@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -304,7 +305,7 @@ static void editbar_player_pov_combobox_changed(GtkComboBox *combo,
     return;
   }
 
-  pplayer = player_by_number(id);
+  pplayer = valid_player_by_number(id);
   if (pplayer != NULL) {
     send_chat_printf("/take \"%s\"", pplayer->name);
   }
@@ -429,7 +430,7 @@ static void editbar_add_tool_button(struct editbar *eb,
   }
 
   sprite = editor_tool_get_sprite(ett);
-  fc_assert_ret(sprite != NULL);
+  assert(sprite != NULL);
   pixbuf = sprite_get_pixbuf(sprite);
   image = gtk_image_new_from_pixbuf(pixbuf);
 
@@ -488,7 +489,7 @@ static void editbar_add_mode_button(struct editbar *eb,
   button = gtk_toggle_button_new();
 
   sprite = editor_get_mode_sprite(etm);
-  fc_assert_ret(sprite != NULL);
+  assert(sprite != NULL);
   pixbuf = sprite_get_pixbuf(sprite);
   image = gtk_image_new_from_pixbuf(pixbuf);
 
@@ -1229,7 +1230,7 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(hbox), vbox2, FALSE, FALSE, 0);
 
   label = gtk_label_new(NULL);
-  fc_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
+  my_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
               _("Mode"));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
@@ -1534,7 +1535,7 @@ static void editinfobox_refresh(struct editinfobox *ei)
     pixbuf = NULL;
   }
 
-  fc_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
+  my_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
               editor_tool_get_name(ett));
   gtk_label_set_markup(GTK_LABEL(ei->tool_label), buf);
 
@@ -1865,10 +1866,6 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 {
   struct property_editor *pe;
 
-  if (!editor_is_active()) {
-    return;
-  }
-
   pe = editprop_get_property_editor();
   property_editor_handle_object_changed(pe, objtype, object_id, remove);
 }
@@ -1879,10 +1876,6 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void editgui_notify_object_created(int tag, int id)
 {
   struct property_editor *pe;
-
-  if (!editor_is_active()) {
-    return;
-  }
 
   pe = editprop_get_property_editor();
   property_editor_handle_object_created(pe, tag, id);

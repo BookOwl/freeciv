@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-2.3-tilespec"
+options = "+tilespec4+2007.Oct.26"
 
 ; A simple name for the tileset specified by this file:
 name = "isophex"
@@ -72,6 +72,7 @@ files =
   "misc/citybar.spec",
   "isophex/terrain1.spec",
   "isophex/terrain2.spec",
+  "isophex/water.spec",
   "isophex/darkness.spec",
   "isophex/tiles.spec",
   "isophex/grid.spec",

@@ -41,7 +41,7 @@
 #endif
 
 #include "ioz.h"
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 /* map symbolic Winsock error names to symbolic errno names */
 #ifdef HAVE_WINSOCK
@@ -60,9 +60,9 @@
 #endif   
 
 #ifdef FD_ZERO
-#define FC_FD_ZERO FD_ZERO
+#define MY_FD_ZERO FD_ZERO
 #else
-#define FC_FD_ZERO(p) memset((void *)(p), 0, sizeof(*(p)))
+#define MY_FD_ZERO(p) memset((void *)(p), 0, sizeof(*(p)))
 #endif
 
 #ifdef IPV6_ADD_MEMBERSHIP

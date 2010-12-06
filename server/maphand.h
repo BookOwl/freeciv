@@ -51,11 +51,11 @@ void give_map_from_player_to_player(struct player *pfrom, struct player *pdest);
 void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdest);
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest);
-void send_all_known_tiles(struct conn_list *dest);
+void send_all_known_tiles(struct conn_list *dest, bool force);
 
 bool send_tile_suppression(bool now);
 void send_tile_info(struct conn_list *dest, struct tile *ptile,
-                    bool send_unknown);
+                    bool send_unknown, bool force);
 
 void send_map_info(struct conn_list *dest);
 
@@ -69,16 +69,15 @@ void map_vision_update(struct player *pplayer, struct tile *ptile,
                        bool can_reveal_tiles);
 void map_show_all(struct player *pplayer);
 
-bool map_is_known_and_seen(const struct tile *ptile,
-                           const struct player *pplayer,
-                           enum vision_layer vlayer);
+bool map_is_known_and_seen(const struct tile *ptile, struct player *pplayer,
+			   enum vision_layer vlayer);
 bool map_is_known(const struct tile *ptile, const struct player *pplayer);
 void map_set_known(struct tile *ptile, struct player *pplayer);
 void map_clear_known(struct tile *ptile, struct player *pplayer);
 void map_know_and_see_all(struct player *pplayer);
 void show_map_to_all(void);
 
-void player_map_init(struct player *pplayer);
+void player_map_allocate(struct player *pplayer);
 void player_map_free(struct player *pplayer);
 
 struct vision_site *map_get_player_city(const struct tile *ptile,
@@ -121,6 +120,5 @@ void change_playertile_site(struct player_tile *ptile,
 
 void create_base(struct tile *ptile, struct base_type *pbase,
                  struct player *pplayer);
-void destroy_base(struct tile *ptile, struct base_type *pbase);
 
 #endif  /* FC__MAPHAND_H */

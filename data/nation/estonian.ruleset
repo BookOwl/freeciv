@@ -6,16 +6,13 @@ groups="Modern", "European"
 legend=_("Estonia is a small country on the south shore of the eastern\
  Baltic Sea.  Its people and language are closely related to those of\
  Finland.")
-
-leaders = {
- "name",                        "sex"
- "Kalevipoeg",                  "Male"
- "Lembitu",                     "Male"
- "Carl Robert Jakobson",        "Male"
- "Konstantin Päts",             "Male"
- "Lennart Meri",                "Male"
-}
-
+leader=
+ "Kalevipoeg",
+ "Lembitu",
+ "Carl Robert Jakobson",
+ "Konstantin Päts",
+ "Lennart Meri"
+leader_sex="Male", "Male", "Male", "Male", "Male"
 flag="estonia"
 flag_alt = "-"
 city_style = "European"

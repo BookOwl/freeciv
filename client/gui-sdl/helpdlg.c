@@ -86,7 +86,7 @@ void popup_help_dialog_string(const char *item)
 **************************************************************************/
 void popup_help_dialog_typed(const char *item, enum help_page_type eHPT)
 {
-  log_debug("popup_help_dialog_typed : PORT ME");
+  freelog(LOG_DEBUG, "popup_help_dialog_typed : PORT ME");
 }
 
 /**************************************************************************
@@ -228,10 +228,8 @@ void popup_impr_info(Impr_type_id impr)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;
@@ -621,10 +619,8 @@ void popup_unit_info(Unit_type_id type_id)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;
@@ -740,7 +736,7 @@ void popup_unit_info(Unit_type_id type_id)
   {
     char buf[2048];
 
-    fc_snprintf(buf, sizeof(buf), "%s %d %s",
+    my_snprintf(buf, sizeof(buf), "%s %d %s",
               _("Cost:"), utype_build_shield_cost(pUnitType),
               PL_("shield", "shields", utype_build_shield_cost(pUnitType)));
 
@@ -1136,7 +1132,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
 
   /* target governments */
   gov_count = 0;
-  governments_iterate(gov) {
+  government_iterate(gov) {
     requirement_vector_iterate(&(gov->reqs), preq) {
       if (VUT_ADVANCE == preq->source.kind
        && advance_number(preq->source.value.advance) == tech) {
@@ -1154,7 +1150,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
         gov_count++;
       }
     } requirement_vector_iterate_end;
-  } governments_iterate_end;
+  } government_iterate_end;
 
   /* target improvements */
   imp_count = 0;
@@ -1929,10 +1925,8 @@ void popup_tech_info(Tech_type_id tech)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;

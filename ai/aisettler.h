@@ -13,15 +13,11 @@
 #ifndef FC__AISETTLER_H
 #define FC__AISETTLER_H
 
-/* utility */
-#include "support.h"            /* bool type */
-
-/* common */
 #include "city.h"
 #include "fc_types.h"
+#include "shared.h"		/* bool type */
 
 struct ai_data;
-struct settlermap;
 
 struct citytile {
   int food, shield, trade, reserved;
@@ -40,8 +36,7 @@ struct cityresult {
   int city_center;        /* value of city center */
   int best_other;         /* value of best other tile */
   int remaining;          /* value of all other tiles */
-  struct citytile citymap[CITY_MAP_MAX_SIZE][CITY_MAP_MAX_SIZE];
-  int city_radius_sq;     /* current squared radius of the city */
+  struct citytile citymap[CITY_MAP_SIZE][CITY_MAP_SIZE];
 };
 
 void cityresult_fill(struct player *pplayer,
@@ -53,9 +48,4 @@ void ai_settler_init(struct player *pplayer);
 void print_cityresult(struct player *pplayer, struct cityresult *cr,
                       struct ai_data *ai);
 
-void ai_auto_settler(struct player *pplayer, struct unit *punit,
-                     struct settlermap *state);
-
-void contemplate_new_city(struct city *pcity);
-
-#endif /* FC__AISETTLER_H */
+#endif

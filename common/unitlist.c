@@ -39,51 +39,41 @@ struct unit *unit_list_find(const struct unit_list *punitlist, int unit_id)
 }
 
 /****************************************************************************
-  Comparison function for unit_list_sort, sorting by ord_map:
-  The indirection is a bit gory:
-  Read from the right:
-    1. cast arg "a" to "ptr to void*"   (we're sorting a list of "void*"'s)
-    2. dereference to get the "void*"
-    3. cast that "void*" to a "struct unit*"
-
-  Only used in server/savegame.c.
+ Comparison function for unit_list_sort, sorting by ord_map:
+ The indirection is a bit gory:
+ Read from the right:
+   1. cast arg "a" to "ptr to void*"   (we're sorting a list of "void*"'s)
+   2. dereference to get the "void*"
+   3. cast that "void*" to a "struct unit*"
 ****************************************************************************/
 static int compar_unit_ord_map(const struct unit *const *ua,
                                const struct unit *const *ub)
 {
-  return (*ua)->server.ord_map - (*ub)->server.ord_map;
+  return (*ua)->ord_map - (*ub)->ord_map;
 }
 
 /****************************************************************************
-  Comparison function for unit_list_sort, sorting by ord_city: see above.
-
-  Only used in server/savegame.c.
+ Comparison function for unit_list_sort, sorting by ord_city: see above.
 ****************************************************************************/
 static int compar_unit_ord_city(const struct unit *const *ua,
                                 const struct unit *const *ub)
 {
-  return (*ua)->server.ord_city - (*ub)->server.ord_city;
+  return (*ua)->ord_city - (*ub)->ord_city;
 }
 
 /****************************************************************************
-  Sorts the unit list by punit->server.ord_map values.
-
-  Only used in server/savegame.c.
+  Sorts the unit list by punit->ord_map values.
 ****************************************************************************/
 void unit_list_sort_ord_map(struct unit_list *punitlist)
 {
-  fc_assert_ret(is_server());
   unit_list_sort(punitlist, compar_unit_ord_map);
 }
 
 /****************************************************************************
-  Sorts the unit list by punit->server.ord_city values.
-
-  Only used in server/savegame.c.
+  Sorts the unit list by punit->ord_city values.
 ****************************************************************************/
 void unit_list_sort_ord_city(struct unit_list *punitlist)
 {
-  fc_assert_ret(is_server());
   unit_list_sort(punitlist, compar_unit_ord_city);
 }
 
@@ -110,8 +100,7 @@ bool can_units_do_activity(const struct unit_list *punits,
 			   enum unit_activity activity)
 {
   /* Make sure nobody uses these old activities any more */
-  fc_assert_ret_val(activity != ACTIVITY_FORTRESS
-                    && activity != ACTIVITY_AIRBASE, FALSE);
+  assert(activity != ACTIVITY_FORTRESS && activity != ACTIVITY_AIRBASE);
 
   unit_list_iterate(punits, punit) {
     if (can_unit_do_activity(punit, activity)) {
@@ -209,7 +198,7 @@ bool units_are_occupied(const struct unit_list *punits)
 bool units_can_load(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (transporter_for_unit(punit)) {
+    if (find_transporter_for_unit(punit)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -223,7 +212,7 @@ bool units_can_load(const struct unit_list *punits)
 bool units_can_unload(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (can_unit_unload(punit, game_unit_by_number(punit->transported_by))
+    if (can_unit_unload(punit, game_find_unit_by_number(punit->transported_by))
 	&& can_unit_exist_at_tile(punit, punit->tile)) {
       return TRUE;
     }
@@ -241,35 +230,6 @@ bool units_have_activity_on_tile(const struct unit_list *punits,
 {
   unit_list_iterate(punits, punit) {
     if (is_unit_activity_on_tile(activity, punit->tile)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Return TRUE iff any of the units can be upgraded to another unit type
-  (for money)
-****************************************************************************/
-bool units_can_upgrade(const struct unit_list *punits)
-{
-  unit_list_iterate(punits, punit) {
-    if (UU_OK == unit_upgrade_test(punit, FALSE)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Return TRUE iff any of the units can convert to another unit type
-****************************************************************************/
-bool units_can_convert(const struct unit_list *punits)
-{
-  unit_list_iterate(punits, punit) {
-    if (unit_can_convert(punit)) {
       return TRUE;
     }
   } unit_list_iterate_end;

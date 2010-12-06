@@ -20,6 +20,7 @@
 #include "SDL.h"
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -222,7 +223,7 @@ Atom wm_delete_window;
 void set_city_names_font_sizes(int my_city_names_font_size,
 			       int my_city_productions_font_size)
 {
-  log_error("Unimplemented set_city_names_font_sizes.");
+  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
   /* PORTME */
 }
 
@@ -340,25 +341,25 @@ void ui_main(int argc, char *argv[])
   XSetErrorHandler(myerr);*/
 
   if(appResources.version==NULL)  {
-    log_fatal(_("No version number in resources."));
-    log_fatal(_("You probably have an old (circa V1.0)"
-                " Freeciv resource file somewhere."));
+    freelog(LOG_FATAL, _("No version number in resources."));
+    freelog(LOG_FATAL, _("You probably have an old (circa V1.0)"
+			 " Freeciv resource file somewhere."));
     exit(EXIT_FAILURE);
   }
 
   /* TODO: Use capabilities here instead of version numbers */
   if (0 != strncmp(appResources.version, VERSION_STRING,
 		   strlen(appResources.version))) {
-    log_fatal(_("Game version does not match Resource version."));
-    log_fatal(_("Game version: %s - Resource version: %s"),
-              VERSION_STRING, appResources.version);
-    log_fatal(_("You might have an old Freeciv resourcefile"
-                " in /usr/lib/X11/app-defaults"));
+    freelog(LOG_FATAL, _("Game version does not match Resource version."));
+    freelog(LOG_FATAL, _("Game version: %s - Resource version: %s"), 
+	    VERSION_STRING, appResources.version);
+    freelog(LOG_FATAL, _("You might have an old Freeciv resourcefile"
+			 " in /usr/lib/X11/app-defaults"));
     exit(EXIT_FAILURE);
   }
   
   if(!appResources.gotAppDefFile) {
-    log_normal(_("Using fallback resources - which is OK"));
+    freelog(LOG_NORMAL, _("Using fallback resources - which is OK"));
   }
 
   display = XtDisplay(toplevel);
@@ -369,7 +370,7 @@ void ui_main(int argc, char *argv[])
   display_color_type=get_visual(); 
   
   if(display_color_type!=COLOR_DISPLAY) {
-    log_fatal(_("Only color displays are supported for now..."));
+    freelog(LOG_FATAL, _("Only color displays are supported for now..."));
     /*    exit(EXIT_FAILURE); */
   }
 
@@ -383,22 +384,24 @@ void ui_main(int argc, char *argv[])
     values.graphics_exposures = False;
     civ_gc = XCreateGC(display, root_window, GCGraphicsExposures, &values);
 
-    city_names_font = fc_strdup("-*-*-*-*-*-*-14-*");
+    city_names_font = mystrdup("-*-*-*-*-*-*-14-*");
 
-    city_productions_font_name = fc_strdup("-*-*-*-*-*-*-14-*");
+    city_productions_font_name = mystrdup("-*-*-*-*-*-*-14-*");
 
     main_font_set = XCreateFontSet(display, city_names_font,
 	&missing_charset_list_return,
 	&missing_charset_count_return,
 	&def_string_return);
     if (!main_font_set) {
-      log_fatal(_("Unable to open fontset: %s"), city_names_font);
-      log_fatal(_("Doing 'xset fp rehash' may temporarily solve a problem."));
+      freelog(LOG_FATAL, _("Unable to open fontset: %s"),
+	      city_names_font);
+      freelog(LOG_FATAL,
+	      _("Doing 'xset fp rehash' may temporarily solve a problem."));
       exit(EXIT_FAILURE);
     }
     for (i = 0; i < missing_charset_count_return; i++) {
-      log_error(_("Font for charset %s is lacking"),
-                missing_charset_list_return[i]);
+      freelog(LOG_ERROR, _("Font for charset %s is lacking"),
+	      missing_charset_list_return[i]);
     }
     values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
     values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
@@ -411,13 +414,15 @@ void ui_main(int argc, char *argv[])
 	&missing_charset_count_return,
 	&def_string_return);
     if (!prod_font_set) {
-      log_fatal(_("Unable to open fontset: %s"), city_productions_font_name);
-      log_fatal(_("Doing 'xset fp rehash' may temporarily solve a problem."));
+      freelog(LOG_FATAL, _("Unable to open fontset: %s"),
+	      city_productions_font_name);
+      freelog(LOG_FATAL,
+	      _("Doing 'xset fp rehash' may temporarily solve a problem."));
       exit(EXIT_FAILURE);
     }
     for (i = 0; i < missing_charset_count_return; i++) {
-      log_error(_("Font for charset %s is lacking"),
-                missing_charset_list_return[i]);
+      freelog(LOG_ERROR, _("Font for charset %s is lacking"),
+	      missing_charset_list_return[i]);
     }
     values.foreground = get_color(tileset, COLOR_MAPVIEW_CITYTEXT)->color.pixel;
     values.background = get_color(tileset, COLOR_MAPVIEW_UNKNOWN)->color.pixel;
@@ -542,12 +547,11 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   struct unit *punit;
   int i = (size_t)client_data;
 
-  fc_assert_ret(i >= 0 && i < num_units_below);
-  if (unit_ids[i] == 0) { /* no unit displayed at this place */
+  assert(i>=0 && i<num_units_below);
+  if (unit_ids[i] == 0) /* no unit displayed at this place */
     return;
-  }
-  punit = game_unit_by_number(unit_ids[i]);
-  if (punit) { /* should always be true at this point */
+  punit=game_find_unit_by_number(unit_ids[i]);
+  if(punit) { /* should always be true at this point */
     if (unit_owner(punit) == client.conn.playing) {
       /* may be non-true if alliance */
       set_unit_focus(punit);
@@ -682,7 +686,7 @@ void setup_widgets(void)
 
   for(i=0; i<num_units_below; i++) {
     char unit_below_name[32];
-    fc_snprintf(unit_below_name, sizeof(unit_below_name),
+    my_snprintf(unit_below_name, sizeof(unit_below_name),
 		"unitbelowcanvas%ld", i);
     unit_below_canvas[i] = XtVaCreateManagedWidget(unit_below_name,
 						   pixcommWidgetClass,
@@ -783,7 +787,7 @@ void main_show_info_popup(XEvent *event)
 /**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
-void real_conn_list_dialog_update(void)
+void update_conn_list_dialog(void)
 {
   /* PORTME */
   update_start_page();
@@ -815,7 +819,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
 
   if (previous_state == socket_writable)
     return;
-  log_debug("set_wait_for_writable_socket(%d)", socket_writable);
+  freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
   XtRemoveInput(x_input_id);
   x_input_id = XtAppAddInput(app_context, client.conn.sock,
 			     (XtPointer) (XtInputReadMask |
@@ -896,8 +900,8 @@ void timer_callback(XtPointer client_data, XtIntervalId * id)
 void set_unit_icon(int idx, struct unit *punit)
 {
   Widget w;
-
-  fc_assert_ret(idx >= -1 && idx < num_units_below);
+  
+  assert(idx>=-1 && idx<num_units_below);
   if (idx == -1) {
     w = unit_pix_canvas;
   } else {

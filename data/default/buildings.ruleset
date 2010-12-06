@@ -12,7 +12,7 @@
 
 [datafile]
 description="Default buildings data for Freeciv"
-options="+Freeciv-2.3-ruleset"
+options="1.10.1"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -25,11 +25,7 @@ options="+Freeciv-2.3-ruleset"
 ;
 ; Notes:
 ;
-; name          = translatable name as seen by user
-; rule_name     = (optional) name for savegames, rulesets etc; if not
-;                 present, 'name' is used. Since the name used in savegames
-;                 must not change, use this when renaming a building after a
-;                 ruleset has been released.
+; name		= name as seen by user 
 ; genus	        = genus; one of:
 ;                 "GreatWonder", "SmallWonder", "Improvement", "Special".
 ; reqs		= requirements to build the building (see effects.ruleset
@@ -64,7 +60,7 @@ helptext	= _("\
 Allows a city to produce veteran air units (including helicopters). \
  Also, damaged air units (again, including helicopters) which stay in\
  town for one full turn without moving are completely restored.\
-"), _("\
+\n\n\
 Two cities with Airports can airlift one unit per turn. \
  Airlifting instantly transports the unit from one city to another\
  and will use all of the unit's movement points.  A unit must have\
@@ -87,9 +83,8 @@ sabotage	= 100
 sound		= "b_aqueduct"
 sound_alt	= "b_generic"
 helptext	= _("\
-Allows a city to grow larger than size 8 and reduces the chance of plague\
- within the city. A Sewer System is required for a city to grow larger\
- than size 12.\
+Allows a city to grow larger than size 8.  A Sewer System is also\
+ required for a city to grow larger than size 12.\
 ")
 ; NB: plague (illness) has to be activated in the ruleset
 
@@ -135,7 +130,7 @@ sound_alt	= "b_generic"
 helptext	= _("\
 With a Barracks, each new land unit built in a city will\
  automatically have Veteran status, which means that its attack and\
- defense strengths are increased by 50%.  Also, damaged land units\
+ defence strengths are increased by 50%.  Also, damaged land units\
  which stay in town for one full turn without moving are completely\
  restored.\
 ")
@@ -160,7 +155,7 @@ sound_alt	= "b_generic"
 helptext	= _("\
 With a Barracks, each new land unit built in a city will\
  automatically have Veteran status, which means that its attack and\
- defense strengths are increased by 50%.  Also, damaged land units\
+ defence strengths are increased by 50%.  Also, damaged land units\
  which stay in town for one full turn without moving are completely\
  restored.\
 ")
@@ -184,7 +179,7 @@ sound_alt	= "b_generic"
 helptext	= _("\
 With a Barracks, each new land unit built in a city will\
  automatically have Veteran status, which means that its attack and\
- defense strengths are increased by 50%.  Also, damaged land units\
+ defence strengths are increased by 50%.  Also, damaged land units\
  which stay in town for one full turn without moving are completely\
  restored.\
 ")
@@ -232,7 +227,7 @@ sabotage	= 50
 sound		= "b_city_walls"
 sound_alt	= "b_generic"
 helptext	= _("\
-City Walls make it easier to defend a city.  They triple the defense\
+City Walls make it easier to defend a city.  They triple the defence\
  strength of units within the city against land and helicopter\
  units.  They are ineffective against airborne and sea units as well\
  as Howitzers.  City Walls also prevent the loss of population which\
@@ -256,7 +251,7 @@ sabotage	= 100
 sound		= "b_coastal_defense"
 sound_alt	= "b_generic"
 helptext	= _("\
-Increases the defense strength of units within a city by a factor\
+Increases the defence strength of units within a city by a factor\
  of 2 when defending against bombardments from enemy ships.\
 ")
 
@@ -352,8 +347,7 @@ The amount of stored food will be set to half full whenever a city\
 ; Dare I ask where this food comes from?? :-)
 
 [building_harbour]
-name            = _("Harbor")
-rule_name       = "Harbour"     ; en_GB spelling used originally
+name		= _("Harbour")
 genus		= "Improvement"
 reqs	=
     { "type", "name", "range"
@@ -401,7 +395,7 @@ Increases the effect of Factory and Mfg. Plant on the shield\
  Hydro Plant, Factory, and Mfg. Plant together give a 150%\
  production bonus with pollution only 50% of the equivalent\
  combination with a Power Plant.\
-"), _("\
+\n\n\
 In each city, only one Power Plant, Hydro Plant, Nuclear Plant, or\
  Solar Plant can take effect at any one time.\
 ")
@@ -519,7 +513,7 @@ Increases the effect of Factory and Mfg. Plant on the shield\
  Nuclear Plant, Factory, and Mfg. Plant together give a 150%\
  production bonus with pollution only 50% of the equivalent\
  combination with a Power Plant.\
-"), _("\
+\n\n\
 In each city, only one Power Plant, Hydro Plant, Nuclear Plant, or\
  Solar Plant can take effect at any one time.\
 ")
@@ -566,6 +560,7 @@ upkeep		= 0
 sabotage	= 0
 sound		= "b_palace"
 sound_alt	= "b_generic"
+; /* xgettext:no-c-format */
 helptext	= _("\
 Makes a city the capital and the center of your government. \
  Corruption in other cities is related to how far away from the\
@@ -573,13 +568,11 @@ Makes a city the capital and the center of your government. \
  Communism.  The cost of inciting a revolt in a city also depends\
  upon the city's distance from the capital (under all forms of\
  government).\
-"), _("\
+\n\n\
 Take good care of your capital, as its loss may result in your\
  empire plunging into civil war. Losing your current palace also\
  results in losing whatever spaceship you might have.\
-"),
-; /* xgettext:no-c-format */
-_("\
+\n\n\
 Under Despotism the city containing the palace gains a +75%\
  production bonus, and under Monarchy a +50% production bonus.\
 ")
@@ -656,7 +649,7 @@ Increases the effect of Factory and Mfg. Plant on the shield\
  Factory, and Mfg. Plant together give a 150% production bonus.\
  The extra production may lead to the city generating more\
  pollution.\
-"), _("\
+\n\n\
 In each city, only one Power Plant, Hydro Plant, Nuclear Plant, or\
  Solar Plant can take effect at any one time.\
 ")
@@ -748,7 +741,7 @@ helptext	= _("\
 Protects a city and its environs (up to 2 tiles away) from attacks\
  by Nuclear units. A Nuclear unit attacking a city with SDI Defense,\
  or attacking a unit (or deliberately exploded) within range, is shot\
- down and simply has no effect. Also, doubles defense for units in\
+ down and simply has no effect. Also, doubles defence for units in\
  the city against non-nuclear missiles.\
 ")
 ; NOTE:
@@ -771,9 +764,8 @@ sabotage	= 100
 sound		= "b_sewer_system"
 sound_alt	= "b_generic"
 helptext	= _("\
-Allows a city to grow larger than size 12. Pre-requirement is an Aqueduct\
- for a city to grow larger than size 8. The Sewer System further reduces\
- the chance of a plague.\
+Allows a city to grow larger than size 12.  An Aqueduct is first\
+ required for a city to grow larger than size 8.\
 ")
 ; NB: plague (illness) has to be activated in the ruleset
 
@@ -804,7 +796,7 @@ Increases the effect of Factory and Mfg. Plant on the shield\
  Solar Plant, Factory, and Mfg. Plant together give a 150%\
  production bonus, and eliminates all pollution generated by\
  production in that city.\
-"), _("\
+\n\n\
 In each city, only one Power Plant, Hydro Plant, Nuclear Plant, or\
  Solar Plant can take effect at any one time.\
 ")
@@ -829,7 +821,7 @@ helptext	= _("\
 Space Components can be differentiated into Propulsion and Fuel\
  Components.  Each pair of them reduces your spaceship's travel\
  time.  You can build up to 8 pairs.\
-"), _("\
+\n\n\
 Before you can build any spaceship parts, the Apollo Program wonder\
  must have been built by any player.\
 ")
@@ -853,17 +845,17 @@ sound_alt	= "b_generic"
 helptext	= _("\
 Space Modules are the most expensive parts of spaceships.  There\
  are three different types of Space Module:\
-"), _("\
+\n\n\
 - Habitation Module: provides living space for 10,000 people.\
-"), _("\
+\n\n\
 - Life Support Module: provides food and water for the population of\
   one Habitation Module.\
-"), _("\
+\n\n\
 - Solar Panels: provides the energy needed for any two of the other\
   Modules.\
-"), _("\
+\n\n\
 You can build up to 4 Space Modules of each kind.\
-"), _("\
+\n\n\
 Before you can build any spaceship parts, the Apollo Program wonder\
  must have been built by any player.\
 ")
@@ -888,7 +880,7 @@ helptext	= _("\
 Space Structurals form the base of your spaceship.  All other\
  spaceship parts need to be connected to Structurals in order to\
  function.  You can build up to 32 Space Structurals.\
-"), _("\
+\n\n\
 Before you can build any spaceship parts, the Apollo Program wonder\
  must have been built by any player.\
 ")
@@ -1107,8 +1099,7 @@ sound_alt	= "w_generic"
 helptext	= _("\
 This stunning technological achievement makes one unhappy\
  citizen content in each of your cities (including citizens unhappy\
- about military activity). It further reduces the possibility for\
- an illness in the city.\
+ about military activity).\
 ")
 ; NB: In Civ2 this makes 1 content citizen happy in all cities.
 ; NB: plague (illness) has to be activated in the ruleset
@@ -1172,7 +1163,7 @@ sound		= "w_great_library"
 sound_alt	= "w_generic"
 helptext	= _("\
 The civilization which builds the Great Library gets every advance\
- that at least two other teams have achieved.\
+ that at least two other civilizations have achieved.\
 ")
 
 [building_great_wall]
@@ -1340,7 +1331,7 @@ sound		= "w_lighthouse"
 sound_alt	= "w_generic"
 helptext	= _("\
 Gives all your sea units 1 additional movement point. Makes all your\
- new military sea units veterans (for all your cities).\
+ new sea units veterans (for all your cities).\
 ")
 
 [building_magellans_expedition]
@@ -1489,8 +1480,7 @@ Boosts science production in each city with a Research Lab by 100%. \
 ")
 
 [building_shakespeares_theatre]
-name            = _("Shakespeare's Theater")
-rule_name       = "Shakespeare's Theatre"       ; en_GB used originally
+name		= _("Shakespeare's Theatre")
 genus		= "GreatWonder"
 reqs	=
     { "type", "name", "range"
@@ -1546,7 +1536,7 @@ sabotage	= 0
 sound		= "w_sun_tzus_war_academy"
 sound_alt	= "w_generic"
 helptext	= _("\
-All your new military land units start at the first veteran level. The\
+All your new land units start at the first veteran level. The\
  chance of a land unit getting the next veteran level after a battle\
  increases by half.\
 ")

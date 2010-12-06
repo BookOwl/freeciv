@@ -5,52 +5,52 @@ plural=_("?plural:Indians")
 groups="Ancient", "Medieval", "Modern", "Asian"
 legend=_("The cradle of Ancient Indian civilization lay in the Indus river\
  valley in modern-day Pakistan.")
-
-leaders = {
- "name",                "sex"
- "Mohandas Gandhi",     "Male"
- "Ashoka",              "Male"
- "Chandragupta",        "Male"
- "Indira Gandhi",       "Female"
-}
-
-ruler_titles = {
- "government",      "male_title",      "female_title"
- "Despotism",       _("Raja %s"),      _("Rani %s")
- "Fundamentalism",  _("Guru %s"),      _("?female:Guru %s")
- "Monarchy",        _("Maharaja %s"),  _("Maharani %s")
- "Republic",        _("Mahatma %s"),   _("?female:Mahatma %s")
-}
-
+leader=
+ "Mohandas Gandhi",
+ "Ashoka",
+ "Chandragupta",
+ "Indira Gandhi"
+leader_sex="Male", "Male", "Male", "Female"
 flag="india"
 flag_alt = "-"
 city_style = "Asian"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Raja"),         _("Rani")
+                 "Monarchy",        _("Maharaja"),     _("Maharani")
+                 "Republic",        _("Mahatma"),      _("?female:Mahatma")
+               }
 
 init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-
-conflicts_with="Gupta", "Chola", "Mughal"
-civilwar_nations="Lankese", "Bengali", "Sikh", "Kashmiri"
+civilwar_nations = "lankese", "bengali"
 
 cities =
  "Delhi",
- "Mumbai",		; Bombay
- "Chennai",		; Madras
+ "Bombay",
+ "Madras",
  "Bangalore",
- "Kolkata",		; Calcutta
- "Ahmedabad",		; Ahmadabad
+ "Calcutta",
+ "Lahore",
+ "Karachi",
+ "Ahmadabad",
  "Kanpur",
  "Hyderabad",
+ "Dacca",
  "Lucknow",
- "Varanasi",		; Benares
- "Chandigarh",
+ "Benares",
+ "Chandrigarh",
+ "Rawalpindi",
+ "Colombo",
  "Madurai",
  "Coimbatore",
- "Kozhikode",		; Calicut
- "Thiruvananthapuram",	; Trivandrum
+ "Calicut",
+ "Trivandrum",
  "Nagpur",
+ "Chittagong",
+ "Multan",
  "Amritsar",
  "Srinagar",
  "Agra",
@@ -64,35 +64,5 @@ cities =
  "Mysore",
  "Raipur",
  "Gaya",
- "Kanpur",		; Cawnpore
- "Pune (hills)",	; Poona
- "Ranchi",
- "Bhubaneswar",
- "Thiruvananthapuram",
- "Tiruchirappalli",
- "Dehradun",
- "Aizawl",
- "Gandhinagar",
- "Imphal",
- "Thane",
- "Ludhiana",
- "Pimpri-Chinchwad",
- "Nashik",
- "Vadodara",
- "Faridabad",
- "Ghaziabad",
- "Rajkot",
- "Meerut",
- "Kalyan-Dombivali",
- "Navi Mumbai",
- "Aurangabad",
- "Solapur",
- "Jabalpur",
- "Visakhapatnam",
- "Howrah",
- "Jodhpur",
- "Guwahati",
- "Vijayawada",
- "Mira-Bhayandar",
- "Gwalior",
- "Hubballi-Dharwad"
+ "Cawnpore",
+ "Poona (hills)"

@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -45,19 +46,6 @@ static void send_chat_msg(struct connection *pconn,
                           const char *format, ...)
                           fc__attribute((__format__ (__printf__, 4, 5)));
 
-/****************************************************************************
-  Returns whether 'dest' is ignoring the 'sender' connection.
-****************************************************************************/
-static inline bool conn_is_ignored(const struct connection *sender,
-                                   const struct connection *dest)
-{
-  if (NULL != sender && NULL != dest) {
-    return conn_pattern_list_match(dest->server.ignore_list, sender);
-  } else {
-    return FALSE;
-  }
-}
-
 /**************************************************************************
   Formulate a name for this connection, prefering the player name when
   available and unambiguous (since this is the "standard" case), else
@@ -70,9 +58,9 @@ static void form_chat_name(struct connection *pconn, char *buffer, size_t len)
   if (!pplayer
       || pconn->observer
       || strcmp(player_name(pplayer), ANON_PLAYER_NAME) == 0) {
-    fc_snprintf(buffer, len, "(%s)", pconn->username);
+    my_snprintf(buffer, len, "(%s)", pconn->username);
   } else {
-    fc_snprintf(buffer, len, "%s", player_name(pplayer));
+    my_snprintf(buffer, len, "%s", player_name(pplayer));
   }
 }
 
@@ -113,10 +101,10 @@ static void complain_ambiguous(struct connection *pconn, const char *name,
     break;
   case 2:
     notify_conn(pconn->self, NULL, E_CHAT_ERROR, ftc_server,
-                _("%s is an anonymous name. Use connection name."), name);
+                _("%s is an anonymous name. Use connection name"), name);
     break;
   default:
-    log_error("Unkown variant in %s(): %d.", __FUNCTION__, player_conn);
+    assert(0);
   }
 }
 
@@ -127,18 +115,11 @@ static void chat_msg_to_conn(struct connection *sender,
                              struct connection *dest, char *msg)
 {
   char sender_name[MAX_LEN_CHAT_NAME], dest_name[MAX_LEN_CHAT_NAME];
-
-  form_chat_name(dest, dest_name, sizeof(dest_name));
-
-  if (conn_is_ignored(sender, dest)) {
-    send_chat_msg(sender, NULL, ftc_warning,
-                  _("You cannot send messages to %s; you are ignored."),
-                  dest_name);
-    return;
-  }
-
+  
   msg = skip_leading_spaces(msg);
+  
   form_chat_name(sender, sender_name, sizeof(sender_name));
+  form_chat_name(dest, dest_name, sizeof(dest_name));
 
   send_chat_msg(sender, sender, ftc_chat_private,
                 "->*%s* %s", dest_name, msg);
@@ -163,38 +144,28 @@ static void chat_msg_to_player(struct connection *sender,
   msg = skip_leading_spaces(msg);
   form_chat_name(sender, sender_name, sizeof(sender_name));
 
-  /* Find the user of the player 'pdest'. */
-  conn_list_iterate(pdest->connections, pconn) {
-    if (!pconn->observer) {
-      /* Found it! */
-      if (conn_is_ignored(sender, pconn)) {
-        send_chat_msg(sender, NULL, ftc_warning,
-                      _("You cannot send messages to %s; you are ignored."),
-                      player_name(pdest));
-        return;         /* NB: stop here, don't send to observers. */
-      }
-      dest = pconn;
-      break;
-    }
-  } conn_list_iterate_end;
-
   /* Repeat the message for the sender. */
   send_chat_msg(sender, sender, ftc_chat_private,
                 "->{%s} %s", player_name(pdest), msg);
 
   /* Send the message to destination. */
-  if (NULL != dest && dest != sender) {
-    send_chat_msg(dest, sender, ftc_chat_private,
-                  "{%s} %s", sender_name, msg);
-  }
+  conn_list_iterate(pdest->connections, pconn) {
+    if (!pconn->observer) {
+      /* Found the real player connection! */
+      dest = pconn;
+      if (dest != sender) {
+        send_chat_msg(dest, sender, ftc_chat_private,
+                      "{%s} %s", sender_name, msg);
+      }
+      break;
+    }
+  } conn_list_iterate_end;
 
   /* Send the message to player observers. */
   package_chat_msg(&packet, sender, ftc_chat_private,
                    "{%s -> %s} %s", sender_name, player_name(pdest), msg);
   conn_list_iterate(pdest->connections, pconn) {
-    if (pconn != dest
-        && pconn != sender
-        && !conn_is_ignored(sender, pconn)) {
+    if (pconn != dest && pconn != sender) {
       send_packet_chat_msg(pconn, &packet);
     }
   } conn_list_iterate_end;
@@ -203,7 +174,7 @@ static void chat_msg_to_player(struct connection *sender,
       && sender->playing != pdest) {
     /* The sender is another player. */
     conn_list_iterate(sender->playing->connections, pconn) {
-      if (pconn != sender && !conn_is_ignored(sender, pconn)) {
+      if (pconn != sender) {
         send_packet_chat_msg(pconn, &packet);
       }
     } conn_list_iterate_end;
@@ -235,11 +206,7 @@ static void chat_msg_to_allies(struct connection *sender, char *msg)
       continue;
     }
 
-    conn_list_iterate(aplayer->connections, pconn) {
-      if (!conn_is_ignored(sender, pconn)) {
-        send_packet_chat_msg(pconn, &packet);
-      }
-    } conn_list_iterate_end;
+    lsend_packet_chat_msg(aplayer->connections, &packet);
     players = event_cache_player_add(players, aplayer);
   } players_iterate_end;
 
@@ -263,8 +230,7 @@ static void chat_msg_to_global_observers(struct connection *sender,
                    _("%s to global observers: %s"), sender_name, msg);
 
   conn_list_iterate(game.est_connections, dest_conn) {
-    if (conn_is_global_observer(dest_conn)
-        && !conn_is_ignored(sender, dest_conn)) {
+    if (conn_is_global_observer(dest_conn)) {
       send_packet_chat_msg(dest_conn, &packet);
     }
   } conn_list_iterate_end;
@@ -316,18 +282,16 @@ static void chat_msg_to_all(struct connection *sender, char *msg)
   avoiding sending both original and echo if sender is in destination
   set.
 **************************************************************************/
-void handle_chat_msg_req(struct connection *pconn, const char *message)
+void handle_chat_msg_req(struct connection *pconn, char *message)
 {
-  char real_message[MAX_LEN_MSG], *cp;
+  char *cp;
   bool double_colon;
 
-  sz_strlcpy(real_message, message);
-
-  /* This loop to prevent players from sending multiple lines which can
-   * be abused */
-  for (cp = real_message; *cp != '\0'; cp++) {
+  /* this loop to prevent players from sending multiple lines
+   * which can be abused */
+  for (cp = message; *cp != '\0'; cp++) {
     if (*cp == '\n' || *cp == '\r') {
-      *cp = '\0';
+      *cp='\0';
       break;
     }
   }
@@ -338,14 +302,14 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
      So consider this an incentive for IRC support,
      or change it in stdinhand.h - rp
   */
-  if (real_message[0] == SERVER_COMMAND_PREFIX) {
+  if (message[0] == SERVER_COMMAND_PREFIX) {
     /* pass it to the command parser, which will chop the prefix off */
-    (void) handle_stdin_input(pconn, real_message, FALSE);
+    (void) handle_stdin_input(pconn, message, FALSE);
     return;
   }
 
   /* Send to allies command */
-  if (real_message[0] == ALLIESCHAT_COMMAND_PREFIX) {
+  if (message[0] == ALLIESCHAT_COMMAND_PREFIX) {
     /* this won't work if we aren't attached to a player */
     if (NULL == pconn->playing && !pconn->observer) {
       notify_conn(pconn->self, NULL, E_CHAT_ERROR, ftc_server,
@@ -354,9 +318,9 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
     }
 
     if (NULL != pconn->playing) {
-      chat_msg_to_allies(pconn, real_message + 1);
+      chat_msg_to_allies(pconn, message + 1);
     } else {
-      chat_msg_to_global_observers(pconn, real_message + 1);
+      chat_msg_to_global_observers(pconn, message + 1);
     }
     return;
   }
@@ -384,21 +348,21 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
      else complain (might be a typo-ed intended private message)
   */
   
-  cp = strchr(real_message, ':');
+  cp=strchr(message, ':');
 
-  if (cp && (cp != &real_message[0])) {
+  if (cp && (cp != &message[0])) {
     enum m_pre_result match_result_player, match_result_conn;
     struct player *pdest = NULL;
     struct connection *conn_dest = NULL;
     char name[MAX_LEN_NAME];
     char *cpblank;
 
-    (void) fc_strlcpy(name, real_message, MIN(sizeof(name),
-                                              cp - real_message + 1));
+    (void) mystrlcpy(name, message,
+		     MIN(sizeof(name), cp - message + 1));
 
     double_colon = (*(cp+1) == ':');
     if (double_colon) {
-      conn_dest = conn_by_user_prefix(name, &match_result_conn);
+      conn_dest = find_conn_by_user_prefix(name, &match_result_conn);
       if (match_result_conn == M_PRE_AMBIGUOUS) {
 	complain_ambiguous(pconn, name, 1);
 	return;
@@ -409,7 +373,7 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
       }
     } else {
       /* single colon */
-      pdest = player_by_name_prefix(name, &match_result_player);
+      pdest = find_player_by_name_prefix(name, &match_result_player);
       if (match_result_player == M_PRE_AMBIGUOUS) {
 	complain_ambiguous(pconn, name, 0);
 	return;
@@ -423,7 +387,7 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
         return;
 	/* else try for connection name match before complaining */
       }
-      conn_dest = conn_by_user_prefix(name, &match_result_conn);
+      conn_dest = find_conn_by_user_prefix(name, &match_result_conn);
       if (match_result_conn == M_PRE_AMBIGUOUS) {
 	complain_ambiguous(pconn, name, 1);
 	return;
@@ -442,7 +406,7 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
     /* Didn't match; check heuristics to see if this is likely
      * to be a global message
      */
-    cpblank = strchr(real_message, ' ');
+    cpblank=strchr(message, ' ');
     if (!cpblank || (cp < cpblank)) {
       if (double_colon) {
         notify_conn(pconn->self, NULL, E_CHAT_ERROR, ftc_server,
@@ -456,5 +420,5 @@ void handle_chat_msg_req(struct connection *pconn, const char *message)
     }
   }
   /* global message: */
-  chat_msg_to_all(pconn, real_message);
+  chat_msg_to_all(pconn, message);
 }

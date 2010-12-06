@@ -29,7 +29,6 @@
 /* common */
 #include "diptreaty.h"
 #include "fcintl.h"
-#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "packets.h"
@@ -179,7 +178,7 @@ static void popup_diplomacy_dialog(int other_player_id, int initiated_from)
     return;
   }
 
-  if (client.conn.playing->ai_controlled) {
+  if (client.conn.playing->ai_data.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 
@@ -204,11 +203,11 @@ static void popup_diplomacy_dialog(int other_player_id, int initiated_from)
 ****************************************************************************/
 static gint sort_advance_names(gconstpointer a, gconstpointer b)
 {
-  const struct advance *padvance1 = (const struct advance *) a;
-  const struct advance *padvance2 = (const struct advance *) b;
+  struct advance *padvance1 = (struct advance *) a;
+  struct advance *padvance2 = (struct advance *) b;
 
-  return fc_strcoll(advance_name_translation(padvance1),
-                    advance_name_translation(padvance2));
+  return compare_strings(advance_name_translation(padvance1),
+                         advance_name_translation(padvance2));
 }
 
 /****************************************************************
@@ -250,8 +249,9 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
   gtk_menu_shell_append(GTK_MENU_SHELL(parent), item);
   gtk_widget_show_all(item);
 
-  /* Trading: advances */
-  if (game.info.trading_tech) {
+
+  /* Advances. */
+  {
     GtkWidget *advance_item;
     GList *sorting_list = NULL;
 
@@ -274,7 +274,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
       gtk_widget_set_sensitive(advance_item, FALSE);
     } else {
       GList *list_item;
-      const struct advance *padvance;
+      struct advance *padvance;
 
       sorting_list = g_list_sort(sorting_list, sort_advance_names);
       menu = gtk_menu_new();
@@ -294,7 +294,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 
       for (list_item = sorting_list; NULL != list_item;
            list_item = g_list_next(list_item)) {
-        padvance = (const struct advance *) list_item->data;
+        padvance = (struct advance *) list_item->data;
         item =
             gtk_menu_item_new_with_label(advance_name_translation(padvance));
         gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
@@ -315,7 +315,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
   }
 
 
-  /* Trading: cities. */
+  /* Cities. */
 
   /****************************************************************
   Creates a sorted list of plr0's cities, excluding the capital and
@@ -324,7 +324,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 
 			      - Kris Bubendorfer
   *****************************************************************/
-  if (game.info.trading_city) {
+  {
     int i = 0, j = 0, n = city_list_size(pgiver->cities);
     struct city **city_list_ptrs;
 
@@ -454,7 +454,7 @@ static void diplomacy_destroy(struct Diplomacy_dialog* pdialog)
      * by an other way. */
     gui_dialog_destroy(pdialog->dialog);
   }
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -494,7 +494,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   GtkCellRenderer *rend;
 
   struct Diplomacy_dialog *pdialog;
-  char buf[256], plr_buf[4 * MAX_LEN_NAME];
+  char buf[256];
 
   pdialog = fc_malloc(sizeof(*pdialog));
 
@@ -503,8 +503,9 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   gui_dialog_new(&(pdialog->dialog), GTK_NOTEBOOK(top_notebook), pdialog);
   
-  fc_snprintf(buf, sizeof(buf), _("Diplomacy: %s"),
-              nation_plural_for_player(plr1));
+  my_snprintf(buf, sizeof(buf),
+              _("Diplomacy: %s"),
+	      nation_plural_for_player(plr1));
 
   gui_dialog_set_title(pdialog->dialog, buf);
   gui_dialog_response_set_callback(pdialog->dialog, diplomacy_response);
@@ -562,7 +563,8 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  fc_snprintf(buf, sizeof(buf), "<span size=\"large\"><u>%s</u></span>",
+  my_snprintf(buf, sizeof(buf),
+	      "<span size=\"large\"><u>%s</u></span>",
               nation_plural_for_player(plr0));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_box_pack_start(GTK_BOX(vbox), label, TRUE, TRUE, 0);
@@ -579,9 +581,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  fc_snprintf(buf, sizeof(buf),
-              "<span size=\"large\" weight=\"bold\">%s</span>",
-              ruler_title_for_player(plr0, plr_buf, sizeof(plr_buf)));
+  my_snprintf(buf, sizeof(buf),
+	      "<span size=\"large\" weight=\"bold\">%s %s</span>",
+	      ruler_title_translation(plr0),
+	      player_name(plr0));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
 
@@ -593,21 +596,21 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   gtk_table_set_row_spacings(GTK_TABLE(table), 6);
   gtk_box_pack_start(GTK_BOX(vbox), table, TRUE, TRUE, 0);
 
-  /* Trading gold: we */
-  if (game.info.trading_gold) {
-    spin = gtk_spin_button_new_with_range(0.0, plr0->economic.gold + 0.1,
-                                          1.0);
-    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(spin), 0);
-    gtk_table_attach_defaults(GTK_TABLE(table), spin, 1, 2, 0, 1);
-    g_object_set_data(G_OBJECT(spin), "plr", plr0);
-    g_signal_connect_after(spin, "value-changed",
-                           G_CALLBACK(diplo_dialog_returnkey), pdialog);
+  spin = gtk_spin_button_new_with_range(0.0, plr0->economic.gold + 0.1, 1.0);
+  gtk_spin_button_set_digits(GTK_SPIN_BUTTON(spin), 0);
+  gtk_table_attach_defaults(GTK_TABLE(table), spin, 1, 2, 0, 1);
+  g_object_set_data(G_OBJECT(spin), "plr", plr0);
+  g_signal_connect_after(spin, "value-changed",
+			 G_CALLBACK(diplo_dialog_returnkey), pdialog);
 
-    label = g_object_new(GTK_TYPE_LABEL, "use-underline", TRUE,
-                         "mnemonic-widget", spin, "label", _("_Gold:"),
-                         "xalign", 0.0, "yalign", 0.5, NULL);
-    gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
-  }
+  label = g_object_new(GTK_TYPE_LABEL,
+    "use-underline", TRUE,
+    "mnemonic-widget", spin,
+    "label", _("_Gold:"),
+    "xalign", 0.0,
+    "yalign", 0.5,
+    NULL);
+  gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
 
   menubar = gtk_menu_bar_new();
   gtk_table_attach_defaults(GTK_TABLE(table), menubar, 1, 2, 1, 2);
@@ -633,7 +636,8 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  fc_snprintf(buf, sizeof(buf), "<span size=\"large\"><u>%s</u></span>",
+  my_snprintf(buf, sizeof(buf),
+	      "<span size=\"large\"><u>%s</u></span>",
               nation_plural_for_player(plr1));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_box_pack_start(GTK_BOX(vbox), label, TRUE, TRUE, 0);
@@ -651,9 +655,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  fc_snprintf(buf, sizeof(buf),
-              "<span size=\"large\" weight=\"bold\">%s</span>",
-              ruler_title_for_player(plr1, plr_buf, sizeof(plr_buf)));
+  my_snprintf(buf, sizeof(buf),
+	      "<span size=\"large\" weight=\"bold\">%s %s</span>",
+	      ruler_title_translation(plr1),
+	      player_name(plr1));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
 
@@ -665,20 +670,21 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   gtk_table_set_row_spacings(GTK_TABLE(table), 6);
   gtk_box_pack_start(GTK_BOX(vbox), table, TRUE, TRUE, 0);
 
-  /* Trading gold: they */
-  if (game.info.trading_gold) {
-    spin = gtk_spin_button_new_with_range(0.0, plr1->economic.gold + 0.1, 1.0);
-    gtk_spin_button_set_digits(GTK_SPIN_BUTTON(spin), 0);
-    gtk_table_attach_defaults(GTK_TABLE(table), spin, 1, 2, 0, 1);
-    g_object_set_data(G_OBJECT(spin), "plr", plr1);
-    g_signal_connect_after(spin, "value-changed",
-                           G_CALLBACK(diplo_dialog_returnkey), pdialog);
+  spin = gtk_spin_button_new_with_range(0.0, plr1->economic.gold + 0.1, 1.0);
+  gtk_spin_button_set_digits(GTK_SPIN_BUTTON(spin), 0);
+  gtk_table_attach_defaults(GTK_TABLE(table), spin, 1, 2, 0, 1);
+  g_object_set_data(G_OBJECT(spin), "plr", plr1);
+  g_signal_connect_after(spin, "value-changed",
+			 G_CALLBACK(diplo_dialog_returnkey), pdialog);
 
-    label = g_object_new(GTK_TYPE_LABEL, "use-underline", TRUE,
-                         "mnemonic-widget", spin, "label", _("_Gold:"),
-                         "xalign", 0.0, "yalign", 0.5, NULL);
-    gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
-  }
+  label = g_object_new(GTK_TYPE_LABEL,
+    "use-underline", TRUE,
+    "mnemonic-widget", spin,
+    "label", _("_Gold:"),
+    "xalign", 0.0,
+    "yalign", 0.5,
+    NULL);
+  gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
 
   menubar = gtk_menu_bar_new();
   gtk_table_attach_defaults(GTK_TABLE(table), menubar, 1, 2, 1, 2);
@@ -762,8 +768,8 @@ static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data)
     struct player *pgiver = player_by_number(giver);
     struct player *pdest = player_by_number(dest);
 
-    fc_assert_ret(NULL != pgiver);
-    fc_assert_ret(NULL != pdest);
+    RETURN_IF_FAIL(NULL != pgiver);
+    RETURN_IF_FAIL(NULL != pdest);
 
     advance_iterate(A_FIRST, padvance) {
       Tech_type_id i = advance_number(padvance);
@@ -924,7 +930,7 @@ void diplomacy_dialog_init()
 *****************************************************************/
 void diplomacy_dialog_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /*****************************************************************

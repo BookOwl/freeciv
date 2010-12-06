@@ -13,14 +13,8 @@
 #ifndef FC__BASE_H
 #define FC__BASE_H
 
-/* utility */
-#include "bitvector.h"
-
-/* common */
 #include "fc_types.h"
 #include "requirements.h"
-
-struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
 /* This must correspond to base_gui_type_names[] in base.c */
 enum base_gui_type {
@@ -61,8 +55,6 @@ struct base_type {
   bv_unit_classes native_to;
   bv_base_flags flags;
   bv_bases conflicts;
-
-  struct strvec *helptext;
 };
 
 #define BASE_NONE       -1
@@ -75,10 +67,9 @@ Base_type_id base_number(const struct base_type *pbase);
 struct base_type *base_by_number(const Base_type_id id);
 
 const char *base_rule_name(const struct base_type *pbase);
-const char *base_name_translation(const struct base_type *pbase);
+const char *base_name_translation(struct base_type *pbase);
 
-struct base_type *base_type_by_rule_name(const char *name);
-struct base_type *base_type_by_translated_name(const char *name);
+struct base_type *find_base_type_by_rule_name(const char *name);
 
 bool is_base_near_tile(const struct tile *ptile, const struct base_type *pbase);
 

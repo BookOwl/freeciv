@@ -14,7 +14,7 @@
 #define FC__MOVEMENT_H
 
 #include "fc_types.h"
-#include "tile.h"
+#include "unit.h"       /* enum unit_activity */
 
 #define SINGLE_MOVE     3
 #define MOVE_COST_RIVER 1
@@ -23,24 +23,6 @@
 
 struct unit_type;
 struct terrain;
-
-enum unit_move_result {
-  MR_OK,
-  MR_DEATH,
-  MR_PAUSE,
-  MR_BAD_TYPE_FOR_CITY_TAKE_OVER,
-  MR_BAD_TYPE_FOR_CITY_TAKE_OVER_FROM_SEA,
-  MR_NO_WAR,    /* Can't move here without declaring war. */
-  MR_PEACE,     /* Can't move here because of a peace treaty. */
-  MR_ZOC,
-  MR_BAD_ACTIVITY,
-  MR_BAD_DESTINATION,
-  MR_BAD_MAP_POSITION,
-  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY,
-  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT,
-  MR_NO_TRANSPORTER_CAPACITY,
-  MR_TRIREME,
-};
 
 int unit_move_rate(const struct unit *punit);
 bool unit_can_defend_here(const struct unit *punit);
@@ -73,23 +55,21 @@ bool can_step_taken_wrt_to_zoc(const struct unit_type *punittype,
 			       const struct tile *src_tile,
 			       const struct tile *dst_tile);
 bool zoc_ok_move(const struct unit *punit, const struct tile *ptile);
-bool unit_can_move_to_tile(const struct unit *punit,
-                           const struct tile *ptile,
-                           bool igzoc);
-enum unit_move_result
-unit_move_to_tile_test(const struct unit_type *punittype,
-                       const struct player *unit_owner,
-                       enum unit_activity activity,
-                       const struct tile *src_tile,
-                       const struct tile *dst_tile,
-                       bool igzoc);
+bool can_unit_move_to_tile(const struct unit *punit, const struct tile *ptile,
+			   bool igzoc);
+enum unit_move_result test_unit_move_to_tile(const struct unit_type *punittype,
+					     const struct player *unit_owner,
+					     enum unit_activity activity,
+					     const struct tile *src_tile,
+					     const struct tile *dst_tile,
+					     bool igzoc);
 bool can_unit_transport(const struct unit *transporter, const struct unit *transported);
 bool can_unit_type_transport(const struct unit_type *transporter,
                              const struct unit_class *transported);
 int unit_class_transporter_capacity(const struct tile *ptile,
                                     const struct player *pplayer,
                                     const struct unit_class *pclass);
-struct unit *transport_from_tile(struct unit *punit, struct tile *ptile);
+struct unit *find_transport_from_tile(struct unit *punit, struct tile *ptile);
 
 enum unit_move_type move_type_from_str(const char *s);
 

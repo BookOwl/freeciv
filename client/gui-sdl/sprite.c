@@ -21,9 +21,8 @@
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"
 
-/* client/gui-sdl */
+/* gui-sdl */
 #include "graphics.h"
 
 #include "sprite.h"
@@ -57,7 +56,9 @@ struct sprite * load_gfxfile(const char *filename)
   SDL_Surface *pBuf = NULL;
 
   if ((pBuf = IMG_Load(filename)) == NULL) {
-    log_error(_("load_gfxfile: Unable to load graphic file %s!"), filename);
+    freelog(LOG_ERROR,
+	    _("load_gfxfile: Unable to load graphic file %s!"),
+	    filename);
     return NULL;		/* Should I use abotr() ? */
   }
 

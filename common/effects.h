@@ -13,7 +13,7 @@
 #ifndef FC__EFFECTS_H
 #define FC__EFFECTS_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool */
 #include "fc_types.h"
 
 #include "connection.h"
@@ -71,7 +71,6 @@ enum effect_type {
   EFT_UNIT_RECOVER,
   EFT_UPGRADE_UNIT,
   EFT_UPKEEP_FREE,
-  EFT_TECH_UPKEEP_FREE,
   EFT_NO_UNHAPPY,
   EFT_VETERAN_BUILD,
   EFT_VETERAN_COMBAT,
@@ -107,8 +106,6 @@ enum effect_type {
   EFT_OUTPUT_PENALTY_TILE, /* -1 penalty to tiles producing more than this */
   EFT_OUTPUT_INC_TILE_CELEBRATE,
   EFT_CITY_UNHAPPY_SIZE, /* all citizens after this are unhappy */
-  EFT_CITY_RADIUS_SQ, /* add to default squared city radius */
-  EFT_CITY_BUILD_SLOTS, /* slots to build units */
   EFT_UPGRADE_PRICE_PCT,
   EFT_VISIBLE_WALLS,     /* City should use walls gfx */
   EFT_TECH_COST_FACTOR,
@@ -162,8 +159,8 @@ struct packet_ruleset_effect_req;
 
 void ruleset_cache_init(void);
 void ruleset_cache_free(void);
-void recv_ruleset_effect(const struct packet_ruleset_effect *packet);
-void recv_ruleset_effect_req(const struct packet_ruleset_effect_req *packet);
+void recv_ruleset_effect(struct packet_ruleset_effect *packet);
+void recv_ruleset_effect_req(struct packet_ruleset_effect_req *packet);
 void send_ruleset_cache(struct conn_list *dest);
 
 bool is_effect_useful(const struct player *target_player,

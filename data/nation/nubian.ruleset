@@ -17,25 +17,22 @@ legend=_("A succession of kingdoms stretching roughly from the 1st to the\
  into smaller Christian kingdoms which persisted into medieval times\
  before being conquered by Muslim Arabs.")
 
-leaders = {
- "name",                "sex"
- "Alara",               "Male"
- "Kashta",              "Male"
- "Piye",                "Male"
- "Aspelta",             "Male"
- "Taharqa",             "Male"
- "Amanishakheto",       "Female"
-}
-
-ruler_titles = {
- "government",      "male_title",          "female_title"
- "Despotism",       _("Pharaoh %s"),       _("?female:Pharaoh %s")
- "Monarchy",        _("Great Pharaoh %s"), _("?female:Great Pharaoh %s")
-}
-
+leader=
+ "Alara",
+ "Kashta",
+ "Piye",
+ "Aspelta",
+ "Taharqa",
+ "Amanishakheto"
+leader_sex="Male", "Male", "Male", "Male", "Male", "Female"
 flag="nubia"
 flag_alt = "-"
 city_style = "Babylonian"
+
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Despotism",       _("Pharaoh"),      _("?female:Pharaoh")
+                 "Monarchy", _("Great Pharaoh"), _("?female:Great Pharaoh")
+               }
 
 init_techs=""
 init_buildings=""

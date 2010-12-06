@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h> /* sqrt */
@@ -36,7 +37,6 @@
 #include "government.h"
 #include "mem.h"
 #include "shared.h"
-#include "specialist.h"
 #include "tech.h"
 #include "unit.h"
 #include "map.h"
@@ -281,7 +281,7 @@ static void create_tech_tree(Widget tree, Widget parent, int tech, int levels)
      return;
   }
   
-  fc_snprintf(label, sizeof(label),
+  my_snprintf(label, sizeof(label),
 	      "%s:%d", advance_name_translation(advance_by_number(tech)),
 	      num_unknown_techs_for_goal(client.conn.playing, tech));
 
@@ -725,7 +725,7 @@ static void help_update_improvement(const struct help_item *pitem,
 				    char *title)
 {
   char buf[64000];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
   
   create_help_page(HELP_IMPROVEMENT);
 
@@ -777,7 +777,7 @@ static void help_update_wonder(const struct help_item *pitem,
 			       char *title)
 {
   char buf[64000];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
 
   create_help_page(HELP_WONDER);
 
@@ -830,7 +830,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 				  char *title)
 {
   char buf[64000];
-  struct unit_type *punittype = unit_type_by_translated_name(title);
+  struct unit_type *punittype = find_unit_type_by_translated_name(title);
   
   create_help_page(HELP_UNIT);
   if (punittype) {
@@ -893,7 +893,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 {
   char buf[4096];
   int i;
-  struct advance *padvance = advance_by_translated_name(title);
+  struct advance *padvance = find_advance_by_translated_name(title);
 
   create_help_page(HELP_TECH);
   set_title_topic(pitem);
@@ -957,7 +957,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
     create_tech_tree(help_tech_tree, 0, advance_count(), 3);
     strcpy(buf, pitem->text);
   }
-  fc_break_lines(buf, 68);
+  wordwrap_string(buf, 68);
   XtVaSetValues(help_text, XtNstring, buf, NULL);
 }
 
@@ -968,7 +968,7 @@ static void help_update_terrain(const struct help_item *pitem,
 				char *title)
 {
   char buf[4096];
-  struct terrain *pterrain = terrain_by_translated_name(title);
+  struct terrain *pterrain = find_terrain_by_translated_name(title);
 
   create_help_page(HELP_TERRAIN);
   set_title_topic(pitem);
@@ -1059,96 +1059,18 @@ static void help_update_terrain(const struct help_item *pitem,
 }
 
 /**************************************************************************
-  Help page for bases.
-**************************************************************************/
-static void help_update_base(const struct help_item *pitem,
-                             char *title)
-{
-  char buf[4096];
-  struct base_type *pbase = base_type_by_translated_name(title);
-
-  if (!pbase) {
-    strcat(buf, pitem->text);
-  } else {
-    /* FIXME use actual widgets */
-    const char *sep = "";
-    buf[0] = '\0';
-    if (pbase->buildable) {
-      /* TRANS: "MP" = movement points */
-      sprintf(buf, _("Build: %d MP\n"), pbase->build_time);
-    }
-    sprintf(buf + strlen(buf), _("Conflicts with: "));
-    base_type_iterate(pbase2) {
-      if (!can_bases_coexist(pbase, pbase2)) {
-        strcat(buf, sep);
-        strcat(buf, base_name_translation(pbase2));
-        sep = "/";
-      }
-    } base_type_iterate_end;
-    if (!*sep) {
-      /* TRANS: "Conflicts with: (none)" (bases) */
-      strcat(buf, _("(none)"));
-    }
-    strcat(buf, "\n\n");
-    helptext_base(buf + strlen(buf), sizeof(buf) - strlen(buf),
-                  client.conn.playing, pitem->text, pbase);
-  }
-  create_help_page(HELP_TEXT);
-  set_title_topic(pitem);
-  XtVaSetValues(help_text, XtNstring, buf, NULL);
-}
-
-/**************************************************************************
-  This is currently just a text page, with special text:
-**************************************************************************/
-static void help_update_specialist(const struct help_item *pitem,
-				   char *title)
-{
-  char buf[4096];
-  struct specialist *pspecialist = specialist_by_translated_name(title);
-
-  if (!pspecialist) {
-    strcat(buf, pitem->text);
-  } else {
-    helptext_specialist(buf, sizeof(buf), client.conn.playing, pitem->text,
-                        pspecialist);
-  }
-  create_help_page(HELP_TEXT);
-  set_title_topic(pitem);
-  XtVaSetValues(help_text, XtNstring, buf, NULL);
-}
-
-/**************************************************************************
   This is currently just a text page, with special text:
 **************************************************************************/
 static void help_update_government(const struct help_item *pitem,
 				   char *title)
 {
   char buf[4096];
-  struct government *pgovernment = government_by_translated_name(title);
+  struct government *pgovernment = find_government_by_translated_name(title);
 
   if (!pgovernment) {
     strcat(buf, pitem->text);
   } else {
     helptext_government(buf, sizeof(buf), client.conn.playing, pitem->text, pgovernment);
-  }
-  create_help_page(HELP_TEXT);
-  set_title_topic(pitem);
-  XtVaSetValues(help_text, XtNstring, buf, NULL);
-}
-
-/****************************************************************************
-  This is currently just a text page, with special text
-****************************************************************************/
-static void help_update_nation(const struct help_item *pitem, char *title,
-			       struct nation_type *pnation)
-{
-  char buf[4096];
-
-  if (!pnation) {
-    strcat(buf, pitem->text);
-  } else {
-    helptext_nation(buf, sizeof(buf), pnation, pitem->text);
   }
   create_help_page(HELP_TEXT);
   set_title_topic(pitem);
@@ -1184,17 +1106,8 @@ static void help_update_dialog(const struct help_item *pitem)
   case HELP_TERRAIN:
     help_update_terrain(pitem, top);
     break;
-  case HELP_BASE:
-    help_update_base(pitem, top);
-    break;
-  case HELP_SPECIALIST:
-    help_update_specialist(pitem, top);
-    break;
   case HELP_GOVERNMENT:
     help_update_government(pitem, top);
-    break;
-  case HELP_NATIONS:
-    help_update_nation(pitem, top, nation_by_rule_name(top));
     break;
   case HELP_TEXT:
   default:

@@ -15,16 +15,14 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 
-/* utility */
-#include "bitvector.h"
 #include "rand.h"
-#include "log.h"
 
-/* common */
 #include "base.h"
 #include "game.h"
+#include "log.h"
 #include "map.h"
 #include "movement.h"
 #include "packets.h"
@@ -69,35 +67,13 @@ bool can_player_attack_tile(const struct player *pplayer,
 /***********************************************************************
   Can unit attack other
 ***********************************************************************/
-static bool is_unit_reachable_by_unit(const struct unit *defender,
-                                      const struct unit *attacker)
+bool is_unit_reachable_by_unit(const struct unit *defender,
+                               const struct unit *attacker)
 {
   struct unit_class *dclass = unit_class(defender);
   struct unit_type *atype = unit_type(attacker);
 
   return BV_ISSET(atype->targets, uclass_index(dclass));
-}
-
-/***********************************************************************
-  Can unit attack other at given location
-***********************************************************************/
-bool is_unit_reachable_at(const struct unit *defender,
-                          const struct unit *attacker,
-                          const struct tile *location)
-{
-  if (NULL != tile_city(location)) {
-    return TRUE;
-  }
-
-  if (is_unit_reachable_by_unit(defender, attacker)) {
-    return TRUE;
-  }
-
-  if (tile_has_native_base(location, unit_type(defender))) {
-    return TRUE;
-  }
-
-  return FALSE;
 }
 
 /***********************************************************************
@@ -121,13 +97,16 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
 				  const struct unit *pdefender,
                                   const struct tile *dest_tile)
 {
+  struct city *pcity = tile_city(dest_tile);
+
   /* 1. Can we attack _anything_ ? */
   if (!is_military_unit(punit) || !is_attack_unit(punit)) {
     return FALSE;
   }
 
   /* 2. Only fighters can attack planes, except in city or airbase attacks */
-  if (!is_unit_reachable_at(pdefender, punit, dest_tile)) {
+  if (!is_unit_reachable_by_unit(pdefender, punit)
+      && !(pcity || tile_has_native_base(dest_tile, unit_type(pdefender)))) {
     return FALSE;
   }
 
@@ -148,12 +127,11 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
 }
 
 /***********************************************************************
-  When unreachable_protects setting is TRUE:
   To attack a stack, unit must be able to attack every unit there (not
   including transported units).
 ************************************************************************/
-static bool can_unit_attack_all_at_tile(const struct unit *punit,
-                                        const struct tile *ptile)
+bool can_unit_attack_all_at_tile(const struct unit *punit,
+				 const struct tile *ptile)
 {
   unit_list_iterate(ptile->units, aunit) {
     /* HACK: we don't count transported units here.  This prevents some
@@ -171,47 +149,17 @@ static bool can_unit_attack_all_at_tile(const struct unit *punit,
 }
 
 /***********************************************************************
-  When unreachable_protects setting is FALSE:
-  To attack a stack, unit must be able to attack some unit there (not
-  including transported units).
-************************************************************************/
-static bool can_unit_attack_any_at_tile(const struct unit *punit,
-                                        const struct tile *ptile)
-{
-  unit_list_iterate(ptile->units, aunit) {
-    /* HACK: we don't count transported units here.  This prevents some
-     * bugs like a cargoplane carrying a land unit being vulnerable. */
-    if (aunit->transported_by == -1
-	&& can_unit_attack_unit_at_tile(punit, aunit, ptile)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/***********************************************************************
-  Check if unit can attack unit stack at tile.
-***********************************************************************/
-bool can_unit_attack_units_at_tile(const struct unit *punit,
-                                   const struct tile *ptile)
-{
-  if (game.info.unreachable_protects) {
-    return can_unit_attack_all_at_tile(punit, ptile);
-  } else {
-    return can_unit_attack_any_at_tile(punit, ptile);
-  }
-}
-
-/***********************************************************************
   Is unit (1) diplomatically allowed to attack and (2) physically able
   to do so?
 ***********************************************************************/
 bool can_unit_attack_tile(const struct unit *punit,
-                          const struct tile *dest_tile)
+			  const struct tile *dest_tile)
 {
-  return (can_player_attack_tile(unit_owner(punit), dest_tile)
-          && can_unit_attack_units_at_tile(punit, dest_tile));
+  if (!can_player_attack_tile(unit_owner(punit), dest_tile)) {
+    return FALSE;
+  }
+
+  return can_unit_attack_all_at_tile(punit, dest_tile);
 }
 
 /***********************************************************************
@@ -384,10 +332,8 @@ struct city *sdi_try_defend(const struct player *owner,
 {
   square_iterate(ptile, 2, ptile1) {
     struct city *pcity = tile_city(ptile1);
-
-    if (pcity
-        && !pplayers_allied(city_owner(pcity), owner)
-        && fc_rand(100) < get_city_bonus(pcity, EFT_NUKE_PROOF)) {
+    if (pcity && (!pplayers_allied(city_owner(pcity), owner))
+	&& myrand(100) < get_city_bonus(pcity, EFT_NUKE_PROOF)) {
       return pcity;
     }
   } square_iterate_end;
@@ -481,9 +427,11 @@ static int defense_multiplication(const struct unit_type *att_type,
   struct city *pcity = tile_city(ptile);
   int mod;
 
-  fc_assert_ret_val(NULL != def_type, 0);
+  CHECK_UNIT_TYPE(def_type);
 
-  if (NULL != att_type) {
+  if (att_type) {
+    CHECK_UNIT_TYPE(att_type);
+
     if (utype_has_flag(def_type, F_PIKEMEN)
 	&& utype_has_flag(att_type, F_HORSE)) {
       defensepower *= 2;
@@ -609,8 +557,7 @@ struct unit *get_defender(const struct unit *attacker,
   unit_list_iterate(ptile->units, defender) {
     /* We used to skip over allied units, but the logic for that is
      * complicated and is now handled elsewhere. */
-    if (unit_can_defend_here(defender)
-        && can_unit_attack_unit_at_tile(attacker, defender, ptile)) {
+    if (unit_can_defend_here(defender)) {
       bool change = FALSE;
       int build_cost = unit_build_shield_cost(defender);
       int defense_rating = get_defense_rating(attacker, defender);
@@ -618,13 +565,12 @@ struct unit *get_defender(const struct unit *attacker,
       int unit_def 
         = (int) (100000 * (1 - unit_win_chance(attacker, defender)));
 
-      fc_assert_action(0 <= unit_def, continue);
+      assert(unit_def >= 0);
 
       if (unit_has_type_flag(defender, F_GAMELOSS)
           && !is_stack_vulnerable(defender->tile)) {
-        unit_def = -1; /* then always use leader as last defender. */
-        /* FIXME: multiple gameloss units with varying defense value
-         * not handled. */
+        unit_def = -1; // then always use leader as last defender
+        // FIXME: multiple gameloss units with varying defense value not handled
       }
 
       if (unit_def > bestvalue) {
@@ -647,6 +593,20 @@ struct unit *get_defender(const struct unit *attacker,
       }
     }
   } unit_list_iterate_end;
+
+  if (unit_list_size(ptile->units) > 0 && !bestdef) {
+    struct unit *punit = unit_list_get(ptile->units, 0);
+
+    freelog(LOG_ERROR, "get_defender bug: %s %s vs %s %s (total %d"
+            " units) on \"%s\" at (%d,%d). ",
+            nation_rule_name(nation_of_unit(attacker)),
+            unit_rule_name(attacker),
+            nation_rule_name(nation_of_unit(punit)),
+            unit_rule_name(punit),
+            unit_list_size(ptile->units), 
+            terrain_rule_name(tile_terrain(ptile)),
+            TILE_XY(ptile));
+  }
 
   return bestdef;
 }

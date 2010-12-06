@@ -74,17 +74,17 @@ static void caravan_destroy_callback(GtkWidget *w, gpointer data)
 static void get_help_build_wonder_button_label(char* buf, int bufsize,
                                                bool* help_build_possible)
 {
-  struct city* destcity = game_city_by_number(caravan_city_id);
-  struct unit* caravan = game_unit_by_number(caravan_unit_id);
+  struct city* destcity = game_find_city_by_number(caravan_city_id);
+  struct unit* caravan = game_find_unit_by_number(caravan_unit_id);
   
   if (destcity && caravan
       && unit_can_help_build_wonder(caravan, destcity)) {
-    fc_snprintf(buf, bufsize, _("Help build _Wonder (%d remaining)"),
-                impr_build_shield_cost(destcity->production.value.building)
-                - destcity->shield_stock);
+    my_snprintf(buf, bufsize, _("Help build _Wonder (%d remaining)"),
+	impr_build_shield_cost(destcity->production.value.building)
+	- destcity->shield_stock);
     *help_build_possible = TRUE;
   } else {
-    fc_snprintf(buf, bufsize, _("Help build _Wonder"));
+    my_snprintf(buf, bufsize, _("Help build _Wonder"));
     *help_build_possible = FALSE;
   }
 }
@@ -98,9 +98,9 @@ void popup_caravan_dialog(struct unit *punit,
   char buf[128], wonder[128];
   bool can_establish, can_trade, can_wonder;
   
-  fc_snprintf(buf, sizeof(buf),
-              _("Your caravan from %s reaches the city of %s.\nWhat now?"),
-              city_name(phomecity), city_name(pdestcity));
+  my_snprintf(buf, sizeof(buf),
+	      _("Your caravan from %s reaches the city of %s.\nWhat now?"),
+	      city_name(phomecity), city_name(pdestcity));
   
   caravan_city_id=pdestcity->id; /* callbacks need these */
   caravan_unit_id=punit->id;

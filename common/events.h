@@ -13,8 +13,14 @@
 #ifndef FC__EVENTS_H
 #define FC__EVENTS_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"          /* bool type */
 
+/* Add new event types to the end. Old clients (< 2.2) saves message
+ * settings by type number and installing new event type in
+ * between would cause erronous loading of existing rc file.
+ * When adding events to stable branch, there is risk that TRUNK
+ * already has allocated next slot for something else (and has
+ * new event in upper slot) */
 #define SPECENUM_NAME event_type
 #define SPECENUM_VALUE0   E_CITY_CANTBUILD
 #define SPECENUM_VALUE1   E_CITY_LOST
@@ -135,16 +141,12 @@
 #define SPECENUM_VALUE105 E_VOTE_NEW
 #define SPECENUM_VALUE106 E_VOTE_RESOLVED
 #define SPECENUM_VALUE107 E_VOTE_ABORTED
-/* Change of the city radius */
-#define SPECENUM_VALUE108 E_CITY_RADIUS_SQ
-/* A unit with population cost was build; the city shrinks. */
-#define SPECENUM_VALUE109 E_UNIT_BUILT_POP_COST
 /*
  * Note: If you add a new event, make sure you make a similar change
- * to the events array in "common/events.c" using GEN_EV and
- * "data/stdsounds.soundspec"
+ * to the events array in common/events.c using GEN_EV,
+ * data/stdsoundes and to server/scripting/api.pkg
  */
-#define SPECENUM_VALUE110 E_LAST
+#define SPECENUM_VALUE108 E_LAST
 #include "specenum_gen.h"
 /* the maximum number of enumerators is set in generate_specnum.py */
 

@@ -30,13 +30,8 @@ else
 DSUBDIRS =
 endif
 
-if MODINST
-MODSUBDIRS = modinst
-else
-MODSUBDIRS =
-endif
 
-SUBDIRS=	$(DSUBDIRS) utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS) $(MODSUBDIRS)
+SUBDIRS=	$(DSUBDIRS) utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS)
 
 ## Automake should distribute config.rpath automatically - and new
 ## versions probably do. We still support versions that do not, so
@@ -98,7 +93,7 @@ EXTRA_DIST=	autogen.sh 			\
 		vms/vms_build.com		\
 		scripts/setup_auth_server.sh
 
-noinst_HEADERS= fc_version
+noinst_HEADERS= version.in
 
 src-check:
 	cd tests && $(MAKE) $(AM_MAKEFLAGS) src-check

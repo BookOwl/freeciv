@@ -153,7 +153,7 @@ static void popup_load_game_dialog(void)
   struct widget *pNextLabel = NULL; 
   SDL_String16 *pTitle, *pFilename;
   SDL_Rect area;
-  struct fileinfo_list *files;
+  struct datafile_list *files;
   int count = 0;
   int scrollbar_width = 0;
   int max_label_width = 0;
@@ -194,10 +194,8 @@ static void popup_load_game_dialog(void)
   
   /* close button */
   pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                  WF_WIDGET_HAS_INFO_LABEL
-                                  | WF_RESTORE_BACKGROUND);
-  pCloseButton->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                                    adj_font(12));
+                                  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pCloseButton->action = exit_load_dlg_callback;
   set_wstate(pCloseButton, FC_WS_NORMAL);
   pCloseButton->key = SDLK_ESCAPE;
@@ -213,8 +211,9 @@ static void popup_load_game_dialog(void)
   hide_scrollbar(pLoadDialog->pScroll);
 
   /* search for user saved games. */
-  files = fileinfolist_infix(get_save_dirs(), ".sav", FALSE);
-  fileinfo_list_iterate(files, pfile) {
+  files = datafilelist_infix("saves", ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    
     count++;
     
     pFilename = create_str16_from_char(pfile->name, adj_font(13));
@@ -224,7 +223,7 @@ static void popup_load_game_dialog(void)
      
     /* store filename */
     pFilenameLabel->data.ptr = fc_calloc(1, strlen(pfile->fullname) + 1);
-    fc_strlcpy((char*)pFilenameLabel->data.ptr, pfile->fullname, strlen(pfile->fullname) + 1);
+    mystrlcpy((char*)pFilenameLabel->data.ptr, pfile->fullname, strlen(pfile->fullname) + 1);
     
     pFilenameLabel->action = load_selected_game_callback;
      
@@ -241,8 +240,50 @@ static void popup_load_game_dialog(void)
     }
 
     max_label_width = MAX(max_label_width, pFilenameLabel->size.w);
-  } fileinfo_list_iterate_end;
-  fileinfo_list_destroy(files);
+        
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
+
+  files = datafilelist_infix(NULL, ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    
+    count++;
+    
+    pFilename = create_str16_from_char(pfile->name, adj_font(13));
+    pFilename->style |= SF_CENTER;
+    pFilenameLabel = create_iconlabel(NULL, pWindow->dst, pFilename,
+      (WF_FREE_DATA | WF_SELLECT_WITHOUT_BAR | WF_RESTORE_BACKGROUND));
+     
+    /* store filename */
+    pFilenameLabel->data.ptr = fc_calloc(1, strlen(pfile->fullname) + 1);
+    mystrlcpy((char*)pFilenameLabel->data.ptr, pfile->fullname, strlen(pfile->fullname) + 1);
+    
+    pFilenameLabel->action = load_selected_game_callback;
+     
+    set_wstate(pFilenameLabel, FC_WS_NORMAL);
+    
+    /* FIXME: this was supposed to be add_widget_to_vertical_scroll_widget_list(), but
+     * add_widget_to_vertical_scroll_widget_list() needs the scrollbar area to be defined
+     * for updating the scrollbar position, but the area is not known yet (depends on
+     * maximum label width) */ 
+    add_to_gui_list(ID_LABEL, pFilenameLabel);
+
+    if (count == 1) {
+      pFirstLabel = pFilenameLabel;
+    }
+
+    max_label_width = MAX(max_label_width, pFilenameLabel->size.w);
+        
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
 
   pLastLabel = pFilenameLabel;
 
@@ -379,7 +420,10 @@ void real_output_window_append(const char *astring,
     convertcopy_to_utf16(pUniStr, n, astring);
     add_to_chat_list(pUniStr, n);
   } else {
-    meswin_add(astring, tags, NULL, E_CHAT_MSG);
+    char message[MAX_LEN_MSG];
+    my_snprintf(message , MAX_LEN_MSG, "%s" , astring);
+    
+    add_notify_window(message, tags, NULL, E_CHAT_MSG);
   }
 }
 
@@ -430,10 +474,10 @@ static void add_to_chat_list(Uint16 *pUniStr, size_t n_alloc)
 {
   SDL_String16 *pStr;
   struct widget *pBuf, *pWindow = pConnDlg->pEndWidgetList;
-
-  fc_assert_ret(pUniStr != NULL);
-  fc_assert_ret(n_alloc != 0);
-
+  
+  assert(pUniStr != NULL);
+  assert(n_alloc != 0);
+  
   pStr = create_string16(pUniStr, n_alloc, adj_font(12));
    
   if (convert_string_to_const_surface_width(pStr, pConnDlg->text_width - adj_size(5))) {
@@ -558,7 +602,7 @@ static int load_game_callback(struct widget *pWidget)
 /**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
-void real_conn_list_dialog_update(void)
+void update_conn_list_dialog(void)
 {
   if (C_S_PREPARING == client_state()) {
     if (pConnDlg) {
@@ -670,9 +714,9 @@ static void popup_conn_list_dialog(void)
   if (pConnDlg || !client.conn.established) {
     return;
   }
-
-  meswin_dialog_popdown();
-
+  
+  popdown_meswin_dialog();
+  
   pConnDlg = fc_calloc(1, sizeof(struct CONNLIST));
     
   pWindow = create_window_skeleton(NULL, NULL, 0);
@@ -725,7 +769,7 @@ static void popup_conn_list_dialog(void)
   
   {  
     char cBuf[256];   
-    fc_snprintf(cBuf, sizeof(cBuf), _("Total users logged in : %d"), n);
+    my_snprintf(cBuf, sizeof(cBuf), _("Total users logged in : %d"), n);
     pStr = create_str16_from_char(cBuf, adj_font(12));
   }
   
@@ -842,8 +886,8 @@ static void popup_conn_list_dialog(void)
     
   pConnDlg->pBeginWidgetList = pBuf;
   /* ------------------------------------------------------------ */
-
-  conn_list_dialog_update();
+  
+  update_conn_list_dialog();
 }
 
 /**************************************************************************

@@ -15,6 +15,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -25,38 +27,17 @@
 
 /* common */
 #include "city.h"
-#include "fc_interface.h"
 #include "game.h"
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
 #include "map.h"
-#include "research.h"
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "vision.h"
 
 #include "player.h"
-
-
-struct player_slot {
-  struct player *player;
-};
-
-static struct {
-  struct player_slot *slots;
-  int used_slots; /* number of used/allocated players in the player slots */
-} player_slots;
-
-static void player_defaults(struct player *pplayer);
-
-static void player_diplstate_new(const struct player *plr1,
-                                 const struct player *plr2);
-static void player_diplstate_defaults(const struct player *plr1,
-                                      const struct player *plr2);
-static void player_diplstate_destroy(const struct player *plr1,
-                                     const struct player *plr2);
 
 /* Names of AI levels. These must correspond to enum ai_level in
  * player.h. Also commands to set AI level in server/commands.c
@@ -77,7 +58,7 @@ static const char *ai_level_names[] = {
 enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1, 
                                            const struct player *p2)
 {
-  enum diplstate_type ds = player_diplstate_get(p1, p2)->type;
+  enum diplstate_type ds = pplayer_get_diplstate(p1, p2)->type;
 
   if (p1 == p2 || ds == DS_WAR) {
     return DIPL_ERROR;
@@ -85,7 +66,7 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
   if (players_on_same_team(p1, p2)) {
     return DIPL_ERROR;
   }
-  if (player_diplstate_get(p1, p2)->has_reason_to_cancel == 0
+  if (p1->diplstates[player_index(p2)].has_reason_to_cancel == 0
       && get_player_bonus(p1, EFT_HAS_SENATE) > 0
       && get_player_bonus(p1, EFT_ANY_GOVERNMENT) == 0) {
     return DIPL_SENATE_BLOCKING;
@@ -108,7 +89,7 @@ static bool is_valid_alliance(const struct player *p1,
                               const struct player *p2)
 {
   players_iterate(pplayer) {
-    enum diplstate_type ds = player_diplstate_get(p1, pplayer)->type;
+    enum diplstate_type ds = pplayer_get_diplstate(p1, pplayer)->type;
 
     if (pplayer != p1
         && pplayer != p2
@@ -135,7 +116,7 @@ enum dipl_reason pplayer_can_make_treaty(const struct player *p1,
                                          const struct player *p2,
                                          enum diplstate_type treaty)
 {
-  enum diplstate_type existing = player_diplstate_get(p1, p2)->type;
+  enum diplstate_type existing = pplayer_get_diplstate(p1, p2)->type;
 
   if (p1 == p2) {
     return DIPL_ERROR; /* duh! */
@@ -224,410 +205,73 @@ bool player_can_invade_tile(const struct player *pplayer,
           || !players_non_invade(pplayer, ptile_owner));
 }
 
-/****************************************************************************
-  ...
-****************************************************************************/
-static void player_diplstate_new(const struct player *plr1,
-                                 const struct player *plr2)
-{
-  struct player_diplstate *diplstate;
-
-  fc_assert_ret(plr1 != NULL);
-  fc_assert_ret(plr2 != NULL);
-
-  const struct player_diplstate **diplstate_slot
-    = plr1->diplstates + player_index(plr2);
-
-  fc_assert_ret(*diplstate_slot == NULL);
-
-  diplstate = fc_calloc(1, sizeof(*diplstate));
-  *diplstate_slot = diplstate;
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-static void player_diplstate_defaults(const struct player *plr1,
-                                      const struct player *plr2)
-{
-  struct player_diplstate *diplstate = player_diplstate_get(plr1, plr2);
-
-  fc_assert_ret(diplstate != NULL);
-
-  diplstate->type                 = DS_NO_CONTACT;
-  diplstate->max_state            = DS_NO_CONTACT;
-  diplstate->first_contact_turn   = 0;
-  diplstate->turns_left           = 0;
-  diplstate->has_reason_to_cancel = 0;
-  diplstate->contact_turns_left   = 0;
-}
-
-
 /***************************************************************
-  Returns diplomatic state type between two players
+  In the server you must use server_player_init.  Note that
+  this function is matched by game_remove_player() in game.c,
+  there is no corresponding player_free() in this file.
 ***************************************************************/
-struct player_diplstate *player_diplstate_get(const struct player *plr1,
-                                              const struct player *plr2)
-{
-  fc_assert_ret_val(plr1 != NULL, NULL);
-  fc_assert_ret_val(plr2 != NULL, NULL);
-
-  const struct player_diplstate **diplstate_slot
-    = plr1->diplstates + player_index(plr2);
-
-  fc_assert_ret_val(*diplstate_slot != NULL, NULL);
-
-  return (struct player_diplstate *) *diplstate_slot;
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-static void player_diplstate_destroy(const struct player *plr1,
-                                     const struct player *plr2)
-{
-  fc_assert_ret(plr1 != NULL);
-  fc_assert_ret(plr2 != NULL);
-
-  const struct player_diplstate **diplstate_slot
-    = plr1->diplstates + player_index(plr2);
-
-  if (*diplstate_slot != NULL) {
-    free(player_diplstate_get(plr1, plr2));
-  }
-
-  *diplstate_slot = NULL;
-}
-
-/***************************************************************
-  Initialise all player slots (= pointer to player pointers).
-***************************************************************/
-void player_slots_init(void)
+void player_init(struct player *plr)
 {
   int i;
 
-  /* Init player slots. */
-  player_slots.slots = fc_calloc(player_slot_count(),
-                                 sizeof(*player_slots.slots));
-  /* Can't use the defined functions as the needed data will be
-   * defined here. */
-  for (i = 0; i < player_slot_count(); i++) {
-    player_slots.slots[i].player = NULL;
+  sz_strlcpy(plr->name, ANON_PLAYER_NAME);
+  sz_strlcpy(plr->username, ANON_USER_NAME);
+  sz_strlcpy(plr->ranked_username, ANON_USER_NAME);
+  plr->user_turns = 0;
+  plr->is_male = TRUE;
+  plr->government = NULL;
+  plr->target_government = NULL;
+  plr->nation = NO_NATION_SELECTED;
+  plr->team = NULL;
+  plr->is_ready = FALSE;
+
+  plr->revolution_finishes = -1;
+  plr->capital = FALSE;
+  plr->city_style=0;            /* should be first basic style */
+  plr->cities = city_list_new();
+  plr->units = unit_list_new();
+
+  plr->connections = conn_list_new();
+  plr->current_conn = NULL;
+  plr->is_connected = FALSE;
+
+  plr->was_created = FALSE;
+  plr->is_alive=TRUE;
+  plr->is_dying = FALSE;
+  plr->is_winner = FALSE;
+  plr->surrendered = FALSE;
+  BV_CLR_ALL(plr->real_embassy);
+  for(i = 0; i < MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS; i++) {
+    plr->diplstates[i].type = DS_NO_CONTACT;
+    plr->diplstates[i].has_reason_to_cancel = 0;
+    plr->diplstates[i].contact_turns_left = 0;
   }
-  player_slots.used_slots = 0;
-}
+  plr->ai = NULL;
+  plr->ai_data.control=FALSE;
+  BV_CLR_ALL(plr->ai_data.handicaps);
+  plr->ai_data.skill_level = 0;
+  plr->ai_data.fuzzy = 0;
+  plr->ai_data.expand = 100;
+  plr->ai_data.barbarian_type = NOT_A_BARBARIAN;
+  plr->economic.tax=PLAYER_DEFAULT_TAX_RATE;
+  plr->economic.science=PLAYER_DEFAULT_SCIENCE_RATE;
+  plr->economic.luxury=PLAYER_DEFAULT_LUXURY_RATE;
 
-/***************************************************************
-  ...
-***************************************************************/
-bool player_slots_initialised(void)
-{
-  return (player_slots.slots != NULL);
-}
+  plr->economic = player_limit_to_max_rates(plr);
+  spaceship_init(&plr->spaceship);
 
-/***************************************************************
-  Remove all player slots.
-***************************************************************/
-void player_slots_free(void)
-{
-  players_iterate(pplayer) {
-    player_destroy(pplayer);
-  } players_iterate_end;
-  free(player_slots.slots);
-  player_slots.slots = NULL;
-  player_slots.used_slots = 0;
-}
+  plr->gives_shared_vision = 0;
+  plr->really_gives_vision = 0;
 
-/****************************************************************************
-  Returns the first player slot.
-****************************************************************************/
-struct player_slot *player_slot_first(void)
-{
-  return player_slots.slots;
-}
-
-/****************************************************************************
-  Returns the next slot.
-****************************************************************************/
-struct player_slot *player_slot_next(struct player_slot *pslot)
-{
-  pslot++;
-  return (pslot < player_slots.slots + player_slot_count() ? pslot : NULL);
-}
-
-/***************************************************************
-  Returns the total number of player slots, i.e. the maximum
-  number of players (including barbarians, etc.) that could ever
-  exist at once.
-***************************************************************/
-int player_slot_count(void)
-{
-  return (MAX_NUM_PLAYER_SLOTS);
-}
-
-/****************************************************************************
-  Returns the index of the player slot.
-****************************************************************************/
-int player_slot_index(const struct player_slot *pslot)
-{
-  fc_assert_ret_val(NULL != pslot, -1);
-
-  return pslot - player_slots.slots;
-}
-
-/****************************************************************************
-  Returns the team corresponding to the slot. If the slot is not used, it
-  will return NULL. See also player_slot_is_used().
-****************************************************************************/
-struct player *player_slot_get_player(const struct player_slot *pslot)
-{
-  fc_assert_ret_val(NULL != pslot, NULL);
-
-  return pslot->player;
-}
-
-/****************************************************************************
-  Returns TRUE is this slot is "used" i.e. corresponds to a valid,
-  initialized player that exists in the game.
-****************************************************************************/
-bool player_slot_is_used(const struct player_slot *pslot)
-{
-  fc_assert_ret_val(NULL != pslot, FALSE);
-
-  /* No player slot available, if the game is not initialised. */
-  if (!player_slots_initialised()) {
-    return FALSE;
-  }
-
-  return NULL != pslot->player;
-}
-
-/****************************************************************************
-  Return the possibly unused and uninitialized player slot.
-****************************************************************************/
-struct player_slot *player_slot_by_number(int player_id)
-{
-  if (!player_slots_initialised()
-      || !(0 <= player_id && player_id < player_slot_count())) {
-    return NULL;
-  }
-
-  return player_slots.slots + player_id;
-}
-
-
-/****************************************************************************
-  Creates a new player for the slot. If slot is NULL, it will lookup to a
-  free slot. If the slot already used, then just return the player.
-****************************************************************************/
-struct player *player_new(struct player_slot *pslot)
-{
-  struct player *pplayer;
-
-  fc_assert_ret_val(player_slots_initialised(), NULL);
-
-  if (NULL == pslot) {
-    player_slots_iterate(aslot) {
-      if (!player_slot_is_used(aslot)) {
-        pslot = aslot;
-        break;
-      }
-    } player_slots_iterate_end;
-
-    fc_assert_ret_val(NULL != pslot, NULL);
-  } else if (NULL != pslot->player) {
-    return pslot->player;
-  }
-
-  /* Now create the player. */
-  log_debug("Create player for slot %d.", player_slot_index(pslot));
-  pplayer = fc_calloc(1, sizeof(*pplayer));
-  pplayer->slot = pslot;
-  pslot->player = pplayer;
-
-  pplayer->diplstates = fc_calloc(player_slot_count(),
-                                  sizeof(*pplayer->diplstates));
-  player_slots_iterate(pslot) {
-    const struct player_diplstate **diplstate_slot
-      = pplayer->diplstates + player_slot_index(pslot);
-    *diplstate_slot = NULL;
-  } player_slots_iterate_end;
-
-  players_iterate(aplayer) {
-    /* Create diplomatic states for all other players. */
-    player_diplstate_new(pplayer, aplayer);
-    /* Create diplomatic state of this player. */
-    if (aplayer != pplayer) {
-      player_diplstate_new(aplayer, pplayer);
-    }
-  } players_iterate_end;
-
-  /* Set default values. */
-  player_defaults(pplayer);
-
-  /* Increase number of players. */
-  player_slots.used_slots++;
-
-  return pplayer;
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-static void player_defaults(struct player *pplayer)
-{
-  int i;
-
-  sz_strlcpy(pplayer->name, ANON_PLAYER_NAME);
-  sz_strlcpy(pplayer->username, ANON_USER_NAME);
-  sz_strlcpy(pplayer->ranked_username, ANON_USER_NAME);
-  pplayer->user_turns = 0;
-  pplayer->is_male = TRUE;
-  pplayer->government = NULL;
-  pplayer->target_government = NULL;
-  pplayer->nation = NO_NATION_SELECTED;
-  pplayer->team = NULL;
-  pplayer->is_ready = FALSE;
-  pplayer->nturns_idle = 0;
-  pplayer->is_alive = TRUE;
-
-  pplayer->revolution_finishes = -1;
-
-  BV_CLR_ALL(pplayer->real_embassy);
-  players_iterate(aplayer) {
-    /* create diplomatic states for all other players */
-    player_diplstate_defaults(pplayer, aplayer);
-    /* create diplomatic state of this player */
-    if (aplayer != pplayer) {
-      player_diplstate_defaults(aplayer, pplayer);
-    }
-  } players_iterate_end;
-
-  pplayer->city_style = 0;            /* should be first basic style */
-  pplayer->cities = city_list_new();
-  pplayer->units = unit_list_new();
-
-  pplayer->economic.gold    = 0;
-  pplayer->economic.tax     = PLAYER_DEFAULT_TAX_RATE;
-  pplayer->economic.science = PLAYER_DEFAULT_SCIENCE_RATE;
-  pplayer->economic.luxury  = PLAYER_DEFAULT_LUXURY_RATE;
-  pplayer->economic = player_limit_to_max_rates(pplayer);
-
-  spaceship_init(&pplayer->spaceship);
-
-  pplayer->ai_controlled = FALSE;
-  BV_CLR_ALL(pplayer->ai_common.handicaps);
-  pplayer->ai_common.skill_level = 0;
-  pplayer->ai_common.fuzzy = 0;
-  pplayer->ai_common.expand = 100;
-  pplayer->ai_common.barbarian_type = NOT_A_BARBARIAN;
-  player_slots_iterate(pslot) {
-    pplayer->ai_common.love[player_slot_index(pslot)] = 1;
-  } player_slots_iterate_end;
-
-  pplayer->ai = NULL;
-  pplayer->was_created = FALSE;
-  pplayer->is_connected = FALSE;
-  pplayer->current_conn = NULL;
-  pplayer->connections = conn_list_new();
-  BV_CLR_ALL(pplayer->gives_shared_vision);
   for (i = 0; i < B_LAST; i++) {
-    pplayer->wonders[i] = WONDER_NOT_BUILT;
+    plr->wonders[i] = WONDER_NOT_BUILT;
   }
 
-  pplayer->attribute_block.data = NULL;
-  pplayer->attribute_block.length = 0;
-  pplayer->attribute_block_buffer.data = NULL;
-  pplayer->attribute_block_buffer.length = 0;
-
-  pplayer->tile_known.vec = NULL;
-  pplayer->tile_known.bits = 0;
-
-  /* pplayer->server is initialised in
-      ./server/plrhand.c:server_player_init()
-     and pplayer->client in
-      ./client/climisc.c:client_player_init() */
-}
-
-/****************************************************************************
-  Clear all player data. If full is set, then the nation and the team will
-  be cleared too.
-****************************************************************************/
-void player_clear(struct player *pplayer, bool full)
-{
-  if (pplayer == NULL) {
-    return;
-  }
-
-  /* Clears the attribute blocks. */
-  if (pplayer->attribute_block.data) {
-    free(pplayer->attribute_block.data);
-    pplayer->attribute_block.data = NULL;
-  }
-  pplayer->attribute_block.length = 0;
-
-  if (pplayer->attribute_block_buffer.data) {
-    free(pplayer->attribute_block_buffer.data);
-    pplayer->attribute_block_buffer.data = NULL;
-  }
-  pplayer->attribute_block_buffer.length = 0;
-
-  /* Clears units and cities. */
-  unit_list_iterate(pplayer->units, punit) {
-    game_remove_unit(punit);
-  } unit_list_iterate_end;
-
-  city_list_iterate(pplayer->cities, pcity) {
-    game_remove_city(pcity);
-  } city_list_iterate_end;
-
-  if (full) {
-    team_remove_player(pplayer);
-
-    /* This comes last because log calls in the above functions
-     * may use it. */
-    if (pplayer->nation != NULL) {
-      player_set_nation(pplayer, NULL);
-    }
-  }
-}
-
-/****************************************************************************
-  Destroys and remove a player from the game.
-****************************************************************************/
-void player_destroy(struct player *pplayer)
-{
-  struct player_slot *pslot;
-
-  fc_assert_ret(NULL != pplayer);
-
-  pslot = pplayer->slot;
-  fc_assert(pslot->player == pplayer);
-
-  /* Remove all that is game-dependent in the player structure. */
-  player_clear(pplayer, TRUE);
-
-  fc_assert(0 == unit_list_size(pplayer->units));
-  unit_list_destroy(pplayer->units);
-  fc_assert(0 == city_list_size(pplayer->cities));
-  city_list_destroy(pplayer->cities);
-
-  fc_assert(conn_list_size(pplayer->connections) == 0);
-  conn_list_destroy(pplayer->connections);
-
-  players_iterate(aplayer) {
-    /* destroy the diplomatics states of this player with others ... */
-    player_diplstate_destroy(pplayer, aplayer);
-    /* and of others with this player. */
-    if (aplayer != pplayer) {
-      player_diplstate_destroy(aplayer, pplayer);
-    }
-  } players_iterate_end;
-  free(pplayer->diplstates);
-
-  free(pplayer);
-  pslot->player = NULL;
-  player_slots.used_slots--;
+  plr->attribute_block.data = NULL;
+  plr->attribute_block.length = 0;
+  plr->attribute_block_buffer.data = NULL;
+  plr->attribute_block_buffer.length = 0;
+  BV_CLR_ALL(plr->debug);
 }
 
 /**************************************************************************
@@ -635,7 +279,15 @@ void player_destroy(struct player *pplayer)
 **************************************************************************/
 int player_count(void)
 {
-  return player_slots.used_slots;
+  return game.nplayers;
+}
+
+/**************************************************************************
+  Set the number of players.
+**************************************************************************/
+void set_player_count(int count)
+{
+  game.nplayers = count;
 }
 
 /**************************************************************************
@@ -654,8 +306,8 @@ int player_index(const struct player *pplayer)
 **************************************************************************/
 int player_number(const struct player *pplayer)
 {
-  fc_assert_ret_val(NULL != pplayer, -1);
-  return player_slot_index(pplayer->slot);
+  assert(pplayer);
+  return pplayer - game.players;
 }
 
 /**************************************************************************
@@ -666,9 +318,22 @@ int player_number(const struct player *pplayer)
 **************************************************************************/
 struct player *player_by_number(const int player_id)
 {
-  struct player_slot *pslot = player_slot_by_number(player_id);
+  return player_slot_by_number(player_id);
+}
 
-  return (NULL != pslot ? player_slot_get_player(pslot) : NULL);
+/**************************************************************************
+  Return pointer iff the player ID refers to an in-game player.
+**************************************************************************/
+struct player *valid_player_by_number(const int player_id)
+{
+  struct player *pslot;
+
+  pslot = player_slot_by_number(player_id);
+
+  if (!player_slot_is_used(pslot)) {
+    return NULL;
+  }
+  return pslot;
 }
 
 /****************************************************************************
@@ -679,11 +344,11 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 {
   if (pplayer->nation != pnation) {
     if (pplayer->nation) {
-      fc_assert(pplayer->nation->player == pplayer);
+      assert(pplayer->nation->player == pplayer);
       pplayer->nation->player = NULL;
     }
     if (pnation) {
-      fc_assert(pnation->player == NULL);
+      assert(pnation->player == NULL);
       pnation->player = pplayer;
     }
     pplayer->nation = pnation;
@@ -695,10 +360,20 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 /***************************************************************
 ...
 ***************************************************************/
-struct player *player_by_name(const char *name)
+void player_set_unit_focus_status(struct player *pplayer)
+{
+  unit_list_iterate(pplayer->units, punit) 
+    punit->focus_status=FOCUS_AVAIL;
+  unit_list_iterate_end;
+}
+
+/***************************************************************
+...
+***************************************************************/
+struct player *find_player_by_name(const char *name)
 {
   players_iterate(pplayer) {
-    if (fc_strcasecmp(name, pplayer->name) == 0) {
+    if (mystrcasecmp(name, pplayer->name) == 0) {
       return pplayer;
     }
   } players_iterate_end;
@@ -723,29 +398,29 @@ const char *player_name(const struct player *pplayer)
   problem, and fills *result with characterisation of match/non-match
   (see shared.[ch])
 ***************************************************************/
-static const char *player_name_by_number(int i)
+static const char *player_slot_name_by_number(int i)
 {
   struct player *pplayer;
-
-  pplayer = player_by_number(i);
+  
+  pplayer = valid_player_by_number(i);
   return player_name(pplayer);
 }
 
 /***************************************************************
 Find player by its name prefix
 ***************************************************************/
-struct player *player_by_name_prefix(const char *name,
-                                     enum m_pre_result *result)
+struct player *find_player_by_name_prefix(const char *name,
+					  enum m_pre_result *result)
 {
   int ind;
 
-  *result = match_prefix(player_name_by_number,
-                         player_slot_count(), MAX_LEN_NAME - 1,
-                         fc_strncasequotecmp, effectivestrlenquote,
+  *result = match_prefix(player_slot_name_by_number,
+                         player_slot_count(), MAX_LEN_NAME-1,
+                         mystrncasequotecmp, effectivestrlenquote,
                          name, &ind);
 
   if (*result < M_PRE_AMBIGUOUS) {
-    return player_by_number(ind);
+    return valid_player_by_number(ind);
   } else {
     return NULL;
   }
@@ -754,14 +429,14 @@ struct player *player_by_name_prefix(const char *name,
 /***************************************************************
 Find player by its user name (not player/leader name)
 ***************************************************************/
-struct player *player_by_user(const char *name)
+struct player *find_player_by_user(const char *name)
 {
   players_iterate(pplayer) {
-    if (fc_strcasecmp(name, pplayer->username) == 0) {
+    if (mystrcasecmp(name, pplayer->username) == 0) {
       return pplayer;
     }
   } players_iterate_end;
-
+  
   return NULL;
 }
 
@@ -806,7 +481,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   }
 
   /* Hiding units are only seen by the V_INVIS fog layer. */
-  return fc_funcs->player_tile_vision_get(ptile, pplayer, V_INVIS);
+  return BV_ISSET(ptile->tile_seen[V_INVIS], player_index(pplayer));
 
   return FALSE;
 }
@@ -876,9 +551,11 @@ bool can_player_see_city_internals(const struct player *pplayer,
  hash are considered - even those not currently owned by any
  player. Callers expect this behavior.
 ***************************************************************/
-struct city *player_city_by_number(const struct player *pplayer, int city_id)
+struct city *player_find_city_by_id(const struct player *pplayer,
+				    int city_id)
 {
-  /* We call idex directly. Should use game_city_by_number() instead? */
+  /* We call idex directly. Should use game_find_city_by_id()
+   * instead? */
   struct city *pcity = idex_lookup_city(city_id);
 
   if (!pcity) {
@@ -902,9 +579,11 @@ struct city *player_city_by_number(const struct player *pplayer, int city_id)
  hash are considered - even those not currently owned by any
  player. Callers expect this behavior.
 ***************************************************************/
-struct unit *player_unit_by_number(const struct player *pplayer, int unit_id)
+struct unit *player_find_unit_by_id(const struct player *pplayer,
+				    int unit_id)
 {
-  /* We call idex directly. Should use game_unit_by_number() instead? */
+  /* We call idex directly. Should use game_find_unit_by_number()
+   * instead? */
   struct unit *punit = idex_lookup_unit(unit_id);
 
   if (!punit) {
@@ -920,17 +599,15 @@ struct unit *player_unit_by_number(const struct player *pplayer, int unit_id)
 }
 
 /*************************************************************************
-  Return true iff x,y is inside any of the player's city map.
+Return 1 if x,y is inside any of the player's city radii.
 **************************************************************************/
-bool player_in_city_map(const struct player *pplayer,
-                        const struct tile *ptile)
+bool player_in_city_radius(const struct player *pplayer,
+			   const struct tile *ptile)
 {
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, ptile1) {
+  city_tile_iterate(ptile, ptile1) {
     struct city *pcity = tile_city(ptile1);
 
-    if (pcity && city_owner(pcity) == pplayer
-        && city_map_radius_sq_get(pcity) >= sq_map_distance(ptile,
-                                                            ptile1)) {
+    if (pcity && city_owner(pcity) == pplayer) {
       return TRUE;
     }
   } city_tile_iterate_end;
@@ -940,13 +617,13 @@ bool player_in_city_map(const struct player *pplayer,
 
 /**************************************************************************
  Returns the number of techs the player has researched which has this
- flag. Needs to be optimized later (e.g. int tech_flags[TF_COUNT] in
+ flag. Needs to be optimized later (e.g. int tech_flags[TF_LAST] in
  struct player)
 **************************************************************************/
 int num_known_tech_with_flag(const struct player *pplayer,
-                             enum tech_flag_id flag)
+			     enum tech_flag_id flag)
 {
-  return player_research_get(pplayer)->num_known_tech_with_flag[flag];
+  return get_player_research(pplayer)->num_known_tech_with_flag[flag];
 }
 
 /**************************************************************************
@@ -1020,7 +697,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
   struct player_economic economic;
 
   /* ai players allowed to cheat */
-  if (pplayer->ai_controlled) {
+  if (pplayer->ai_data.control) {
     return pplayer->economic;
   }
 
@@ -1045,7 +722,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
     economic.science = maxrate;
   }
 
-  fc_assert(surplus % 10 == 0);
+  assert(surplus % 10 == 0);
   while (surplus > 0) {
     if (economic.science < maxrate) {
       economic.science += 10;
@@ -1054,8 +731,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
     } else if (economic.luxury < maxrate) {
       economic.luxury += 10;
     } else {
-      fc_assert_msg(FALSE, "Failed to distribute the surplus. "
-                    "maxrate = %d.", maxrate);
+      die("byebye");
     }
     surplus -= 10;
   }
@@ -1066,7 +742,7 @@ struct player_economic player_limit_to_max_rates(struct player *pplayer)
 /**************************************************************************
 Locate the city where the players palace is located, (NULL Otherwise) 
 **************************************************************************/
-struct city *player_palace(const struct player *pplayer)
+struct city *find_palace(const struct player *pplayer)
 {
   if (!pplayer) {
     /* The client depends on this behavior in some places. */
@@ -1088,10 +764,10 @@ struct city *player_palace(const struct player *pplayer)
 **************************************************************************/
 bool ai_handicap(const struct player *pplayer, enum handicap_type htype)
 {
-  if (!pplayer->ai_controlled) {
+  if (!pplayer->ai_data.control) {
     return TRUE;
   }
-  return BV_ISSET(pplayer->ai_common.handicaps, htype);
+  return BV_ISSET(pplayer->ai_data.handicaps, htype);
 }
 
 /**************************************************************************
@@ -1112,14 +788,16 @@ the "ai_fuzzy(pplayer," part, and read the previous example as:
 **************************************************************************/
 bool ai_fuzzy(const struct player *pplayer, bool normal_decision)
 {
-  if (!pplayer->ai_controlled || pplayer->ai_common.fuzzy == 0) {
+  if (!pplayer->ai_data.control || pplayer->ai_data.fuzzy == 0) {
     return normal_decision;
   }
-  if (fc_rand(1000) >= pplayer->ai_common.fuzzy) {
+  if (myrand(1000) >= pplayer->ai_data.fuzzy) {
     return normal_decision;
   }
   return !normal_decision;
 }
+
+
 
 /**************************************************************************
   Return a text describing an AI's love for you.  (Oooh, kinky!!)
@@ -1150,7 +828,7 @@ const char *love_text(const int love)
   } else if (love <= MAX_AI_LOVE * 90 / 100) {
     return Q_("?attitude:Admiring");
   } else {
-    fc_assert(love > MAX_AI_LOVE * 90 / 100);
+    assert(love > MAX_AI_LOVE * 90 / 100);
     return Q_("?attitude:Worshipful");
   }
 }
@@ -1171,9 +849,20 @@ const char *diplstate_text(const enum diplstate_type type)
     N_("?diplomatic_state:Team")
   };
 
-  fc_assert_ret_val_msg(0 <= type && type < DS_LAST, NULL,
-                        "Bad diplstate_type: %d.", type);
-  return Q_(ds_names[type]);
+  if (type < DS_LAST) {
+    return Q_(ds_names[type]);
+  }
+  die("Bad diplstate_type in diplstate_text: %d", type);
+  return NULL;
+}
+
+/***************************************************************
+returns diplomatic state type between two players
+***************************************************************/
+const struct player_diplstate *pplayer_get_diplstate(const struct player *pplayer,
+						     const struct player *pplayer2)
+{
+  return &(pplayer->diplstates[player_index(pplayer2)]);
 }
 
 /***************************************************************
@@ -1182,7 +871,7 @@ const char *diplstate_text(const enum diplstate_type type)
 bool pplayers_at_war(const struct player *pplayer,
                      const struct player *pplayer2)
 {
-  enum diplstate_type ds = player_diplstate_get(pplayer, pplayer2)->type;
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
   if (pplayer == pplayer2) {
     return FALSE;
   }
@@ -1198,22 +887,13 @@ bool pplayers_at_war(const struct player *pplayer,
 bool pplayers_allied(const struct player *pplayer,
                      const struct player *pplayer2)
 {
-  enum diplstate_type ds;
-
-  if (!pplayer || !pplayer2) {
-    return FALSE;
-  }
-
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
   if (pplayer == pplayer2) {
     return TRUE;
   }
-
   if (is_barbarian(pplayer) || is_barbarian(pplayer2)) {
     return FALSE;
   }
-
-  ds = player_diplstate_get(pplayer, pplayer2)->type;
-
   return (ds == DS_ALLIANCE || ds == DS_TEAM);
 }
 
@@ -1223,7 +903,7 @@ bool pplayers_allied(const struct player *pplayer,
 bool pplayers_in_peace(const struct player *pplayer,
                        const struct player *pplayer2)
 {
-  enum diplstate_type ds = player_diplstate_get(pplayer, pplayer2)->type;
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
 
   if (pplayer == pplayer2) {
     return TRUE;
@@ -1247,7 +927,7 @@ bool players_non_invade(const struct player *pplayer1,
     /* Likely an unnecessary test. */
     return FALSE;
   }
-  return player_diplstate_get(pplayer1, pplayer2)->type == DS_PEACE;
+  return pplayer_get_diplstate(pplayer1, pplayer2)->type == DS_PEACE;
 }
 
 /***************************************************************
@@ -1256,7 +936,7 @@ bool players_non_invade(const struct player *pplayer1,
 bool pplayers_non_attack(const struct player *pplayer,
                          const struct player *pplayer2)
 {
-  enum diplstate_type ds = player_diplstate_get(pplayer, pplayer2)->type;
+  enum diplstate_type ds = pplayer_get_diplstate(pplayer, pplayer2)->type;
   if (pplayer == pplayer2) {
     return FALSE;
   }
@@ -1277,7 +957,7 @@ bool players_on_same_team(const struct player *pplayer1,
 
 bool is_barbarian(const struct player *pplayer)
 {
-  return pplayer->ai_common.barbarian_type != NOT_A_BARBARIAN;
+  return pplayer->ai_data.barbarian_type != NOT_A_BARBARIAN;
 }
 
 /**************************************************************************
@@ -1285,7 +965,7 @@ bool is_barbarian(const struct player *pplayer)
 **************************************************************************/
 bool gives_shared_vision(const struct player *me, const struct player *them)
 {
-  return BV_ISSET(me->gives_shared_vision, player_index(them));
+  return TEST_BIT(me->gives_shared_vision, player_index(them));
 }
 
 /**************************************************************************
@@ -1337,22 +1017,43 @@ int player_in_territory(const struct player *pplayer,
 bool is_valid_username(const char *name)
 {
   return (strlen(name) > 0
-          && !fc_isdigit(name[0])
-          && is_ascii_name(name)
-          && fc_strcasecmp(name, ANON_USER_NAME) != 0);
+	  && !my_isdigit(name[0])
+	  && is_ascii_name(name)
+	  && mystrcasecmp(name, ANON_USER_NAME) != 0);
+}
+
+/****************************************************************************
+  Returns player_research struct of the given player. Note that team
+  members share research
+****************************************************************************/
+struct player_research *get_player_research(const struct player *plr)
+{
+  if (!plr || !plr->team) {
+    /* Some client users depend on this behavior. */
+    return NULL;
+  }
+  return &(plr->team->research);
+}
+
+/****************************************************************************
+  Marks player as winner.
+****************************************************************************/
+void player_set_winner(struct player *plr)
+{
+  plr->is_winner = TRUE;
 }
 
 /****************************************************************************
   Returns AI level associated with level name
 ****************************************************************************/
-enum ai_level ai_level_by_name(const char *name)
+enum ai_level find_ai_level_by_name(const char *name)
 {
   enum ai_level level;
 
   for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (ai_level_names[level] != NULL) {
       /* Only consider levels that really have names */
-      if (fc_strcasecmp(ai_level_names[level], name) == 0) {
+      if (mystrcasecmp(ai_level_names[level], name) == 0) {
         return level;
       }
     }
@@ -1367,7 +1068,7 @@ enum ai_level ai_level_by_name(const char *name)
 ***************************************************************/
 const char *ai_level_name(enum ai_level level)
 {
-  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+  assert(level >= 0 && level < AI_LEVEL_LAST);
 
   if (ai_level_names[level] == NULL) {
     return NULL;
@@ -1381,7 +1082,7 @@ const char *ai_level_name(enum ai_level level)
 ***************************************************************/
 const char *ai_level_cmd(enum ai_level level)
 {
-  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+  assert(level >= 0 && level < AI_LEVEL_LAST);
 
   if (ai_level_names[level] == NULL) {
     return NULL;
@@ -1427,4 +1128,48 @@ int number_of_ai_levels(void)
   }
 
   return count;
+}
+
+/***************************************************************
+  Returns the total number of player slots, i.e. the maximum
+  number of players (including barbarians, etc.) that could ever
+  exist at once.
+***************************************************************/
+int player_slot_count(void)
+{
+  return ARRAY_SIZE(game.players);
+}
+
+/***************************************************************
+  Returns TRUE is this slot is "used" i.e. corresponds to a
+  valid, initialized player that exists in the game.
+***************************************************************/
+bool player_slot_is_used(const struct player *pslot)
+{
+  if (!pslot) {
+    return FALSE;
+  }
+  return pslot->used;
+}
+
+/***************************************************************
+  Set the 'used' status of the player slot.  
+***************************************************************/
+void player_slot_set_used(struct player *pslot, bool used)
+{
+  if (!pslot) {
+    return;
+  }
+  pslot->used = used;
+}
+
+/***************************************************************
+  Return the possibly unused and uninitialized player slot.
+***************************************************************/
+struct player *player_slot_by_number(int player_id)
+{
+  if (!(0 <= player_id && player_id < player_slot_count())) {
+    return NULL;
+  }
+  return &game.players[player_id];
 }

@@ -15,11 +15,12 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
 #include "registry.h"
-#include "mem.h"
 
-/* client/gui-sdl */
+/* gui-sdl */
 #include "graphics.h"
 #include "themespec.h"
 
@@ -60,7 +61,7 @@ struct theme_background_system *theme_background_system_read(struct section_file
   int i;
   struct theme_background_system *backgrounds = fc_malloc(sizeof(*backgrounds));
 
-  fc_assert_ret_val(ARRAY_SIZE(background_names) == BACKGROUND_LAST, NULL);
+  assert(ARRAY_SIZE(background_names) == BACKGROUND_LAST);
   
   for (i = 0; i < BACKGROUND_LAST; i++) {
     backgrounds->backgrounds[i] = 

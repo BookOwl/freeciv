@@ -32,19 +32,12 @@ enum debug_globals {
   DEBUG_LAST
 };
 
-enum city_names_mode {
-  CNM_NO_RESTRICTIONS = 0,
-  CNM_PLAYER_UNIQUE,
-  CNM_GLOBAL_UNIQUE,
-  CNM_NO_STEALING
-};
-
-enum barbarians_rate {
-  BARBS_DISABLED = 0,
-  BARBS_HUTS_ONLY,
-  BARBS_NORMAL,
-  BARBS_FREQUENT,
-  BARBS_HORDES
+/* NB: Must match phasemode setting
+ * help text in server/settings.c */
+enum phase_mode_types {
+  PMT_CONCURRENT = 0,
+  PMT_PLAYERS_ALTERNATE = 1,
+  PMT_TEAMS_ALTERNATE = 2
 };
 
 #define CONTAMINATION_POLLUTION 1
@@ -55,95 +48,26 @@ enum barbarians_rate {
 #define TURNS_NEEDED_TO_RANK 10
 
 struct civ_game {
-  struct packet_ruleset_control control;
-  struct packet_scenario_info scenario;
   struct packet_game_info info;
-
   struct government *government_during_revolution;
 
-  struct conn_list *all_connections;   /* including not yet established */
-  struct conn_list *est_connections;   /* all established client conns */
+  struct packet_ruleset_control control;
+  struct packet_scenario_info scenario;
+
+  struct player players[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
+  int nplayers;
+  struct conn_list *all_connections;        /* including not yet established */
+  struct conn_list *est_connections;        /* all established client conns */
 
   int work_veteran_chance[MAX_VET_LEVELS];
   int veteran_chance[MAX_VET_LEVELS];
 
   union {
     struct {
-      /* Only used at the client (./client/). */
-
       /* Nothing yet. */
     } client;
 
     struct {
-      /* Only used in the server (./ai/ and ./server/). */
-
-      /* Defined in the ruleset. */
-
-      /* Game settings & other data. */
-
-      bool allied_victory;
-      enum city_names_mode allowed_city_names;
-      int aqueductloss;
-      bool auto_ai_toggle;
-      bool autoattack;
-      int autoupgrade_veteran_loss;
-      enum barbarians_rate barbarianrate;
-      int base_bribe_cost;
-      int base_incite_cost;
-      int civilwarsize;
-      int conquercost;
-      int contactturns;
-      int diplchance;
-      int diplcost;
-      int dispersion;
-      int end_turn;
-      bool endspaceship;
-      bool fixedlength;
-      bool foggedborders;
-      int freecost;
-      int incite_improvement_factor;
-      int incite_total_factor;
-      int incite_unit_factor;
-      int init_vis_radius_sq;
-      int kick_time;
-      int killunhomed;    /* slowly killing unhomed units */
-      int maxconnectionsperhost;
-      int max_players;
-      int mgr_distance;
-      bool mgr_foodneeded;
-      int mgr_nationchance;
-      int mgr_turninterval;
-      int mgr_worldchance;
-      bool migration;
-      int min_players;
-      bool natural_city_names;
-      int netwait;
-      int nuke_contamination;
-      int num_phases;
-      int occupychance;
-      int onsetbarbarian;
-      int pingtime;
-      int pingtimeout;
-      int ransom_gold;
-      int razechance;
-      int revolution_length;
-      int save_compress_level;
-      enum fz_method save_compress_type;
-      int saveversion; /* save game version to use */
-      int save_nturns;
-      bool savepalace;
-      bool homecaughtunits;
-      char start_units[MAX_LEN_STARTUNIT];
-      int start_year;
-      int techlost_donor;
-      int techlost_recv;
-      int tcptimeout;
-      int techpenalty;
-      bool turnblock;
-      int unitwaittime;   /* minimal time between two movements of a unit */
-      int upgrade_veteran_loss;
-      bool vision_reveal_tiles;
-
       bool debug[DEBUG_LAST];
       int timeoutint;     /* increase timeout every N turns... */
       int timeoutinc;     /* ... by this amount ... */
@@ -151,30 +75,24 @@ struct civ_game {
       int timeoutintinc;  /* ... and increase timeoutint by this amount */
       int timeoutcounter; /* timeoutcounter - timeoutint = turns to next inc. */
       int timeoutaddenemymove; /* minimum timeout after an enemy move is seen */
-
+      int maxconnectionsperhost;
       time_t last_ping;
       struct timer *phase_timer; /* Time since seconds_to_phase_done was set. */
-      /* The game.info.phase_mode value indicates the phase mode currently in
-       * use. The "stored" value is a value the player can change; it won't
+      /* The .info.phase_mode value indicates the phase mode currently in
+       * use.  The "stored" value is a value the player can change; it won't
        * take effect until the next turn. */
       int phase_mode_stored;
       char connectmsg[MAX_LEN_MSG];
       char save_name[MAX_LEN_NAME];
       bool scorelog;
-      char scorefile[MAX_LEN_NAME];
       int scoreturn;    /* next make_history_report() */
       int seed;
-
-      bool global_warming;
-      bool nuclear_winter;
-
       bool fogofwar_old; /* as the fog_of_war bit get changed by setting
                           * the server we need to remember the old setting */
+      bool foggedborders;
       char rulesetdir[MAX_LEN_NAME];
       char demography[MAX_LEN_DEMOGRAPHY];
       char allow_take[MAX_LEN_ALLOW_TAKE];
-
-      bool settings_gamestart_valid; /* Valid settings from the game start. */
 
       struct {
         int turns;
@@ -185,7 +103,7 @@ struct civ_game {
 
       /* values from game.info.t */
       struct {
-        /* Items given to all players at game start. Server only. */
+        /* Items given to all players at game start.  Server only. */
         int global_init_techs[MAX_NUM_TECH_LIST];
         int global_init_buildings[MAX_NUM_BUILDING_LIST];
       } rgame;
@@ -193,7 +111,7 @@ struct civ_game {
       /* used by the map editor to control game_save. */
       struct {
         bool save_random;
-
+  
         bool save_known; /* loading will just reveal the squares around
                           * cities and units */
         bool save_starts; /* start positions will be auto generated */
@@ -229,10 +147,12 @@ int game_next_year(int);
 void game_advance_year(void);
 
 int civ_population(const struct player *pplayer);
-struct city *game_city_by_name(const char *name);
-struct city *game_city_by_number(int id);
+struct city *game_find_city_by_name(const char *name);
+struct city *game_find_city_by_number(int id);
 
-struct unit *game_unit_by_number(int id);
+struct unit *game_find_unit_by_number(int id);
+
+void game_remove_player(struct player *pplayer);
 
 void game_remove_unit(struct unit *punit);
 void game_remove_city(struct city *pcity);
@@ -250,6 +170,8 @@ int generate_save_name(const char *format, char *buf, int buflen,
                        const char *reason);
 
 extern struct civ_game game;
+
+bool setting_class_is_changeable(enum sset_class class);
 
 #define GAME_DEFAULT_SEED        0
 #define GAME_MIN_SEED            0
@@ -307,14 +229,16 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_FOGGEDBORDERS   FALSE
 
-#define GAME_DEFAULT_GLOBAL_WARMING  TRUE
-#define GAME_DEFAULT_NUCLEAR_WINTER  TRUE
-
-#define GAME_DEFAULT_BORDERS         BORDERS_ENABLED
+/* 0 means no national borders. */
+#define GAME_DEFAULT_BORDERS         1
+#define GAME_MIN_BORDERS             0
+#define GAME_MAX_BORDERS             3
 
 #define GAME_DEFAULT_HAPPYBORDERS    TRUE
 
-#define GAME_DEFAULT_DIPLOMACY       DIPLO_FOR_ALL
+#define GAME_DEFAULT_DIPLOMACY       0
+#define GAME_MIN_DIPLOMACY           0
+#define GAME_MAX_DIPLOMACY           4
 
 #define GAME_DEFAULT_DIPLCHANCE      80
 #define GAME_MIN_DIPLCHANCE          40
@@ -336,9 +260,6 @@ extern struct civ_game game;
 #define GAME_MIN_CIVILWARSIZE        6
 #define GAME_MAX_CIVILWARSIZE        1000
 
-#define GAME_DEFAULT_RESTRICTINFRA   FALSE
-#define GAME_DEFAULT_UNRPROTECTS     TRUE
-
 #define GAME_DEFAULT_CONTACTTURNS    20
 #define GAME_MIN_CONTACTTURNS        0
 #define GAME_MAX_CONTACTTURNS        100
@@ -351,8 +272,6 @@ extern struct civ_game game;
  
 #define GAME_DEFAULT_SAVEPALACE      TRUE
 
-#define GAME_DEFAULT_HOMECAUGHTUNITS TRUE
-
 #define GAME_DEFAULT_NATURALCITYNAMES TRUE
 
 #define GAME_DEFAULT_MIGRATION        FALSE
@@ -363,12 +282,9 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_MGR_FOODNEEDED   TRUE
 
-/* definition of the migration distance in relation to the current city
- * radius; 0 means that migration is possible if the second city is within
- * the city radius */
-#define GAME_DEFAULT_MGR_DISTANCE     0
-#define GAME_MIN_MGR_DISTANCE         (0 - CITY_MAP_MAX_RADIUS)
-#define GAME_MAX_MGR_DISTANCE         (1 + CITY_MAP_MAX_RADIUS)
+#define GAME_DEFAULT_MGR_DISTANCE     3
+#define GAME_MIN_MGR_DISTANCE         1
+#define GAME_MAX_MGR_DISTANCE         7
 
 #define GAME_DEFAULT_MGR_NATIONCHANCE 50
 #define GAME_MIN_MGR_NATIONCHANCE     0
@@ -382,32 +298,19 @@ extern struct civ_game game;
 #define GAME_MIN_AQUEDUCTLOSS        0
 #define GAME_MAX_AQUEDUCTLOSS        100
 
-#define GAME_DEFAULT_KILLCITIZEN     (1 << LAND_MOVING)
-
-#define GAME_DEFAULT_KILLUNHOMED     0
-#define GAME_MIN_KILLUNHOMED         0
-#define GAME_MAX_KILLUNHOMED         100
+#define GAME_DEFAULT_KILLCITIZEN     1
+#define GAME_MIN_KILLCITIZEN         0
+#define GAME_MAX_KILLCITIZEN         ((1 << MOVETYPE_LAST) - 1)
 
 #define GAME_DEFAULT_TECHPENALTY     100
 #define GAME_MIN_TECHPENALTY         0
 #define GAME_MAX_TECHPENALTY         100
-
-#define GAME_DEFAULT_TECHLOST_RECV   0
-#define GAME_MIN_TECHLOST_RECV       0
-#define GAME_MAX_TECHLOST_RECV       100
-
-#define GAME_DEFAULT_TECHLOST_DONOR  0
-#define GAME_MIN_TECHLOST_DONOR      0
-#define GAME_MAX_TECHLOST_DONOR      100
-
-#define GAME_DEFAULT_TEAM_POOLED_RESEARCH TRUE
 
 #define GAME_DEFAULT_RAZECHANCE      20
 #define GAME_MIN_RAZECHANCE          0
 #define GAME_MAX_RAZECHANCE          100
 
 #define GAME_DEFAULT_SCORELOG        FALSE
-#define GAME_DEFAULT_SCOREFILE       "freeciv-score.log"
 #define GAME_DEFAULT_SCORETURN       20
 
 #define GAME_DEFAULT_SPACERACE       TRUE
@@ -432,11 +335,9 @@ extern struct civ_game game;
 #define GAME_MIN_TIMEOUT             -1
 #define GAME_MAX_TIMEOUT             8639999
 
-#define GAME_MIN_UNITWAITTIME        0
-#define GAME_MAX_UNITWAITTIME        GAME_MAX_TIMEOUT
-#define GAME_DEFAULT_UNITWAITTIME    0
-
 #define GAME_DEFAULT_PHASE_MODE 0
+#define GAME_MIN_PHASE_MODE 0
+#define GAME_MAX_PHASE_MODE 2
 
 #define GAME_DEFAULT_TCPTIMEOUT      10
 #define GAME_MIN_TCPTIMEOUT          0
@@ -462,15 +363,13 @@ extern struct civ_game game;
 #define GAME_MIN_FULLTRADESIZE       1
 #define GAME_MAX_FULLTRADESIZE       50
 
-#define GAME_DEFAULT_TRADING_TECH    TRUE
-#define GAME_DEFAULT_TRADING_GOLD    TRUE
-#define GAME_DEFAULT_TRADING_CITY    TRUE
-
 #define GAME_DEFAULT_TRADEMINDIST    9
 #define GAME_MIN_TRADEMINDIST        1
 #define GAME_MAX_TRADEMINDIST        999
 
-#define GAME_DEFAULT_BARBARIANRATE   BARBS_NORMAL
+#define GAME_DEFAULT_BARBARIANRATE   2
+#define GAME_MIN_BARBARIANRATE       0
+#define GAME_MAX_BARBARIANRATE       4
 
 #define GAME_DEFAULT_ONSETBARBARIAN  60
 #define GAME_MIN_ONSETBARBARIAN      0
@@ -484,7 +383,6 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_RULESETDIR      "default"
 
-#define GAME_DEFAULT_SAVEVERSION     0
 #define GAME_DEFAULT_SAVE_NAME       "freeciv"
 #define GAME_DEFAULT_SAVETURNS       1
 #define GAME_MIN_SAVETURNS           0
@@ -513,14 +411,22 @@ extern struct civ_game game;
 #define GAME_MAX_COMPRESS_LEVEL     9
 
 #if defined(HAVE_LIBBZ2)
+#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
+#  define GAME_MAX_COMPRESS_TYPE FZ_BZIP2
 #  define GAME_DEFAULT_COMPRESS_TYPE FZ_BZIP2
 #elif defined(HAVE_LIBZ)
+#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
+#  define GAME_MAX_COMPRESS_TYPE FZ_ZLIB
 #  define GAME_DEFAULT_COMPRESS_TYPE FZ_ZLIB
 #else
+#  define GAME_MIN_COMPRESS_TYPE FZ_PLAIN
+#  define GAME_MAX_COMPRESS_TYPE FZ_PLAIN
 #  define GAME_DEFAULT_COMPRESS_TYPE FZ_PLAIN
 #endif
 
-#define GAME_DEFAULT_ALLOWED_CITY_NAMES CNM_PLAYER_UNIQUE
+#define GAME_DEFAULT_ALLOWED_CITY_NAMES 1
+#define GAME_MIN_ALLOWED_CITY_NAMES 0
+#define GAME_MAX_ALLOWED_CITY_NAMES 3
 
 #define GAME_DEFAULT_REVOLUTION_LENGTH 0
 #define GAME_MIN_REVOLUTION_LENGTH 0
@@ -528,15 +434,7 @@ extern struct civ_game game;
 
 #define GAME_START_YEAR -4000
 
-#define GAME_DEFAULT_AIRLIFTINGSTYLE AIRLIFTING_CLASSICAL
-
 #define GAME_MAX_READ_RECURSION 10 /* max recursion for the read command */
-
-#define GAME_DEFAULT_ALLIED_VICTORY TRUE
-
-#define GAME_DEFAULT_KICK_TIME 1800     /* 1800 seconds = 30 minutes. */
-#define GAME_MIN_KICK_TIME 0            /* 0 = disabling. */
-#define GAME_MAX_KICK_TIME 86400        /* 86400 seconds = 24 hours. */
 
 /* ruleset settings */
 
@@ -603,11 +501,6 @@ extern struct civ_game game;
 #define RS_MIN_CITIES_MIN_DIST                   1
 #define RS_MAX_CITIES_MIN_DIST                   RS_MAX_VALUE
 
-/* the constants CITY_MAP_*_RADIUS are defined in city.c */
-#define RS_DEFAULT_CITY_RADIUS_SQ                CITY_MAP_DEFAULT_RADIUS_SQ
-#define RS_MIN_CITY_RADIUS_SQ                    CITY_MAP_MIN_RADIUS_SQ
-#define RS_MAX_CITY_RADIUS_SQ                    CITY_MAP_MAX_RADIUS_SQ
-
 #define RS_DEFAULT_VIS_RADIUS_SQ                 5 /* city radius 2 */
 #define RS_MIN_VIS_RADIUS_SQ                     0
 #define RS_MAX_VIS_RADIUS_SQ                     401 /* city radius 20 */
@@ -648,14 +541,6 @@ extern struct civ_game game;
 #define RS_DEFAULT_UPGRADE_VETERAN_LOSS          0
 #define RS_MIN_UPGRADE_VETERAN_LOSS              0
 #define RS_MAX_UPGRADE_VETERAN_LOSS              MAX_VET_LEVELS
-
-#define RS_DEFAULT_TECH_UPKEEP_STYLE     0
-#define RS_MIN_TECH_UPKEEP_STYLE         0
-#define RS_MAX_TECH_UPKEEP_STYLE         1
-
-#define RS_DEFAULT_TECH_UPKEEP_DIVIDER   500
-#define RS_MIN_TECH_UPKEEP_DIVIDER       1
-#define RS_MAX_TECH_UPKEEP_DIVIDER       1000
 
 #define RS_DEFAULT_BASE_TECH_COST                20
 #define RS_MIN_BASE_TECH_COST                    0

@@ -15,7 +15,7 @@
 #include <config.h>
 #endif
 
-#include "log.h"                /* fc_assert */
+#include <assert.h>
 
 #include "distribute.h"
 
@@ -33,7 +33,7 @@
 void distribute(int number, int groups, int *ratios, int *result)
 {
   int i, sum = 0, rest[groups], max_groups[groups], max_count, max;
-#ifdef DEBUG
+#ifndef NDEBUG
   const int original_number = number;
 #endif
 
@@ -52,7 +52,7 @@ void distribute(int number, int groups, int *ratios, int *result)
    */
 
   for (i = 0; i < groups; i++) {
-    fc_assert(ratios[i] >= 0);
+    assert(ratios[i] >= 0);
     sum += ratios[i];
   }
 
@@ -96,7 +96,7 @@ void distribute(int number, int groups, int *ratios, int *result)
 
       /* Give an extra source to the target with largest remainder and
        * smallest whole number. */
-      fc_assert(max_count > 1);
+      assert(max_count > 1);
       for (i = 1; i < max_count; i++) {
 	if (result[max_groups[i]] < min) {
 	  min = result[max_groups[i]];
@@ -109,13 +109,13 @@ void distribute(int number, int groups, int *ratios, int *result)
     }
   }
 
-#ifdef DEBUG
+#ifndef NDEBUG
   number = original_number;
   for (i = 0; i < groups; i++) {
-    fc_assert(result[i] >= 0);
+    assert(result[i] >= 0);
     number -= result[i];
   }
-  fc_assert(number == 0);
+  assert(number == 0);
 #endif
 }
 

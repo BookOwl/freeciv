@@ -30,7 +30,6 @@
 #include "government.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
 
 /* client */
 #include "client_main.h"
@@ -104,7 +103,7 @@ void intel_dialog_init()
 *****************************************************************/
 void intel_dialog_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /****************************************************************
@@ -144,18 +143,9 @@ static void intel_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct intel_dialog *pdialog = (struct intel_dialog *)data;
 
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
 
   free(pdialog);
-}
-
-/**************************************************************************
-  Close an intelligence dialog for the given player.
-**************************************************************************/
-void close_intel_dialog(struct player *p)
-{
-  struct intel_dialog *pdialog = get_intel_dialog(p);
-  intel_destroy_callback(NULL, pdialog);
 }
 
 /****************************************************************
@@ -311,8 +301,9 @@ void update_intel_dialog(struct player *p)
     int i;
 
     /* window title. */
-    fc_snprintf(buf, sizeof(buf), _("Foreign Intelligence: %s Empire"),
-                nation_adjective_for_player(p));
+    my_snprintf(buf, sizeof(buf),
+	_("Foreign Intelligence: %s Empire"),
+	nation_adjective_for_player(p));
     gtk_window_set_title(GTK_WINDOW(pdialog->shell), buf);
 
     /* diplomacy tab. */
@@ -338,7 +329,7 @@ void update_intel_dialog(struct player *p)
       if (other == p || !other->is_alive) {
 	continue;
       }
-      state = player_diplstate_get(p, other);
+      state = pplayer_get_diplstate(p, other);
       gtk_tree_store_append(pdialog->diplstates, &it,
 			    &diplstates[state->type]);
       g_value_init(&v, G_TYPE_STRING);
@@ -366,62 +357,61 @@ void update_intel_dialog(struct player *p)
     /* table labels. */
     for (i = 0; i < ARRAY_SIZE(pdialog->table_labels); i++) {
       if (pdialog->table_labels[i]) {
-        struct city *pcity;
+	struct city *pcity;
 
-        switch (i) {
-        case LABEL_RULER:
-          ruler_title_for_player(p, buf, sizeof(buf));
-          break;
-        case LABEL_GOVERNMENT:
-          sz_strlcpy(buf, government_name_for_player(p));
-          break;
-        case LABEL_CAPITAL:
-          pcity = player_palace(p);
-          /* TRANS: "unknown" location */
-          sz_strlcpy(buf, (!pcity) ? _("(unknown)") : city_name(pcity));
-          break;
-        case LABEL_GOLD:
-          fc_snprintf(buf, sizeof(buf), "%d", p->economic.gold);
-          break;
-        case LABEL_TAX:
-          fc_snprintf(buf, sizeof(buf), "%d%%", p->economic.tax);
-          break;
-        case LABEL_SCIENCE:
-          fc_snprintf(buf, sizeof(buf), "%d%%", p->economic.science);
-          break;
-        case LABEL_LUXURY:
-          fc_snprintf(buf, sizeof(buf), "%d%%", p->economic.luxury);
-          break;
-        case LABEL_RESEARCHING:
-          {
-            struct player_research *research = player_research_get(p);
+	switch (i) {
+	  case LABEL_RULER:
+	    my_snprintf(buf, sizeof(buf), "%s %s", 
+		ruler_title_translation(p),
+		player_name(p));
+	    break;
+	  case LABEL_GOVERNMENT:
+	    sz_strlcpy(buf, government_name_for_player(p));
+	    break;
+	  case LABEL_CAPITAL:
+	    pcity = find_palace(p);
+	    /* TRANS: "unknown" location */
+	    sz_strlcpy(buf, (!pcity) ? _("(unknown)") : city_name(pcity));
+	    break;
+	  case LABEL_GOLD:
+	    my_snprintf(buf, sizeof(buf), "%d", p->economic.gold);
+	    break;
+	  case LABEL_TAX:
+	    my_snprintf(buf, sizeof(buf), "%d%%", p->economic.tax);
+	    break;
+	  case LABEL_SCIENCE:
+	    my_snprintf(buf, sizeof(buf), "%d%%", p->economic.science);
+	    break;
+	  case LABEL_LUXURY:
+	    my_snprintf(buf, sizeof(buf), "%d%%", p->economic.luxury);
+	    break;
+	  case LABEL_RESEARCHING: {
+	    struct player_research* research = get_player_research(p);
+	    switch (research->researching) {
+	    case A_UNKNOWN:
+	      /* TRANS: "Unknown" advance/technology */
+	      my_snprintf(buf, sizeof(buf), _("(Unknown)"));
+	      break;
+	    case A_UNSET:
+	      /* TRANS: missing value */
+	      my_snprintf(buf, sizeof(buf), _("(none)"));
+	      break;
+	    default:
+	      my_snprintf(buf, sizeof(buf), "%s(%d/%d)",
+		  advance_name_researching(p),
+		  research->bulbs_researched, total_bulbs_required(p));
+	      break;
+	    };
+	    break;
+	  }
+	  default:
+	    buf[0] = '\0';
+	    break;
+	}
 
-            switch (research->researching) {
-            case A_UNKNOWN:
-              /* TRANS: "Unknown" advance/technology */
-              fc_snprintf(buf, sizeof(buf), _("(Unknown)"));
-              break;
-            case A_UNSET:
-              /* TRANS: missing value */
-              fc_snprintf(buf, sizeof(buf), _("(none)"));
-              break;
-            default:
-              fc_snprintf(buf, sizeof(buf), "%s(%d/%d)",
-                          advance_name_researching(p),
-                          research->bulbs_researched,
-                          total_bulbs_required(p));
-              break;
-            }
-            break;
-          }
-        default:
-          buf[0] = '\0';
-          break;
-        }
-
-        if (buf[0] != '\0') {
-          gtk_label_set_text(GTK_LABEL(pdialog->table_labels[i]), buf);
-        }
+	if (buf[0] != '\0') {
+	  gtk_label_set_text(GTK_LABEL(pdialog->table_labels[i]), buf);
+	}
       }
     }
   }

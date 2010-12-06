@@ -15,10 +15,10 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 /* utility */
-#include "bitvector.h"
 #include "log.h"
 #include "mem.h"
 
@@ -671,6 +671,7 @@ static void pft_fill_default_parameter(struct pf_parameter *parameter,
 {
   struct unit_class *punitclass = utype_class(punittype);
 
+  parameter->turn_mode = TM_CAPPED;
   parameter->unknown_MC = SINGLE_MOVE;
 
   if (uclass_has_flag(punitclass, UCF_TERRAIN_SPEED)) {
@@ -737,12 +738,6 @@ static void pft_fill_utype_default_parameter(struct pf_parameter *parameter,
   }
   parameter->owner = powner;
 
-  if (!BV_ISSET(parameter->unit_flags, F_CIVILIAN)) {
-    parameter->can_invade_tile = player_can_invade_tile;
-  } else {
-    parameter->can_invade_tile = NULL;
-  }
-
   parameter->omniscience = !ai_handicap(powner, H_MAP);
 }
 
@@ -800,13 +795,14 @@ static void pft_fill_parameter(struct pf_parameter *parameter,
     parameter->get_MC = airmove;
     break;
   default:
-    log_error("pft_fill_parameter() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_parameter() impossible move type!");
     break;
   }
 
   if (!parameter->get_moves_left_req && utype_fuel(punittype)) {
     /* Unit needs fuel */
     parameter->get_moves_left_req = get_fuel_moves_left_req;
+    parameter->turn_mode = TM_WORST_TIME;
   }
 
   if (!unit_type_really_ignores_zoc(punittype)) {
@@ -860,7 +856,7 @@ static void pft_fill_overlap_param(struct pf_parameter *parameter,
     parameter->get_MC = airmove; /* very crude */
     break;
   default:
-    log_error("pft_fill_overlap_param() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_overlap_param() impossible move type!");
     break;
   }
 
@@ -916,7 +912,7 @@ static void pft_fill_attack_param(struct pf_parameter *parameter,
     parameter->get_MC = airmove; /* very crude */
     break;
   default:
-    log_error("pft_fill_attack_param() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_attack_param() impossible move type!");
     break;
   }
 
@@ -979,6 +975,8 @@ void pft_fill_amphibious_parameter(struct pft_amphibious *parameter)
   parameter->sea_scale = move_rate / parameter->sea.move_rate;
   parameter->combined.moves_left_initially *= parameter->sea_scale;
   parameter->combined.move_rate = move_rate;
+  /* To ensure triremes behave correctly: FIXME: Probably incorrect now */
+  parameter->combined.turn_mode = TM_WORST_TIME;
   parameter->combined.get_MC = amphibious_move;
   parameter->combined.get_TB = amphibious_behaviour;
   parameter->combined.get_EC = amphibious_extra_cost;
@@ -1009,10 +1007,10 @@ struct pf_path *pft_concat(struct pf_path *dest_path,
   } else {
     int old_length = dest_path->length;
 
-    fc_assert_ret_val(pf_path_last_position(dest_path)->tile
-                      == src_path->positions[0].tile, NULL);
-    fc_assert_ret_val(pf_path_last_position(dest_path)->moves_left
-                      == src_path->positions[0].moves_left, NULL);
+    assert(pf_path_get_last_position(dest_path)->tile
+	   == src_path->positions[0].tile);
+    assert(pf_path_get_last_position(dest_path)->moves_left
+	   == src_path->positions[0].moves_left);
     dest_path->length += src_path->length - 1;
     dest_path->positions =
 	fc_realloc(dest_path->positions,
@@ -1042,7 +1040,7 @@ bool pft_advance_path(struct pf_path *path, struct tile *ptile)
       return FALSE;
     }
   }
-  fc_assert_ret_val(i < path->length, FALSE);
+  assert(i < path->length);
   path->length -= i;
   new_positions = fc_malloc(sizeof(*path->positions) * path->length);
   memcpy(new_positions, path->positions + i,

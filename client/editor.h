@@ -20,7 +20,6 @@
  * on how to add more object types. */
 enum editor_object_type {
   OBJTYPE_TILE = 0,
-  OBJTYPE_STARTPOS,
   OBJTYPE_UNIT,
   OBJTYPE_CITY,
   OBJTYPE_PLAYER,

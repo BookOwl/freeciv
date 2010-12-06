@@ -36,7 +36,6 @@
 #include "government.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
 
 /* client */
 #include "client_main.h"
@@ -155,18 +154,9 @@ void popdown_intel_dialog(struct intel_dialog *pdialog)
   pdialog->intel_dialog_shell = 0;
 
   if (!(pdialog->intel_diplo_dialog_shell)) {
-    dialog_list_remove(dialog_list, pdialog);
+    dialog_list_unlink(dialog_list, pdialog);
     free(pdialog);
   }
-}
-
-/**************************************************************************
-  Close an intelligence dialog for the given player.
-**************************************************************************/
-void close_intel_dialog(struct player *p)
-{
-  struct intel_dialog *pdialog = get_intel_dialog(p);
-  popdown_intel_dialog(pdialog);
 }
 
 /****************************************************************
@@ -174,7 +164,7 @@ void close_intel_dialog(struct player *p)
 *****************************************************************/
 void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 {
-  char buf[4 * MAX_LEN_NAME], plr_buf[4 * MAX_LEN_NAME];
+  char buf[64];
   struct city *pcity;
 
   static char *tech_list_names_ptrs[A_LAST+1];
@@ -194,7 +184,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 						pdialog->intel_dialog_shell,
 						NULL);
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("Intelligence Information for the %s Empire"),
 	      nation_adjective_for_player(pdialog->pplayer));
 
@@ -204,16 +194,16 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 						     XtNlabel, buf,
 						     NULL));
 
-  fc_snprintf(buf, sizeof(buf), _("Ruler: %s"),
-              ruler_title_for_player(pdialog->pplayer,
-                                     plr_buf, sizeof(plr_buf)));
+  my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"),
+	      ruler_title_translation(pdialog->pplayer),
+	      player_name(pdialog->pplayer));
   XtVaCreateManagedWidget("intelnamelabel",
 			  labelWidgetClass,
 			  pdialog->intel_form,
 			  XtNlabel, buf,
 			  NULL);
 
-  fc_snprintf(buf, sizeof(buf), _("Government: %s"),
+  my_snprintf(buf, sizeof(buf), _("Government: %s"),
 	      government_name_for_player(pdialog->pplayer));
   XtVaCreateManagedWidget("intelgovlabel",
 			  labelWidgetClass,
@@ -221,7 +211,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  fc_snprintf(buf, sizeof(buf), _("Gold: %d"),
+  my_snprintf(buf, sizeof(buf), _("Gold: %d"),
 	      pdialog->pplayer->economic.gold);
   XtVaCreateManagedWidget("intelgoldlabel",
 			  labelWidgetClass,
@@ -229,7 +219,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  fc_snprintf(buf, sizeof(buf), _("Tax: %d%%"),
+  my_snprintf(buf, sizeof(buf), _("Tax: %d%%"),
 	      pdialog->pplayer->economic.tax);
   XtVaCreateManagedWidget("inteltaxlabel",
 			  labelWidgetClass,
@@ -237,7 +227,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  fc_snprintf(buf, sizeof(buf), _("Science: %d%%"),
+  my_snprintf(buf, sizeof(buf), _("Science: %d%%"),
 	      pdialog->pplayer->economic.science);
   XtVaCreateManagedWidget("intelscilabel",
 			  labelWidgetClass,
@@ -245,7 +235,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  fc_snprintf(buf, sizeof(buf), _("Luxury: %d%%"),
+  my_snprintf(buf, sizeof(buf), _("Luxury: %d%%"),
 	      pdialog->pplayer->economic.luxury);
   XtVaCreateManagedWidget("intelluxlabel",
 			  labelWidgetClass,
@@ -253,18 +243,18 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  switch (player_research_get(pdialog->pplayer)->researching) {
+  switch (get_player_research(pdialog->pplayer)->researching) {
   case A_UNKNOWN:
-    fc_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
+    my_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
     break;
   case A_UNSET:
-    fc_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-		player_research_get(pdialog->pplayer)->bulbs_researched);
+    my_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
+		get_player_research(pdialog->pplayer)->bulbs_researched);
     break;
   default:
-    fc_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
+    my_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
 		advance_name_researching(pdialog->pplayer),
-		player_research_get(pdialog->pplayer)->bulbs_researched,
+		get_player_research(pdialog->pplayer)->bulbs_researched,
 		total_bulbs_required(pdialog->pplayer));
     break;
   };
@@ -275,8 +265,8 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  pcity = player_palace(pdialog->pplayer);
-  fc_snprintf(buf, sizeof(buf), _("Capital: %s"),
+  pcity = find_palace(pdialog->pplayer);
+  my_snprintf(buf, sizeof(buf), _("Capital: %s"),
 	      /* TRANS: "unknown" location */
 	      (!pcity) ? _("(unknown)") : city_name(pcity));
   XtVaCreateManagedWidget("intelcapitallabel",
@@ -290,7 +280,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
       if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
 	sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
       } else {
-	fc_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
+	my_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
 		    "%s*", advance_name_translation(advance_by_number(i)));
       }
       tech_list_names_ptrs[j]=tech_list_names[j];
@@ -410,7 +400,7 @@ void popdown_intel_diplo_dialog(struct intel_dialog *pdialog)
   pdialog->intel_diplo_dialog_shell = 0;
 
   if (!(pdialog->intel_dialog_shell)) {
-    dialog_list_remove(dialog_list, pdialog);
+    dialog_list_unlink(dialog_list, pdialog);
     free(pdialog);
   }
 }
@@ -420,7 +410,7 @@ void popdown_intel_diplo_dialog(struct intel_dialog *pdialog)
 *****************************************************************/
 void create_intel_diplo_dialog(struct intel_dialog *pdialog, bool raise)
 {
-  char buf[4 * MAX_LEN_NAME], plr_buf[4 * MAX_LEN_NAME];
+  char buf[64];
 
   pdialog->intel_diplo_dialog_shell_is_raised = raise;
 
@@ -436,7 +426,7 @@ void create_intel_diplo_dialog(struct intel_dialog *pdialog, bool raise)
 			    pdialog->intel_diplo_dialog_shell,
 			    NULL);
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
 	      _("Intelligence Diplomacy Information for the %s Empire"),
 	      nation_adjective_for_player(pdialog->pplayer));
 
@@ -446,10 +436,10 @@ void create_intel_diplo_dialog(struct intel_dialog *pdialog, bool raise)
 				pdialog->intel_diplo_form,
 				XtNlabel, buf,
 				NULL));
-
-  fc_snprintf(buf, sizeof(buf), _("Ruler: %s"),
-              ruler_title_for_player(pdialog->pplayer,
-                                     plr_buf, sizeof(plr_buf)));
+   
+  my_snprintf(buf, sizeof(buf), _("Ruler: %s %s"), 
+	      ruler_title_translation(pdialog->pplayer),
+	      player_name(pdialog->pplayer));
   XtVaCreateManagedWidget("inteldiplonamelabel", 
 			  labelWidgetClass, 
 			  pdialog->intel_diplo_form, 
@@ -498,8 +488,8 @@ void update_intel_diplo_dialog(struct intel_dialog *pdialog)
       if (other == pdialog->pplayer) {
 	continue;
       }
-      state = player_diplstate_get(pdialog->pplayer, other);
-      fc_snprintf(namelist_text[i], sizeof(namelist_text[i]),
+      state = pplayer_get_diplstate(pdialog->pplayer, other);
+      my_snprintf(namelist_text[i], sizeof(namelist_text[i]),
 		  "%-32s %-16s %-16s",
 		  player_name(other),
 		  nation_adjective_for_player(other),

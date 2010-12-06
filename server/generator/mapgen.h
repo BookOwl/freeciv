@@ -13,7 +13,7 @@
 #ifndef FC__MAPGEN_H
 #define FC__MAPGEN_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 void map_fractal_generate(bool autosize, struct unit_type *initial_unit);
 

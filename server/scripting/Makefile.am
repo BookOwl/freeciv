@@ -11,8 +11,6 @@ AM_CPPFLAGS = \
 dist_libscripting_la_SOURCES = \
 		api_actions.c	\
 		api_actions.h	\
-		api_effects.c	\
-		api_effects.h	\
 		api_find.c	\
 		api_find.h	\
 		api_gen.c	\
@@ -23,8 +21,6 @@ dist_libscripting_la_SOURCES = \
 		api_methods.h	\
 		api_notify.c	\
 		api_notify.h	\
-		api_specenum.c  \
-		api_specenum.h  \
 		api_utilities.c	\
 		api_utilities.h	\
 		api_types.h	\

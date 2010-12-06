@@ -20,6 +20,4 @@ void ai_do_last_activities(struct player *pplayer);
 
 void ai_best_government(struct player *pplayer);
 
-void ai_calc_data(struct player *pplayer, int *trade, int *expenses);
-
 #endif  /* FC__AIHAND_H */

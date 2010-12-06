@@ -11,7 +11,7 @@
 
 [datafile]
 description="Default effects data for Freeciv"
-options="+Freeciv-2.3-ruleset"
+options="1.0"
 
 ; /* <-- avoid gettext warnings
 ; */ <-- avoid gettext warnings
@@ -81,10 +81,6 @@ reqs    =
       "Tech", "Invention", "player"
     }
 
-; basic free tech upkeep
-[effect_upkeep_tech_free]
-name    = "Tech_Upkeep_Free"
-value   = 10
 
 ; Fortress HP regen
 [effect_fortress_hp_regen]
@@ -116,14 +112,6 @@ reqs	=
 name	= "Upkeep_Free"
 value	= 99
 reqs	=
-    { "type", "name", "range"
-      "Gov", "Anarchy", "Player"
-    }
-
-[effect_anarchy_upkeep_tech_free]
-name    = "Tech_Upkeep_Free"
-value   = 9999
-reqs    =
     { "type", "name", "range"
       "Gov", "Anarchy", "Player"
     }
@@ -2198,9 +2186,4 @@ value   = 1
 ; Cities can always work tiles
 [effect_tile_workable]
 name    = "Tile_Workable"
-value   = 1
-
-; each city has at least one slot to build units
-[effect_city_build_slots_basic]
-name    = "City_Build_Slots"
 value   = 1

@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,20 +24,17 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
-#include "bitvector.h"
+/* common & utility */
 #include "fcintl.h"
-#include "log.h"
-#include "mem.h"
-#include "rand.h"
-#include "support.h"
-
-/* common */
 #include "game.h"
 #include "government.h"
 #include "map.h"
+#include "log.h"
+#include "mem.h"
 #include "packets.h"
 #include "player.h"
+#include "rand.h"
+#include "support.h"
 #include "unitlist.h"
 
 /* client */
@@ -322,7 +320,7 @@ static void pillage_callback(GtkWidget *w, gpointer data)
   struct unit *punit;
   int what = GPOINTER_TO_INT(data);
 
-  punit = game_unit_by_number(unit_to_use_to_pillage);
+  punit = game_find_unit_by_number(unit_to_use_to_pillage);
   if (punit) {
     Base_type_id pillage_base = -1;
 
@@ -370,7 +368,7 @@ void popup_pillage_dialog(struct unit *punit,
       BV_CLR_ALL(what_base);
 
       if (what > S_LAST) {
-        BV_SET(what_base, what % (S_LAST + 1));
+        BV_SET(what_base, what - S_LAST - 1);
       } else {
         BV_SET(what_bv, what);
       }
@@ -379,7 +377,7 @@ void popup_pillage_dialog(struct unit *punit,
                         G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
 
       if (what > S_LAST) {
-        BV_CLR(bases, what % (S_LAST + 1));
+        BV_CLR(bases, what - S_LAST - 1);
       } else {
         clear_special(&may_pillage, what);
       }
@@ -406,7 +404,7 @@ static void unit_select_row_activated(GtkTreeView *view, GtkTreePath *path)
   gtk_tree_model_get_iter(GTK_TREE_MODEL(unit_select_store), &it, path);
   gtk_tree_model_get(GTK_TREE_MODEL(unit_select_store), &it, 0, &id, -1);
  
-  if ((punit = player_unit_by_number(client_player(), id))) {
+  if ((punit = player_find_unit_by_id(client.conn.playing, id))) {
     set_unit_focus(punit);
   }
 
@@ -510,12 +508,12 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
           pmyunit = punit;
 
           /* Activate this unit. */
-	  punit->client.focus_status = FOCUS_AVAIL;
+	  punit->focus_status = FOCUS_AVAIL;
 	  if (unit_has_orders(punit)) {
 	    request_orders_cleared(punit);
 	  }
-	  if (punit->activity != ACTIVITY_IDLE || punit->ai_controlled) {
-	    punit->ai_controlled = FALSE;
+	  if (punit->activity != ACTIVITY_IDLE || punit->ai.control) {
+	    punit->ai.control = FALSE;
 	    request_new_unit_activity(punit, ACTIVITY_IDLE);
 	  }
         }
@@ -533,7 +531,7 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing) {
           if ((punit->activity == ACTIVITY_IDLE) &&
-              !punit->ai_controlled &&
+              !punit->ai.control &&
               can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
             request_new_unit_activity(punit, ACTIVITY_SENTRY);
           }
@@ -547,7 +545,7 @@ static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing) {
           if (punit->activity == ACTIVITY_IDLE &&
-              !punit->ai_controlled) {
+              !punit->ai.control) {
             /* Give focus to it */
             add_unit_focus(punit);
           }
@@ -751,7 +749,7 @@ static GtkWidget* create_list_of_nations_in_group(struct nation_group* group,
       continue;
     }
 
-    if (NULL != group && !nation_is_in_group(pnation, group)) {
+    if (group != NULL && !is_nation_in_group(pnation, group)) {
       continue;
     }
 
@@ -806,16 +804,12 @@ static GtkWidget* create_nation_selection_list(void)
   gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);  
   gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
   
-  for (i = 1; i <= nation_group_count(); i++) {
-    struct nation_group* group = (nation_group_by_number(i - 1));
+  for (i = 0; i <= nation_group_count(); i++) {
+    struct nation_group* group = (i == 0 ? NULL: nation_group_by_number(i - 1));
     nation_list = create_list_of_nations_in_group(group, i);
-    group_name_label = gtk_label_new(nation_group_name_translation(group));
+    group_name_label = gtk_label_new(group ? Q_(group->name) : _("All"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), nation_list, group_name_label);
   }
-  
-  nation_list = create_list_of_nations_in_group(NULL, 0);
-  group_name_label = gtk_label_new(_("All"));
-  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), nation_list, group_name_label);
 
   return vbox;
 }
@@ -1088,7 +1082,8 @@ static gint cmp_func(gconstpointer ap, gconstpointer bp)
  *****************************************************************/
 static void select_random_leader(void)
 {
-  int i;
+  struct nation_leader *leaders;
+  int i, nleaders;
   GList *items = NULL;
   GtkWidget *text, *list;
   gchar *name;
@@ -1105,12 +1100,11 @@ static void select_random_leader(void)
     unique = TRUE;
   }
 
-  i = 0;
-  nation_leader_list_iterate(nation_leaders(nation_by_number
-                                            (selected_nation)), pleader) {
-    items = g_list_prepend(items, (gpointer) nation_leader_name(pleader));
-    i++;
-  } nation_leader_list_iterate_end
+  leaders
+    = get_nation_leaders(nation_by_number(selected_nation), &nleaders);
+  for (i = 0; i < nleaders; i++) {
+    items = g_list_prepend(items, leaders[i].name);
+  }
 
   /* Populate combo box with minimum signal noise. */
   g_signal_handlers_block_by_func(list, races_leader_callback, NULL);
@@ -1124,7 +1118,7 @@ static void select_random_leader(void)
   if (unique) {
     gtk_entry_set_text(GTK_ENTRY(text), name);
   } else {
-    i = fc_rand(i);
+    i = myrand(nleaders);
     gtk_entry_set_text(GTK_ENTRY(text), g_list_nth_data(items, i));
   }
 
@@ -1264,16 +1258,15 @@ static void races_nation_callback(GtkTreeSelection *select, gpointer data)
 **************************************************************************/
 static void races_leader_callback(void)
 {
-  const struct nation_leader *pleader;
   const gchar *name;
 
   name = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(races_leader)->entry));
 
-  if ((pleader = nation_leader_by_name(nation_by_number(selected_nation),
-                                       name))) {
-    selected_sex = nation_leader_is_male(pleader);
+  if (check_nation_leader_name(nation_by_number(selected_nation), name)) {
+    selected_sex = get_nation_leader_sex(nation_by_number(selected_nation),
+					 name);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(races_sex[selected_sex]),
-                                 TRUE);
+				 TRUE);
   }
 }
 

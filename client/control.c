@@ -15,9 +15,11 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
+#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "timing.h"
@@ -97,7 +99,7 @@ void control_init(void)
   int i;
 
   caravan_arrival_queue = genlist_new();
-  diplomat_arrival_queue = genlist_new_full(free);
+  diplomat_arrival_queue = genlist_new();
 
   current_focus = unit_list_new();
   previous_focus = unit_list_new();
@@ -114,23 +116,29 @@ void control_init(void)
 **************************************************************************/
 void control_free(void)
 {
+  const struct genlist_link *plink;
   int i;
 
-  genlist_destroy(caravan_arrival_queue);
+  genlist_free(caravan_arrival_queue);
   caravan_arrival_queue = NULL;
 
-  genlist_destroy(diplomat_arrival_queue);
+  /* Datas in diplomat_arrival_queue are malloced. */
+  for (plink = genlist_head(diplomat_arrival_queue); NULL != plink;
+       plink = genlist_link_next(plink)) {
+    free(genlist_link_data(plink));
+  }
+  genlist_free(diplomat_arrival_queue);
   diplomat_arrival_queue = NULL;
 
-  unit_list_destroy(current_focus);
+  unit_list_free(current_focus);
   current_focus = NULL;
-  unit_list_destroy(previous_focus);
+  unit_list_free(previous_focus);
   previous_focus = NULL;
-  unit_list_destroy(urgent_focus_queue);
+  unit_list_free(urgent_focus_queue);
   urgent_focus_queue = NULL;
 
   for (i = 0; i < MAX_NUM_BATTLEGROUPS; i++) {
-    unit_list_destroy(battlegroups[i]);
+    unit_list_free(battlegroups[i]);
     battlegroups[i] = NULL;
   }
 
@@ -185,17 +193,17 @@ void control_unit_killed(struct unit *punit)
 
   goto_unit_killed(punit);
 
-  unit_list_remove(get_units_in_focus(), punit);
+  unit_list_unlink(get_units_in_focus(), punit);
   if (get_num_units_in_focus() < 1) {
     set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
   }
   update_unit_info_label(get_units_in_focus());
 
-  unit_list_remove(previous_focus, punit);
-  unit_list_remove(urgent_focus_queue, punit);
+  unit_list_unlink(previous_focus, punit);
+  unit_list_unlink(urgent_focus_queue, punit);
 
   for (i = 0; i < MAX_NUM_BATTLEGROUPS; i++) {
-    unit_list_remove(battlegroups[i], punit);
+    unit_list_unlink(battlegroups[i], punit);
   }
 }
 
@@ -213,7 +221,7 @@ void unit_change_battlegroup(struct unit *punit, int battlegroup)
       unit_list_append(battlegroups[battlegroup], punit);
     }
     if (punit->battlegroup != BATTLEGROUP_NONE) {
-      unit_list_remove(battlegroups[punit->battlegroup], punit);
+      unit_list_unlink(battlegroups[punit->battlegroup], punit);
     }
     punit->battlegroup = battlegroup;
   }
@@ -241,10 +249,9 @@ void set_hover_state(struct unit_list *punits, enum cursor_hover_state state,
 		     enum unit_activity activity,
 		     enum unit_orders order)
 {
-  fc_assert_ret((punits && unit_list_size(punits) > 0)
-                || state == HOVER_NONE);
-  fc_assert_ret(state == HOVER_CONNECT || activity == ACTIVITY_LAST);
-  fc_assert_ret(state == HOVER_GOTO || order == ORDER_LAST);
+  assert((punits && unit_list_size(punits) > 0) || state == HOVER_NONE);
+  assert(state == HOVER_CONNECT || activity == ACTIVITY_LAST);
+  assert(state == HOVER_GOTO || order == ORDER_LAST);
   hover_state = state;
   connect_activity = activity;
   goto_last_order = order;
@@ -317,7 +324,7 @@ static void current_focus_append(struct unit *punit)
 {
   unit_list_append(current_focus, punit);
 
-  punit->client.focus_status = FOCUS_AVAIL;
+  punit->focus_status = FOCUS_AVAIL;
   refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
 
   if (unit_selection_clears_orders) {
@@ -334,9 +341,8 @@ void clear_unit_orders(struct unit *punit)
     return;
   }
 
-  if (punit->activity != ACTIVITY_IDLE
-      || punit->ai_controlled)  {
-    punit->ai_controlled = FALSE;
+  if (punit->activity != ACTIVITY_IDLE || punit->ai.control)  {
+    punit->ai.control = FALSE;
     refresh_unit_city_dialogs(punit);
     request_new_unit_activity(punit, ACTIVITY_IDLE);
   } else if (unit_has_orders(punit)) {
@@ -383,7 +389,7 @@ void set_unit_focus(struct unit *punit)
   if (!can_client_change_view()) {
     /* This function can be called to set the focus to NULL when
      * disconnecting.  In this case we don't want any other actions! */
-    fc_assert(punit == NULL);
+    assert(punit == NULL);
     return;
   }
 
@@ -397,7 +403,7 @@ void set_unit_focus(struct unit *punit)
   }
 
   update_unit_info_label(current_focus);
-  menus_update();
+  update_menus();
 }
 
 /**************************************************************************
@@ -428,7 +434,7 @@ void add_unit_focus(struct unit *punit)
 
   current_focus_append(punit);
   update_unit_info_label(current_focus);
-  menus_update();
+  update_menus();
 }
 
 /**************************************************************************
@@ -463,12 +469,12 @@ static struct unit *find_best_focus_candidate(bool accept_current)
     unit_list_iterate(ptile2->units, punit) {
       if ((!unit_is_in_focus(punit) || accept_current)
 	  && unit_owner(punit) == client.conn.playing
-	  && punit->client.focus_status == FOCUS_AVAIL
+	  && punit->focus_status == FOCUS_AVAIL
 	  && punit->activity == ACTIVITY_IDLE
 	  && !unit_has_orders(punit)
 	  && punit->moves_left > 0
 	  && !punit->done_moving
-	  && !punit->ai_controlled) {
+	  && !punit->ai.control) {
 	return punit;
       }
     } unit_list_iterate_end;
@@ -503,7 +509,7 @@ void advance_unit_focus(void)
      * Is the unit which just lost focus a non-AI unit? If yes this
      * enables the auto end turn. 
      */
-    if (!punit->ai_controlled) {
+    if (!punit->ai.control) {
       non_ai_unit_focus = TRUE;
       break;
     }
@@ -523,7 +529,7 @@ void advance_unit_focus(void)
         }
       } unit_list_iterate_end;
     }
-    unit_list_remove(urgent_focus_queue, candidate);
+    unit_list_unlink(urgent_focus_queue, candidate);
 
     /* Autocenter on Wakeup, regardless of the local option 
      * "auto_center_on_unit". */
@@ -536,8 +542,8 @@ void advance_unit_focus(void)
     if (!candidate) {
       /* Try for "waiting" units. */
       unit_list_iterate(client.conn.playing->units, punit) {
-        if(punit->client.focus_status == FOCUS_WAIT) {
-          punit->client.focus_status = FOCUS_AVAIL;
+        if(punit->focus_status == FOCUS_WAIT) {
+          punit->focus_status = FOCUS_AVAIL;
         }
       } unit_list_iterate_end;
       candidate = find_best_focus_candidate(FALSE);
@@ -585,7 +591,7 @@ void update_unit_focus(void)
 	 || unit_has_orders(punit))
 	&& punit->moves_left > 0 
 	&& !punit->done_moving
-	&& !punit->ai_controlled) {
+	&& !punit->ai.control) {
       return;
     }
   } unit_list_iterate_end;
@@ -827,16 +833,16 @@ void process_caravan_arrival(struct unit *punit)
     void *data;
 
     data = genlist_get(caravan_arrival_queue, 0);
-    genlist_remove(caravan_arrival_queue, data);
-    punit = game_unit_by_number(FC_PTR_TO_INT(data));
+    genlist_unlink(caravan_arrival_queue, data);
+    punit = game_find_unit_by_number(FC_PTR_TO_INT(data));
 
     if (punit && (unit_can_help_build_wonder_here(punit)
                   || unit_can_est_trade_route_here(punit))
         && (NULL == client.conn.playing
             || (unit_owner(punit) == client.conn.playing
-                && !client.conn.playing->ai_controlled))) {
+                && !client.conn.playing->ai_data.control))) {
       struct city *pcity_dest = tile_city(unit_tile(punit));
-      struct city *pcity_homecity = game_city_by_number(punit->homecity);
+      struct city *pcity_homecity = game_find_city_by_number(punit->homecity);
 
       if (pcity_dest && pcity_homecity) {
         popup_caravan_dialog(punit, pcity_homecity, pcity_dest);
@@ -882,12 +888,14 @@ void process_diplomat_arrival(struct unit *pdiplomat, int victim_id)
     struct unit *punit;
 
     p_ids = genlist_get(diplomat_arrival_queue, 0);
+    genlist_unlink(diplomat_arrival_queue, p_ids);
     diplomat_id = p_ids[0];
     victim_id = p_ids[1];
-    genlist_remove(diplomat_arrival_queue, p_ids); /* Do free(p_ids). */
-    pdiplomat = player_unit_by_number(client_player(), diplomat_id);
-    pcity = game_city_by_number(victim_id);
-    punit = game_unit_by_number(victim_id);
+    free(p_ids);
+    p_ids = NULL;
+    pdiplomat = player_find_unit_by_id(client.conn.playing, diplomat_id);
+    pcity = game_find_city_by_number(victim_id);
+    punit = game_find_unit_by_number(victim_id);
 
     if (!pdiplomat || !unit_has_type_flag(pdiplomat, F_DIPLOMAT))
       continue;
@@ -928,7 +936,7 @@ void request_unit_goto(enum unit_orders last_order)
     update_unit_info_label(punits);
     control_mouse_cursor(NULL);
   } else {
-    fc_assert_ret(goto_is_active());
+    assert(goto_is_active());
     goto_add_waypoint();
   }
 }
@@ -1130,7 +1138,7 @@ void request_unit_connect(enum unit_activity activity)
     update_unit_info_label(punits);
     control_mouse_cursor(NULL);
   } else {
-    fc_assert_ret(goto_is_active());
+    assert(goto_is_active());
     goto_add_waypoint();
   }
 }
@@ -1183,7 +1191,7 @@ void request_unit_return(struct unit *punit)
   struct pf_path *path;
 
   if ((path = path_to_nearest_allied_city(punit))) {
-    int turns = pf_path_last_position(path)->turn;
+    int turns = pf_path_get_last_position(path)->turn;
     int max_hp = unit_type(punit)->hp;
 
     if (punit->hp + turns *
@@ -1228,21 +1236,6 @@ void request_unit_wakeup(struct unit *punit)
 }
 
 /****************************************************************************
-  Defines specific hash tables needed for request_unit_select().
-****************************************************************************/
-#define SPECHASH_TAG unit_type
-#define SPECHASH_KEY_TYPE struct unit_type *
-#define SPECHASH_DATA_TYPE void *
-#include "spechash.h"
-
-#define SPECHASH_TAG continent
-#define SPECHASH_KEY_TYPE Continent_id
-#define SPECHASH_DATA_TYPE void *
-#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
-#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
-#include "spechash.h"
-
-/****************************************************************************
   Select all units based on the given list of units and the selection modes.
 ****************************************************************************/
 void request_unit_select(struct unit_list *punits,
@@ -1252,9 +1245,7 @@ void request_unit_select(struct unit_list *punits,
   const struct player *pplayer;
   const struct tile *ptile;
   struct unit *punit_first;
-  struct tile_hash *tile_table;
-  struct unit_type_hash *type_table;
-  struct continent_hash *cont_table;
+  struct hash_table *tile_table, *type_table, *cont_table;
 
   if (!can_client_change_view() || !punits
       || unit_list_size(punits) < 1) {
@@ -1269,44 +1260,45 @@ void request_unit_select(struct unit_list *punits,
   }
 
   pplayer = unit_owner(punit_first);
-  tile_table = tile_hash_new();
-  type_table = unit_type_hash_new();
-  cont_table = continent_hash_new();
+  tile_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
+  type_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
+  cont_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
 
   unit_list_iterate(punits, punit) {
     if (seltype == SELTYPE_SAME) {
-      unit_type_hash_insert(type_table, unit_type(punit), NULL);
+      hash_insert(type_table, unit_type(punit), NULL);
     }
 
     ptile = unit_tile(punit);
     if (selloc == SELLOC_TILE) {
-      tile_hash_insert(tile_table, ptile, NULL);
+      hash_insert(tile_table, ptile, NULL);
     } else if (selloc == SELLOC_CONT) {
-      continent_hash_insert(cont_table, tile_continent(ptile), NULL);
+      hash_insert(cont_table, FC_INT_TO_PTR(ptile->continent), NULL);
     }
   } unit_list_iterate_end;
 
   if (selloc == SELLOC_TILE) {
-    tile_hash_iterate(tile_table, ptile) {
+    hash_keys_iterate(tile_table, key) {
+      ptile = key;
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) != pplayer) {
           continue;
         }
         if (seltype == SELTYPE_SAME
-            && !unit_type_hash_lookup(type_table, unit_type(punit), NULL)) {
+            && !hash_key_exists(type_table, unit_type(punit))) {
           continue;
         }
         add_unit_focus(punit);
       } unit_list_iterate_end;
-    } tile_hash_iterate_end;
+    } hash_keys_iterate_end;
   } else {
     unit_list_iterate(pplayer->units, punit) {
       ptile = unit_tile(punit);
       if ((seltype == SELTYPE_SAME
-           && !unit_type_hash_lookup(type_table, unit_type(punit), NULL))
+           && !hash_key_exists(type_table, unit_type(punit)))
           || (selloc == SELLOC_CONT
-              && !continent_hash_lookup(cont_table, tile_continent(ptile),
-                                        NULL))) {
+              && !hash_key_exists(cont_table,
+                                  FC_INT_TO_PTR(ptile->continent)))) {
         continue;
       }
 
@@ -1314,9 +1306,9 @@ void request_unit_select(struct unit_list *punits,
     } unit_list_iterate_end;
   }
 
-  tile_hash_destroy(tile_table);
-  unit_type_hash_destroy(type_table);
-  continent_hash_destroy(cont_table);
+  hash_free(tile_table);
+  hash_free(type_table);
+  hash_free(cont_table);
 }
 
 /**************************************************************************
@@ -1357,7 +1349,7 @@ all the server checks and messages here.)
 **************************************************************************/
 void request_unit_build_city(struct unit *punit)
 {
-  if (unit_can_build_city(punit)) {
+  if (can_unit_build_city(punit)) {
     dsend_packet_city_name_suggestion_req(&client.conn, punit->id);
     /* the reply will trigger a dialog to name the new city */
   } else {
@@ -1386,7 +1378,8 @@ void request_move_unit_direction(struct unit *punit, int dir)
   }
 
   if (punit->moves_left > 0) {
-    dsend_packet_unit_move(&client.conn, punit->id, tile_index(dest_tile));
+    dsend_packet_unit_move(&client.conn, punit->id,
+			   dest_tile->x, dest_tile->y);
   } else {
     /* Initiate a "goto" with direction keys for exhausted units. */
     send_goto_tile(punit, dest_tile);
@@ -1464,14 +1457,6 @@ void request_unit_upgrade(struct unit *punit)
   }
 }
 
-/**************************************************************************
-  Sends unit convert packet.
-**************************************************************************/
-void request_unit_convert(struct unit *punit)
-{
-  dsend_packet_unit_convert(&client.conn, punit->id);
-}
-
 /****************************************************************************
   Call to request (from the server) that the settler unit is put into
   autosettler mode.
@@ -1494,7 +1479,7 @@ void request_unit_autosettlers(const struct unit *punit)
 void request_unit_load(struct unit *pcargo, struct unit *ptrans)
 {
   if (!ptrans) {
-    ptrans = transporter_for_unit(pcargo);
+    ptrans = find_transporter_for_unit(pcargo);
   }
 
   if (ptrans
@@ -1515,7 +1500,7 @@ void request_unit_load(struct unit *pcargo, struct unit *ptrans)
 ****************************************************************************/
 void request_unit_unload(struct unit *pcargo)
 {
-  struct unit *ptrans = game_unit_by_number(pcargo->transported_by);
+  struct unit *ptrans = game_find_unit_by_number(pcargo->transported_by);
 
   if (can_client_issue_orders()
       && ptrans
@@ -1546,7 +1531,8 @@ void request_unit_caravan_action(struct unit *punit, enum packet_type action)
   } else if (action == PACKET_UNIT_HELP_BUILD_WONDER) {
     dsend_packet_unit_help_build_wonder(&client.conn, punit->id);
   } else {
-    log_error("request_unit_caravan_action() Bad action (%d)", action);
+    freelog(LOG_ERROR, "request_unit_caravan_action() Bad action (%d)",
+	    action);
   }
 }
 
@@ -1626,7 +1612,7 @@ void request_unit_patrol(void)
     enter_goto_state(punits);
     create_line_at_mouse_pos();
   } else {
-    fc_assert_ret(goto_is_active());
+    assert(goto_is_active());
     goto_add_waypoint();
   }
 }
@@ -2034,7 +2020,7 @@ void request_center_focus_unit(void)
 void request_units_wait(struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    punit->client.focus_status = FOCUS_WAIT;
+    punit->focus_status = FOCUS_WAIT;
   } unit_list_iterate_end;
   if (punits == get_units_in_focus()) {
     advance_unit_focus();
@@ -2057,7 +2043,7 @@ void request_unit_move_done(void)
     } unit_list_iterate_end;
     unit_list_iterate(get_units_in_focus(), punit) {
       clear_unit_orders(punit);
-      punit->client.focus_status = new_status;
+      punit->focus_status = new_status;
     } unit_list_iterate_end;
     if (new_status == FOCUS_DONE) {
       advance_unit_focus();
@@ -2085,7 +2071,7 @@ void do_move_unit(struct unit *punit, struct unit *target_unit)
 		     unit_type(punit)->sound_move_alt);
   }
 
-  unit_list_remove(src_tile->units, punit);
+  unit_list_unlink(src_tile->units, punit);
 
   if (unit_owner(punit) == client.conn.playing
       && auto_center_on_unit
@@ -2134,7 +2120,7 @@ void do_move_unit(struct unit *punit, struct unit *target_unit)
   }
 
   if (unit_is_in_focus(punit)) {
-    menus_update();
+    update_menus();
   }
 }
 
@@ -2152,7 +2138,7 @@ void do_map_click(struct tile *ptile, enum quickselect_type qtype)
   if (hover_state != HOVER_NONE) {
     switch (hover_state) {
     case HOVER_NONE:
-      break;
+      die("well; shouldn't get here :)");
     case HOVER_GOTO:
       do_unit_goto(ptile);
       break;
@@ -2261,7 +2247,7 @@ static struct unit *quickselect(struct tile *ptile,
               *panymoveland = NULL, *panyland = NULL,
               *panymoveunit = NULL, *panyunit = NULL;
 
-  fc_assert_ret_val(qtype > SELECT_POPUP, NULL);
+  assert(qtype > SELECT_POPUP);
 
   if (listsize == 0) {
     return NULL;
@@ -2396,7 +2382,7 @@ void do_unit_nuke(struct unit *punit)
 **************************************************************************/
 void do_unit_paradrop_to(struct unit *punit, struct tile *ptile)
 {
-  dsend_packet_unit_paradrop_to(&client.conn, punit->id, tile_index(ptile));
+  dsend_packet_unit_paradrop_to(&client.conn, punit->id, ptile->x, ptile->y);
 }
  
 /**************************************************************************
@@ -2465,7 +2451,7 @@ void key_cancel_action(void)
 **************************************************************************/
 void key_center_capital(void)
 {
-  struct city *capital = player_palace(client_player());
+  struct city *capital = find_palace(client.conn.playing);
 
   if (capital)  {
     /* Center on the tile, and pop up the crosshair overlay. */
@@ -2638,7 +2624,7 @@ void key_unit_unload_all(void)
        * If there is no unit unloaded (which shouldn't happen, but could if
        * the caller doesn't check if the transporter is loaded), the we
        * don't do anything. */
-      punit->client.focus_status = FOCUS_WAIT;
+      punit->focus_status = FOCUS_WAIT;
     } unit_list_iterate_end;
     set_unit_focus(pnext_focus);
   }
@@ -2709,16 +2695,6 @@ void key_unit_disband(void)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
     request_unit_disband(punit);
-  } unit_list_iterate_end;
-}
-
-/**************************************************************************
-  Unit convert key pressed or respective menu entry selected.
-**************************************************************************/
-void key_unit_convert(void)
-{
-  unit_list_iterate(get_units_in_focus(), punit) {
-    request_unit_convert(punit);
   } unit_list_iterate_end;
 }
 
@@ -2871,7 +2847,7 @@ void key_unit_assign_battlegroup(int battlegroup, bool append)
 	  dsend_packet_unit_battlegroup(&client.conn,
 					punit->id, BATTLEGROUP_NONE);
 	  refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
-	  unit_list_remove(battlegroups[battlegroup], punit);
+	  unit_list_unlink(battlegroups[battlegroup], punit);
 	}
       } unit_list_iterate_safe_end;
     }
@@ -2879,7 +2855,7 @@ void key_unit_assign_battlegroup(int battlegroup, bool append)
       if (punit->battlegroup != battlegroup) {
 	if (punit->battlegroup >= 0
 	    && punit->battlegroup < MAX_NUM_BATTLEGROUPS) {
-	  unit_list_remove(battlegroups[punit->battlegroup], punit);
+	  unit_list_unlink(battlegroups[punit->battlegroup], punit);
 	}
 	punit->battlegroup = battlegroup;
 	dsend_packet_unit_battlegroup(&client.conn,

@@ -32,7 +32,7 @@
 /* common & utility */
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"     /* fc_strdup() */
+#include "mem.h"     /* mystrdup() */
 #include "support.h"
 #include "version.h"
 
@@ -140,8 +140,7 @@ static void password_callback(Widget w, XtPointer client_data,
  configure the dialog depending on what type of authentication request the
  server is making.
 **************************************************************************/
-void handle_authentication_req(enum authentication_type type,
-                               const char *message)
+void handle_authentication_req(enum authentication_type type, char *message)
 {
   XtVaSetValues(iinput, XtNstring, "", NULL);
   XtVaSetValues(connw, XtNlabel, _("Next"), NULL);
@@ -172,8 +171,7 @@ void handle_authentication_req(enum authentication_type type,
     dialog_config = ENTER_PASSWORD_TYPE;
     break;
   default:
-    log_error("Unsupported authentication type %d: %s.", type, message);
-    break;
+    assert(0);
   }
 
   XtPopup(shell, XtGrabNone);
@@ -217,7 +215,7 @@ void gui_server_connect(void)
   ihost=XtVaCreateManagedWidget("chosti", asciiTextWidgetClass, form, 
 			  XtNstring, server_host, NULL);
 
-  fc_snprintf(buf, sizeof(buf), "%d", server_port);
+  my_snprintf(buf, sizeof(buf), "%d", server_port);
   
   I_L(XtVaCreateManagedWidget("cportl", labelWidgetClass, form, NULL));
   iport=XtVaCreateManagedWidget("cporti", asciiTextWidgetClass, form, 
@@ -255,7 +253,7 @@ void gui_server_connect(void)
   this regenerates the player information from a loaded game on the server.
   currently a stub. TODO
 **************************************************************************/
-void handle_game_load(bool load_successful, const char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }
@@ -338,8 +336,7 @@ void connect_callback(Widget w, XtPointer client_data,
     send_packet_authentication_reply(&client.conn, &reply);
     break;
   default:
-    log_error("Unsupported dialog configuration: %d", dialog_config)
-    break;
+    assert(0);
   }
 }
 
@@ -350,7 +347,7 @@ static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
   output_window_append(ftc_client, message);
-  log_normal("%s", message);
+  freelog(LOG_NORMAL, "%s", message);
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
     server_scan_finish(lan);
@@ -545,7 +542,7 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
       server_list = server_scan_get_list(lan);
       if (server_list == NULL) {
 	if (num_lanservers_timer == 0) {
-	  *list = fc_strdup(" ");;
+	  *list = mystrdup(" ");;
 	  return 0;
 	} else {
 	  return -1;
@@ -564,11 +561,11 @@ static int get_server_list(char **list, char *errbuf, int n_errbuf)
 
   server_list_iterate(server_list,pserver) {
     if (pserver == NULL) continue;
-    fc_snprintf(line, sizeof(line), "%-35s %-5d %-11s %-11s %2d   %s",
+    my_snprintf(line, sizeof(line), "%-35s %-5d %-11s %-11s %2d   %s",
 		pserver->host, pserver->port, pserver->version,
 		_(pserver->state), pserver->nplayers, pserver->message);
     if (*list) free(*list);
-    *list=fc_strdup(line);
+    *list=mystrdup(line);
     list++;
   } server_list_iterate_end;
 

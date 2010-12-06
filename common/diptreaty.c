@@ -22,27 +22,22 @@
 
 #include "diptreaty.h"
 
-/****************************************************************************
+/**************************************************************************
   Returns TRUE iff pplayer could do diplomancy in the game at all.
-****************************************************************************/
-bool diplomacy_possible(const struct player *pplayer1,
-                        const struct player *pplayer2)
+  These values are set by player in stdinhand.c.
+**************************************************************************/
+bool diplomacy_possible(const struct player *pplayer,
+			const struct player *aplayer)
 {
-  switch (game.info.diplomacy) {
-  case DIPLO_FOR_ALL:
-    return TRUE;
-  case DIPLO_FOR_HUMANS:
-    return (!pplayer1->ai_controlled && !pplayer2->ai_controlled);
-  case DIPLO_FOR_AIS:
-    return (pplayer1->ai_controlled && pplayer2->ai_controlled);
-  case DIPLO_FOR_TEAMS:
-    return players_on_same_team(pplayer1, pplayer2);
-  case DIPLO_DISABLED:
-    return FALSE;
-  }
-  log_error("%s(): Unsupported diplomacy variant %d.",
-            __FUNCTION__, game.info.diplomacy);
-  return FALSE;
+  return  (game.info.diplomacy == 0      /* Unlimited diplomacy */
+	   || (game.info.diplomacy == 1  /* Human diplomacy only */
+               && !pplayer->ai_data.control 
+               && !aplayer->ai_data.control)
+	   || (game.info.diplomacy == 2  /* AI diplomacy only */
+               && pplayer->ai_data.control
+               && aplayer->ai_data.control)
+	   || (game.info.diplomacy == 3  /* Team diplomacy only */
+	       && players_on_same_team(pplayer, aplayer)));
 }
 
 /**************************************************************************
@@ -57,10 +52,8 @@ bool could_meet_with_player(const struct player *pplayer,
           && diplomacy_possible(pplayer,aplayer)
           && (player_has_embassy(aplayer, pplayer) 
               || player_has_embassy(pplayer, aplayer)
-              || player_diplstate_get(pplayer, aplayer)->contact_turns_left
-                 > 0
-              || player_diplstate_get(aplayer, pplayer)->contact_turns_left
-                 > 0));
+              || pplayer->diplstates[player_index(aplayer)].contact_turns_left > 0
+              || aplayer->diplstates[player_index(pplayer)].contact_turns_left > 0));
 }
 
 /**************************************************************************
@@ -72,9 +65,8 @@ bool could_intel_with_player(const struct player *pplayer,
   return (pplayer->is_alive
           && aplayer->is_alive
           && pplayer != aplayer
-          && (player_diplstate_get(pplayer, aplayer)->contact_turns_left > 0
-              || player_diplstate_get(aplayer, pplayer)->contact_turns_left
-                 > 0
+          && (pplayer->diplstates[player_index(aplayer)].contact_turns_left > 0
+              || aplayer->diplstates[player_index(pplayer)].contact_turns_left > 0
               || player_has_embassy(pplayer, aplayer)));
 }
 
@@ -99,7 +91,7 @@ void clear_treaty(struct Treaty *ptreaty)
   clause_list_iterate(ptreaty->clauses, pclause) {
     free(pclause);
   } clause_list_iterate_end;
-  clause_list_destroy(ptreaty->clauses);
+  clause_list_free(ptreaty->clauses);
 }
 
 /****************************************************************
@@ -111,7 +103,7 @@ bool remove_clause(struct Treaty *ptreaty, struct player *pfrom,
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type && pclause->from==pfrom &&
        pclause->value==val) {
-      clause_list_remove(ptreaty->clauses, pclause);
+      clause_list_unlink(ptreaty->clauses, pclause);
       free(pclause);
 
       ptreaty->accept0 = FALSE;
@@ -134,16 +126,16 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
   struct player *pto = (pfrom == ptreaty->plr0
                         ? ptreaty->plr1 : ptreaty->plr0);
   struct Clause *pclause;
-  enum diplstate_type ds
-    = player_diplstate_get(ptreaty->plr0, ptreaty->plr1)->type;
+  enum diplstate_type ds = 
+                     pplayer_get_diplstate(ptreaty->plr0, ptreaty->plr1)->type;
 
   if (type < 0 || type >= CLAUSE_LAST) {
-    log_error("Illegal clause type encountered.");
+    freelog(LOG_ERROR, "Illegal clause type encountered.");
     return FALSE;
   }
 
   if (type == CLAUSE_ADVANCE && !valid_advance_by_number(val)) {
-    log_error("Illegal tech value %i in clause.", val);
+    freelog(LOG_ERROR, "Illegal tech value %i in clause.", val);
     return FALSE;
   }
   
@@ -153,31 +145,22 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
           || (ds == DS_ALLIANCE && type == CLAUSE_ALLIANCE)
           || (ds == DS_CEASEFIRE && type == CLAUSE_CEASEFIRE))) {
     /* we already have this diplomatic state */
-    log_error("Illegal treaty suggested between %s and %s - they "
-              "already have this treaty level.",
-              nation_rule_name(nation_of_player(ptreaty->plr0)), 
-              nation_rule_name(nation_of_player(ptreaty->plr1)));
+    freelog(LOG_ERROR, "Illegal treaty suggested between %s and %s - they "
+                       "already have this treaty level.",
+                       nation_rule_name(nation_of_player(ptreaty->plr0)), 
+                       nation_rule_name(nation_of_player(ptreaty->plr1)));
     return FALSE;
   }
 
   if (type == CLAUSE_EMBASSY && player_has_real_embassy(pto, pfrom)) {
     /* we already have embassy */
-    log_error("Illegal embassy clause: %s already have embassy with %s.",
-              nation_rule_name(nation_of_player(pto)),
-              nation_rule_name(nation_of_player(pfrom)));
+    freelog(LOG_ERROR,
+            "Illegal embassy clause: %s already have embassy with %s.",
+            nation_rule_name(nation_of_player(pto)),
+            nation_rule_name(nation_of_player(pfrom)));
     return FALSE;
   }
-
-  if (!game.info.trading_gold && type == CLAUSE_GOLD) {
-    return FALSE;
-  }
-  if (!game.info.trading_tech && type == CLAUSE_ADVANCE) {
-    return FALSE;
-  }
-  if (!game.info.trading_city && type == CLAUSE_CITY) {
-    return FALSE;
-  }
-
+      
   clause_list_iterate(ptreaty->clauses, pclause) {
     if(pclause->type==type
        && pclause->from==pfrom

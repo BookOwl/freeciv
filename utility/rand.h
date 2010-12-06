@@ -15,7 +15,7 @@
 
 #include <stdint.h>
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 /* This is duplicated in shared.h to avoid extra includes: */
 #define MAX_UINT32 0xFFFFFFFF
@@ -28,27 +28,26 @@ typedef struct {
   bool is_init;			/* initially 0 for static storage */
 } RANDOM_STATE;
 
-#define fc_rand(_size) \
-  fc_rand_debug((_size), "fc_rand", __LINE__, __FILE__)
+#define myrand(_size) \
+  myrand_debug((_size), "myrand", __LINE__, __FILE__)
 
-RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
-                          int line, const char *file);
+RANDOM_TYPE myrand_debug(RANDOM_TYPE size, const char *called_as, 
+                         int line, const char *file);
 
-void fc_srand(RANDOM_TYPE seed);
+void mysrand(RANDOM_TYPE seed);
 
-bool fc_rand_is_init(void);
-RANDOM_STATE fc_rand_state(void);
-void fc_rand_set_state(RANDOM_STATE state);
+bool myrand_is_init(void);
+RANDOM_STATE get_myrand_state(void);
+void set_myrand_state(RANDOM_STATE state);
 
 void test_random1(int n);
 
 /*===*/
 
-#define fc_randomly(_seed, _size) \
-  fc_randomly_debug((_seed), (_size), "fc_randomly", __LINE__, __FILE__)
+#define myrandomly(_seed, _size) \
+  myrandomly_debug((_seed), (_size), "myrandomly", __LINE__, __FILE__)
 
-RANDOM_TYPE fc_randomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
-                              const char *called_as,
-                              int line, const char *file);
+RANDOM_TYPE myrandomly_debug(RANDOM_TYPE seed, RANDOM_TYPE size,
+			     const char *called_as, int line, const char *file);
 
 #endif  /* FC__RAND_H */

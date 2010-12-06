@@ -18,7 +18,6 @@
 #include <stdio.h>
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "log.h"
 #include "rand.h"
@@ -30,7 +29,6 @@
 #include "government.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
 #include "unitlist.h"
 
 /* server */
@@ -39,6 +37,7 @@
 #include "cityturn.h"
 #include "diplhand.h"
 #include "diplomats.h"
+#include "gotohand.h"
 #include "notify.h"
 #include "plrhand.h"
 #include "techtools.h"
@@ -59,11 +58,8 @@ static bool diplomat_infiltrate_tile(struct player *pplayer, struct player *cpla
 				     struct unit *pdiplomat, struct tile *ptile);
 static void diplomat_escape(struct player *pplayer, struct unit *pdiplomat,
 			    const struct city *pcity);
-static void maybe_cause_incident(enum diplomat_actions action,
-                                 struct player *offender,
-                                 struct player *victim_player,
-                                 struct tile *victim_tile,
-                                 const char *victim_link);
+static void maybe_cause_incident(enum diplomat_actions action, struct player *offender,
+				 struct unit *victim_unit, struct city *victim_city);
 
 /******************************************************************************
   Poison a city's water supply.
@@ -92,7 +88,7 @@ void spy_poison(struct player *pplayer, struct unit *pdiplomat,
   if (!cplayer || !pplayers_at_war(pplayer, cplayer))
     return;
 
-  log_debug("poison: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "poison: unit: %d", pdiplomat->id);
 
   /* If not a Spy, can't poison. */
   if (!unit_has_type_flag(pdiplomat, F_SPY))
@@ -104,7 +100,7 @@ void spy_poison(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("poison: infiltrated");
+  freelog (LOG_DEBUG, "poison: infiltrated");
 
   /* If city is too small, can't poison. */
   if (pcity->size < 2) {
@@ -114,11 +110,11 @@ void spy_poison(struct player *pplayer, struct unit *pdiplomat,
                     " supply in %s."),
                   unit_link(pdiplomat),
                   city_link(pcity));
-    log_debug("poison: target city too small");
+    freelog (LOG_DEBUG, "poison: target city too small");
     return;
   }
 
-  log_debug("poison: succeeded");
+  freelog (LOG_DEBUG, "poison: succeeded");
 
   /* Poison people! */
   city_reduce_size(pcity, 1, pplayer);
@@ -139,8 +135,7 @@ void spy_poison(struct player *pplayer, struct unit *pdiplomat,
   send_city_info(NULL, pcity);
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(SPY_POISON, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(SPY_POISON, pplayer, NULL, pcity);
 
   /* Now lets see if the spy survives. */
   diplomat_escape(pplayer, pdiplomat, pcity);
@@ -172,7 +167,7 @@ void diplomat_investigate(struct player *pplayer, struct unit *pdiplomat,
   if ((cplayer == pplayer) || !cplayer)
     return;
 
-  log_debug("investigate: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "investigate: unit: %d", pdiplomat->id);
 
   /* Do It... */
   update_dumb_city(pplayer, pcity);
@@ -197,9 +192,7 @@ void diplomat_investigate(struct player *pplayer, struct unit *pdiplomat,
   /* Send city info to investigator's player.
      As this is a special case we bypass send_city_info. */
   package_city(pcity, &city_packet, TRUE);
-  /* We need to force to send the packet to ensure the client will receive
-   * something and popup the city dialog. */
-  lsend_packet_city_info(pplayer->connections, &city_packet, TRUE);
+  lsend_packet_city_info(pplayer->connections, &city_packet);
 
   /* Charge a nominal amount of movement for this. */
   (pdiplomat->moves_left)--;
@@ -208,8 +201,7 @@ void diplomat_investigate(struct player *pplayer, struct unit *pdiplomat,
   }
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_INVESTIGATE, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(DIPLOMAT_INVESTIGATE, pplayer, NULL, pcity);
 
   /* Spies always survive. Diplomats never do. */
   if (!unit_has_type_flag(pdiplomat, F_SPY)) {
@@ -273,7 +265,7 @@ void diplomat_embassy(struct player *pplayer, struct unit *pdiplomat,
   if ((cplayer == pplayer) || !cplayer)
     return;
 
-  log_debug("embassy: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "embassy: unit: %d", pdiplomat->id);
 
   /* Check for Barbarian response. */
   if (get_player_bonus(cplayer, EFT_NO_DIPLOMACY)) {
@@ -287,7 +279,7 @@ void diplomat_embassy(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("embassy: succeeded");
+  freelog (LOG_DEBUG, "embassy: succeeded");
 
   establish_embassy(pplayer, cplayer);
 
@@ -309,8 +301,7 @@ void diplomat_embassy(struct player *pplayer, struct unit *pdiplomat,
   }
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_EMBASSY, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(DIPLOMAT_EMBASSY, pplayer, NULL, pcity);
 
   /* Spies always survive. Diplomats never do. */
   if (!unit_has_type_flag(pdiplomat, F_SPY)) {
@@ -347,7 +338,7 @@ void spy_sabotage_unit(struct player *pplayer, struct unit *pdiplomat,
   if (!uplayer || pplayers_allied(pplayer, uplayer))
     return;
 
-  log_debug("sabotage-unit: unit: %d", pdiplomat->id);
+  freelog(LOG_DEBUG, "sabotage-unit: unit: %d", pdiplomat->id);
 
   /* If not a Spy, can't sabotage unit. */
   if (!unit_has_type_flag(pdiplomat, F_SPY))
@@ -364,7 +355,7 @@ void spy_sabotage_unit(struct player *pplayer, struct unit *pdiplomat,
                   unit_link(pdiplomat),
                   nation_adjective_for_player(uplayer),
                   victim_link);
-    log_debug("sabotage-unit: unit has too few hit points");
+    freelog(LOG_DEBUG, "sabotage-unit: unit has too few hit points");
     return;
   }
 
@@ -374,7 +365,7 @@ void spy_sabotage_unit(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("sabotage-unit: succeeded");
+  freelog(LOG_DEBUG, "sabotage-unit: succeeded");
 
   /* Sabotage the unit by removing half its remaining hit points. */
   pvictim->hp /= 2;
@@ -395,8 +386,7 @@ void spy_sabotage_unit(struct player *pplayer, struct unit *pdiplomat,
                 nation_plural_for_player(pplayer));
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(SPY_SABOTAGE_UNIT, pplayer, uplayer,
-                       unit_tile(pvictim), victim_link);
+  maybe_cause_incident(SPY_SABOTAGE_UNIT, pplayer, pvictim, NULL);
 
   /* Now lets see if the spy survives. */
   diplomat_escape(pplayer, pdiplomat, NULL);
@@ -425,18 +415,17 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
   struct tile *victim_tile;
   int bribe_cost;
   int diplomat_id = pdiplomat->id;
+  struct unit *gained_unit = NULL;
 
   /* Fetch target unit's player.  Sanity checks. */
-  if (!pvictim) {
+  if (!pvictim)
     return;
-  }
   uplayer = unit_owner(pvictim);
   /* We might make it allowable in peace with a loss of reputation */
-  if (!uplayer || pplayers_allied(pplayer, uplayer)) {
+  if (!uplayer || pplayers_allied(pplayer, uplayer))
     return;
-  }
 
-  log_debug("bribe-unit: unit: %d", pdiplomat->id);
+  freelog(LOG_DEBUG, "bribe-unit: unit: %d", pdiplomat->id);
 
   /* Check for unit from a bribable government. */
   if (get_player_bonus(uplayer, EFT_UNBRIBABLE_UNITS)) {
@@ -445,6 +434,9 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
                   _("You can't bribe a unit from this nation."));
     return;
   }
+
+  /* N.B.: unit_link always returns the same pointer. */
+  sz_strlcpy(victim_link, unit_link(pvictim));
 
   /* Get bribe cost, ignoring any previously saved value. */
   bribe_cost = unit_bribe_cost(pvictim);
@@ -455,8 +447,8 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("You don't have enough gold to bribe the %s %s."),
                   nation_adjective_for_player(uplayer),
-                  unit_link(pvictim));
-    log_debug("bribe-unit: not enough gold");
+                  victim_link);
+    freelog(LOG_DEBUG, "bribe-unit: not enough gold");
     return;
   }
 
@@ -464,39 +456,62 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
     notify_player(pplayer, unit_tile(pdiplomat),
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("You cannot bribe the %s!"),
-                  unit_link(pvictim));
+                  victim_link);
     return;
   }
 
-  log_debug("bribe-unit: succeeded");
+  freelog (LOG_DEBUG, "bribe-unit: succeeded");
 
-  victim_tile = pvictim->tile;
-  pvictim = unit_change_owner(pvictim, pplayer, pdiplomat->homecity);
+  /* Convert the unit to your cause. Fog is lifted in the create algorithm. */
+  gained_unit = create_unit_full(pplayer, pvictim->tile,
+                                 unit_type(pvictim), pvictim->veteran,
+                                 pdiplomat->homecity, pvictim->moves_left,
+                                 pvictim->hp, NULL);
 
-  /* N.B.: unit_link always returns the same pointer. As unit_change_owner()
-   * currently remove the old unit and replace by a new one (with a new id),
-   * we want to make link to the new unit. */
-  sz_strlcpy(victim_link, unit_link(pvictim));
+  /* Copy some more unit fields */
+  gained_unit->fuel        = pvictim->fuel;
+  gained_unit->paradropped = pvictim->paradropped;
+  gained_unit->birth_turn  = pvictim->birth_turn;
+
+  /* Inform owner about less than full fuel */
+  send_unit_info(pplayer, gained_unit);
 
   /* Notify everybody involved. */
-  notify_player(pplayer, victim_tile, E_MY_DIPLOMAT_BRIBE, ftc_server,
+  notify_player(pplayer, unit_tile(pvictim), 
+                E_MY_DIPLOMAT_BRIBE, ftc_server,
                 /* TRANS: <diplomat> ... <unit> */
                 _("Your %s succeeded in bribing the %s."),
-                unit_link(pdiplomat), victim_link);
+                unit_link(pdiplomat),
+                victim_link);
   if (maybe_make_veteran(pdiplomat)) {
     notify_unit_experience(pdiplomat);
   }
-  notify_player(uplayer, victim_tile, E_ENEMY_DIPLOMAT_BRIBE, ftc_server,
+  notify_player(uplayer, unit_tile(pvictim),
+                E_ENEMY_DIPLOMAT_BRIBE, ftc_server,
                 /* TRANS: <unit> ... <Poles> */
                 _("Your %s was bribed by the %s."),
-                victim_link, nation_plural_for_player(pplayer));
+                victim_link,
+                nation_plural_for_player(pplayer));
 
   /* This costs! */
   pplayer->economic.gold -= bribe_cost;
 
   /* This may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_BRIBE, pplayer, uplayer,
-                       victim_tile, victim_link);
+  maybe_cause_incident(DIPLOMAT_BRIBE, pplayer, pvictim, NULL);
+
+  /* update unit upkeep in the homecity of the victim */
+  if (pvictim->homecity > 0) {
+    /* update unit upkeep */
+    city_units_upkeep(game_find_city_by_number(pvictim->homecity));
+  }
+  /* update unit upkeep in the new homecity */
+  if (pvictim->homecity > 0) {
+    city_units_upkeep(game_find_city_by_number(gained_unit->homecity));
+  }
+
+  /* Be sure to wipe the converted unit! */
+  victim_tile = pvictim->tile;
+  wipe_unit(pvictim);
 
   if (!unit_alive(diplomat_id)) {
     return;
@@ -506,12 +521,12 @@ void diplomat_bribe(struct player *pplayer, struct unit *pdiplomat,
   if (!unit_move_handling(pdiplomat, victim_tile, FALSE, FALSE)) {
     pdiplomat->moves_left = 0;
   }
-  if (NULL != player_unit_by_number(pplayer, diplomat_id)) {
-    send_unit_info(pplayer, pdiplomat);
+  if (player_find_unit_by_id(pplayer, diplomat_id)) {
+    send_unit_info (pplayer, pdiplomat);
   }
 
   /* Update clients. */
-  send_player_all_c(pplayer, NULL);
+  send_player_info(pplayer, NULL);
 }
 
 /****************************************************************************
@@ -563,8 +578,8 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
   
   if (technology == A_FUTURE) {
     if (player_invention_state(pplayer, A_FUTURE) != TECH_PREREQS_KNOWN
-        || player_research_get(pplayer)->future_tech >= 
-	   player_research_get(pplayer)->future_tech) {
+        || get_player_research(pplayer)->future_tech >= 
+	   get_player_research(pplayer)->future_tech) {
       return;
     }
   } else if (technology != A_UNSET) {
@@ -576,7 +591,7 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
     }
   }
 
-  log_debug("steal-tech: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "steal-tech: unit: %d", pdiplomat->id);
 
   /* If not a Spy, do something random. */
   if (!unit_has_type_flag(pdiplomat, F_SPY)) {
@@ -589,34 +604,34 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("steal-tech: infiltrated");
+  freelog (LOG_DEBUG, "steal-tech: infiltrated");
 
   /* Check if the Diplomat/Spy succeeds with his/her task. */
   /* (Twice as difficult if target is specified.) */
   /* (If already stolen from, impossible for Diplomats and harder for Spies.) */
-  if (pcity->server.steal > 0 && !unit_has_type_flag(pdiplomat, F_SPY)) {
+  if (pcity->steal > 0 && !unit_has_type_flag(pdiplomat, F_SPY)) {
     /* Already stolen from: Diplomat always fails! */
     count = 1;
-    log_debug("steal-tech: difficulty: impossible");
+    freelog (LOG_DEBUG, "steal-tech: difficulty: impossible");
   } else {
     /* Determine difficulty. */
     count = 1;
     if (technology != A_UNSET) {
       count++;
     }
-    count += pcity->server.steal;
-    log_debug("steal-tech: difficulty: %d", count);
+    count += pcity->steal;
+    freelog (LOG_DEBUG, "steal-tech: difficulty: %d", count);
     /* Determine success or failure. */
     while (count > 0) {
-      if (fc_rand (100) >= game.server.diplchance) {
-        break;
+      if (myrand (100) >= game.info.diplchance) {
+	break;
       }
       count--;
     }
   }
   
   if (count > 0) {
-    if (pcity->server.steal > 0 && !unit_has_type_flag(pdiplomat, F_SPY)) {
+    if (pcity->steal > 0 && !unit_has_type_flag(pdiplomat, F_SPY)) {
       notify_player(pplayer, city_tile(pcity),
                     E_MY_DIPLOMAT_FAILED, ftc_server,
                     _("%s was expecting your attempt to steal technology "
@@ -638,8 +653,7 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
                   unit_tile_link(pdiplomat),
                   city_link(pcity));
     /* this may cause a diplomatic incident */
-    maybe_cause_incident(DIPLOMAT_STEAL, pplayer, cplayer,
-                         city_tile(pcity), city_link(pcity));
+    maybe_cause_incident(DIPLOMAT_STEAL, pplayer, NULL, pcity);
     wipe_unit(pdiplomat);
     return;
   } 
@@ -657,14 +671,13 @@ void diplomat_get_tech(struct player *pplayer, struct unit *pdiplomat,
   }
 
   /* Update stealing player's science progress and research fields */
-  send_player_all_c(pplayer, NULL);
-
+  send_player_info(pplayer, NULL);
+ 
   /* Record the theft. */
-  (pcity->server.steal)++;
+  (pcity->steal)++;
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_STEAL, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(DIPLOMAT_STEAL, pplayer, NULL, pcity);
 
   /* Check if a spy survives her mission. Diplomats never do. */
   diplomat_escape(pplayer, pdiplomat, pcity);
@@ -701,14 +714,14 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
   if (!cplayer || pplayers_allied(cplayer, pplayer))
     return;
 
-  log_debug("incite: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "incite: unit: %d", pdiplomat->id);
 
   /* See if the city is subvertable. */
   if (get_city_bonus(pcity, EFT_NO_INCITE) > 0) {
     notify_player(pplayer, city_tile(pcity),
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("You can't subvert this city."));
-    log_debug("incite: city is protected");
+    freelog (LOG_DEBUG, "incite: city is protected");
     return;
   }
 
@@ -721,7 +734,7 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("You don't have enough gold to subvert %s."),
                   city_link(pcity));
-    log_debug("incite: not enough gold");
+    freelog(LOG_DEBUG, "incite: not enough gold");
     return;
   }
 
@@ -731,10 +744,10 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("incite: infiltrated");
+  freelog (LOG_DEBUG, "incite: infiltrated");
 
   /* Check if the Diplomat/Spy succeeds with his/her task. */
-  if (fc_rand (100) >= game.server.diplchance) {
+  if (myrand (100) >= game.info.diplchance) {
     notify_player(pplayer, city_tile(pcity),
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("Your %s was caught in the attempt"
@@ -751,7 +764,7 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("incite: succeeded");
+  freelog (LOG_DEBUG, "incite: succeeded");
 
   /* Subvert the city to your cause... */
 
@@ -781,8 +794,7 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
   steal_a_tech (pplayer, cplayer, A_UNSET);
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_INCITE, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(DIPLOMAT_INCITE, pplayer, NULL, pcity);
 
   /* Transfer city and units supported by this city (that
      are within one square of the city) to the new owner. */
@@ -795,8 +807,8 @@ void diplomat_incite(struct player *pplayer, struct unit *pdiplomat,
   diplomat_escape(pplayer, pdiplomat, pcity);
 
   /* Update the players gold in the client */
-  send_player_info_c(pplayer, pplayer->connections);
-}
+  send_player_info(pplayer, pplayer);
+}  
 
 /**************************************************************************
   Sabotage enemy city's improvement or production.
@@ -831,15 +843,15 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
   if (!cplayer || !pplayers_at_war(pplayer, cplayer))
     return;
 
-  log_debug("sabotage: unit: %d", pdiplomat->id);
+  freelog (LOG_DEBUG, "sabotage: unit: %d", pdiplomat->id);
 
   /* If not a Spy, do something random. */
   if (!unit_has_type_flag(pdiplomat, F_SPY))
     improvement = B_LAST;
 
   /* Twice as difficult if target is specified. */
-  success_prob = (improvement >= B_LAST ? game.server.diplchance 
-                  : game.server.diplchance / 2); 
+  success_prob = (improvement >= B_LAST ? game.info.diplchance 
+                  : game.info.diplchance / 2); 
 
   /* Check if the Diplomat/Spy succeeds against defending Diplomats/Spies. */
   if (!diplomat_infiltrate_tile(pplayer, cplayer, pdiplomat, 
@@ -847,10 +859,10 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("sabotage: infiltrated");
+  freelog (LOG_DEBUG, "sabotage: infiltrated");
 
   /* Check if the Diplomat/Spy succeeds with his/her task. */
-  if (fc_rand (100) >= success_prob) {
+  if (myrand (100) >= success_prob) {
     notify_player(pplayer, city_tile(pcity),
                   E_MY_DIPLOMAT_FAILED, ftc_server,
                   _("Your %s was caught in the attempt"
@@ -866,7 +878,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
     return;
   }
 
-  log_debug("sabotage: succeeded");
+  freelog (LOG_DEBUG, "sabotage: succeeded");
 
   /* Examine the city for improvements to sabotage. */
   count = 0;
@@ -876,13 +888,13 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
     }
   } city_built_iterate_end;
 
-  log_debug("sabotage: count of improvements: %d", count);
+  freelog (LOG_DEBUG, "sabotage: count of improvements: %d", count);
 
   /* Determine the target (-1 is production). */
   if (improvement < 0) {
     /* If told to sabotage production, do so. */
     ptarget = NULL;
-    log_debug("sabotage: specified target production");
+    freelog (LOG_DEBUG, "sabotage: specified target production");
   } else if (improvement >= B_LAST) {
     /*
      * Pick random:
@@ -898,15 +910,15 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
                     city_link(pcity));
       diplomat_charge_movement(pdiplomat, pcity->tile);
       send_unit_info(pplayer, pdiplomat);
-      log_debug("sabotage: random: nothing to do");
+      freelog(LOG_DEBUG, "sabotage: random: nothing to do");
       return;
     }
-    if (count == 0 || fc_rand (2) == 1) {
+    if (count == 0 || myrand (2) == 1) {
       ptarget = NULL;
-      log_debug("sabotage: random: targeted production");
+      freelog (LOG_DEBUG, "sabotage: random: targeted production");
     } else {
       ptarget = NULL;
-      which = fc_rand (count);
+      which = myrand (count);
 
       city_built_iterate(pcity, pimprove) {
 	if (pimprove->sabotage > 0) {
@@ -920,11 +932,11 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
       } city_built_iterate_end;
 
       if (NULL != ptarget) {
-        log_debug("sabotage: random: targeted improvement: %d (%s)",
-                  improvement_number(ptarget),
-                  improvement_rule_name(ptarget));
+	freelog (LOG_DEBUG, "sabotage: random: targeted improvement: %d (%s)",
+		improvement_number(ptarget),
+		improvement_rule_name(ptarget));
       } else {
-        log_error("sabotage: random: targeted improvement error!");
+	freelog (LOG_ERROR, "sabotage: random: targeted improvement error!");
       }
     }
   } else {
@@ -937,18 +949,20 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
     if (city_has_building(pcity, pimprove)) {
       if (pimprove->sabotage > 0) {
 	ptarget = pimprove;
-        log_debug("sabotage: specified target improvement: %d (%s)",
-                  improvement, improvement_rule_name(pimprove));
+	freelog (LOG_DEBUG, "sabotage: specified target improvement: %d (%s)",
+	       improvement,
+	       improvement_rule_name(pimprove));
       } else {
         notify_player(pplayer, city_tile(pcity),
                       E_MY_DIPLOMAT_FAILED, ftc_server,
                       _("You cannot sabotage a %s!"),
                       improvement_name_translation(pimprove));
-        diplomat_charge_movement(pdiplomat, pcity->tile);
-        send_unit_info(pplayer, pdiplomat);
-        log_debug("sabotage: disallowed target improvement: %d (%s)",
-                  improvement, improvement_rule_name(pimprove));
-        return;
+	diplomat_charge_movement (pdiplomat, pcity->tile);
+	send_unit_info (pplayer, pdiplomat);
+	freelog (LOG_DEBUG, "sabotage: disallowed target improvement: %d (%s)",
+	       improvement,
+	       improvement_rule_name(pimprove));
+	return;
       }
     } else {
       notify_player(pplayer, city_tile(pcity),
@@ -957,10 +971,11 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
                     unit_name_translation(pdiplomat),
                     improvement_name_translation(pimprove),
                     city_link(pcity));
-      diplomat_charge_movement(pdiplomat, pcity->tile);
-      send_unit_info(pplayer, pdiplomat);
-      log_debug("sabotage: target improvement not found: %d (%s)",
-                improvement, improvement_rule_name(pimprove));
+      diplomat_charge_movement (pdiplomat, pcity->tile);
+      send_unit_info (pplayer, pdiplomat);
+      freelog (LOG_DEBUG, "sabotage: target improvement not found: %d (%s)",
+	       improvement,
+	       improvement_rule_name(pimprove));
       return;
     }
   }
@@ -990,7 +1005,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
                   prod,
                   city_link(pcity),
                   nation_plural_for_player(pplayer));
-    log_debug("sabotage: sabotaged production");
+    freelog (LOG_DEBUG, "sabotage: sabotaged production");
   } else {
     int vulnerability = ptarget->sabotage;
 
@@ -1004,7 +1019,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
     vulnerability -= (vulnerability
 		      * get_city_bonus(pcity, EFT_SPY_RESISTANT) / 100);
 
-    if (fc_rand(100) >= vulnerability) {
+    if (myrand(100) >= vulnerability) {
       /* Caught! */
       notify_player(pplayer, city_tile(pcity),
                     E_MY_DIPLOMAT_FAILED, ftc_server,
@@ -1019,7 +1034,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
                     improvement_name_translation(ptarget),
                     city_link(pcity));
       wipe_unit(pdiplomat);
-      log_debug("sabotage: caught in capital or on city walls");
+      freelog(LOG_DEBUG, "sabotage: caught in capital or on city walls");
       return;
     }
 
@@ -1036,9 +1051,9 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
                   nation_plural_for_player(pplayer),
                   improvement_name_translation(ptarget),
                   city_link(pcity));
-    log_debug("sabotage: sabotaged improvement: %d (%s)",
-              improvement_number(ptarget),
-              improvement_rule_name(ptarget));
+    freelog (LOG_DEBUG, "sabotage: sabotaged improvement: %d (%s)",
+	       improvement_number(ptarget),
+	       improvement_rule_name(ptarget));
 
     /* Do it. */
     building_lost(pcity, ptarget);
@@ -1048,8 +1063,7 @@ void diplomat_sabotage(struct player *pplayer, struct unit *pdiplomat,
   send_city_info(NULL, pcity);
 
   /* this may cause a diplomatic incident */
-  maybe_cause_incident(DIPLOMAT_SABOTAGE, pplayer, cplayer,
-                       city_tile(pcity), city_link(pcity));
+  maybe_cause_incident(DIPLOMAT_SABOTAGE, pplayer, NULL, pcity);
 
   /* Check if a spy survives her mission. Diplomats never do. */
   diplomat_escape(pplayer, pdiplomat, pcity);
@@ -1106,7 +1120,7 @@ static bool diplomat_success_vs_defender(struct unit *pattacker,
     }
   }
   
-  return fc_rand(100) < chance;
+  return myrand(100) < chance;
 }
 
 /**************************************************************************
@@ -1275,7 +1289,7 @@ static bool diplomat_infiltrate_tile(struct player *pplayer,
   This determines if a diplomat/spy survives and escapes.
   If "pcity" is NULL, assume action was in the field.
 
-  Spies have a game.server.diplchance specified chance of survival (better 
+  Spies have a game.info.diplchance specified chance of survival (better 
   if veteran):
     - Diplomats always die.
     - Escapes to home city.
@@ -1288,7 +1302,7 @@ static void diplomat_escape(struct player *pplayer, struct unit *pdiplomat,
   int escapechance;
   struct city *spyhome;
 
-  escapechance = game.server.diplchance + pdiplomat->veteran * 5;
+  escapechance = game.info.diplchance + pdiplomat->veteran * 5;
   
   if (pcity) {
     ptile = pcity->tile;
@@ -1297,13 +1311,11 @@ static void diplomat_escape(struct player *pplayer, struct unit *pdiplomat,
   }
   
   /* find closest city for escape target */
-  spyhome = find_closest_city(ptile, NULL, unit_owner(pdiplomat), FALSE,
-                              FALSE, FALSE, TRUE, FALSE);
+  spyhome = find_closest_owned_city(unit_owner(pdiplomat), ptile, FALSE, NULL);
 
   if (spyhome
       && unit_has_type_flag(pdiplomat, F_SPY)
-      && (unit_has_type_flag(pdiplomat, F_SUPERSPY)
-          || fc_rand (100) < escapechance)) {
+      && (myrand (100) < escapechance || unit_has_type_flag(pdiplomat, F_SUPERSPY))) {
     /* Attacking Spy/Diplomat survives. */
     notify_player(pplayer, ptile, E_MY_DIPLOMAT_ESCAPE, ftc_server,
                   _("Your %s has successfully completed"
@@ -1317,7 +1329,7 @@ static void diplomat_escape(struct player *pplayer, struct unit *pdiplomat,
     /* being teleported costs all movement */
     if (!teleport_unit_to_city (pdiplomat, spyhome, -1, FALSE)) {
       send_unit_info (pplayer, pdiplomat);
-      log_error("Bug in diplomat_escape: Spy can't teleport.");
+      freelog(LOG_ERROR, "Bug in diplomat_escape: Spy can't teleport.");
       return;
     }
 
@@ -1340,16 +1352,25 @@ static void diplomat_escape(struct player *pplayer, struct unit *pdiplomat,
   wipe_unit(pdiplomat);
 }
 
-/****************************************************************************
-  After an action of a diplomat, maybe it will cause a diplomatic incident
-  with the victim.
-****************************************************************************/
-static void maybe_cause_incident(enum diplomat_actions action,
-                                 struct player *offender,
-                                 struct player *victim_player,
-                                 struct tile *victim_tile,
-                                 const char *victim_link)
+/**************************************************************************
+...
+**************************************************************************/
+static void maybe_cause_incident(enum diplomat_actions action, struct player *offender,
+ 				 struct unit *victim_unit, struct city *victim_city)
 {
+  struct player *victim_player = 0;
+  struct tile *victim_tile = NULL;
+
+  if (victim_city) {
+    victim_tile = victim_city->tile;
+    victim_player = city_owner(victim_city);
+  } else if (victim_unit) {
+    victim_tile = victim_unit->tile;
+    victim_player = unit_owner(victim_unit);
+  } else {
+    die("No victim in call to maybe_cause_incident()");
+  }
+
   if (!pplayers_at_war(offender, victim_player)) {
     switch (action) {
     case DIPLOMAT_BRIBE:
@@ -1357,32 +1378,38 @@ static void maybe_cause_incident(enum diplomat_actions action,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
                     _("You have caused an incident while bribing "
                       "the %s %s."),
-                    nation_adjective_for_player(victim_player), victim_link);
+                    nation_adjective_for_player(victim_player),
+                    unit_link(victim_unit));
       notify_player(victim_player, victim_tile,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
                     _("%s has caused an incident while bribing your %s."),
-                    player_name(offender), victim_link);
+                    player_name(offender),
+                    unit_link(victim_unit));
       break;
     case DIPLOMAT_STEAL:
       notify_player(offender, victim_tile,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
                     _("You have caused an incident while attempting "
-                      "to steal tech from %s."), player_name(victim_player));
+                      "to steal tech from %s."),
+                    player_name(victim_player));
       notify_player(victim_player, victim_tile,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
                     _("%s has caused an incident while attempting "
-                      "to steal tech from you."), player_name(offender));
+                      "to steal tech from you."),
+                    player_name(offender));
       break;
     case DIPLOMAT_INCITE:
       notify_player(offender, victim_tile,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
                     _("You have caused an incident while inciting a "
-                      "revolt in %s."), victim_link);
+                      "revolt in %s."),
+                    city_link(victim_city));
       notify_player(victim_player, victim_tile,
                     E_DIPLOMATIC_INCIDENT, ftc_server,
-                    _("The %s have caused an incident while inciting a "
+                    _("%s have caused an incident while inciting a "
                       "revolt in %s."),
-                    nation_plural_for_player(offender), victim_link);
+                    nation_plural_for_player(offender),
+                    city_link(victim_city));
       break;
     case DIPLOMAT_MOVE:
     case DIPLOMAT_EMBASSY:
@@ -1393,13 +1420,13 @@ static void maybe_cause_incident(enum diplomat_actions action,
     case SPY_SABOTAGE_UNIT:
     case DIPLOMAT_SABOTAGE:
       /* You can only do these when you are at war, so we should never
-       * get inside this "if" */
-      fc_assert_ret(FALSE);
+ 	 get inside this "if" */
+      die("Bug in maybe_cause_incident()");
     }
-    player_diplstate_get(victim_player, offender)->has_reason_to_cancel = 2;
+    victim_player->diplstates[player_index(offender)].has_reason_to_cancel = 2;
     call_incident(INCIDENT_DIPLOMAT, offender, victim_player);
-    send_player_all_c(offender, NULL);
-    send_player_all_c(victim_player, NULL);
+    send_player_info(offender, NULL);
+    send_player_info(victim_player, NULL);
   }
 
   return;
@@ -1420,8 +1447,8 @@ int unit_bribe_cost(struct unit *punit)
   int dist;
   int default_hp = unit_type(punit)->hp;
 
-  cost = unit_owner(punit)->economic.gold + game.server.base_bribe_cost;
-  capital = player_palace(unit_owner(punit));
+  cost = unit_owner(punit)->economic.gold + game.info.base_bribe_cost;
+  capital = find_palace(unit_owner(punit));
   if (capital) {
     int tmp = map_distance(capital->tile, punit->tile);
     dist=MIN(32, tmp);

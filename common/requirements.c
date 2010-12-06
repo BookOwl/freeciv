@@ -28,6 +28,64 @@
 
 #include "requirements.h"
 
+/* Names of source types.  These must correspond to enum universals_n in
+ * fc_types.h.  Do not change these unless you know what you're doing! */
+static const char *universal_names[] = {
+  "None",
+  "Tech",
+  "Gov",
+  "Building",
+  "Special",
+  "Terrain",
+  "Nation",
+  "UnitType",
+  "UnitFlag",
+  "UnitClass",
+  "UnitClassFlag",
+  "OutputType",
+  "Specialist",
+  "MinSize",
+  "AI",
+  "TerrainClass",
+  "Base",
+  "MinYear",
+  "TerrainAlter",
+  "CityTile"
+};
+
+/* Names of requirement ranges. These must correspond to enum req_range in
+ * requirements.h.  Do not change these unless you know what you're doing! */
+static const char *req_range_names[REQ_RANGE_LAST] = {
+  "Local",
+  "Adjacent",
+  "City",
+  "Continent",
+  "Player",
+  "World"
+};
+
+/**************************************************************************
+  Convert a range name to an enumerated value.
+
+  The check is case insensitive and returns REQ_RANGE_LAST if no match
+  is found.
+**************************************************************************/
+enum req_range req_range_from_str(const char *str)
+{
+  enum req_range range;
+
+  RETURN_VAL_IF_FAIL(ARRAY_SIZE(req_range_names) == REQ_RANGE_LAST,
+                     REQ_RANGE_LAST);
+
+  for (range = 0; range < REQ_RANGE_LAST; range++) {
+    if (0 == mystrcasecmp(req_range_names[range], str)) {
+      return range;
+    }
+  }
+
+  return REQ_RANGE_LAST;
+}
+
 /**************************************************************************
   Parse requirement type (kind) and value strings into a universal
   structure.  Passing in a NULL type is considered VUT_NONE (not an error).
@@ -38,10 +96,19 @@
 struct universal universal_by_rule_name(const char *kind,
 					const char *value)
 {
-  struct universal source;
+  struct universal source = { .kind = VUT_LAST };
 
-  source.kind = universals_n_by_name(kind, fc_strcasecmp);
-  if (!universals_n_is_valid(source.kind)) {
+  RETURN_VAL_IF_FAIL(ARRAY_SIZE(universal_names) == VUT_LAST, source);
+
+  if (kind) {
+    for (source.kind = 0;
+         source.kind < ARRAY_SIZE(universal_names);
+         source.kind++) {
+      if (0 == mystrcasecmp(universal_names[source.kind], kind)) {
+        break;
+      }
+    }
+  } else {
     source.kind = VUT_NONE;
   }
 
@@ -50,74 +117,73 @@ struct universal universal_by_rule_name(const char *kind,
   case VUT_NONE:
     return source;
   case VUT_ADVANCE:
-    source.value.advance = advance_by_rule_name(value);
+    source.value.advance = find_advance_by_rule_name(value);
     if (source.value.advance != NULL) {
       return source;
     }
     break;
   case VUT_GOVERNMENT:
-    source.value.govern = government_by_rule_name(value);
+    source.value.govern = find_government_by_rule_name(value);
     if (source.value.govern != NULL) {
       return source;
     }
     break;
   case VUT_IMPROVEMENT:
-    source.value.building = improvement_by_rule_name(value);
+    source.value.building = find_improvement_by_rule_name(value);
     if (source.value.building != NULL) {
       return source;
     }
     break;
   case VUT_SPECIAL:
-    source.value.special = special_by_rule_name(value);
+    source.value.special = find_special_by_rule_name(value);
     if (source.value.special != S_LAST) {
       return source;
     }
     break;
   case VUT_TERRAIN:
-    source.value.terrain = terrain_by_rule_name(value);
+    source.value.terrain = find_terrain_by_rule_name(value);
     if (source.value.terrain != T_UNKNOWN) {
       return source;
     }
     break;
   case VUT_NATION:
-    source.value.nation = nation_by_rule_name(value);
+    source.value.nation = find_nation_by_rule_name(value);
     if (source.value.nation != NO_NATION_SELECTED) {
       return source;
     }
     break;
   case VUT_UTYPE:
-    source.value.utype = unit_type_by_rule_name(value);
+    source.value.utype = find_unit_type_by_rule_name(value);
     if (source.value.utype) {
       return source;
     }
     break;
   case VUT_UTFLAG:
-    source.value.unitflag = unit_flag_by_rule_name(value);
+    source.value.unitflag = find_unit_flag_by_rule_name(value);
     if (source.value.unitflag != F_LAST) {
       return source;
     }
     break;
   case VUT_UCLASS:
-    source.value.uclass = unit_class_by_rule_name(value);
+    source.value.uclass = find_unit_class_by_rule_name(value);
     if (source.value.uclass) {
       return source;
     }
     break;
   case VUT_UCFLAG:
-    source.value.unitclassflag
-      = unit_class_flag_id_by_name(value, fc_strcasecmp);
-    if (unit_class_flag_id_is_valid(source.value.unitclassflag)) {
+    source.value.unitclassflag = find_unit_class_flag_by_rule_name(value);
+    if (source.value.unitclassflag != UCF_LAST) {
       return source;
     }
     break;
   case VUT_OTYPE:
-    source.value.outputtype = output_type_by_identifier(value);
+    source.value.outputtype = find_output_type_by_identifier(value);
     if (source.value.outputtype != O_LAST) {
       return source;
     }
     break;
   case VUT_SPECIALIST:
-    source.value.specialist = specialist_by_rule_name(value);
+    source.value.specialist = find_specialist_by_rule_name(value);
     if (source.value.specialist) {
       return source;
     }
@@ -128,20 +194,19 @@ struct universal universal_by_rule_name(const char *kind,
     }
     break;
   case VUT_AI_LEVEL:
-    source.value.ai_level = ai_level_by_name(value);
+    source.value.ai_level = find_ai_level_by_name(value);
     if (source.value.ai_level != AI_LEVEL_LAST) {
       return source;
     }
     break;
   case VUT_TERRAINCLASS:
-    source.value.terrainclass
-      = terrain_class_by_name(value, fc_strcasecmp);
-    if (terrain_class_is_valid(source.value.terrainclass)) {
+    source.value.terrainclass = find_terrain_class_by_rule_name(value);
+    if (source.value.terrainclass != TC_LAST) {
       return source;
     }
     break;
   case VUT_BASE:
-    source.value.base = base_type_by_rule_name(value);
+    source.value.base = find_base_type_by_rule_name(value);
     if (source.value.base != NULL) {
       return source;
     }
@@ -153,24 +218,23 @@ struct universal universal_by_rule_name(const char *kind,
     }
     break;
   case VUT_TERRAINALTER:
-    source.value.terrainalter
-      = terrain_alteration_by_name(value, fc_strcasecmp);
-    if (terrain_alteration_is_valid(source.value.terrainalter)) {
+    source.value.terrainalter = find_terrain_alteration_by_rule_name(value);
+    if (source.value.terrainalter != TA_LAST) {
       return source;
     }
     break;
   case VUT_CITYTILE:
-    source.value.citytile = citytile_by_rule_name(value);
+    source.value.citytile = find_citytile_by_rule_name(value);
     if (source.value.citytile != CITYT_LAST) {
       return source;
     }
     break;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
 
   /* If we reach here there's been an error. */
-  source.kind = universals_n_invalid();
+  source.kind = VUT_LAST;
   return source;
 }
 
@@ -267,12 +331,12 @@ struct universal universal_by_number(const enum universals_n kind,
   case VUT_CITYTILE:
     source.value.citytile = value;
     return source;
-  case VUT_COUNT:
-    break;
+  case VUT_LAST:
+    return source;
   }
 
   /* If we reach here there's been an error. */
-  source.kind = universals_n_invalid();
+  source.kind = VUT_LAST;
   return source;
 }
 
@@ -333,20 +397,20 @@ int universal_number(const struct universal *source)
     return source->value.terrainalter;
   case VUT_CITYTILE:
     return source->value.citytile;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
 
   /* If we reach here there's been an error. */
-  fc_assert_msg(FALSE, "universal_number(): invalid source kind %d.",
-                source->kind);
+  freelog(LOG_ERROR, "universal_number(): invalid source kind %d.",
+          source->kind);
   return 0;
 }
 
 /****************************************************************************
   Parse a requirement type and value string into a requrement structure.
-  Returns the invalid element for enum universal_n on error. Passing in a
-  NULL type is considered VUT_NONE (not an error).
+  Returns VUT_LAST on error.  Passing in a NULL type is considered VUT_NONE
+  (not an error).
 
   Pass this some values like "Building", "Factory".
 ****************************************************************************/
@@ -361,11 +425,11 @@ struct requirement req_from_str(const char *type, const char *range,
 
   /* Scan the range string to find the range.  If no range is given a
    * default fallback is used rather than giving an error. */
-  req.range = req_range_by_name(range, fc_strcasecmp);
-  if (!req_range_is_valid(req.range)) {
+  req.range = req_range_from_str(range);
+  if (req.range == REQ_RANGE_LAST) {
     switch (req.source.kind) {
     case VUT_NONE:
-    case VUT_COUNT:
+    case VUT_LAST:
       break;
     case VUT_IMPROVEMENT:
     case VUT_SPECIAL:
@@ -446,15 +510,15 @@ struct requirement req_from_str(const char *type, const char *range,
   case VUT_NONE:
     invalid = FALSE;
     break;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
-
   if (invalid) {
-    log_error("Invalid requirement %s | %s | %s | %s | %s",
-              type, range, survives ? "survives" : "",
-              negated ? "negated" : "", value);
-    req.source.kind = universals_n_invalid();
+    freelog(LOG_ERROR, "Invalid requirement %s | %s | %s | %s | %s",
+	    type, range,
+	    survives ? "survives" : "",
+	    negated ? "negated" : "", value);
+    req.source.kind = VUT_LAST;
   }
 
   return req;
@@ -514,9 +578,9 @@ static int num_world_buildings_total(const struct impr_type *building)
     return (great_wonder_is_built(building)
             || great_wonder_is_destroyed(building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("World-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("World-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -529,9 +593,9 @@ static int num_world_buildings(const struct impr_type *building)
   if (is_great_wonder(building)) {
     return (great_wonder_is_built(building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("World-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("World-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -545,9 +609,9 @@ static int num_player_buildings(const struct player *pplayer,
   if (is_wonder(building)) {
     return (wonder_is_built(pplayer, building) ? 1 : 0);
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("Player-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("Player-ranged requirements are only supported for wonders."));
     return 0;
   }
 }
@@ -562,14 +626,14 @@ static int num_continent_buildings(const struct player *pplayer,
   if (is_wonder(building)) {
     const struct city *pcity;
 
-    pcity = city_from_wonder(pplayer, building);
+    pcity = find_city_from_wonder(pplayer, building);
     if (pcity && tile_continent(pcity->tile) == continent) {
       return 1;
     }
   } else {
-    /* TRANS: Obscure ruleset error. */
-    log_error(_("Island-ranged requirements are only supported "
-                "for wonders."));
+    freelog(LOG_ERROR,
+	    /* TRANS: Obscure ruleset error. */
+	    _("Island-ranged requirements are only supported for wonders."));
   }
   return 0;
 }
@@ -617,9 +681,10 @@ static int count_buildings_in_range(const struct player *target_player,
       return num_world_buildings_total(source);
     } else {
       /* There is no sources cache for this. */
-      /* TRANS: Obscure ruleset error. */
-      log_error(_("Surviving requirements are only supported "
-                  "at world range."));
+      freelog(LOG_ERROR,
+	      /* TRANS: Obscure ruleset error. */
+	      _("Surviving requirements are only "
+		"supported at world range."));
       return 0;
     }
   }
@@ -650,11 +715,11 @@ static int count_buildings_in_range(const struct player *target_player,
     }
   case REQ_RANGE_ADJACENT:
     return 0;
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "count_buildings_in_range(): invalid range %d.", range);
   return 0;
 }
 
@@ -681,11 +746,11 @@ static bool is_tech_in_range(const struct player *target_player,
   case REQ_RANGE_ADJACENT:
   case REQ_RANGE_CITY:
   case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_tech_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -706,11 +771,11 @@ static bool is_special_in_range(const struct tile *target_tile,
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
   case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_special_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -735,11 +800,11 @@ static bool is_terrain_in_range(const struct tile *target_tile,
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
   case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_terrain_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -764,11 +829,12 @@ static bool is_terrain_class_in_range(const struct tile *target_tile,
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
   case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_terrain_class_in_range(): invalid range %d.",
+          range);
   return FALSE;
 }
 
@@ -793,11 +859,11 @@ static bool is_base_type_in_range(const struct tile *target_tile,
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
   case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_base_type_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -822,11 +888,12 @@ static bool is_terrain_alter_possible_in_range(const struct tile *target_tile,
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
   case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR,
+          "is_terrain_alter_possible_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -847,11 +914,11 @@ static bool is_nation_in_range(const struct player *target_player,
   case REQ_RANGE_ADJACENT:
   case REQ_RANGE_CITY:
   case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_COUNT:
+  case REQ_RANGE_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
+  freelog(LOG_ERROR, "is_nation_in_range(): invalid range %d.", range);
   return FALSE;
 }
 
@@ -1022,8 +1089,8 @@ bool is_req_active(const struct player *target_player,
     break;
   case VUT_AI_LEVEL:
     eval = target_player
-      && target_player->ai_controlled
-      && target_player->ai_common.skill_level == req->source.value.ai_level;
+      && target_player->ai_data.control
+      && target_player->ai_data.skill_level == req->source.value.ai_level;
     break;
   case VUT_TERRAINCLASS:
     eval = is_terrain_class_in_range(target_tile,
@@ -1053,16 +1120,17 @@ bool is_req_active(const struct player *target_player,
         }
       } else {
         /* Not implemented */
-        log_error("is_req_active(): citytile %d not supported.",
-                  req->source.value.citytile);
+        freelog(LOG_ERROR, "is_req_active(): citytile %d not supported.",
+                req->source.value.citytile);
         return FALSE;
       }
     } else {
       eval = FALSE;
     }
     break;
-  case VUT_COUNT:
-    log_error("is_req_active(): invalid source kind %d.", req->source.kind);
+  case VUT_LAST:
+    freelog(LOG_ERROR, "is_req_active(): invalid source kind %d.",
+            req->source.kind);
     return FALSE;
   }
 
@@ -1149,10 +1217,11 @@ bool is_req_unchanging(const struct requirement *req)
   case VUT_MINYEAR:
     /* Once year is reached, it does not change again */
     return req->source.value.minyear > game.info.year;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
-  fc_assert_msg(FALSE, "Invalid source kind %d.", req->source.kind);
+  freelog(LOG_ERROR, "is_req_unchanging(): invalid source kind %d.",
+          req->source.kind);
   return TRUE;
 }
 
@@ -1207,12 +1276,22 @@ bool are_universals_equal(const struct universal *psource1,
     return psource1->value.terrainalter == psource2->value.terrainalter;
   case VUT_CITYTILE:
     return psource1->value.citytile == psource2->value.citytile;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
-
-  fc_assert_msg(FALSE, "Invalid source kind %d.", psource1->kind);
+  freelog(LOG_ERROR, "are_universals_equal(): invalid source kind %d.",
+          psource1->kind);
   return FALSE;
+}
+
+/****************************************************************************
+  Return the (untranslated) rule name of the kind of universal.
+  You don't have to free the return pointer.
+*****************************************************************************/
+const char *universal_kind_name(const enum universals_n kind)
+{
+  RETURN_VAL_IF_FAIL(kind >= 0 && kind < ARRAY_SIZE(universal_names), NULL);
+  return universal_names[kind];
 }
 
 /****************************************************************************
@@ -1246,7 +1325,7 @@ const char *universal_rule_name(const struct universal *psource)
   case VUT_UCLASS:
     return uclass_rule_name(psource->value.uclass);
   case VUT_UCFLAG:
-    return unit_class_flag_id_name(psource->value.unitclassflag);
+    return unit_class_flag_rule_name(psource->value.unitclassflag);
   case VUT_OTYPE:
     return get_output_name(psource->value.outputtype);
   case VUT_SPECIALIST:
@@ -1256,16 +1335,17 @@ const char *universal_rule_name(const struct universal *psource)
   case VUT_AI_LEVEL:
     return ai_level_name(psource->value.ai_level);
   case VUT_TERRAINCLASS:
-    return terrain_class_name(psource->value.terrainclass);
+    return terrain_class_rule_name(psource->value.terrainclass);
   case VUT_BASE:
     return base_rule_name(psource->value.base);
   case VUT_TERRAINALTER:
-    return terrain_alteration_name(psource->value.terrainalter);
-  case VUT_COUNT:
+    return terrain_alteration_rule_name(psource->value.terrainalter);
+  case VUT_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid source kind %d.", psource->kind);
+  freelog(LOG_ERROR, "universal_rule_name: invalid source kind %d.",
+          psource->kind);
   return NULL;
 }
 
@@ -1280,31 +1360,28 @@ const char *universal_name_translation(const struct universal *psource,
   switch (psource->kind) {
   case VUT_NONE:
     /* TRANS: missing value */
-    fc_strlcat(buf, _("(none)"), bufsz);
+    mystrlcat(buf, _("(none)"), bufsz);
     return buf;
   case VUT_ADVANCE:
-    fc_strlcat(buf, advance_name_translation(psource->value.advance), bufsz);
+    mystrlcat(buf, advance_name_translation(psource->value.advance), bufsz);
     return buf;
   case VUT_GOVERNMENT:
-    fc_strlcat(buf, government_name_translation(psource->value.govern),
-               bufsz);
+    mystrlcat(buf, government_name_translation(psource->value.govern), bufsz);
     return buf;
   case VUT_IMPROVEMENT:
-    fc_strlcat(buf, improvement_name_translation(psource->value.building),
-               bufsz);
+    mystrlcat(buf, improvement_name_translation(psource->value.building), bufsz);
     return buf;
   case VUT_SPECIAL:
-    fc_strlcat(buf, special_name_translation(psource->value.special), bufsz);
+    mystrlcat(buf, special_name_translation(psource->value.special), bufsz);
     return buf;
   case VUT_TERRAIN:
-    fc_strlcat(buf, terrain_name_translation(psource->value.terrain), bufsz);
+    mystrlcat(buf, terrain_name_translation(psource->value.terrain), bufsz);
     return buf;
   case VUT_NATION:
-    fc_strlcat(buf, nation_adjective_translation(psource->value.nation),
-               bufsz);
+    mystrlcat(buf, nation_adjective_translation(psource->value.nation), bufsz);
     return buf;
   case VUT_UTYPE:
-    fc_strlcat(buf, utype_name_translation(psource->value.utype), bufsz);
+    mystrlcat(buf, utype_name_translation(psource->value.utype), bufsz);
     return buf;
   case VUT_UTFLAG:
     cat_snprintf(buf, bufsz, _("\"%s\" units"),
@@ -1317,16 +1394,14 @@ const char *universal_name_translation(const struct universal *psource,
     return buf;
   case VUT_UCFLAG:
     cat_snprintf(buf, bufsz, _("\"%s\" units"),
-                 /* flag names are never translated */
-                 unit_class_flag_id_name(psource->value.unitclassflag));
+		 /* flag names are never translated */
+		 unit_class_flag_rule_name(psource->value.unitclassflag));
     return buf;
   case VUT_OTYPE:
-    /* FIXME */
-    fc_strlcat(buf, get_output_name(psource->value.outputtype), bufsz);
+    mystrlcat(buf, get_output_name(psource->value.outputtype), bufsz); /* FIXME */
     return buf;
   case VUT_SPECIALIST:
-    fc_strlcat(buf, specialist_plural_translation(psource->value.specialist),
-               bufsz);
+    mystrlcat(buf, specialist_name_translation(psource->value.specialist), bufsz);
     return buf;
   case VUT_MINSIZE:
     cat_snprintf(buf, bufsz, _("Size %d"),
@@ -1357,13 +1432,15 @@ const char *universal_name_translation(const struct universal *psource,
                  terrain_alteration_name_translation(psource->value.terrainalter));
     return buf;
   case VUT_CITYTILE:
-    fc_strlcat(buf, _("City center tile"), bufsz);
+    mystrlcat(buf, _("City center tile"), bufsz);
     return buf;
-  case VUT_COUNT:
+  case VUT_LAST:
     break;
   }
 
-  fc_assert_msg(FALSE, "Invalid source kind %d.", psource->kind);
+  freelog(LOG_ERROR, "universal_rule_name: invalid source kind %d.",
+          psource->kind);
+
   return buf;
 }
 
@@ -1372,7 +1449,7 @@ const char *universal_name_translation(const struct universal *psource,
 *****************************************************************************/
 const char *universal_type_rule_name(const struct universal *psource)
 {
-  return universals_n_name(psource->kind);
+  return universal_kind_name(psource->kind);
 }
 
 /**************************************************************************

@@ -6,14 +6,13 @@ groups="Modern", "Asian"
 legend=_("The Federation of Pakistan was formed from the\
  predominantly Muslim regions of British India in 1947.")
 
-leaders = {
- "name",                "sex"
- "Zulfikar Ali Bhutto", "Male"
- "Muhammad Zia-ul-Haq", "Male"
- "Benazir Bhutto",      "Female"
- "Muhammad Ali Jinnah", "Male"
- "Khawaja Nazimuddin",  "Male"
-}
+leader=
+ "Zulfikar Ali Bhutto",
+ "Muhammad Zia-ul-Haq",
+ "Benazir Bhutto",
+ "Muhammad Ali Jinnah",
+ "Khawaja Nazimuddin"
+leader_sex="Male", "Male", "Female", "Male", "Male"
 
 flag="pakistan"
 flag_alt="-"
@@ -24,7 +23,7 @@ init_buildings=""
 init_government="Despotism"
 init_units=""
 
-civilwar_nations="Iranian", "Pashtun", "Kashmiri"
+civilwar_nations="indian", "afghani", "iranian"
 
 ; http://de.wikipedia.org/wiki/Liste_der_Städte_in_Pakistan
 cities =

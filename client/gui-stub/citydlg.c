@@ -21,7 +21,7 @@
   Pop up (or bring to the front) a dialog for the given city.  It may or
   may not be modal.
 **************************************************************************/
-void real_city_dialog_popup(struct city *pcity)
+void popup_city_dialog(struct city *pcity)
 {
   /* PORTME */
 }
@@ -45,7 +45,7 @@ void popdown_all_city_dialogs(void)
 /**************************************************************************
   Refresh (update) all data for the given city's dialog.
 **************************************************************************/
-void real_city_dialog_refresh(struct city *pcity)
+void refresh_city_dialog(struct city *pcity)
 {
   /* PORTME */
 }
@@ -63,7 +63,7 @@ void refresh_unit_city_dialogs(struct unit *punit)
   struct city *pcity_sup, *pcity_pre;
   struct city_dialog *pdialog;
 
-  pcity_sup = game_city_by_number(punit->homecity);
+  pcity_sup = game_find_city_by_number(punit->homecity);
   pcity_pre = tile_city(punit->tile);
 
   if (pcity_sup && (pdialog = get_city_dialog(pcity_sup))) {

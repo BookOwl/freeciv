@@ -44,6 +44,41 @@ void get_economy_report_data(struct improvement_entry *entries,
 void get_economy_report_units_data(struct unit_entry *entries,
 				   int *num_entries_used, int *total_cost);
 
+void report_dialogs_freeze(void);
+void report_dialogs_thaw(void);
+void report_dialogs_force_thaw(void);
+bool is_report_dialogs_frozen(void);
+
+struct options_settable {
+  enum sset_type stype;
+  enum sset_class sclass;
+  unsigned char scategory;
+  bool is_visible;
+
+  int val;
+  int default_val;
+  int min;
+  int max;
+
+  char *strval;
+  char *default_strval;
+
+  char *name;
+  char *short_help;
+  char *extra_help;
+
+  bool desired_sent;
+};
+
+extern struct options_settable *settable_options;
+extern int num_settable_options;
+
+extern char **options_categories;
+extern int num_options_categories;
+
+void settable_options_init(void);
+void settable_options_free(void);
+
 void sell_all_improvements(struct impr_type *pimprove, bool obsolete_only,
 			   char *message, size_t message_sz);
 void disband_all_units(struct unit_type *punittype, bool in_cities_only,

@@ -15,12 +15,13 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <string.h>
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
+#include "hash.h"
 #include "log.h"
 #include "support.h"
 
@@ -91,7 +92,7 @@ struct editor_state {
 
   enum selection_modes selection_mode;
 
-  struct tile_hash *selected_tile_table;
+  struct hash_table *selected_tile_table;
   struct edit_buffer *copybuf;
 };
 
@@ -160,11 +161,8 @@ void editor_init(void)
             _("Create city.\nShortcut: c"));
   tool_init(ETT_VISION, _("Vision"), ETF_HAS_SIZE,
             _("Modify player's tile knowledge.\nShortcut: v"));
-  tool_init(ETT_STARTPOS, _("Start Position"), ETF_NO_FLAGS,
-            _("Place a start position which allows any nation to "
-              "start at the tile. To allow only certain nations to "
-              "start there, middle click on the start position on "
-              "the map and use the property editor.\nShortcut: p"));
+  tool_init(ETT_STARTPOS, _("Start Position"), ETF_HAS_APPLIED_PLAYER,
+            _("Place a player start position.\nShortcut: p"));
 
   tool_init(ETT_COPYPASTE, _("Copy/Paste"), ETF_HAS_SIZE,
             _("Copy and paste tiles.\n"
@@ -172,8 +170,9 @@ void editor_init(void)
               "Shoftcut for paste mode: shift-v"));
   editor->copybuf = edit_buffer_new(EBT_ALL);
 
-  editor->selected_tile_table = tile_hash_new();
-  tile_hash_set_no_shrink(editor->selected_tile_table, TRUE);
+  editor->selected_tile_table = hash_new(hash_fval_keyval,
+                                         hash_fcmp_keyval);
+  hash_set_no_shrink(editor->selected_tile_table, TRUE);
 }
 
 /****************************************************************************
@@ -396,7 +395,7 @@ static void editor_grab_applied_player(const struct tile *ptile)
     apno = player_number(tile_owner(ptile));
   }
   
-  if (player_by_number(apno) != NULL) {
+  if (valid_player_by_number(apno) != NULL) {
     editor_tool_set_applied_player(editor_get_tool(), apno);
     editgui_refresh();
   }
@@ -529,11 +528,11 @@ static void popup_properties(struct tile *ptile)
   tiles = tile_list_new();
 
   if (editor_tile_is_selected(ptile)) {
-    tile_hash_iterate(editor->selected_tile_table, sel_tile) {
+    hash_keys_iterate(editor->selected_tile_table, sel_tile) {
       if (can_edit_tile_properties(sel_tile)) {
         tile_list_append(tiles, sel_tile);
       }
-    } tile_hash_iterate_end;
+    } hash_keys_iterate_end;
   } else {
     if (can_edit_tile_properties(ptile)) {
       tile_list_append(tiles, ptile);
@@ -542,7 +541,7 @@ static void popup_properties(struct tile *ptile)
 
   editgui_popup_properties(tiles, NUM_OBJTYPES);
 
-  tile_list_destroy(tiles);
+  tile_list_free(tiles);
 }
 
 /****************************************************************************
@@ -801,7 +800,7 @@ void editor_apply_tool(const struct tile *ptile,
 {
   enum editor_tool_type ett;
   enum editor_tool_mode etm;
-  int value, size, count, apno, tile, id;
+  int value, size, count, apno, x, y, id;
   bool erase;
   struct connection *my_conn = &client.conn;
 
@@ -823,7 +822,7 @@ void editor_apply_tool(const struct tile *ptile,
   }
 
   if (editor_tool_has_applied_player(ett)
-      && player_by_number(apno) == NULL) {
+      && valid_player_by_number(apno) == NULL) {
     return;
   }
 
@@ -849,32 +848,33 @@ void editor_apply_tool(const struct tile *ptile,
   }
 
   erase = (etm == ETM_ERASE);
-  tile = tile_index(ptile);
+  x = ptile->x;
+  y = ptile->y;
 
   switch (ett) {
 
   case ETT_TERRAIN:
-    dsend_packet_edit_tile_terrain(my_conn, tile, erase ? 0 : value, size);
+    dsend_packet_edit_tile_terrain(my_conn, x, y, erase ? 0 : value, size);
     break;
 
   case ETT_TERRAIN_RESOURCE:
-    dsend_packet_edit_tile_resource(my_conn, tile, erase ? -1 : value,
+    dsend_packet_edit_tile_resource(my_conn, x, y, erase ? -1 : value,
                                     size);
     break;
 
   case ETT_TERRAIN_SPECIAL:
-    dsend_packet_edit_tile_special(my_conn, tile, value, erase, size);
+    dsend_packet_edit_tile_special(my_conn, x, y, value, erase, size);
     break;
 
   case ETT_MILITARY_BASE:
-    dsend_packet_edit_tile_base(my_conn, tile, value, erase, size);
+    dsend_packet_edit_tile_base(my_conn, x, y, value, erase, size);
     break;
 
   case ETT_UNIT:
     if (erase) {
-      dsend_packet_edit_unit_remove(my_conn, apno, tile, value, count);
+      dsend_packet_edit_unit_remove(my_conn, apno, x, y, value, count);
     } else {
-      dsend_packet_edit_unit_create(my_conn, apno, tile, value, count, 0);
+      dsend_packet_edit_unit_create(my_conn, apno, x, y, value, count, 0);
     }
     break;
 
@@ -886,19 +886,21 @@ void editor_apply_tool(const struct tile *ptile,
         dsend_packet_edit_city_remove(my_conn, id);
       }
     } else {
-      dsend_packet_edit_city_create(my_conn, apno, tile, size, 0);
+      dsend_packet_edit_city_create(my_conn, apno, x, y, size, 0);
     }
     break;
 
   case ETT_VISION:
     if (client_has_player()) {
       id = client_player_number();
-      dsend_packet_edit_player_vision(my_conn, id, tile, !erase, size);
+      dsend_packet_edit_player_vision(my_conn, id, x, y, !erase, size);
     }
     break;
 
   case ETT_STARTPOS:
-    dsend_packet_edit_startpos(my_conn, tile, erase, 0);
+    dsend_packet_edit_startpos(my_conn, x, y,
+                               erase ? NATION_NONE :
+                               nation_number(player_by_number(apno)->nation));
     break;
 
   default:
@@ -982,7 +984,7 @@ void editor_selection_clear(void)
   if (!editor) {
     return;
   }
-  tile_hash_clear(editor->selected_tile_table);
+  hash_delete_all_entries(editor->selected_tile_table);
 }
 
 /****************************************************************************
@@ -993,7 +995,7 @@ void editor_selection_add(const struct tile *ptile)
   if (!editor || !ptile) {
     return;
   }
-  tile_hash_insert(editor->selected_tile_table, ptile, NULL);
+  hash_insert(editor->selected_tile_table, ptile, NULL);
 }
 
 /****************************************************************************
@@ -1004,7 +1006,7 @@ void editor_selection_remove(const struct tile *ptile)
   if (!editor || !ptile) {
     return;
   }
-  tile_hash_remove(editor->selected_tile_table, ptile);
+  hash_delete_entry(editor->selected_tile_table, ptile);
 }
 
 /****************************************************************************
@@ -1015,7 +1017,7 @@ bool editor_tile_is_selected(const struct tile *ptile)
   if (!editor || !ptile) {
     return FALSE;
   }
-  return tile_hash_lookup(editor->selected_tile_table, ptile, NULL);
+  return hash_key_exists(editor->selected_tile_table, ptile);
 }
 
 /****************************************************************************
@@ -1038,9 +1040,9 @@ void editor_apply_tool_to_selection(void)
   }
 
   connection_do_buffer(&client.conn);
-  tile_hash_iterate(editor->selected_tile_table, ptile) {
+  hash_keys_iterate(editor->selected_tile_table, ptile) {
     editor_apply_tool(ptile, TRUE);
-  } tile_hash_iterate_end;
+  } hash_keys_iterate_end;
   editor_notify_edit_finished();
   connection_do_unbuffer(&client.conn);
 
@@ -1239,7 +1241,7 @@ const char *editor_tool_get_tooltip(enum editor_tool_type ett)
 /****************************************************************************
   Returns the current applied player number for the editor tool.
 
-  May return a player number for which player_by_number returns NULL.
+  May return a player number for which valid_player_by_number returns NULL.
 ****************************************************************************/
 int editor_tool_get_applied_player(enum editor_tool_type ett)
 {
@@ -1293,7 +1295,7 @@ int editor_selection_count(void)
   if (!editor) {
     return 0;
   }
-  return tile_hash_size(editor->selected_tile_table);
+  return hash_num_entries(editor->selected_tile_table);
 }
 
 /****************************************************************************
@@ -1320,7 +1322,7 @@ struct unit *editor_create_unit_virtual(void)
   }
 
   apno = editor_tool_get_applied_player(ETT_UNIT);
-  pplayer = player_by_number(apno);
+  pplayer = valid_player_by_number(apno);
   if (!pplayer) {
     return NULL;
   }
@@ -1359,9 +1361,9 @@ void edit_buffer_free(struct edit_buffer *ebuf)
 
   if (ebuf->vtiles) {
     tile_list_iterate(ebuf->vtiles, vtile) {
-      tile_virtual_destroy(vtile);
+      destroy_tile_virtual(vtile);
     } tile_list_iterate_end;
-    tile_list_destroy(ebuf->vtiles);
+    tile_list_free(ebuf->vtiles);
     ebuf->vtiles = NULL;
   }
   free(ebuf);
@@ -1377,7 +1379,7 @@ void edit_buffer_clear(struct edit_buffer *ebuf)
   }
 
   tile_list_iterate(ebuf->vtiles, vtile) {
-    tile_virtual_destroy(vtile);
+    destroy_tile_virtual(vtile);
   } tile_list_iterate_end;
   tile_list_clear(ebuf->vtiles);
 
@@ -1424,7 +1426,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
     dx = 0;
     dy = 0;
   }
-  vtile = tile_virtual_new(NULL);
+  vtile = create_tile_virtual();
   vtile->x = dx;
   vtile->y = dy;
 
@@ -1473,7 +1475,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
         char name[MAX_LEN_NAME];
 
         pcity = tile_city(ptile);
-        fc_snprintf(name, sizeof(name), "Copy of %s",
+        my_snprintf(name, sizeof(name), "Copy of %s",
                     city_name(pcity));
         vcity = create_city_virtual(city_owner(pcity), NULL, name);
         vcity->size = pcity->size;
@@ -1496,7 +1498,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
   if (copied) {
     tile_list_append(ebuf->vtiles, vtile);
   } else {
-    tile_virtual_destroy(vtile);
+    destroy_tile_virtual(vtile);
   }
 }
 
@@ -1508,11 +1510,12 @@ static void fill_tile_edit_packet(struct packet_edit_tile *packet,
 {
   const struct resource *presource;
   const struct terrain *pterrain;
+  const struct nation_type *pnation;
 
   if (!packet || !ptile) {
     return;
   }
-  packet->tile = tile_index(ptile);
+  packet->id = tile_index(ptile);
   packet->specials = tile_specials(ptile);
   packet->bases = tile_bases(ptile);
 
@@ -1521,6 +1524,9 @@ static void fill_tile_edit_packet(struct packet_edit_tile *packet,
 
   pterrain = tile_terrain(ptile);
   packet->terrain = pterrain ? terrain_number(pterrain) : -1;
+
+  pnation = map_get_startpos(ptile);
+  packet->startpos_nation = pnation ? nation_number(pnation) : -1;
 }
 
 /****************************************************************************
@@ -1534,14 +1540,15 @@ static void paste_tile(struct edit_buffer *ebuf,
   struct connection *my_conn = &client.conn;
   struct packet_edit_tile tile_packet;
   struct city *vcity;
-  int value, owner, tile;
+  int value, owner, x, y;
   bool send_edit_tile = FALSE;
 
   if (!ebuf || !vtile || !ptile_dest) {
     return;
   }
 
-  tile = tile_index(ptile_dest);
+  x = ptile_dest->x;
+  y = ptile_dest->y;
 
   fill_tile_edit_packet(&tile_packet, ptile_dest);
 
@@ -1552,14 +1559,14 @@ static void paste_tile(struct edit_buffer *ebuf,
         continue;
       }
       value = terrain_number(tile_terrain(vtile));
-      dsend_packet_edit_tile_terrain(my_conn, tile, value, 1);
+      dsend_packet_edit_tile_terrain(my_conn, x, y, value, 1);
       break;
     case EBT_RESOURCE:
       if (!tile_resource(vtile)) {
         continue;
       }
       value = resource_number(tile_resource(vtile));
-      dsend_packet_edit_tile_resource(my_conn, tile, value, 1);
+      dsend_packet_edit_tile_resource(my_conn, x, y, value, 1);
       break;
     case EBT_SPECIAL:
       tile_packet.specials = tile_specials(vtile);
@@ -1573,7 +1580,7 @@ static void paste_tile(struct edit_buffer *ebuf,
       unit_list_iterate(vtile->units, vunit) {
         value = utype_number(unit_type(vunit));
         owner = player_number(unit_owner(vunit));
-        dsend_packet_edit_unit_create(my_conn, owner, tile, value, 1, 0);
+        dsend_packet_edit_unit_create(my_conn, owner, x, y, value, 1, 0);
       } unit_list_iterate_end;
       break;
     case EBT_CITY:
@@ -1583,7 +1590,7 @@ static void paste_tile(struct edit_buffer *ebuf,
       }
       owner = player_number(city_owner(vcity));
       value = vcity->size;
-      dsend_packet_edit_city_create(my_conn, owner, tile, value, 0);
+      dsend_packet_edit_city_create(my_conn, owner, x, y, value, 0);
       break;
     default:
       break;
@@ -1657,8 +1664,8 @@ const char *editor_tool_get_mode_name(enum editor_tool_type ett,
     return _("Paste");
     break;
   default:
-    log_error("Unrecognized editor tool mode %d "
-              "in editor_tool_get_mode_name().", etm);
+    freelog(LOG_ERROR, "Unrecognized editor tool mode %d "
+            "in editor_tool_get_mode_name().", etm);
     break;
   }
 
@@ -1734,7 +1741,7 @@ int edit_buffer_get_status_string(const struct edit_buffer *ebuf,
     return 0;
   }
 
-  ret = fc_strlcpy(buf, _("Buffer empty."), buflen);
+  ret = mystrlcpy(buf, _("Buffer empty."), buflen);
   if (!ebuf || !ebuf->vtiles) {
     return ret;
   }
@@ -1742,7 +1749,7 @@ int edit_buffer_get_status_string(const struct edit_buffer *ebuf,
   total = tile_list_size(ebuf->vtiles);
   if (total > 0) {
     fmt = PL_("%d tile copied.", "%d tiles copied.", total);
-    ret = fc_snprintf(buf, buflen, fmt, total);
+    ret = my_snprintf(buf, buflen, fmt, total);
   }
 
   return ret;
@@ -1799,17 +1806,17 @@ const struct tile *editor_get_selection_center(void)
     return NULL;
   }
 
-  count = tile_hash_size(editor->selected_tile_table);
+  count = hash_num_entries(editor->selected_tile_table);
   if (count < 1) {
     return NULL;
   }
 
   origin = map_pos_to_tile(0, 0);
-  tile_hash_iterate(editor->selected_tile_table, ptile) {
+  hash_keys_iterate(editor->selected_tile_table, ptile) {
     map_distance_vector(&dx, &dy, origin, ptile);
     xsum += dx;
     ysum += dy;
-  } tile_hash_iterate_end;
+  } hash_keys_iterate_end;
 
   cx = xsum / count;
   cy = ysum / count;

@@ -14,10 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-/* utility */
-#include "bitvector.h"
-
-/* common */
 #include "base.h"
 #include "fc_types.h"
 #include "player.h"
@@ -41,6 +37,7 @@ struct tile {
   int nat_x, nat_y; /* Native coordinates of the tile. */
   int index; /* Index coordinate of the tile. */
   Continent_id continent;
+  bv_player tile_known, tile_seen[V_COUNT];
   bv_special special;
   bv_bases bases;
   struct resource *resource;		/* NULL for no resource */
@@ -52,23 +49,14 @@ struct tile {
   char *spec_sprite;
 };
 
-/* 'struct tile_list' and related functions. */
+/* get 'struct tile_list' and related functions: */
 #define SPECLIST_TAG tile
 #define SPECLIST_TYPE struct tile
 #include "speclist.h"
-#define tile_list_iterate(tile_list, ptile)                                 \
-  TYPED_LIST_ITERATE(struct tile, tile_list, ptile)
-#define tile_list_iterate_end LIST_ITERATE_END
 
-/* 'struct tile_hash' and related functions. */
-#define SPECHASH_TAG tile
-#define SPECHASH_KEY_TYPE struct tile *
-#define SPECHASH_DATA_TYPE void *
-#include "spechash.h"
-#define tile_hash_iterate(hash, ptile)                                      \
-  TYPED_HASH_KEYS_ITERATE(struct tile *, hash, ptile)
-#define tile_hash_iterate_end HASH_KEYS_ITERATE_END
-
+#define tile_list_iterate(tile_list, ptile) \
+    TYPED_LIST_ITERATE(struct tile, tile_list, ptile)
+#define tile_list_iterate_end  LIST_ITERATE_END
 
 /* Tile accessor functions. */
 int tile_index(const struct tile *ptile);
@@ -150,7 +138,7 @@ bool tile_apply_activity(struct tile *ptile, Activity_type_id act);
 const char *tile_get_info_text(const struct tile *ptile, int linebreaks);
 
 /* Virtual tiles are tiles that do not exist on the game map. */
-struct tile *tile_virtual_new(const struct tile *ptile);
-void tile_virtual_destroy(struct tile *vtile);
+struct tile *create_tile_virtual(void);
+void destroy_tile_virtual(struct tile *vtile);
 
 #endif /* FC__TILE_H */

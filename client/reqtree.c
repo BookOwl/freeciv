@@ -15,16 +15,14 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+#include <log.h>
 #include <stdarg.h>
 #include <string.h>
-
-/* utility */
-#include "log.h"
 
 /* common */
 #include "government.h"
 #include "improvement.h"
-#include "research.h"
 #include "tech.h"
 
 /* client */
@@ -204,7 +202,7 @@ static void node_rectangle_minimum_size(struct tree_node *node,
       } improvement_iterate_end;
     
       /* governments */
-      governments_iterate(gov) {
+      government_iterate(gov) {
         requirement_vector_iterate(&(gov->reqs), preq) {
           if (VUT_ADVANCE == preq->source.kind
 	   && advance_number(preq->source.value.advance) == node->tech) {
@@ -214,7 +212,7 @@ static void node_rectangle_minimum_size(struct tree_node *node,
             icons_width_sum += swidth + 2;	    
 	  }
         } requirement_vector_iterate_end;
-      } governments_iterate_end;
+      } government_iterate_end;
     }
     
     *height += max_icon_height;
@@ -437,7 +435,7 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer)
   j = 0;
   advance_index_iterate(A_FIRST, tech) {
     if (nodes[tech]) {
-      fc_assert_action(valid_advance_by_number(nodes[tech]->tech), continue);
+      assert(valid_advance_by_number(nodes[tech]->tech));
       tree->nodes[j++] = nodes[tech];
     }
   } advance_index_iterate_end;
@@ -571,7 +569,7 @@ static struct reqtree *add_dummy_nodes(struct reqtree *tree)
     struct tree_node *node = tree->nodes[i];
     int mpl;
 
-    fc_assert_action(!node->is_dummy, continue);
+    assert(!node->is_dummy);
 
     mpl = max_provide_layer(node);
 
@@ -604,7 +602,7 @@ static struct reqtree *add_dummy_nodes(struct reqtree *tree)
 
     if (mpl > node->layer + 1) {
       k += mpl - node->layer - 1;
-      fc_assert(k <= new_tree->num_nodes);
+      assert(k <= new_tree->num_nodes);
     }
   }
   new_tree->layers = NULL;
@@ -861,7 +859,7 @@ void get_reqtree_dimensions(struct reqtree *reqtree,
 static enum color_std node_color(struct tree_node *node)
 {
   if (!node->is_dummy) {
-    struct player_research* research = player_research_get(client.conn.playing);
+    struct player_research* research = get_player_research(client.conn.playing);
 
     if (!research) {
       return COLOR_REQTREE_KNOWN;
@@ -910,7 +908,7 @@ static enum color_std node_color(struct tree_node *node)
 static enum reqtree_edge_type get_edge_type(struct tree_node *node, 
                                             struct tree_node *dest_node)
 {
-  struct player_research *research = player_research_get(client.conn.playing);
+  struct player_research *research = get_player_research(client.conn.playing);
 
   if (dest_node == NULL) {
     /* assume node is a dummy */
@@ -919,7 +917,7 @@ static enum reqtree_edge_type get_edge_type(struct tree_node *node,
    
   /* find the required tech */
   while (node->is_dummy) {
-    fc_assert(node->nrequire == 1);
+    assert(node->nrequire == 1);
     node = node->require[0];
   }
   
@@ -929,7 +927,7 @@ static enum reqtree_edge_type get_edge_type(struct tree_node *node,
     enum reqtree_edge_type sum_type = REQTREE_EDGE;
     int i;
 
-    fc_assert(dest_node->nprovide > 0);
+    assert(dest_node->nprovide > 0);
     for (i = 0; i < dest_node->nprovide; ++i) {
       enum reqtree_edge_type type = get_edge_type(node, dest_node->provide[i]);
       switch (type) {
@@ -1091,7 +1089,7 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
  	    } requirement_vector_iterate_end;
           } improvement_iterate_end;
 
-          governments_iterate(gov) {
+          government_iterate(gov) {
             requirement_vector_iterate(&(gov->reqs), preq) {
               if (VUT_ADVANCE == preq->source.kind
                && advance_number(preq->source.value.advance) == node->tech) {
@@ -1105,7 +1103,7 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
  	        icon_startx += swidth + 2;
               }
             } requirement_vector_iterate_end;
-          } governments_iterate_end;
+          } government_iterate_end;
         }
       }
 

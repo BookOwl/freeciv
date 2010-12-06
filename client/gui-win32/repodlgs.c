@@ -33,7 +33,6 @@
 /* common */
 #include "government.h"
 #include "packets.h"
-#include "research.h"
 #include "unitlist.h"
 
 /* client */
@@ -112,7 +111,7 @@ science_dialog_update(void)
 
   ComboBox_ResetContent(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH));
 
-  if (A_UNSET == player_research_get(client.conn.playing)->researching) {
+  if (A_UNSET == get_player_research(client.conn.playing)->researching) {
     id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			    advance_name_for_player(client.conn.playing, A_NONE));
     ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
@@ -121,14 +120,14 @@ science_dialog_update(void)
 		       id);
     text[0] = '\0';
   } else {
-    fc_snprintf(text, sizeof(text), "%d/%d",
-		player_research_get(client.conn.playing)->bulbs_researched,
+    my_snprintf(text, sizeof(text), "%d/%d",
+		get_player_research(client.conn.playing)->bulbs_researched,
 		total_bulbs_required(client.conn.playing));
   }
 
   SetWindowText(GetDlgItem(science_dlg, ID_SCIENCE_PROG), text);
 
-  if (!is_future_tech(player_research_get(client.conn.playing)->researching)) {
+  if (!is_future_tech(get_player_research(client.conn.playing)->researching)) {
     advance_index_iterate(A_FIRST, tech_id) {
       if (TECH_PREREQS_KNOWN !=
             player_invention_state(client.conn.playing, tech_id)) {
@@ -139,14 +138,14 @@ science_dialog_update(void)
 			      advance_name_for_player(client.conn.playing, tech_id));
       ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id, tech_id);
-      if (tech_id == player_research_get(client.conn.playing)->researching) {
+      if (tech_id == get_player_research(client.conn.playing)->researching) {
 	ComboBox_SetCurSel(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			   id);
       }
     } advance_index_iterate_end;
   } else {
       tech_id = advance_count() + 1
-		+ player_research_get(client.conn.playing)->future_tech;
+		+ get_player_research(client.conn.playing)->future_tech;
       id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
 			      advance_name_for_player(client.conn.playing, tech_id));
       ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_RESEARCH),
@@ -160,19 +159,19 @@ science_dialog_update(void)
     if (player_invention_reachable(client.conn.playing, tech_id)
         && TECH_KNOWN != player_invention_state(client.conn.playing, tech_id)
         && (11 > num_unknown_techs_for_goal(client.conn.playing, tech_id)
-	    || tech_id == player_research_get(client.conn.playing)->tech_goal)) {
+	    || tech_id == get_player_research(client.conn.playing)->tech_goal)) {
       id = ComboBox_AddString(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			      advance_name_for_player(client.conn.playing, tech_id));
        ComboBox_SetItemData(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
 			 id, tech_id);
-      if (tech_id == player_research_get(client.conn.playing)->tech_goal)
+      if (tech_id == get_player_research(client.conn.playing)->tech_goal)
  	ComboBox_SetCurSel(GetDlgItem(science_dlg,ID_SCIENCE_GOAL),
  			   id);
        
      }
   } advance_index_iterate_end;
 
-  if (A_UNSET == player_research_get(client.conn.playing)->tech_goal) {
+  if (A_UNSET == get_player_research(client.conn.playing)->tech_goal) {
     id = ComboBox_AddString(GetDlgItem(science_dlg, ID_SCIENCE_GOAL),
 			    advance_name_for_player(client.conn.playing, A_NONE));
     ComboBox_SetItemData(GetDlgItem(science_dlg, ID_SCIENCE_GOAL),
@@ -182,11 +181,19 @@ science_dialog_update(void)
    }
 
   steps = num_unknown_techs_for_goal(client.conn.playing,
-                            player_research_get(client.conn.playing)->tech_goal);
-  fc_snprintf(text, sizeof(text),
+                            get_player_research(client.conn.playing)->tech_goal);
+  my_snprintf(text, sizeof(text),
 	      PL_("(%d step)", "(%d steps)", steps), steps);
   SetWindowText(GetDlgItem(science_dlg,ID_SCIENCE_STEPS),text);
   fcwin_redo_layout(science_dlg);
+}
+
+/****************************************************************************
+  Resize and redraw the requirement tree.
+****************************************************************************/
+void science_dialog_redraw(void)
+{
+  /* No requirement tree yet. */
 }
 
 /**************************************************************************
@@ -236,7 +243,7 @@ static LONG CALLBACK science_proc(HWND hWnd,
 	      to = ComboBox_GetItemData(GetDlgItem(hWnd, ID_SCIENCE_GOAL),
 					to);
 	      steps = num_unknown_techs_for_goal(client.conn.playing, to);
-	      fc_snprintf(text, sizeof(text), 
+	      my_snprintf(text, sizeof(text), 
 	                  PL_("(%d step)", "(%d steps)", steps),
 			  steps);
 	      SetWindowText(GetDlgItem(hWnd,ID_SCIENCE_STEPS), text);
@@ -347,16 +354,16 @@ economy_report_dialog_update(void)
   for (i = 0; i < entries_used; i++) {
     struct improvement_entry *p = &entries[i];
 
-    fc_snprintf(buf0, sizeof(buf0), "%s", improvement_name_translation(p->type));
-    fc_snprintf(buf1, sizeof(buf1), "%5d", p->count);
-    fc_snprintf(buf2, sizeof(buf2), "%5d", p->cost);
-    fc_snprintf(buf3, sizeof(buf3), "%6d", p->total_cost);
+    my_snprintf(buf0, sizeof(buf0), "%s", improvement_name_translation(p->type));
+    my_snprintf(buf1, sizeof(buf1), "%5d", p->count);
+    my_snprintf(buf2, sizeof(buf2), "%5d", p->cost);
+    my_snprintf(buf3, sizeof(buf3), "%6d", p->total_cost);
 
     fcwin_listview_add_row(lv, i, 4, row);
 
     economy_improvement_type[i] = p->type;
   }
-  fc_snprintf(economy_total, sizeof(economy_total),
+  my_snprintf(economy_total, sizeof(economy_total),
 	      _("Income:%6d    Total Costs: %6d"), tax, total);
   SetWindowText(GetDlgItem(economy_dlg,ID_TRADEREP_CASH),economy_total);
   ListView_SetColumnWidth(lv,0,LVSCW_AUTOSIZE);
@@ -568,7 +575,7 @@ static LONG CALLBACK activeunits_proc(HWND hWnd,
 	      ut1 = activeunits_type[sel];
 	      CHECK_UNIT_TYPE(ut1);
 	      ut2 = can_upgrade_unittype(client.conn.playing, activeunits_type[sel]);
-	      fc_snprintf(buf, sizeof(buf),
+	      my_snprintf(buf, sizeof(buf),
 			  _("Upgrade as many %s to %s as possible for %d gold each?\n"
 			    "Treasury contains %d gold."),
 			  utype_name_translation(ut1),
@@ -653,16 +660,16 @@ activeunits_report_dialog_update(void)
       if ((unitarray[index].active_count > 0)
 	  || (unitarray[index].building_count > 0)) {
         can = (can_upgrade_unittype(client.conn.playing, putype) != NULL);
-        fc_snprintf(buf[0], sizeof(buf[0]), "%s",
+        my_snprintf(buf[0], sizeof(buf[0]), "%s",
                     utype_name_translation(putype));
-        fc_snprintf(buf[1], sizeof(buf[1]), "%c", can ? '*': '-');
-        fc_snprintf(buf[2], sizeof(buf[2]), "%3d",
+        my_snprintf(buf[1], sizeof(buf[1]), "%c", can ? '*': '-');
+        my_snprintf(buf[2], sizeof(buf[2]), "%3d",
                     unitarray[index].building_count);
-        fc_snprintf(buf[3], sizeof(buf[3]), "%3d",
+        my_snprintf(buf[3], sizeof(buf[3]), "%3d",
                     unitarray[index].active_count);
-        fc_snprintf(buf[4], sizeof(buf[4]), "%3d",
+        my_snprintf(buf[4], sizeof(buf[4]), "%3d",
                     unitarray[index].upkeep[O_SHIELD]);
-        fc_snprintf(buf[5], sizeof(buf[5]), "%3d",
+        my_snprintf(buf[5], sizeof(buf[5]), "%3d",
                     unitarray[index].upkeep[O_FOOD]);
         /* TODO: add upkeep[O_GOLD] here */
         fcwin_listview_add_row(lv,k,AU_COL,row);
@@ -676,12 +683,12 @@ activeunits_report_dialog_update(void)
       }
     } unit_type_iterate_end;
 
-    fc_snprintf(buf[0],sizeof(buf[0]),"%s",_("Totals"));
+    my_snprintf(buf[0],sizeof(buf[0]),"%s",_("Totals"));
     buf[1][0]='\0';
-    fc_snprintf(buf[2],sizeof(buf[2]),"%d",unittotals.building_count);
-    fc_snprintf(buf[3],sizeof(buf[3]),"%d",unittotals.active_count);
-    fc_snprintf(buf[4],sizeof(buf[4]),"%d",unittotals.upkeep[O_SHIELD]);
-    fc_snprintf(buf[5],sizeof(buf[5]),"%d",unittotals.upkeep[O_FOOD]);
+    my_snprintf(buf[2],sizeof(buf[2]),"%d",unittotals.building_count);
+    my_snprintf(buf[3],sizeof(buf[3]),"%d",unittotals.active_count);
+    my_snprintf(buf[4],sizeof(buf[4]),"%d",unittotals.upkeep[O_SHIELD]);
+    my_snprintf(buf[5],sizeof(buf[5]),"%d",unittotals.upkeep[O_FOOD]);
     /* TODO: add upkeep[O_GOLD] here */
     fcwin_listview_add_row(lv,k,AU_COL,row);
     EnableWindow(GetDlgItem(activeunits_dlg,ID_MILITARY_UPGRADE),FALSE);
@@ -770,17 +777,17 @@ void popup_endgame_report_dialog(struct packet_endgame_report *packet)
 {
   char buffer[150 * MAX_NUM_PLAYERS];
   int i;
-
+ 
   buffer[0] = '\0';
-  for (i = 0; i < packet->player_num; i++) {
-    const struct player *pplayer = player_by_number(packet->player_id[i]);
-
+  for (i = 0; i < packet->nscores; i++) {
     cat_snprintf(buffer, sizeof(buffer),
                  PL_("%2d: The %s ruler %s scored %d point\n",
                      "%2d: The %s ruler %s scored %d points\n",
                      packet->score[i]),
-                 i + 1, nation_adjective_for_player(pplayer),
-                 player_name(pplayer), packet->score[i]);
+                 i + 1,
+                 nation_adjective_for_player(player_by_number(packet->id[i])),
+                 player_name(player_by_number(packet->id[i])),
+                 packet->score[i]);
   }
   popup_notify_dialog(_("Final Report:"),
                       _("The Greatest Civilizations in the world."),
@@ -969,15 +976,15 @@ static void create_settable_options_dialog(void)
       /* integer */
       char buf[80];
       int length;
-      fc_snprintf(buf, 80, "%d", o->max);
+      my_snprintf(buf, 80, "%d", o->max);
       buf[79] = 0;
       length = strlen(buf);
-      fc_snprintf(buf, 80, "%d", o->min);
+      my_snprintf(buf, 80, "%d", o->min);
       buf[79] = 0;
       if (length < strlen(buf)) {
         length = strlen(buf);
       }
-      fc_snprintf(buf, 80, "%d", o->val);
+      my_snprintf(buf, 80, "%d", o->val);
       fcwin_box_add_edit(hbox, buf, length, ID_OPTIONS_BASE + i, 0, FALSE,
 			 TRUE, 5);
     } else {

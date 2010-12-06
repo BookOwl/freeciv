@@ -69,7 +69,7 @@ static LONG CALLBACK option_proc(HWND dlg,UINT message,
 	  break;
 	case COT_INTEGER:
 	  GetWindowText((HWND)(gui_data),dp,sizeof(dp));
-          if (str_to_int(dp, &val)) {
+          if (1 == sscanf(dp, "%d", &val)) {
             (void) option_int_set(poption, val);
           }
 	  break;
@@ -189,7 +189,7 @@ void popup_option_dialog(void)
 		      option_bool_get(poption)?BST_CHECKED:BST_UNCHECKED);
       break;
     case COT_INTEGER:
-      fc_snprintf(valstr, sizeof(valstr), "%d", option_int_get(poption));
+      my_snprintf(valstr, sizeof(valstr), "%d", option_int_get(poption));
       SetWindowText((HWND)(gui_data), valstr);
       break;
     case COT_STRING:

@@ -58,7 +58,6 @@ extern GtkWidget *	flake_ebox;
 extern GtkWidget *	government_ebox;
 extern GtkWidget *      map_canvas;             /* GtkDrawingArea */
 extern GtkWidget *      overview_canvas;        /* GtkDrawingArea */
-extern GtkWidget *      overview_scrolled_window;        /* GtkScrolledWindow */
 extern GtkWidget *      timeout_label;
 extern GtkWidget *      turn_done_button;
 extern GtkWidget *      unit_info_box;
@@ -75,9 +74,24 @@ extern GtkWidget *	bottom_notebook;
 extern GtkWidget *	right_notebook;
 extern GtkTextBuffer *	message_buffer;
 
-extern int overview_canvas_store_width;
-extern int overview_canvas_store_height;
-
+/* NB: Must match creation arugments in
+ * create_start_page() in pages.c */
+enum connection_list_columns {
+  CL_COL_PLAYER_NUMBER = 0,
+  CL_COL_USER_NAME,
+  CL_COL_READY_STATE,
+  CL_COL_PLAYER_NAME,
+  CL_COL_FLAG,
+  CL_COL_NATION,
+  CL_COL_TEAM,
+  CL_COL_GGZ_RECORD,
+  CL_COL_GGZ_RATING,
+  CL_COL_CONN_ID,
+  
+  CL_NUM_COLUMNS
+};
+extern GtkTreeStore *connection_list_store;
+extern GtkTreeView *connection_list_view;
 
 void enable_menus(bool enable);
 

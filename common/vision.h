@@ -97,7 +97,7 @@ struct vision {
 
 #define ASSERT_VISION(v)						\
  do {									\
-   fc_assert((v)->radius_sq[V_MAIN] >= (v)->radius_sq[V_INVIS]);	\
+   assert((v)->radius_sq[V_MAIN] >= (v)->radius_sq[V_INVIS]);		\
  } while(FALSE);
 
 struct vision *vision_new(struct player *pplayer, struct tile *ptile);

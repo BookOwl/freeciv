@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -40,7 +41,6 @@
 
 /* common */
 #include "diptreaty.h"
-#include "game.h"
 #include "government.h"
 #include "map.h"
 #include "packets.h"
@@ -226,7 +226,7 @@ static void popup_diplomacy_dialog(int other_player_id)
 {
   struct Diplomacy_dialog *pdialog = find_diplomacy_dialog(other_player_id);
 
-  if (NULL == client.conn.playing || client.conn.playing->ai_controlled) {
+  if (NULL == client.conn.playing || client.conn.playing->ai_data.control) {
     return;			/* Don't show if we are AI controlled. */
   }
 
@@ -253,12 +253,7 @@ static int fill_diplomacy_tech_menu(Widget popupmenu,
 				    struct player *plr0, struct player *plr1)
 {
   int flag = 0;
-
-  if (!game.info.trading_tech) {
-    /* Trading advances deactivated. */
-    return 0;
-  }
-
+  
   advance_index_iterate(A_FIRST, i) {
     if (player_invention_state(plr0, i) == TECH_KNOWN
         && player_invention_reachable(plr1, i)
@@ -290,12 +285,6 @@ static int fill_diplomacy_city_menu(Widget popupmenu,
 				    struct player *plr0, struct player *plr1)
 {
   int i = 0, j = 0, n = city_list_size(plr0->cities);
-
-  if (game.info.trading_city) {
-    /* Trading cities deactivated. */
-    return 0;
-  }
-
   struct city **city_list_ptrs;
   if (n>0) {
     city_list_ptrs = fc_malloc(sizeof(struct city*)*n);
@@ -332,7 +321,6 @@ static int fill_diplomacy_city_menu(Widget popupmenu,
 struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0, 
 						 struct player *plr1)
 {
-  char plr0_buf[4 * MAX_LEN_NAME], plr1_buf[4 * MAX_LEN_NAME];
   char buf[512], *pheadlinem;
   struct Diplomacy_dialog *pdialog;
   Dimension width, height, maxwidth;
@@ -373,7 +361,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 					       pdialog->dip_main_form, 
 					       NULL);
   
-  fc_snprintf(buf, sizeof(buf), _("The %s offerings"),
+  my_snprintf(buf, sizeof(buf), _("The %s offerings"),
 	      nation_adjective_for_player(plr0));
   pdialog->dip_headline0=XtVaCreateManagedWidget("dipheadline0", 
 						 labelWidgetClass, 
@@ -381,7 +369,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 						 XtNlabel, buf,
 						 NULL);   
 
-  fc_snprintf(buf, sizeof(buf), _("The %s offerings"),
+  my_snprintf(buf, sizeof(buf), _("The %s offerings"),
 	      nation_adjective_for_player(plr1));
   pdialog->dip_headline1=XtVaCreateManagedWidget("dipheadline1", 
 						 labelWidgetClass, 
@@ -484,33 +472,31 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 		 fill_diplomacy_city_menu(popupmenu, plr1, plr0));  
   
   /* End of trade city code */
+  
+  pdialog->dip_gold_input0=XtVaCreateManagedWidget("dipgoldinput0", 
+						   asciiTextWidgetClass,
+						   pdialog->dip_form0,
+						   NULL);
 
-  /* Trading gold */
-  if (game.info.trading_gold) {
-    pdialog->dip_gold_input0 = XtVaCreateManagedWidget("dipgoldinput0",
-                                                       asciiTextWidgetClass,
-                                                       pdialog->dip_form0, NULL);
-    fc_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr0->economic.gold);
-    pdialog->dip_gold_label0 = XtVaCreateManagedWidget("dipgoldlabel0",
-                                                       labelWidgetClass,
-                                                       pdialog->dip_form0,
-                                                       XtNlabel, buf, NULL);
+  pdialog->dip_gold_input1=XtVaCreateManagedWidget("dipgoldinput1", 
+						   asciiTextWidgetClass,
+						   pdialog->dip_form1,
+						   NULL);
+  
+  my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr0->economic.gold);
+  pdialog->dip_gold_label0=XtVaCreateManagedWidget("dipgoldlabel0", 
+						   labelWidgetClass,
+						   pdialog->dip_form0,
+						   XtNlabel, buf,
+						   NULL);
 
+  my_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr1->economic.gold);
+  pdialog->dip_gold_label1=XtVaCreateManagedWidget("dipgoldlabel1", 
+						   labelWidgetClass,
+						   pdialog->dip_form1,
+						   XtNlabel, buf,
+						   NULL);
 
-    pdialog->dip_gold_input1 = XtVaCreateManagedWidget("dipgoldinput1",
-                                                       asciiTextWidgetClass,
-                                                       pdialog->dip_form1, NULL);
-    fc_snprintf(buf, sizeof(buf), _("Gold(max %d)"), plr1->economic.gold);
-    pdialog->dip_gold_label1 = XtVaCreateManagedWidget("dipgoldlabel1",
-                                                       labelWidgetClass,
-                                                       pdialog->dip_form1,
-                                                       XtNlabel, buf, NULL);
-  } else {
-    pdialog->dip_gold_input0 = NULL;
-    pdialog->dip_gold_input1 = NULL;
-    pdialog->dip_gold_label0 = NULL;
-    pdialog->dip_gold_label1 = NULL;
-  }
 
   pdialog->dip_vision_button0 =
     I_L(XtVaCreateManagedWidget("dipvisionbutton0",
@@ -555,18 +541,18 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 				smeBSBObjectClass, popupmenu, NULL);
   XtAddCallback(entry, XtNcallback, diplomacy_dialog_alliance_callback,
 		(XtPointer)pdialog);
-
-  fc_snprintf(buf, sizeof(buf),
-              /* TRANS: The <nation adjective> <ruler-title + player-name>
-               * E.g. "The Czech President Vaclav Havel". */
-              _("This Eternal Treaty\n"
-                "marks the results of the diplomatic work between\n"
-                "The %s %s\nand\nThe %s %s"),
-              nation_adjective_for_player(plr0),
-              ruler_title_for_player(plr0, plr0_buf, sizeof(plr0_buf)),
-              nation_adjective_for_player(plr1),
-              ruler_title_for_player(plr1, plr1_buf, sizeof(plr1_buf)));
-
+  
+  my_snprintf(buf, sizeof(buf),
+	      _("This Eternal Treaty\n"
+		 "marks the results of the diplomatic work between\n"
+		 "The %s %s %s\nand\nThe %s %s %s"),
+	  nation_adjective_for_player(plr0),
+	  ruler_title_translation(plr0),
+	  player_name(plr0),
+	  nation_adjective_for_player(plr1),
+	  ruler_title_translation(plr1),
+	  player_name(plr1));
+  
   pheadlinem=create_centered_string(buf);
   pdialog->dip_headline1=XtVaCreateManagedWidget("dipheadlinem", 
 						 labelWidgetClass, 
@@ -597,7 +583,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   XtVaSetValues(pdialog->dip_view, XtNwidth, width, NULL); 
   XtVaSetValues(pdialog->dip_clauselist, XtNwidth, width, NULL); 
 
-  fc_snprintf(buf, sizeof(buf), _("%s view:"),
+  my_snprintf(buf, sizeof(buf), _("%s view:"),
               nation_adjective_for_player(plr0));
   pdialog->dip_acceptlabel0=XtVaCreateManagedWidget("dipacceptlabel0",
 						    labelWidgetClass, 
@@ -609,7 +595,7 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 						    pdialog->dip_formm, 
 						    XtNbitmap, get_thumb_pixmap(0),
 						    NULL);
-  fc_snprintf(buf, sizeof(buf), _("%s view:"),
+  my_snprintf(buf, sizeof(buf), _("%s view:"),
               nation_adjective_for_player(plr1));
   pdialog->dip_acceptlabel1=XtVaCreateManagedWidget("dipacceptlabel1",
 						    labelWidgetClass, 
@@ -655,17 +641,13 @@ struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   XtVaGetValues(pdialog->dip_tech_menubutton0, XtNwidth, &width, NULL);
   XtVaGetValues(pdialog->dip_city_menubutton0, XtNwidth, &width, NULL);
   maxwidth=MAX(width, maxwidth);
-  if (pdialog->dip_gold_input0) {
-    XtVaGetValues(pdialog->dip_gold_input0, XtNwidth, &width, NULL);
-  }
+  XtVaGetValues(pdialog->dip_gold_input0, XtNwidth, &width, NULL);
   maxwidth=MAX(width, maxwidth);
   XtVaSetValues(pdialog->dip_map_menubutton0, XtNwidth, maxwidth, NULL);
   XtVaSetValues(pdialog->dip_tech_menubutton0, XtNwidth, maxwidth, NULL);
   XtVaSetValues(pdialog->dip_city_menubutton0, XtNwidth, maxwidth, NULL);
-  if (pdialog->dip_gold_input0) {
-    XtVaSetValues(pdialog->dip_gold_input0,  XtNwidth, maxwidth, NULL);
-  }
-
+  XtVaSetValues(pdialog->dip_gold_input0,  XtNwidth, maxwidth, NULL);
+  
   XtVaGetValues(pdialog->dip_formm, XtNheight, &height, NULL);
   XtVaSetValues(pdialog->dip_form0, XtNheight, height, NULL); 
   XtVaSetValues(pdialog->dip_form1, XtNheight, height, NULL); 
@@ -909,7 +891,7 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 {
   XtDestroyWidget(pdialog->dip_dialog_shell);
   
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -964,7 +946,7 @@ void diplodlg_key_gold(Widget w)
     int amount;
     
     XtVaGetValues(w, XtNstring, &dp, NULL);
-    if (str_to_int(dp, &amount) && 0 <= amount
+    if (sscanf(dp, "%d", &amount) == 1 && amount >= 0
 	&& amount <= pgiver->economic.gold) {
       dsend_packet_diplomacy_create_clause_req(&client.conn,
 					       player_number(pdialog->treaty.plr1),

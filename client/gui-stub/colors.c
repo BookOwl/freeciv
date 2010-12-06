@@ -15,9 +15,6 @@
 #include <config.h>
 #endif
 
-/* utility */
-#include "mem.h"
-
 #include "colors.h"
 
 /****************************************************************************

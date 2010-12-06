@@ -29,7 +29,7 @@ data/nation/<nationname>.ruleset
   ok though.
   - The name should be the same as the name of the nation inside the
   ruleset file.
-  - The file must be encoded in UTF-8.
+  - The file must be encoded in Unicode.
 
 data/default/nations.ruleset
 
@@ -182,12 +182,11 @@ Nation grouping
 
 Freeciv supports a classification of nations in an unlimited number of
 groups and every nation should be assigned to at least one. We currently 
-have Ancient, Medieval, Early Modern, Modern, African, American, Asian,
-European, Oceanian and Imaginary groups. Modern nations are existing and
-politically independent countries; a nation listed as ancient, medieval
-or early modern should have had an independent dynasty or state in ancient
-(until 500 AD), medieval (500 - 1500) or early modern (1500 - 1800) times
-respectively. Finally, an imaginary nation is - as the name suggests - a
+have Ancient, Medieval, Modern, African, American, Asian, European,
+Oceanian and Fictional groups. Modern nations are existing and politically
+independent countries; a nation listed as ancient or medieval should have
+had an independent dynasty or state in ancient or medieval times
+respectively. Finally, a fictional nation is - as the name suggests - a
 product of someone's imagination.
 
 
@@ -243,7 +242,7 @@ Leaders
 =======
 
 A leader should be a historically notable political leader of the
-nation. Two living persons per nation is permitted - one of each sex.
+nation. Only one living person per nation is permitted.
 
 An ideal leader list should contain between five and ten names.
 
@@ -371,18 +370,3 @@ At this point, it is useful to put one city per line, only.
 
 Finally, don't forget to leave a blank line feed in the end of your nation
 ruleset.
-
-
-Update information
-==================
-
-The information about the changes in the definition of a nation between
-different versions of freeciv is keep in the wiki at http://freeciv.wikia.com
-as part of the ruleset differences. The urls below list the differences
-between the freeciv versions from 2.3.x to the current version:
-
-http://freeciv.wikia.com/wiki/How_to_update_a_ruleset_from_2.2_to_2.3
-
-The description of a nation file can be found at:
-
-http://freeciv.wikia.com/wiki/Nations

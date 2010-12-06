@@ -16,7 +16,7 @@
 #ifndef FC__TIMING_H
 #define FC__TIMING_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 enum timer_timetype {
   TIMER_CPU,			/* time spent by the CPU */
@@ -60,6 +60,7 @@ void stop_timer(struct timer *t);
 void clear_timer_start(struct timer *t);
 
 double read_timer_seconds(struct timer *t);
+double read_timer_seconds_free(struct timer *t);
 
 void usleep_since_timer_start(struct timer *t, long usec);
 void usleep_since_timer_start_free(struct timer *t, long usec);

@@ -15,16 +15,11 @@
 
 /* City Improvements, including Wonders.  (Alternatively "Buildings".) */
 
-/* utility */
-#include "bitvector.h"
-#include "support.h"            /* bool */
+#include "shared.h"		/* bool */
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
-#include "requirements.h"
 
-struct strvec;          /* Actually defined in "utility/string_vector.h". */
+#include "requirements.h"
 
 /* B_LAST is a value that is guaranteed to be larger than all
  * actual Impr_type_id values.  It is used as a flag value; it can
@@ -37,33 +32,24 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
 #define B_NEVER (NULL)
 
-/* Changing these breaks network compatibility. */
-#define SPECENUM_NAME impr_flag_id
-/* improvement should be visible to others without spying */
-#define SPECENUM_VALUE0 IF_VISIBLE_BY_OTHERS
-#define SPECENUM_VALUE0NAME "VisibleByOthers"
-/* this small wonder is moved to another city if game.savepalace is on. */
-#define SPECENUM_VALUE1 IF_SAVE_SMALL_WONDER
-#define SPECENUM_VALUE1NAME "SaveSmallWonder"
-/* when built, gives gold */
-#define SPECENUM_VALUE2 IF_GOLD
-#define SPECENUM_VALUE2NAME "Gold"
-#define SPECENUM_COUNT IF_COUNT
-#include "specenum_gen.h"
 
-#define SPECENUM_NAME impr_genus_id
-#define SPECENUM_VALUE0 IG_GREAT_WONDER
-#define SPECENUM_VALUE0NAME "GreatWonder"
-#define SPECENUM_VALUE1 IG_SMALL_WONDER
-#define SPECENUM_VALUE1NAME "SmallWonder"
-#define SPECENUM_VALUE2 IG_IMPROVEMENT
-#define SPECENUM_VALUE2NAME "Improvement"
-#define SPECENUM_VALUE3 IG_SPECIAL
-#define SPECENUM_VALUE3NAME "Special"
-#include "specenum_gen.h"
+/* Changing these breaks network compatibility. */
+enum impr_flag_id {
+  IF_VISIBLE_BY_OTHERS,  /* improvement should be visible to others without spying */
+  IF_SAVE_SMALL_WONDER,  /* this small wonder is moved to another city if game.savepalace is on. */
+  IF_GOLD,		 /* when built, gives gold */
+  IF_LAST
+};
+
+enum impr_genus_id {
+  IG_GREAT_WONDER,
+  IG_SMALL_WONDER,
+  IG_IMPROVEMENT,
+  IG_SPECIAL,
+  IG_LAST
+};
 
 BV_DEFINE(bv_imprs, B_LAST);
-BV_DEFINE(bv_impr_flags, IF_COUNT);
 
 /* Type of improvement. (Read from buildings.ruleset file.) */
 struct impr_type {
@@ -78,8 +64,8 @@ struct impr_type {
   int upkeep;
   int sabotage;		/* Base chance of diplomat sabotage succeeding. */
   enum impr_genus_id genus;		/* genus; e.g. GreatWonder */
-  bv_impr_flags flags;
-  struct strvec *helptext;
+  unsigned int flags;
+  char *helptext;
   char soundtag[MAX_LEN_NAME];
   char soundtag_alt[MAX_LEN_NAME];
 
@@ -97,15 +83,16 @@ struct impr_type *improvement_by_number(const Impr_type_id id);
 struct impr_type *valid_improvement(struct impr_type *pimprove);
 struct impr_type *valid_improvement_by_number(const Impr_type_id id);
 
-struct impr_type *improvement_by_rule_name(const char *name);
-struct impr_type *improvement_by_translated_name(const char *name);
+struct impr_type *find_improvement_by_rule_name(const char *name);
+struct impr_type *find_improvement_by_translated_name(const char *name);
 
 const char *improvement_rule_name(const struct impr_type *pimprove);
-const char *improvement_name_translation(const struct impr_type *pimprove);
+const char *improvement_name_translation(struct impr_type *pimprove);
 
 /* General improvement flag accessor routines */
 bool improvement_has_flag(const struct impr_type *pimprove,
-                          enum impr_flag_id flag);
+			  enum impr_flag_id flag);
+enum impr_flag_id find_improvement_flag_by_rule_name(const char *s);
 
 /* Ancillary routines */
 int impr_build_shield_cost(const struct impr_type *pimprove);
@@ -139,19 +126,19 @@ void wonder_destroyed(const struct city *pcity,
 
 bool wonder_is_built(const struct player *pplayer,
                      const struct impr_type *pimprove);
-struct city *city_from_wonder(const struct player *pplayer,
-                              const struct impr_type *pimprove);
+struct city *find_city_from_wonder(const struct player *pplayer,
+                                   const struct impr_type *pimprove);
 
 bool great_wonder_is_built(const struct impr_type *pimprove);
 bool great_wonder_is_destroyed(const struct impr_type *pimprove);
 bool great_wonder_is_available(const struct impr_type *pimprove);
-struct city *city_from_great_wonder(const struct impr_type *pimprove);
+struct city *find_city_from_great_wonder(const struct impr_type *pimprove);
 struct player *great_wonder_owner(const struct impr_type *pimprove);
 
 bool small_wonder_is_built(const struct player *pplayer,
                            const struct impr_type *pimprove);
-struct city *city_from_small_wonder(const struct player *pplayer,
-                                    const struct impr_type *pimprove);
+struct city *find_city_from_small_wonder(const struct player *pplayer,
+                                         const struct impr_type *pimprove);
 
 /* player related improvement functions */
 bool improvement_obsolete(const struct player *pplayer,
@@ -165,6 +152,9 @@ bool can_player_build_improvement_later(const struct player *p,
 					struct impr_type *pimprove);
 bool can_player_build_improvement_now(const struct player *p,
 				      struct impr_type *pimprove);
+
+/* General genus accessor routines */
+enum impr_genus_id find_genus_by_rule_name(const char *s);
 
 /* Initialization and iteration */
 void improvements_init(void);

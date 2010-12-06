@@ -13,8 +13,12 @@
 #ifndef FC__MESSAGEWIN_H
 #define FC__MESSAGEWIN_H
 
+#include <gtk/gtk.h>
+
 #include "messagewin_g.h"
 
-void meswin_dialog_popdown(void);
+GtkWidget *create_meswin_area(void);
+
+void popdown_meswin_dialog(void);
 
 #endif  /* FC__MESSAGEWIN_H */

@@ -94,7 +94,6 @@
       <separator />
       <menuitem action="UNIT_HOMECITY" />
       <menuitem action="UNIT_UPGRADE" />
-      <menuitem action="UNIT_CONVERT" />
       <menuitem action="UNIT_DISBAND" />
     </menu>
 
@@ -166,7 +165,6 @@
       <menuitem action="HELP_TECH" />
       <menuitem action="HELP_SPACE_RACE" />
       <menuitem action="HELP_RULESET" />
-      <menuitem action="HELP_NATIONS" />
       <separator />
       <menuitem action="HELP_CONNECTING" />
       <menuitem action="HELP_CONTROLS" />

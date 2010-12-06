@@ -2857,7 +2857,6 @@ Freeciv*mapcanvas.translations:\
    Shift<Key>f:       key-open-find-city()             \n\
    Shift<Key>l:       key-open-goto-airlift()          \n\
    Shift<Key>n:       key-unit-nuke()                  \n\
-   Shift<Key>o:       key-unit-convert()               \n\
    Shift<Key>p:       key-unit-pillage()               \n\
    Shift<Key>r:       key-open-revolution()            \n\
    Shift<Key>t:       key-open-rates()                 \n\
@@ -2945,7 +2944,6 @@ Freeciv*overviewcanvas.translations:\
    Shift<Key>f:       key-open-find-city()             \n\
    Shift<Key>l:       key-open-goto-airlift()          \n\
    Shift<Key>n:       key-unit-nuke()                  \n\
-   Shift<Key>o:       key-unit-convert()               \n\
    Shift<Key>p:       key-unit-pillage()               \n\
    Shift<Key>r:       key-open-revolution()            \n\
    Shift<Key>t:       key-open-rates()                 \n\

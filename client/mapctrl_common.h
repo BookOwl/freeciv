@@ -14,13 +14,9 @@
 #ifndef FC__MAPCTRL_COMMON_H
 #define FC__MAPCTRL_COMMON_H
 
-/* utility */
-#include "support.h"            /* bool type */
+#include "map.h"		/* enum direction8 */
+#include "shared.h"		/* bool type */
 
-/* common */
-#include "map.h"                /* enum direction8 */
-
-/* client */
 #include "control.h"            /* quickselect_type */
 
 extern bool rbutton_down;

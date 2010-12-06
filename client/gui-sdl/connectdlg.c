@@ -80,7 +80,7 @@ void really_close_connection_dialog(void)
 /**************************************************************************
  provide a packet handler for packet_game_load
 **************************************************************************/
-void handle_game_load(bool load_successful, const char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   /* PORTME */
 }
@@ -97,7 +97,8 @@ static int connect_callback(struct widget *pWidget)
                           errbuf, sizeof(errbuf)) != -1) {
     } else {
       output_window_append(ftc_any, errbuf);
-
+      real_update_meswin_dialog();
+  
       /* button up */
       unsellect_widget_action();
       set_wstate(pWidget, FC_WS_SELLECTED);
@@ -130,10 +131,10 @@ static int exit_meta_severs_dlg_callback(struct widget *pWidget)
     server_scan_finish(pServer_scan);
     pServer_scan = NULL;
     pServer_list = NULL;
-
+      
     set_client_page(PAGE_NETWORK);
-    meswin_dialog_popup(TRUE);
-  }
+    popup_meswin_dialog(true);
+  }    
   return -1;
 }
 
@@ -161,7 +162,7 @@ static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
   output_window_append(ftc_client, message);
-  log_normal("%s", message);
+  freelog(LOG_NORMAL, "%s", message);
 
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
@@ -227,7 +228,7 @@ void popup_connection_dialog(bool lan_scan)
   
   queue_flush();
   close_connection_dialog();
-  meswin_dialog_popdown();
+  popdown_meswin_dialog();
 
   /* Text Label */  
   pLabelWindow = create_window_skeleton(NULL, NULL, 0);
@@ -235,7 +236,7 @@ void popup_connection_dialog(bool lan_scan)
   
   area = pLabelWindow->area;
   
-  fc_snprintf(cBuf, sizeof(cBuf), _("Creating Server List..."));
+  my_snprintf(cBuf, sizeof(cBuf), _("Creating Server List..."));
   pStr = create_str16_from_char(cBuf, adj_font(16));
   pStr->style = TTF_STYLE_BOLD;
   pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
@@ -272,14 +273,15 @@ void popup_connection_dialog(bool lan_scan)
   /* clear label */
   popdown_window_group_dialog(pNewWidget, pLabelWindow);
 
-  meswin_dialog_popup(TRUE);
-
+  popup_meswin_dialog(true);        
+  
   if(!pServer_list) {
     if (lan_scan) {
       output_window_append(ftc_client, _("No LAN servers found")); 
     } else {
       output_window_append(ftc_client, _("No public servers found")); 
-    }
+    }        
+    real_update_meswin_dialog();
     set_client_page(PAGE_NETWORK);
     return;
   }
@@ -313,7 +315,7 @@ void popup_connection_dialog(bool lan_scan)
 
     /* TRANS: "host.example.com Port 5556 Ver: 2.2.0 Running Players 3\n
      * [server message]" */
-    fc_snprintf(cBuf, sizeof(cBuf), _("%s Port %d Ver: %s %s %s %d\n%s"),
+    my_snprintf(cBuf, sizeof(cBuf), _("%s Port %d Ver: %s %s %s %d\n%s"),
     	pServer->host, pServer->port, pServer->version, _(pServer->state),
     		_("Players"), pServer->nplayers, pServer->message);
 
@@ -345,6 +347,7 @@ void popup_connection_dialog(bool lan_scan)
     } else {
       output_window_append(ftc_client, _("No public servers found"));
     }
+    real_update_meswin_dialog();
     set_client_page(PAGE_NETWORK);
     return;
   }
@@ -506,7 +509,7 @@ static int convert_portnr_callback(struct widget *pWidget)
       FC_FREE(tmp);
     } else {
       /* empty input -> restore previous content */
-      fc_snprintf(pCharPort, sizeof(pCharPort), "%d", server_port);
+      my_snprintf(pCharPort, sizeof(pCharPort), "%d", server_port);
       copy_chars_to_string16(pWidget->string16, pCharPort);
       widget_redraw(pWidget);
       widget_mark_dirty(pWidget);
@@ -593,7 +596,7 @@ void popup_join_game_dialog()
   area.h += pBuf->size.h + adj_size(5);
   
   /* port edit */
-  fc_snprintf(pCharPort, sizeof(pCharPort), "%d", server_port);
+  my_snprintf(pCharPort, sizeof(pCharPort), "%d", server_port);
   
   pBuf = create_edit_from_chars(NULL, pWindow->dst, pCharPort, adj_font(14), adj_size(210),
 					 WF_RESTORE_BACKGROUND);
@@ -712,7 +715,7 @@ static int convert_passwd_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     char *tmp = convert_to_chars(pWidget->string16->text);
     if(tmp) {
-      fc_snprintf(password, MAX_LEN_NAME, "%s", tmp);
+      my_snprintf(password, MAX_LEN_NAME, "%s", tmp);
       FC_FREE(tmp);
     }
   }
@@ -751,7 +754,7 @@ static int send_passwd_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static void popup_user_passwd_dialog(const char *pMessage)
+static void popup_user_passwd_dialog(char *pMessage)
 {
   struct widget *pBuf, *pWindow;
   SDL_String16 *pLabelStr = NULL, *pPasswdStr = NULL;
@@ -880,7 +883,7 @@ static int convert_first_passwd_callback(struct widget *pWidget)
     char *tmp = convert_to_chars(pWidget->string16->text);
     
     if(tmp) {
-      fc_snprintf(password, MAX_LEN_NAME, "%s", tmp);
+      my_snprintf(password, MAX_LEN_NAME, "%s", tmp);
       FC_FREE(tmp);
       set_wstate(pWidget->prev, FC_WS_NORMAL);
       widget_redraw(pWidget->prev);
@@ -926,7 +929,7 @@ static int convert_secound_passwd_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static void popup_new_user_passwd_dialog(const char *pMessage)
+static void popup_new_user_passwd_dialog(char *pMessage)
 {
   struct widget *pBuf, *pWindow;
   SDL_String16 *pLabelStr = NULL, *pPasswdStr = NULL;
@@ -1087,15 +1090,14 @@ void close_connection_dialog(void)
  popup passwd dialog depending on what type of authentication request the
  server is making.
 **************************************************************************/
-void handle_authentication_req(enum authentication_type type,
-                               const char *message)
+void handle_authentication_req(enum authentication_type type, char *message)
 {
   switch (type) {
-  case AUTH_NEWUSER_FIRST:
-  case AUTH_NEWUSER_RETRY:
-    popup_new_user_passwd_dialog(message);
-    return;
-  case AUTH_LOGIN_FIRST:
+    case AUTH_NEWUSER_FIRST:
+    case AUTH_NEWUSER_RETRY:
+      popup_new_user_passwd_dialog(message);
+    break;
+    case AUTH_LOGIN_FIRST:
     /* if we magically have a password already present in 'password'
      * then, use that and skip the password entry dialog */
     if (password[0] != '\0') {
@@ -1107,13 +1109,14 @@ void handle_authentication_req(enum authentication_type type,
     } else {
       popup_user_passwd_dialog(message);
     }
-    return;
-  case AUTH_LOGIN_RETRY:
-    popup_user_passwd_dialog(message);
-    return;
+    break;
+    case AUTH_LOGIN_RETRY:
+      popup_user_passwd_dialog(message);
+    break;
+    default:
+      assert(0);
   }
 
-  log_error("Not supported authentication type %d: %s.", type, message);
 }
 
 /**************************************************************************

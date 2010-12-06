@@ -26,7 +26,6 @@
 #include "SDL.h"
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "log.h"
 #include "rand.h"
@@ -156,13 +155,13 @@ void popdown_all_game_dialogs(void)
   popdown_bribe_dialog();
   popdown_find_dialog();
   popdown_revolution_dialog();
-  science_report_dialogs_popdown_all();
-  meswin_dialog_popdown();
+  popdown_all_science_dialogs();
+  popdown_meswin_dialog();
   popdown_worklist_editor();
   popdown_all_city_dialogs();
-  city_report_dialog_popdown();
-  economy_report_dialog_popdown();
-  units_report_dialog_popdown();
+  popdown_city_report_dialog();
+  popdown_economy_report_dialog();
+  popdown_activeunits_report_dialog();
   popdown_intel_dialogs();
   popdown_players_nations_dialog();
   popdown_players_dialog();
@@ -235,8 +234,8 @@ static struct notify_goto_data *notify_goto_data_new(const char *headline,
 {
   struct notify_goto_data *pdata = fc_malloc(sizeof(*pdata));
 
-  pdata->headline = fc_strdup(headline);
-  pdata->lines = fc_strdup(lines);
+  pdata->headline = mystrdup(headline);
+  pdata->lines = mystrdup(lines);
   pdata->ptile = ptile;
   return pdata;
 }
@@ -328,7 +327,7 @@ static struct notify_goto_dialog *notify_goto_dialog_new(void)
                                            pdialog->window->dst,
                                            WF_WIDGET_HAS_INFO_LABEL
                                            | WF_RESTORE_BACKGROUND);
-  pdialog->close_button->info_label =
+  pdialog->close_button->string16 =
       create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pdialog->close_button->action = notify_goto_dialog_close_callback;
   pdialog->close_button->data.ptr = pdialog;
@@ -339,7 +338,7 @@ static struct notify_goto_dialog *notify_goto_dialog_new(void)
   pdialog->label = NULL;
 
   /* Data list. */
-  pdialog->datas = notify_goto_list_new_full(notify_goto_data_destroy);
+  pdialog->datas = notify_goto_list_new();
 
   return pdialog;
 }
@@ -359,7 +358,13 @@ static void notify_goto_dialog_destroy(struct notify_goto_dialog *pdialog)
     del_widget_pointer_from_gui_list(pdialog->label);
   }
 
-  notify_goto_list_destroy(pdialog->datas);
+  while (0 < notify_goto_list_size(pdialog->datas)) {
+    struct notify_goto_data *pdata = notify_goto_list_get(pdialog->datas, 0);
+
+    notify_goto_list_unlink(pdialog->datas, pdata);
+    notify_goto_data_destroy(pdata);
+  }
+  notify_goto_list_free(pdialog->datas);
   free(pdialog);
 }
 
@@ -414,8 +419,10 @@ static void notify_goto_dialog_update(struct notify_goto_dialog *pdialog)
 static void notify_goto_dialog_advance(struct notify_goto_dialog *pdialog)
 {
   if (1 < notify_goto_list_size(pdialog->datas)) {
-    notify_goto_list_remove(pdialog->datas,
-                            notify_goto_list_get(pdialog->datas, 0));
+    struct notify_goto_data *pdata = notify_goto_list_get(pdialog->datas, 0);
+
+    notify_goto_list_unlink(pdialog->datas, pdata);
+    notify_goto_data_destroy(pdata);
     notify_goto_dialog_update(pdialog);
   } else {
     notify_goto_dialog_destroy(pdialog);
@@ -437,7 +444,7 @@ void popup_notify_goto_dialog(const char *headline, const char *lines,
   if (NULL == notify_goto_dialog) {
     notify_goto_dialog = notify_goto_dialog_new();
   }
-  fc_assert(NULL != notify_goto_dialog);
+  assert(NULL != notify_goto_dialog);
 
   notify_goto_list_prepend(notify_goto_dialog->datas,
                            notify_goto_data_new(headline, lines, ptile));
@@ -455,12 +462,13 @@ void popdown_notify_goto_dialog(void)
   }
 }
 
+
 /**************************************************************************
   Popup a dialog to display connection message from server.
 **************************************************************************/
 void popup_connect_msg(const char *headline, const char *message)
 {
-  log_error("popup_connect_msg() PORT ME");
+  freelog(LOG_ERROR, "popup_connect_msg() PORT ME");
 }
 
 /* ----------------------------------------------------------------------- */
@@ -528,9 +536,8 @@ void popup_notify_dialog(const char *caption, const char *headline,
   /* ---------- */
   /* create exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->action = exit_notify_dialog_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -667,11 +674,12 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
     flush_dirty();
     return;
   }
-
+  CHECK_UNIT_TYPE(unit_type(pUnit));
+    
   pUnit_Upgrade_Dlg = fc_calloc(1, sizeof(struct SMALL_DLG));
 
-  unit_upgrade_result = unit_upgrade_info(pUnit, cBuf, sizeof(cBuf));
-
+  unit_upgrade_result = get_unit_upgrade_info(cBuf, sizeof(cBuf), pUnit);
+ 
   pStr = create_str16_from_char(_("Upgrade Obsolete Units"), adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
 
@@ -709,8 +717,8 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   area.h += (pBuf->size.h + adj_size(20));
   
   add_to_gui_list(ID_BUTTON, pBuf);
-
-  if (UU_OK == unit_upgrade_result) {
+  
+  if (unit_upgrade_result == UR_OK) {
     pBuf = create_themeicon_button_from_chars(pTheme->OK_Icon, pWindow->dst,
 					      _("Upgrade"), adj_font(12), 0);
         
@@ -754,8 +762,8 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   /* cancel button */
   pBuf = pWindow->prev;
   pBuf->size.y = area.y + area.h - pBuf->size.h - adj_size(7);
-
-  if (UU_OK == unit_upgrade_result) {
+  
+  if (unit_upgrade_result == UR_OK) {
     /* sell button */
     pBuf = pBuf->prev;
     pBuf->size.x = area.x + (area.w - (2 * pBuf->size.w + adj_size(10))) / 2;
@@ -825,7 +833,7 @@ static int unit_select_callback( struct widget *pWidget )
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     struct unit *pUnit =
-      player_unit_by_number(client_player(), MAX_ID - pWidget->ID);
+      player_find_unit_by_id(client.conn.playing, MAX_ID - pWidget->ID);
   
     popdown_unit_select_dialog();
     if (pUnit) {
@@ -876,7 +884,7 @@ void popup_unit_select_dialog(struct tile *ptile)
   is_unit_move_blocked = TRUE;  
   pUnit_Select_Dlg = fc_calloc(1, sizeof(struct ADVANCED_DLG));
     
-  fc_snprintf(cBuf , sizeof(cBuf),"%s (%d)", _("Unit selection") , n);
+  my_snprintf(cBuf , sizeof(cBuf),"%s (%d)", _("Unit selection") , n);
   pStr = create_str16_from_char(cBuf , adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
   
@@ -893,9 +901,8 @@ void popup_unit_select_dialog(struct tile *ptile)
   /* ---------- */
   /* create exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->action = exit_unit_select_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -910,7 +917,7 @@ void popup_unit_select_dialog(struct tile *ptile)
     pUnitType = unit_type(pUnit);
         
     if (unit_owner(pUnit) == client.conn.playing) {
-      fc_snprintf(cBuf , sizeof(cBuf), _("Contact %s (%d / %d) %s(%d,%d,%d) %s"),
+      my_snprintf(cBuf , sizeof(cBuf), _("Contact %s (%d / %d) %s(%d,%d,%d) %s"),
             pUnit->veteran ? _("Veteran") : "" ,
             pUnit->hp, pUnitType->hp,
             utype_name_translation(pUnitType),
@@ -921,7 +928,7 @@ void popup_unit_select_dialog(struct tile *ptile)
     } else {
       int att_chance, def_chance;
       
-      fc_snprintf(cBuf , sizeof(cBuf), _("%s %s %s(A:%d D:%d M:%d FP:%d) HP:%d%%"),
+      my_snprintf(cBuf , sizeof(cBuf), _("%s %s %s(A:%d D:%d M:%d FP:%d) HP:%d%%"),
             nation_adjective_for_player(unit_owner(pUnit)),
             (pUnit->veteran ? _("Veteran") : ""),
             utype_name_translation(pUnitType),
@@ -1062,7 +1069,7 @@ const char *sdl_get_tile_defense_info_text(struct tile *ptile)
     bonus += terrain_control.river_defense_bonus;
   }
 
-  fc_snprintf(buffer, sizeof(buffer), _("Terrain Defense Bonus: +%d%% "), bonus);
+  my_snprintf(buffer, sizeof(buffer), _("Terrain Defense Bonus: +%d%% "), bonus);
 
   return buffer;
 }
@@ -1087,7 +1094,7 @@ static void popup_terrain_info_dialog(SDL_Surface *pDest, struct tile *ptile)
   pTerrain_Info_Dlg = fc_calloc(1, sizeof(struct SMALL_DLG));
     
   /* ----------- */  
-  fc_snprintf(cBuf, sizeof(cBuf), "%s [%d,%d]", _("Terrain Info"), ptile->x , ptile->y);
+  my_snprintf(cBuf, sizeof(cBuf), "%s [%d,%d]", _("Terrain Info"), ptile->x , ptile->y);
   
   pWindow = create_window_skeleton(NULL, create_str16_from_char(cBuf , adj_font(12)), 0);
   pWindow->string16->style |= TTF_STYLE_BOLD;
@@ -1128,9 +1135,8 @@ static void popup_terrain_info_dialog(SDL_Surface *pDest, struct tile *ptile)
   
   /* exit icon */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->size.x = area.x + area.w - pBuf->size.w - 1;
   pBuf->size.y = pWindow->size.y + adj_size(2);
   pBuf->action = exit_terrain_info_dialog_callback;
@@ -1312,7 +1318,7 @@ static int adv_unit_sentry_idle_callback(struct widget *pWidget)
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing
          && ACTIVITY_IDLE == punit->activity
-         && !punit->ai_controlled
+         && !punit->ai.control
          && can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
           request_new_unit_activity(punit, ACTIVITY_SENTRY);
         }
@@ -1459,9 +1465,8 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = exit_advanced_terrain_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -1498,7 +1503,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
     area.h += pBuf->next->size.h;
     /* ------------------ */
     
-    fc_snprintf(cBuf, sizeof(cBuf), _("Zoom to : %s"), city_name(pCity) );
+    my_snprintf(cBuf, sizeof(cBuf), _("Zoom to : %s"), city_name(pCity) );
     
     create_active_iconlabel(pBuf, pWindow->dst,
 		    pStr, cBuf, zoom_to_city_callback);
@@ -1648,7 +1653,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 	}
         pUnitType = unit_type(pUnit);
         if (unit_owner(pUnit) == client.conn.playing) {
-          fc_snprintf(cBuf, sizeof(cBuf),
+          my_snprintf(cBuf, sizeof(cBuf),
             _("Activate %s (%d / %d) %s (%d,%d,%d) %s"),
             pUnit->veteran ? _("Veteran") : "" ,
             pUnit->hp, pUnitType->hp,
@@ -1667,7 +1672,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 	} else {
 	  int att_chance, def_chance;
 	  
-          fc_snprintf(cBuf, sizeof(cBuf), _("%s %s %s (A:%d D:%d M:%d FP:%d) HP:%d%%"),
+          my_snprintf(cBuf, sizeof(cBuf), _("%s %s %s (A:%d D:%d M:%d FP:%d) HP:%d%%"),
             nation_adjective_for_player(unit_owner(pUnit)),
             (pUnit->veteran ? _("Veteran") : ""),
             utype_name_translation(pUnitType),
@@ -1729,7 +1734,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 
       if (my_units > 1) {
 	
-	fc_snprintf(cBuf, sizeof(cBuf), "%s (%d)", _("Ready all"), my_units);
+	my_snprintf(cBuf, sizeof(cBuf), "%s (%d)", _("Ready all"), my_units);
 	create_active_iconlabel(pBuf, pWindow->dst, pStr,
 	       cBuf, adv_unit_select_all_callback);
         pBuf->data.unit = pAdvanced_Terrain_Dlg->pEndActiveWidgetList->data.unit;
@@ -1738,7 +1743,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
 	DownAdd(pBuf, pLast);
 	area.h += pBuf->size.h;
 	
-	fc_snprintf(cBuf, sizeof(cBuf), "%s (%d)", _("Sentry idle"), my_units);
+	my_snprintf(cBuf, sizeof(cBuf), "%s (%d)", _("Sentry idle"), my_units);
 	create_active_iconlabel(pBuf, pWindow->dst, pStr,
 	       cBuf, adv_unit_sentry_idle_callback);
         pBuf->data.unit = pAdvanced_Terrain_Dlg->pEndActiveWidgetList->data.unit;
@@ -1765,7 +1770,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
         if ((pCity && city_owner(pCity) == client.conn.playing)
 	 || (unit_owner(pUnit) == client.conn.playing))
         {
-          fc_snprintf(cBuf, sizeof(cBuf),
+          my_snprintf(cBuf, sizeof(cBuf),
             _("Activate %s (%d / %d) %s (%d,%d,%d) %s"),
             pUnit->veteran ? _("Veteran") : "" ,
             pUnit->hp, pUnitType->hp,
@@ -1793,7 +1798,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
         } else {
 	  int att_chance, def_chance;
 	
-          fc_snprintf(cBuf, sizeof(cBuf), _("%s %s %s (A:%d D:%d M:%d FP:%d) HP:%d%%"),
+          my_snprintf(cBuf, sizeof(cBuf), _("%s %s %s (A:%d D:%d M:%d FP:%d) HP:%d%%"),
             nation_adjective_for_player(unit_owner(pUnit)),
             (pUnit->veteran ? _("Veteran") : ""),
             utype_name_translation(pUnitType),
@@ -1823,7 +1828,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
         }
       }
       /* ---------------- */
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
             _("View Civiliopedia entry for %s"),
             utype_name_translation(pUnitType));
       create_active_iconlabel(pBuf, pWindow->dst, pStr,
@@ -2024,9 +2029,8 @@ void popup_pillage_dialog(struct unit *pUnit,
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = exit_pillage_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -2250,7 +2254,7 @@ static void popup_government_dialog(void)
   
   /* create gov. buttons */
   j = 0;
-  governments_iterate(pGov) {
+  government_iterate(pGov) {
 
     if (pGov == game.government_during_revolution) {
       continue;
@@ -2271,7 +2275,7 @@ static void popup_government_dialog(void)
       j++;
 
     }
-  } governments_iterate_end;
+  } government_iterate_end;
 
   pGov_Dlg->pBeginWidgetList = pGov_Button;
 
@@ -2522,27 +2526,27 @@ static int change_sex_callback(struct widget *pSex)
 static int next_name_callback(struct widget *pNext)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
+    int dim;
     struct NAT *pSetup = (struct NAT *)(pNationDlg->pEndWidgetList->data.ptr);
-    const struct nation_leader_list *leaders =
-        nation_leaders(nation_by_number(pSetup->nation));
-    const struct nation_leader *pleader;
-
+    struct nation_leader *leaders = get_nation_leaders(nation_by_number(pSetup->nation), &dim);
+      
     pSetup->selected_leader++;
-    pleader = nation_leader_list_get(leaders, pSetup->selected_leader);
-
+    
     /* change leadaer sex */
-    if (pSetup->leader_sex != nation_leader_is_male(pleader)) {
+    if (pSetup->leader_sex != leaders[pSetup->selected_leader].is_male) {
       change_sex_callback(NULL);
     }
-
+      
     /* change leadaer name */
     copy_chars_to_string16(pSetup->pName_Edit->string16,
-                           nation_leader_name(pleader));
+                                  leaders[pSetup->selected_leader].name);
     
     FC_FREE(pLeaderName);
-    pLeaderName = fc_strdup(nation_leader_name(pleader));
-
-    if (nation_leader_list_size(leaders) - 1 == pSetup->selected_leader) {
+    pLeaderName = fc_calloc(1, strlen(leaders[pSetup->selected_leader].name) + 1);
+    mystrlcpy(pLeaderName, leaders[pSetup->selected_leader].name,
+                         strlen(leaders[pSetup->selected_leader].name) + 1);
+    
+    if ((dim - 1) == pSetup->selected_leader) {
       set_wstate(pSetup->pName_Next, FC_WS_DISABLED);
     }
   
@@ -2577,26 +2581,26 @@ static int next_name_callback(struct widget *pNext)
 static int prev_name_callback(struct widget *pPrev)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
+    int dim;
     struct NAT *pSetup = (struct NAT *)(pNationDlg->pEndWidgetList->data.ptr);
-    const struct nation_leader_list *leaders =
-        nation_leaders(nation_by_number(pSetup->nation));
-    const struct nation_leader *pleader;
-
+    struct nation_leader *leaders = get_nation_leaders(nation_by_number(pSetup->nation), &dim);
+      
     pSetup->selected_leader--;
-    pleader = nation_leader_list_get(leaders, pSetup->selected_leader);
-
+  
     /* change leadaer sex */
-    if (pSetup->leader_sex != nation_leader_is_male(pleader)) {
+    if (pSetup->leader_sex != leaders[pSetup->selected_leader].is_male) {
       change_sex_callback(NULL);
     }
-
+    
     /* change leadaer name */
     copy_chars_to_string16(pSetup->pName_Edit->string16,
-                           nation_leader_name(pleader));
-
+                                  leaders[pSetup->selected_leader].name);
+    
     FC_FREE(pLeaderName);
-    pLeaderName = fc_strdup(nation_leader_name(pleader));
-
+    pLeaderName = fc_calloc(1, strlen(leaders[pSetup->selected_leader].name) + 1);
+    mystrlcpy(pLeaderName, leaders[pSetup->selected_leader].name,
+                         strlen(leaders[pSetup->selected_leader].name) + 1);
+    
     if (!pSetup->selected_leader) {
       set_wstate(pSetup->pName_Prev, FC_WS_DISABLED);
     }
@@ -2867,21 +2871,22 @@ static void change_nation_label(void)
 **************************************************************************/
 static void select_random_leader(Nation_type_id nation)
 {
+  int dim;
   struct NAT *pSetup = (struct NAT *)(pNationDlg->pEndWidgetList->data.ptr);
-  const struct nation_leader_list *leaders =
-      nation_leaders(nation_by_number(pSetup->nation));
-  const struct nation_leader *pleader;
-
-  pSetup->selected_leader = fc_rand(nation_leader_list_size(leaders));
-  pleader = nation_leader_list_get(leaders, pSetup->selected_leader);
+  struct nation_leader *leaders = get_nation_leaders(nation_by_number(nation), &dim);
+  
+    
+  pSetup->selected_leader = myrand(dim);
   copy_chars_to_string16(pSetup->pName_Edit->string16,
-                         nation_leader_name(pleader));
-
+  				leaders[pSetup->selected_leader].name);
+  
   FC_FREE(pLeaderName);
-  pLeaderName = fc_strdup(nation_leader_name(pleader));
-
+  pLeaderName = fc_calloc(1, strlen(leaders[pSetup->selected_leader].name) + 1);
+  mystrlcpy(pLeaderName, leaders[pSetup->selected_leader].name,
+                       strlen(leaders[pSetup->selected_leader].name) + 1);
+  
   /* initialize leader sex */
-  pSetup->leader_sex = nation_leader_is_male(pleader);
+  pSetup->leader_sex = leaders[pSetup->selected_leader].is_male;
 
   if (pSetup->leader_sex) {
     copy_chars_to_string16(pSetup->pChange_Sex->string16, _("Male"));
@@ -2893,25 +2898,22 @@ static void select_random_leader(Nation_type_id nation)
   set_wstate(pSetup->pName_Prev, FC_WS_DISABLED);
   set_wstate(pSetup->pName_Next, FC_WS_DISABLED);
 
-  if (1 < nation_leader_list_size(leaders)) {
+  if (dim > 1) {
     /* if selected leader is not the first leader, enable "previous leader" button */
     if (pSetup->selected_leader > 0) {
       set_wstate(pSetup->pName_Prev, FC_WS_NORMAL);
     }
 
     /* if selected leader is not the last leader, enable "next leader" button */
-    if (pSetup->selected_leader < (nation_leader_list_size(leaders) - 1)) {
+    if (pSetup->selected_leader < (dim - 1)) {
       set_wstate(pSetup->pName_Next, FC_WS_NORMAL);
     }
   }
   
 }
 
-/**************************************************************************
-  ...
-**************************************************************************/
-static int get_playable_nation_count(void)
-{
+static int get_playable_nation_count() {
+ 
   int playable_nation_count = 0;
     
   nations_iterate(pnation) {
@@ -3057,7 +3059,7 @@ void popup_races_dialog(struct player *pplayer)
     
   /* nation name */
   
-  pSetup->nation = fc_rand(get_playable_nation_count());
+  pSetup->nation = myrand(get_playable_nation_count());
   pSetup->nation_city_style = city_style_of_nation(nation_by_number(pSetup->nation));
   
   copy_chars_to_string16(pStr, nation_plural_translation(nation_by_number(pSetup->nation)));
@@ -3323,9 +3325,10 @@ void races_toggles_set_sensitive()
   nations_iterate(nation) {
   
     if (!nation->is_available || nation->player) {
-      log_debug("  [%d]: %d = %s", nation_index(nation),
-                (!nation->is_available || nation->player),
-                nation_rule_name(nation));
+      freelog(LOG_DEBUG,"  [%d]: %d = %s",
+	      nation_index(nation),
+	      (!nation->is_available || nation->player),
+	      nation_rule_name(nation));
 
       pNat = get_widget_pointer_form_main_list(MAX_ID - nation_index(nation));
       set_wstate(pNat, FC_WS_DISABLED);
@@ -3338,7 +3341,7 @@ void races_toggles_set_sensitive()
   
   if (change) {
     do {
-      pSetup->nation = fc_rand(get_playable_nation_count());
+      pSetup->nation = myrand(get_playable_nation_count());
       pNat = get_widget_pointer_form_main_list(MAX_ID - pSetup->nation);
     } while(get_wstate(pNat) == FC_WS_DISABLED);
     if (get_wstate(pSetup->pName_Edit) == FC_WS_PRESSED) {

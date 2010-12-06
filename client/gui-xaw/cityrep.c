@@ -15,6 +15,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -165,7 +166,7 @@ static char *get_city_table_header(void)
 /****************************************************************
 ...
 ****************************************************************/
-void city_report_dialog_popup(bool make_modal)
+void popup_city_report_dialog(bool make_modal)
 {
   if(!city_dialog_shell) {
       Position x, y;
@@ -195,7 +196,7 @@ void city_report_dialog_popup(bool make_modal)
 /****************************************************************
   Closes the cityrep dialog.
 ****************************************************************/
-void city_report_dialog_popdown(void)
+void popdown_city_report_dialog(void)
 {
   if (city_dialog_shell) {
     if (city_dialog_shell_is_modal) {
@@ -307,7 +308,7 @@ void create_city_report_dialog(bool make_modal)
 	 XtParseTranslationTable("<Message>WM_PROTOCOLS: msg-close-city-report()"));
   }
 
-  real_city_report_dialog_update();
+  city_report_dialog_update();
 }
 
 /****************************************************************
@@ -441,10 +442,10 @@ void city_refresh_callback(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-void city_close_callback(Widget w, XtPointer client_data,
-                         XtPointer call_data)
+void city_close_callback(Widget w, XtPointer client_data, 
+			 XtPointer call_data)
 {
-  city_report_dialog_popdown();
+  popdown_city_report_dialog();
 }
 
 /****************************************************************
@@ -502,9 +503,9 @@ void city_config_callback(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-void real_city_report_dialog_update(void)
+void city_report_dialog_update(void)
 {
-  if (!client_has_player()) {
+  if (NULL == client.conn.playing || is_report_dialogs_frozen()) {
     return;
   }
 
@@ -516,13 +517,13 @@ void real_city_report_dialog_update(void)
     const char *report_title;
 
     n = city_list_size(client.conn.playing->cities);
-    log_debug("%d cities in report", n);
+    freelog(LOG_DEBUG, "%d cities in report", n);
     if(n_alloc == 0 || n > n_alloc) {
       int j, n_prev = n_alloc;
       
       n_alloc *= 2;
       if (!n_alloc || n_alloc < n) n_alloc = n + 1;
-      log_debug("city report n_alloc increased to %d", n_alloc);
+      freelog(LOG_DEBUG, "city report n_alloc increased to %d", n_alloc);
       cities_in_list = fc_realloc(cities_in_list,
 				  n_alloc*sizeof(*cities_in_list));
       city_list_text = fc_realloc(city_list_text, n_alloc*sizeof(char*));
@@ -550,14 +551,14 @@ void real_city_report_dialog_update(void)
     city_list_iterate(client.conn.playing->cities, pcity) {
       cities_in_list[i++] = pcity;
     } city_list_iterate_end;
-    fc_assert(i==n);
+    assert(i==n);
     qsort(cities_in_list, n, sizeof(struct city*), city_name_compare);
     for(i=0; i<n; i++) {
       get_city_text(cities_in_list[i], city_list_text[i], MAX_LEN_CITY_TEXT);
     }
     i = n;
     if(!n) {
-      fc_strlcpy(city_list_text[0], 
+      mystrlcpy(city_list_text[0], 
 		"                                                             ",
 		MAX_LEN_CITY_TEXT);
       i=1;
@@ -586,13 +587,12 @@ void real_city_report_dialog_update(void)
 /****************************************************************
   Update the text for a single city in the city report
 *****************************************************************/
-void real_city_report_update_city(struct city *pcity)
+void city_report_dialog_update_city(struct city *pcity)
 {
   int i;
 
-  if (!city_dialog_shell) {
-    return;
-  }
+  if(is_report_dialogs_frozen()) return;
+  if(!city_dialog_shell) return;
 
   for(i=0; cities_in_list[i]; i++)  {
     if(cities_in_list[i]==pcity)  {
@@ -607,7 +607,7 @@ void real_city_report_update_city(struct city *pcity)
       }
       get_city_text(pcity, new_city_line, sizeof(new_city_line));
       if(strcmp(new_city_line, list[i])==0) return; /* no change */
-      fc_strlcpy(list[i], new_city_line, MAX_LEN_CITY_TEXT);
+      mystrlcpy(list[i], new_city_line, MAX_LEN_CITY_TEXT);
 
       /* It seems really inefficient to regenerate the whole list just to
          change one line.  It's also annoying to have to set the size
@@ -623,7 +623,7 @@ void real_city_report_update_city(struct city *pcity)
       return;
     }
   }
-  real_city_report_dialog_update();
+  city_report_dialog_update();
 }
 
 /****************************************************************
@@ -699,7 +699,7 @@ void create_city_report_config_dialog(void)
   config_toggle = fc_realloc(config_toggle,
 			     NUM_CREPORT_COLS * sizeof(*config_toggle));
   for(i=0, spec=city_report_specs+i; i<NUM_CREPORT_COLS; i++, spec++) {
-    fc_snprintf(buf, sizeof(buf), "%-32s", spec->explanation);
+    my_snprintf(buf, sizeof(buf), "%-32s", spec->explanation);
     above = (i==1)?config_label:config_optlabel;
 
     config_optlabel = XtVaCreateManagedWidget("cityconfiglabel", 
@@ -753,7 +753,7 @@ void config_ok_command_callback(Widget w, XtPointer client_data,
     spec->show = (bool) b;
   }
   config_shell=0;
-  real_city_report_dialog_update();
+  city_report_dialog_update();
 }
 
 /**************************************************************************
@@ -1087,7 +1087,7 @@ static void chgall_refresh_command_callback(Widget w,
   state->fr_count = collect_currently_building_targets(targets);
   name_and_sort_items(targets, state->fr_count, items, false, NULL);
   for (i = 0; i < state->fr_count; i++) {
-    state->fr_list[i] = fc_strdup(items[i].descr);
+    state->fr_list[i] = mystrdup(items[i].descr);
     state->fr_cids[i] = cid_encode(items[i].item);
   }
   XawListChange(state->w.fr, state->fr_list, state->fr_count, 0, FALSE);
@@ -1095,7 +1095,7 @@ static void chgall_refresh_command_callback(Widget w,
   state->to_count = collect_buildable_targets(targets);
   name_and_sort_items(targets, state->to_count, items, TRUE, NULL);
   for (i = 0; i < state->to_count; i++) {
-    state->to_list[i] = fc_strdup(items[i].descr);
+    state->to_list[i] = mystrdup(items[i].descr);
     state->to_cids[i] = cid_encode(items[i].item);
   }
   XawListChange(state->w.to, state->to_list, state->to_count, 0, FALSE);

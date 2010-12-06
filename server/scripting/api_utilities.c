@@ -28,8 +28,7 @@
 ************************************************************************/
 int api_utilities_random(int min, int max)
 {
-  double roll = ((double) (fc_rand(MAX_UINT32) % MAX_UINT32)
-                 / (double) MAX_UINT32);
+  double roll = (double)(myrand(MAX_UINT32) % MAX_UINT32) / (double)MAX_UINT32;
 
   return (min + floor(roll * (max - min + 1)));
 }
@@ -39,7 +38,7 @@ int api_utilities_random(int min, int max)
 ************************************************************************/
 void api_utilities_error_log(const char *msg)
 {
-  log_error("%s", msg);
+  freelog(LOG_ERROR, "%s", msg);
 }
 
 /************************************************************************
@@ -47,5 +46,5 @@ void api_utilities_error_log(const char *msg)
 ************************************************************************/
 void api_utilities_debug_log(const char *msg)
 {
-  log_debug("%s", msg);
+  freelog(LOG_DEBUG, "%s", msg);
 }

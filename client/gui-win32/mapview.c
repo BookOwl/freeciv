@@ -173,7 +173,7 @@ update_info_label(void)
   char buffer2[512];
   char buffer[512];
   HDC hdc;
-  fc_snprintf(buffer, sizeof(buffer),
+  my_snprintf(buffer, sizeof(buffer),
 	      _("Population: %s\nYear: %s\nGold: %d\nTax: %d Lux: %d Sci: %d"),
 		population_to_text(civ_population(client.conn.playing)),
 		textyear( game.info.year ),
@@ -181,7 +181,7 @@ update_info_label(void)
 		client.conn.playing->economic.tax,
 		client.conn.playing->economic.luxury,
 		client.conn.playing->economic.science );
-  fc_snprintf(buffer2,sizeof(buffer2),
+  my_snprintf(buffer2,sizeof(buffer2),
 	      "%s\n%s",
 	      nation_adjective_for_player(client.conn.playing),
 	      buffer);
@@ -506,7 +506,7 @@ void overview_expose(HDC hdc)
 	RECT rc;
 	draw_sprite(radar_gfx_sprite,hdc,overview_win_x,overview_win_y);
 	SetBkMode(hdc,TRANSPARENT);
-	fc_snprintf(s, sizeof(s), "%d.%d.%d%s",
+	my_snprintf(s, sizeof(s), "%d.%d.%d%s",
 		    MAJOR_VERSION, MINOR_VERSION,
 		    PATCH_VERSION, VERSION_LABEL);
 	DrawText(hdc, word_version(), strlen(word_version()), &rc, DT_CALCRECT);
@@ -610,12 +610,4 @@ void tileset_changed(void)
   init_fog_bmp();
   map_canvas_resized(mapview.width, mapview.height);
   citydlg_tileset_change();
-}
-
-/**************************************************************************
- Sets the position of the overview scroll window based on mapview position.
-**************************************************************************/
-void update_overview_scroll_window_pos(int x, int y)
-{
-  /* TODO: PORTME. */
 }

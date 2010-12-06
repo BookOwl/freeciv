@@ -64,7 +64,7 @@ void start_page_start_callback(Widget w, XtPointer client_data,
 /***************************************************************************
   Returns current client page
 ***************************************************************************/
-enum client_pages get_current_client_page(void)
+enum client_pages get_client_page(void)
 {
   return old_page;
 }
@@ -73,7 +73,7 @@ enum client_pages get_current_client_page(void)
   Sets the "page" that the client should show.  See documentation in
   pages_g.h.
 **************************************************************************/
-void real_set_client_page(enum client_pages page)
+void set_client_page(enum client_pages page)
 {
   /* PORTME, PORTME, PORTME */
   switch (page) {
@@ -88,7 +88,6 @@ void real_set_client_page(enum client_pages page)
     break;
   case PAGE_START:
     popup_start_page();
-    conn_list_dialog_update();
     break;
   case PAGE_SCENARIO:
   case PAGE_LOAD:
@@ -218,7 +217,7 @@ void update_start_page(void)
   if (!start_page_shell) {
     return;
   }
-  if (client_has_player() && C_S_RUNNING != client_state()) {
+  if (C_S_RUNNING != client_state()) {
     bool is_ready;
     const char *name, *nation, *leader;
     static char *namelist_ptrs[MAX_NUM_PLAYERS];
@@ -227,14 +226,13 @@ void update_start_page(void)
     Dimension width, height;
 
     j = 0;
-
     players_iterate(pplayer) {
-      if (pplayer->ai_controlled) {
+      if (pplayer->ai_data.control) {
 	name = _("<AI>");
       } else {
 	name = pplayer->username;
       }
-      is_ready = pplayer->ai_controlled ? TRUE: pplayer->is_ready;
+      is_ready = pplayer->ai_data.control ? TRUE: pplayer->is_ready;
       if (pplayer->nation == NO_NATION_SELECTED) {
 	nation = _("Random");
 	leader = "";
@@ -243,7 +241,7 @@ void update_start_page(void)
 	leader = player_name(pplayer);
       }
 
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 		  "%-16s %-5s %-16s %-16s %4d",
 		  name,
 		  is_ready ? " Yes " : " No  ",
@@ -262,7 +260,7 @@ void update_start_page(void)
       nation = "";
       leader = "";
 
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 		  "%-16s %-5s %-16s %-16s %4d",
 		  name,
 		  " No   ",

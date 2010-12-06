@@ -18,66 +18,53 @@
 
 #include "tech.h"
 
-#define MAX_NUM_TEAM_SLOTS MAX_NUM_PLAYER_SLOTS
+#define MAX_NUM_TEAMS (MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS)
 
-/* Opaque types. */
-struct team;
-struct team_slot;
+struct team {
+  Team_type_id item_number;
+  int players; /* # of players on the team */
+  
+  struct player_research research;
+};
 
-/* General team slot accessor functions. */
-void team_slots_init(void);
-bool team_slots_initialised(void);
-void team_slots_free(void);
-int team_slot_count(void);
+/* General team accessor functions. */
+Team_type_id team_count(void);
+Team_type_id team_index(const struct team *pteam);
+Team_type_id team_number(const struct team *pteam);
 
-struct team_slot *team_slot_first(void);
-struct team_slot *team_slot_next(struct team_slot *tslot);
+struct team *team_by_number(const Team_type_id id);
+struct team *find_team_by_rule_name(const char *team_name);
 
-/* Team slot accessor functions. */
-int team_slot_index(const struct team_slot *tslot);
-struct team *team_slot_get_team(const struct team_slot *tslot);
-bool team_slot_is_used(const struct team_slot *tslot);
-struct team_slot *team_slot_by_number(int team_id);
-struct team_slot *team_slot_by_rule_name(const char *team_name);
-const char *team_slot_rule_name(const struct team_slot *tslot);
-const char *team_slot_name_translation(const struct team_slot *tslot);
-const char *team_slot_defined_name(const struct team_slot *tslot);
-void team_slot_set_defined_name(struct team_slot *tslot, const char *team_name);
-
-/* Team accessor functions. */
-struct team *team_new(struct team_slot *tslot);
-void team_destroy(struct team *pteam);
-int team_count(void);
-int team_index(const struct team *pteam);
-int team_number(const struct team *pteam);
-struct team *team_by_number(const int team_id);
 const char *team_rule_name(const struct team *pteam);
-const char *team_name_translation(const struct team *pteam);
-int team_pretty_name(const struct team *pteam, char *buf, size_t buf_len);
-
-const struct player_list *team_members(const struct team *pteam);
+const char *team_name_translation(struct team *pteam);
 
 /* Ancillary routines */
 void team_add_player(struct player *pplayer, struct team *pteam);
 void team_remove_player(struct player *pplayer);
 
-/* iterate over all team slots */
-#define team_slots_iterate(_tslot)                                          \
-  if (team_slots_initialised()) {                                           \
-    struct team_slot *_tslot = team_slot_first();                           \
-    for (; NULL != _tslot; _tslot = team_slot_next(_tslot)) {
-#define team_slots_iterate_end                                              \
-    }                                                                       \
-  }
+struct team *find_empty_team(void);
 
-/* iterate over all teams, which are used at the moment */
-#define teams_iterate(_pteam)                                               \
-  team_slots_iterate(_tslot) {                                              \
-    if (!team_slot_is_used(_tslot)) {                                       \
-      continue;                                                             \
-    }                                                                       \
-    struct team *_pteam = team_slot_get_team(_tslot);
-#define teams_iterate_end                                                   \
-  } team_slots_iterate_end;
+/* Initialization and iteration */
+void teams_init(void);
+
+struct team *team_array_first(void);
+const struct team *team_array_last(void);
+
+/* This is different than other iterators.  It always does the entire
+ * list, but skips unused entries.
+ */
+#define team_iterate(_p)						\
+{									\
+  struct team *_p = team_array_first();					\
+  if (NULL != _p) {							\
+    for (; _p <= team_array_last(); _p++) {				\
+      if (_p->players == 0) {						\
+	continue;							\
+      }
+
+#define team_iterate_end						\
+    }									\
+  }									\
+}
 
 #endif /* FC__TEAM_H */

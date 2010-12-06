@@ -33,6 +33,7 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -78,30 +79,6 @@ struct fz_FILE_s {
   } u;
 };
 
-/****************************************************************************
-  Validate the compression method.
-****************************************************************************/
-static inline bool fz_method_is_valid(enum fz_method method)
-{
-  switch (method) {
-  case FZ_PLAIN:
-#ifdef HAVE_LIBZ
-  case FZ_ZLIB:
-#endif
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-#endif
-    return TRUE;
-  }
-  return FALSE;
-}
-
-#define fz_method_validate(method)                                          \
-    (fz_method_is_valid(method) ? method                                    \
-     : (fc_assert_msg(TRUE == fz_method_is_valid(method),                   \
-                      "Unsupported compress method %d, reverting to plain.",\
-                      method), FZ_PLAIN))
-
 /***************************************************************
   Open file for reading/writing, like fopen.
   Parameters compress_method and compress_level only apply
@@ -127,6 +104,20 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
   if (mode[0] == 'w') {
     /* Writing: */
     fp->mode = 'w';
+
+#ifndef HAVE_LIBZ
+    if (method == FZ_ZLIB) {
+      freelog(LOG_ERROR, "Not compiled with zlib support, reverting to plain.");
+      method = FZ_PLAIN;
+    }
+#endif
+#ifndef HAVE_LIBBZ2
+    if (method == FZ_BZIP2) {
+      freelog(LOG_ERROR, "Not compiled with bzib2 support, reverting to plain.");
+      method = FZ_PLAIN;
+    }
+#endif
+
   } else {
     /* Reading: ignore specified method and try best: */
     fp->mode = 'r';
@@ -197,7 +188,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
 #endif
   }
 
-  fp->method = fz_method_validate(method);
+  fp->method = method;
 
   switch (fp->method) {
 #ifdef HAVE_LIBBZ2
@@ -207,7 +198,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
     fp->u.bz2.plain = fc_fopen(filename, mode);
     if (fp->u.bz2.plain) {
       /*  Open for read handled earlier */
-      fc_assert_ret_val('w' == mode[0], NULL);
+      assert(mode[0] == 'w');
       fp->u.bz2.file = BZ2_bzWriteOpen(&fp->u.bz2.error, fp->u.bz2.plain,
                                        compress_level, 1, 15);
       if (fp->u.bz2.error != BZ_OK) {
@@ -224,7 +215,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       free(fp);
       fp = NULL;
     }
-    return fp;
+    break;
 #endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
@@ -238,7 +229,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       free(fp);
       fp = NULL;
     }
-    return fp;
+    break;
 #endif
   case FZ_PLAIN:
     fp->u.plain = fc_fopen(filename, mode);
@@ -246,14 +237,12 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       free(fp);
       fp = NULL;
     }
-    return fp;
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fromFile method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  free(fp);
-  return NULL;
+  return fp;
 }
 
 /***************************************************************
@@ -283,40 +272,41 @@ fz_FILE *fz_from_stream(FILE *stream)
 ***************************************************************/
 int fz_fclose(fz_FILE *fp)
 {
-  int error;
-
-  fc_assert_ret_val(NULL != fp, 1);
-
-  switch (fz_method_validate(fp->method)) {
+  int retval = 0;
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
-    if ('w' == fp->mode) {
+    if(fp->mode == 'w') {
       BZ2_bzWriteClose(&fp->u.bz2.error, fp->u.bz2.file, 0, NULL, NULL);
     } else {
       BZ2_bzReadClose(&fp->u.bz2.error, fp->u.bz2.file);
     }
-    error = fp->u.bz2.error;
+    if(fp->u.bz2.error == BZ_OK) {
+      retval = 0;
+    } else {
+      retval = 1;
+    }
     fclose(fp->u.bz2.plain);
-    free(fp);
-    return BZ_OK == error ? 0 : 1;
+    break;
 #endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    error = gzclose(fp->u.zlib);
-    free(fp);
-    return 0 > error ? error : 0; /* Only negative Z values are errors. */
+    retval = gzclose(fp->u.zlib);
+    if (retval > 0) {
+      retval = 0;		/* only negative Z values are errors */
+    }
+    break;
 #endif
   case FZ_PLAIN:
-    error = fclose(fp->u.plain);
-    free(fp);
-    return error;
+    retval = fclose(fp->u.plain);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fclose method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
   free(fp);
-  return 1;
+  return retval;
 }
 
 /***************************************************************
@@ -326,13 +316,12 @@ int fz_fclose(fz_FILE *fp)
 ***************************************************************/
 char *fz_fgets(char *buffer, int size, fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, NULL);
-
-  switch (fz_method_validate(fp->method)) {
+  char *retval = NULL;
+  
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
-      char *retval = NULL;
       int i = 0;
       int last_read;
 
@@ -368,21 +357,22 @@ char *fz_fgets(char *buffer, int size, fz_FILE *fp)
         }
       }
       buffer[i] = '\0';
-      return retval;
+      break;
     }
 #endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    return gzgets(fp->u.zlib, buffer, size);
+    retval = gzgets(fp->u.zlib, buffer, size);
+    break;
 #endif
   case FZ_PLAIN:
-    return fgets(buffer, size, fp->u.plain);
+    retval = fgets(buffer, size, fp->u.plain);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fgets method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return NULL;
+  return retval;
 }
 
 /***************************************************************
@@ -398,58 +388,54 @@ char *fz_fgets(char *buffer, int size, fz_FILE *fp)
 ***************************************************************/
 int fz_fprintf(fz_FILE *fp, const char *format, ...)
 {
-  int num;
   va_list ap;
+  int retval = 0;
+  
+  va_start(ap, format);
 
-  fc_assert_ret_val(NULL != fp, 0);
-
-  switch (fz_method_validate(fp->method)) {
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
       char buffer[65536];
-
-      va_start(ap, format);
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
-      va_end(ap);
+      int num;
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
       BZ2_bzWrite(&fp->u.bz2.error, fp->u.bz2.file, buffer, strlen(buffer));
       if (fp->u.bz2.error != BZ_OK) {
-        return 0;
+        retval = 0;
       } else {
-        return strlen(buffer);
+        retval = strlen(buffer);
       }
     }
+    break;
 #endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     {
       char buffer[65536];
-
-      va_start(ap, format);
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
-      va_end(ap);
+      int num;
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
-      return gzwrite(fp->u.zlib, buffer, (unsigned int)strlen(buffer));
+      retval = gzwrite(fp->u.zlib, buffer, (unsigned int)strlen(buffer));
     }
+    break;
 #endif
   case FZ_PLAIN:
-    va_start(ap, format);
-    num = vfprintf(fp->u.plain, format, ap);
-    va_end(ap);
-    return num;
+    retval = vfprintf(fp->u.plain, format, ap);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fprintf method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return 0;
+  va_end(ap);
+  return retval;
 }
 
 /***************************************************************
@@ -458,32 +444,35 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
 ***************************************************************/
 int fz_ferror(fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, 0);
+  int retval = 0;
 
-  switch (fz_method_validate(fp->method)) {
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
-    return (BZ_OK != fp->u.bz2.error
-            && BZ_STREAM_END != fp->u.bz2.error);
+    if (fp->u.bz2.error != BZ_OK &&
+        fp->u.bz2.error != BZ_STREAM_END) {
+      retval = 1;
+    } else {
+      retval = 0;
+    }
+    break;
 #endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    {
-      int error;
-
-      (void) gzerror(fp->u.zlib, &error); /* Ignore string result here. */
-      return 0 > error ? error : 0; /* Only negative Z values are errors. */
+    (void) gzerror(fp->u.zlib, &retval);	/* ignore string result here */
+    if (retval > 0) {
+      retval = 0;		/* only negative Z values are errors */
     }
+    break;
 #endif
   case FZ_PLAIN:
-    return ferror(fp->u.plain);
+    retval = ferror(fp->u.plain);
     break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_ferror method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return 0;
+  return retval;
 }
 
 /***************************************************************
@@ -496,14 +485,14 @@ int fz_ferror(fz_FILE *fp)
 ***************************************************************/
 const char *fz_strerror(fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, NULL);
-
-  switch (fz_method_validate(fp->method)) {
+  const char *retval = 0;
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
       static char bzip2error[50];
-      const char *cleartext = NULL;
+      char *cleartext = NULL;
 
       /* Rationale for translating these:
        * - Some of them provide usable information to user
@@ -511,59 +500,60 @@ const char *fz_strerror(fz_FILE *fp)
        */
       switch(fp->u.bz2.error) {
        case BZ_OK:
-         cleartext = Q_("?bzip2error:OK");
+         cleartext = _("OK");
          break;
        case BZ_RUN_OK:
-         cleartext = Q_("?bzip2error:Run ok");
+         cleartext = _("Run ok");
          break;
        case BZ_FLUSH_OK:
-         cleartext = Q_("?bzip2error:Flush ok");
+         cleartext = _("Flush ok");
          break;
        case BZ_FINISH_OK:
-         cleartext = Q_("?bzip2error:Finish ok");
+         cleartext = _("Finish ok");
          break;
        case BZ_STREAM_END:
-         cleartext = Q_("?bzip2error:Stream end");
+         cleartext = _("Stream end");
          break;
        case BZ_CONFIG_ERROR:
-         cleartext = Q_("?bzip2error:Config error");
+         cleartext = _("Config error");
          break;
        case BZ_SEQUENCE_ERROR:
-         cleartext = Q_("?bzip2error:Sequence error");
+         cleartext = _("Sequence error");
          break;
        case BZ_PARAM_ERROR:
-         cleartext = Q_("?bzip2error:Parameter error");
+         cleartext = _("Parameter error");
          break;
        case BZ_MEM_ERROR:
-         cleartext = Q_("?bzip2error:Mem error");
+         cleartext = _("Mem error");
          break;
        case BZ_DATA_ERROR:
-         cleartext = Q_("?bzip2error:Data error");
+         cleartext = _("Data error");
          break;
        case BZ_DATA_ERROR_MAGIC:
-         cleartext = Q_("?bzip2error:Not bzip2 file");
+         cleartext = _("Not bzip2 file");
          break;
        case BZ_IO_ERROR:
-         cleartext = Q_("?bzip2error:IO error");
+         cleartext = _("IO error");
          break;
        case BZ_UNEXPECTED_EOF:
-         cleartext = Q_("?bzip2error:Unexpected EOF");
+         cleartext = _("Unexpected EOF");
          break;
        case BZ_OUTBUFF_FULL:
-         cleartext = Q_("?bzip2error:Output buffer full");
+         cleartext = _("Output buffer full");
          break;
        default:
          break;
       }
 
       if (cleartext != NULL) {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
                     cleartext, fp->u.bz2.error);
       } else {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
                     fp->u.bz2.error);
       }
-      return bzip2error;
+      retval = bzip2error;
+      break;
     }
 #endif
 #ifdef HAVE_LIBZ
@@ -571,16 +561,20 @@ const char *fz_strerror(fz_FILE *fp)
     {
       int errnum;
       const char *estr = gzerror(fp->u.zlib, &errnum);
-
-      return Z_ERRNO == errnum ? fc_strerror(fc_get_errno()) : estr;
+      if (errnum == Z_ERRNO) {
+	retval = fc_strerror(fc_get_errno());
+      } else {
+	retval = estr;
+      }
     }
+    break;
 #endif
   case FZ_PLAIN:
-    return fc_strerror(fc_get_errno());
+    retval = fc_strerror(fc_get_errno());
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_strerror method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return NULL;
+  return retval;
 }

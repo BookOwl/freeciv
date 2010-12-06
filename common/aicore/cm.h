@@ -26,11 +26,8 @@
  * the weighted sum over the surplus of each type.
  */
 
-/* utility */
-#include "support.h"            /* bool type */
-
-/* common */
-#include "city.h"               /* CITY_MAP_MAX_SIZE */
+#include "city.h"		/* CITY_MAP_SIZE */
+#include "shared.h"		/* bool type */
 
 /* A description of the goal. */
 struct cm_parameter {
@@ -49,18 +46,15 @@ struct cm_result {
 
   int surplus[O_LAST];
 
-  int city_radius_sq;
-  bool *worker_positions;
+  bool worker_positions_used[CITY_MAP_SIZE][CITY_MAP_SIZE];
   int specialists[SP_MAX];
 };
 
+
 void cm_init(void);
 void cm_init_citymap(void);
-void cm_clear_cache(struct city *pcity);
-void cm_free(void);
 
-struct cm_result *cm_result_new(struct city *pcity);
-void cm_result_destroy(struct cm_result *result);
+void cm_free(void);
 
 /*
  * Will try to meet the requirements and fill out the result. Caller
@@ -93,6 +87,5 @@ int cm_result_specialists(const struct cm_result *result);
 int cm_result_workers(const struct cm_result *result);
 
 void cm_result_from_main_map(struct cm_result *result,
-                             const struct city *pcity);
-
-#endif /* FC__CM_H */
+                             const struct city *pcity, bool main_map);
+#endif

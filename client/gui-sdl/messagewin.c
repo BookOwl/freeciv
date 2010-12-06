@@ -68,7 +68,7 @@ static int msg_callback(struct widget *pWidget)
     unsellect_widget_action();
 
     meswin_double_click(message_index);
-    meswin_set_visited_state(message_index, TRUE);
+    set_message_visited_state(message_index, TRUE);
   }
   
   return -1;
@@ -92,18 +92,18 @@ static int move_msg_window_callback(struct widget *pWindow)
 /**************************************************************************
  ...
 **************************************************************************/
-void real_meswin_dialog_update(void)
+void real_update_meswin_dialog(void)
 {
   int msg_count;
   int current_count;
-  const struct message *pMsg = NULL;
+  struct message *pMsg = NULL;
   struct widget *pBuf = NULL, *pWindow = NULL;
   SDL_String16 *pStr = NULL;
   SDL_Rect area = {0, 0, 0, 0};
   bool create;
   int label_width;
 
-  msg_count = meswin_get_num_messages();
+  msg_count = get_num_messages();
   current_count = pMsg_Dlg->pScroll->count;
   
   if (current_count > 0) {
@@ -129,7 +129,7 @@ void real_meswin_dialog_update(void)
   if (msg_count > 0) {
     for(; current_count < msg_count; current_count++)
     {
-      pMsg = meswin_get_message(current_count);
+      pMsg = get_message(current_count);
       pStr = create_str16_from_char(pMsg->descr , PTSIZE_LOG_FONT);
 
       if (convert_string_to_const_surface_width(pStr, label_width - adj_size(10))) {
@@ -229,7 +229,7 @@ void real_meswin_dialog_update(void)
 /**************************************************************************
   Popup (or raise) the message dialog; typically triggered by 'F9'.
 **************************************************************************/
-void meswin_dialog_popup(bool raise)
+void popup_meswin_dialog(bool raise)
 {
   SDL_String16 *pStr;
   int scrollbar_width;
@@ -288,14 +288,14 @@ void meswin_dialog_popup(bool raise)
   widget_set_position(pWindow, (Main.screen->w - pWindow->size.w)/2, adj_size(25));
 
   widget_redraw(pWindow);
-
-  real_meswin_dialog_update();
+  
+  real_update_meswin_dialog();  
 }
 
-/****************************************************************************
+/**************************************************************************
   Popdown the messages dialog; called by void popdown_all_game_dialogs(void)
-****************************************************************************/
-void meswin_dialog_popdown(void)
+**************************************************************************/
+void popdown_meswin_dialog(void)
 {
   if(pMsg_Dlg) {
     popdown_window_group_dialog(pMsg_Dlg->pBeginWidgetList,
@@ -309,7 +309,7 @@ void meswin_dialog_popdown(void)
 /**************************************************************************
   Return whether the message dialog is open.
 **************************************************************************/
-bool meswin_dialog_is_open(void)
+bool is_meswin_open(void)
 {
   return (pMsg_Dlg != NULL);
 }

@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-2.3-tilespec"
+options = "+tilespec4+2007.Oct.26"
 
 ; A simple name for the tileset specified by this file:
 name = "amplio"
@@ -70,8 +70,8 @@ files =
   "misc/small.spec",
   "amplio/units.spec",
   "misc/flags.spec",
-  "misc/buildings-large.spec",
-  "misc/wonders-large.spec",
+  "amplio/buildings.spec",
+  "amplio/wonders.spec",
   "misc/space.spec",
   "misc/techs.spec",
   "misc/treaty.spec",
@@ -88,7 +88,7 @@ files =
   "misc/citybar.spec",
   "misc/shields.spec",
   "misc/editor.spec",
-  "misc/icons.spec"
+  "amplio/icons.spec"
 
 
 ; Include color definitions

@@ -13,10 +13,6 @@
 #ifndef FC__EDITPROP_H
 #define FC__EDITPROP_H
 
-/* client */
-#include "editor.h"
-
-/* client/include */
 #include "editgui_g.h"
 
 struct tile_list;
@@ -25,13 +21,11 @@ struct property_editor;
 void property_editor_clear(struct property_editor *pe);
 void property_editor_load_tiles(struct property_editor *pe,
                                 const struct tile_list *tiles);
-void property_editor_reload(struct property_editor *pe,
-                            enum editor_object_type objtype);
-void property_editor_popup(struct property_editor *pe,
-                           enum editor_object_type objtype);
+void property_editor_reload(struct property_editor *pe, int objtype);
+void property_editor_popup(struct property_editor *pe, int objtype);
 void property_editor_popdown(struct property_editor *pe);
 void property_editor_handle_object_changed(struct property_editor *pe,
-                                           enum editor_object_type objtype,
+                                           int objtype,
                                            int object_id,
                                            bool remove);
 void property_editor_handle_object_created(struct property_editor *pe,

@@ -13,7 +13,7 @@
 #ifndef FC__CITYREPDATA_H
 #define FC__CITYREPDATA_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 #include "fc_types.h"
 

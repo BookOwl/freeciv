@@ -15,8 +15,8 @@
 
 #include "repodlgs_g.h"
 
-void science_report_dialog_popdown(void);
-void economy_report_dialog_popdown(void);
-void units_report_dialog_popdown(void);
+void popdown_science_dialog(void);
+void popdown_economy_report_dialog(void);
+void popdown_activeunits_report_dialog(void);
 
 #endif  /* FC__REPODLGS_H */

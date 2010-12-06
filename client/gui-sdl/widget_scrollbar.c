@@ -497,9 +497,9 @@ Uint32 create_vertical_scrollbar(struct ADVANCED_DLG *pDlg,
 {
   Uint16 count = 0;
   struct widget *pBuf = NULL, *pWindow = NULL;
-
-  fc_assert_ret_val(pDlg != NULL, 0);
-
+    
+  assert(pDlg != NULL);
+  
   pWindow = pDlg->pEndWidgetList;
   
   if (!pDlg->pScroll) {
@@ -576,7 +576,7 @@ void setup_vertical_scrollbar_area(struct ScrollBar *pScroll,
 {
   bool buttons_exist;
   
-  fc_assert_ret(pScroll != NULL);
+  assert(pScroll != NULL);
   
   buttons_exist = (pScroll->pDown_Right_Button && pScroll->pUp_Left_Button);
   
@@ -1165,9 +1165,9 @@ bool add_widget_to_vertical_scroll_widget_list(struct ADVANCED_DLG *pDlg,
   int count = 0;
   bool last = FALSE, seen = TRUE;
   
-  fc_assert_ret_val(pNew_Widget != NULL, FALSE);
-  fc_assert_ret_val(pDlg != NULL, FALSE);
-  fc_assert_ret_val(pDlg->pScroll != NULL, FALSE);
+  assert(pNew_Widget != NULL);
+  assert(pDlg != NULL);
+  assert(pDlg->pScroll != NULL);
   
   if (!pAdd_Dock) {
     pAdd_Dock = pDlg->pBeginWidgetList; /* last item */
@@ -1249,7 +1249,9 @@ bool add_widget_to_vertical_scroll_widget_list(struct ADVANCED_DLG *pDlg,
   if (seen) {
     if(!pDlg->pBeginActiveWidgetList) {
       /* first element ( active list empty ) */
-      fc_assert_msg(FALSE == dir, "Forbided List Operation");
+      if(dir) {
+	die("Forbided List Operation");
+      }
       pNew_Widget->size.x = start_x;
       pNew_Widget->size.y = start_y;
       pDlg->pBeginActiveWidgetList = pNew_Widget;
@@ -1354,8 +1356,8 @@ bool del_widget_from_vertical_scroll_widget_list(struct ADVANCED_DLG *pDlg,
 {
   int count = 0;
   struct widget *pBuf = pWidget;
-  fc_assert_ret_val(pWidget != NULL, FALSE);
-  fc_assert_ret_val(pDlg != NULL, FALSE);
+  assert(pWidget != NULL);
+  assert(pDlg != NULL);
   
   /* if begin == end -> size = 1 */
   if (pDlg->pBeginActiveWidgetList == pDlg->pEndActiveWidgetList) {
@@ -1530,7 +1532,7 @@ STD:  while (pBuf != pWidget) {
 **************************************************************************/
 void setup_vertical_scrollbar_default_callbacks(struct ScrollBar *pScroll)
 {
-  fc_assert_ret(pScroll != NULL);
+  assert(pScroll != NULL);
   if(pScroll->pUp_Left_Button) {
     pScroll->pUp_Left_Button->action = std_up_advanced_dlg_callback;
   }
@@ -1557,7 +1559,7 @@ Uint32 create_horizontal_scrollbar(struct ADVANCED_DLG *pDlg,
   Uint16 count = 0;
   struct widget *pBuf = NULL, *pWindow = NULL;
     
-  fc_assert_ret_val(pDlg != NULL, 0);
+  assert(pDlg != NULL);
   
   pWindow = pDlg->pEndWidgetList;
   
