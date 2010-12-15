@@ -35,7 +35,6 @@
   current | (mapped to current savegame format)            | ----/--/-- |  0
           | first version (svn17538)                       | 2010/07/05 |  -
   2.3.0   | 2.3.0 release                                  | 2010/11/?? |  3
-  2.4.0   | 2.4.0 release (development)                    | 20../../.. | 10
           |                                                |            |
 
   Structure of this file:
@@ -549,23 +548,9 @@ void savegame2_save(struct section_file *file, const char *save_reason,
   struct timer *savetimer = new_timer_start(TIMER_CPU, TIMER_DEBUG);
 #endif
 
-  if (game.server.saveversion == -1) {
-    /* freeciv 2.2.x */
-    if (player_count() > 32) {
-      log_error("Error: freeciv 2.2.x can't handle more than 32 players.");
-    } else if (MAPSIZE_FULLSIZE != map.server.mapsize
-               || 30 < map.server.size) {
-      log_error("Error: freeciv 2.2.x can't handle bigger maps.");
-    } else {
-      log_verbose("saving game in old format ...");
-      game_save(file, save_reason, scenario);
-    }
-  } else {
-    /* freeciv 2.2.99 or newer */
-    log_verbose("saving game in new format ...");
-    savegame2_save_real(file, save_reason, scenario,
-                        game.server.saveversion);
-  }
+  /* freeciv 2.2.99 or newer */
+  log_verbose("saving game in new format ...");
+  savegame2_save_real(file, save_reason, scenario, game.server.saveversion);
 
 #ifdef DEBUG
   stop_timer(savetimer);
@@ -5250,28 +5235,6 @@ static void compat_save_020300(struct savedata *saving)
   log_debug("Save savegame version 2.3.0");
 }
 
-/****************************************************************************
-  ...
-****************************************************************************/
-static void compat_load_020400(struct loaddata *loading)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  log_debug("Load savegame version 2.4.0");
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-static void compat_save_020400(struct savedata *saving)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  log_debug("Save savegame version 2.4.0");
-}
-
 struct compatibility {
   int version;
   const struct sset_val_name name;
@@ -5288,18 +5251,12 @@ struct compatibility {
  * above and add the needed code to save/load the old version below. Thus,
  * old savegames can still be created and loaded while the main definition
  * represents the current state of the art. */
-/* While developing freeciv 2.4.0, add the compatibility functions to
- * - compat_load_020400 to load old savegame, and to
- * - compat_save_020400 to create an old savegame. */
 static struct compatibility compat[] = {
   /* dummy; equal to the current version (last element) */
   { 0, { "CURRENT", N_("current version") }, NULL, NULL },
   /* version 1 and 2 is not used */
   { 3, { "2.3.0", N_("freeciv 2.3.0") },
     compat_load_020300, compat_save_020300},
-  /* version 4 to 9 are reserves for possible changes in 2.3.x */
-  { 10, { "2.4.0", N_("freeciv 2.4.0 (development)") },
-    compat_load_020400, compat_save_020400},
   /* Current savefile version is listed above this line; it corresponds to
      the definitions in this file. */
 };

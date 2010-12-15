@@ -357,7 +357,6 @@ match=2
 *include "nation/scottish.ruleset"
 *include "nation/scythian.ruleset"
 *include "nation/seleucid.ruleset"
-*include "nation/seljuk.ruleset"
 *include "nation/senegalese.ruleset"
 *include "nation/serbian.ruleset"
 *include "nation/shawnee.ruleset"

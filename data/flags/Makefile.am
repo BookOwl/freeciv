@@ -314,7 +314,6 @@ flag_files =				\
 		scotland.png		\
 		scythia.png		\
 		seleucid.png		\
-		seljuk.png		\
 		senegal.png		\
 		serbia.png		\
 		shawnee.png		\
@@ -711,7 +710,6 @@ flag_files =				\
 		scotland-large.png		\
 		scythia-large.png		\
 		seleucid-large.png		\
-		seljuk-large.png		\
 		senegal-large.png		\
 		serbia-large.png		\
 		shawnee-large.png		\
@@ -1110,7 +1108,6 @@ shield_files =					\
 		scotland-shield.png		\
 		scythia-shield.png		\
 		seleucid-shield.png		\
-		seljuk-shield.png		\
 		senegal-shield.png		\
 		serbia-shield.png		\
 		shawnee-shield.png		\
@@ -1507,7 +1504,6 @@ shield_files =					\
 		scotland-shield-large.png		\
 		scythia-shield-large.png		\
 		seleucid-shield-large.png		\
-		seljuk-shield-large.png			\
 		senegal-shield-large.png		\
 		serbia-shield-large.png		\
 		shawnee-shield-large.png		\
