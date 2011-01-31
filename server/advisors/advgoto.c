@@ -26,7 +26,6 @@
 #include "path_finding.h"
 
 /* server */
-#include "maphand.h"
 #include "srv_log.h"
 #include "unithand.h"
 #include "unittools.h"
@@ -139,8 +138,8 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
   /* Try not to end move next to an enemy if we can avoid it by waiting */
   if (punit->moves_left <= map_move_cost_unit(punit, ptile)
       && unit_move_rate(punit) > map_move_cost_unit(punit, ptile)
-      && adv_danger_at(punit, ptile)
-      && !adv_danger_at(punit, punit->tile)) {
+      && enemies_at(punit, ptile)
+      && !enemies_at(punit, punit->tile)) {
     UNIT_LOG(LOG_DEBUG, punit, "ending move early to stay out of trouble");
     return FALSE;
   }
@@ -150,115 +149,4 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
   (void) unit_move_handling(punit, ptile, FALSE, TRUE);
 
   return TRUE;
-}
-
-/**************************************************************************
-  Similar to is_my_zoc(), but with some changes:
-  - destination (x0,y0) need not be adjacent?
-  - don't care about some directions?
-  
-  Note this function only makes sense for ground units.
-
-  Fix to bizarre did-not-find bug.  Thanks, Katvrr -- Syela
-**************************************************************************/
-static bool adv_could_be_my_zoc(struct unit *myunit, struct tile *ptile)
-{
-  fc_assert_ret_val(is_ground_unit(myunit), TRUE);
-
-  if (same_pos(ptile, myunit->tile))
-    return FALSE; /* can't be my zoc */
-  if (is_tiles_adjacent(ptile, myunit->tile)
-      && !is_non_allied_unit_tile(ptile, unit_owner(myunit)))
-    return FALSE;
-
-  adjc_iterate(ptile, atile) {
-    if (!is_ocean_tile(atile)
-	&& is_non_allied_unit_tile(atile, unit_owner(myunit))) {
-      return FALSE;
-    }
-  } adjc_iterate_end;
-  
-  return TRUE;
-}
-
-/**************************************************************************
-  returns:
-    0 if can't move
-    1 if zoc_ok
-   -1 if zoc could be ok?
-
-  see also unithand can_unit_move_to_tile_with_notify()
-**************************************************************************/
-int adv_could_unit_move_to_tile(struct unit *punit, struct tile *dest_tile)
-{
-  enum unit_move_result reason =
-      unit_move_to_tile_test(unit_type(punit), unit_owner(punit),
-                             ACTIVITY_IDLE, punit->tile, 
-                             dest_tile, unit_has_type_flag(punit, F_IGZOC));
-  switch (reason) {
-  case MR_OK:
-    return 1;
-
-  case MR_ZOC:
-    if (adv_could_be_my_zoc(punit, punit->tile)) {
-      return -1;
-    }
-    break;
-
-  default:
-    break;
-  };
-  return 0;
-}
-
-/**************************************************************************
-  Are there dangerous enemies at or adjacent to the tile 'ptile'?
-**************************************************************************/
-bool adv_danger_at(struct unit *punit, struct tile *ptile)
-{
-  int a = 0, d, db;
-  struct player *pplayer = unit_owner(punit);
-  struct city *pcity = tile_city(ptile);
-  enum danger_consideration dc = DANG_UNDECIDED;
-
-  /* Give AI code possibility to decide itself */
-  CALL_PLR_AI_FUNC(consider_dangerous, unit_owner(punit), ptile, punit, &dc);
-  if (dc == DANG_YES) {
-    return TRUE;
-  } else if (dc == DANG_NOT) {
-    return FALSE;
-  }
-
-  if (pcity && pplayers_allied(city_owner(pcity), unit_owner(punit))
-      && !is_non_allied_unit_tile(ptile, pplayer)) {
-    /* We will be safe in a friendly city */
-    return FALSE;
-  }
-
-  /* Calculate how well we can defend at (x,y) */
-  db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  if (tile_has_special(ptile, S_RIVER)) {
-    db += (db * terrain_control.river_defense_bonus) / 100;
-  }
-  d = unit_def_rating_basic_sq(punit) * db;
-
-  adjc_iterate(ptile, ptile1) {
-    if (!map_is_known_and_seen(ptile1, unit_owner(punit), V_MAIN)) {
-      /* We cannot see danger at (ptile1) => assume there is none */
-      continue;
-    }
-    unit_list_iterate(ptile1->units, enemy) {
-      if (pplayers_at_war(unit_owner(enemy), unit_owner(punit)) 
-          && can_unit_attack_unit_at_tile(enemy, punit, ptile)
-          && can_unit_attack_units_at_tile(enemy, ptile)) {
-        a += unit_att_rating(enemy);
-        if ((a * a * 10) >= d) {
-          /* The enemies combined strength is too big! */
-          return TRUE;
-        }
-      }
-    } unit_list_iterate_end;
-  } adjc_iterate_end;
-
-  return FALSE; /* as good a quick'n'dirty should be -- Syela */
 }

@@ -32,8 +32,7 @@
 #include "unit.h"
 
 /* scripting */
-#include "script_game.h"
-#include "script_types.h"
+#include "script.h"
 
 /* server */
 #include "citytools.h"
@@ -474,8 +473,6 @@ bool update_bulbs(struct player *plr, int bulbs, bool check_tech)
       notify_player(plr, NULL, E_TECH_GAIN, ftc_server,
                     _("Insufficient science output. We lost Future Tech. %d."),
                     research->future_tech);
-      log_debug("%s: tech loss (future tech %d)", player_name(plr),
-                research->future_tech);
       research->future_tech--;
     } else {
       Tech_type_id tech = pick_random_tech_researched(plr);
@@ -483,8 +480,6 @@ bool update_bulbs(struct player *plr, int bulbs, bool check_tech)
         notify_player(plr, NULL, E_TECH_GAIN, ftc_server,
                       _("Insufficient science output. We lost %s."),
                       advance_name_for_player(plr, tech));
-        log_debug("%s: tech loss (%s)", player_name(plr),
-                  advance_name_for_player(plr, tech));
         player_tech_lost(plr, tech);
       }
     }
@@ -783,11 +778,9 @@ void init_tech(struct player *plr, bool update)
   } advance_index_iterate_end;
 
 #ifdef TECH_UPKEEP_DEBUGGING
-  /* Print a list of the needed upkeep if 'i' techs are researched.
-   * If the ruleset contains self-rooted techs this can not work! */
+  /* Print a list of the needed upkeep if 'i' techs are researched. */
   {
     bool global_state[A_LAST];
-    Tech_type_id tech = A_LAST;
 
     /* Save the game research state. */
     advance_index_iterate(A_FIRST, i) {
@@ -795,42 +788,18 @@ void init_tech(struct player *plr, bool update)
     } advance_index_iterate_end;
 
     research->techs_researched = 1;
-    player_research_update(plr);
-
-    /* Show research costs. */
-    advance_index_iterate(A_NONE, i) {
-      log_debug("[player %d] %-25s (ID: %3d) cost: %6d - reachable: %-3s "
-                "(now) / %-3s (ever)", player_number(plr),
-                advance_rule_name(advance_by_number(i)), i,
-                base_total_bulbs_required(plr, i),
-                player_invention_reachable(plr, i, FALSE) ? "yes" : "no",
-                player_invention_reachable(plr, i, TRUE) ? "yes" : "no");
-    } advance_index_iterate_end;
 
     /* Update step for step each tech as known and print the upkeep. */
-    while (tech != A_NONE) {
-      tech = A_NONE;
-      advance_index_iterate(A_FIRST, i) {
-        if (player_invention_state(plr, i) == TECH_PREREQS_KNOWN) {
-          /* Found a tech which can be researched. */
-          tech = i;
-          break;
-        }
-      } advance_index_iterate_end;
+    advance_index_iterate(A_FIRST, i) {
+      research->inventions[i].state = TECH_KNOWN;
+      research->techs_researched++;
 
-      if (tech != A_NONE) {
-        research->inventions[tech].state = TECH_KNOWN;
-        research->techs_researched++;
+      /* This will change the game state! */
+      player_research_update(plr);
 
-        /* This will change the game state! */
-        player_research_update(plr);
-
-        log_debug("[player %d] researched: %-25s (ID: %4d) techs: %3d "
-                  "upkeep: %4d", player_number(plr),
-                  advance_rule_name(advance_by_number(tech)), tech,
-                  research->techs_researched, research->tech_upkeep);
-      }
-    }
+      log_debug("[player %d] techs: %3d upkeep: %4d", player_number(plr),
+                research->techs_researched, research->tech_upkeep);
+    } advance_index_iterate_end;
 
     /* Reset the changes done. */
     advance_index_iterate(A_FIRST, i) {

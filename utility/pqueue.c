@@ -21,7 +21,6 @@
 #include <config.h>
 #endif
 
-/* utility */
 #include "log.h"                /* fc_assert. */
 #include "mem.h"
 

@@ -61,7 +61,7 @@ static const char *cr_entry_size(const struct city *pcity,
 				 const void *data)
 {
   static char buf[8];
-  fc_snprintf(buf, sizeof(buf), "%2d", city_size_get(pcity));
+  fc_snprintf(buf, sizeof(buf), "%2d", pcity->size);
   return buf;
 }
 
@@ -335,8 +335,7 @@ static const char *cr_entry_growturns(const struct city *pcity,
     fc_snprintf(buffer, sizeof(buffer), "%4d", turns);
   }
   fc_snprintf(buf, sizeof(buf), "%s (%d/%d)",
-              buffer, pcity->food_stock,
-              city_granary_size(city_size_get(pcity)));
+              buffer, pcity->food_stock, city_granary_size(pcity->size));
   return buf;
 }
 

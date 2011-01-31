@@ -15,7 +15,6 @@
 #include <config.h>
 #endif
 
-/* utility */
 #include "shared.h"
 
 #include "iterator.h"

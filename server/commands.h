@@ -73,7 +73,6 @@ enum command_id {
   CMD_CANCELVOTE,
   CMD_IGNORE,
   CMD_UNIGNORE,
-  CMD_PLAYERCOLOR,
 
   /* potentially harmful: */
   CMD_END_GAME,
@@ -85,14 +84,7 @@ enum command_id {
   CMD_WRITE_SCRIPT,
   CMD_RESET,
   CMD_LUA,
-  CMD_LUAFILE,
   CMD_KICK,
-#ifdef DEBUG
-  CMD_OLDSAVE,
-#endif /* DEBUG */
-  CMD_DELEGATE,
-  CMD_FCDB,
-  CMD_MAPIMG,
 
   /* undocumented */
   CMD_RFCSTYLE,

@@ -50,7 +50,6 @@
 #include "version.h"
 
 /* server */
-#include "aiiface.h"
 #include "console.h"
 #include "ggzserver.h"
 #include "meta.h"
@@ -260,17 +259,17 @@ int main(int argc, char *argv[])
         break;
       }
       free(option);
-#ifdef HAVE_FCDB
-    } else if ((option = get_option_malloc("--Database", argv, &inx, argc))) {
-      srvarg.fcdb_enabled = TRUE;
-      srvarg.fcdb_conf = option;
-    } else if (is_option("--auth", argv[inx])) {
+#ifdef HAVE_AUTH
+    } else if ((option = get_option_malloc("--auth", argv, &inx, argc))) {
       srvarg.auth_enabled = TRUE;
+      srvarg.auth_conf = option;
     } else if (is_option("--Guests", argv[inx])) {
       srvarg.auth_allow_guests = TRUE;
     } else if (is_option("--Newusers", argv[inx])) {
       srvarg.auth_allow_newusers = TRUE;
 #endif
+    } else if (is_option("--Ppm", argv[inx])) {
+      srvarg.save_ppm = TRUE;
     } else if ((option = get_option_malloc("--Serverid", argv, &inx, argc))) {
       sz_strlcpy(srvarg.serverid, option);
       free(option);
@@ -293,14 +292,6 @@ int main(int argc, char *argv[])
         log_error(_("Illegal value \"%s\" for --Announce"), option);
       }
       free(option);
-#ifdef AI_MODULES
-    } else if ((option = get_option_malloc("--LoadAI", argv, &inx, argc))) {
-      if (!load_ai_module(option)) {
-        fc_fprintf(stderr, _("Failed to load AI module \"%s\"\n"), option);
-        exit(EXIT_FAILURE);
-      }
-      free(option);
-#endif /* AI_MODULES */
     } else {
       fc_fprintf(stderr, _("Error: unknown option '%s'\n"), argv[inx]);
       showhelp = TRUE;
@@ -321,13 +312,10 @@ int main(int argc, char *argv[])
   if (showhelp) {
     fc_fprintf(stderr,
 	       _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
-    fc_fprintf(stderr, _("  -A  --Announce PROTO\tAnnounce game in LAN "
-                         "using protocol PROTO (IPv4/IPv6/none)\n"));
-#ifdef HAVE_FCDB
-    fc_fprintf(stderr, _("  -D  --Database FILE\tEnable database connection "
+    fc_fprintf(stderr, _("  -A  --Announce PROTO\tAnnounce game in LAN using protocol PROTO (IPv4/IPv6/none)\n"));
+#ifdef HAVE_AUTH
+    fc_fprintf(stderr, _("  -a  --auth FILE\tEnable server authentication "
                          "with configuration from FILE.\n"));
-    fc_fprintf(stderr, _("  -a  --auth\t\tEnable server authentication "
-                         "(requires --Database).\n"));
     fc_fprintf(stderr, _("  -G  --Guests\t\tAllow guests to "
 			 "login if auth is enabled.\n"));
     fc_fprintf(stderr, _("  -N  --Newusers\tAllow new users to "
@@ -366,13 +354,11 @@ int main(int argc, char *argv[])
 	       _("  -s, --saves DIR\tSave games to directory DIR\n"));
     fc_fprintf(stderr,
 	       _("  -S, --Serverid ID\tSets the server id to ID\n"));
+    fc_fprintf(stderr,
+	     _("  -P, --Ppm\t\tSave ppms of the map when saving the game.\n"));
     fc_fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE\n"));
     fc_fprintf(stderr,
 	       _("  -R, --Ranklog FILE\tUse FILE as ranking logfile\n"));
-#ifdef AI_MODULES
-    fc_fprintf(stderr,
-               _("  -L, --LoadAI MODULE\tLoad ai module MODULE. Can appear multiple times\n"));
-#endif /* AI_MODULES */
     fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
     /* TRANS: No full stop after the URL, could cause confusion. */
     fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);

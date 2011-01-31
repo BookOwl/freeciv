@@ -14,10 +14,6 @@
 #ifndef FC__FC_TYPES_H
 #define FC__FC_TYPES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "bitvector.h"
 #include "shared.h"
 
@@ -37,7 +33,7 @@ extern "C" {
 #define MAX_NUM_UNIT_LIST 10
 #define MAX_NUM_BUILDING_LIST 10
 #define MAX_LEN_VET_SHORT_NAME 8
-#define MAX_VET_LEVELS 20 /* see diplomat_success_vs_defender() */
+#define MAX_VET_LEVELS 10
 #define MAX_BASE_TYPES 32
 #define MAX_NUM_USER_UNIT_FLAGS 4
 #define MAX_NUM_LEADERS MAX_NUM_ITEMS
@@ -91,8 +87,6 @@ enum unit_activity {
   ACTIVITY_LAST   /* leave this one last */
 };
 
-enum adv_unit_task { AUT_NONE, AUT_AUTO_SETTLER, AUT_BUILD_CITY };
-
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
 typedef int Resource_type_id;
@@ -104,7 +98,6 @@ typedef enum unit_activity Activity_type_id;
 typedef int Nation_type_id;
 typedef int Unit_type_id;
 typedef int Base_type_id;
-typedef unsigned char citizens;
 
 struct advance;
 struct city;
@@ -133,15 +126,14 @@ struct unit;
 typedef int Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
- * would have a recursive dependency. */
-#define SPECENUM_NAME unit_move_type
-#define SPECENUM_VALUE0 UMT_LAND
-#define SPECENUM_VALUE0NAME "Land"
-#define SPECENUM_VALUE1 UMT_SEA
-#define SPECENUM_VALUE1NAME "Sea"
-#define SPECENUM_VALUE2 UMT_BOTH
-#define SPECENUM_VALUE2NAME "Both"
-#include "specenum_gen.h"
+ * would have a recursive dependency.
+ * Order must mach order in move_type_names array. */
+enum unit_move_type {
+  LAND_MOVING = 0,
+  SEA_MOVING,
+  BOTH_MOVING,
+  MOVETYPE_LAST
+};
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
@@ -298,23 +290,15 @@ struct ai_choice;			/* incorporates universals_u */
 BV_DEFINE(bv_bases, MAX_BASE_TYPES);
 BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 
-#define SPECENUM_NAME gui_type
-/* Used for options which do not belong to any gui. */
-#define SPECENUM_VALUE0 GUI_STUB
-#define SPECENUM_VALUE0NAME "stub"
-#define SPECENUM_VALUE1 GUI_GTK2
-#define SPECENUM_VALUE1NAME "gtk2"
-#define SPECENUM_VALUE2 GUI_SDL
-#define SPECENUM_VALUE2NAME "sdl"
-#define SPECENUM_VALUE3 GUI_XAW
-#define SPECENUM_VALUE3NAME "xaw"
-#define SPECENUM_VALUE4 GUI_QT
-#define SPECENUM_VALUE4NAME "qt"
-#define SPECENUM_VALUE5 GUI_WIN32
-#define SPECENUM_VALUE5NAME "win32"
-#define SPECENUM_VALUE6 GUI_FTWL
-#define SPECENUM_VALUE6NAME "ftwl"
-#include "specenum_gen.h"
+enum gui_type {
+  GUI_STUB,
+  GUI_GTK2,
+  GUI_SDL,
+  GUI_XAW,
+  GUI_WIN32,
+  GUI_FTWL,
+  GUI_LAST
+};
 
 #define SPECENUM_NAME airlifting_style
 #define SPECENUM_BITWISE
@@ -330,16 +314,6 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 /* Unlimited units to airlift to the destination (doesn't require any
  * Airport or equivalent). */
 #define SPECENUM_VALUE3 AIRLIFTING_UNLIMITED_DEST
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME reval_map
-#define SPECENUM_BITWISE
-/* Reveal only the area around the first units at the beginning. */
-#define SPECENUM_ZERO   REVEAL_MAP_NONE
-/* Reveal the (fogged) map at the beginning of the game. */
-#define SPECENUM_VALUE0 REVEAL_MAP_START
-/* Reveal (and unfog) the map for dead players. */
-#define SPECENUM_VALUE1 REVEAL_MAP_DEAD
 #include "specenum_gen.h"
 
 enum phase_mode_types {
@@ -361,16 +335,6 @@ enum diplomacy_mode {
   DIPLO_FOR_AIS,
   DIPLO_FOR_TEAMS,
   DIPLO_DISABLED,
-};
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-enum test_result {
-  TR_SUCCESS,
-  TR_OTHER_FAILURE,
-  TR_ALREADY_SOLD
 };
 
 #endif /* FC__FC_TYPES_H */

@@ -6,16 +6,16 @@
 
 MAJOR_VERSION="2"
 MINOR_VERSION="3"
-PATCH_VERSION="99"
-VERSION_LABEL="-dev"
+PATCH_VERSION="0"
+VERSION_LABEL="-beta2+"
 
-IS_DEVEL_VERSION=1
-IS_BETA_VERSION=0
+IS_DEVEL_VERSION=0
+IS_BETA_VERSION=1
 
-NEXT_STABLE_VERSION="2.4.0"
+NEXT_STABLE_VERSION="2.3.0"
 RELEASE_MONTH=3
 
-DATASUBDIR=dev
+DATASUBDIR=2.3
 
 # Freeciv network capstring: see documentation in common/capstr.c
 #
@@ -27,7 +27,7 @@ DATASUBDIR=dev
 #   - Avoid adding a new mandatory capability to the development branch for
 #     as long as possible.  We want to maintain network compatibility with
 #     the stable branch for as long as possible.
-NETWORK_CAPSTRING_MANDATORY="+Freeciv.Devel.2011.Jan.27h"
+NETWORK_CAPSTRING_MANDATORY="+Freeciv-2.3-network"
 NETWORK_CAPSTRING_OPTIONAL=""
 
 if test x$VERSION_SCRIPT_SILENT != xyes ; then

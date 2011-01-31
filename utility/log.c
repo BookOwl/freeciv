@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "mem.h"
@@ -184,7 +183,7 @@ bool log_parse_level_str(const char *level_str, enum log_level *ret_level)
 out:
   free(dup);
   return ret;
-#else  /* DEBUG */
+#else
   fc_fprintf(stderr, _("Freeciv must be compiled with the DEBUG flag "
                        "to use advanced log levels based on files.\n"));
   return FALSE;

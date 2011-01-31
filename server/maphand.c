@@ -413,12 +413,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
       } tile_special_type_iterate_end;
       info.bases = ptile->bases;
 
-      if (ptile->label != NULL) {
-        strncpy(info.label, ptile->label, sizeof(info.label));
-      } else {
-        info.label[0] = '\0';
-      }
-
       send_packet_tile_info(pconn, &info);
     } else if (pplayer && map_is_known(ptile, pplayer)) {
       struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
@@ -446,13 +440,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
       } tile_special_type_iterate_end;
       info.bases = plrtile->bases;
 
-      /* Labels never change, so they are not subject to fog of war */
-      if (ptile->label != NULL) {
-        strncpy(info.label, ptile->label, sizeof(info.label));
-      } else {
-        info.label[0] = '\0';
-      }
-
       send_packet_tile_info(pconn, &info);
     } else if (send_unknown) {
       info.known = TILE_UNKNOWN;
@@ -467,8 +454,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
         info.special[spe] = FALSE;
       } tile_special_type_iterate_end;
       BV_CLR_ALL(info.bases);
-
-      info.label[0] = '\0';
 
       send_packet_tile_info(pconn, &info);
     }
@@ -908,7 +893,7 @@ void change_playertile_site(struct player_tile *ptile,
 
   if (ptile->site != NULL) {
     /* Releasing old site from tile */
-    vision_site_destroy(ptile->site);
+    free_vision_site(ptile->site);
   }
 
   ptile->site = new_site;
@@ -987,7 +972,7 @@ void player_map_free(struct player *pplayer)
     struct vision_site *psite = map_get_player_site(ptile, pplayer);
 
     if (NULL != psite) {
-      vision_site_destroy(psite);
+      free_vision_site(psite);
     }
 
     /* clear players knowledge */
@@ -1178,7 +1163,7 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
 	if (!dest_tile->site) {
           /* We cannot assign new vision site with change_playertile_site(),
            * since location is not yet set up for new site */
-          dest_tile->site = vision_site_new(0, ptile, NULL);
+          dest_tile->site = create_vision_site(0, ptile, NULL);
           *dest_tile->site = *from_tile->site;
 	}
         /* Note that we don't care if receiver knows vision source city

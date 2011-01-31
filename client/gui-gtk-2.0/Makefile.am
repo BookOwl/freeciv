@@ -28,8 +28,6 @@ libgui_gtk2_la_SOURCES = \
 	chatline.c	\
 	choice_dialog.c	\
 	choice_dialog.h \
-	citizensinfo.c	\
-	citizensinfo.h	\
 	citydlg.c	\
 	citydlg.h	\
 	cityrep.c	\

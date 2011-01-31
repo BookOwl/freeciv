@@ -14,10 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
@@ -53,7 +49,6 @@ struct tile {
   struct city *worked;			/* NULL for not worked */
   struct player *owner;			/* NULL for not owned */
   struct tile *claimer;
-  char *label;                          /* NULL for no label */
   char *spec_sprite;
 };
 
@@ -157,13 +152,5 @@ const char *tile_get_info_text(const struct tile *ptile, int linebreaks);
 /* Virtual tiles are tiles that do not exist on the game map. */
 struct tile *tile_virtual_new(const struct tile *ptile);
 void tile_virtual_destroy(struct tile *vtile);
-
-void *tile_hash_key(const struct tile *ptile);
-
-bool tile_set_label(struct tile *ptile, const char *label);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__TILE_H */

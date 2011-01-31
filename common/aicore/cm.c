@@ -72,9 +72,6 @@
  defines, structs, globals, forward declarations
 *****************************************************************************/
 
-/* Maximal iterations before the search loop is stoped. */
-#define CM_MAX_LOOP 10000
-
 #ifdef DEBUG
 #define GATHER_TIME_STATS
 #define CM_DEBUG
@@ -707,7 +704,7 @@ static void apply_solution(struct cm_state *state,
 
   /* Finally we must refresh the city to reset all the precomputed fields. */
   city_refresh_from_main_map(pcity, state->workers_map);
-  fc_assert_ret(citizens == city_size_get(pcity));
+  fc_assert_ret(citizens == pcity->size);
 }
 
 /****************************************************************************
@@ -1093,7 +1090,7 @@ static void clean_lattice(struct tile_type_vector *lattice,
 
     forced_loop = FALSE;
 
-    if (ptype->lattice_depth >= city_size_get(pcity)) {
+    if (ptype->lattice_depth >= pcity->size) {
       tile_type_vector_append(&tofree, ptype);
     } else {
       /* Remove links to children that are being removed. */
@@ -1107,7 +1104,7 @@ static void clean_lattice(struct tile_type_vector *lattice,
       for (ci = 0, cj = 0; ci < ptype->worse_types.size; ci++) {
         const struct cm_tile_type *ptype2 = ptype->worse_types.p[ci];
 
-        if (ptype2->lattice_depth < city_size_get(pcity)) {
+        if (ptype2->lattice_depth < pcity->size) {
           ptype->worse_types.p[cj] = ptype->worse_types.p[ci];
           cj++;
         }
@@ -1240,7 +1237,7 @@ static void add_workers(struct partial_solution *soln,
   /* update the number of idle workers */
   newcount = soln->idle - number;
   fc_assert_ret(newcount >= 0);
-  fc_assert_ret(newcount <= city_size_get(state->pcity));
+  fc_assert_ret(newcount <= state->pcity->size);
   soln->idle = newcount;
 
   /* update the worker counts */
@@ -1509,8 +1506,7 @@ static void compute_max_stats_heuristic(const struct cm_state *state,
   }
 
   /* initialize solnplus here, after the shortcut check */
-  init_partial_solution(&solnplus, num_types(state),
-                        city_size_get(state->pcity));
+  init_partial_solution(&solnplus, num_types(state), state->pcity->size);
 
   output_type_iterate(stat) {
     /* compute the solution that has soln, then the check_choice,
@@ -1698,7 +1694,7 @@ static struct cm_state *cm_state_init(struct city *pcity)
   struct cm_state *state = fc_malloc(sizeof(*state));
 
   log_base(LOG_CM_STATE, "creating cm_state for %s (size %d)",
-           city_name(pcity), city_size_get(pcity));
+           city_name(pcity), pcity->size);
 
   /* copy the arguments */
   state->pcity = pcity;
@@ -1719,12 +1715,12 @@ static struct cm_state *cm_state_init(struct city *pcity)
   } output_type_iterate_end;
 
   /* We have no best solution yet, so its value is the worst possible. */
-  init_partial_solution(&state->best, numtypes, city_size_get(pcity));
+  init_partial_solution(&state->best, numtypes, pcity->size);
   state->best_value = worst_fitness();
 
   /* Initialize the current solution and choice stack to empty */
-  init_partial_solution(&state->current, numtypes, city_size_get(pcity));
-  state->choice.stack = fc_malloc(city_size_get(pcity)
+  init_partial_solution(&state->current, numtypes, pcity->size);
+  state->choice.stack = fc_malloc(pcity->size
 				  * sizeof(*state->choice.stack));
   state->choice.size = 0;
 
@@ -1756,7 +1752,7 @@ static void begin_search(struct cm_state *state,
   state->best_value = worst_fitness();
   destroy_partial_solution(&state->current);
   init_partial_solution(&state->current, num_types(state),
-			city_size_get(state->pcity));
+			state->pcity->size);
   state->choice.size = 0;
 }
 
@@ -1803,7 +1799,6 @@ static void cm_find_best_solution(struct cm_state *state,
                                   const struct cm_parameter *const parameter,
                                   struct cm_result *result)
 {
-  int loop_count = 0;
 #ifdef GATHER_TIME_STATS
   performance.current = &performance.opt;
 #endif
@@ -1812,14 +1807,7 @@ static void cm_find_best_solution(struct cm_state *state,
 
   /* search until we find a feasible solution */
   while (!bb_next(state)) {
-    /* Limit the number of loops. */
-    loop_count++;
-
-    if (loop_count > CM_MAX_LOOP) {
-      log_error("Did not find a cm solution in %d iterations for %s.",
-                CM_MAX_LOOP, city_name(state->pcity));
-      break;
-    }
+    /* nothing */
   }
 
   /* convert to the caller's format */
@@ -2139,7 +2127,7 @@ void cm_print_city(const struct city *pcity)
 
   log_test("cm_print_city(city %d=\"%s\")", pcity->id, city_name(pcity));
   log_test("  size=%d, specialists=%s",
-           city_size_get(pcity), specialists_string(pcity->specialists));
+           pcity->size, specialists_string(pcity->specialists));
 
   log_test("  workers at:");
   city_tile_iterate_index(city_map_radius_sq_get(pcity), pcenter, ptile,

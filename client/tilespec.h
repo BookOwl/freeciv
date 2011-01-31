@@ -18,10 +18,6 @@
 #ifndef FC__TILESPEC_H
 #define FC__TILESPEC_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "log.h"                /* enum log_level */
 
@@ -93,7 +89,6 @@ enum mapview_layer {
   LAYER_CITY2,
   LAYER_GRID2,
   LAYER_OVERLAYS,
-  LAYER_TILELABEL,
   LAYER_CITYBAR,
   LAYER_FOCUS_UNIT,
   LAYER_GOTO,
@@ -154,11 +149,6 @@ void tileset_setup_government(struct tileset *t,
 void tileset_setup_nation_flag(struct tileset *t, 
 			       struct nation_type *nation);
 void tileset_setup_city_tiles(struct tileset *t, int style);
-
-void tileset_player_init(struct tileset *t, struct player *pplayer);
-void tileset_player_free(struct tileset *t, struct player *pplayer);
-void tileset_background_init(struct tileset *t);
-void tileset_background_free(struct tileset *t);
 
 /* Gfx support */
 
@@ -334,9 +324,5 @@ const char *tileset_mini_intro_filename(const struct tileset *t);
 int tileset_num_city_colors(const struct tileset *t);
 void tileset_use_prefered_theme(const struct tileset *t);
 bool tileset_use_hard_coded_fog(const struct tileset *t);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__TILESPEC_H */

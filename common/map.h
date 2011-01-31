@@ -13,10 +13,6 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <math.h> /* sqrt */
 
 /* utility */
@@ -656,9 +652,5 @@ static inline bool is_border_tile(const struct tile *ptile, int dist)
 	  || ptile->nat_x >= map.xsize - xdist
 	  || ptile->nat_y >= map.ysize - ydist);
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__MAP_H */

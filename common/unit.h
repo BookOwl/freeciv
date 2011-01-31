@@ -13,10 +13,6 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
@@ -60,6 +56,10 @@ enum diplomat_actions {
   DIPLOMAT_ANY_ACTION   /* leave this one last */
 };
 
+enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
+                    AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_ESCORT, 
+                    AIUNIT_EXPLORE, AIUNIT_RECOVER, AIUNIT_HUNTER };
+
 enum goto_move_restriction {
   GOTO_MOVE_ANY,
   GOTO_MOVE_CARDINAL_ONLY, /* No diagonal moves.  */
@@ -97,7 +97,7 @@ enum unit_upgrade_result {
 };
 
 struct unit_adv {
-  enum adv_unit_task task;
+  enum ai_unit_task role;
 };
 
 struct unit_order {
@@ -200,18 +200,6 @@ struct unit {
     } server;
   };
 };
-
-#ifdef DEBUG
-#define CHECK_UNIT(punit)                                                   \
-  (fc_assert(punit != NULL),                                                \
-   fc_assert(unit_type(punit) != NULL),                                     \
-   fc_assert(unit_owner(punit) != NULL),                                    \
-   fc_assert(player_by_number(player_index(unit_owner(punit)))              \
-             == unit_owner(punit)),                                         \
-   fc_assert(game_unit_by_number(punit->id) != NULL))
-#else
-#define CHECK_UNIT(punit) /* Do nothing */
-#endif
 
 bool is_real_activity(enum unit_activity activity);
 
@@ -352,11 +340,5 @@ bool unit_alive(int id);
 void *unit_ai_data(const struct unit *punit, const struct ai_type *ai);
 void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data);
-
-int unit_bribe_cost(struct unit *punit);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__UNIT_H */

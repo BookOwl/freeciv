@@ -29,11 +29,192 @@
 #include "fcintl.h"
 #include "log.h"
 #include "netintf.h"
-#include "netfile.h"
 #include "registry.h"
 
 /* modinst */
 #include "download.h"
+
+
+#define PROTOCOL_STRING "HTTP/1.1 "
+#define UNKNOWN_CONTENT_LENGTH -1
+
+
+static char *lookup_header_entry(char *headers, char *entry)
+{
+  int i, j;
+  int len = strlen(entry);
+
+  for (i = 0; headers[i] != '\0' ; i += j) {
+    for (j = 0; headers[i + j] != '\0' && headers[i + j] != '\n'; j++) {
+      /* Nothing, we just searched for end of line */
+    }
+    if (headers[i + j] == '\n') {
+      if (!strncmp(&headers[i + j + 1], entry, len)) {
+        return &headers[i + j + 1 + len];
+      }
+
+      /* Get over newline character */
+      j++;
+    }
+  }
+
+  return NULL;
+}
+
+static bool download_file(const char *URL, const char *local_filename)
+{
+  const char *path;
+  char srvname[MAX_LEN_ADDR];
+  int port;
+  static union fc_sockaddr addr;
+  int sock;
+  char buf[50000];
+  char hdr_buf[2048];
+  int hdr_idx = 0;
+  int msglen;
+  int result;
+  FILE *fp;
+  int header_end_chars = 0;
+  int clen = UNKNOWN_CONTENT_LENGTH;
+  int cread = 0;
+
+  path = fc_lookup_httpd(srvname, &port, URL);
+  if (path == NULL) {
+    return FALSE;
+  }
+
+  if (!net_lookup_service(srvname, port, &addr, FALSE)) {
+    return FALSE;
+  }
+
+  sock = socket(addr.saddr.sa_family, SOCK_STREAM, 0);
+  if (sock == -1) {
+    return FALSE;
+  }
+
+  if (fc_connect(sock, &addr.saddr, sockaddr_size(&addr)) == -1) {
+    fc_closesocket(sock);
+    return FALSE;
+  }
+
+  msglen = fc_snprintf(buf, sizeof(buf),
+                       "GET %s HTTP/1.1\r\n"
+                       "HOST: %s:%d\r\n"
+                       "User-Agent: Freeciv-modpack/%s\r\n"
+                       "Content-Length: 0\r\n"
+                       "\r\n",
+                       path, srvname, port, VERSION_STRING);
+  if (fc_writesocket(sock, buf, msglen) != msglen) {
+    fc_closesocket(sock);
+    return FALSE;
+  }
+
+  fp = fopen(local_filename, "w+b");
+  if (fp == NULL) {
+    fc_closesocket(sock);
+    return FALSE;
+  }
+
+  result = 1;
+  while (result && (clen == UNKNOWN_CONTENT_LENGTH || clen > cread)) {
+    result = fc_readsocket(sock, buf, sizeof(buf));
+
+    if (result < 0) {
+      if (errno != EAGAIN && errno != EINTR && errno != EWOULDBLOCK) {
+        fc_closesocket(sock);
+        return FALSE;
+      }
+      fc_usleep(1000000);
+    } else if (result > 0) {
+      int left;
+      int total_written = 0;
+      int i;
+
+      for (i = 0; i < result && header_end_chars < 4; i++) {
+        if (hdr_idx < sizeof(hdr_buf)) {
+          hdr_buf[hdr_idx++] = buf[i];
+        }
+        switch (header_end_chars) {
+         case 0:
+         case 2:
+           if (buf[i] == '\r') {
+             header_end_chars++;
+           } else {
+             header_end_chars =  0;
+           }
+           break;
+         case 1:
+         case 3:
+           if (buf[i] == '\n') {
+             header_end_chars++;
+             if (header_end_chars >= 3) {
+               if (hdr_idx < sizeof(hdr_buf)) {
+                 int httpret;
+                 char *clenstr;
+                 int protolen = strlen(PROTOCOL_STRING);
+
+                 hdr_buf[hdr_idx] = '\0';
+
+                 if (strncmp(hdr_buf, PROTOCOL_STRING, protolen)) {
+                   /* Not valid HTTP header */
+                   fclose(fp);
+                   fc_closesocket(sock);
+                   return FALSE;
+                 }
+                 httpret = atoi(hdr_buf + protolen);
+
+                 if (httpret != 200) {
+                   /* Error document */
+                   fclose(fp);
+                   fc_closesocket(sock);
+                   return FALSE;
+                 }
+
+                 clenstr = lookup_header_entry(hdr_buf, "Content-Length: ");
+                 if (clenstr != NULL) {
+                   clen = atoi(clenstr);
+                 }
+               } else {
+                 /* Too long header */
+                 fclose(fp);
+                 fc_closesocket(sock);
+                 return FALSE;
+               }
+             }
+           } else {
+             header_end_chars =  0;
+           }
+           break;
+        }
+      }
+
+      left = result - i;
+      total_written = i;
+
+      if (left > 0) {
+        cread += left;
+      }
+
+      while (left > 0) {
+        int written;
+
+        written = fwrite(buf + total_written, 1, left, fp);
+        if (written <= 0) {
+          fclose(fp);
+          fc_closesocket(sock);
+          return FALSE;
+        }
+        left -= written;
+        total_written += written;
+      }
+    }
+  }
+
+  fclose(fp);
+
+  fc_closesocket(sock);
+  return TRUE;
+}
 
 /**************************************************************************
   Return path to control directory
@@ -57,18 +238,6 @@ static char *control_dir(void)
               home);
 
   return controld;
-}
-
-/**************************************************************************
-  Message callback called by netfile module when downloading files.
-**************************************************************************/
-static void nf_cb(const char *msg, void *data)
-{
-  dl_msg_callback mcb = (dl_msg_callback) data;
-
-  if (mcb != NULL) {
-    mcb(msg);
-  }
 }
 
 /**************************************************************************
@@ -122,14 +291,19 @@ const char *download_modpack(const char *URL,
     return _("Cannot create required directories");
   }
 
+  fc_snprintf(local_name, sizeof(local_name), "%s/%s", controld, URL + start_idx);
+
   if (mcb != NULL) {
     mcb(_("Downloading modpack control file."));
   }
+  if (!download_file(URL, local_name)) {
+    return _("Failed to download modpack control file from given URL");
+  }
 
-  control = netfile_get_section_file(URL, nf_cb, mcb);
+  control = secfile_load(local_name, FALSE);
 
   if (control == NULL) {
-    return _("Failed to get and parse modpack control file");
+    return _("Cannot parse modpack control file");
   }
 
   control_capstr = secfile_lookup_str(control, "info.options");
@@ -220,7 +394,7 @@ const char *download_modpack(const char *URL,
       }
 
       fc_snprintf(fileURL, sizeof(fileURL), "%s/%s", baseURL, src_name);
-      if (!netfile_download_file(fileURL, local_name, nf_cb, mcb)) {
+      if (!download_file(fileURL, local_name)) {
         if (mcb != NULL) {
           char buf[2048];
 
@@ -256,6 +430,7 @@ const char *download_modpack_list(const char *URL, modpack_list_setup_cb cb,
                                   dl_msg_callback mcb)
 {
   const char *controld = control_dir();
+  char local_name[2048];
   struct section_file *list_file;
   const char *list_capstr;
   int modpack_count;
@@ -270,10 +445,16 @@ const char *download_modpack_list(const char *URL, modpack_list_setup_cb cb,
     return _("Cannot create required directories");
   }
 
-  list_file = netfile_get_section_file(URL, nf_cb, mcb);
+  fc_snprintf(local_name, sizeof(local_name), "%s/modpack.list", controld);
+
+  if (!download_file(URL, local_name)) {
+    return _("Failed to download modpack list");
+  }
+
+  list_file = secfile_load(local_name, FALSE);
 
   if (list_file == NULL) {
-    return _("Cannot fetch and parse modpack list");
+    return _("Cannot parse modpack list");
   }
 
   list_capstr = secfile_lookup_str(list_file, "info.options");

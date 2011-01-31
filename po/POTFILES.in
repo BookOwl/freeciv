@@ -1,6 +1,5 @@
 # List of source files containing translatable strings.
 # (Filenames relative to top-level directory.)
-common/ai.c
 common/city.c
 common/connection.c
 common/effects.c
@@ -25,14 +24,12 @@ utility/inputfile.c
 utility/ioz.c
 utility/log.c
 utility/mem.c
-utility/netfile.c
 utility/netintf.c
 utility/registry.c
 utility/shared.c
 utility/support.c
 ai/aicity.c
 ai/advdiplomacy.c
-server/aiiface.c
 server/auth.c
 server/barbarian.c
 server/cityhand.c
@@ -45,7 +42,6 @@ server/console.c
 server/diplhand.c
 server/diplomats.c
 server/edithand.c
-server/fcdb.c
 server/gamehand.c
 server/generator/mapgen_topology.c
 server/ggzserver.c
@@ -129,8 +125,6 @@ client/gui-gtk-2.0/theme_dlg.c
 client/gui-gtk-2.0/tileset_dlg.c
 client/gui-gtk-2.0/wldlg.c
 client/gui-gtk-2.0/voteinfo_bar.c
-client/gui-qt/chatline.cpp
-client/gui-qt/mapview.cpp
 client/gui-sdl/caravan_dialog.c
 client/gui-sdl/chatline.c
 client/gui-sdl/citydlg.c
@@ -218,7 +212,6 @@ modinst/download.c
 modinst/modinst.c
 data/Freeciv.in
 data/helpdata.txt
-data/database.lua
 data/civ1/buildings.ruleset
 data/civ1/governments.ruleset
 data/civ1/techs.ruleset
@@ -279,7 +272,6 @@ data/nation/aramean.ruleset
 data/nation/argentine.ruleset
 data/nation/armenian.ruleset
 data/nation/ashanti.ruleset
-data/nation/assamese.ruleset
 data/nation/assyrian.ruleset
 data/nation/asturian.ruleset
 data/nation/atlantean.ruleset
@@ -314,7 +306,6 @@ data/nation/burgundian.ruleset
 data/nation/burkinabe.ruleset
 data/nation/burmese.ruleset
 data/nation/burundi.ruleset
-data/nation/buryat.ruleset
 data/nation/byzantium.ruleset
 data/nation/californian.ruleset
 data/nation/cambodian.ruleset
@@ -350,7 +341,6 @@ data/nation/cuban.ruleset
 data/nation/curonian.ruleset
 data/nation/cypriot.ruleset
 data/nation/czech.ruleset
-data/nation/czechoslovak.ruleset
 data/nation/dahomean.ruleset
 data/nation/danish.ruleset
 data/nation/dominican.ruleset
@@ -365,14 +355,12 @@ data/nation/egyptianarab.ruleset
 data/nation/elamite.ruleset
 data/nation/emirati.ruleset
 data/nation/english.ruleset
-data/nation/epirote.ruleset
 data/nation/esperant.ruleset
 data/nation/estonian.ruleset
 data/nation/eritrean.ruleset
 data/nation/ethiopian.ruleset
 data/nation/etruscan.ruleset
 data/nation/european.ruleset
-data/nation/evenki.ruleset
 data/nation/fijian.ruleset
 data/nation/filipino.ruleset
 data/nation/finnish.ruleset
@@ -383,10 +371,8 @@ data/nation/frisian.ruleset
 data/nation/gaelic.ruleset
 data/nation/galician.ruleset
 data/nation/gallic.ruleset
-data/nation/genoese.ruleset
 data/nation/georgian.ruleset
 data/nation/german.ruleset
-data/nation/ghana.ruleset
 data/nation/ghanaian.ruleset
 data/nation/gokturk.ruleset
 data/nation/greaterpolish.ruleset
@@ -435,7 +421,6 @@ data/nation/kalmyk.ruleset
 data/nation/kanem-bornu.ruleset
 data/nation/karelian.ruleset
 data/nation/kashmiri.ruleset
-data/nation/kashubian.ruleset
 data/nation/kazakh.ruleset
 data/nation/kenyan.ruleset
 data/nation/khazar.ruleset
@@ -454,7 +439,6 @@ data/nation/leonese.ruleset
 data/nation/libyan.ruleset
 data/nation/liechtensteiner.ruleset
 data/nation/lipkatatar.ruleset
-data/nation/lippe.ruleset
 data/nation/lithuanian.ruleset
 data/nation/lojbanistani.ruleset
 data/nation/lorrain.ruleset
@@ -486,7 +470,6 @@ data/nation/milanese.ruleset
 data/nation/miskito.ruleset
 data/nation/mixtec.ruleset
 data/nation/moldovan.ruleset
-data/nation/mon.ruleset
 data/nation/monegasque.ruleset
 data/nation/mongol.ruleset
 data/nation/montenegrin.ruleset
@@ -496,7 +479,6 @@ data/nation/motswana.ruleset
 data/nation/moroccan.ruleset
 data/nation/mozambican.ruleset
 data/nation/mughal.ruleset
-data/nation/muscovite.ruleset
 data/nation/muskogee.ruleset
 data/nation/mwiska.ruleset
 data/nation/namibian.ruleset
@@ -521,7 +503,6 @@ data/nation/occitan.ruleset
 data/nation/ohlone.ruleset
 data/nation/omani.ruleset
 data/nation/oldenburgian.ruleset
-data/nation/oldprussian.ruleset
 data/nation/ossetian.ruleset
 data/nation/ostrogothic.ruleset
 data/nation/otomi.ruleset
@@ -569,10 +550,8 @@ data/nation/schleswig-holsteinian.ruleset
 data/nation/scottish.ruleset
 data/nation/scythian.ruleset
 data/nation/seleucid.ruleset
-data/nation/seljuk.ruleset
 data/nation/senegalese.ruleset
 data/nation/serbian.ruleset
-data/nation/shan.ruleset
 data/nation/shawnee.ruleset
 data/nation/siberian.ruleset
 data/nation/sicilian.ruleset
@@ -634,7 +613,6 @@ data/nation/uyghur.ruleset
 data/nation/uzbek.ruleset
 data/nation/vampire.ruleset
 data/nation/vandalic.ruleset
-data/nation/vedic.ruleset
 data/nation/venetian.ruleset
 data/nation/venezuelan.ruleset
 data/nation/vermont.ruleset
@@ -642,7 +620,6 @@ data/nation/vietnamese.ruleset
 data/nation/viking.ruleset
 data/nation/vincentian.ruleset
 data/nation/visigothic.ruleset
-data/nation/volgabulgar.ruleset
 data/nation/walloon.ruleset
 data/nation/welsh.ruleset
 data/nation/westernpomeranian.ruleset
@@ -655,7 +632,6 @@ data/nation/yemeni.ruleset
 data/nation/yucatecan.ruleset
 data/nation/yugoslav.ruleset
 data/nation/zapotec.ruleset
-data/nation/zhuang.ruleset
 data/nation/zimbabwean.ruleset
 data/nation/zulu.ruleset
 data/scenario/british-isles-85x80-v2.80.sav

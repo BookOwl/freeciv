@@ -42,14 +42,15 @@ struct server_arguments {
   char *saves_pathname;
   char *scenarios_pathname;
   char serverid[256];
+  /* save a ppm of the map? */
+  bool save_ppm;
   /* quit if there no players after a given time interval */
   int quitidle;
   /* exit the server on game ending */
   bool exit_on_end;
   /* authentication options */
-  bool fcdb_enabled;            /* defaults to FALSE */
-  char *fcdb_conf;              /* freeciv database configuration file */
   bool auth_enabled;            /* defaults to FALSE */
+  char *auth_conf;              /* auth configuration file */
   bool auth_allow_guests;       /* defaults to TRUE */
   bool auth_allow_newusers;     /* defaults to TRUE */
   enum announce_type announce;

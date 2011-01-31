@@ -67,63 +67,8 @@ dnl Use Automake 1.11 silent rules by default if available
 dnl verbose build using  make V=1
 ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
-dnl AC_PROG_SED is available only in autoconf 2.60 and later. With older
-dnl autoconf, assume that 'sed' is ok. This is needed for the configuration
-dnl of the clients and the database setting.
-ifdef([AC_PROG_SED], [AC_PROG_SED], [SED=sed])
-
-dnl checks for databases
-dnl all:                  Autodetect as many as possible [default].
-dnl mysql:                use mysql database
-dnl postgres:             use postgres database
-dnl comma-separated-list: Detect these or abort.
-AC_ARG_ENABLE(fcdb,
-[  --enable-fcdb[=no/all/mysql/postgres/sqlite3]
-                          database backends [[default=all]]
-                          (no, or list)],
-[databases=${enableval}],
-[fcdb_all=no])
-
-fcdb_all=no
-fcdb_mysql=no
-fcdb_postgres=no
-fcdb_sqlite3=no
-
-for db in $(echo $databases | $SED 's/,/ /g') ; do
-  if test "x$db" = "xall" ; then
-    fcdb_all=yes
-  elif test "x$db" = "xno" ; then
-    fcdb_all=no
-  elif test "x$db" = "xmysql" ; then
-    fcdb_mysql=yes
-  elif test "x$db" = "xpostgres" ; then
-    fcdb_postgres=yes
-  elif test "x$db" = "xsqlite3" ; then
-    fcdb_sqlite3=yes
-  fi
-done
-
-dnl checks for database mysql
-dnl sets FCDB_MYSQL(conditional), FCDB_MYSQL_CFLAGS, FCDB_MYSQL_LDFLAGS
-FC_FCDB_MYSQL
-
-dnl checks for database postgres
-dnl sets FCDB_POSTGRES(conditional), FCDB_POSTGRES_CFLAGS, FCDB_POSTGRES_LDFLAGS
-FC_FCDB_POSTGRES
-
-dnl checks for database sqlite3
-dnl sets FCDB_SQLITE3(conditional), FCDB_SQLITE3_CFLAGS, FCDB_SQLITE3_LDFLAGS
-FC_FCDB_SQLITE3
-
-dnl check if a database backend is available
-if test "x$fcdb_mysql" = "xyes" || test "x$fcdb_postgres" = "xyes" \
-   || test "x$fcdb_sqlite3" = "xyes"; then
-  enable_fcdb=yes
-  AC_DEFINE(HAVE_FCDB,1,[ ])
-else
-  enable_fcdb=no
-fi
-AM_CONDITIONAL(FCDB_DB, test "x$enable_fcdb" = "xyes")
+dnl checks for mysql, sets AUTH_LIBS, AUTH_CFLAGS
+FC_CHECK_AUTH
 
 dnl  no=do not compile server,  yes=compile server,  *=error
 AC_ARG_ENABLE(server,
@@ -146,22 +91,22 @@ AC_ARG_ENABLE(ipv6,
   *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ipv6) ;;
 esac], [ipv6=test])
 if test x$ipv6 != xno ; then
-  enable_ipv6=yes
+  ipv6_possible=true
   AC_CHECK_FUNCS([gethostbyname2 inet_pton inet_ntop getnameinfo],
-[], [enable_ipv6=no])
-  if test x$enable_ipv6 = xyes ; then
+[], [ipv6_possible=false])
+  if test x$ipv6_possible = xtrue ; then
     AC_MSG_CHECKING([for AF_INET6])
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
 #include <sys/socket.h>
       ]], [[return AF_INET6;]])], [AC_MSG_RESULT([yes])],
        [AC_MSG_RESULT([no])
-        enable_ipv6=no])
+        ipv6_possible=false])
   fi
-  if test x$enable_ipv6 = xyes && test x$ipv6 = xyes ; then
+  if test x$ipv6_possible = xfalse && test x$ipv6 = xyes ; then
     AC_MSG_ERROR([Cannot enable IPv6 functionality])
   fi
-  if test x$enable_ipv6 = xyes ; then
+  if test x$ipv6_possible = xtrue ; then
     AC_DEFINE([IPV6_SUPPORT], [1], [IPv6 Support built in])
   fi
 fi
@@ -172,60 +117,29 @@ WITH_READLINE=$withval,	dnl yes/no - required to use / never use
 WITH_READLINE="maybe"	dnl maybe  - use if found [default]
 )
 
-dnl map images
-dnl all:                  Autodetect as many as possible [default].
-dnl no:                   No additional toolkits.
-dnl magickwand:           compile magickwand (imagemagick) support.
-dnl comma-separated-list: Detect these or abort.
-AC_ARG_ENABLE(mapimg-toolkit,
-[  --enable-mapimg-toolkit[=no/all/magickwand]
-                          additional map image toolkits to compile
-                          [[default=all]] (no, or list)],
-[toolkits=${enableval}],
-[mapimg_all=yes])
-
-mapimg_all=yes
-mapimg_magickwand=no
-
-dnl AC_PROG_SED is available only in autoconf 2.60 and later. With older
-dnl autoconf, assume that 'sed' is ok. This is needed for the configuration
-dnl of the clients and the mapimg toolkits.
-ifdef([AC_PROG_SED], [AC_PROG_SED], [SED=sed])
-
-for toolkit in $(echo $toolkits | $SED 's/,/ /g') ; do
-  if test "x$toolkit" = "xall" ; then
-    mapimg_all=yes
-  elif test "x$toolkit" = "xno" ; then
-    mapimg_all=no
-  elif test "x$toolkit" = "xmagickwand" ; then
-    mapimg_magickwand=yes
-  fi
-done
-
-dnl checks for MagickWand mapimg support
-dnl sets MAPIMG_WAND_CFLAGS, MAPIMG_WAND_LIBS
-FC_MAPIMG_MAGICKWAND
-
 dnl no:   Do not compile client.
 dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE(client,
-[  --enable-client[=auto/all/gtk/sdl/xaw/qt/win32/ftwl/stub]
+[  --enable-client[=auto/all/gtk/sdl/xaw/win32/ftwl/stub]
                           clients to compile [[auto]] (or list for multiple)
                           maintained clients: gtk/sdl/xaw/stub
-                          unmaintained clients: qt/win32/ftwl],
+                          unmaintained clients: win32/ftwl],
 [clients=${enableval}],
 [client=auto])
 
 gui_gtk2=no
 gui_sdl=no
 gui_xaw=no
-gui_qt=no
 gui_win32=no
 gui_ftwl=no
 gui_beos=no
 gui_stub=no
+
+dnl AC_PROG_SED is available only in autoconf 2.60 and later.
+dnl With older autoconf, assume that 'sed' is ok.
+ifdef([AC_PROG_SED], [AC_PROG_SED], [SED=sed])
 
 for gui in $(echo $clients | $SED 's/,/ /g') ; do
   if test "x$gui" = "xno" ; then
@@ -329,34 +243,6 @@ AC_ARG_WITH(efence,
 	[  --with-efence           use Electric Fence, malloc debugger ],
 	WITH_EFENCE=1
 )
-
-AC_ARG_ENABLE([aimodules],
-[  --enable-aimodules      support for ai modules [[default=no]]],
-[case "${enableval}" in
-  yes) enable_aimodules=yes ;;
-  no)  enable_aimodules=no ;;
-  *)   AC_MSG_ERROR([bad value ${enable_aimodules} for --enable-aimodules]) ;;
-esac], [enable_aimodules=no])
-aimoduledir="${libdir}/fcai"
-AC_SUBST(aimoduledir)
-AM_CONDITIONAL(AI_MODULES, test "$enable_aimodules" = "yes")
-if test $enable_aimodules = yes ; then
-  if test x$enable_shared != xyes ; then
-    AC_MSG_ERROR([cannot enable ai module support if also build of shared libraries is not enabled with --enable-shared])
-  fi
-  LIBS_TMP=$LIBS
-  LIBS="$LIBS -lltdl"
-  AC_MSG_CHECKING([whether can build modules])
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <ltdl.h>]],
-     [[lt_dlopenext(NULL);]])],
-     [AC_MSG_RESULT([yes])],
-     [AC_MSG_RESULT([no])
-      AC_MSG_ERROR([cannot build loadable AI modules as requested])])
-  LIBS=$LIBS_TMP
-  SERVER_LIBS="${SERVER_LIBS} -lltdl"
-  AC_DEFINE_UNQUOTED([AI_MODULES], [1], [Directory for ai modules])
-  CPPFLAGS="${CPPFLAGS} -DAI_MODULEDIR=\"\\\"${aimoduledir}\\\"\""
-fi
 
 dnl Checks for programs.
 AC_PROG_AWK
@@ -525,12 +411,6 @@ else
   AC_SUBST([POFILES])
 fi
 
-PKG_PROG_PKG_CONFIG
-PKG_CHECK_MODULES([CURL], [libcurl],,
-    [AC_MSG_ERROR([libcurl development files required])])
-CFLAGS="$CFLAGS $CURL_CFLAGS"
-LIBS="$LIBS $CURL_LIBS"
-
 dnl Set debug flags supported by compiler
 EXTRA_DEBUG_CFLAGS=""
 FC_C_FLAGS([-Wall -Wpointer-arith -Wcast-align -Wmissing-prototypes -Wmissing-declarations],
@@ -645,17 +525,11 @@ if test "$GZIP" = "no"; then
   AC_MSG_ERROR([You need the gzip program for compilation.])
 fi
 
-dnl Check for bzip2 compression
+dnl Check for libbzip2
 AC_CHECK_LIB(bz2, BZ2_bzReadOpen,
   [AC_CHECK_HEADERS([bzlib.h],
    [AC_DEFINE(HAVE_LIBBZ2, 1, [libbzip2 is available])
 UTILITY_LIBS="$UTILITY_LIBS -lbz2"])])
-
-dnl Check for xz compression
-AC_CHECK_LIB(lzma, lzma_code,
-  [AC_CHECK_HEADERS([lzma.h],
-   [AC_DEFINE(HAVE_LIBLZMA, 1, [liblzma is available])
-UTILITY_LIBS="${UTILITY_LIBS} -llzma"])])
 
 AC_SUBST([UTILITY_LIBS])
 AC_SUBST([COMMON_LIBS])
@@ -675,31 +549,6 @@ fi
 if test "$ftwl" = opengl ; then
      FTWL_CFLAGS="$FTWL_CFLAGS "`sdl-config --cflags`" "`freetype-config --cflags`
      FTWL_LIBS="$FTWL_LIBS "`sdl-config --libs`" -lpng "`freetype-config --libs -lGL -lGLU`
-fi
-
-dnl Check thread implementation
-AC_MSG_CHECKING([for threads implementation])
-thread_impl=none
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <pthread.h>]],
-  [[return pthread_create(NULL, NULL, NULL, NULL);]])],
-  [AC_DEFINE([HAVE_PTHREAD], [1], [Use pthreads as thread implementation])
-  thread_impl=pthreads
-  AC_MSG_RESULT([pthreads])
-  CFLAGS="$CFLAGS -pthread"
-  LIBS="$LIBS -lpthread"])
-
-if test "x$thread_impl" = "xnone" ; then
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <windows.h>]],
-    [[CreateThread(NULL, 0, NULL, NULL, 0, NULL);]])],
-    [AC_DEFINE([HAVE_WINTHREADS], [1], [Use Windows threads as thread implementation])
-    thread_impl=windows
-    AC_MSG_RESULT([windows])])
-fi
-
-if test "x$thread_impl" = "xnone" ; then
-  AC_MSG_RESULT([none])
-else
-  AC_DEFINE([HAVE_THREADS], [1], [Defined if there is any thread implementation at all])
 fi
 
 dnl Check and choose clients
@@ -730,9 +579,6 @@ if test "x$client" != "xno"; then
 
   dnl Xaw-specific overrides
   FC_XAW_CLIENT
-
-  dnl QT-specific overrides
-  FC_QT_CLIENT
 
   if test "x$gui_ftwl" = "xyes" || test "x$client" = "xall" ||
      test "x$client" = "xauto" ; then
@@ -804,7 +650,6 @@ if test "x$client" = "xall" ; then
   if test "x$gui_gtk2" = "xyes" ||
      test "x$gui_sdl" = "xyes" ||
      test "x$gui_xaw" = "xyes" ||
-     test "x$gui_qt" = "xyes" ||
      test "x$gui_ftwl" = "xyes" ||
      test "x$gui_win32" = "xyes" ||
      test "x$gui_beos" = "xyes" ||
@@ -841,11 +686,6 @@ AC_SUBST([GUI_sdl_LDFLAGS])
 AC_SUBST([GUI_xaw_CFLAGS])
 AC_SUBST([GUI_xaw_LIBS])
 AC_SUBST([GUI_xaw_LDFLAGS])
-AC_SUBST([GUI_qt_CPPFLAGS])
-AC_SUBST([GUI_qt_CFLAGS])
-AC_SUBST([GUI_qt_CXXFLAGS])
-AC_SUBST([GUI_qt_LIBS])
-AC_SUBST([GUI_qt_LDFLAGS])
 AC_SUBST([GUI_ftwl_CFLAGS])
 AC_SUBST([GUI_ftwl_LIBS])
 AC_SUBST([GUI_ftwl_LDFLAGS])
@@ -868,7 +708,6 @@ AM_CONDITIONAL(AUDIO_SDL, test "x$SDL_mixer" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_SDL, test "x$gui_sdl" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_2_0, test "x$gui_gtk2" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "x$gui_xaw" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_QT, test "x$gui_qt" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_STUB, test "x$gui_stub" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_WIN32, test "x$gui_win32" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_FTWL, test "x$gui_ftwl" = "xyes")
@@ -887,7 +726,7 @@ fi
 
 dnl Checks for additional server libraries:
 if test "x$server" = "xyes"; then
-    SERVER_LIBS="-lm ${SERVER_LIBS}"
+    SERVER_LIBS=" -lm "
 
     dnl Some systems (e.g., BeOS) need this lib
     AC_CHECK_LIB(bind, gethostbyaddr, SERVER_LIBS="-lbind $SERVER_LIBS")
@@ -1033,24 +872,6 @@ AC_SUBST([LUA_CFLAGS])
 AC_SUBST([LUA_LIBS])
 AC_SUBST([LUA_AS_DEPENDENCY])
 
-if test x$enable_fcdb = xyes ; then
-  LUASQL_CFLAGS="-I\$(top_srcdir)/dependencies/luasql-2.1.1/src"
-  LUASQL_LIBS=""
-  if test x$fcdb_mysql = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql-2.1.1/src/libluasql_mysql.a"
-  fi
-  if test x$fcdb_postgres = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql-2.1.1/src/libluasql_postgres.a"
-  fi
-  if test x$fcdb_sqlite3 = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql-2.1.1/src/libluasql_sqlite3.a"
-  fi
-  LUASQL_AS_DEPENDENCY="$LUASQL_LIBS"
-
-  AC_SUBST([LUASQL_CFLAGS])
-  AC_SUBST([LUASQL_LIBS])
-  AC_SUBST([LUASQL_AS_DEPENDENCY])
-fi
 
 TOLUA_CFLAGS="-I\$(top_srcdir)/dependencies/tolua-5.1/include"
 TOLUA_LIBS="\$(top_builddir)/dependencies/tolua-5.1/src/lib/libtolua.a"
@@ -1129,12 +950,11 @@ AC_CONFIG_COMMANDS([fc_default-5],[[if test x`uname -s` = xBeOS ; then
    fi]],[[]])
 
 CFLAGS="$EXTRA_DEBUG_CFLAGS $CFLAGS"
-CXXFLAGS="$EXTRA_DEBUG_CXXFLAGS $CXXFLAGS"
 
 dnl Rebuild 'configure' whenever fc_version changes, if maintainer mode enabled.
 AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/fc_version"])
 
-dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
+dnl Make sure that config.h changes when ever CPPFLAGS or CFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
 dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
@@ -1144,8 +964,6 @@ AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
                    [These are the CPPFLAGS used in compilation])
 AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
                    [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
@@ -1203,13 +1021,9 @@ AC_CONFIG_FILES([Makefile
 	  dependencies/tolua-5.1/src/Makefile
 	  dependencies/tolua-5.1/src/lib/Makefile
           dependencies/tolua-5.1/src/bin/Makefile
-          dependencies/luasql-2.1.1/Makefile
-          dependencies/luasql-2.1.1/src/Makefile
 	  common/Makefile
 	  common/aicore/Makefile
 	  ai/Makefile
-          ai/default/Makefile
-          ai/stub/Makefile
 	  tests/Makefile
   	  win32/Makefile
 	  client/Makefile
@@ -1218,7 +1032,6 @@ AC_CONFIG_FILES([Makefile
 	  client/gui-sdl/Makefile
 	  client/gui-gtk-2.0/Makefile
 	  client/gui-xaw/Makefile
-          client/gui-qt/Makefile
 	  client/gui-win32/Makefile
 	  client/gui-ftwl/Makefile
 	  client/gui-stub/Makefile
@@ -1284,20 +1097,14 @@ AC_OUTPUT
 AC_MSG_NOTICE([
 ****************** Configuration Summary ******************
 
-  == General build options ==
-  Shared libraries:      $enable_shared
-  Debugging support:     $enable_debug
-  Profiling support:     $enable_gprof
-  IPv6 support:          $enable_ipv6
-
-  == Client ==
   Build freeciv client:  $client
+    Debugging support:     $enable_debug
+    Profiling support:     $enable_gprof
 
   Maintained client frontends:
     Gtk-2.0: $gui_gtk2
     SDL:     $gui_sdl
     Xaw:     $gui_xaw
-    QT:      $gui_qt
     Stub:    $gui_stub
 
   Not maintained client frontends:
@@ -1305,15 +1112,9 @@ AC_MSG_NOTICE([
     Win32:   $gui_win32
     FTWL:    $gui_ftwl
 
-  == Server ==
   Build freeciv server:  $server
-    AI modules support:    $enable_aimodules
-    Database support:      $enable_fcdb
-      mysql:                 $fcdb_mysql
-      postgres:              $fcdb_postgres
-      sqlite3:               $fcdb_sqlite3
-
-  Map image toolkits:
-    ppm:        built-in
-    MagickWand: $mapimg_magickwand
+    Debugging support:     $enable_debug
+    Profiling support:     $enable_gprof
+    Auth database support: $auth
 ])
+

@@ -22,7 +22,6 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiunit.h"
 
 struct pf_path;
 struct pf_parameter;
@@ -33,6 +32,18 @@ struct pft_amphibious;
  * Pass as fearfulness values to ai_avoid_risks.
  */
 #define NORMAL_STACKING_FEARFULNESS ((double)PF_TURN_FACTOR / 36.0)
+
+#ifdef DEBUG
+#define CHECK_UNIT(punit)                                                   \
+  (fc_assert(punit != NULL),                                                \
+   fc_assert(unit_type(punit) != NULL),                                     \
+   fc_assert(unit_owner(punit) != NULL),                                    \
+   fc_assert(player_by_number(player_index(unit_owner(punit)))              \
+             == unit_owner(punit)),                                         \
+   fc_assert(game_unit_by_number(punit->id) != NULL))
+#else
+#define CHECK_UNIT(punit) /* Do nothing */
+#endif
 
 /*
  * Initialise using ai_avoid_risks()
@@ -72,10 +83,8 @@ bool ai_unit_goto_constrained(struct unit *punit, struct tile *ptile,
 bool ai_unit_goto(struct unit *punit, struct tile *ptile);
 bool goto_is_sane(struct unit *punit, struct tile *ptile, bool omni);
 
-void ai_unit_new_task(struct unit *punit, enum ai_unit_task task, 
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, 
                       struct tile *ptile);
-void ai_unit_new_adv_task(struct unit *punit, enum adv_unit_task task,
-                          struct tile *ptile);
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
 bool ai_unit_attack(struct unit *punit, struct tile *ptile);
 bool ai_unit_move(struct unit *punit, struct tile *ptile);

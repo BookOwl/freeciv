@@ -46,14 +46,12 @@
 
 /* server */
 #include "barbarian.h"
-#include "citizenshand.h"
 #include "citytools.h"
 #include "cityturn.h"
 #include "diplomats.h"
 #include "maphand.h"
 #include "notify.h"
 #include "plrhand.h"
-#include "sanitycheck.h"
 #include "spacerace.h"
 #include "srv_main.h"
 #include "techtools.h"
@@ -639,10 +637,9 @@ static void city_add_unit(struct player *pplayer, struct unit *punit)
   struct city *pcity = tile_city(punit->tile);
 
   fc_assert_ret(unit_pop_value(punit) > 0);
-  city_size_add(pcity, unit_pop_value(punit));
+  pcity->size += unit_pop_value(punit);
   /* Make the new people something, otherwise city fails the checks */
   pcity->specialists[DEFAULT_SPECIALIST] += unit_pop_value(punit);
-  citizens_update(pcity);
   /* update squared city radius; no worker arrangement needed - it is done
    * unconditionally below */
   city_map_update_radius_sq(pcity, FALSE);
@@ -652,9 +649,6 @@ static void city_add_unit(struct player *pplayer, struct unit *punit)
                 unit_tile_link(punit),
                 city_link(pcity));
   wipe_unit(punit);
-
-  sanity_check_city(pcity);
-
   send_city_info(NULL, pcity);
 }
 
@@ -747,8 +741,8 @@ void handle_unit_change_activity(struct player *pplayer, int unit_id,
 
   /* Remove city spot reservations for AI settlers on city founding
    * mission, before goto_tile reset. */
-  if (punit->server.adv->task != AUT_NONE) {
-    adv_unit_new_task(punit, AUT_NONE, NULL);
+  if (punit->server.adv->role != AIUNIT_NONE) {
+    ai_unit_new_role(punit, AIUNIT_NONE, NULL);
   }
 
   punit->ai_controlled = FALSE;
@@ -963,7 +957,7 @@ static bool unit_bombard(struct unit *punit, struct tile *ptile)
   unit_forget_last_activity(punit);
   
   if (pcity
-      && city_size_get(pcity) > 1
+      && pcity->size > 1
       && get_city_bonus(pcity, EFT_UNIT_NO_LOSE_POP) == 0
       && kills_citizen_after_attack(punit)) {
     city_reduce_size(pcity, 1, pplayer);
@@ -1062,7 +1056,7 @@ static void unit_attack_handling(struct unit *punit, struct unit *pdefender)
 
   if (punit->hp > 0
       && (pcity = tile_city(def_tile))
-      && city_size_get(pcity) > 1
+      && pcity->size > 1
       && get_city_bonus(pcity, EFT_UNIT_NO_LOSE_POP) == 0
       && kills_citizen_after_attack(punit)) {
     city_reduce_size(pcity, 1, pplayer);
@@ -2197,7 +2191,9 @@ void handle_unit_orders(struct player *pplayer,
    * settlers on city founding mission, city spot reservation
    * from goto_tile must be freed, and free_unit_orders() loses
    * goto_tile information */
-  adv_unit_new_task(punit, AUT_NONE, NULL);
+  if (punit->server.adv->role != AIUNIT_NONE) {
+    ai_unit_new_role(punit, AIUNIT_NONE, NULL);
+  }
 
   free_unit_orders(punit);
   /* If we waited on a tile, reset punit->done_moving */

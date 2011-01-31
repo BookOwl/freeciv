@@ -33,9 +33,11 @@
 #include "player.h"
 #include "unit.h"
 
+/* ai */
+#include "advdiplomacy.h"
+
 /* scripting */
-#include "script_game.h"
-#include "script_types.h"
+#include "script.h"
 
 /* server */
 #include "citytools.h"

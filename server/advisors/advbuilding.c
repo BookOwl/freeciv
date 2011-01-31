@@ -42,8 +42,8 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aitools.h"
+#include "defaultai.h"
 
 #include "advbuilding.h"
 
@@ -137,7 +137,7 @@ static void calculate_city_clusters(struct player *pplayer)
   Calculate walking distances to wonder city from nearby cities.
 **************************************************************************/
 static void calculate_wonder_helpers(struct player *pplayer, 
-                                     struct adv_data *ai)
+                                     struct ai_data *ai)
 {
   struct pf_map *pfm;
   struct pf_parameter parameter;
@@ -193,7 +193,7 @@ static void calculate_wonder_helpers(struct player *pplayer,
   base want of a city.
 **************************************************************************/
 static inline int city_want(struct player *pplayer, struct city *acity, 
-                            struct adv_data *ai, struct impr_type *pimprove)
+                            struct ai_data *ai, struct impr_type *pimprove)
 {
   int want = 0, prod[O_LAST], bonus[O_LAST], waste[O_LAST], i;
 
@@ -260,7 +260,7 @@ static inline int city_want(struct player *pplayer, struct city *acity,
 static int base_want(struct player *pplayer, struct city *pcity, 
                      struct impr_type *pimprove)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int final_want = 0;
   int wonder_player_id = WONDER_NOT_OWNED;
   int wonder_city_id = WONDER_NOT_BUILT;
@@ -393,7 +393,7 @@ static struct unit_class *affected_unit_class(const struct effect *peffect)
   Number of AI stats units affected by effect
 **************************************************************************/
 static int num_affected_units(const struct effect *peffect,
-                              const struct adv_data *ai)
+                              const struct ai_data *ai)
 {
   struct unit_class *uclass;
   enum unit_move_type move;
@@ -402,12 +402,14 @@ static int num_affected_units(const struct effect *peffect,
   if (uclass) {
     move = uclass_move_type(uclass);
     switch (move) {
-     case UMT_LAND:
+     case LAND_MOVING:
          return ai->stats.units.land;
-     case UMT_SEA:
+     case SEA_MOVING:
        return ai->stats.units.sea;
-     case UMT_BOTH:
+     case BOTH_MOVING:
        return ai->stats.units.amphibious;
+     case MOVETYPE_LAST:
+       break;
     }
   }
   return ai->stats.units.land + ai->stats.units.sea
@@ -421,7 +423,7 @@ static int num_affected_units(const struct effect *peffect,
 **************************************************************************/
 static int improvement_effect_value(struct player *pplayer,
 				    struct government *gov,
-				    const struct adv_data *ai,
+				    const struct ai_data *ai,
 				    const struct city *pcity,
 				    const bool capital, 
 				    const struct impr_type *pimprove,
@@ -432,7 +434,7 @@ static int improvement_effect_value(struct player *pplayer,
 {
   int amount = peffect->value;
   struct unit_class *uclass;
-  enum unit_move_type move = unit_move_type_invalid();
+  enum unit_move_type move = MOVETYPE_LAST;
   int num;
 
   switch (peffect->type) {
@@ -597,8 +599,8 @@ static int improvement_effect_value(struct player *pplayer,
     break;  /* Useless for AI */
   case EFT_NUKE_PROOF:
     if (ai->threats.nuclear) {
-      v += city_size_get(pcity) * unit_list_size(pcity->tile->units)
-           * (capital + 1) * amount / 100;
+      v += pcity->size * unit_list_size(pcity->tile->units) * (capital + 1)
+	* amount / 100;
     }
     break;
   case EFT_REVEAL_MAP:
@@ -617,9 +619,9 @@ static int improvement_effect_value(struct player *pplayer,
     if (get_city_bonus(pcity, EFT_SIZE_UNLIMIT) == 0) {
       const int aqueduct_size = get_city_bonus(pcity, EFT_SIZE_ADJ);
 
-      if (!city_can_grow_to(pcity, city_size_get(pcity) + 1)) {
+      if (!city_can_grow_to(pcity, pcity->size + 1)) {
 	v += pcity->surplus[O_FOOD] * ai->food_priority * amount;
-	if (city_size_get(pcity) == aqueduct_size) {
+	if (pcity->size == aqueduct_size) {
 	  v += 30 * pcity->surplus[O_FOOD];
 	}
       }
@@ -678,7 +680,7 @@ static int improvement_effect_value(struct player *pplayer,
       move = uclass_move_type(uclass);
     }
 
-    if (uclass == NULL || move == UMT_SEA) {
+    if (uclass == NULL || move == SEA_MOVING) {
       /* Helps against sea units */
       if (is_ocean_tile(pcity->tile)) {
         v += ai->threats.ocean[-tile_continent(pcity->tile)]
@@ -695,7 +697,7 @@ static int improvement_effect_value(struct player *pplayer,
       }
     }
     v += (amount/20 + ai->threats.invasions - 1) * c; /* for wonder */
-    if (capital || uclass == NULL || move != UMT_SEA) {
+    if (capital || uclass == NULL || move != SEA_MOVING) {
       if (ai->threats.continent[tile_continent(pcity->tile)]
           || capital
           || (ai->threats.invasions
@@ -757,7 +759,6 @@ static int improvement_effect_value(struct player *pplayer,
     break;
     /* This has no effect for AI */
   case EFT_VISIBLE_WALLS:
-  case EFT_CITY_IMAGE:
   case EFT_SHIELD2GOLD_FACTOR:
     break;
   case EFT_TECH_COST_FACTOR:
@@ -913,7 +914,7 @@ static void adjust_improvement_wants_by_effects(struct player *pplayer,
   int v = 0;
   int cities[REQ_RANGE_COUNT];
   int nplayers = normal_player_count();
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   bool capital = is_capital(pcity);
   bool can_build = TRUE;
   struct government *gov = government_of_player(pplayer);
@@ -1215,7 +1216,7 @@ static void adjust_wants_by_effects(struct player *pplayer,
 **************************************************************************/
 void building_advisor(struct player *pplayer)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct city *wonder_city = game_city_by_number(ai->wonder_city);
 
   if (wonder_city && city_owner(wonder_city) != pplayer) {

@@ -32,7 +32,7 @@
 #include "plrhand.h"
 
 /* server/scripting */
-#include "script_game.h"
+#include "script.h"
 
 #include "api_methods.h"
 

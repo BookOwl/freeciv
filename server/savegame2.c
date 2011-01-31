@@ -35,11 +35,6 @@
   current | (mapped to current savegame format)            | ----/--/-- |  0
           | first version (svn17538)                       | 2010/07/05 |  -
   2.3.0   | 2.3.0 release                                  | 2010/11/?? |  3
-  2.4.0   | 2.4.0 release (development)                    | 20../../.. | 10
-          | * player ai type                               |            |
-          | * delegation                                   |            |
-          | * citizens                                     |            |
-          | * save player color                            |            |
           |                                                |            |
 
   Structure of this file:
@@ -108,27 +103,21 @@
 #include "timing.h"
 
 /* common */
-#include "ai.h"
 #include "bitvector.h"
 #include "capability.h"
-#include "citizens.h"
 #include "city.h"
 #include "game.h"
 #include "government.h"
 #include "map.h"
-#include "mapimg.h"
 #include "movement.h"
 #include "packets.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "specialist.h"
 #include "unit.h"
 #include "unitlist.h"
 
 /* server */
-#include "aiiface.h"
 #include "barbarian.h"
-#include "citizenshand.h"
 #include "citytools.h"
 #include "cityturn.h"
 #include "diplhand.h"
@@ -137,7 +126,6 @@
 #include "notify.h"
 #include "plrhand.h"
 #include "ruleset.h"
-#include "sanitycheck.h"
 #include "savegame.h"
 #include "score.h"
 #include "settings.h"
@@ -157,7 +145,12 @@
 #include "utilities.h"
 
 /* server/scripting */
-#include "script_game.h"
+#include "script.h"
+
+/* ai */
+#include "aicity.h"
+#include "aiunit.h"
+#include "defaultai.h"
 
 #include "savegame2.h"
 
@@ -174,10 +167,6 @@ static bool sg_success;
     return _val;                                                            \
   }
 
-#define sg_warn(condition, message, ...)                                    \
-  if (!(condition)) {                                                       \
-    log_sg(message, ## __VA_ARGS__);                                        \
-  }
 #define sg_warn_ret(condition, message, ...)                                \
   if (!(condition)) {                                                       \
     log_sg(message, ## __VA_ARGS__);                                        \
@@ -509,9 +498,6 @@ static void sg_save_player_vision(struct savedata *saving,
 static void sg_load_event_cache(struct loaddata *loading);
 static void sg_save_event_cache(struct savedata *saving);
 
-static void sg_load_mapimg(struct loaddata *loading);
-static void sg_save_mapimg(struct savedata *saving);
-
 static void sg_load_sanitycheck(struct loaddata *loading);
 static void sg_save_sanitycheck(struct savedata *saving);
 
@@ -562,23 +548,9 @@ void savegame2_save(struct section_file *file, const char *save_reason,
   struct timer *savetimer = new_timer_start(TIMER_CPU, TIMER_DEBUG);
 #endif
 
-  if (game.server.saveversion == -1) {
-    /* freeciv 2.2.x */
-    if (player_count() > 32) {
-      log_error("Error: freeciv 2.2.x can't handle more than 32 players.");
-    } else if (MAPSIZE_FULLSIZE != map.server.mapsize
-               || 30 < map.server.size) {
-      log_error("Error: freeciv 2.2.x can't handle bigger maps.");
-    } else {
-      log_verbose("saving game in old format ...");
-      game_save(file, save_reason, scenario);
-    }
-  } else {
-    /* freeciv 2.2.99 or newer */
-    log_verbose("saving game in new format ...");
-    savegame2_save_real(file, save_reason, scenario,
-                        game.server.saveversion);
-  }
+  /* freeciv 2.2.99 or newer */
+  log_verbose("saving game in new format ...");
+  savegame2_save_real(file, save_reason, scenario, game.server.saveversion);
 
 #ifdef DEBUG
   stop_timer(savetimer);
@@ -628,8 +600,6 @@ static void savegame2_load_real(struct section_file *file)
   sg_load_players(loading);
   /* [event_cache] */
   sg_load_event_cache(loading);
-  /* [mapimg] */
-  sg_load_mapimg(loading);
 
   /* Sanity checks for the loaded game. */
   sg_load_sanitycheck(loading);
@@ -676,8 +646,6 @@ static void savegame2_save_real(struct section_file *file,
   sg_save_players(saving);
   /* [event_cache] */
   sg_save_event_cache(saving);
-  /* [mapimg] */
-  sg_save_mapimg(saving);
 
   /* Sanity checks for the saved game. */
   sg_save_sanitycheck(saving);
@@ -2207,20 +2175,14 @@ static void sg_load_map_tiles(struct loaddata *loading)
     const char *spec_sprite = secfile_lookup_str(loading->file,
                                                  "map.spec_sprite_%d_%d",
                                                  ptile->nat_x, ptile->nat_y);
-    const char *label = secfile_lookup_str_default(loading->file, NULL,
-                                                   "map.label_%d_%d",
-                                                   ptile->nat_x, ptile->nat_y);
     if (NULL != ptile->spec_sprite) {
       ptile->spec_sprite = fc_strdup(spec_sprite);
-    }
-    if (label != NULL) {
-      tile_set_label(ptile, label);
     }
   } whole_map_iterate_end;
 }
 
 /****************************************************************************
-  Save all map tiles
+  ...
 ****************************************************************************/
 static void sg_save_map_tiles(struct savedata *saving)
 {
@@ -2237,10 +2199,6 @@ static void sg_save_map_tiles(struct savedata *saving)
       secfile_insert_str(saving->file, ptile->spec_sprite,
                          "map.spec_sprite_%d_%d", ptile->nat_x,
                          ptile->nat_y);
-    }
-    if (ptile->label != NULL) {
-      secfile_insert_str(saving->file, ptile->label,
-                         "map.label_%d_%d", ptile->nat_x, ptile->nat_y);
     }
   } whole_map_iterate_end;
 }
@@ -2893,34 +2851,15 @@ static void sg_load_players_basic(struct loaddata *loading)
   /* Now, load the players from the savefile. */
   player_slots_iterate(pslot) {
     struct player *pplayer;
-    struct rgbcolor *prgbcolor = NULL;
-    int pslot_id = player_slot_index(pslot);
 
     if (NULL == secfile_section_lookup(loading->file, "player%d",
-                                       pslot_id)) {
+                                       player_slot_index(pslot))) {
       continue;
     }
 
-    /* Get player AI type. */
-    string = secfile_lookup_str(loading->file, "player%d.ai_type",
-                                player_slot_index(pslot));
-    sg_failure_ret(string != NULL, "%s", secfile_error());
-
-    /* Get player color */
-    if (!rgbcolor_load(loading->file, &prgbcolor, "player%d.color",
-                       pslot_id)) {
-      log_verbose("No color defined for player %d.", pslot_id);
-    }
-
-    /* Create player. */
-    pplayer = server_create_player(player_slot_index(pslot), string,
-                                   prgbcolor);
-    sg_failure_ret(pplayer != NULL, "Invalid AI type: '%s'!", string);
-
+    /* create player */
+    pplayer = server_create_player(player_slot_index(pslot));
     server_player_init(pplayer, FALSE, FALSE);
-
-    /* Free the color definition. */
-    rgbcolor_destroy(prgbcolor);
   } player_slots_iterate_end;
 
   /* check number of players */
@@ -3166,7 +3105,9 @@ static void sg_load_player_main(struct loaddata *loading,
   int i, plrno = player_number(plr);
   const char *string;
   struct government *gov;
+  struct ai_data *ai;
   struct player_research *research;
+  enum ai_level skill_level;
 
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
@@ -3182,13 +3123,6 @@ static void sg_load_player_main(struct loaddata *loading,
              secfile_lookup_str_default(loading->file, "",
                                         "player%d.ranked_username",
                                         plrno));
-  string = secfile_lookup_str_default(loading->file, "",
-                                      "player%d.delegation_username",
-                                      plrno);
-  /* Defaults to no delegation. */
-  if (strlen(string)) {
-    player_delegation_set(plr, string);
-  }
 
   /* Nation */
   string = secfile_lookup_str(loading->file, "player%d.nation", plrno);
@@ -3219,10 +3153,8 @@ static void sg_load_player_main(struct loaddata *loading,
                  "%s", secfile_error());
 
 
-  /* Advisor data.
-     FIXME: Results are not used at all.
-     Do we need this call for side effects? */
-  adv_data_get(plr);
+  /* AI data. */
+  ai = ai_data_get(plr);
   sg_failure_ret(secfile_lookup_bool(loading->file, &plr->ai_controlled,
                                      "player%d.ai.control", plrno),
                  "%s", secfile_error());
@@ -3298,6 +3230,9 @@ static void sg_load_player_main(struct loaddata *loading,
                                       "%s.ask_ceasefire", buf);
   } players_iterate_end;
 
+  skill_level
+    = secfile_lookup_int_default(loading->file, game.info.skill_level,
+                                 "player%d.ai.skill_level", plrno);
   /* Some sane defaults */
   BV_CLR_ALL(plr->ai_common.handicaps);
   plr->ai_common.fuzzy = 0;
@@ -3491,19 +3426,12 @@ static void sg_save_player_main(struct savedata *saving,
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
-  secfile_insert_str(saving->file, plr->ai->name,
-                     "player%d.ai_type", plrno);
   secfile_insert_str(saving->file, player_name(plr),
                      "player%d.name", plrno);
   secfile_insert_str(saving->file, plr->username,
                      "player%d.username", plrno);
-  rgbcolor_save(saving->file, plr->rgb, "player%d.color", plrno);
   secfile_insert_str(saving->file, plr->ranked_username,
                      "player%d.ranked_username", plrno);
-  secfile_insert_str(saving->file,
-                     player_delegation_get(plr) ? player_delegation_get(plr)
-                                                : "",
-                     "player%d.delegation_username", plrno);
   secfile_insert_str(saving->file, nation_rule_name(nation_of_player(plr)),
                      "player%d.nation", plrno);
   secfile_insert_int(saving->file, plr->team ? team_index(plr->team) : -1,
@@ -3744,9 +3672,9 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
 {
   struct player *past;
   const char *kind, *name, *string;
-  int id, i, repair, specialists = 0, workers = 0, value;
+  int id, i, repair, specialists = 0, workers = 0;
   int nat_x, nat_y;
-  citizens size;
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &nat_x, "%s.x", citystr),
                   FALSE, "%s", secfile_error());
@@ -3772,22 +3700,15 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     pcity->original = past;
   }
 
-  sg_warn_ret_val(secfile_lookup_int(loading->file, &value, "%s.size",
+  sg_warn_ret_val(secfile_lookup_int(loading->file, &pcity->size, "%s.size",
                                      citystr), FALSE, "%s", secfile_error());
-  size = (citizens)value; /* set the correct type */
-  sg_warn_ret_val(value == (int)size, FALSE,
-                  "Invalid city size: %d, set to %d", value, size);
-  city_size_set(pcity, size);
 
   specialist_type_iterate(sp) {
     sg_warn_ret_val(
-        secfile_lookup_int(loading->file, &value, "%s.n%s", citystr,
+        secfile_lookup_int(loading->file, &pcity->specialists[sp],
+                           "%s.n%s", citystr,
                            specialist_rule_name(specialist_by_number(sp))),
         FALSE, "%s", secfile_error());
-    pcity->specialists[sp] = (citizens)value; /* set the correct type */
-    sg_warn_ret_val(value == (int)pcity->specialists[sp], FALSE,
-                    "Invalid number of specialists: %d, set to %d.", value,
-                    pcity->specialists[sp]);
     specialists += pcity->specialists[sp];
   } specialist_type_iterate_end;
 
@@ -3937,8 +3858,8 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     if (NULL != pwork) {
       log_sg("[%s] city center of '%s' (%d,%d) [%d] is worked by '%s' "
              "(%d,%d) [%d]; repairing ", citystr, city_name(pcity),
-             TILE_XY(city_tile(pcity)), city_size_get(pcity), city_name(pwork),
-             TILE_XY(city_tile(pwork)), city_size_get(pwork));
+             TILE_XY(city_tile(pcity)), pcity->size, city_name(pwork),
+             TILE_XY(city_tile(pwork)), pwork->size);
 
       tile_set_worked(city_tile(pcity), NULL); /* remove tile from pwork */
       pwork->specialists[DEFAULT_SPECIALIST]++;
@@ -3946,7 +3867,7 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     } else {
       log_sg("[%s] city center of '%s' (%d,%d) [%d] is empty; repairing ",
              citystr, city_name(pcity), TILE_XY(city_tile(pcity)),
-             city_size_get(pcity));
+             pcity->size);
     }
 
     /* repair pcity */
@@ -3954,11 +3875,11 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     city_repair_size(pcity, -1);
   }
 
-  repair = city_size_get(pcity) - specialists - (workers - FREE_WORKED_TILES);
+  repair = pcity->size - specialists - (workers - FREE_WORKED_TILES);
   if (0 != repair) {
     log_sg("[%s] size mismatch for '%s' (%d,%d): size [%d] != "
            "(workers [%d] - free worked tiles [%d]) + specialists [%d]",
-           citystr, city_name(pcity), TILE_XY(city_tile(pcity)), city_size_get(pcity),
+           citystr, city_name(pcity), TILE_XY(city_tile(pcity)), pcity->size,
            workers, FREE_WORKED_TILES, specialists);
 
     /* repair pcity */
@@ -3977,40 +3898,29 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     }
   }
 
-  CALL_FUNC_EACH_AI(city_load, loading->file, pcity, citystr);
+  /* FIXME: remove this when the urgency is properly recalculated. */
+  city_data->urgency
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.urgency", citystr);
 
-  /* Nation of citizens. */
-  if (game.info.citizen_nationality == TRUE) {
-    citizens_init(pcity);
-    player_slots_iterate(pslot) {
-      int nationality;
+  /* avoid fc_rand recalculations on subsequent reload. */
+  city_data->building_turn
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.building_turn",
+                                 citystr);
+  city_data->building_wait
+    = secfile_lookup_int_default(loading->file, BUILDING_WAIT_MINIMUM,
+                                 "%s.ai.building_wait", citystr);
 
-      nationality = secfile_lookup_int_default(loading->file, -1,
-                                               "%s.citizen%d", citystr,
-                                               player_slot_index(pslot));
-      if (nationality > 0 && !player_slot_is_used(pslot)) {
-        log_sg("Citizens of an invalid nation for %s (player slot %d)!",
-                city_name(pcity), player_slot_index(pslot));
-        continue;
-      }
-
-      if (nationality != -1 && player_slot_is_used(pslot)) {
-        sg_warn(nationality >= 0 && nationality <= MAX_CITY_SIZE,
-                "Invalid value for citizens of player %d in %s: %d.",
-                player_slot_index(pslot), city_name(pcity), nationality);
-        citizens_nation_set(pcity, pslot, nationality);
-      }
-    } player_slots_iterate_end;
-    /* Sanity check. */
-    size = citizens_count(pcity);
-    if (size != city_size_get(pcity)) {
-      log_sg("City size and number of citizens does not match (%d != %d)! "
-             "Repairing ...", city_size_get(pcity), size);
-      citizens_update(pcity);
-    }
-  }
-
-  sanity_check_city(pcity);
+  /* avoid fc_rand and expensive recalculations on subsequent reload. */
+  city_data->founder_turn
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.founder_turn",
+                                 citystr);
+  city_data->founder_want
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.founder_want",
+                                 citystr);
+  city_data->founder_boat
+    = secfile_lookup_bool_default(loading->file,
+                                  (city_data->founder_want < 0),
+                                  "%s.ai.founder_boat", citystr);
 
   return TRUE;
 }
@@ -4024,7 +3934,6 @@ static void sg_save_player_cities(struct savedata *saving,
   int wlist_max_length = 0;
   int i = 0;
   int plrno = player_number(plr);
-  bool nations[MAX_NUM_PLAYER_SLOTS];
 
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
@@ -4032,27 +3941,10 @@ static void sg_save_player_cities(struct savedata *saving,
   secfile_insert_int(saving->file, city_list_size(plr->cities),
                      "player%d.ncities", plrno);
 
-  if (game.info.citizen_nationality == TRUE) {
-    /* Initialise the nation list for the citizens information. */
-    player_slots_iterate(pslot) {
-      nations[player_slot_index(pslot)] = FALSE;
-    } player_slots_iterate_end;
-  }
-
-  /* First determine lenght of longest worklist and the nations we have. */
+  /* First determine lenght of longest worklist */
   city_list_iterate(plr->cities, pcity) {
     if (pcity->worklist.length > wlist_max_length) {
       wlist_max_length = pcity->worklist.length;
-    }
-
-    if (game.info.citizen_nationality == TRUE) {
-      /* Find all nations of the citizens,*/
-      players_iterate(pplayer) {
-        if (!nations[player_index(pplayer)]
-            && citizens_nation_get(pcity, pplayer->slot) != 0) {
-          nations[player_index(pplayer)] = TRUE;
-        }
-      } players_iterate_end;
     }
   } city_list_iterate_end;
 
@@ -4061,6 +3953,7 @@ static void sg_save_player_cities(struct savedata *saving,
     char impr_buf[MAX_NUM_ITEMS + 1];
     char buf[32];
     int j;
+    struct ai_city *city_data = def_ai_city_data(pcity);
 
     fc_snprintf(buf, sizeof(buf), "player%d.c%d", plrno, i);
 
@@ -4070,7 +3963,7 @@ static void sg_save_player_cities(struct savedata *saving,
 
     secfile_insert_int(saving->file, player_number(pcity->original),
                        "%s.original", buf);
-    secfile_insert_int(saving->file, city_size_get(pcity), "%s.size", buf);
+    secfile_insert_int(saving->file, pcity->size, "%s.size", buf);
 
     specialist_type_iterate(sp) {
       secfile_insert_int(saving->file, pcity->specialists[sp], "%s.n%s", buf,
@@ -4162,18 +4055,23 @@ static void sg_save_player_cities(struct savedata *saving,
                           "%s.option%d", buf, j);
     }
 
-    CALL_FUNC_EACH_AI(city_save, saving->file, pcity, buf);
+    /* FIXME: remove this when the urgency is properly recalculated. */
+    secfile_insert_int(saving->file, city_data->urgency,
+                       "%s.ai.urgency", buf);
 
-    if (game.info.citizen_nationality == TRUE) {
-      /* Save nationality of the citizens,*/
-      players_iterate(pplayer) {
-        if (nations[player_index(pplayer)]) {
-          secfile_insert_int(saving->file,
-                             citizens_nation_get(pcity, pplayer->slot),
-                             "%s.citizen%d", buf, player_index(pplayer));
-        }
-      } players_iterate_end;
-    }
+    /* avoid fc_rand recalculations on subsequent reload. */
+    secfile_insert_int(saving->file, city_data->building_turn,
+                       "%s.ai.building_turn", buf);
+    secfile_insert_int(saving->file, city_data->building_wait,
+                       "%s.ai.building_wait", buf);
+
+    /* avoid fc_rand and expensive recalculations on subsequent reload. */
+    secfile_insert_int(saving->file, city_data->founder_turn,
+                       "%s.ai.founder_turn", buf);
+    secfile_insert_int(saving->file, city_data->founder_want,
+                       "%s.ai.founder_want", buf);
+    secfile_insert_bool(saving->file, city_data->founder_boat,
+                       "%s.ai.founder_boat", buf);
 
     i++;
   } city_list_iterate_end;
@@ -4264,6 +4162,7 @@ static bool sg_load_player_unit(struct loaddata *loading,
   enum tile_special_type target;
   struct base_type *pbase = NULL;
   int base;
+  struct unit_ai *unit_data = def_ai_unit_data(punit);
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &punit->id, "%s.id",
                                      unitstr), FALSE, "%s", secfile_error());
@@ -4410,9 +4309,14 @@ static bool sg_load_player_unit(struct loaddata *loading,
                                       unitstr);
   }
 
-  /* Load AI data of the unit. */
-  CALL_FUNC_EACH_AI(unit_load, loading->file, punit, unitstr);
-
+  unit_data->passenger
+    = secfile_lookup_int_default(loading->file, 0, "%s.passenger", unitstr);
+  unit_data->ferryboat
+    = secfile_lookup_int_default(loading->file, 0, "%s.ferryboat", unitstr);
+  unit_data->charge
+    = secfile_lookup_int_default(loading->file, 0, "%s.charge", unitstr);
+  unit_data->bodyguard
+    = secfile_lookup_int_default(loading->file, 0, "%s.bodyguard", unitstr);
   sg_warn_ret_val(secfile_lookup_bool(loading->file,
                                       &punit->ai_controlled,
                                       "%s.ai", unitstr), FALSE,
@@ -4537,6 +4441,8 @@ static void sg_save_player_units(struct savedata *saving,
                      "player%d.nunits", player_number(plr));
 
   unit_list_iterate(plr->units, punit) {
+    struct unit_ai *unit_data = def_ai_unit_data(punit);
+
     char buf[32];
     fc_snprintf(buf, sizeof(buf), "player%d.u%d", player_number(plr), i);
 
@@ -4588,10 +4494,14 @@ static void sg_save_player_units(struct savedata *saving,
 
     secfile_insert_bool(saving->file, punit->ai_controlled,
                         "%s.ai", buf);
-
-    /* Save AI data of the unit. */
-    CALL_FUNC_EACH_AI(unit_save, saving->file, punit, buf);
-
+    secfile_insert_int(saving->file, unit_data->passenger,
+                       "%s.passenger", buf);
+    secfile_insert_int(saving->file, unit_data->ferryboat,
+                       "%s.ferryboat", buf);
+    secfile_insert_int(saving->file, unit_data->charge,
+                       "%s.charge", buf);
+    secfile_insert_int(saving->file, unit_data->bodyguard,
+                       "%s.bodyguard", buf);
     secfile_insert_int(saving->file, punit->server.ord_map,
                        "%s.ord_map", buf);
     secfile_insert_int(saving->file, punit->server.ord_city,
@@ -4957,7 +4867,7 @@ static void sg_load_player_vision(struct loaddata *loading,
     char buf[32];
     fc_snprintf(buf, sizeof(buf), "player%d.dc%d", plrno, i);
 
-    pdcity = vision_site_new(0, NULL, NULL);
+    pdcity = create_vision_site(0, NULL, NULL);
     if (sg_load_player_vision_city(loading, plr, pdcity, buf)) {
       change_playertile_site(map_get_player_tile(pdcity->location, plr),
                              pdcity);
@@ -4966,7 +4876,7 @@ static void sg_load_player_vision(struct loaddata *loading,
       /* Error loading the data. */
       log_sg("Skipping seen city %d for player %d.", i, plrno);
       if (pdcity != NULL) {
-        vision_site_destroy(pdcity);
+        free_vision_site(pdcity);
       }
     }
   }
@@ -4995,8 +4905,7 @@ static bool sg_load_player_vision_city(struct loaddata *loading,
                                        const char *citystr)
 {
   const char *string;
-  int i, id, size;
-  citizens city_size;
+  int i, id;
   int nat_x, nat_y;
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &nat_x, "%s.x",
@@ -5022,13 +4931,9 @@ static bool sg_load_player_vision_city(struct loaddata *loading,
   sg_warn_ret_val(IDENTITY_NUMBER_ZERO < pdcity->identity, FALSE,
                   "%s has invalid id (%d); skipping.", citystr, id);
 
-  sg_warn_ret_val(secfile_lookup_int(loading->file, &size,
+  sg_warn_ret_val(secfile_lookup_int(loading->file, &pdcity->size,
                                      "%s.size", citystr),
                   FALSE, "%s", secfile_error());
-  city_size = (citizens)size; /* set the correct type */
-  sg_warn_ret_val(size == (int)city_size, FALSE,
-                  "Invalid city size: %d; set to %d.", size, city_size);
-  vision_site_size_set(pdcity, city_size);
 
   /* Initialise list of improvements */
   BV_CLR_ALL(pdcity->improvements);
@@ -5178,15 +5083,14 @@ static void sg_save_player_vision(struct savedata *saving,
 
     fc_snprintf(buf, sizeof(buf), "player%d.dc%d", plrno, i);
 
-    if (NULL != pdcity && plr != vision_site_owner(pdcity)) {
+    if (NULL != pdcity && plr != vision_owner(pdcity)) {
       secfile_insert_int(saving->file, ptile->nat_y, "%s.y", buf);
       secfile_insert_int(saving->file, ptile->nat_x, "%s.x", buf);
       secfile_insert_int(saving->file, pdcity->identity, "%s.id", buf);
-      secfile_insert_int(saving->file, player_number(vision_site_owner(pdcity)),
+      secfile_insert_int(saving->file, player_number(vision_owner(pdcity)),
                          "%s.owner", buf);
 
-      secfile_insert_int(saving->file, vision_site_size_get(pdcity),
-                         "%s.size", buf);
+      secfile_insert_int(saving->file, pdcity->size, "%s.size", buf);
       secfile_insert_bool(saving->file, pdcity->occupied,
                           "%s.occupied", buf);
       secfile_insert_bool(saving->file, pdcity->walls, "%s.walls", buf);
@@ -5244,71 +5148,6 @@ static void sg_save_event_cache(struct savedata *saving)
   }
 
   event_cache_save(saving->file, "event_cache");
-}
-
-/* =======================================================================
- * Load / save the mapimg definitions.
- * ======================================================================= */
-
-/****************************************************************************
-  Load '[mapimg]'.
-****************************************************************************/
-static void sg_load_mapimg(struct loaddata *loading)
-{
-  int mapdef_count, i;
-
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  /* Clear all defined map images. */
-  while (mapimg_count() > 0) {
-    mapimg_delete(0);
-  }
-
-  mapdef_count = secfile_lookup_int_default(loading->file, 0,
-                                            "mapimg.count");
-  log_verbose("Saved map image definitions: %d.", mapdef_count);
-
-  if (0 >= mapdef_count) {
-    return;
-  }
-
-  for (i = 0; i < mapdef_count; i++) {
-    const char *p;
-
-    p = secfile_lookup_str(loading->file, "mapimg.mapdef%d", i);
-    if (NULL == p) {
-      log_verbose("[Mapimg %4d] Missing definition.", i);
-      continue;
-    }
-
-    if (!mapimg_define(p, FALSE)) {
-      log_error("Invalid map image definition %4d: %s.", i, p);
-    }
-
-    log_verbose("Mapimg %4d loaded.", i);
-  }
-}
-
-/****************************************************************************
-  Save '[mapimg]'.
-****************************************************************************/
-static void sg_save_mapimg(struct savedata *saving)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  secfile_insert_int(saving->file, mapimg_count(), "mapimg.count");
-  if (mapimg_count() > 0) {
-    int i;
-
-    for (i = 0; i < mapimg_count(); i++) {
-      char buf[MAX_LEN_MAPDEF];
-
-      mapimg_id2str(i, buf, sizeof(buf));
-      secfile_insert_str(saving->file, buf, "mapimg.mapdef%d", i);
-    }
-  }
 }
 
 /* =======================================================================
@@ -5447,80 +5286,6 @@ static void compat_save_020300(struct savedata *saving)
   log_debug("Save savegame version 2.3.0");
 }
 
-/****************************************************************************
-  ...
-****************************************************************************/
-static void compat_load_020400(struct loaddata *loading)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  log_debug("Load savegame version 2.4.0");
-
-  /* Add the default player AI. */
-  player_slots_iterate(pslot) {
-    if (NULL == secfile_section_lookup(loading->file, "player%d",
-                                       player_slot_index(pslot))) {
-      continue;
-    }
-
-    secfile_insert_str(loading->file, FC_AI_DEFAULT_NAME,
-                       "player%d.ai_type", player_slot_index(pslot));
-  } player_slots_iterate_end;
-
-  /* Player colors are assigned automatically. */
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-static void compat_save_020400(struct savedata *saving)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  log_debug("Save savegame version 2.4.0");
-
-  /* Iterate over all players. */
-  player_slots_iterate(pslot) {
-    int plrno = player_slot_index(pslot);
-
-    if (NULL == secfile_section_lookup(saving->file, "player%d",
-                                       player_slot_index(pslot))) {
-      continue;
-    }
-
-    /* Remove the definition of the AI type. */
-    secfile_entry_delete(saving->file, "player%d.ai_type", plrno);
-
-    /* Remove delegation information. */
-    secfile_entry_delete(saving->file, "player%d.delegation_username", plrno);
-  } player_slots_iterate_end;
-
-  player_slots_iterate(pslot) {
-    int ncities, i, plrid = player_slot_index(pslot);
-
-    if (NULL == secfile_section_lookup(saving->file, "player%d", plrid)) {
-      continue;
-    }
-
-    /* Remove citizens informations. */
-    ncities = secfile_lookup_int_default(saving->file, 0, "player%d.ncities",
-                                         plrid);
-    for (i = 0; i < ncities; i++) {
-      player_slots_iterate(pslot2) {
-        secfile_entry_delete(saving->file, "player%d.c%d.citizen%d",
-                             plrid, i, player_slot_index(pslot2));
-      } player_slots_iterate_end;
-    }
-
-    /* Delete player colors. */
-    secfile_entry_delete(saving->file, "player%d.color.red", plrid);
-    secfile_entry_delete(saving->file, "player%d.color.green", plrid);
-    secfile_entry_delete(saving->file, "player%d.color.blue", plrid);
-  } player_slots_iterate_end;
-}
-
 struct compatibility {
   int version;
   const struct sset_val_name name;
@@ -5537,18 +5302,12 @@ struct compatibility {
  * above and add the needed code to save/load the old version below. Thus,
  * old savegames can still be created and loaded while the main definition
  * represents the current state of the art. */
-/* While developing freeciv 2.4.0, add the compatibility functions to
- * - compat_load_020400 to load old savegame, and to
- * - compat_save_020400 to create an old savegame. */
 static struct compatibility compat[] = {
   /* dummy; equal to the current version (last element) */
   { 0, { "CURRENT", N_("current version") }, NULL, NULL },
   /* version 1 and 2 is not used */
   { 3, { "2.3.0", N_("freeciv 2.3.0") },
     compat_load_020300, compat_save_020300},
-  /* version 4 to 9 are reserves for possible changes in 2.3.x */
-  { 10, { "2.4.0", N_("freeciv 2.4.0 (development)") },
-    compat_load_020400, compat_save_020400},
   /* Current savefile version is listed above this line; it corresponds to
      the definitions in this file. */
 };

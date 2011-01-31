@@ -20,7 +20,6 @@
 
 /* utility */
 #include "rand.h"
-#include "registry.h"
 
 /* common */
 #include "game.h"
@@ -38,17 +37,15 @@
 #include "advdata.h"
 #include "autosettlers.h"
 #include "advbuilding.h"
-#include "infracache.h"
 
 /* ai */
-#include "advdiplomacy.h"
 #include "advdomestic.h"
 #include "advmilitary.h"
 #include "aihand.h"
-#include "aiplayer.h"
 #include "aisettler.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "aicity.h"
 
@@ -90,7 +87,7 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
   another player's ai_data structure here for evaluation by different
   priorities.
 **************************************************************************/
-int ai_eval_calc_city(struct city *pcity, struct adv_data *ai)
+int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
 {
   int i = (pcity->surplus[O_FOOD] * ai->food_priority
            + pcity->surplus[O_SHIELD] * ai->shield_priority
@@ -205,7 +202,7 @@ static void ai_barbarian_choose_build(struct player *pplayer,
 static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 {
   struct ai_choice newchoice;
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct ai_city *city_data = def_ai_city_data(pcity);
 
   init_choice(&newchoice);
@@ -339,7 +336,7 @@ static void ai_upgrade_units(struct city *pcity, int limit, bool military)
   struct player *pplayer = city_owner(pcity);
   int expenses;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   unit_list_iterate(pcity->tile->units, punit) {
     if (pcity->owner == punit->owner) {
@@ -402,7 +399,7 @@ static void ai_spend_gold(struct player *pplayer)
     } unit_list_iterate_safe_end;
   } city_list_iterate_end;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   do {
     bool expensive; /* don't buy when it costs x2 unless we must */
@@ -468,8 +465,8 @@ static void ai_spend_gold(struct player *pplayer)
     if (is_unit_choice_type(bestchoice.type)
         && utype_has_flag(bestchoice.value.utype, F_CITIES)) {
       if (get_city_bonus(pcity, EFT_GROWTH_FOOD) == 0
-          && city_size_get(pcity) == 1
-          && city_granary_size(city_size_get(pcity))
+          && pcity->size == 1
+          && city_granary_size(pcity->size)
              > pcity->food_stock + pcity->surplus[O_FOOD]) {
         /* Don't buy settlers in size 1 cities unless we grow next turn */
         continue;
@@ -578,7 +575,7 @@ static int unit_foodbox_cost(struct unit *punit)
 
     foodloss_pct = CLIP(0, foodloss_pct, 100);
     fc_assert_ret_val(pcity != NULL, -1);
-    cost = city_granary_size(city_size_get(pcity));
+    cost = city_granary_size(pcity->size);
     cost = cost * foodloss_pct / 100;
   }
 
@@ -599,7 +596,7 @@ static void contemplate_terrain_improvements(struct city *pcity)
   struct tile *best_tile = NULL; /* May be accessed by log_*() calls. */
   struct tile *pcenter = city_tile(pcity);
   struct player *pplayer = city_owner(pcity);
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct unit_type *unit_type = best_role_unit(pcity, F_SETTLERS);
   Continent_id place = tile_continent(pcenter);
 
@@ -670,8 +667,6 @@ void ai_manage_cities(struct player *pplayer)
 
   /* Initialize the infrastructure cache, which is used shortly. */
   initialize_infrastructure_cache(pplayer);
-  /* Needed by contemplate_new_city(). */
-  ai_auto_settler_init(pplayer);
   city_list_iterate(pplayer->cities, pcity) {
     struct ai_city *city_data = def_ai_city_data(pcity);
     /* Note that this function mungs the seamap, but we don't care */
@@ -700,7 +695,6 @@ void ai_manage_cities(struct player *pplayer)
     TIMING_LOG(AIT_CITY_SETTLERS, TIMER_STOP);
     ASSERT_CHOICE(city_data->choice);
   } city_list_iterate_end;
-  ai_auto_settler_free(pplayer);
 
   city_list_iterate(pplayer->cities, pcity) {
     ai_city_choose_build(pplayer, pcity);
@@ -854,59 +848,4 @@ void ai_city_free(struct city *pcity)
     city_set_ai_data(pcity, default_ai_get_self(), NULL);
     FC_FREE(city_data);
   }
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-void ai_city_save(struct section_file *file, const struct city *pcity,
-                  const char *citystr)
-{
-  struct ai_city *city_data = def_ai_city_data(pcity);
-
-  /* FIXME: remove this when the urgency is properly recalculated. */
-  secfile_insert_int(file, city_data->urgency, "%s.ai.urgency", citystr);
-
-  /* avoid fc_rand recalculations on subsequent reload. */
-  secfile_insert_int(file, city_data->building_turn, "%s.ai.building_turn",
-                     citystr);
-  secfile_insert_int(file, city_data->building_wait, "%s.ai.building_wait",
-                     citystr);
-
-  /* avoid fc_rand and expensive recalculations on subsequent reload. */
-  secfile_insert_int(file, city_data->founder_turn, "%s.ai.founder_turn",
-                     citystr);
-  secfile_insert_int(file, city_data->founder_want, "%s.ai.founder_want",
-                     citystr);
-  secfile_insert_bool(file, city_data->founder_boat, "%s.ai.founder_boat",
-                      citystr);
-}
-
-/**************************************************************************
-  ...
-**************************************************************************/
-void ai_city_load(const struct section_file *file, struct city *pcity,
-                  const char *citystr)
-{
-  struct ai_city *city_data = def_ai_city_data(pcity);
-
-  /* FIXME: remove this when the urgency is properly recalculated. */
-  city_data->urgency
-    = secfile_lookup_int_default(file, 0, "%s.ai.urgency", citystr);
-
-  /* avoid fc_rand recalculations on subsequent reload. */
-  city_data->building_turn
-    = secfile_lookup_int_default(file, 0, "%s.ai.building_turn", citystr);
-  city_data->building_wait
-    = secfile_lookup_int_default(file, BUILDING_WAIT_MINIMUM,
-                                 "%s.ai.building_wait", citystr);
-
-  /* avoid fc_rand and expensive recalculations on subsequent reload. */
-  city_data->founder_turn
-    = secfile_lookup_int_default(file, 0, "%s.ai.founder_turn", citystr);
-  city_data->founder_want
-    = secfile_lookup_int_default(file, 0, "%s.ai.founder_want", citystr);
-  city_data->founder_boat
-    = secfile_lookup_bool_default(file, (city_data->founder_want < 0),
-                                  "%s.ai.founder_boat", citystr);
 }

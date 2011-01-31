@@ -21,6 +21,9 @@
 #include "fc_types.h"
 #include "improvement.h"
 
+/* ai */
+#include "advdiplomacy.h"
+
 /* max size of a short */
 #define MAX_NUM_ID (1+MAX_UINT16)
 
@@ -29,15 +32,6 @@
  * and some of the functions that fill them with useful values at the 
  * start of every turn. 
  */
-
-enum war_reason {
-  WAR_REASON_BEHAVIOUR,
-  WAR_REASON_SPACE,
-  WAR_REASON_EXCUSE,
-  WAR_REASON_HATRED,
-  WAR_REASON_ALLIANCE,
-  WAR_REASON_NONE
-};
 
 enum ai_improvement_status {
   AI_IMPR_CALCULATE, /* Calculate exactly its effect */
@@ -70,11 +64,9 @@ struct ai_dip_intel {
   signed char warned_about_space;
 };
 
-struct ai_settler; /* see aisettler.c */
-
 BV_DEFINE(bv_id, MAX_NUM_ID);
-struct adv_data {
-  /* Whether adv_data_phase_init() has been called or not. */
+struct ai_data {
+  /* Whether ai_data_phase_init() has been called or not. */
   bool phase_is_initialized;
 
   /* The Wonder City */
@@ -114,6 +106,9 @@ struct adv_data {
     bool land_done;   /* nothing more on land to explore anywhere */
     bool sea_done;    /* nothing more to explore at sea */
   } explore;
+
+  /* Keep track of available ocean channels */
+  bool *channels;
 
   /* This struct is used for statistical unit building, eg to ensure
    * that we don't build too few or too many units of a given type. */
@@ -170,28 +165,24 @@ struct adv_data {
   
   /* If the ai doesn't want/need any research */
   bool wants_no_science;
-
-  /* If the AI celebrates. */
-  bool celebrate;
-
+  
   /* AI doesn't like having more than this number of cities */
   int max_num_cities;
-
-  /* Cache map for AI settlers; defined in aisettler.c. */
-  struct ai_settler *settler;
 };
 
-void adv_data_init(struct player *pplayer);
+void ai_data_init(struct player *pplayer);
 void ai_data_default(struct player *pplayer);
-void adv_data_close(struct player *pplayer);
+void ai_data_close(struct player *pplayer);
 
-void adv_data_phase_init(struct player *pplayer, bool is_new_phase);
-void adv_data_phase_done(struct player *pplayer);
+void ai_data_phase_init(struct player *pplayer, bool is_new_phase);
+void ai_data_phase_done(struct player *pplayer);
 
 void ai_data_analyze_rulesets(struct player *pplayer);
 
-struct adv_data *adv_data_get(struct player *pplayer);
+struct ai_data *ai_data_get(struct player *pplayer);
 struct ai_dip_intel *ai_diplomacy_get(const struct player *plr1,
                                       const struct player *plr2);
+
+bool ai_channel(struct player *pplayer, Continent_id c1, Continent_id c2);
 
 #endif /* FC__ADVDATA_H */

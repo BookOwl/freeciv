@@ -28,7 +28,6 @@
 
 /* common */
 #include "capstr.h"
-#include "citizens.h"
 #include "events.h"
 #include "game.h"
 #include "government.h"
@@ -39,7 +38,6 @@
 #include "packets.h"
 #include "player.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "spaceship.h"
 #include "specialist.h"
 #include "unit.h"
@@ -575,7 +573,7 @@ void handle_city_info(const struct packet_city_info *packet)
   sz_strlcpy(pcity->name, packet->name);
   
   /* check data */
-  city_size_set(pcity, 0);
+  pcity->size = 0;
   for (i = 0; i < FEELING_LAST; i++) {
     pcity->feel[CITIZEN_HAPPY][i] = packet->ppl_happy[i];
     pcity->feel[CITIZEN_CONTENT][i] = packet->ppl_content[i];
@@ -583,28 +581,18 @@ void handle_city_info(const struct packet_city_info *packet)
     pcity->feel[CITIZEN_ANGRY][i] = packet->ppl_angry[i];
   }
   for (i = 0; i < CITIZEN_LAST; i++) {
-    city_size_add(pcity, pcity->feel[i][FEELING_FINAL]);
+    pcity->size += pcity->feel[i][FEELING_FINAL];
   }
   specialist_type_iterate(sp) {
+    pcity->size +=
     pcity->specialists[sp] = packet->specialists[sp];
-    city_size_add(pcity, pcity->specialists[sp]);
   } specialist_type_iterate_end;
 
-  if (city_size_get(pcity) != packet->size) {
+  if (pcity->size != packet->size) {
     log_error("handle_city_info() "
               "%d citizens not equal %d city size in \"%s\".",
-              city_size_get(pcity), packet->size, city_name(pcity));
-    city_size_set(pcity, packet->size);
-  }
-
-  /* The nationality of the citizens. */
-  if (game.info.citizen_nationality == TRUE) {
-    citizens_init(pcity);
-    for (i = 0; i < packet->nationalities_count; i++) {
-      citizens_nation_set(pcity, player_slot_by_number(packet->nation_id[i]),
-                          packet->nation_citizens[i]);
-    }
-    fc_assert(citizens_count(pcity) == city_size_get(pcity));
+              pcity->size, packet->size, city_name(pcity));
+    pcity->size = packet->size;
   }
 
   pcity->city_radius_sq = packet->city_radius_sq;
@@ -934,7 +922,7 @@ void handle_city_short_info(const struct packet_city_short_info *packet)
   }
 
   pcity->specialists[DEFAULT_SPECIALIST] = packet->size;
-  city_size_set(pcity, packet->size);
+  pcity->size = packet->size;
 
   /* We can't actually see the internals of the city, but the server tells
    * us this much. */
@@ -1747,9 +1735,6 @@ void handle_player_remove(int playerno)
   } conn_list_iterate_end;
   conn_list_clear(pplayer->connections);
 
-  /* Free the memory allocated for the player color. */
-  tileset_player_free(tileset, pplayer);
-
   player_destroy(pplayer);
 
   players_dialog_update();
@@ -1782,20 +1767,6 @@ void handle_player_info(const struct packet_player_info *pinfo)
   pslot = player_slot_by_number(pinfo->playerno);
   fc_assert(NULL != pslot);
   pplayer = player_new(pslot);
-
-  if (pplayer->rgb == NULL || (pplayer->rgb->r != pinfo->color_red
-                               || pplayer->rgb->g != pinfo->color_green
-                               || pplayer->rgb->b != pinfo->color_blue)) {
-    struct rgbcolor *prgbcolor = rgbcolor_new(pinfo->color_red,
-                                              pinfo->color_green,
-                                              pinfo->color_blue);
-    fc_assert_ret(prgbcolor != NULL);
-
-    player_set_color(pplayer, prgbcolor);
-    tileset_player_init(tileset, pplayer);
-
-    rgbcolor_destroy(prgbcolor);
-  }
 
   /* Team. */
   tslot = team_slot_by_number(pinfo->team);
@@ -2516,17 +2487,6 @@ void handle_tile_info(const struct packet_tile_info *packet)
   ptile->continent = packet->continent;
   map.num_continents = MAX(ptile->continent, map.num_continents);
 
-  if (packet->label[0] == '\0') {
-    if (ptile->label != NULL) {
-      FC_FREE(ptile->label);
-      ptile->label = NULL;
-      tile_changed = TRUE;
-    }
-  } else if (ptile->label == NULL || strcmp(packet->label, ptile->label)) {
-      tile_set_label(ptile, packet->label);
-      tile_changed = TRUE;
-  }
-
   if (known_changed || tile_changed) {
     /* 
      * A tile can only change if it was known before and is still
@@ -2694,15 +2654,12 @@ void handle_ruleset_unit(const struct packet_ruleset_unit *p)
   u->cargo              = p->cargo;
   u->targets            = p->targets;
 
-  if (p->veteran_levels == 0) {
-    u->veteran = NULL;
-  } else {
-    u->veteran = veteran_system_new(p->veteran_levels);
+  u->veteran_levels = 0; /* not used in the client */
 
-    for (i = 0; i < p->veteran_levels; i++) {
-      veteran_system_definition(u->veteran, i, p->veteran_name[i],
-                                p->power_fact[i], 0, 0, p->move_bonus[i]);
-    }
+  for (i = 0; i < MAX_VET_LEVELS; i++) {
+    names_set(&u->veteran[i].name, p->veteran_name[i], NULL);
+    u->veteran[i].power_fact = p->power_fact[i];
+    u->veteran[i].move_bonus = p->move_bonus[i];
   }
 
   PACKET_STRVEC_EXTRACT(u->helptext, p->helptext);
@@ -2886,9 +2843,6 @@ void handle_ruleset_terrain(const struct packet_ruleset_terrain *p)
 
   pterrain->flags = p->flags;
 
-  fc_assert_ret(pterrain->rgb == NULL);
-  pterrain->rgb = rgbcolor_new(p->color_red, p->color_green, p->color_blue);
-
   PACKET_STRVEC_EXTRACT(pterrain->helptext, p->helptext);
 
   tileset_setup_tile_type(tileset, pterrain);
@@ -3065,26 +3019,10 @@ void handle_ruleset_game(const struct packet_ruleset_game *packet)
   /* Must set num_specialist_types before iterating over them. */
   DEFAULT_SPECIALIST = packet->default_specialist;
 
-  fc_assert_ret(packet->veteran_levels > 0);
-
-  game.veteran = veteran_system_new(packet->veteran_levels);
-  game.veteran->levels = packet->veteran_levels;
-
-  for (i = 0; i < packet->veteran_levels; i++) {
-    veteran_system_definition(game.veteran, i, packet->veteran_name[i],
-                              packet->power_fact[i], 0, 0,
-                              packet->move_bonus[i]);
+  for (i = 0; i < MAX_VET_LEVELS; i++) {
+    game.work_veteran_chance[i] = packet->work_veteran_chance[i];
+    game.veteran_chance[i] = packet->work_veteran_chance[i];
   }
-
-  if (game.plr_bg_color) {
-    rgbcolor_destroy(game.plr_bg_color);
-  }
-
-  game.plr_bg_color = rgbcolor_new(packet->background_red,
-                                   packet->background_green,
-                                   packet->background_blue);
-
-  tileset_background_init(tileset);
 }
 
 /****************************************************************************

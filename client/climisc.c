@@ -38,7 +38,6 @@ used throughout the client.
 #include "game.h"
 #include "government.h"
 #include "map.h"
-#include "mapimg.h"
 #include "packets.h"
 #include "research.h"
 #include "spaceship.h"
@@ -930,7 +929,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
                                  * usable */
   bool shown = FALSE;           /* Message displayed somewhere at least */
 
-  if (!event_type_is_valid(event))  {
+  if (event >= E_LAST)  {
     /* Server may have added a new event; leave as MW_OUTPUT */
     log_verbose("Unknown event type %d!", event);
   } else if (event >= 0)  {
@@ -1177,14 +1176,14 @@ enum unit_bg_color_type unit_color_type(const struct unit_type *punittype)
     return UNIT_BG_HP_LOSS;
   }
 
-  if (pclass->move_type == UMT_LAND) {
+  if (pclass->move_type == LAND_MOVING) {
     return UNIT_BG_LAND;
   }
-  if (pclass->move_type == UMT_SEA) {
+  if (pclass->move_type == SEA_MOVING) {
     return UNIT_BG_SEA;
   }
 
-  fc_assert(pclass->move_type == UMT_BOTH);
+  fc_assert(pclass->move_type == BOTH_MOVING);
 
   if (uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
     /* Unit moves on both sea and land by speed determined by terrain */
@@ -1284,89 +1283,4 @@ void client_player_maps_reset(void)
 
     dbv_resize(&pplayer->tile_known, MAP_INDEX_SIZE);
   } players_iterate_end;
-}
-
-/***************************************************************
-  Create a map image definition on the client.
-***************************************************************/
-bool mapimg_client_define(void)
-{
-  char str[MAX_LEN_MAPDEF];
-  char map[MAPIMG_LAYER_COUNT + 1];
-  enum mapimg_layer layer;
-  int map_pos = 0;
-
-  /* Only one definition allowed. */
-  while (mapimg_count() != 0) {
-    mapimg_delete(0);
-  }
-
-  /* Map image definition: zoom, turns */
-  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", mapimg_zoom,
-              mapimg_format);
-
-  /* Map image definition: show */
-  if (client_is_global_observer()) {
-    cat_snprintf(str, sizeof(str), ":show=all");
-    /* use all available knowledge */
-    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
-  } else {
-    cat_snprintf(str, sizeof(str), ":show=plrid:plrid=%d",
-                 player_index(client.conn.playing));
-    /* use only player knowledge */
-    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
-  }
-
-  /* Map image definition: map */
-  for (layer = mapimg_layer_begin(); layer != mapimg_layer_end();
-       layer = mapimg_layer_next(layer)) {
-    if (mapimg_layer[layer]) {
-      cat_snprintf(map, sizeof(map), "%s",
-                   mapimg_layer_name(layer));
-      map[map_pos++] = mapimg_layer_name(layer)[0];
-    }
-  }
-  map[map_pos] = '\0';
-
-  if (map_pos == 0) {
-    /* no value set - use dummy setting */
-    sz_strlcpy(map, "-");
-  }
-  cat_snprintf(str, sizeof(str), ":map=%s", map);
-
-  log_debug("client map image definition: %s", str);
-
-  if (!mapimg_define(str, FALSE) || !mapimg_isvalid(0)) {
-    /* An error in the definition string or an error validation the string.
-     * The error message is available via mapimg_error(). */
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/****************************************************************************
-  Save map image.
-****************************************************************************/
-bool mapimg_client_createmap(const char *filename)
-{
-  struct mapdef *pmapdef;
-  char mapimgfile[512];
-
-  if (NULL == filename || '\0' == filename[0]) {
-    sz_strlcpy(mapimgfile, mapimg_filename);
-  } else {
-    sz_strlcpy(mapimgfile, filename);
-  }
-
-  if (!mapimg_client_define()) {
-    return FALSE;
-  }
-
-  pmapdef = mapimg_isvalid(0);
-  if (!pmapdef) {
-    return FALSE;
-  }
-
-  return mapimg_create(pmapdef, TRUE, mapimgfile);
 }

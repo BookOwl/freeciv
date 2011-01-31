@@ -77,26 +77,17 @@ static struct command commands[] = {
   {"list",	ALLOW_INFO,
    /* no translatable parameters */
    SYN_ORIG_("list\n"
-             "list colors\n"
              "list connections\n"
              "list ignored users\n"
-             "list map image definitions\n"
              "list players\n"
              "list scenarios\n"
              "list teams\n"
              "list votes\n"),
    N_("Show a list of various things."),
-   N_("Show a list of:\n"
-      " - the player colors,\n"
-      " - connections to the server,\n"
-      " - your ignore list,\n"
-      " - the list of defined map images,\n"
-      " - the list of the players in the game,\n"
-      " - the available scenarios,\n"
-      " - the teams of players or\n"
-      " - the running votes.\n"
-      "The argument may be abbreviated, and defaults to 'players' if "
-      "absent."),
+   N_("Show a list of connections to the server, your ignore list, "
+      "the list of the players in the game, the available scenarios, "
+      "the teams of players, or the running votes. The argument may be "
+      "abbreviated, and defaults to 'players' if absent."),
    CMD_ECHO_NONE, VCF_NONE, 0
   },
   {"quit",	ALLOW_HACK,
@@ -292,17 +283,13 @@ static struct command commands[] = {
   },
   {"create",	ALLOW_CTRL,
    /* TRANS: translate text between <> only */
-   N_("create <player-name> [ai type]"),
+   N_("create <player-name>"),
    N_("Create an AI player with a given name."),
    N_("With the 'create' command a new player with the given name is "
       "created.\n"
       "If the game was started, the command checks for free player slots "
       "and, if no free slots are available, it tries to reuse the slots of "
-      "dead players. The new player has no units or cities.\n"
-      "AI type parameter can be used to select which AI module will be "
-      "used for created player. This requires that freeciv has been "
-      "compiled with AI module support and respective module has been "
-      "loaded."),
+      "dead players. The new player has no units or cities."),
    CMD_ECHO_ALL, VCF_NONE, 50
   },
   {"away",	ALLOW_BASIC,
@@ -460,26 +447,6 @@ static struct command commands[] = {
       "list, issue \"/list ignore\"."),
    CMD_ECHO_NONE, VCF_NONE, 0
   },
-  {"playercolor", ALLOW_ADMIN,
-   /* TRANS: translate text between <> */
-   N_("playercolor <player-name> <color>\n"
-      "playercolor <player-name> reset"),
-   N_("Define the color of a player."),
-   N_("This command is used to set the color of a player's nation. The "
-      "color ist defined using a hexadecimal notation (HEX) for the "
-      "combination of Red, Green, and Blue color values (RGB). The lowest "
-      "value is 0 (in HEX: 00). The highest value is 255 (in HEX: FF). The "
-      "color definition starts with a '#' sign followed be the HEX values "
-      "for the three colors, i.e '#ff0000' for red. In server scripts, the "
-      "'#' sign must be escaped or the color definition must be quoted.\n"
-      "In initial game state the color can only be defined if the "
-      "'plrcolormode' setting is set to 'PLR_SET'. The "
-      "defined color can be removed using the reset argument.\n"
-      "For a running game, this command redefines the player color. The "
-      "change will be visible in the following turn.\n"
-      "To list the player color use 'list colors'."),
-   CMD_ECHO_NONE, VCF_NONE, 0
-  },
   {"endgame",	ALLOW_ADMIN,
    /* no translatable parameters */
    SYN_ORIG_("endgame"),
@@ -555,12 +522,6 @@ static struct command commands[] = {
    N_("Evaluate a line of freeciv script in the current game."), NULL,
    CMD_ECHO_ADMINS, VCF_NONE, 0
   },
-  {"luafile", ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("luafile <file>"),
-   N_("Evaluate a freeciv script file in the current game."), NULL,
-   CMD_ECHO_ADMINS, VCF_NONE, 0
-  },
   {"kick", ALLOW_CTRL,
    /* TRANS: translate text between <> */
     N_("kick <user>"),
@@ -569,54 +530,6 @@ static struct command commands[] = {
        "server and not allowed to reconnect. The time the user wouldn't be "
        "able to reconnect is controlled by the 'kicktime' setting."),
    CMD_ECHO_ADMINS, VCF_NOPASSALONE, 50
-  },
-#ifdef DEBUG
-  {"oldsave", ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("save\n"
-      "save <file-name>"),
-   N_("Save game to file using the old format."), NULL,
-   CMD_ECHO_ADMINS, VCF_NONE, 0
-  },
-#endif /* DEBUG */
-  {"delegate", ALLOW_BASIC,
-   /* TRANS: translate only text between [] and <> */
-   N_("delegate cancel [player-name]\n"
-      "delegate restore\n"
-      "delegate show <player-name>\n"
-      "delegate take <player-name>\n"
-      "delegate to <username> [player-name]"),
-   N_("Delegate control to another user."),
-   N_("This command can be used to delegate the control over a player. The "
-      "[player-name] argument can only be used by connections with the "
-      "cmdlevel 'admin' or above to force the corresponding change of the "
-      "delegation status."),
-   CMD_ECHO_NONE, VCF_NONE, 0
-  },
-  {"fcdb", ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("fcdb [reload]"),
-   N_("Reload the freeciv database script."), NULL,
-   CMD_ECHO_ADMINS, VCF_NONE, 0
-  },
-  {"mapimg",   ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("mapimg colortest\n"
-      "mapimg create <id>|all\n"
-      "mapimg define <mapdef>\n"
-      "mapimg delete <id>|all\n"
-      "mapimg show <id>|all\n"
-      "mapimg help"),
-   N_("Create image files of the world/player map."),
-   N_("This command allows the creation of map images. Supported "
-      "arguments:\n"
-      "  colortest        - create a image to showing all colors\n"
-      "  create <id>|all  - create a specific or all map images\n"
-      "  define <mapdef>  - define a map image\n"
-      "  delete <id>|all  - delete a specific or all map images\n"
-      "  help             - more information about the definition\n"
-      "  show <id>|all    - shown a specific or all map images"),
-   CMD_ECHO_ADMINS, VCF_NONE, 50
   },
   {"rfcstyle",	ALLOW_HACK,
    /* no translatable parameters */

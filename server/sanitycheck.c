@@ -52,7 +52,7 @@
 #define SANITY_CITY(_city, check)                                           \
   fc_assert_full(file, function, line, check, ,                             \
                  "(%4d, %4d) in \"%s\"[%d]", TILE_XY((_city)->tile),        \
-                 city_name(_city), city_size_get(_city))
+                 city_name(_city), (_city)->size)
 
 #define SANITY_TERRAIN(_tile, check)                                        \
   fc_assert_full(file, function, line, check, ,                             \
@@ -69,8 +69,6 @@
     }                                                                       \
   } while(0)
 
-static void check_city_feelings(const struct city *pcity, const char *file,
-                                const char *function, int line);
 
 /**************************************************************************
   Sanity checking on map (tile) specials.
@@ -228,7 +226,7 @@ static bool check_city_good(struct city *pcity, const char *file,
     SANITY_("(----,----) city has no tile (skipping remaining tests), "
             "at %s \"%s\"[%d]%s",
             nation_rule_name(nation_of_player(pplayer)),
-            city_name(pcity), city_size_get(pcity),
+            city_name(pcity), pcity->size,
             "{city center}");
     return FALSE;
   }
@@ -246,7 +244,7 @@ static bool check_city_good(struct city *pcity, const char *file,
               TILE_XY(pcenter),
               nation_rule_name(nation_of_player(tile_owner(pcenter))),
               nation_rule_name(nation_of_player(pplayer)),
-              city_name(pcity), city_size_get(pcity),
+              city_name(pcity), pcity->size,
               "{city center}");
     }
   }
@@ -277,7 +275,7 @@ static void check_city_size(struct city *pcity, const char *file,
   int citizens = 0;
   struct tile *pcenter = city_tile(pcity);
 
-  SANITY_CITY(pcity, city_size_get(pcity) >= 1);
+  SANITY_CITY(pcity, pcity->size >= 1);
 
   city_tile_iterate_skip_free_worked(city_map_radius_sq_get(pcity), pcenter,
                                   ptile, _index, _x, _y) {
@@ -287,13 +285,13 @@ static void check_city_size(struct city *pcity, const char *file,
   } city_tile_iterate_skip_free_worked_end;
 
   citizens += city_specialists(pcity);
-  delta = city_size_get(pcity) - citizens;
+  delta = pcity->size - citizens;
   if (0 != delta) {
     SANITY_("(%4d,%4d) %d citizens not equal [size], "
             "repairing \"%s\"[%d]",
             TILE_XY(pcity->tile),
             citizens,
-            city_name(pcity), city_size_get(pcity));
+            city_name(pcity), pcity->size);
 
     citylog_map_workers(LOG_DEBUG, pcity);
     log_debug("[%s (%d)] specialists: %d", city_name(pcity), pcity->id,
@@ -308,21 +306,34 @@ static void check_city_size(struct city *pcity, const char *file,
   Verify that the number of people with feelings + specialists equal
   city size.
 **************************************************************************/
-static void check_city_feelings(const struct city *pcity, const char *file,
+void real_sanity_check_feelings(const struct city *pcity,
+                                const char *file,
                                 const char *function, int line)
 {
-  int feel;
+  int ccategory;
   int spe = city_specialists(pcity);
 
-  for (feel = FEELING_BASE; feel < FEELING_LAST; feel++) {
+  for (ccategory = CITIZEN_HAPPY; ccategory < CITIZEN_LAST; ccategory++) {
     int sum = 0;
-    int ccategory;
+    int feel;
 
-    for (ccategory = CITIZEN_HAPPY; ccategory < CITIZEN_LAST; ccategory++) {
+    for (feel = FEELING_BASE; feel < FEELING_LAST; feel++) {
       sum += pcity->feel[ccategory][feel];
     }
 
-    SANITY_CITY(pcity, city_size_get(pcity) - spe == sum);
+    SANITY_CITY(pcity, pcity->size - spe == sum);
+  }
+}
+
+/**************************************************************************
+  Verify that the city has sane values.
+**************************************************************************/
+void real_sanity_check_city_all(struct city *pcity, const char *file,
+                                const char *function, int line)
+{
+  if (check_city_good(pcity, file, function, line)) {
+    check_city_size(pcity, file, function, line);
+    /* TODO: check_feelings. Currently fails far too often to be included. */
   }
 }
 
@@ -334,7 +345,6 @@ void real_sanity_check_city(struct city *pcity, const char *file,
 {
   if (check_city_good(pcity, file, function, line)) {
     check_city_size(pcity, file, function, line);
-    check_city_feelings(pcity, file, function, line);
   }
 }
 
@@ -444,7 +454,7 @@ static void check_players(const char *file, const char *function, int line)
       continue;
     }
 
-    SANITY_CHECK(pplayer->server.adv != NULL);
+    SANITY_CHECK(pplayer->server.aidata != NULL);
     SANITY_CHECK(!pplayer->nation || pplayer->nation->player == pplayer);
     SANITY_CHECK(player_list_search(team_members(pplayer->team), pplayer));
 

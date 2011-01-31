@@ -38,8 +38,8 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "srv_log.h"
 
@@ -135,7 +135,7 @@ void real_city_log(const char *file, const char *function, int line,
   fc_snprintf(buffer, sizeof(buffer), "%s %s(%d,%d) [s%d d%d u%d g%d] ",
               nation_rule_name(nation_of_city(pcity)),
               city_name(pcity),
-              TILE_XY(pcity->tile), city_size_get(pcity),
+              TILE_XY(pcity->tile), pcity->size,
               city_data->danger, city_data->urgency,
               city_data->grave_danger);
 

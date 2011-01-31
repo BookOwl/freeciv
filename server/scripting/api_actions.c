@@ -20,7 +20,6 @@
 #include "unittype.h"
 
 /* server */
-#include "aiiface.h"
 #include "barbarian.h"
 #include "citytools.h"
 #include "console.h" /* enum rfc_status */
@@ -34,9 +33,8 @@
 
 /* server/scripting */
 #include "api_find.h"
-#include "script_game.h"
+#include "script.h"
 #include "script_signal.h"
-#include "script_types.h"
 
 #include "api_actions.h"
 
@@ -144,12 +142,10 @@ Player *api_actions_create_player(const char *username,
   SCRIPT_CHECK_ARG_NIL(username, 1, string, NULL);
 
   if (game_was_started()) {
-    status = create_command_newcomer(username, FC_AI_DEFAULT_NAME,
-                                     FALSE, pnation, &pplayer,
+    status = create_command_newcomer(username, FALSE, pnation, &pplayer,
                                      buf, sizeof(buf));
   } else {
-    status = create_command_pregame(username, FC_AI_DEFAULT_NAME,
-                                    FALSE, &pplayer,
+    status = create_command_pregame(username, FALSE, &pplayer,
                                     buf, sizeof(buf));
   }
 

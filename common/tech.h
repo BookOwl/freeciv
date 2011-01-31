@@ -13,10 +13,6 @@
 #ifndef FC__TECH_H
 #define FC__TECH_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 #include "shared.h"
@@ -99,13 +95,11 @@ BV_DEFINE(bv_tech_flags, TF_COUNT);
 /* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
  * requirements are fulfilled; all others (including those which can never 
  * be reached) are TECH_UNKNOWN */
-#define SPECENUM_NAME tech_state
-/* TECH_UNKNOWN must be 0 as the code does no special initialisation after
- * memset(0), See player_researches_init(). */
-#define SPECENUM_VALUE0 TECH_UNKNOWN
-#define SPECENUM_VALUE1 TECH_PREREQS_KNOWN
-#define SPECENUM_VALUE2 TECH_KNOWN
-#include "specenum_gen.h"
+enum tech_state {
+  TECH_UNKNOWN = 0,
+  TECH_PREREQS_KNOWN = 1,
+  TECH_KNOWN = 2,
+};
 
 enum tech_req {
   AR_ONE = 0,
@@ -234,9 +228,4 @@ const struct advance *advance_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__TECH_H */

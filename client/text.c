@@ -365,29 +365,14 @@ const char *popup_info_text(struct tile *ptile)
 
     /* TRANS: A is attack power, D is defense power, FP is firepower,
      * HP is hitpoints (current and max). */
-    {
-      const struct veteran_level *vlevel
-        = utype_veteran_level(ptype, punit->veteran);
-
-      fc_assert(vlevel != NULL);
-      astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d (%s)"),
-                    ptype->attack_strength, ptype->defense_strength,
-                    ptype->firepower, punit->hp, ptype->hp,
-                    vlevel ? name_translation(&vlevel->name) : "?");
-    }
-
-    if (unit_owner(punit) == client_player()
-        || client_is_global_observer()) {
-      /* Show bribe cost for own units. */
-      astr_add_line(&str, _("Bribe cost: %d"), unit_bribe_cost(punit));
-    } else {
-      /* We can only give an (lower) boundary for units of other players. */
-      astr_add_line(&str, _("Estimated bribe cost: > %d"),
-                    unit_bribe_cost(punit));
-    }
+    astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d (%s)"),
+		  ptype->attack_strength, 
+		  ptype->defense_strength, ptype->firepower, punit->hp, 
+		  ptype->hp,
+                  name_translation(&ptype->veteran[punit->veteran].name));
 
     if ((NULL == client.conn.playing || owner == client.conn.playing)
-        && unit_list_size(ptile->units) >= 2) {
+	&& unit_list_size(ptile->units) >= 2) {
       /* TRANS: "5 more" units on this tile */
       astr_add(&str, _("  (%d more)"), unit_list_size(ptile->units) - 1);
     }
@@ -539,11 +524,8 @@ const char *unit_description(struct unit *punit)
 
   astr_add(&str, "%s", utype_name_translation(ptype));
 
-  if (punit->veteran < utype_veteran_levels(ptype)) {
-    const struct veteran_level *vlevel
-      = utype_veteran_level(ptype, punit->veteran);
-
-    astr_add(&str, " (%s)", vlevel ? name_translation(&vlevel->name) : "?");
+  if (rule_name(&ptype->veteran[punit->veteran].name)[0] != '\0') {
+    astr_add(&str, " (%s)", name_translation(&ptype->veteran[punit->veteran].name));
   }
 
   if (pplayer == unit_owner(punit)) {
