@@ -44,7 +44,6 @@
 #include "unitlist.h"
 
 /* server */
-#include "aiiface.h"
 #include "citytools.h"
 #include "gamehand.h"
 #include "maphand.h"
@@ -113,10 +112,11 @@ static struct player *create_barbarian_player(enum barbarian_type type)
   } players_iterate_end;
 
   /* make a new player, or not */
-  barbarians = server_create_player(-1, FC_AI_DEFAULT_NAME, NULL);
+  barbarians = server_create_player(-1);
   if (!barbarians) {
     return NULL;
   }
+
   server_player_init(barbarians, TRUE, TRUE);
 
   nation = pick_a_nation(NULL, FALSE, TRUE, type);
@@ -150,8 +150,6 @@ static struct player *create_barbarian_player(enum barbarian_type type)
       player_diplstate_get(barbarians, pplayer)->type = DS_WAR;
     }
   } players_iterate_end;
-
-  CALL_PLR_AI_FUNC(gained_control, barbarians, barbarians);
 
   log_verbose("Created barbarian %s, player %d", player_name(barbarians),
               player_number(barbarians));
@@ -562,8 +560,7 @@ static void try_summon_barbarians(void)
     if (!barbarians) {
       return;
     }
-    adv_data_phase_init(barbarians, TRUE); /* Created ferry may need ai data */
-    CALL_PLR_AI_FUNC(phase_begin, barbarians, barbarians, TRUE);
+    ai_data_phase_init(barbarians, TRUE); /* Created ferry may need ai data */
 
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
 
@@ -595,8 +592,7 @@ static void try_summon_barbarians(void)
       }
     }
 
-    CALL_PLR_AI_FUNC(phase_finished, barbarians, barbarians);
-    adv_data_phase_done(barbarians);
+    ai_data_phase_done(barbarians);
   }
 
   if (really_created == 0) {

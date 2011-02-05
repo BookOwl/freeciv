@@ -34,17 +34,17 @@
 #include "packets.h"
 #include "unitlist.h"
 
-/* common/aicore */
+/* aicore */
 #include "citymap.h"
 #include "path_finding.h"
 #include "pf_tools.h"
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aisettler.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 /* server */
 #include "citytools.h"
@@ -54,7 +54,7 @@
 #include "unithand.h"
 #include "unittools.h"
 
-/* server/advisors */
+/* advisors */
 #include "advdata.h"
 #include "advgoto.h"
 #include "advtools.h"
@@ -75,22 +75,23 @@
 #define WORKER_FEAR_FACTOR 2
 
 struct settlermap {
+
   int enroute; /* unit ID of settler en route to this tile */
   int eta; /* estimated number of turns until enroute arrives */
+
 };
+
 
 /**************************************************************************
   Manages settlers.
 **************************************************************************/
 void ai_manage_settler(struct player *pplayer, struct unit *punit)
 {
-  struct unit_ai *unit_data = def_ai_unit_data(punit);
-
   punit->ai_controlled = TRUE;
-  unit_data->done = TRUE; /* we will manage this unit later... ugh */
+  def_ai_unit_data(punit)->done = TRUE; /* we will manage this unit later... ugh */
   /* if BUILD_CITY must remain BUILD_CITY, otherwise turn into autosettler */
-  if (unit_data->task == AIUNIT_NONE) {
-    adv_unit_new_task(punit, AUT_AUTO_SETTLER, NULL);
+  if (punit->server.adv->role == AIUNIT_NONE) {
+    ai_unit_new_role(punit, AIUNIT_AUTO_SETTLER, NULL);
   }
   return;
 }
@@ -470,6 +471,7 @@ void auto_settler_findwork(struct player *pplayer,
                            struct settlermap *state,
                            int recursion)
 {
+  struct cityresult result;
   int best_impr = 0;            /* best terrain improvement we can do */
   enum unit_activity best_act;
   struct tile *best_tile = NULL;
@@ -480,13 +482,16 @@ void auto_settler_findwork(struct player *pplayer,
 
   if (recursion > unit_list_size(pplayer->units)) {
     fc_assert(recursion <= unit_list_size(pplayer->units));
-    adv_unit_new_task(punit, AUT_NONE, NULL);
+    ai_unit_new_role(punit, AIUNIT_NONE, NULL);
     set_unit_activity(punit, ACTIVITY_IDLE);
     send_unit_info(NULL, punit);
     return; /* avoid further recursion. */
   }
 
   CHECK_UNIT(punit);
+
+  result.total = 0;
+  result.result = 0;
 
   fc_assert_ret(pplayer && punit);
   fc_assert_ret(unit_has_type_flag(punit, F_CITIES)
@@ -504,7 +509,7 @@ void auto_settler_findwork(struct player *pplayer,
     TIMING_LOG(AIT_WORKERS, TIMER_STOP);
   }
 
-  adv_unit_new_task(punit, AUT_AUTO_SETTLER, best_tile);
+  ai_unit_new_role(punit, AIUNIT_AUTO_SETTLER, best_tile);
 
   auto_settler_setup_work(pplayer, punit, state, recursion, path,
                           best_tile, best_act,
@@ -526,7 +531,7 @@ void auto_settler_setup_work(struct player *pplayer, struct unit *punit,
                              int completion_time)
 {
   /* Run the "autosettler" program */
-  if (punit->server.adv->task == AUT_AUTO_SETTLER) {
+  if (punit->server.adv->role == AIUNIT_AUTO_SETTLER) {
     struct pf_map *pfm = NULL;
     struct pf_parameter parameter;
 
@@ -658,20 +663,17 @@ void auto_settlers_player(struct player *pplayer)
    * player auto-settler mode) or if the player is an AI.  But don't
    * auto-settle with a unit under orders even for an AI player - these come
    * from the human player and take precedence. */
-  if (pplayer->ai_controlled) {
-    CALL_PLR_AI_FUNC(auto_settler_init, pplayer, pplayer);
-  }
   unit_list_iterate_safe(pplayer->units, punit) {
     if ((punit->ai_controlled || pplayer->ai_controlled)
-        && (unit_has_type_flag(punit, F_SETTLERS)
-            || unit_has_type_flag(punit, F_CITIES))
-        && !unit_has_orders(punit)
+	&& (unit_has_type_flag(punit, F_SETTLERS)
+	    || unit_has_type_flag(punit, F_CITIES))
+	&& !unit_has_orders(punit)
         && punit->moves_left > 0) {
       log_debug("%s settler at (%d, %d) is ai controlled.",
                 nation_rule_name(nation_of_player(pplayer)),
                 TILE_XY(punit->tile)); 
       if (punit->activity == ACTIVITY_SENTRY) {
-        unit_activity_handling(punit, ACTIVITY_IDLE);
+	unit_activity_handling(punit, ACTIVITY_IDLE);
       }
       if (punit->activity == ACTIVITY_GOTO && punit->moves_left > 0) {
         unit_activity_handling(punit, ACTIVITY_IDLE);
@@ -680,41 +682,15 @@ void auto_settlers_player(struct player *pplayer)
         if (!pplayer->ai_controlled) {
           auto_settler_findwork(pplayer, punit, state, 0);
         } else {
-          CALL_PLR_AI_FUNC(auto_settler_run, pplayer, pplayer, punit, state);
+          CALL_PLR_AI_FUNC(auto_settler, pplayer, pplayer, punit, state);
         }
       }
     }
   } unit_list_iterate_safe_end;
-  if (pplayer->ai_controlled) {
-    CALL_PLR_AI_FUNC(auto_settler_free, pplayer, pplayer);
-  }
 
   if (timer_in_use(t)) {
-
-#ifdef LOG_TIMERS
     log_verbose("%s autosettlers consumed %g milliseconds.",
                 nation_rule_name(nation_of_player(pplayer)),
                 1000.0 * read_timer_seconds(t));
-#else
-    log_verbose("%s autosettlers finished",
-                nation_rule_name(nation_of_player(pplayer)));
-#endif
-
   }
-}
-
-/************************************************************************** 
-  Change unit's advisor task.
-**************************************************************************/
-void adv_unit_new_task(struct unit *punit, enum adv_unit_task task,
-                       struct tile *ptile)
-{
-  if (punit->server.adv->task == task) {
-    /* Already that task */
-    return;
-  }
-
-  punit->server.adv->task = task;
-
-  CALL_PLR_AI_FUNC(unit_task, unit_owner(punit), punit, task, ptile);
 }

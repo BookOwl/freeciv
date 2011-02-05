@@ -398,7 +398,6 @@ static bool manual_command(void)
 
     fprintf(doc, TAIL);
     fclose(doc);
-    log_normal(_("Manual file %s successful written."), filename);
   } /* manuals */
 
   return TRUE;
@@ -442,7 +441,7 @@ int main(int argc, char **argv)
         inx++;
         showhelp = TRUE;
       }
-#endif /* NDEBUG */
+#endif
     } else if ((option = get_option_malloc("--debug", argv, &inx, argc))) {
       if (!log_parse_level_str(option, &srvarg.loglevel)) {
         showhelp = TRUE;
@@ -495,7 +494,6 @@ int main(int argc, char **argv)
   }
 
   manual_command();
-  con_log_close();
 
-  return EXIT_SUCCESS;
+  return 0;
 }

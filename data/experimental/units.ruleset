@@ -18,8 +18,8 @@
 ; then the first unit with this role will be chosen.
 
 [datafile]
-description="Experimental unit data for Freeciv"
-options="+Freeciv-ruleset-Devel-2011.Jan.27"
+description="Experimental unit_type data for Freeciv"
+options="+Freeciv-2.3-ruleset"
 
 [flags]
 ; Names for custom unit type flags.
@@ -33,13 +33,13 @@ veteran_names = _("green"), _("veteran"), _("hardened"), _("elite")
 ; The percentage chance of increasing level through combat
 veteran_raise_chance = 50, 33, 20, 0
 
-; The percentage chance of a settler/engineer increasing level through
-; performing useful work (per turn)
-veteran_work_raise_chance = 5, 3, 1, 0
-
 ; Power factors are as a percentage.
 ; +50% is represented by 150
 veteran_power_fact = 100, 150, 175, 200
+
+; The percentage chance of a settler/engineer increasing level through
+; performing useful work (per turn)
+veteran_work_raise_chance = 5, 3, 1, 0
 
 ; The additional number of movement points granted for different veteran
 ; levels.  These are thirds of points, so to increase movement
@@ -201,15 +201,6 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; cargo         = Unit classes this unit can transport
 ; city_size     = Initial size of the cities Settlers type unit builds
 ; flags         = special flag strings
-;
-; veteran_names = Special veteran level for this unit. See the definitions in
-;                 game.ruleset. All of the veteran_* entries have to have the
-;                 same length!
-; veteran_raise_chance =
-; veteran_work_raise_chance =
-; veteran_power_fact =
-; veteran_move_bonus =
-;
 ; roles         = special role strings
 ; sound_move	= optional sound effect when the unit moves
 ; sound_move_alt= optional alternative sound effect if above not
@@ -392,11 +383,6 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 flags         = "Settlers", "NonMil", "Airbase", "NoVeteran"
-veteran_names             = _("journeyman"), _("working man"), _("foreman")
-veteran_raise_chance      = 40, 20, 0
-veteran_work_raise_chance = 66, 33, 0
-veteran_power_fact        = 100, 150, 200
-veteran_move_bonus        = 0, 0, 0
 roles         = "Settlers"
 helptext      = _("\
 Workers are similar to Settlers in that they can improve terrain --\

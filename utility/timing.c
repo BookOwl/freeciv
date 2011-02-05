@@ -55,7 +55,6 @@
 # include <sys/timeb.h>
 #endif
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 #include "shared.h"		/* TRUE, FALSE */

@@ -283,7 +283,7 @@ static int ai_goldequiv_clause(struct player *pplayer,
                                bool verbose,
                                enum diplstate_type ds_after)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int worth = 0; /* worth for pplayer of what aplayer gives */
   bool give = (pplayer == pclause->from);
   struct player *giver;
@@ -308,20 +308,6 @@ static int ai_goldequiv_clause(struct player *pplayer,
     } else if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
       worth += compute_tech_sell_price(aplayer, pplayer, pclause->value,
                                        &is_dangerous);
-
-      if (game.info.tech_upkeep_style == 1) {
-        /* Consider the upkeep costs! Thus, one can not get an AI player by
-         * - given AI lots of techs for gold/cities etc.
-         * - AI losses tech due to high upkeep. 
-         * FIXME: Is there a better way for this? */
-        struct player_research *research = player_research_get(pplayer);
-        int limit = MAX(1, research->tech_upkeep
-                           / research->techs_researched);
-
-        if (pplayer->bulbs_last_turn < limit) {
-          worth /= 2;
-        }
-      }
     }
     DIPLO_LOG(LOG_DIPL, pplayer, aplayer, "%s clause worth %d",
               advance_name_by_player(pplayer, pclause->value), worth);
@@ -684,7 +670,7 @@ static void ai_treaty_react(struct player *pplayer,
 void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
                         struct Treaty *ptreaty)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int total_balance = 0;
   bool gift = TRUE;
   enum diplstate_type ds_after =
@@ -735,13 +721,13 @@ void ai_treaty_accepted(struct player *pplayer, struct player *aplayer,
 ***********************************************************************/
 static int ai_war_desire(struct player *pplayer, struct player *target)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int want = 0, fear = 0, distance = 0, settlers = 0, cities = 0;
   struct player_spaceship *ship = &target->spaceship;
 
   city_list_iterate(target->cities, pcity) {
     want += 100; /* base city want */
-    want += city_size_get(pcity) * 20;
+    want += pcity->size * 20;
     want += pcity->surplus[O_SHIELD] * 8;
     want += pcity->surplus[O_TRADE] * 6;
 
@@ -904,7 +890,7 @@ void ai_diplomacy_first_contact(struct player *pplayer,
 ***********************************************************************/
 void ai_diplomacy_begin_new_phase(struct player *pplayer)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int war_desire[player_slot_count()];
   int best_desire = 0;
   struct player *best_target = NULL;
@@ -1372,7 +1358,7 @@ void static war_countdown(struct player *pplayer, struct player *target,
 ***********************************************************************/
 void ai_diplomacy_actions(struct player *pplayer)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   bool need_targets = TRUE;
   struct player *target = NULL;
   int most_hatred = MAX_AI_LOVE;

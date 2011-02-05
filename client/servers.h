@@ -14,13 +14,9 @@
 #ifndef FC__SERVERS_H
 #define FC__SERVERS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #define SERVER_LAN_PORT 4555
 #define SERVER_LAN_TTL 1
-#define SERVER_LAN_VERSION 2
+#define SERVER_LAN_VERSION 1
 
 struct server
 {
@@ -77,9 +73,5 @@ enum server_scan_status server_scan_poll(struct server_scan *scan);
 const struct server_list *
 server_scan_get_list(const struct server_scan *scan);
 void server_scan_finish(struct server_scan *scan);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__SERVERS_H */

@@ -38,8 +38,8 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "srv_log.h"
 
@@ -135,7 +135,7 @@ void real_city_log(const char *file, const char *function, int line,
   fc_snprintf(buffer, sizeof(buffer), "%s %s(%d,%d) [s%d d%d u%d g%d] ",
               nation_rule_name(nation_of_city(pcity)),
               city_name(pcity),
-              TILE_XY(pcity->tile), city_size_get(pcity),
+              TILE_XY(pcity->tile), pcity->size,
               city_data->danger, city_data->urgency,
               city_data->grave_danger);
 
@@ -295,8 +295,6 @@ void TIMING_RESULTS(void)
 {
   char buf[200];
 
-#ifdef LOG_TIMERS
-
 #define AILOG_OUT(text, which)                                              \
   fc_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text,     \
               read_timer_seconds(aitimer[which][0]),                        \
@@ -305,17 +303,6 @@ void TIMING_RESULTS(void)
   notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buf);
 
   log_test("  --- AI timing results ---");
-
-#else  /* LOG_TIMERS */
-
-#define AILOG_OUT(text, which)                                          \
-  fc_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text, \
-              read_timer_seconds(aitimer[which][0]),                    \
-              read_timer_seconds(aitimer[which][1]));                   \
-  notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buf);
-
-#endif /* LOG_TIMERS */
-
   notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log,
               "  --- AI timing results ---");
   AILOG_OUT("Total AI time", AIT_ALL);

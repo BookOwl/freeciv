@@ -39,7 +39,6 @@
 #include "utilities.h"
 
 /* server */
-#include "aiiface.h"
 #include "citytools.h"
 #include "cityturn.h"
 #include "connecthand.h"
@@ -487,11 +486,6 @@ void handle_edit_tile(struct connection *pc,
     changed = TRUE;
   }
 
-  /* Handle changes in label */
-  if (tile_set_label(ptile, packet->label)) {
-    changed = TRUE;
-  }
-
   /* TODO: Handle more property edits. */
 
 
@@ -723,7 +717,7 @@ void handle_edit_unit(struct connection *pc,
   if (packet->veteran != punit->veteran
       && !unit_has_type_flag(punit, F_NO_VETERAN)) {
     int v = packet->veteran;
-    if (!utype_veteran_level(putype, v)) {
+    if (rule_name(&putype->veteran[v].name) == '\0') {
       notify_conn(pc->self, NULL, E_BAD_COMMAND, ftc_editor,
                   _("Invalid veteran level %d for unit %d (%s)."),
                   v, id, unit_link(punit));
@@ -845,7 +839,7 @@ void handle_edit_city(struct connection *pc,
   }
 
   /* Handle size change. */
-  if (packet->size != city_size_get(pcity)) {
+  if (packet->size != pcity->size) {
     if (!(0 < packet->size && packet->size <= MAX_CITY_SIZE)) {
       notify_conn(pc->self, ptile, E_BAD_COMMAND, ftc_editor,
                   _("Invalid city size %d for city %s."),
@@ -911,7 +905,7 @@ void handle_edit_city(struct connection *pc,
  
   /* Handle food stock change. */
   if (packet->food_stock != pcity->food_stock) {
-    int max = city_granary_size(city_size_get(pcity));
+    int max = city_granary_size(pcity->size);
     if (!(0 <= packet->food_stock && packet->food_stock <= max)) {
       notify_conn(pc->self, ptile, E_BAD_COMMAND, ftc_editor,
                   _("Invalid city food stock amount %d for city %s "
@@ -997,14 +991,15 @@ void handle_edit_player_create(struct connection *pc, int tag)
     return;
   }
 
-  pplayer = server_create_player(-1, FC_AI_DEFAULT_NAME, NULL);
+
+  pplayer = server_create_player(-1);
   if (!pplayer) {
     notify_conn(pc->self, NULL, E_BAD_COMMAND, ftc_editor,
                 _("Player creation failed."));
     return;
   }
-  server_player_init(pplayer, TRUE, TRUE);
 
+  server_player_init(pplayer, TRUE, TRUE);
   player_set_nation(pplayer, pnation);
   server_player_set_name(pplayer, pick_random_player_name(pnation));
   sz_strlcpy(pplayer->username, ANON_USER_NAME);

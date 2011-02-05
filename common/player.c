@@ -26,14 +26,12 @@
 /* common */
 #include "city.h"
 #include "fc_interface.h"
-#include "featured_text.h"
 #include "game.h"
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
 #include "map.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
@@ -227,8 +225,7 @@ bool player_can_invade_tile(const struct player *pplayer,
 }
 
 /****************************************************************************
-  Allocate new diplstate structure for tracking state between given two
-  players.
+  ...
 ****************************************************************************/
 static void player_diplstate_new(const struct player *plr1,
                                  const struct player *plr2)
@@ -248,7 +245,7 @@ static void player_diplstate_new(const struct player *plr1,
 }
 
 /****************************************************************************
-  Set diplstate between given two players to default values.
+  ...
 ****************************************************************************/
 static void player_diplstate_defaults(const struct player *plr1,
                                       const struct player *plr2)
@@ -284,7 +281,7 @@ struct player_diplstate *player_diplstate_get(const struct player *plr1,
 }
 
 /****************************************************************************
-  Free resources used by diplstate between given two players.
+  ...
 ****************************************************************************/
 static void player_diplstate_destroy(const struct player *plr1,
                                      const struct player *plr2)
@@ -321,7 +318,7 @@ void player_slots_init(void)
 }
 
 /***************************************************************
-  Return whether player slots are already initialized.
+  ...
 ***************************************************************/
 bool player_slots_initialised(void)
 {
@@ -475,7 +472,7 @@ struct player *player_new(struct player_slot *pslot)
 }
 
 /****************************************************************************
-  Set player structure to its default values.
+  ...
 ****************************************************************************/
 static void player_defaults(struct player *pplayer)
 {
@@ -545,51 +542,10 @@ static void player_defaults(struct player *pplayer)
   pplayer->tile_known.vec = NULL;
   pplayer->tile_known.bits = 0;
 
-  pplayer->rgb = NULL;
-
   /* pplayer->server is initialised in
       ./server/plrhand.c:server_player_init()
      and pplayer->client in
       ./client/climisc.c:client_player_init() */
-}
-
-/****************************************************************************
-  Set the player's color.
-****************************************************************************/
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor)
-{
-  fc_assert_ret(prgbcolor != NULL);
-
-  if (pplayer->rgb != NULL) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
-
-  pplayer->rgb = rgbcolor_copy(prgbcolor);
-}
-
-/****************************************************************************
-  Return the player color as featured text string.
-****************************************************************************/
-const char *player_color_ftstr(struct player *pplayer)
-{
-  static char buf[64];
-  char hex[16];
-
-  fc_assert_ret_val(pplayer != NULL, NULL);
-
-  buf[0] = '\0';
-  if (pplayer->rgb != NULL
-      && rgbcolor_to_hex(pplayer->rgb, hex, sizeof(hex))) {
-    struct ft_color plrcolor = FT_COLOR("#000000", hex);
-
-    featured_text_apply_tag(hex, buf, sizeof(buf), TTT_COLOR, 0,
-                            FT_OFFSET_UNSET, plrcolor);
-  } else {
-    cat_snprintf(buf, sizeof(buf), _("no color"));
-  }
-
-  return buf;
 }
 
 /****************************************************************************
@@ -668,11 +624,6 @@ void player_destroy(struct player *pplayer)
   } players_iterate_end;
   free(pplayer->diplstates);
 
-  /* Clear player color. */
-  if (pplayer->rgb) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
-
   free(pplayer);
   pslot->player = NULL;
   player_slots.used_slots--;
@@ -741,7 +692,7 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 }
 
 /***************************************************************
-  Find player by given name.
+...
 ***************************************************************/
 struct player *player_by_name(const char *name)
 {
@@ -1266,9 +1217,6 @@ bool players_on_same_team(const struct player *pplayer1,
   return (pplayer1->team && pplayer1->team == pplayer2->team);
 }
 
-/**************************************************************************
-  Return TRUE iff player is any kind of barbarian
-**************************************************************************/
 bool is_barbarian(const struct player *pplayer)
 {
   return pplayer->ai_common.barbarian_type != NOT_A_BARBARIAN;
@@ -1421,21 +1369,4 @@ int number_of_ai_levels(void)
   }
 
   return count;
-}
-
-/**************************************************************************
-  Return pointer to ai data of given player and ai type.
-**************************************************************************/
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai)
-{
-  return pplayer->server.ais[ai_type_number(ai)];
-}
-
-/**************************************************************************
-  Attach ai data to player
-**************************************************************************/
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data)
-{
-  pplayer->server.ais[ai_type_number(ai)] = data;
 }

@@ -1546,13 +1546,6 @@ def main():
     else:
         output_h=my_open(output_h_name)
 
-    output_h.write('''
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-''')
-
     # write structs
     for p in packets:
         output_h.write(p.get_struct())
@@ -1566,10 +1559,6 @@ extern "C" {
 void delta_stats_report(void);
 void delta_stats_reset(void);
 void *get_packet_from_connection_helper(struct connection *pc, enum packet_type type);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 ''')
     output_h.close()
 
@@ -1704,10 +1693,6 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "shared.h"
 
@@ -1733,10 +1718,6 @@ bool client_handle_packet(enum packet_type type, const void *packet);
         else:
             f.write('void handle_%s(%s);\n'%(a,b))
     f.write('''
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif /* FC__PACKHAND_GEN_H */
 ''')
     f.close()

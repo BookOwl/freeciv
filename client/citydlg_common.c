@@ -648,10 +648,10 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
     }
   } specialist_type_iterate_end;
 
-  if (city_size_get(pcity) != i) {
+  if (pcity->size != i) {
     log_error("get_city_citizen_types() %d citizens "
               "not equal %d city size in \"%s\".",
-              i, city_size_get(pcity), city_name(pcity));
+              i, pcity->size, city_name(pcity));
   }
   return i;
 }

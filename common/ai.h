@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,18 +13,10 @@
 #ifndef FC__AI_H
 #define FC__AI_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* common */
 #include "fc_types.h" /* MAX_LEN_NAME */
 
-/* Update this capability string when ever there is changes to ai_type
-   structure below */
-#define FC_AI_MOD_CAPSTR "+Freeciv-ai-module-2011.Feb.05b"
-
-#define FC_AI_LAST 3
+#define FC_AI_LAST 1
 
 struct Treaty;
 struct player;
@@ -34,7 +26,6 @@ struct unit;
 struct tile;
 struct settlermap;
 struct pf_path;
-struct section_file;
 
 enum incident_type {
   INCIDENT_DIPLOMAT = 0, INCIDENT_WAR, INCIDENT_PILLAGE,
@@ -42,67 +33,36 @@ enum incident_type {
   INCIDENT_NUCLEAR_SELF, INCIDENT_LAST
 };
 
-enum danger_consideration { DANG_UNDECIDED, DANG_NOT, DANG_YES };
-
 struct ai_type
 {
   char name[MAX_LEN_NAME];
 
   struct {
-    void (*player_alloc)(struct player *pplayer);
-    void (*player_free)(struct player *pplayer);
-    void (*gained_control)(struct player *pplayer);
-    void (*lost_control)(struct player *pplayer);
-    void (*split_by_civil_war)(struct player *pplayer);
-
-    void (*phase_begin)(struct player *pplayer, bool new_phase);
-    void (*phase_finished)(struct player *pplayer);
-
     void (*city_alloc)(struct city *pcity);
     void (*city_free)(struct city *pcity);
     void (*city_got)(struct player *pplayer, struct city *pcity);
     void (*city_lost)(struct player *pplayer, struct city *pcity);
-    void (*city_save)(struct section_file *file, const struct city *pcity,
-                      const char *citystr);
-    void (*city_load)(const struct section_file *file, struct city *pcity,
-                      const char *citystr);
-    void (*choose_building)(struct city *pcity, struct ai_choice *choice);
-
-    void (*units_ruleset_init)(void);
 
     void (*unit_alloc)(struct unit *punit);
     void (*unit_free)(struct unit *punit);
     void (*unit_got)(struct unit *punit);
     void (*unit_lost)(struct unit *punit);
-    void (*unit_created)(struct unit *punit);
     void (*unit_turn_end)(struct unit *punit);
     void (*unit_move)(struct unit *punit, struct tile *ptile,
                       struct pf_path *path, int step);
-    void (*unit_task)(struct unit *punit, enum adv_unit_task task,
-                      struct tile *ptile);
-    void (*unit_save)(struct section_file *file, const struct unit *punit,
-                      const char *unitstr);
-    void (*unit_load)(const struct section_file *file, struct unit *punit,
-                      const char *unitstr);
 
-    void (*auto_settler_init)(struct player *pplayer);
-    void (*auto_settler_run)(struct player *pplayer, struct unit *punit,
-                             struct settlermap *state);
-    void (*auto_settler_free)(struct player *pplayer);
+    void (*auto_settler)(struct player *pplayer, struct unit *punit,
+                         struct settlermap *state);
 
     void (*first_activities)(struct player *pplayer);
     void (*diplomacy_actions)(struct player *pplayer);
     void (*last_activities)(struct player *pplayer);
-    void (*treaty_evaluate)(struct player *pplayer, struct player *aplayer,
-                            struct Treaty *ptreaty);
-    void (*treaty_accepted)(struct player *pplayer, struct player *aplayer,
-                            struct Treaty *ptreaty);
+    void (*before_auto_settlers)(struct player *pplayer);
+    void (*treaty_evaluate)(struct player *pplayer, struct player *aplayer, struct Treaty *ptreaty);
+    void (*treaty_accepted)(struct player *pplayer, struct player *aplayer, struct Treaty *ptreaty);
     void (*first_contact)(struct player *pplayer, struct player *aplayer);
     void (*incident)(enum incident_type type, struct player *violator,
                      struct player *victim);
-
-    void (*consider_dangerous)(struct tile *ptile, struct unit *punit,
-                               enum danger_consideration *result);
   } funcs;
 };
 
@@ -141,9 +101,5 @@ struct ai_type *ai_type_by_name(const char *search);
       }                                         \
     } ai_type_iterate_end;                      \
   } while (FALSE)
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__AI_H */

@@ -761,7 +761,6 @@ get_lan_server_list(struct server_scan *scan)
   char version[256];
   char status[256];
   char players[256];
-  char humans[256];
   char message[1024];
   bool found_new = FALSE;
 
@@ -789,7 +788,6 @@ get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, version, sizeof(version));
     dio_get_string(&din, status, sizeof(status));
     dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, humans, sizeof(humans));
     dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
@@ -849,7 +847,7 @@ get_lan_server_list(struct server_scan *scan)
     pserver->version = fc_strdup(version);
     pserver->state = fc_strdup(status);
     pserver->nplayers = atoi(players);
-    pserver->humans = atoi(humans);
+    pserver->humans = -1;
     pserver->message = fc_strdup(message);
     pserver->players = NULL;
     found_new = TRUE;

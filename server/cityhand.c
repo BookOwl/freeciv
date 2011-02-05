@@ -123,8 +123,8 @@ void handle_city_change_specialist(struct player *pplayer, int city_id,
   pcity->specialists[from]--;
   pcity->specialists[to]++;
 
-  city_refresh(pcity);
   sanity_check_city(pcity);
+  city_refresh(pcity);
   send_city_info(pplayer, pcity);
 }
 
@@ -163,17 +163,21 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
 
   if (is_free_worked(pcity, ptile)) {
     auto_arrange_workers(pcity);
-  } else if (tile_worked(ptile) == pcity) {
+    sync_cities();
+    return;
+  }
+
+  if (tile_worked(ptile) == pcity) {
     city_map_update_empty(pcity, ptile);
     pcity->specialists[DEFAULT_SPECIALIST]++;
+    city_refresh(pcity);
+    sync_cities();
   } else {
     log_verbose("handle_city_make_specialist() not working {%d,%d} \"%s\".",
                 worker_x, worker_y, city_name(pcity));
   }
 
-  city_refresh(pcity);
   sanity_check_city(pcity);
-  sync_cities();
 }
 
 /**************************************************************************
@@ -240,8 +244,8 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
     }
   } specialist_type_iterate_end;
 
-  city_refresh(pcity);
   sanity_check_city(pcity);
+  city_refresh(pcity);
   sync_cities();
 }
 
@@ -251,19 +255,14 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 void really_handle_city_sell(struct player *pplayer, struct city *pcity,
 			     struct impr_type *pimprove)
 {
-  enum test_result sell_result;
-
-  sell_result = test_player_sell_building_now(pplayer, pcity, pimprove);
-
-  if (sell_result == TR_ALREADY_SOLD) {
+  if (pcity->did_sell) {
     notify_player(pplayer, pcity->tile, E_BAD_COMMAND, ftc_server,
 		  _("You have already sold something here this turn."));
     return;
   }
 
-  if (sell_result != TR_SUCCESS) {
+  if (!can_city_sell_building(pcity, pimprove))
     return;
-  }
 
   pcity->did_sell=TRUE;
   notify_player(pplayer, pcity->tile, E_IMP_SOLD, ftc_server,
@@ -468,8 +467,8 @@ void handle_city_change(struct player *pplayer, int city_id,
 
   change_build_target(pplayer, pcity, prod, E_CITY_PRODUCTION_CHANGED);
 
-  city_refresh(pcity);
   sanity_check_city(pcity);
+  city_refresh(pcity);
   send_city_info(pplayer, pcity);
 }
 

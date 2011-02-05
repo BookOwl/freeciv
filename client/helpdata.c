@@ -1534,7 +1534,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
          || uclass_has_flag(utype_class(utype), UCF_MISSILE))
         && utype->defense_strength == 0);
     switch(utype_move_type(utype)) {
-      case UMT_BOTH:
+      case BOTH_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"
@@ -1543,7 +1543,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
           CATLSTR(buf, bufsz,
                   _("* May be promoted after defeating an enemy unit.\n"));
         break;
-      case UMT_LAND:
+      case LAND_MOVING:
         if (utype_has_flag(utype, F_DIPLOMAT)||utype_has_flag(utype, F_SPY)) {
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran under communist governments.\n"));
@@ -1560,7 +1560,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                     _("* May be promoted after defeating an enemy unit.\n"));
         }
         break;
-      case UMT_SEA:
+      case SEA_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"

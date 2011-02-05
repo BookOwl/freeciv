@@ -167,8 +167,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
     gint n, j, i;
     gboolean toggle;
 
-    for (i = 0; i <= event_type_max(); i++) {
-      /* Include possible undefined messages. */
+    for (i=0; i<E_LAST; i++) {
       messages_where[i] = 0;
     }
 

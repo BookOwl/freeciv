@@ -13,10 +13,6 @@
 #ifndef FC__TERRAIN_H
 #define FC__TERRAIN_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 #include "shared.h"
@@ -28,7 +24,6 @@ extern "C" {
 
 struct base_type;
 struct strvec;          /* Actually defined in "utility/string_vector.h". */
-struct rgbcolor;
 
 enum special_river_move {
   RMV_NORMAL = 0,
@@ -242,8 +237,6 @@ struct terrain {
 
   bv_terrain_flags flags;
 
-  struct rgbcolor *rgb;
-
   struct strvec *helptext;
 };
 
@@ -385,9 +378,5 @@ const struct terrain *terrain_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__TERRAIN_H */

@@ -13,10 +13,6 @@
 #ifndef FC__OPTIONS_H
 #define FC__OPTIONS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "support.h"            /* bool type */
 
@@ -24,7 +20,6 @@ extern "C" {
 #include "events.h"
 #include "fc_types.h"           /* enum gui_type */
 #include "featured_text.h"      /* struct ft_color */
-#include "mapimg.h"
 
 
 struct video_mode {
@@ -32,7 +27,7 @@ struct video_mode {
   int height;
 };
 #define VIDEO_MODE(ARG_width, ARG_height) \
-    { ARG_width, ARG_height }
+    { .width = ARG_width, .height = ARG_height }
 /****************************************************************************
   Constructor.
 ****************************************************************************/
@@ -115,12 +110,6 @@ extern bool player_dlg_show_dead_players;
 extern bool reqtree_show_icons;
 extern bool reqtree_curved_lines;
 
-/* options for map images */
-extern char mapimg_format[64];
-extern int mapimg_zoom;
-extern bool mapimg_layer[MAPIMG_LAYER_COUNT];
-extern char mapimg_filename[512];
-
 /* gui-gtk-2.0 client specific options. */
 #define FC_GTK_DEFAULT_THEME_NAME "Freeciv"
 extern char gui_gtk2_default_theme_name[512];
@@ -200,8 +189,8 @@ void options_save(void);
 
 
 /* Option sets. */
-extern const struct option_set *client_optset;
-extern const struct option_set *server_optset;
+extern const struct option_set const *client_optset;
+extern const struct option_set const *server_optset;
 
 struct option *optset_option_by_number(const struct option_set *poptset,
                                        int id);
@@ -320,7 +309,7 @@ void options_dialogs_set(void);
 #define MW_MESSAGES  2		/* add to the messages window */
 #define MW_POPUP     4		/* popup an individual window */
 
-extern int messages_where[];	/* OR-ed MW_ values [E_COUNT] */
+extern int messages_where[];	/* OR-ed MW_ values [E_LAST] */
 
 
 /** Client options **/
@@ -336,13 +325,7 @@ extern int messages_where[];	/* OR-ed MW_ values [E_COUNT] */
 #define GUI_GTK2_CITYDLG_MIN_YSIZE      128
 #define GUI_GTK2_CITYDLG_MAX_YSIZE      4096
 
+
 #define GUI_GTK_OVERVIEW_MIN_XSIZE      160
 #define GUI_GTK_OVERVIEW_MIN_YSIZE      100
-
-#define GUI_DEFAULT_MAPIMG_FILENAME     "freeciv"
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__OPTIONS_H */

@@ -1123,3 +1123,4 @@ const char *unit_tile_link(const struct unit *punit)
               SEQ_START, SEQ_END, tag_name, SEQ_STOP);
   return buf;
 }
+

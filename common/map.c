@@ -329,7 +329,7 @@ void map_init_topology(bool set_sizes)
 }
 
 /***************************************************************
-  Initialize tile structure
+...
 ***************************************************************/
 static void tile_init(struct tile *ptile)
 {
@@ -437,20 +437,14 @@ struct tile *index_to_tile(int index)
 }
 
 /***************************************************************
-  Free memory associated with one tile.
+...
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
   unit_list_destroy(ptile->units);
-
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
-  }
-
-  if (ptile->label) {
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
   }
 }
 
@@ -582,7 +576,7 @@ int map_vector_to_sq_distance(int dx, int dy)
 }
 
 /***************************************************************
-  Return real distance between two tiles.
+...
 ***************************************************************/
 int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -593,7 +587,7 @@ int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return squared distance between two tiles.
+...
 ***************************************************************/
 int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -606,7 +600,7 @@ int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return Manhattan distance between two tiles.
+...
 ***************************************************************/
 int map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -643,9 +637,7 @@ bool is_safe_ocean(const struct tile *ptile)
 }
 
 /***************************************************************
-  Is there any kind of water known to be in tile or any of
-  adjacent tiles. Rivers, irrigation and oceanic terrains are
-  considered water tiles.
+...
 ***************************************************************/
 bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
@@ -878,7 +870,7 @@ int map_move_cost(const struct player *pplayer,
 }
 
 /***************************************************************
-  Are two tiles adjacent to each other.
+...
 ***************************************************************/
 bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 {
@@ -895,9 +887,6 @@ bool same_pos(const struct tile *tile1, const struct tile *tile2)
   return (tile1 == tile2);
 }
 
-/***************************************************************
-  Is given position real position
-***************************************************************/
 bool is_real_map_pos(int x, int y)
 {
   return normalize_map_pos(&x, &y);
@@ -1599,7 +1588,7 @@ struct startpos *map_startpos_new(struct tile *ptile)
   fc_assert_ret_val(NULL != map.startpos_table, NULL);
 
   psp = startpos_new(ptile);
-  startpos_hash_replace(map.startpos_table, tile_hash_key(ptile), psp);
+  startpos_hash_replace(map.startpos_table, ptile, psp);
   return psp;
 }
 
@@ -1614,7 +1603,7 @@ struct startpos *map_startpos_get(const struct tile *ptile)
   fc_assert_ret_val(NULL != ptile, NULL);
   fc_assert_ret_val(NULL != map.startpos_table, NULL);
 
-  startpos_hash_lookup(map.startpos_table, tile_hash_key(ptile), &psp);
+  startpos_hash_lookup(map.startpos_table, ptile, &psp);
   return psp;
 }
 
@@ -1627,7 +1616,7 @@ bool map_startpos_remove(struct tile *ptile)
   fc_assert_ret_val(NULL != ptile, FALSE);
   fc_assert_ret_val(NULL != map.startpos_table, FALSE);
 
-  return startpos_hash_remove(map.startpos_table, tile_hash_key(ptile));
+  return startpos_hash_remove(map.startpos_table, ptile);
 }
 
 /****************************************************************************

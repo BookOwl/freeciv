@@ -30,7 +30,6 @@
 #include "packets.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "unittype.h"
 
 #include "combat.h"
 
@@ -410,18 +409,12 @@ int get_attack_power(const struct unit *punit)
  status.
 **************************************************************************/
 int base_get_attack_power(const struct unit_type *punittype,
-                          int veteran, int moves_left)
+			  int veteran, int moves_left)
 {
   int power;
-  const struct veteran_level *vlevel;
 
-  fc_assert_ret_val(punittype != NULL, 0);
-
-  vlevel = utype_veteran_level(punittype, veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
-
-  power = punittype->attack_strength * POWER_FACTOR
-          * vlevel->power_fact / 100;
+  power = punittype->attack_strength * POWER_FACTOR;
+  power *= punittype->veteran[veteran].power_fact;
 
   if (game.info.tired_attack && moves_left < SINGLE_MOVE) {
     power = (power * moves_left) / SINGLE_MOVE;
@@ -435,15 +428,8 @@ int base_get_attack_power(const struct unit_type *punittype,
 **************************************************************************/
 int base_get_defense_power(const struct unit *punit)
 {
-  const struct veteran_level *vlevel;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
-
   return unit_type(punit)->defense_strength * POWER_FACTOR
-         * vlevel->power_fact / 100;
+  	* unit_type(punit)->veteran[punit->veteran].power_fact;
 }
 
 /**************************************************************************
@@ -545,29 +531,23 @@ int get_virtual_defense_power(const struct unit_type *att_type,
 {
   int defensepower = def_type->defense_strength;
   int db;
-  const struct veteran_level *vlevel;
 
-  fc_assert_ret_val(def_type != NULL, 0);
-
-  if (utype_move_type(def_type) == UMT_LAND
+  if (utype_move_type(def_type) == LAND_MOVING
       && is_ocean_tile(ptile)) {
     /* Ground units on ship doesn't defend. */
     return 0;
   }
-
-  vlevel = utype_veteran_level(def_type, veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
 
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
   if (tile_has_special(ptile, S_RIVER)) {
     db += (db * terrain_control.river_defense_bonus) / 100;
   }
   defensepower *= db;
-  defensepower *= vlevel->power_fact / 100;
+  defensepower *= def_type->veteran[veteran].power_fact;
 
   return defense_multiplication(att_type, def_type, def_player,
-                                ptile, defensepower,
-                                fortified);
+				ptile, defensepower,
+				fortified);
 }
 
 /***************************************************************************

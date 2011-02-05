@@ -42,9 +42,9 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aiunit.h"
 #include "aitools.h"
+#include "defaultai.h"
 
 #include "aiparatrooper.h"
 
@@ -72,7 +72,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
     acity = tile_city(ptile);
     if (acity && city_owner(acity) == unit_owner(punit)
         && unit_list_size(ptile->units) == 0) {
-      val = city_size_get(acity) * def_ai_city_data(acity)->urgency;
+      val = acity->size * def_ai_city_data(acity)->urgency;
       if (val > best) {
 	best = val;
 	best_tile = ptile;
@@ -99,7 +99,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
         continue;
       }
       /* Prefer big cities on other continents */
-      val = city_size_get(acity)
+      val = acity->size
             + (tile_continent(punit->tile) != tile_continent(ptile));
       if (val > best) {
         best = val;
@@ -301,16 +301,15 @@ static int calculate_want_for_paratrooper(struct unit *punit,
     /* Prefer long jumps.
      * If a city is near we can take/protect it with normal units */
     if (pplayers_allied(pplayer, city_owner(pcity))) {
-      profit += city_size_get(pcity)
+      profit += pcity->size
                 * multiplier * real_map_distance(ptile_city, ptile) / 2;
     } else {
 
-      profit += city_size_get(pcity) * multiplier
-                * real_map_distance(ptile_city, ptile);
+      profit += pcity->size * multiplier * real_map_distance(ptile_city, ptile);
     }
   } square_iterate_end;
   
-  total = adv_data_get(pplayer)->stats.units.paratroopers;
+  total = ai_data_get(pplayer)->stats.units.paratroopers;
   total_cities = city_list_size(pplayer->cities);
   
   if (total > total_cities) {

@@ -13,13 +13,8 @@
 #ifndef FC__STDINHAND_H
 #define FC__STDINHAND_H
 
-/* common */
 #include "connection.h"         /* enum cmdlevel */
 #include "fc_types.h"
-
-/* server */
-#include "commands.h"
-#include "console.h"
 
 #define SERVER_COMMAND_PREFIX '/'
   /* the character to mark chatlines as server commands */
@@ -27,10 +22,6 @@
 void stdinhand_init(void);
 void stdinhand_turn(void);
 void stdinhand_free(void);
-
-void cmd_reply(enum command_id cmd, struct connection *caller,
-               enum rfc_status rfc_status, const char *format, ...)
-               fc__attribute((__format__ (__printf__, 4, 5)));
 
 bool handle_stdin_input(struct connection *caller, const char *str,
                         bool check);
@@ -40,15 +31,11 @@ bool read_init_script(struct connection *caller, char *script_filename,
                       bool from_cmdline, bool check);
 void show_players(struct connection *caller);
 
-enum rfc_status create_command_newcomer(const char *name,
-                                        const char *ai,
-                                        bool check,
+enum rfc_status create_command_newcomer(const char *name, bool check,
                                         struct nation_type *pnation,
                                         struct player **newplayer,
                                         char *buf, size_t buflen);
-enum rfc_status create_command_pregame(const char *name,
-                                       const char *ai,
-                                       bool check,
+enum rfc_status create_command_pregame(const char *name, bool check,
                                        struct player **newplayer,
                                        char *buf, size_t buflen);
 

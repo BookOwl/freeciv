@@ -41,13 +41,12 @@
 #include "advdata.h"
 #include "advgoto.h"
 #include "advtools.h"
-#include "autosettlers.h"
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "aihunt.h"
 
@@ -239,9 +238,9 @@ void ai_hunter_choice(struct player *pplayer, struct city *pcity,
                       struct ai_choice *choice)
 {
   struct unit_type *best_land_hunter
-    = ai_hunter_guess_best(pcity, UMT_LAND);
+    = ai_hunter_guess_best(pcity, LAND_MOVING);
   struct unit_type *best_sea_hunter
-    = ai_hunter_guess_best(pcity, UMT_SEA);
+    = ai_hunter_guess_best(pcity, SEA_MOVING);
   struct unit *hunter = ai_hunter_find(pplayer, pcity);
 
   if ((!best_land_hunter && !best_sea_hunter)
@@ -325,8 +324,8 @@ static void ai_hunter_try_launch(struct player *pplayer,
           }
           if (ut->move_rate + victim->moves_left > move_cost
               && ATTACK_POWER(victim) > DEFENCE_POWER(punit)
-              && (utype_move_type(ut) == UMT_SEA
-                  || utype_move_type(ut) == UMT_BOTH)) {
+              && (utype_move_type(ut) == SEA_MOVING
+                  || utype_move_type(ut) == BOTH_MOVING)) {
             /* Threat to our carrier. Kill it. */
             sucker = victim;
             UNIT_LOG(LOGLEVEL_HUNT, missile, "found aux target %d(%d, %d)",
@@ -520,7 +519,7 @@ int ai_hunter_manage(struct player *pplayer, struct unit *punit)
       }
 
       /* This assigns missiles to us */
-      ai_unit_new_task(punit, AIUNIT_HUNTER, target->tile);
+      ai_unit_new_role(punit, AIUNIT_HUNTER, target->tile);
 
       /* Check if we can nuke it */
       ai_hunter_try_launch(pplayer, punit, target);
@@ -528,7 +527,7 @@ int ai_hunter_manage(struct player *pplayer, struct unit *punit)
       /* Check if we have nuked it */
       if (target != game_unit_by_number(sanity_target)) {
         UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished by cargo (pre)");
-        ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+        ai_unit_new_role(punit, AIUNIT_NONE, NULL);
         pf_map_destroy(pfm);
         return -1; /* try again */
       }
@@ -544,7 +543,7 @@ int ai_hunter_manage(struct player *pplayer, struct unit *punit)
 
       if (target != game_unit_by_number(sanity_target)) {
         UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished");
-        ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+        ai_unit_new_role(punit, AIUNIT_NONE, NULL);
         pf_map_destroy(pfm);
         return -1; /* try again */
       }
@@ -553,7 +552,7 @@ int ai_hunter_manage(struct player *pplayer, struct unit *punit)
       ai_hunter_try_launch(pplayer, punit, target);
       if (target != game_unit_by_number(sanity_target)) {
         UNIT_LOG(LOGLEVEL_HUNT, punit, "mission accomplished by cargo (post)");
-        ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+        ai_unit_new_role(punit, AIUNIT_NONE, NULL);
         pf_map_destroy(pfm);
         return -1; /* try again */
       }

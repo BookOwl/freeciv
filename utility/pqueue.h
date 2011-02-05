@@ -13,10 +13,6 @@
 #ifndef FC__PQUEUE_H
 #define FC__PQUEUE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "shared.h"
 
 typedef int pq_data_t;
@@ -28,8 +24,4 @@ void pq_insert(struct pqueue *q, const pq_data_t datum, int datum_priority);
 bool pq_remove(struct pqueue *q, pq_data_t *dest);
 bool pq_peek(struct pqueue *q, pq_data_t *dest);
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* FC__PQUEUE_H */
+#endif

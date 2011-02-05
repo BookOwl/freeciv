@@ -23,7 +23,6 @@ pkgdata_DATA = \
 		angolan.ruleset \
 		anishinaabe.ruleset \
 		antarctican.ruleset \
-		antillean.ruleset \
 		apache.ruleset \
 		arab.ruleset \
 		aragonese.ruleset \
@@ -31,7 +30,6 @@ pkgdata_DATA = \
 		argentine.ruleset \
 		armenian.ruleset \
 		ashanti.ruleset \
-		assamese.ruleset \
 		assyrian.ruleset \
 		asturian.ruleset \
 		atlantean.ruleset \
@@ -42,7 +40,6 @@ pkgdata_DATA = \
 		aztec.ruleset \
 		babylonian.ruleset \
 		badian.ruleset \
-		bangladeshi.ruleset \
 		barbarian.ruleset \
 		bashkir.ruleset \
 		basque.ruleset \
@@ -67,7 +64,6 @@ pkgdata_DATA = \
 		burkinabe.ruleset \
 		burmese.ruleset \
 		burundi.ruleset \
-		buryat.ruleset \
 		byzantium.ruleset \
 		californian.ruleset \
 		cambodian.ruleset \
@@ -86,7 +82,6 @@ pkgdata_DATA = \
 		chilean.ruleset \
 		chimu.ruleset \
 		chinese.ruleset \
-		chinook.ruleset \
 		chola.ruleset \
 		chumash.ruleset \
 		colombian.ruleset \
@@ -104,7 +99,6 @@ pkgdata_DATA = \
 		curonian.ruleset \
 		cypriot.ruleset \
 		czech.ruleset \
-		czechoslovak.ruleset \
 		dahomean.ruleset \
 		danish.ruleset \
 		dominican.ruleset \
@@ -119,14 +113,12 @@ pkgdata_DATA = \
 		elamite.ruleset \
 		emirati.ruleset \
 		english.ruleset \
-		epirote.ruleset \
 		esperant.ruleset \
 		estonian.ruleset \
 		eritrean.ruleset \
 		ethiopian.ruleset \
 		etruscan.ruleset \
 		european.ruleset \
-		evenki.ruleset \
 		fijian.ruleset \
 		filipino.ruleset \
 		finnish.ruleset \
@@ -134,14 +126,11 @@ pkgdata_DATA = \
 		franconian.ruleset \
 		french.ruleset \
 		frisian.ruleset \
-		friulian.ruleset \
 		gaelic.ruleset \
 		galician.ruleset \
 		gallic.ruleset \
-		genoese.ruleset \
 		georgian.ruleset \
 		german.ruleset \
-		ghana.ruleset \
 		ghanaian.ruleset \
 		gokturk.ruleset \
 		greaterpolish.ruleset \
@@ -181,7 +170,6 @@ pkgdata_DATA = \
 		irish.ruleset \
 		iroquois.ruleset \
 		israeli.ruleset \
-		israelite.ruleset \
 		italian.ruleset \
 		ivoirian.ruleset \
 		jamaican.ruleset \
@@ -191,12 +179,9 @@ pkgdata_DATA = \
 		kanem-bornu.ruleset \
 		karelian.ruleset \
 		kashmiri.ruleset \
-		kashubian.ruleset \
-		katangan.ruleset \
 		kazakh.ruleset \
 		kenyan.ruleset \
 		khazar.ruleset \
-		khmer.ruleset \
 		khwarezmian.ruleset \
 		kongo.ruleset \
 		korean.ruleset \
@@ -211,7 +196,6 @@ pkgdata_DATA = \
 		leonese.ruleset \
 		libyan.ruleset \
 		liechtensteiner.ruleset \
-		lippe.ruleset \
 		lipkatatar.ruleset \
 		lithuanian.ruleset \
 		lojbanistani.ruleset \
@@ -244,7 +228,6 @@ pkgdata_DATA = \
 		miskito.ruleset \
 		mixtec.ruleset \
 		moldovan.ruleset \
-		mon.ruleset \
 		monegasque.ruleset \
 		mongol.ruleset \
 		montenegrin.ruleset \
@@ -255,12 +238,10 @@ pkgdata_DATA = \
 		mozambican.ruleset \
 		mughal.ruleset \
 		muskogee.ruleset \
-		muscovite.ruleset \
 		mwiska.ruleset \
 		namibian.ruleset \
 		navajo.ruleset \
 		neapolitan.ruleset \
-		nenets.ruleset \
 		nepali.ruleset \
 		nestorian.ruleset \
 		newfoundland.ruleset \
@@ -279,7 +260,6 @@ pkgdata_DATA = \
 		occitan.ruleset \
 		ohlone.ruleset \
 		oldenburgian.ruleset \
-		oldprussian.ruleset \
 		omani.ruleset \
 		otomi.ruleset \
 		ossetian.ruleset \
@@ -307,7 +287,6 @@ pkgdata_DATA = \
 		purhepecha.ruleset \
 		quebecois.ruleset \
 		raramuri.ruleset \
-		rhenish.ruleset \
 		riffian.ruleset \
 		riograndense.ruleset \
 		romanian.ruleset \
@@ -317,7 +296,6 @@ pkgdata_DATA = \
 		rwandan.ruleset \
 		ryukyuan.ruleset \
 		sahrawi.ruleset \
-		salishan.ruleset \
 		salvadoran.ruleset \
 		sami.ruleset \
 		sammarinese.ruleset \
@@ -330,10 +308,8 @@ pkgdata_DATA = \
 		scottish.ruleset \
 		scythian.ruleset \
 		seleucid.ruleset \
-		seljuk.ruleset \
 		senegalese.ruleset \
 		serbian.ruleset \
-		shan.ruleset \
 		shawnee.ruleset \
 		siberian.ruleset \
 		sicilian.ruleset \
@@ -395,7 +371,6 @@ pkgdata_DATA = \
 		uzbek.ruleset \
 		vampire.ruleset \
 		vandalic.ruleset \
-		vedic.ruleset \
 		venetian.ruleset \
 		venezuelan.ruleset \
 		vermont.ruleset \
@@ -403,7 +378,6 @@ pkgdata_DATA = \
 		viking.ruleset \
 		vincentian.ruleset \
 		visigothic.ruleset \
-		volgabulgar.ruleset \
 		walloon.ruleset \
 		welsh.ruleset \
 		westernpomeranian.ruleset \
@@ -416,7 +390,6 @@ pkgdata_DATA = \
 		yucatecan.ruleset \
 		yugoslav.ruleset \
 		zapotec.ruleset \
-		zhuang.ruleset \
 		zimbabwean.ruleset \
 		zulu.ruleset 
 

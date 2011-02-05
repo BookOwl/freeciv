@@ -28,9 +28,9 @@
 /* modinst */
 #include "download.h"
 
-#define MODPACK_LIST_URL "http://www.cazfi.net/freeciv/modinst/" DATASUBDIR "/modpack.list"
+#define MODPACK_LIST_URL "http://download.gna.org/freeciv/modinst/" DATASUBDIR "/modpack.list"
 
-#define DEFAULT_URL_START "http://www.cazfi.net/freeciv/modinst/" DATASUBDIR "/"
+#define DEFAULT_URL_START "http://download.gna.org/freeciv/modinst/" DATASUBDIR "/"
 #define EXAMPLE_URL DEFAULT_URL_START "ancients.modpack"
 
 static GtkWidget *statusbar;
@@ -333,8 +333,6 @@ int main(int argc, char *argv[])
   gtk_widget_show_all(toplevel);
 
   gtk_main();
-
-  log_close();
 
   return EXIT_SUCCESS;
 }

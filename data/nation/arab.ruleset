@@ -19,8 +19,9 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",      "female_title"
  "Despotism",       _("Sheikh %s"),    _("Shaykha %s")
- "Republic",        _("Vizier %s"),    _("?female:Vizier %s")
- "Fundamentalism",  _("Caliph %s"),    _("Calipha %s")
+ "Monarchy",        _("Malik %s"),     _("Malika %s")
+ "Republic",        _("Sultan %s"),    _("Sultana %s")
+ "Communism",       _("Caliph %s"),    _("Calipha %s")
 }
 
 flag ="arab"
@@ -34,11 +35,11 @@ init_units=""
 
 ; Should not appear with other Arabic nations from the beginning but...
 conflicts_with="Iraqi", "Libyan", "Sudanese", "Syrian", "Egyptian Arab",
- "Moroccan", "Tunisian", "Algerian", "Andalusi", "Saudi", "Palestinian",
+ "Moroccan", "Tunisian", "Algerian", "Al-Andalus", "Saudi", "Palestinian",
  "Yemeni", "South Yemeni", "Lebanese", "Emirati"
 ; ...civil war to them.
 civilwar_nations="Iraqi", "Libyan", "Sudanese", "Syrian", "Egyptian Arab",
- "Moroccan", "Tunisian", "Algerian", "Andalusi", "Saudi", "Palestinian",
+ "Moroccan", "Tunisian", "Algerian", "Al-Andalus", "Saudi", "Palestinian",
  "Yemeni", "Lebanese", "Emirati"
 
 ; Arab Peninsula and Near East.  City names are mostly from the Ummayyad 

@@ -58,9 +58,9 @@
 #include "aicity.h"
 #include "aiguard.h"
 #include "aihand.h"
-#include "aiplayer.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "aidiplomat.h"
 
@@ -164,10 +164,10 @@ void ai_choose_diplomat_offensive(struct player *pplayer,
                                   struct ai_choice *choice)
 {
   struct unit_type *ut = best_role_unit(pcity, F_DIPLOMAT);
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int expenses;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   if (!ut) {
     /* We don't know diplomats yet! */
@@ -329,7 +329,7 @@ static void ai_diplomat_city(struct unit *punit, struct city *ctarget)
   }
 
   incite_cost = city_incite_cost(pplayer, ctarget);
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   if (incite_cost <= pplayer->economic.gold - 2 * expenses) {
     T(DIPLOMAT_INCITE,0);
@@ -349,7 +349,7 @@ static void ai_diplomat_city(struct unit *punit, struct city *ctarget)
   UNIT_LOG(LOG_DIPLOMAT, punit,
            "decides to stand idle outside enemy city %s!",
            city_name(ctarget));
-  ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+  ai_unit_new_role(punit, AIUNIT_NONE, NULL);
 }
 
 /**************************************************************************
@@ -368,7 +368,7 @@ static void find_city_to_diplomat(struct player *pplayer, struct unit *punit,
   fc_assert_ret(punit != NULL);
   *ctarget = NULL;
   *move_dist = -1;
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
     struct city *acity;
@@ -487,7 +487,7 @@ static bool ai_diplomat_bribe_nearby(struct player *pplayer,
 {
   int gold_avail, expenses;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
   gold_avail = pplayer->economic.gold - expenses;
 
   pf_map_positions_iterate(pfm, pos, FALSE) {
@@ -597,7 +597,6 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
   struct pf_parameter parameter;
   struct pf_map *pfm;
   struct pf_position pos;
-  struct unit_ai *unit_data;
 
   CHECK_UNIT(punit);
 
@@ -625,18 +624,16 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
             || city_data->urgency > 0)) {
       UNIT_LOG(LOG_DIPLOMAT, punit, "stays to protect %s (urg %d)", 
                city_name(pcity), city_data->urgency);
-      ai_unit_new_task(punit, AIUNIT_NONE, NULL); /* abort mission */
+      ai_unit_new_role(punit, AIUNIT_NONE, NULL); /* abort mission */
       def_ai_unit_data(punit)->done = TRUE;
       pf_map_destroy(pfm);
       return;
     }
   }
 
-  unit_data = def_ai_unit_data(punit);
-
   /* Check if existing target still makes sense */
-  if (unit_data->task == AIUNIT_ATTACK
-      || unit_data->task == AIUNIT_DEFEND_HOME) {
+  if (punit->server.adv->role == AIUNIT_ATTACK
+      || punit->server.adv->role == AIUNIT_DEFEND_HOME) {
     bool failure = FALSE;
 
     ctarget = tile_city(punit->goto_tile);
@@ -645,12 +642,12 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       if (same_pos(ctarget->tile, punit->tile)) {
         failure = TRUE;
       } else if (pplayers_allied(pplayer, city_owner(ctarget))
-          && unit_data->task == AIUNIT_ATTACK
+          && punit->server.adv->role == AIUNIT_ATTACK
           && player_has_embassy(pplayer, city_owner(ctarget))) {
         /* We probably incited this city with another diplomat */
         failure = TRUE;
       } else if (!pplayers_allied(pplayer, city_owner(ctarget))
-                 && unit_data->task == AIUNIT_DEFEND_HOME) {
+                 && punit->server.adv->role == AIUNIT_DEFEND_HOME) {
         /* We probably lost the city */
         failure = TRUE;
       }
@@ -660,7 +657,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
     }
     if (failure) {
       UNIT_LOG(LOG_DIPLOMAT, punit, "mission aborted");
-      ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+      ai_unit_new_role(punit, AIUNIT_NONE, NULL);
     }
   }
 
@@ -668,7 +665,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
    * old map, and we need paths to move, and because fctd below requires
    * a new map for its iterator. */
   if (!same_pos(parameter.start_tile, punit->tile)
-      || unit_data->task == AIUNIT_NONE) {
+      || punit->server.adv->role == AIUNIT_NONE) {
     pf_map_destroy(pfm);
     pft_fill_unit_parameter(&parameter, punit);
     parameter.get_zoc = NULL; /* kludge */
@@ -676,7 +673,7 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
   }
 
   /* If we are not busy, acquire a target. */
-  if (unit_data->task == AIUNIT_NONE) {
+  if (punit->server.adv->role == AIUNIT_NONE) {
     enum ai_unit_task task;
     int move_dist; /* dummy */
 
@@ -707,15 +704,15 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
       return;
     }
 
-    ai_unit_new_task(punit, task, ctarget->tile);
+    ai_unit_new_role(punit, task, ctarget->tile);
     fc_assert(punit->moves_left > 0 && ctarget 
-              && unit_data->task != AIUNIT_NONE);
+              && punit->server.adv->role != AIUNIT_NONE);
   }
 
   CHECK_UNIT(punit);
   if (ctarget == NULL) {
-    UNIT_LOG(LOG_ERROR, punit, "ctarget not set (task == %d)",
-             unit_data->task);
+    UNIT_LOG(LOG_ERROR, punit, "ctarget not set (role==%d)",
+             punit->server.adv->role);
     pf_map_destroy(pfm);
     return;
   }
@@ -727,13 +724,13 @@ void ai_manage_diplomat(struct player *pplayer, struct unit *punit)
     path = pf_map_path(pfm, punit->goto_tile);
     if (path && adv_unit_execute_path(punit, path) && punit->moves_left > 0) {
       /* Check if we can do something with our destination now. */
-      if (unit_data->task == AIUNIT_ATTACK) {
+      if (punit->server.adv->role == AIUNIT_ATTACK) {
         int dist  = real_map_distance(punit->tile, punit->goto_tile);
         UNIT_LOG(LOG_DIPLOMAT, punit, "attack, dist %d to %s",
                  dist, ctarget ? city_name(ctarget) : "(none)");
         if (dist == 1) {
           /* Do our stuff */
-          ai_unit_new_task(punit, AIUNIT_NONE, NULL);
+          ai_unit_new_role(punit, AIUNIT_NONE, NULL);
           ai_diplomat_city(punit, ctarget);
         }
       }

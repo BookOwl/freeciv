@@ -100,11 +100,10 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
                                       city_owner(pcity))) {
         return TRUE;
       }
-      if(action == SPY_POISON
-         && city_size_get(pcity) > 1
-         && unit_has_type_flag(pdiplomat, F_SPY)) {
-        return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
-      }
+      if(action==SPY_POISON &&
+	 pcity->size>1 &&
+	 unit_has_type_flag(pdiplomat, F_SPY))
+	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_INVESTIGATE)
         return TRUE;
       if (action == DIPLOMAT_STEAL && !is_barbarian(city_owner(pcity))) {
@@ -457,7 +456,7 @@ unit_add_or_build_city_test(const struct unit *punit)
   }
 
   fc_assert(unit_pop_value(punit) > 0);
-  new_pop = city_size_get(pcity) + unit_pop_value(punit);
+  new_pop = pcity->size + unit_pop_value(punit);
 
   if (new_pop > game.info.add_to_size_limit) {
     return UAB_TOO_BIG;
@@ -511,12 +510,7 @@ bool can_unit_change_homecity(const struct unit *punit)
 **************************************************************************/
 int get_activity_rate(const struct unit *punit)
 {
-  const struct veteran_level *vlevel;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
+  double fact = unit_type(punit)->veteran[punit->veteran].power_fact;
 
   /* The speed of the settler depends on its base move_rate, not on
    * the number of moves actually remaining or the adjusted move rate.
@@ -526,9 +520,7 @@ int get_activity_rate(const struct unit *punit)
   int move_rate = unit_type(punit)->move_rate;
 
   /* All settler actions are multiplied by ACTIVITY_COUNT. */
-  return ACTIVITY_FACTOR
-         * (float)vlevel->power_fact / 100
-         * move_rate / SINGLE_MOVE;
+  return ACTIVITY_FACTOR * fact * move_rate / SINGLE_MOVE;
 }
 
 /**************************************************************************
@@ -1907,51 +1899,4 @@ void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data)
 {
   punit->server.ais[ai_type_number(ai)] = data;
-}
-
-
-
-/*****************************************************************************
-  Calculate how expensive it is to bribe the unit. The cost depends on the
-  distance to the capital and government form. For a damaged unit the price is
-  reduced.
-
-  The bribe cost for settlers are halved.
-**************************************************************************/
-int unit_bribe_cost(struct unit *punit)
-{
-  int cost, default_hp, dist = 0;
-  struct city *capital;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  default_hp = unit_type(punit)->hp;
-  cost = unit_owner(punit)->economic.gold + game.info.base_bribe_cost;
-  capital = player_palace(unit_owner(punit));
-
-  /* Consider the distance to the capital. */
-  if (capital != NULL) {
-    dist = MIN(GAME_UNIT_BRIBE_DIST_MAX,
-               map_distance(capital->tile, punit->tile));
-  } else {
-    dist = GAME_UNIT_BRIBE_DIST_MAX;
-  }
-  cost /= dist + 2;
-
-  /* Consider the build cost. */
-  cost *= unit_build_shield_cost(punit) / 10;
-
-  /* FIXME: This is a weird one - should be replaced. */
-  if (unit_has_type_flag(punit, F_CITIES)) {
-    cost /= 2;
-  }
-
-  /* Veterans are not cheap. */
-  /* FIXME: Should this depend on the veteran level? */
-  cost += cost * punit->veteran / 3;
-
-  /* Cost now contains the basic bribe cost.  We now reduce it by:
-   *    bribecost = cost/2 + cost/2 * damage/hp
-   *              = cost/2 * (1 + damage/hp) */
-  return ((float)cost / 2 * (1.0 + punit->hp / default_hp));
 }

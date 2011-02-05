@@ -43,7 +43,6 @@
 #include "terrain.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "unittype.h"
 
 /* aicore */
 #include "path_finding.h"
@@ -51,12 +50,8 @@
 
 /* ai */
 #include "advdiplomacy.h"
+#include "aiferry.h"
 #include "aitools.h"
-
-/* server/scripting */
-#include "script_game.h"
-#include "script_signal.h"
-#include "script_types.h"
 
 /* server */
 #include "aiiface.h"
@@ -69,17 +64,20 @@
 #include "notify.h"
 #include "plrhand.h"
 #include "sanitycheck.h"
+#include "script_signal.h"
 #include "sernet.h"
 #include "srv_main.h"
 #include "techtools.h"
 #include "unithand.h"
+#include "unittools.h"
 
 /* server/advisors */
 #include "advgoto.h"
 #include "autoexplorer.h"
 #include "autosettlers.h"
 
-#include "unittools.h"
+/* server/scripting */
+#include "script.h"
 
 /* We need this global variable for our sort algorithm */
 static struct tile *autoattack_target;
@@ -97,8 +95,6 @@ static int hp_gain_coord(struct unit *punit);
 static void put_unit_onto_transporter(struct unit *punit, struct unit *ptrans);
 static void pull_unit_from_transporter(struct unit *punit,
 				       struct unit *ptrans);
-
-static bool maybe_become_veteran_real(struct unit *punit, bool settler);
 
 /**************************************************************************
   Returns a unit type that matches the role_tech or role roles.
@@ -153,64 +149,33 @@ struct unit_type *find_a_unit_type(enum unit_role_id role,
   return which[fc_rand(num)];
 }
 
-/*****************************************************************************
-  ...
-*****************************************************************************/
-bool maybe_make_veteran(struct unit *punit)
-{
-  return maybe_become_veteran_real(punit, FALSE);
-}
-
-/*****************************************************************************
+/**************************************************************************
   After a battle, after diplomatic aggression and after surviving trireme
   loss chance, this routine is called to decide whether or not the unit
   should become more experienced.
 
   There is a specified chance for it to happen, (+50% if player got SUNTZU)
   the chances are specified in the units.ruleset file.
-
-  If 'settler' is TRUE the veteran level is increased due to work done by
-  the unit.
-*****************************************************************************/
-static bool maybe_become_veteran_real(struct unit *punit, bool settler)
+**************************************************************************/
+bool maybe_make_veteran(struct unit *punit)
 {
-  const struct veteran_system *vsystem;
-  const struct veteran_level *vlevel;
-  int chance;
-
-  fc_assert_ret_val(punit != NULL, FALSE);
-
-  vsystem = utype_veteran_system(unit_type(punit));
-  fc_assert_ret_val(vsystem != NULL, FALSE);
-  fc_assert_ret_val(vsystem->levels > punit->veteran, FALSE);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, FALSE);
-
-  if (punit->veteran + 1 >= vsystem->levels
+  if (punit->veteran + 1 >= MAX_VET_LEVELS
+      || rule_name(&unit_type(punit)->veteran[punit->veteran].name)[0] == '\0'
       || unit_has_type_flag(punit, F_NO_VETERAN)) {
     return FALSE;
-  } else if (!settler) {
+  } else {
     int mod = 100 + get_unittype_bonus(unit_owner(punit), punit->tile,
 				       unit_type(punit), EFT_VETERAN_COMBAT);
 
     /* The modification is tacked on as a multiplier to the base chance.
      * For example with a base chance of 50% for green units and a modifier
      * of +50% the end chance is 75%. */
-    chance = vlevel->raise_chance * mod / 100;
-  } else if (settler && unit_has_type_flag(punit, F_SETTLERS)) {
-    chance = vlevel->work_raise_chance;
-  } else {
-    /* No battle and no work done. */
+    if (fc_rand(100) < game.veteran_chance[punit->veteran] * mod / 100) {
+      punit->veteran++;
+      return TRUE;
+    }
     return FALSE;
   }
-
-  if (fc_rand(100) < chance) {
-    punit->veteran++;
-    return TRUE;
-  }
-
-  return FALSE;
 }
 
 /**************************************************************************
@@ -649,30 +614,39 @@ static bool total_activity_done(struct tile *ptile, enum unit_activity act)
   return total_activity(ptile, act) >= tile_activity_time(act, ptile);
 }
 
+/***************************************************************************
+  Maybe settler/worker gains a veteran level?
+****************************************************************************/
+static bool maybe_settler_become_veteran(struct unit *punit)
+{
+  if (punit->veteran + 1 >= MAX_VET_LEVELS
+      || rule_name(&unit_type(punit)->veteran[punit->veteran].name)[0] == '\0'
+      || unit_has_type_flag(punit, F_NO_VETERAN)) {
+    return FALSE;
+  }
+  if (unit_has_type_flag(punit, F_SETTLERS)
+      && fc_rand(100) < game.work_veteran_chance[punit->veteran]) {
+    punit->veteran++;
+    return TRUE;
+  }
+  return FALSE;  
+}
+
 /**************************************************************************
   Common notification for all experience levels.
 **************************************************************************/
 void notify_unit_experience(struct unit *punit)
 {
-  const struct veteran_system *vsystem;
-  const struct veteran_level *vlevel;
-
   if (!punit) {
     return;
   }
-
-  vsystem = utype_veteran_system(unit_type(punit));
-  fc_assert_ret(vsystem != NULL);
-  fc_assert_ret(vsystem->levels > punit->veteran);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret(vlevel != NULL);
 
   notify_player(unit_owner(punit), unit_tile(punit),
                 E_UNIT_BECAME_VET, ftc_server,
                 /* TRANS: Your <unit> became ... */
                 _("Your %s became more experienced and became %s."),
-                unit_link(punit), name_translation(&vlevel->name));
+                unit_link(punit),
+                name_translation(&unit_type(punit)->veteran[punit->veteran].name));
 }
 
 /**************************************************************************
@@ -720,7 +694,7 @@ static void update_unit_activity(struct unit *punit)
     punit->activity_count += get_activity_rate_this_turn(punit);
 
     /* settler may become veteran when doing something useful */
-    if (maybe_become_veteran_real(punit, TRUE)) {
+    if (maybe_settler_become_veteran(punit)) {
       notify_unit_experience(punit);
     }
     break;
@@ -1446,7 +1420,8 @@ struct unit *create_unit_full(struct player *pplayer, struct tile *ptile,
   city_map_update_tile_now(ptile);
   sync_cities();
 
-  CALL_PLR_AI_FUNC(unit_created, unit_owner(punit), punit);
+  /* Initialize aiferry stuff for new unit */
+  aiferry_init_ferry(punit);
 
   return punit;
 }
@@ -1478,7 +1453,9 @@ static void server_remove_unit(struct unit *punit)
      are built, so that no two settlers head towards the same city
      spot, we need to ensure this reservation is cleared should
      the settler disappear on the way. */
-  adv_unit_new_task(punit, AUT_NONE, NULL);
+  if (punit->server.adv->role != AIUNIT_NONE) {
+    ai_unit_new_role(punit, AIUNIT_NONE, NULL);
+  }
 
   conn_list_iterate(game.est_connections, pconn) {
     if ((NULL == pconn->playing && pconn->observer)
@@ -2182,7 +2159,7 @@ static void do_nuke_tile(struct player *pplayer, struct tile *ptile)
                     city_link(pcity));
     }
 
-    city_reduce_size(pcity, city_size_get(pcity) / 2, pplayer);
+    city_reduce_size(pcity, pcity->size / 2, pplayer);
   }
 
   if (!terrain_has_flag(tile_terrain(ptile), TER_NO_POLLUTION)
@@ -3172,7 +3149,7 @@ static bool maybe_cancel_patrol_due_to_enemy(struct unit *punit)
     struct vision_site *pdcity = map_get_player_site(ptile, pplayer);
 
     if ((penemy && can_player_see_unit(pplayer, penemy))
-	|| (pdcity && !pplayers_allied(pplayer, vision_site_owner(pdcity))
+	|| (pdcity && !pplayers_allied(pplayer, vision_owner(pdcity))
 	    && pdcity->occupied)) {
       cancel = TRUE;
       break;
