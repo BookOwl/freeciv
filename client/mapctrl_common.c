@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdlib.h>		/* qsort */
 
 /* utility */
@@ -171,14 +172,14 @@ static void define_tiles_within_rectangle(void)
       && unit_list_size(units) > 0) {
     if (!rectangle_append) {
       struct unit *punit = unit_list_get(units, 0);
-      unit_focus_set(punit);
-      unit_list_remove(units, punit);
+      set_unit_focus(punit);
+      unit_list_unlink(units, punit);
     }
     unit_list_iterate(units, punit) {
-      unit_focus_add(punit);
+      add_unit_focus(punit);
     } unit_list_iterate_end;
   }
-  unit_list_destroy(units);
+  unit_list_free(units);
 
   /* Clear previous rectangle. */
   draw_selection_rectangle(rec_corner_x, rec_corner_y, rec_w, rec_h);
@@ -290,7 +291,7 @@ void cancel_selection_rectangle(void)
 }
 
 /**************************************************************************
-  Is city highlighted
+...
 **************************************************************************/
 bool is_city_hilited(struct city *pcity)
 {
@@ -436,7 +437,7 @@ void clipboard_paste_production(struct city *pcity)
 }
 
 /**************************************************************************
-  Send request to build production in clipboard to server.
+...
 **************************************************************************/
 static void clipboard_send_production_packet(struct city *pcity)
 {
@@ -470,7 +471,7 @@ void upgrade_canvas_clipboard(void)
 }
 
 /**************************************************************************
-  Goto button has been released. Finish goto.
+...
 **************************************************************************/
 void release_goto_button(int canvas_x, int canvas_y)
 {
@@ -508,7 +509,7 @@ void maybe_activate_keyboardless_goto(int canvas_x, int canvas_y)
 bool get_turn_done_button_state(void)
 {
   return (can_client_issue_orders()
-          && !client.conn.playing->ai_controlled
+          && !client.conn.playing->ai_data.control
           && !client.conn.playing->phase_done
           && !agents_busy());
 }
@@ -571,8 +572,10 @@ void adjust_workers_button_pressed(int canvas_x, int canvas_y)
 
     if (pcity && !cma_is_city_under_agent(pcity, NULL)) {
       int city_x, city_y;
+      bool success;
 
-      fc_assert_ret(city_base_to_city_map(&city_x, &city_y, pcity, ptile));
+      success = city_base_to_city_map(&city_x, &city_y, pcity, ptile);
+      assert(success);
 
       if (NULL != tile_worked(ptile) && tile_worked(ptile) == pcity) {
 	dsend_packet_city_make_specialist(&client.conn, pcity->id,
@@ -618,7 +621,7 @@ void update_turn_done_button_state(void)
   if (turn_done_state) {
     if (waiting_for_end_turn
         || (NULL != client.conn.playing
-            && client.conn.playing->ai_controlled
+            && client.conn.playing->ai_data.control
             && !ai_manual_turn_done)) {
       send_turn_done();
     } else {
@@ -690,8 +693,8 @@ static int unit_list_compare(const void *a, const void *b)
   } else {
     /* If the transporters aren't the same, put in order by the
      * transporters. */
-    const struct unit *ptrans1 = game_unit_by_number(punit1->transported_by);
-    const struct unit *ptrans2 = game_unit_by_number(punit2->transported_by);
+    const struct unit *ptrans1 = game_find_unit_by_number(punit1->transported_by);
+    const struct unit *ptrans2 = game_find_unit_by_number(punit2->transported_by);
 
     if (!ptrans1) {
       ptrans1 = punit1;
@@ -720,3 +723,4 @@ void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list)
   /* Then sort it. */
   qsort(unit_list, i, sizeof(*unit_list), unit_list_compare);
 }
+

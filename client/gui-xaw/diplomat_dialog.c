@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -40,8 +40,6 @@
 #include "client_main.h"
 #include "control.h"
 
-/* client/gui-xaw */
-#include "citydlg.h"
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -97,10 +95,10 @@ static void diplomat_bribe_callback(Widget w, XtPointer client_data,
 {
   destroy_message_dialog(w);
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_unit_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_unit_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_BRIBE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
 }
 
@@ -116,7 +114,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                          _("This unit cannot be bribed!"),
                          diplomat_bribe_no_callback, 0, 0, NULL);
   } else if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Bribe unit for %d gold?\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
@@ -125,7 +123,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
 			 diplomat_bribe_no_callback, 0, 0,
 			 NULL);
   } else {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Bribing the unit costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
@@ -144,10 +142,10 @@ static void diplomat_sabotage_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-                            diplomat_target_id, B_LAST + 1);
+			    diplomat_target_id, -1);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -162,10 +160,10 @@ static void diplomat_embassy_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -174,16 +172,16 @@ static void diplomat_embassy_callback(Widget w, XtPointer client_data,
 /****************************************************************
 ...
 *****************************************************************/
-static void diplomat_investigate_callback(Widget w, XtPointer client_data,
-                                          XtPointer call_data)
+static void diplomat_investigate_callback(Widget w, XtPointer client_data, 
+					  XtPointer call_data)
 {
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_city_by_number(diplomat_target_id)
-      && NULL != game_unit_by_number(diplomat_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -210,8 +208,8 @@ static void spy_poison_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
   }
 
@@ -227,8 +225,8 @@ static void diplomat_steal_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
 			    diplomat_target_id, A_UNSET);
   }
@@ -308,15 +306,15 @@ static void spy_steal_callback(Widget w, XtPointer client_data,
   spy_tech_shell = 0l;
   
   if(!steal_advance){
-    log_error("Bug in spy steal tech code");
+    freelog(LOG_ERROR, "Bug in spy steal tech code");
     process_diplomat_arrival(NULL, 0);
     return;
   }
-
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-                            diplomat_target_id, steal_advance);
+			    diplomat_target_id, steal_advance);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -332,15 +330,15 @@ static void spy_sabotage_callback(Widget w, XtPointer client_data,
   spy_sabotage_shell = 0l;
   
   if(!sabotage_improvement){
-    log_error("Bug in spy sabotage code");
+    freelog(LOG_ERROR, "Bug in spy sabotage code");
     process_diplomat_arrival(NULL, 0);
     return;
   }
-
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-                            diplomat_target_id, sabotage_improvement + 1);
+			    diplomat_target_id, sabotage_improvement + 1);
   }
 
   process_diplomat_arrival(NULL, 0);
@@ -520,10 +518,10 @@ static int create_improvements_list(struct player *pplayer,
 /****************************************************************
 ...
 *****************************************************************/
-static void spy_steal_popup(Widget w, XtPointer client_data,
-                            XtPointer call_data)
+static void spy_steal_popup(Widget w, XtPointer client_data, 
+			    XtPointer call_data)
 {
-  struct city *pvcity = game_city_by_number(diplomat_target_id);
+  struct city *pvcity = game_find_city_by_number(diplomat_target_id);
   struct player *pvictim = NULL;
 
   if(pvcity)
@@ -563,8 +561,8 @@ static void spy_request_sabotage_list(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_city_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_SABOTAGE, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -628,8 +626,8 @@ static void diplomat_incite_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_city_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_INCITE, diplomat_id,
 			    diplomat_target_id, 0);
   }
@@ -643,12 +641,12 @@ void popup_incite_dialog(struct city *pcity, int cost)
   char buf[128];
 
   if (INCITE_IMPOSSIBLE_COST == cost) {
-    fc_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
+    my_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
 		city_name(pcity));
     popup_message_dialog(toplevel, "diplomatnogolddialog", buf,
 			 diplomat_incite_no_callback, 0, 0, NULL);
   } else if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Incite a revolt for %d gold?\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
@@ -658,7 +656,7 @@ void popup_incite_dialog(struct city *pcity, int cost)
 			diplomat_incite_no_callback, 0, 0,
 			NULL);
   } else {
-   fc_snprintf(buf, sizeof(buf),
+   my_snprintf(buf, sizeof(buf),
 	       _("Inciting a revolt costs %d gold.\n"
 		 "Treasury contains %d gold."), 
 	       cost, client.conn.playing->economic.gold);
@@ -682,11 +680,11 @@ static void diplomat_keep_moving_callback(Widget w, XtPointer client_data,
   destroy_message_dialog(w);
   diplomat_dialog = NULL;
 
-  if ((punit = game_unit_by_number(diplomat_id))
-      && (pcity = game_city_by_number(diplomat_target_id))
-      && !same_pos(unit_tile(punit), city_tile(pcity))) {
+  if( (punit=game_find_unit_by_number(diplomat_id))
+      && (pcity=game_find_city_by_number(diplomat_target_id))
+      && !same_pos(punit->tile, pcity->tile)) {
     request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -718,7 +716,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id=pcity->id;
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Your %s has arrived at %s.\nWhat is your command?"),
 		unit_name_translation(punit),
 		city_name(pcity));

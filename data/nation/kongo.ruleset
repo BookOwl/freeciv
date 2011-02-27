@@ -2,7 +2,7 @@
 
 name=_("Kongo")
 plural=_("?plural:Kongo")
-groups="Medieval", "Early Modern", "African"
+groups="Medieval", "African"
 
 legend=_("This Kingdom, lasting from roughly 1400 AD until the late 19th\
  century, existed in the present-day countries of Angola and the\
@@ -10,19 +10,22 @@ legend=_("This Kingdom, lasting from roughly 1400 AD until the late 19th\
  explorers, missionaries and slavers began to arrive and exerted\
  considerable influence in the Kingdom.")
 
-leaders = {
- "name",                "sex"
- "Lukeni lua Nim",      "Male"
- "Ntinu Nimi a Lukeni", "Male"
- "Nanga",               "Male"
- "Nlaza",               "Male"
- "Nkuwu a Ntinu",       "Male"
- "Nvita a Nkanga",      "Male"
-}
+leader=
+ "Lukeni lua Nim",
+ "Ntinu Nimi a Lukeni",
+ "Nanga",
+ "Nlaza",
+ "Nkuwu a Ntinu",
+ "Nvita a Nkanga"
+
+leader_sex = "Male", "Male", "Male", "Male", "Male", "Male"
 
 flag         = "kongo"
 flag_alt     = "-"
 city_style   = "Tropical"
+ruler_titles = { "government",      "male_title",        "female_title"
+                 "Monarchy",       _("Manikongo"),   _("?female:Manikongo")
+               }
 
 init_techs=""
 init_buildings=""

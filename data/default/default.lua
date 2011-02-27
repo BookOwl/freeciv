@@ -12,14 +12,14 @@
 -- When creating new ruleset, you should copy this file only if you
 -- need to override default one. Usually you should implement your
 -- own scripts in ruleset specific script.lua. This way maintaining
--- ruleset is easier as you do not need to keep your own copy of
+-- ruleset is easier as you don't need to keep your own copy of
 -- default.lua updated when ever it changes in Freeciv distribution.
 
 -- Get gold from entering a hut.
 function default_hut_get_gold(unit, gold)
   local owner = unit.owner
 
-  notify.event(owner, unit:tile(), E.HUT_GOLD, _("You found %d gold."), gold)
+  notify.event(owner, unit.tile, E.HUT_GOLD, _("You found %d gold."), gold)
   change_gold(owner, gold)
 end
 
@@ -29,10 +29,10 @@ function default_hut_get_tech(unit)
   local tech = give_technology(owner, nil, "hut")
 
   if tech then
-    notify.event(owner, unit:tile(), E.HUT_TECH,
+    notify.event(owner, unit.tile, E.HUT_TECH,
                  _("You found %s in ancient scrolls of wisdom."),
                  tech:name_translation())
-    notify.embassies(owner, unit:tile(), E.HUT_TECH,
+    notify.embassies(owner, unit.tile, E.HUT_TECH,
                  _("The %s have acquired %s from ancient scrolls of wisdom."),
                  owner.nation:plural_translation(),
                  tech:name_translation())
@@ -52,9 +52,9 @@ function default_hut_get_mercenaries(unit)
   end
 
   if type then
-    notify.event(owner, unit:tile(), E.HUT_MERC,
+    notify.event(owner, unit.tile, E.HUT_MERC,
                  _("A band of friendly mercenaries joins your cause."))
-    create_unit(owner, unit:tile(), type, 0, unit:get_homecity(), -1)
+    create_unit(owner, unit.tile, type, 0, unit:get_homecity(), -1)
     return true
   else
     return false
@@ -67,14 +67,14 @@ function default_hut_get_city(unit)
   local settlers = find.role_unit_type('Cities', owner)
 
   if unit:is_on_possible_city_tile() then
-    create_city(owner, unit:tile(), "")
-    notify.event(owner, unit:tile(), E.HUT_CITY,
+    create_city(owner, unit.tile, "")
+    notify.event(owner, unit.tile, E.HUT_CITY,
                  _("You found a friendly city."))
   else
     if settlers then
-      notify.event(owner, unit:tile(), E.HUT_SETTLER,
+      notify.event(owner, unit.tile, E.HUT_SETTLER,
                    _("Friendly nomads are impressed by you, and join you."))
-      create_unit(owner, unit:tile(), settlers, 0, unit:get_homecity(), -1)
+      create_unit(owner, unit.tile, settlers, 0, unit:get_homecity(), -1)
     end
   end
 end
@@ -82,13 +82,13 @@ end
 -- Get barbarians from hut, unless close to a city or king enters
 -- Unit may die: returns true if unit is alive
 function default_hut_get_barbarians(unit)
-  local tile = unit:tile()
+  local tile = unit.tile
   local type = unit.utype
   local owner = unit.owner
 
-  if unit:tile():city_exists_within_max_city_map(true)
+  if unit.tile:city_exists_within_city_radius(true) 
     or type:has_flag('Gameloss') then
-    notify.event(owner, unit:tile(), E.HUT_BARB_CITY_NEAR,
+    notify.event(owner, unit.tile, E.HUT_BARB_CITY_NEAR,
                  _("An abandoned village is here."))
     return true
   end
@@ -133,43 +133,3 @@ function default_hut_enter_callback(unit)
 end
 
 signal.connect("hut_enter", "default_hut_enter_callback")
-
-
---[[
-  Make partisans around conquered city
-
-  if requirements to make partisans when a city is conquered is fullfilled
-  this routine makes a lot of partisans based on the city`s size.
-  To be candidate for partisans the following things must be satisfied:
-  1) The loser of the city is the original owner.
-  2) The Inspire_Partisans effect must be larger than zero.
-
-  If these conditions are ever satisfied, the ruleset must have a unit
-  with the Partisan role.
-
-  In the default ruleset, the requirements for inspiring partisans are:
-  a) Guerilla warfare must be known by atleast 1 player
-  b) The player must know about Communism and Gunpowder
-  c) The player must run either a democracy or a communist society.
-]]--
-
-function default_make_partisans_callback(city, loser, winner)
-  if city.original ~= loser then
-    return
-  end
-  if effects.player_bonus(loser, "Inspire_Partisans") <= 0 then
-    return
-  end
-
-  local partisans = random(0, 1 + (city:size() + 1) / 2) + 1
-  if partisans > 8 then
-    partisans = 8
-  end
-  place_partisans(city:tile(), loser, partisans, city:map_sq_radius())
-  notify.event(loser, city:tile(), E.CITY_LOST,
-      _("The loss of %s has inspired partisans!"), city.name)
-  notify.event(winner, city:tile(), E.UNIT_WIN_ATT,
-      _("The loss of %s has inspired partisans!"), city.name)
-end
-
-signal.connect("city_lost", "default_make_partisans_callback")

@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1386,7 +1387,7 @@ void refresh_worklist(GtkWidget *editor)
   if (ptr->pcity) {
     city_get_queue(ptr->pcity, &queue);
   } else {
-    fc_assert(NULL != pgwl);
+    assert(NULL != pgwl);
     worklist_copy(&queue, global_worklist_get(pgwl));
   }
 

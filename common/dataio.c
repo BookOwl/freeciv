@@ -20,9 +20,10 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -43,7 +44,6 @@
 #endif
 
 /* utility */
-#include "bitvector.h"
 #include "capability.h"
 #include "log.h"
 #include "mem.h"
@@ -58,14 +58,13 @@
 
 #include "dataio.h"
 
-static bool get_conv(char *dst, size_t ndst, const char *src,
-		     size_t nsrc);
-
+/**************************************************************************
+...
+**************************************************************************/
 static DIO_PUT_CONV_FUN put_conv_callback = NULL;
-static DIO_GET_CONV_FUN get_conv_callback = get_conv;
 
 /**************************************************************************
-  Sets string conversion callback to be used when putting text.
+...
 **************************************************************************/
 void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
 {
@@ -74,7 +73,7 @@ void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
 
 /**************************************************************************
  Returns FALSE if the destination isn't large enough or the source was
- bad. This is default get_conv_callback.
+ bad.
 **************************************************************************/
 static bool get_conv(char *dst, size_t ndst, const char *src,
 		     size_t nsrc)
@@ -94,7 +93,12 @@ static bool get_conv(char *dst, size_t ndst, const char *src,
 }
 
 /**************************************************************************
-  Sets string conversion callback to use when getting text.
+...
+**************************************************************************/
+static DIO_GET_CONV_FUN get_conv_callback = get_conv;
+
+/**************************************************************************
+...
 **************************************************************************/
 void dio_set_get_conv_callback(DIO_GET_CONV_FUN fun)
 {
@@ -192,54 +196,54 @@ size_t dio_input_remaining(struct data_in *din)
 }
 
 /**************************************************************************
-  Insert value using 8 bits. May overflow.
+...
 **************************************************************************/
 void dio_put_uint8(struct data_out *dout, int value)
 {
   if (enough_space(dout, 1)) {
     uint8_t x = value;
 
-    fc_assert(sizeof(x) == 1);
+    assert(sizeof(x) == 1);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 1);
     dout->current++;
   }
 }
 
 /**************************************************************************
-  Insert value using 16 bits. May overflow.
+...
 **************************************************************************/
 void dio_put_uint16(struct data_out *dout, int value)
 {
   if (enough_space(dout, 2)) {
     uint16_t x = htons(value);
 
-    fc_assert(sizeof(x) == 2);
+    assert(sizeof(x) == 2);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 2);
     dout->current += 2;
   }
 }
 
 /**************************************************************************
-  Insert value using 16 bits.
+...
 **************************************************************************/
 void dio_put_uint32(struct data_out *dout, int value)
 {
   if (enough_space(dout, 4)) {
     uint32_t x = htonl(value);
 
-    fc_assert(sizeof(x) == 4);
+    assert(sizeof(x) == 4);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 4);
     dout->current += 4;
   }
 }
 
 /**************************************************************************
-  Insert value 0 or 1 using 8 bits.
+...
 **************************************************************************/
 void dio_put_bool8(struct data_out *dout, bool value)
 {
   if (value != TRUE && value != FALSE) {
-    log_error("Trying to put a non-boolean: %d", (int) value);
+    freelog(LOG_ERROR, "Trying to put a non-boolean: %d", (int) value);
     value = FALSE;
   }
 
@@ -247,12 +251,12 @@ void dio_put_bool8(struct data_out *dout, bool value)
 }
 
 /**************************************************************************
-  Insert value 0 or 1 using 32 bits.
+...
 **************************************************************************/
 void dio_put_bool32(struct data_out *dout, bool value)
 {
   if (value != TRUE && value != FALSE) {
-    log_error("Trying to put a non-boolean: %d", (int) value);
+    freelog(LOG_ERROR, "Trying to put a non-boolean: %d", (int) value);
     value = FALSE;
   }
 
@@ -260,9 +264,7 @@ void dio_put_bool32(struct data_out *dout, bool value)
 }
 
 /**************************************************************************
-  Insert number of values brefore stop_value using 8 bits. Then
-  insert values using 8 bits for each. stop_value is not required to
-  fit in 8 bits. Actual values may overflow.
+...
 **************************************************************************/
 void dio_put_uint8_vec8(struct data_out *dout, int *values, int stop_value)
 {
@@ -284,9 +286,7 @@ void dio_put_uint8_vec8(struct data_out *dout, int *values, int stop_value)
 }
 
 /**************************************************************************
-  Insert number of values brefore stop_value using 8 bits. Then
-  insert values using 16 bits for each. stop_value is not required to
-  fit in 16 bits. Actual values may overflow.
+...
 **************************************************************************/
 void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value)
 {
@@ -308,7 +308,7 @@ void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value)
 }
 
 /**************************************************************************
-  Insert block directly from memory.
+...
 **************************************************************************/
 void dio_put_memory(struct data_out *dout, const void *value, size_t size)
 {
@@ -319,7 +319,7 @@ void dio_put_memory(struct data_out *dout, const void *value, size_t size)
 }
 
 /**************************************************************************
-  Insert NULL-terminated string. Conversion callback is used if set.
+...
 **************************************************************************/
 void dio_put_string(struct data_out *dout, const char *value)
 {
@@ -337,9 +337,7 @@ void dio_put_string(struct data_out *dout, const char *value)
 }
 
 /**************************************************************************
-  Insert number of bits as 16 bit value and then insert bits. In incoming
-  value string each bit is represented by one character, value '1' indicating
-  TRUE bit.
+...
 **************************************************************************/
 void dio_put_bit_string(struct data_out *dout, const char *value)
 {
@@ -349,8 +347,8 @@ void dio_put_bit_string(struct data_out *dout, const char *value)
   size_t max = (unsigned short)(-1);
 
   if (bits > max) {
-    fc_assert_msg(FALSE, "Bit string too long: %lu bits.",
-                  (unsigned long) bits);
+    freelog(LOG_ERROR, "Bit string too long: %lu bits.", (unsigned long)bits);
+    assert(FALSE);
     bits = max;
   }
   bytes = (bits + 7) / 8;
@@ -374,8 +372,7 @@ void dio_put_bit_string(struct data_out *dout, const char *value)
 }
 
 /**************************************************************************
-  Insert tech numbers from value array as 8 bit values until there is value
-  A_LAST or MAX_NUM_TECH_LIST tech numbers has been inserted.
+...
 **************************************************************************/
 void dio_put_tech_list(struct data_out *dout, const int *value)
 {
@@ -390,8 +387,7 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 }
 
 /**************************************************************************
-  Insert number of worklist items as 8 bit value and then insert
-  8 bit kind and 8 bit number for each worklist item.
+...
 **************************************************************************/
 void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
 {
@@ -416,7 +412,7 @@ void dio_get_uint8(struct data_in *din, int *dest)
     if (dest) {
       uint8_t x;
 
-      fc_assert(sizeof(x) == 1);
+      assert(sizeof(x) == 1);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 1);
       *dest = x;
     }
@@ -436,7 +432,7 @@ void dio_get_uint16(struct data_in *din, int *dest)
     if (dest) {
       uint16_t x;
 
-      fc_assert(sizeof(x) == 2);
+      assert(sizeof(x) == 2);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 2);
       *dest = ntohs(x);
     }
@@ -456,7 +452,7 @@ void dio_get_uint32(struct data_in *din, int *dest)
     if (dest) {
       uint32_t x;
 
-      fc_assert(sizeof(x) == 4);
+      assert(sizeof(x) == 4);
       memcpy(&x, ADD_TO_POINTER(din->src, din->current), 4);
       *dest = ntohl(x);
     }
@@ -467,7 +463,7 @@ void dio_get_uint32(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take boolean value from 8 bits.
+...
 **************************************************************************/
 void dio_get_bool8(struct data_in *din, bool * dest)
 {
@@ -476,7 +472,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
   dio_get_uint8(din, &ival);
 
   if (ival != 0 && ival != 1) {
-    log_error("Received value isn't boolean: %d", ival);
+    freelog(LOG_ERROR, "Received value isn't boolean: %d", ival);
     ival = 1;
   }
 
@@ -484,7 +480,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
 }
 
 /**************************************************************************
-  Take boolean value from 32 bits.
+...
 **************************************************************************/
 void dio_get_bool32(struct data_in *din, bool * dest)
 {
@@ -493,7 +489,7 @@ void dio_get_bool32(struct data_in *din, bool * dest)
   dio_get_uint32(din, &ival);
 
   if (ival != 0 && ival != 1) {
-    log_error("Received value isn't boolean: %d", ival);
+    freelog(LOG_ERROR, "Received value isn't boolean: %d", ival);
     ival = 1;
   }
 
@@ -501,7 +497,7 @@ void dio_get_bool32(struct data_in *din, bool * dest)
 }
 
 /**************************************************************************
-  Take value from 8 bits.
+...
 **************************************************************************/
 void dio_get_sint8(struct data_in *din, int *dest)
 {
@@ -517,7 +513,7 @@ void dio_get_sint8(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take value from 16 bits.
+...
 **************************************************************************/
 void dio_get_sint16(struct data_in *din, int *dest)
 {
@@ -533,7 +529,7 @@ void dio_get_sint16(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take memory block directly.
+...
 **************************************************************************/
 void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 {
@@ -546,7 +542,7 @@ void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 }
 
 /**************************************************************************
-  Take string. Conversion callback is used.
+...
 **************************************************************************/
 void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 {
@@ -554,7 +550,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   size_t ps_len;		/* length in packet, not including null */
   size_t offset, remaining;
 
-  fc_assert(max_dest_size > 0 || dest == NULL);
+  assert(max_dest_size > 0 || dest == NULL);
 
   if (!enough_data(din, 1)) {
     dest[0] = '\0';
@@ -587,7 +583,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 }
 
 /**************************************************************************
-  Take bits and produce string containing chars '0' and '1'
+...
 **************************************************************************/
 void dio_get_bit_string(struct data_in *din, char *dest,
 			size_t max_dest_size)
@@ -595,7 +591,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
   int npack = 0;		/* number claimed in packet */
   int i;			/* iterate the bytes */
 
-  fc_assert(dest != NULL && max_dest_size > 0);
+  assert(dest != NULL && max_dest_size > 0);
 
   if (!enough_data(din, 1)) {
     dest[0] = '\0';
@@ -604,8 +600,8 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 
   dio_get_uint16(din, &npack);
   if (npack >= max_dest_size) {
-      log_error("Have size for %lu, got %d",
-                (unsigned long) max_dest_size, npack);
+      freelog(LOG_ERROR, "Have size for %lu, got %d",
+              (unsigned long)max_dest_size, npack);
     din->bad_bit_string = TRUE;
     dest[0] = '\0';
     return;
@@ -632,8 +628,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 }
 
 /**************************************************************************
-  Take tech numbers until A_LAST encontered, or MAX_NUM_TECH_LIST techs
-  retrieved.
+...
 **************************************************************************/
 void dio_get_tech_list(struct data_in *din, int *dest)
 {
@@ -652,8 +647,7 @@ void dio_get_tech_list(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take worklist item count and then kind and number for each item, and
-  put them to provided worklist.
+...
 **************************************************************************/
 void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 {
@@ -674,8 +668,7 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 }
 
 /**************************************************************************
-  Take vector of 8 bit values and insert stop_value after them. stop_value
-  does not need to fit in 8 bits.
+...
 **************************************************************************/
 void dio_get_uint8_vec8(struct data_in *din, int **values, int stop_value)
 {
@@ -713,6 +706,40 @@ void dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
 }
 
 /**************************************************************************
+  De-serialize a player diplomatic state.
+**************************************************************************/
+void dio_get_diplstate(struct data_in *din, struct player_diplstate *pds)
+{
+  int value = 0;
+
+  /* backward compatible order defined for this transaction */
+  dio_get_uint8(din, &value);
+  pds->type = value;
+  dio_get_uint16(din, &pds->turns_left);
+  dio_get_uint16(din, &pds->contact_turns_left);
+  dio_get_uint8(din, &pds->has_reason_to_cancel);
+  dio_get_uint16(din, &pds->first_contact_turn);
+  value = 0;
+  dio_get_uint8(din, &value);
+  pds->max_state = value;
+}
+
+/**************************************************************************
+  Serialize a player diplomatic state.
+**************************************************************************/
+void dio_put_diplstate(struct data_out *dout,
+		       const struct player_diplstate *pds)
+{
+  /* backward compatible order defined for this transaction */
+  dio_put_uint8(dout, pds->type);
+  dio_put_uint16(dout, pds->turns_left);
+  dio_put_uint16(dout, pds->contact_turns_left);
+  dio_put_uint8(dout, pds->has_reason_to_cancel);
+  dio_put_uint16(dout, pds->first_contact_turn);
+  dio_put_uint8(dout, pds->max_state);
+}
+
+/**************************************************************************
   De-serialize a requirement.
 **************************************************************************/
 void dio_get_requirement(struct data_in *din, struct requirement *preq)
@@ -745,3 +772,4 @@ void dio_put_requirement(struct data_out *dout, const struct requirement *preq)
   dio_put_bool8(dout, survives);
   dio_put_bool8(dout, negated);
 }
+

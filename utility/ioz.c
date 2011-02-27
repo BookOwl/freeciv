@@ -30,9 +30,10 @@
 **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -46,11 +47,6 @@
 #include <bzlib.h>
 #endif
 
-#ifdef HAVE_LZMA_H
-#include <lzma.h>
-#endif
-
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
@@ -67,46 +63,7 @@ struct bzip2_struct {
   int firstbyte;
   bool eof;
 };
-#endif /* HAVE_LIBBZ2 */
-
-#ifdef HAVE_LIBLZMA
-
-#define PLAIN_FILE_BUF_SIZE (100*1024)     /* 100kb */
-#define XZ_DECODER_TEST_SIZE (4*1024)      /* 4kb */
-
-/* In my tests 7Mb proved to be not enough and with 10Mb decompression
-   succeeded. */
-#define XZ_DECODER_MEMLIMIT (15*1024*1024) /* 15Mb */
-
-struct xz_struct {
-  lzma_stream stream;
-  int out_index;
-
-  /* liblzma bug workaround. This is what stream.avail_out should be,
-     calculated correctly. Used only when reading file. */
-  int out_avail;
-  int total_read;
-
-  FILE *plain;
-  uint8_t *in_buf;  /* uint8_t is what xz headers use */
-  uint8_t *out_buf;
-  lzma_ret error;
-
-  /* There seems to be bug in liblzma decompression that if all the
-     processing happened when lzma_code() last time was called with
-     LZMA_RUN action, it does not set next_out or avail_out variables
-     to sane values when lzma_code() is called with LZMA_FINISH.
-     We never call lzma_code() with LZMA_RUN action with all the input
-     we have left. This hack_byte is kept in storage in case there is no
-     more input when we try to get it. This byte can then be provided to
-     lzma_code(LZMA_FINISH) */
-  char hack_byte;
-  bool hack_byte_used;
-};
-
-static bool xz_outbuffer_to_file(fz_FILE *fp, lzma_action action);
-
-#endif /* HAVE_LIBLZMA */
+#endif
 
 struct fz_FILE_s {
   enum fz_method method;
@@ -119,38 +76,8 @@ struct fz_FILE_s {
 #ifdef HAVE_LIBBZ2
     struct bzip2_struct bz2;
 #endif
-#ifdef HAVE_LIBLZMA
-    struct xz_struct xz;
-#endif
   } u;
 };
-
-/****************************************************************************
-  Validate the compression method.
-****************************************************************************/
-static inline bool fz_method_is_valid(enum fz_method method)
-{
-  switch (method) {
-  case FZ_PLAIN:
-#ifdef HAVE_LIBZ
-  case FZ_ZLIB:
-#endif
-#ifdef HAVE_LIBBZ2
-  case FZ_BZIP2:
-#endif
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-#endif
-    return TRUE;
-  }
-  return FALSE;
-}
-
-#define fz_method_validate(method)                                          \
-    (fz_method_is_valid(method) ? method                                    \
-     : (fc_assert_msg(TRUE == fz_method_is_valid(method),                   \
-                      "Unsupported compress method %d, reverting to plain.",\
-                      method), FZ_PLAIN))
 
 /***************************************************************
   Open file for reading/writing, like fopen.
@@ -177,12 +104,25 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
   if (mode[0] == 'w') {
     /* Writing: */
     fp->mode = 'w';
+
+#ifndef HAVE_LIBZ
+    if (method == FZ_ZLIB) {
+      freelog(LOG_ERROR, "Not compiled with zlib support, reverting to plain.");
+      method = FZ_PLAIN;
+    }
+#endif
+#ifndef HAVE_LIBBZ2
+    if (method == FZ_BZIP2) {
+      freelog(LOG_ERROR, "Not compiled with bzib2 support, reverting to plain.");
+      method = FZ_PLAIN;
+    }
+#endif
+
   } else {
-    /* Reading: ignore specified method and try each: */
+    /* Reading: ignore specified method and try best: */
     fp->mode = 'r';
 #ifdef HAVE_LIBBZ2
-    /* Try to open as bzip2 file
-       This is simplest test, so do it first. */
+    /* Try to open as bzip2 file */
     method = FZ_BZIP2;
     sz_strlcat(mode,"b");
     fp->u.bz2.plain = fc_fopen(filename, mode);
@@ -239,60 +179,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       BZ2_bzReadClose(&tmp_err, fp->u.bz2.file);
       fclose(fp->u.bz2.plain);
     }
-#endif /* HAVE_LIBBZ2 */
-
-#ifdef HAVE_LIBLZMA
-    /* Try to open as xz file */
-    memset(&fp->u.xz.stream, 0, sizeof(lzma_stream));
-    fp->u.xz.error = lzma_stream_decoder(&fp->u.xz.stream,
-                                         XZ_DECODER_MEMLIMIT,
-                                         LZMA_CONCATENATED);
-    if (fp->u.xz.error != LZMA_OK) {
-      return NULL;
-    }
-    sz_strlcat(mode,"b");
-    fp->u.xz.plain = fc_fopen(filename, mode);
-    if (fp->u.xz.plain) {
-      size_t len = 0;
-
-      fp->u.xz.in_buf = fc_malloc(PLAIN_FILE_BUF_SIZE);
-
-      len = fread(fp->u.xz.in_buf, 1, XZ_DECODER_TEST_SIZE,
-                  fp->u.xz.plain);
-      if (len > 0) {
-        lzma_action action;
-
-        fp->u.xz.stream.next_in = fp->u.xz.in_buf;
-        fp->u.xz.stream.avail_in = len;
-        fp->u.xz.out_buf = fc_malloc(PLAIN_FILE_BUF_SIZE);
-        fp->u.xz.stream.next_out = fp->u.xz.out_buf;
-        fp->u.xz.stream.avail_out = PLAIN_FILE_BUF_SIZE;
-        len = fread(&fp->u.xz.hack_byte, 1, 1, fp->u.xz.plain);
-        if (len > 0) {
-          fp->u.xz.hack_byte_used = TRUE;
-          action = LZMA_RUN;
-        } else {
-          fp->u.xz.hack_byte_used = FALSE;
-          action = LZMA_FINISH;
-        }
-        fp->u.xz.error = lzma_code(&fp->u.xz.stream, action);
-        if (fp->u.xz.error == LZMA_OK || fp->u.xz.error == LZMA_STREAM_END) {
-          fp->method = FZ_XZ;
-          fp->u.xz.out_index = 0;
-          fp->u.xz.total_read = 0;
-          fp->u.xz.out_avail = fp->u.xz.stream.total_out;
-          return fp;
-        }
-
-        free(fp->u.xz.out_buf);
-      }
-      fclose(fp->u.xz.plain);
-      lzma_end(&fp->u.xz.stream);
-      free(fp->u.xz.in_buf);
-    } else {
-      return NULL;
-    }
-#endif /* HAVE_LIBLZMA */
+#endif
 
 #ifdef HAVE_LIBZ
     method = FZ_ZLIB;
@@ -301,33 +188,9 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
 #endif
   }
 
-  fp->method = fz_method_validate(method);
+  fp->method = method;
 
   switch (fp->method) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    {
-      lzma_ret ret;
-
-      /*  xz files are binary files, so we should add "b" to mode! */
-      sz_strlcat(mode,"b");
-      memset(&fp->u.xz.stream, 0, sizeof(lzma_stream));
-      ret = lzma_easy_encoder(&fp->u.xz.stream, compress_level, LZMA_CHECK_CRC32);
-      fp->u.xz.error = ret;
-      if (ret != LZMA_OK) {
-        return NULL;
-      }
-      fp->u.xz.in_buf = fc_malloc(PLAIN_FILE_BUF_SIZE);
-      fp->u.xz.stream.next_in = fp->u.xz.in_buf;
-      fp->u.xz.out_buf = fc_malloc(PLAIN_FILE_BUF_SIZE);
-      fp->u.xz.stream.next_out = fp->u.xz.out_buf;
-      fp->u.xz.stream.avail_out = PLAIN_FILE_BUF_SIZE;
-      fp->u.xz.out_index = 0;
-      fp->u.xz.total_read = 0;
-      fp->u.xz.plain = fc_fopen(filename, mode);
-    }
-    return fp;
-#endif /* HAVE_LIBLZMA */
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     /*  bz2 files are binary files, so we should add "b" to mode! */
@@ -335,7 +198,7 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
     fp->u.bz2.plain = fc_fopen(filename, mode);
     if (fp->u.bz2.plain) {
       /*  Open for read handled earlier */
-      fc_assert_ret_val('w' == mode[0], NULL);
+      assert(mode[0] == 'w');
       fp->u.bz2.file = BZ2_bzWriteOpen(&fp->u.bz2.error, fp->u.bz2.plain,
                                        compress_level, 1, 15);
       if (fp->u.bz2.error != BZ_OK) {
@@ -352,8 +215,8 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       free(fp);
       fp = NULL;
     }
-    return fp;
-#endif /* HAVE_LIBBZ2 */
+    break;
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     /*  gz files are binary files, so we should add "b" to mode! */
@@ -366,22 +229,20 @@ fz_FILE *fz_from_file(const char *filename, const char *in_mode,
       free(fp);
       fp = NULL;
     }
-    return fp;
-#endif /* HAVE_LIBZ */
+    break;
+#endif
   case FZ_PLAIN:
     fp->u.plain = fc_fopen(filename, mode);
     if (!fp->u.plain) {
       free(fp);
       fp = NULL;
     }
-    return fp;
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fromFile method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  free(fp);
-  return NULL;
+  return fp;
 }
 
 /***************************************************************
@@ -411,51 +272,41 @@ fz_FILE *fz_from_stream(FILE *stream)
 ***************************************************************/
 int fz_fclose(fz_FILE *fp)
 {
-  int error = 0;
-
-  fc_assert_ret_val(NULL != fp, 1);
-
-  switch (fz_method_validate(fp->method)) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    if (fp->mode == 'w' && !xz_outbuffer_to_file(fp, LZMA_FINISH)) {
-      error = 1;
-    }
-    lzma_end(&fp->u.xz.stream);
-    free(fp->u.xz.in_buf);
-    free(fp->u.xz.out_buf);
-    fclose(fp->u.xz.plain);
-    return error;
-#endif /* HAVE_LIBLZMA */
+  int retval = 0;
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
-    if ('w' == fp->mode) {
+    if(fp->mode == 'w') {
       BZ2_bzWriteClose(&fp->u.bz2.error, fp->u.bz2.file, 0, NULL, NULL);
     } else {
       BZ2_bzReadClose(&fp->u.bz2.error, fp->u.bz2.file);
     }
-    error = fp->u.bz2.error;
+    if(fp->u.bz2.error == BZ_OK) {
+      retval = 0;
+    } else {
+      retval = 1;
+    }
     fclose(fp->u.bz2.plain);
-    free(fp);
-    return BZ_OK == error ? 0 : 1;
-#endif /* HAVE_LIBBZ2 */
+    break;
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    error = gzclose(fp->u.zlib);
-    free(fp);
-    return 0 > error ? error : 0; /* Only negative Z values are errors. */
-#endif /* HAVE_LIBZ */
+    retval = gzclose(fp->u.zlib);
+    if (retval > 0) {
+      retval = 0;		/* only negative Z values are errors */
+    }
+    break;
+#endif
   case FZ_PLAIN:
-    error = fclose(fp->u.plain);
-    free(fp);
-    return error;
+    retval = fclose(fp->u.plain);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fclose method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
   free(fp);
-  return 1;
+  return retval;
 }
 
 /***************************************************************
@@ -465,101 +316,12 @@ int fz_fclose(fz_FILE *fp)
 ***************************************************************/
 char *fz_fgets(char *buffer, int size, fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, NULL);
-
-  switch (fz_method_validate(fp->method)) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    {
-      int i, j;
-
-      for (i = 0; i < size - 1; i += j) {
-        ssize_t len = 0;
-        bool line_end;
-
-        for (j = 0, line_end = FALSE; fp->u.xz.out_avail > 0
-               && !line_end
-               && j < size - i - 1;
-             j++, fp->u.xz.out_avail--) {
-          buffer[i + j] = fp->u.xz.out_buf[fp->u.xz.out_index++];
-          fp->u.xz.total_read++;
-          if (buffer[i + j] == '\n') {
-            line_end = TRUE;
-          }
-        }
-
-        if (line_end || size <= j + i + 1) {
-          buffer[i + j] = '\0';
-          return buffer;
-        }
-
-        if (fp->u.xz.hack_byte_used) {
-          ssize_t hblen = 0;
-
-          fp->u.xz.in_buf[0] = fp->u.xz.hack_byte;
-          len = fread(fp->u.xz.in_buf + 1, 1, PLAIN_FILE_BUF_SIZE - 1,
-                      fp->u.xz.plain);
-          len++;
-
-          if (len <= 1) {
-            hblen = fread(&fp->u.xz.hack_byte, 1, 1, fp->u.xz.plain);
-          }
-          if (hblen <= 0) {
-            fp->u.xz.hack_byte_used = FALSE;
-          }
-        }
-        if (len <= 0) {
-          if (fp->u.xz.error == LZMA_STREAM_END) {
-            if (i + j == 0) {
-              /* Plain file read complete, and there was nothing in xz buffers
-                 -> end-of-file. */
-              return NULL;
-            }
-            buffer[i + j] = '\0';
-            return buffer;
-          } else {
-            fp->u.xz.stream.next_out = fp->u.xz.out_buf;
-            fp->u.xz.stream.avail_out = PLAIN_FILE_BUF_SIZE;
-            fp->u.xz.error = lzma_code(&fp->u.xz.stream, LZMA_FINISH);
-            fp->u.xz.out_index = 0;
-            fp->u.xz.out_avail =
-              fp->u.xz.stream.total_out - fp->u.xz.total_read;
-            if (fp->u.xz.error != LZMA_OK
-                && fp->u.xz.error != LZMA_STREAM_END) {
-              return NULL;
-            }
-          }
-        } else {
-          lzma_action action;
-
-          fp->u.xz.stream.next_in = fp->u.xz.in_buf;
-          fp->u.xz.stream.avail_in = len;
-          fp->u.xz.stream.next_out = fp->u.xz.out_buf;
-          fp->u.xz.stream.avail_out = PLAIN_FILE_BUF_SIZE;
-          if (fp->u.xz.hack_byte_used) {
-            action = LZMA_RUN;
-          } else {
-            action = LZMA_FINISH;
-          }
-          fp->u.xz.error = lzma_code(&fp->u.xz.stream, action);
-          fp->u.xz.out_avail =
-            fp->u.xz.stream.total_out - fp->u.xz.total_read;
-          fp->u.xz.out_index = 0;
-          if (fp->u.xz.error != LZMA_OK && fp->u.xz.error != LZMA_STREAM_END) {
-            return NULL;
-          }
-        }
-      }
-
-      buffer[i] = '\0';
-      return buffer;
-    }
-    break;
-#endif /* HAVE_LIBLZMA */
+  char *retval = NULL;
+  
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
-      char *retval = NULL;
       int i = 0;
       int last_read;
 
@@ -595,57 +357,23 @@ char *fz_fgets(char *buffer, int size, fz_FILE *fp)
         }
       }
       buffer[i] = '\0';
-      return retval;
+      break;
     }
-#endif /* HAVE_LIBBZ2 */
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    return gzgets(fp->u.zlib, buffer, size);
-#endif /* HAVE_LIBZ */
+    retval = gzgets(fp->u.zlib, buffer, size);
+    break;
+#endif
   case FZ_PLAIN:
-    return fgets(buffer, size, fp->u.plain);
+    retval = fgets(buffer, size, fp->u.plain);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fgets method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return NULL;
+  return retval;
 }
-
-#ifdef HAVE_LIBLZMA
-
-/***************************************************************
-  Helper function to do given compression action and writing
-  results from output buffer to file.
-***************************************************************/
-static bool xz_outbuffer_to_file(fz_FILE *fp, lzma_action action)
-{
-  do {
-    ssize_t len;
-    ssize_t total = 0;
-
-    fp->u.xz.error = lzma_code(&fp->u.xz.stream, action);
-
-    if (fp->u.xz.error != LZMA_OK && fp->u.xz.error != LZMA_STREAM_END) {
-      return FALSE;
-    }
-
-    while (total < PLAIN_FILE_BUF_SIZE - fp->u.xz.stream.avail_out) {
-      len = fwrite(fp->u.xz.out_buf, 1,
-                   PLAIN_FILE_BUF_SIZE - fp->u.xz.stream.avail_out - total,
-                   fp->u.xz.plain);
-      total += len;
-      if (len <= 0) {
-        return FALSE;
-      }
-    }
-    fp->u.xz.stream.avail_out = PLAIN_FILE_BUF_SIZE;
-    fp->u.xz.stream.next_out = fp->u.xz.out_buf;
-  } while (fp->u.xz.stream.avail_in > 0);
-
-  return TRUE;
-}
-#endif /* HAVE_LIBLZMA */
 
 /***************************************************************
   Print formated, like fprintf.
@@ -660,83 +388,54 @@ static bool xz_outbuffer_to_file(fz_FILE *fp, lzma_action action)
 ***************************************************************/
 int fz_fprintf(fz_FILE *fp, const char *format, ...)
 {
-  int num;
   va_list ap;
+  int retval = 0;
+  
+  va_start(ap, format);
 
-  fc_assert_ret_val(NULL != fp, 0);
-
-  switch (fz_method_validate(fp->method)) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    {
-      int num;
-
-      va_start(ap, format);
-      num = fc_vsnprintf((char *)fp->u.xz.in_buf, PLAIN_FILE_BUF_SIZE, format, ap);
-      va_end(ap);
-
-      if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%u)",
-                  PLAIN_FILE_BUF_SIZE);
-        num = PLAIN_FILE_BUF_SIZE;
-      }
-      fp->u.xz.stream.next_in = fp->u.xz.in_buf;
-      fp->u.xz.stream.avail_in = num;
-
-      if (!xz_outbuffer_to_file(fp, LZMA_RUN)) {
-        return 0;
-      } else {
-        return strlen((char *)fp->u.xz.in_buf);
-      }
-    }
-    break;
-#endif /* HAVE_LIBLZMA */
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
       char buffer[65536];
-
-      va_start(ap, format);
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
-      va_end(ap);
+      int num;
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
       BZ2_bzWrite(&fp->u.bz2.error, fp->u.bz2.file, buffer, strlen(buffer));
       if (fp->u.bz2.error != BZ_OK) {
-        return 0;
+        retval = 0;
       } else {
-        return strlen(buffer);
+        retval = strlen(buffer);
       }
     }
-#endif /* HAVE_LIBBZ2 */
+    break;
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     {
       char buffer[65536];
-
-      va_start(ap, format);
-      num = fc_vsnprintf(buffer, sizeof(buffer), format, ap);
-      va_end(ap);
+      int num;
+      num = my_vsnprintf(buffer, sizeof(buffer), format, ap);
       if (num == -1) {
-        log_error("Too much data: truncated in fz_fprintf (%lu)",
-                  (unsigned long) sizeof(buffer));
+	  freelog(LOG_ERROR, "Too much data: truncated in fz_fprintf (%lu)",
+		  (unsigned long) sizeof(buffer));
       }
-      return gzwrite(fp->u.zlib, buffer, (unsigned int)strlen(buffer));
+      retval = gzwrite(fp->u.zlib, buffer, (unsigned int)strlen(buffer));
     }
-#endif /* HAVE_LIBZ */
+    break;
+#endif
   case FZ_PLAIN:
-    va_start(ap, format);
-    num = vfprintf(fp->u.plain, format, ap);
-    va_end(ap);
-    return num;
+    retval = vfprintf(fp->u.plain, format, ap);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_fprintf method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return 0;
+  va_end(ap);
+  return retval;
 }
 
 /***************************************************************
@@ -745,42 +444,35 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
 ***************************************************************/
 int fz_ferror(fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, 0);
+  int retval = 0;
 
-  switch (fz_method_validate(fp->method)) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    if (fp->u.xz.error != LZMA_OK
-        && fp->u.xz.error != LZMA_STREAM_END) {
-      return 1;
-    } else {
-      return 0;
-    }
-    break;
-#endif /* HAVE_LZMA */
+  switch (fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
-    return (BZ_OK != fp->u.bz2.error
-            && BZ_STREAM_END != fp->u.bz2.error);
-#endif /* HAVE_LIBBZ2 */
+    if (fp->u.bz2.error != BZ_OK &&
+        fp->u.bz2.error != BZ_STREAM_END) {
+      retval = 1;
+    } else {
+      retval = 0;
+    }
+    break;
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
-    {
-      int error;
-
-      (void) gzerror(fp->u.zlib, &error); /* Ignore string result here. */
-      return 0 > error ? error : 0; /* Only negative Z values are errors. */
+    (void) gzerror(fp->u.zlib, &retval);	/* ignore string result here */
+    if (retval > 0) {
+      retval = 0;		/* only negative Z values are errors */
     }
-#endif /* HAVE_LIBZ */
-  case FZ_PLAIN:
-    return ferror(fp->u.plain);
     break;
+#endif
+  case FZ_PLAIN:
+    retval = ferror(fp->u.plain);
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_ferror method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return 0;
+  return retval;
 }
 
 /***************************************************************
@@ -793,66 +485,14 @@ int fz_ferror(fz_FILE *fp)
 ***************************************************************/
 const char *fz_strerror(fz_FILE *fp)
 {
-  fc_assert_ret_val(NULL != fp, NULL);
-
-  switch (fz_method_validate(fp->method)) {
-#ifdef HAVE_LIBLZMA
-  case FZ_XZ:
-    {
-      static char xzerror[50];
-      char *cleartext = NULL;
-
-      switch(fp->u.xz.error) {
-       case LZMA_OK:
-         cleartext = _("OK");
-         break;
-       case LZMA_STREAM_END:
-         cleartext = _("Stream end");
-         break;
-       case LZMA_NO_CHECK:
-         cleartext = _("No integrity check");
-         break;
-       case LZMA_UNSUPPORTED_CHECK:
-         cleartext = _("Cannot calculate the integrity check");
-         break;
-       case LZMA_MEM_ERROR:
-         cleartext = _("Mem error");
-         break;
-       case LZMA_MEMLIMIT_ERROR:
-         cleartext = _("Memory limit reached");
-         break;
-       case LZMA_FORMAT_ERROR:
-         cleartext = _("Unregonized file format");
-         break;
-       case LZMA_OPTIONS_ERROR:
-         cleartext = _("Unsupported options");
-         break;
-       case LZMA_DATA_ERROR:
-         cleartext = _("Data error");
-         break;
-       case LZMA_BUF_ERROR:
-         cleartext = _("Progress not possible");
-         break;
-       default:
-         break;
-      }
-
-      if (cleartext != NULL) {
-        fc_snprintf(xzerror, sizeof(xzerror), _("XZ: \"%s\" (%d)"),
-                    cleartext, fp->u.xz.error);
-      } else {
-        fc_snprintf(xzerror, sizeof(xzerror), _("XZ error %d"),
-                    fp->u.xz.error);
-      }
-      return xzerror;
-    }
-    break;
-#endif /* HAVE_LIBLZMA */
+  const char *retval = 0;
+  
+  switch(fp->method) {
 #ifdef HAVE_LIBBZ2
   case FZ_BZIP2:
     {
       static char bzip2error[50];
-      const char *cleartext = NULL;
+      char *cleartext = NULL;
 
       /* Rationale for translating these:
        * - Some of them provide usable information to user
@@ -860,76 +500,81 @@ const char *fz_strerror(fz_FILE *fp)
        */
       switch(fp->u.bz2.error) {
        case BZ_OK:
-         cleartext = Q_("?bzip2error:OK");
+         cleartext = _("OK");
          break;
        case BZ_RUN_OK:
-         cleartext = Q_("?bzip2error:Run ok");
+         cleartext = _("Run ok");
          break;
        case BZ_FLUSH_OK:
-         cleartext = Q_("?bzip2error:Flush ok");
+         cleartext = _("Flush ok");
          break;
        case BZ_FINISH_OK:
-         cleartext = Q_("?bzip2error:Finish ok");
+         cleartext = _("Finish ok");
          break;
        case BZ_STREAM_END:
-         cleartext = Q_("?bzip2error:Stream end");
+         cleartext = _("Stream end");
          break;
        case BZ_CONFIG_ERROR:
-         cleartext = Q_("?bzip2error:Config error");
+         cleartext = _("Config error");
          break;
        case BZ_SEQUENCE_ERROR:
-         cleartext = Q_("?bzip2error:Sequence error");
+         cleartext = _("Sequence error");
          break;
        case BZ_PARAM_ERROR:
-         cleartext = Q_("?bzip2error:Parameter error");
+         cleartext = _("Parameter error");
          break;
        case BZ_MEM_ERROR:
-         cleartext = Q_("?bzip2error:Mem error");
+         cleartext = _("Mem error");
          break;
        case BZ_DATA_ERROR:
-         cleartext = Q_("?bzip2error:Data error");
+         cleartext = _("Data error");
          break;
        case BZ_DATA_ERROR_MAGIC:
-         cleartext = Q_("?bzip2error:Not bzip2 file");
+         cleartext = _("Not bzip2 file");
          break;
        case BZ_IO_ERROR:
-         cleartext = Q_("?bzip2error:IO error");
+         cleartext = _("IO error");
          break;
        case BZ_UNEXPECTED_EOF:
-         cleartext = Q_("?bzip2error:Unexpected EOF");
+         cleartext = _("Unexpected EOF");
          break;
        case BZ_OUTBUFF_FULL:
-         cleartext = Q_("?bzip2error:Output buffer full");
+         cleartext = _("Output buffer full");
          break;
        default:
          break;
       }
 
       if (cleartext != NULL) {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2: \"%s\" (%d)"),
                     cleartext, fp->u.bz2.error);
       } else {
-        fc_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
+        my_snprintf(bzip2error, sizeof(bzip2error), _("Bz2 error %d"),
                     fp->u.bz2.error);
       }
-      return bzip2error;
+      retval = bzip2error;
+      break;
     }
-#endif /* HAVE_LIBBZ2 */
+#endif
 #ifdef HAVE_LIBZ
   case FZ_ZLIB:
     {
       int errnum;
       const char *estr = gzerror(fp->u.zlib, &errnum);
-
-      return Z_ERRNO == errnum ? fc_strerror(fc_get_errno()) : estr;
+      if (errnum == Z_ERRNO) {
+	retval = fc_strerror(fc_get_errno());
+      } else {
+	retval = estr;
+      }
     }
-#endif /* HAVE_LIBZ */
+    break;
+#endif
   case FZ_PLAIN:
-    return fc_strerror(fc_get_errno());
+    retval = fc_strerror(fc_get_errno());
+    break;
+  default:
+    /* Should never happen */
+    die("Internal error: Bad fz_strerror method: %d", fp->method);
   }
-
-  /* Should never happen */
-  fc_assert_msg(FALSE, "Internal error in %s() (method = %d)",
-                __FUNCTION__, fp->method);
-  return NULL;
+  return retval;
 }

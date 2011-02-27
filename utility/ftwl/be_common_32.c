@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -708,8 +708,8 @@ void be_write_osda_to_file(struct osda *osda, const char *filename)
   const char *fileext = ".png";
   char *real_filename = fc_malloc(strlen(filename) + strlen(fileext));
 
-  fc_strlcpy(real_filename, filename, strlen(filename));
-  fc_strlcat(real_filename, fileext, strlen(fileext));
+  mystrlcpy(real_filename, filename, strlen(filename));
+  mystrlcat(real_filename, fileext, strlen(fileext));
   
   file = fc_fopen(real_filename, "w");
 

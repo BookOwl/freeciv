@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "messagewin.h"
@@ -21,7 +21,7 @@
   Display the message dialog.  Optionally raise it.
   Typically triggered by F10.
 **************************************************************************/
-void meswin_dialog_popup(bool raise)
+void popup_meswin_dialog(bool raise)
 {
   /* PORTME */
 }
@@ -29,7 +29,7 @@ void meswin_dialog_popup(bool raise)
 /**************************************************************************
   Return whether the message dialog is open.
 **************************************************************************/
-bool meswin_dialog_is_open(void)
+bool is_meswin_open(void)
 {
   /* PORTME */
   return FALSE;
@@ -38,7 +38,7 @@ bool meswin_dialog_is_open(void)
 /**************************************************************************
   Do the work of updating (populating) the message dialog.
 **************************************************************************/
-void real_meswin_dialog_update(void)
+void real_update_meswin_dialog(void)
 {
   /* PORTME */
 }

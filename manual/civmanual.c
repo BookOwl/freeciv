@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -20,10 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef HAVE_SIGNAL_H
-#include <signal.h>
-#endif
 
 /* utility */
 #include "capability.h"
@@ -38,7 +34,6 @@
 /* common */
 #include "connection.h"
 #include "events.h"
-#include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "improvement.h"
 #include "map.h"
@@ -59,8 +54,8 @@
 #include "plrhand.h"
 #include "report.h"
 #include "ruleset.h"
+#include "savegame.h"
 #include "settings.h"
-#include "sernet.h"
 #include "srv_main.h"
 #include "stdinhand.h"
 
@@ -141,11 +136,11 @@ static bool manual_command(void)
   for (manuals = 0; manuals < MANUAL_COUNT; manuals++) {
     int i;
 
-    fc_snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
+    my_snprintf(filename, sizeof(filename), "manual%d.html", manuals + 1);
 
     if (!is_reg_file_for_access(filename, TRUE)
         || !(doc = fc_fopen(filename, "w"))) {
-      log_error(_("Could not write manual file %s."), filename);
+      die(_("Could not write manual file %s."), filename);
       return FALSE;
     }
 
@@ -155,78 +150,53 @@ static bool manual_command(void)
     case MANUAL_SETTINGS:
       fprintf(doc, _("<h1>Freeciv %s server options</h1>\n\n"), VERSION_STRING);
       settings_iterate(pset) {
-        char buf[256];
-
         fprintf(doc, SEPARATOR);
         fprintf(doc, "%s%s - %s%s\n\n", SECTION_BEGIN, setting_name(pset),
                 _(setting_short_help(pset)), SECTION_END);
         if (strlen(setting_extra_help(pset)) > 0) {
-          char *help = fc_strdup(_(setting_extra_help(pset)));
+          char *help = mystrdup(_(setting_extra_help(pset)));
           size_t help_len = strlen(help) + 1;
 
-          fc_break_lines(help, LINE_BREAK);
           help = html_special_chars(help, &help_len);
           fprintf(doc, "<pre>%s</pre>\n\n", help);
           FC_FREE(help);
         }
         fprintf(doc, "<p class=\"misc\">");
-        fprintf(doc, _("Level: %s.<br>"),
-                _(sset_level_name(setting_number(pset))));
-        fprintf(doc, _("Category: %s.<br>"),
-                _(sset_category_name(setting_number(pset))));
+        fprintf(doc, _("Level: %s.<br>"), _(setting_level_name(pset)));
+        fprintf(doc, _("Category: %s.<br>"), _(setting_category_name(pset)));
 
-        /* first check if the setting is locked because this is include in
-         * the function setting_is_changeable() */
-        if (!setting_locked(pset)) {
-          fprintf(doc, _("Is locked by the ruleset."));
-        } else if (!setting_is_changeable(pset, &my_conn, NULL, 0)) {
-          fprintf(doc, _("Can only be used in server console."));
+        if (!setting_is_changeable(pset, &my_conn, NULL)) {
+          fprintf(doc, _("Can only be used in server console. "));
         }
-
         fprintf(doc, "</p>\n\n");
-        setting_default_name(pset, TRUE, buf, sizeof(buf));
         switch (setting_type(pset)) {
-        case SSET_INT:
-          fprintf(doc, "<p class=\"bounds\">%s %d, %s %s, %s %d</p>\n\n",
-                  _("Minimum:"), setting_int_min(pset),
-                  _("Default:"), buf,
-                  _("Maximum:"), setting_int_max(pset));
-          break;
-        case SSET_ENUM:
-          {
-            const char *value;
-
-            fprintf(doc, "<p class=\"bounds\">%s</p>\n",
-                    _("Possible values:"));
-            for (i = 0; (value = setting_enum_val(pset, i, FALSE)); i++) {
-              fprintf(doc, "<p class=\"bounds\"><li/> %s: \"%s\"</p>\n",
-                      value, setting_enum_val(pset, i, TRUE));
-            }
-          }
-          break;
-        case SSET_BITWISE:
-          {
-            const char *value;
-
-            fprintf(doc, "<p class=\"bounds\">%s</p>\n",
-                    _("Possible values (option can take any number of these):"));
-            for (i = 0; (value = setting_bitwise_bit(pset, i, FALSE)); i++) {
-              fprintf(doc, "<p class=\"bounds\"><li/> %s: \"%s\"</p>\n",
-                      value, setting_bitwise_bit(pset, i, TRUE));
-            }
-          }
-          break;
         case SSET_BOOL:
-        case SSET_STRING:
+          fprintf(doc, "<p class=\"bounds\">%s 0, %s %d, %s 1</p>\n\n",
+                  _("Minimum:"), _("Default:"),
+                  setting_bool_def(pset) ? 1 : 0, _("Maximum:"));
+          if (setting_bool_get(pset) != setting_bool_def(pset)) {
+            fprintf(doc, _("<p class=\"changed\">Value set to %d</p>\n\n"),
+                    setting_bool_get(pset) ? 1 : 0);
+          }
           break;
-        }
-        if (SSET_INT != setting_type(pset)) {
-          fprintf(doc, "<p class=\"bounds\">%s %s</p>\n\n",
-                  _("Default:"), buf);
-        }
-        if (setting_changed(pset)) {
-          fprintf(doc, _("<p class=\"changed\">Value set to %s</p>\n\n"),
-                  setting_value_name(pset, TRUE, buf, sizeof(buf)));
+        case SSET_INT:
+          fprintf(doc, "<p class=\"bounds\">%s %d, %s %d, %s %d</p>\n\n",
+                  _("Minimum:"), setting_int_min(pset),
+                  _("Default:"), setting_int_def(pset),
+                  _("Maximum:"), setting_int_max(pset));
+          if (setting_int_get(pset) != setting_int_def(pset)) {
+            fprintf(doc, _("<p class=\"changed\">Value set to %d</p>\n\n"),
+                    setting_int_get(pset));
+          }
+          break;
+        case SSET_STRING:
+          fprintf(doc, "<p class=\"bounds\">%s \"%s\"</p>\n\n",
+                  _("Default:"), setting_str_def(pset));
+          if (strcmp(setting_str_get(pset), setting_str_def(pset)) != 0) {
+            fprintf(doc, _("<p class=\"changed\">Value set to %s</p>\n\n"),
+                    setting_str_get(pset));
+          }
+          break;
         }
       } settings_iterate_end;
       break;
@@ -241,7 +211,7 @@ static bool manual_command(void)
         fprintf(doc, "%s%s  -  %s%s\n\n", SECTION_BEGIN, command_name(cmd),
                 command_short_help(cmd), SECTION_END);
         if (command_synopsis(cmd)) {
-          char *cmdstr = fc_strdup(command_synopsis(cmd));
+          char *cmdstr = mystrdup(command_synopsis(cmd));
           size_t cmdstr_len = strlen(cmdstr) + 1;
 
           cmdstr = html_special_chars(cmdstr, &cmdstr_len);
@@ -253,10 +223,9 @@ static bool manual_command(void)
         fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
                 cmdlevel_name(command_level(cmd)));
         if (command_extra_help(cmd)) {
-          char *help = fc_strdup(command_extra_help(cmd));
+          char *help = mystrdup(command_extra_help(cmd));
           size_t help_len = strlen(help) + 1;
 
-          fc_break_lines(help, LINE_BREAK);
           help = html_special_chars(help, &help_len);
           fprintf(doc, _("<p>Description:</p>\n\n"));
           fprintf(doc, "<pre>%s</pre>\n\n", help);
@@ -398,15 +367,11 @@ static bool manual_command(void)
 
     fprintf(doc, TAIL);
     fclose(doc);
-    log_normal(_("Manual file %s successful written."), filename);
   } /* manuals */
 
   return TRUE;
 }
 
-/**************************************************************************
-  Entry point of whole freeciv-manual program
-**************************************************************************/
 int main(int argc, char **argv)
 {
   int inx;
@@ -417,8 +382,8 @@ int main(int argc, char **argv)
   init_nls();
   init_character_encodings(FC_DEFAULT_DATA_ENCODING, FALSE);
 
-  /* Set the default log level. */
-  srvarg.loglevel = LOG_NORMAL;
+  /* Initialize game with default values */
+  game_init();
 
   /* parse command-line arguments... */
   inx = 1;
@@ -431,43 +396,9 @@ int main(int argc, char **argv)
       break;
     } else if (is_option("--version", argv[inx])) {
       showvers = TRUE;
-    } else if ((option = get_option_malloc("--log", argv, &inx, argc))) {
-      srvarg.log_filename = option; /* Never freed. */
-#ifndef NDEBUG
-    } else if (is_option("--Fatal", argv[inx])) {
-      if (inx + 1 >= argc || '-' == argv[inx + 1][0]) {
-        srvarg.fatal_assertions = SIGABRT;
-      } else if (str_to_int(argv[inx + 1], &srvarg.fatal_assertions)) {
-        inx++;
-      } else {
-        fc_fprintf(stderr, _("Invalid signal number \"%s\".\n"),
-                   argv[inx + 1]);
-        inx++;
-        showhelp = TRUE;
-      }
-#endif /* NDEBUG */
-    } else if ((option = get_option_malloc("--debug", argv, &inx, argc))) {
-      if (!log_parse_level_str(option, &srvarg.loglevel)) {
-        showhelp = TRUE;
-        break;
-      }
-      free(option);
     }
     inx++;
   }
-
-  /* must be before con_log_init() */
-  init_connections();
-  con_log_init(srvarg.log_filename, srvarg.loglevel,
-               srvarg.fatal_assertions);
-  /* logging available after this point */
-
-  /* Initialize game with default values */
-  game_init();
-
-  /* Imitate a server - this is needed for as some function only work if this
-   * is set. */
-  i_am_server();
 
   if (showvers && !showhelp) {
     fc_fprintf(stderr, "%s \n", freeciv_name_version());
@@ -475,30 +406,18 @@ int main(int argc, char **argv)
   } else if (showhelp) {
     fc_fprintf(stderr,
          _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
-#ifdef DEBUG
-    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
-                         "%d, or %d:file1,min,max:...)\n"),
-               LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
-#else
-    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
-                         "%d)\n"), LOG_FATAL, LOG_VERBOSE);
-#endif /* DEBUG */
-#ifndef NDEBUG
-    fc_fprintf(stderr, _("  -F, --Fatal [SIGNAL]\t"
-                         "Raise a signal on failed assertion\n"));
-#endif /* NDEBUG */
-    fc_fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
-    fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
-    fc_fprintf(stderr, _("  -r, --ruleset RULESET\tMake manual for "
-                         "RULESET\n"));
-    fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+    fc_fprintf(stderr,
+         _("  -r, --ruleset RULESET  Make manual for RULESET\n"));
+    fc_fprintf(stderr,
+         _("  -h, --help             Print a summary of the options\n"));
+    fc_fprintf(stderr,
+         _("  -v, --version          Print the version number\n"));
     /* TRANS: No full stop after the URL, could cause confusion. */
     fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 
   manual_command();
-  con_log_close();
 
-  return EXIT_SUCCESS;
+  return 0;
 }

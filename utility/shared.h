@@ -13,16 +13,10 @@
 #ifndef FC__SHARED_H
 #define FC__SHARED_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <stdlib.h>		/* size_t */
 #include <string.h>		/* memset */
 #include <time.h>		/* time_t */
 
-/* utility */
-#include "log.h"
 #include "support.h" /* bool, fc__attribute */
 
 #ifdef HAVE_CONFIG_H
@@ -63,6 +57,22 @@ extern "C" {
 #define DIVIDE(n, d) \
     ( (n) / (d) - (( (n) < 0 && (n) % (d) < 0 ) ? 1 : 0) )
 
+/* Deletes bit no in val,
+   moves all bits larger than no one down,
+   and inserts a zero at the top. */
+#define WIPEBIT(val, no) ( ((~(-1<<(no)))&(val)) \
+                           | (( (-1<<((no)+1)) & (val)) >>1) )
+/*
+ * Yields TRUE iff the bit bit_no is set in val.
+ */
+#define TEST_BIT(val, bit_no)      	(((val) & (1u << (bit_no))) == (1u << (bit_no)))
+
+/*
+ * If cond is TRUE it yields a value where only the bit bit_no is
+ * set. If cond is FALSE it yields 0.
+ */
+#define COND_SET_BIT(cond, bit_no) 	((cond) ? (1u << (bit_no)) : 0)
+
 /* This is duplicated in rand.h to avoid extra includes: */
 #define MAX_UINT32 0xFFFFFFFF
 #define MAX_UINT16 0xFFFF
@@ -83,7 +93,6 @@ extern "C" {
 #define FC_PTR_TO_UINT(p) ((unsigned int) (unsigned long) (p))
 #define FC_SIZE_TO_PTR(s) ((void *) (unsigned long) (s))
 #define FC_PTR_TO_SIZE(p) ((size_t) (unsigned long) (p))
-#define FC_ENUM_PTR(e) ((int *) (void *) (&e))
 
 /****************************************************************************
   Used to initialize an array 'a' of size 'size' with value 'val' in each
@@ -97,6 +106,45 @@ extern "C" {
       (array)[_ini_index] = (value);					    \
     }									    \
   }
+
+
+/* Bitvectors. */
+#define _BV_BYTES(bits)		((((bits) - 1) / 8) + 1)
+#define _BV_BYTE_INDEX(bits)	((bits) / 8)
+#define _BV_BITMASK(bit)	(1u << ((bit) & 0x7))
+#ifdef DEBUG
+#  define _BV_ASSERT(bv, bit) assert((bit) >= 0 \
+                                     && (bit) < sizeof((bv).vec) * 8)
+#else
+#  define _BV_ASSERT(bv, bit) (void)0
+#endif
+#define BV_ISSET(bv, bit) \
+  (_BV_ASSERT(bv, bit), \
+   ((bv).vec[_BV_BYTE_INDEX(bit)] & _BV_BITMASK(bit)) != 0)
+#define BV_SET(bv, bit) \
+  do { _BV_ASSERT(bv, bit); \
+       (bv).vec[_BV_BYTE_INDEX(bit)] |= _BV_BITMASK(bit); } while(FALSE)
+#define BV_CLR(bv, bit) \
+  do { _BV_ASSERT(bv, bit); \
+       (bv).vec[_BV_BYTE_INDEX(bit)] &= ~_BV_BITMASK(bit); } while(FALSE)
+#define BV_CLR_ALL(bv) \
+  do { memset((bv).vec, 0, sizeof((bv).vec)); } while(FALSE)
+#define BV_SET_ALL(bv) \
+  do { memset((bv).vec, 0xff, sizeof((bv).vec)); } while(FALSE)
+bool bv_check_mask(const unsigned char *vec1, const unsigned char *vec2,
+		   size_t size1, size_t size2);
+#define BV_CHECK_MASK(vec1, vec2) \
+  bv_check_mask((vec1).vec, (vec2).vec, sizeof((vec1).vec), sizeof((vec2).vec))
+#define BV_ISSET_ANY(vec) BV_CHECK_MASK(vec, vec)
+
+bool bv_are_equal(const unsigned char *vec1, const unsigned char *vec2,
+		  size_t size1, size_t size2);
+#define BV_ARE_EQUAL(vec1, vec2) \
+  bv_are_equal((vec1).vec, (vec2).vec, sizeof((vec1).vec), sizeof((vec2).vec))
+
+/* Used to make a BV typedef.  Such types are usually called "bv_foo". */
+#define BV_DEFINE(name, bits) \
+  typedef struct { unsigned char vec[_BV_BYTES(bits)]; } name
 
 char *create_centered_string(const char *s);
 
@@ -117,11 +165,10 @@ void randomize_base64url_string(char *s, size_t n);
 
 int compare_strings(const void *first, const void *second);
 int compare_strings_ptrs(const void *first, const void *second);
-int compare_strings_strvec(const char *const *first,
-                           const char *const *second);
 
 char *skip_leading_spaces(char *s);
 void remove_leading_trailing_spaces(char *s);
+int wordwrap_string(char *s, int len);
 
 bool check_strlen(const char *str, size_t len, const char *errmsg);
 size_t loud_strlcpy(char *buffer, const char *str, size_t len,
@@ -131,40 +178,40 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
     loud_strlcpy(buffer, str, sizeof(buffer), errmsg)
 
 char *end_of_strn(char *str, int *nleft);
+int cat_snprintf(char *str, size_t n, const char *format, ...)
+     fc__attribute((__format__ (__printf__, 3, 4)));
 
-bool str_to_int(const char *str, int *pint);
+#define die(...) real_die(__FILE__, __LINE__, __VA_ARGS__)
+void real_die(const char *file, int line, const char *format, ...)
+      fc__attribute((__format__ (__printf__, 3, 4)));
 
 /**************************************************************************
 ...
 **************************************************************************/
-struct fileinfo {
-  char *name;           /* descriptive file name string */
-  char *fullname;       /* full absolute filename */
-  time_t mtime;         /* last modification time  */
+struct datafile {
+  char *name;		/* descriptive file name string */
+  char *fullname;	/* full absolute filename */
+  time_t mtime;		/* last modification time  */
 };
 
-#define SPECLIST_TAG fileinfo
-#define SPECLIST_TYPE struct fileinfo
+#define SPECLIST_TAG datafile
+#define SPECLIST_TYPE struct datafile
 #include "speclist.h"
-#define fileinfo_list_iterate(list, pnode) \
-  TYPED_LIST_ITERATE(struct fileinfo, list, pnode)
-#define fileinfo_list_iterate_end LIST_ITERATE_END
-
+#define datafile_list_iterate(list, pnode) \
+  TYPED_LIST_ITERATE(struct datafile, list, pnode)
+#define datafile_list_iterate_end LIST_ITERATE_END
+                                                                               
 char *user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
   
-const struct strvec *get_data_dirs(void);
-const struct strvec *get_save_dirs(void);
-const struct strvec *get_scenario_dirs(void);
-
-struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix);
-struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
+const char **get_data_dirs(int *num_dirs);
+  
+char **datafilelist(const char *suffix);
+struct datafile_list *datafilelist_infix(const char *subpath,
                                          const char *infix, bool nodups);
-const char *fileinfoname(const struct strvec *dirs, const char *filename);
-struct strvec *fileinfonames(const struct strvec *dirs,
-                             const char *filename);
-const char *fileinfoname_required(const struct strvec *dirs,
-                                  const char *filename);
+char *datafilename(const char *filename);
+char **datafilenames(const char *filename);
+char *datafilename_required(const char *filename);
 
 char *get_langname(void);
 void init_nls(void);
@@ -220,13 +267,9 @@ char *skip_to_basename(char *filepath);
 bool make_dir(const char *pathname);
 bool path_is_absolute(const char *filename);
 
-char scanin(const char **buf, char *delimiters, char *dest, int size);
+char scanin(char **buf, char *delimiters, char *dest, int size);
 
 void array_shuffle(int *array, int n);
-
-void format_time_duration(time_t t, char *buf, int maxlen);
-
-bool wildcard_fit_string(const char *pattern, const char *test);
 
 /* Custom format strings. */
 struct cf_sequence;
@@ -247,6 +290,26 @@ static inline struct cf_sequence cf_float_seq(char letter, float value);
 static inline struct cf_sequence cf_ptr_seq(char letter, const void *value);
 static inline struct cf_sequence cf_str_seq(char letter, const char *value);
 static inline struct cf_sequence cf_end(void);
+
+/* Tools for fc_vsnprintcf(). */
+#define CF_BOOL_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_BOOLEAN, .letter = ARG_letter, { .bool_value = ARG_value } }
+#define CF_TRANS_BOOL_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_TRANS_BOOLEAN, .letter = ARG_letter, \
+    { .bool_value = ARG_value } }
+#define CF_CHAR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_CHARACTER, .letter = ARG_letter, { .char_value = ARG_value } }
+#define CF_INT_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_INTEGER, .letter = ARG_letter, { .int_value = ARG_value } }
+#define CF_HEXA_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_HEXA, .letter = ARG_letter, { .int_value = ARG_value } }
+#define CF_FLOAT_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_FLOAT, .letter = ARG_letter, { .float_value = ARG_value } }
+#define CF_PTR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_POINTER, .letter = ARG_letter, { .ptr_value = ARG_value } }
+#define CF_STR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_STRING, .letter = ARG_letter, { .str_value = ARG_value } }
+#define CF_END { .type = CF_LAST }
 
 enum cf_type {
   CF_BOOLEAN,
@@ -279,12 +342,7 @@ struct cf_sequence {
 ****************************************************************************/
 static inline struct cf_sequence cf_bool_seq(char letter, bool value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_BOOLEAN;
-  sequence.letter = letter;
-  sequence.bool_value = value;
-
+  struct cf_sequence sequence = CF_BOOL_SEQ(letter, value);
   return sequence;
 }
 
@@ -294,12 +352,7 @@ static inline struct cf_sequence cf_bool_seq(char letter, bool value)
 ****************************************************************************/
 static inline struct cf_sequence cf_trans_bool_seq(char letter, bool value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_TRANS_BOOLEAN;
-  sequence.letter = letter;
-  sequence.bool_value = value;
-
+  struct cf_sequence sequence = CF_TRANS_BOOL_SEQ(letter, value);
   return sequence;
 }
 
@@ -308,12 +361,7 @@ static inline struct cf_sequence cf_trans_bool_seq(char letter, bool value)
 ****************************************************************************/
 static inline struct cf_sequence cf_char_seq(char letter, char value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_CHARACTER;
-  sequence.letter = letter;
-  sequence.char_value = value;
-
+  struct cf_sequence sequence = CF_CHAR_SEQ(letter, value);
   return sequence;
 }
 
@@ -322,12 +370,7 @@ static inline struct cf_sequence cf_char_seq(char letter, char value)
 ****************************************************************************/
 static inline struct cf_sequence cf_int_seq(char letter, int value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_INTEGER;
-  sequence.letter = letter;
-  sequence.int_value = value;
-
+  struct cf_sequence sequence = CF_INT_SEQ(letter, value);
   return sequence;
 }
 
@@ -336,12 +379,7 @@ static inline struct cf_sequence cf_int_seq(char letter, int value)
 ****************************************************************************/
 static inline struct cf_sequence cf_hexa_seq(char letter, int value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_HEXA;
-  sequence.letter = letter;
-  sequence.int_value = value;
-
+  struct cf_sequence sequence = CF_HEXA_SEQ(letter, value);
   return sequence;
 }
 
@@ -350,12 +388,7 @@ static inline struct cf_sequence cf_hexa_seq(char letter, int value)
 ****************************************************************************/
 static inline struct cf_sequence cf_float_seq(char letter, float value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_FLOAT;
-  sequence.letter = letter;
-  sequence.float_value = value;
-
+  struct cf_sequence sequence = CF_FLOAT_SEQ(letter, value);
   return sequence;
 }
 
@@ -364,12 +397,7 @@ static inline struct cf_sequence cf_float_seq(char letter, float value)
 ****************************************************************************/
 static inline struct cf_sequence cf_ptr_seq(char letter, const void *value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_POINTER;
-  sequence.letter = letter;
-  sequence.ptr_value = value;
-
+  struct cf_sequence sequence = CF_PTR_SEQ(letter, value);
   return sequence;
 }
 
@@ -378,12 +406,7 @@ static inline struct cf_sequence cf_ptr_seq(char letter, const void *value)
 ****************************************************************************/
 static inline struct cf_sequence cf_str_seq(char letter, const char *value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_STRING;
-  sequence.letter = letter;
-  sequence.str_value = value;
-
+  struct cf_sequence sequence = CF_STR_SEQ(letter, value);
   return sequence;
 }
 
@@ -392,17 +415,8 @@ static inline struct cf_sequence cf_str_seq(char letter, const char *value)
 ****************************************************************************/
 static inline struct cf_sequence cf_end(void)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_LAST;
-
+  struct cf_sequence sequence = CF_END;
   return sequence;
 }
-
-bool formats_match(const char *format1, const char *format2);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__SHARED_H */

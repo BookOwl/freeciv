@@ -21,7 +21,13 @@ struct Treaty;
 struct Clause;
 struct ai_data;
 
-void ai_diplomacy_begin_new_phase(struct player *pplayer);
+enum war_reason {
+  WAR_REASON_BEHAVIOUR, WAR_REASON_SPACE, WAR_REASON_EXCUSE,
+  WAR_REASON_HATRED, WAR_REASON_ALLIANCE, WAR_REASON_NONE
+};
+
+void ai_diplomacy_begin_new_phase(struct player *pplayer,
+				  struct ai_data *ai);
 void ai_diplomacy_actions(struct player *pplayer);
 
 void ai_treaty_evaluate(struct player *pplayer, struct player *aplayer,

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -128,7 +128,7 @@ void popup_caravan_dialog(struct unit *pUnit,
   pCaravan_Dlg = fc_calloc(1, sizeof(struct SMALL_DLG));
   is_unit_move_blocked = TRUE;
       
-  fc_snprintf(cBuf, sizeof(cBuf), _("Your caravan has arrived at %s"),
+  my_snprintf(cBuf, sizeof(cBuf), _("Your caravan has arrived at %s"),
               city_name(pDestcity));
 
   /* window */
@@ -152,14 +152,14 @@ void popup_caravan_dialog(struct unit *pUnit,
     int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pDestcity);
     
     if (can_establish_trade_route(pHomecity, pDestcity)) {
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
                   _("Establish Trade route with %s ( %d R&G + %d trade )"),
                   city_name(pHomecity),
                   revenue,
                   trade_between_cities(pHomecity, pDestcity));
     } else {
       revenue = (revenue + 2) / 3;
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
 		_("Enter Marketplace ( %d R&G bonus )"), revenue);
     }
     
@@ -215,8 +215,8 @@ void popup_caravan_dialog(struct unit *pUnit,
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
-
+                           pUnit->tile);
+  
   /* setup widget size and start position */
     
   pBuf = pWindow->prev;

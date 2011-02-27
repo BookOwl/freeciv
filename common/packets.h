@@ -13,10 +13,6 @@
 #ifndef FC__PACKETS_H
 #define FC__PACKETS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 struct connection;
 struct data_in;
 
@@ -28,7 +24,7 @@ struct data_in;
 #include "map.h"
 #include "player.h"
 #include "requirements.h"
-#include "shared.h"		/* MAX_LEN_ADDR */
+#include "shared.h"		/* MAX_LEN_NAME, MAX_LEN_ADDR */
 #include "spaceship.h"
 #include "team.h"
 #include "unittype.h"
@@ -87,12 +83,20 @@ void generic_handle_player_attribute_chunk(struct player *pplayer,
 					   const struct
 					   packet_player_attribute_chunk
 					   *chunk);
-const char *packet_name(enum packet_type type);
-bool packet_has_game_info_flag(enum packet_type type);
+const char *get_packet_name(enum packet_type type);
 
+void pre_send_packet_chat_msg(struct connection *pc,
+			      struct packet_chat_msg *packet);
+void post_receive_packet_chat_msg(struct connection *pc,
+				  struct packet_chat_msg *packet);
 void pre_send_packet_player_attribute_chunk(struct connection *pc,
 					    struct packet_player_attribute_chunk
 					    *packet);
+
+void post_receive_packet_ruleset_control(struct connection *pc,
+                                         struct packet_ruleset_control *packet);
+void post_send_packet_ruleset_control(struct connection *pc,
+                                      const struct packet_ruleset_control *packet);
 
 #define SEND_PACKET_START(type) \
   unsigned char buffer[MAX_LEN_PACKET]; \
@@ -132,25 +136,5 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 
 int send_packet_data(struct connection *pc, unsigned char *data, int len);
 void check_packet(struct data_in *din, struct connection *pc);
-
-/* Utilities to exchange strings and string vectors. */
-#define PACKET_STRVEC_SEPARATOR '\3'
-#define PACKET_STRVEC_COMPUTE(str, strvec)                                  \
-  if (NULL != strvec) {                                                     \
-    strvec_to_str(strvec, PACKET_STRVEC_SEPARATOR, str, sizeof(str));       \
-  } else {                                                                  \
-    str[0] = '\0';                                                          \
-  }
-#define PACKET_STRVEC_EXTRACT(strvec, str)                                  \
-  if ('\0' != str[0]) {                                                     \
-    strvec = strvec_new();                                                  \
-    strvec_from_str(strvec, PACKET_STRVEC_SEPARATOR, str);                  \
-  } else {                                                                  \
-    strvec = NULL;                                                          \
-  }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PACKETS_H */

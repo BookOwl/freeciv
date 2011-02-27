@@ -13,17 +13,8 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-/* utility */
-#include "bitvector.h"
-
-/* common */
-#include "ai.h"                 /* FC_AI_LAST */
-#include "base.h"
 #include "fc_types.h"
+#include "base.h"
 #include "terrain.h"		/* enum tile_special_type */
 #include "unittype.h"
 #include "vision.h"
@@ -60,6 +51,10 @@ enum diplomat_actions {
   DIPLOMAT_ANY_ACTION   /* leave this one last */
 };
 
+enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
+                    AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_ESCORT, 
+                    AIUNIT_EXPLORE, AIUNIT_RECOVER, AIUNIT_HUNTER };
+
 enum goto_move_restriction {
   GOTO_MOVE_ANY,
   GOTO_MOVE_CARDINAL_ONLY, /* No diagonal moves.  */
@@ -70,34 +65,66 @@ enum goto_route_type {
   ROUTE_GOTO, ROUTE_PATROL
 };
 
-enum unit_add_build_city_result {
-  UAB_BUILD_OK,         /* Unit OK to build city. */
-  UAB_ADD_OK,           /* Unit OK to add to city. */
-  UAB_BAD_CITY_TERRAIN, /* Equivalent to 'CB_BAD_CITY_TERRAIN'. */
-  UAB_BAD_UNIT_TERRAIN, /* Equivalent to 'CB_BAD_UNIT_TERRAIN'. */
-  UAB_BAD_BORDERS,      /* Equivalent to 'CB_BAD_BORDERS'. */
-  UAB_NO_MIN_DIST,      /* Equivalent to 'CB_NO_MIN_DIST'. */
-  UAB_NOT_ADDABLE_UNIT, /* Unit is not one that can be added to cities. */
-  UAB_NOT_BUILD_UNIT,   /* Unit is not one that can build cities. */
-  UAB_NO_MOVES_BUILD,   /* Unit does not have moves left to build a city. */
-  UAB_NO_MOVES_ADD,     /* Unit does not have moves left to add to city. */
-  UAB_NOT_OWNER,        /* Owner of unit is not owner of city. */
-  UAB_TOO_BIG,          /* City is too big to be added to. */
-  UAB_NO_SPACE          /* Adding takes city past limit. */
+enum unit_move_result {
+  MR_OK,
+  MR_DEATH,
+  MR_PAUSE,
+  MR_BAD_TYPE_FOR_CITY_TAKE_OVER,
+  MR_NO_WAR, /* Can't move here without declaring war. */
+  MR_PEACE, /* Can't move here because of a peace treaty. */
+  MR_ZOC,
+  MR_BAD_ACTIVITY,
+  MR_BAD_DESTINATION,
+  MR_BAD_MAP_POSITION,
+  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_CITY,
+  MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT,
+  MR_NO_TRANSPORTER_CAPACITY,
+  MR_TRIREME,
+};
+
+enum add_build_city_result {
+  AB_BUILD_OK,			/* Unit OK to build city */
+  AB_ADD_OK,			/* Unit OK to add to city */
+  AB_NOT_BUILD_LOC,		/* City is not allowed to be built at
+				   this location */
+  AB_NOT_ADDABLE_UNIT,		/* Unit is not one that can be added
+				   to cities */
+  AB_NOT_BUILD_UNIT,		/* Unit is not one that can build
+				   cities */
+  AB_NO_MOVES_BUILD,		/* Unit does not have moves left to
+				   build a city */
+  AB_NO_MOVES_ADD,		/* Unit does not have moves left to
+				   add to city */
+  AB_NOT_OWNER,			/* Owner of unit is not owner of
+				   city */
+  AB_TOO_BIG,			/* City is too big to be added to */
+  AB_NO_SPACE			/* Adding takes city past limit */
 };
 
 enum unit_upgrade_result {
-  UU_OK,
-  UU_NO_UNITTYPE,
-  UU_NO_MONEY,
-  UU_NOT_IN_CITY,
-  UU_NOT_CITY_OWNER,
-  UU_NOT_ENOUGH_ROOM,
-  UU_NOT_TERRAIN        /* The upgraded unit could not survive. */
+  UR_OK,
+  UR_NO_UNITTYPE,
+  UR_NO_MONEY,
+  UR_NOT_IN_CITY,
+  UR_NOT_CITY_OWNER,
+  UR_NOT_ENOUGH_ROOM
 };
+    
+struct unit_ai {
+  bool control; /* 0: not automated    1: automated */
+  enum ai_unit_task ai_role;
+  /* The following are unit ids or special indicator values (<=0) */
+  int ferryboat; /* the ferryboat assigned to us */
+  int passenger; /* the unit assigned to this ferryboat */
+  int bodyguard; /* the unit bodyguarding us */
+  int charge; /* the unit this unit is bodyguarding */
 
-struct unit_adv {
-  enum adv_unit_task task;
+  struct tile *prev_struct, *cur_struct;
+  struct tile **prev_pos, **cur_pos;
+
+  int target; /* target we hunt */
+  int hunted; /* if a player is hunting us, set by that player */
+  bool done;  /* we are done controlling this unit this turn */
 };
 
 struct unit_order {
@@ -120,10 +147,10 @@ struct unit {
   int hp;
   int veteran;
   int fuel;
-
-  struct tile *goto_tile; /* May be NULL. */
-
+  int birth_turn;
+  struct unit_ai ai;
   enum unit_activity activity;
+  struct tile *goto_tile; /* May be NULL. */
 
   /* The amount of work that has been done on the current activity.  This
    * is counted in turns but is multiplied by ACTIVITY_COUNT (which allows
@@ -132,15 +159,11 @@ struct unit {
 
   enum tile_special_type activity_target;
   Base_type_id           activity_base;
-
-  /* Previous activity, so it can be resumed without loss of progress
-   * if the user changes their mind during a turn. */
-  enum unit_activity changed_from;
-  int changed_from_count;
-  enum tile_special_type changed_from_target;
-  Base_type_id           changed_from_base;
-
-  bool ai_controlled; /* 0: not automated; 1: automated */
+  enum unit_focus_status focus_status;
+  int ord_map, ord_city;
+  /* ord_map and ord_city are the order index of this unit in tile.units
+     and city.units_supported; they are only used for save/reload */
+  bool debug;
   bool moved;
   bool paradropped;
 
@@ -159,59 +182,25 @@ struct unit {
 #define BATTLEGROUP_NONE (-1)
   int battlegroup;
 
+  struct {
+    /* Equivalent to pcity->client.color.  Only for F_CITIES units. */
+    bool colored;
+    int color_index;
+
+    bool asking_city_name;
+  } client;
+  struct {
+    struct vision *vision;
+  } server;
+
   bool has_orders;
   struct {
     int length, index;
-    bool repeat;   /* The path is to be repeated on completion. */
-    bool vigilant; /* Orders should be cleared if an enemy is met. */
+    bool repeat;	/* The path is to be repeated on completion. */
+    bool vigilant;	/* Orders should be cleared if an enemy is met. */
     struct unit_order *list;
   } orders;
-
-  union {
-    struct {
-      /* Only used at the client (the server is omniscient; ./client/). */
-
-      enum unit_focus_status focus_status;
-
-      /* Equivalent to pcity->client.color. Only for F_CITIES units. */
-      bool colored;
-      int color_index;
-
-      bool asking_city_name;
-    } client;
-
-    struct {
-      /* Only used in the server (./ai/ and ./server/). */
-
-      bool debug;
-
-      struct unit_adv *adv;
-      void *ais[FC_AI_LAST];
-      int birth_turn;
-
-      /* ord_map and ord_city are the order index of this unit in tile.units
-       * and city.units_supported; they are only used for save/reload */
-      int ord_map;
-      int ord_city;
-
-      struct vision *vision;
-      time_t action_timestamp;
-      int action_turn;
-    } server;
-  };
 };
-
-#ifdef DEBUG
-#define CHECK_UNIT(punit)                                                   \
-  (fc_assert(punit != NULL),                                                \
-   fc_assert(unit_type(punit) != NULL),                                     \
-   fc_assert(unit_owner(punit) != NULL),                                    \
-   fc_assert(player_by_number(player_index(unit_owner(punit)))              \
-             == unit_owner(punit)),                                         \
-   fc_assert(game_unit_by_number(punit->id) != NULL))
-#else
-#define CHECK_UNIT(punit) /* Do nothing */
-#endif
 
 bool is_real_activity(enum unit_activity activity);
 
@@ -239,9 +228,6 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity);
 bool unit_can_help_build_wonder_here(const struct unit *punit);
 bool unit_can_est_trade_route_here(const struct unit *punit);
-bool base_unit_can_airlift_to(const struct player *restriction,
-                              const struct unit *punit,
-                              const struct city *pcity);
 bool unit_can_airlift_to(const struct unit *punit, const struct city *pcity);
 bool unit_has_orders(const struct unit *punit);
 
@@ -280,7 +266,6 @@ int get_activity_rate_this_turn(const struct unit *punit);
 int get_turns_for_activity_at(const struct unit *punit,
 			      enum unit_activity activity,
 			      const struct tile *ptile);
-bool activity_requires_target(enum unit_activity activity);
 bool can_unit_do_autosettlers(const struct unit *punit); 
 bool is_unit_activity_on_tile(enum unit_activity activity,
 			      const struct tile *ptile);
@@ -293,11 +278,14 @@ bool is_square_threatened(const struct player *pplayer,
 			  const struct tile *ptile);
 bool is_field_unit(const struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(const struct unit *punit);
-bool unit_can_add_to_city(const struct unit *punit);
-bool unit_can_build_city(const struct unit *punit);
-bool unit_can_add_or_build_city(const struct unit *punit);
-enum unit_add_build_city_result
-unit_add_or_build_city_test(const struct unit *punit);
+#define COULD_OCCUPY(punit) \
+  (uclass_has_flag(unit_class(punit), UCF_CAN_OCCUPY_CITY) \
+   && is_military_unit(punit))
+bool can_unit_add_to_city (const struct unit *punit);
+bool can_unit_build_city (const struct unit *punit);
+bool can_unit_add_or_build_city (const struct unit *punit);
+enum add_build_city_result test_unit_add_or_build_city(const struct unit *
+						       punit);
 bool kills_citizen_after_attack(const struct unit *punit);
 
 struct astring; /* Forward declaration. */
@@ -309,7 +297,6 @@ int get_transporter_capacity(const struct unit *punit);
 
 struct player *unit_owner(const struct unit *punit);
 struct tile *unit_tile(const struct unit *punit);
-void unit_tile_set(struct unit *punit, struct tile *ptile);
 
 struct unit *is_allied_unit_tile(const struct tile *ptile,
 				 const struct player *pplayer);
@@ -328,36 +315,24 @@ bool unit_type_really_ignores_zoc(const struct unit_type *punittype);
 
 bool is_build_or_clean_activity(enum unit_activity activity);
 
-struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
+struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
                                  struct unit_type *punittype,
 				 int veteran_level);
-void unit_virtual_destroy(struct unit *punit);
+void destroy_unit_virtual(struct unit *punit);
 bool unit_is_virtual(const struct unit *punit);
 void free_unit_orders(struct unit *punit);
 
 int get_transporter_occupancy(const struct unit *ptrans);
-struct unit *transporter_for_unit(const struct unit *pcargo);
+struct unit *find_transporter_for_unit(const struct unit *pcargo);
 
-enum unit_upgrade_result unit_upgrade_test(const struct unit *punit,
-                                           bool is_free);
-enum unit_upgrade_result unit_upgrade_info(const struct unit *punit,
-                                           char *buf, size_t bufsz);
-bool unit_can_convert(const struct unit *punit);
-
+enum unit_upgrade_result test_unit_upgrade(const struct unit *punit,
+					   bool is_free);
+enum unit_upgrade_result get_unit_upgrade_info(char *buf, size_t bufsz,
+					       const struct unit *punit);
 bool is_losing_hp(const struct unit *punit);
 bool unit_type_is_losing_hp(const struct player *pplayer,
                             const struct unit_type *punittype);
 
 bool unit_alive(int id);
-
-void *unit_ai_data(const struct unit *punit, const struct ai_type *ai);
-void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
-                      void *data);
-
-int unit_bribe_cost(struct unit *punit);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__UNIT_H */

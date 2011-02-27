@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -90,7 +90,7 @@ void happiness_dialog_init()
 *****************************************************************/
 void happiness_dialog_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /****************************************************************
@@ -311,7 +311,7 @@ void close_happiness_dialog(struct city *pcity)
 
   gtk_widget_hide(pdialog->shell);
 
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
 
   gtk_widget_destroy(pdialog->shell);
   free(pdialog);

@@ -20,7 +20,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -30,7 +30,6 @@
 /* common */
 #include "game.h"
 #include "government.h"
-#include "research.h"
 #include "unitlist.h"
 
 /* client */
@@ -166,7 +165,8 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
     if (pUnits_Upg_Dlg) {
       return 1;
     }
-
+    CHECK_UNIT_TYPE(ut1);
+    
     set_wstate(pWidget, FC_WS_NORMAL);
     pSellected_Widget = NULL;
     widget_redraw(pWidget);
@@ -177,7 +177,7 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
     ut2 = can_upgrade_unittype(client.conn.playing, ut1);
     value = unit_upgrade_price(client.conn.playing, ut1, ut2);
     
-    fc_snprintf(cBuf, sizeof(cBuf),
+    my_snprintf(cBuf, sizeof(cBuf),
           _("Upgrade as many %s to %s as possible for %d gold each?\n"
             "Treasury contains %d gold."),
           utype_name_translation(ut1),
@@ -204,7 +204,7 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
     /* create text label */
     pStr = create_str16_from_char(cBuf, adj_font(10));
     pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
-    pStr->fgcol = *get_theme_color(COLOR_THEME_UNITUPGRADE_TEXT);
+    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_UNITUPGRADE_TEXT);
     
     pText = create_text_surf_from_str16(pStr);
     FREESTRING16(pStr);
@@ -241,7 +241,7 @@ static int popup_upgrade_unit_callback(struct widget *pWidget)
     
     pUnits_Upg_Dlg->pBeginWidgetList = pBuf;
 
-    resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+    resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                   (pWindow->size.w - pWindow->area.w) + area.w,
                   (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -332,24 +332,24 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
     pUnitsDlg = fc_calloc(1, sizeof(struct ADVANCED_DLG));  
   }
   
-  fc_snprintf(cBuf, sizeof(cBuf), _("active"));
+  my_snprintf(cBuf, sizeof(cBuf), _("active"));
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= SF_CENTER;
   pText1 = create_text_surf_from_str16(pStr);
     
-  fc_snprintf(cBuf, sizeof(cBuf), _("under\nconstruction"));
+  my_snprintf(cBuf, sizeof(cBuf), _("under\nconstruction"));
   copy_chars_to_string16(pStr, cBuf);
   pText2 = create_text_surf_from_str16(pStr);
     
-  fc_snprintf(cBuf, sizeof(cBuf), _("soonest\ncompletion"));
+  my_snprintf(cBuf, sizeof(cBuf), _("soonest\ncompletion"));
   copy_chars_to_string16(pStr, cBuf);
   pText5 = create_text_surf_from_str16(pStr);
     
-  fc_snprintf(cBuf, sizeof(cBuf), _("Total"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Total"));
   copy_chars_to_string16(pStr, cBuf);
   pText3 = create_text_surf_from_str16(pStr);
     
-  fc_snprintf(cBuf, sizeof(cBuf), _("Units"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Units"));
   copy_chars_to_string16(pStr, cBuf);
   pText4 = create_text_surf_from_str16(pStr);
   name_w = pText4->w;
@@ -372,8 +372,8 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   /* ------------------------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pBuf->action = exit_units_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -381,7 +381,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   add_to_gui_list(ID_BUTTON, pBuf);
   /* ------------------------- */
   /* totals */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total->active_count);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total->active_count);
 	
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
@@ -393,7 +393,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   pBuf->size.w = pText1->w + adj_size(6);
   add_to_gui_list(ID_LABEL, pBuf);
   /* ---------------------------------------------- */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_SHIELD]);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_SHIELD]);
 	
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
@@ -403,7 +403,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   pBuf->size.w = pText1->w;
   add_to_gui_list(ID_LABEL, pBuf);
   /* ---------------------------------------------- */	
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_FOOD]);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_FOOD]);
 	
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
@@ -413,7 +413,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   pBuf->size.w = pText1->w;
   add_to_gui_list(ID_LABEL, pBuf);
   /* ---------------------------------------------- */	
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_GOLD]);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total->upkeep[O_GOLD]);
 	
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
@@ -423,7 +423,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   pBuf->size.w = pText1->w;
   add_to_gui_list(ID_LABEL, pBuf);
   /* ---------------------------------------------- */	
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total->building_count);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total->building_count);
 	
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
@@ -458,11 +458,11 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
 			(WF_RESTORE_BACKGROUND|WF_SELLECT_WITHOUT_BAR));
       if(upgrade) {
-	pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_UNITUPGRADE_TEXT);
+	pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_UNITUPGRADE_TEXT);
 	pBuf->action = popup_upgrade_unit_callback;
 	set_wstate(pBuf, FC_WS_NORMAL);
       } else {
-        pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_UNITSREP_TEXT);
+        pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_UNITSREP_TEXT);
       }
       pBuf->string16->style &= ~SF_CENTER;
       if(count > adj_size(72)) {
@@ -473,7 +473,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       add_to_gui_list(MAX_ID - utype_number(i), pBuf);
       
       /* active */	
-      fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].active_count);
+      my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].active_count);
       pStr = create_str16_from_char(cBuf, adj_font(10));
       pStr->style |= SF_CENTER;
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
@@ -486,7 +486,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       add_to_gui_list(MAX_ID - utype_number(i), pBuf);
       
       /* shield upkeep */	
-      fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_SHIELD]);
+      my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_SHIELD]);
       pStr = create_str16_from_char(cBuf, adj_font(10));
       pStr->style |= SF_CENTER;
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
@@ -499,7 +499,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       add_to_gui_list(MAX_ID - utype_number(i), pBuf);
 	
       /* food upkeep */
-      fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_FOOD]);
+      my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_FOOD]);
       pStr = create_str16_from_char(cBuf, adj_font(10));
       pStr->style |= SF_CENTER;
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
@@ -513,7 +513,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       add_to_gui_list(MAX_ID - utype_number(i), pBuf);
 
       /* gold upkeep */
-      fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_GOLD]);
+      my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_GOLD]);
       pStr = create_str16_from_char(cBuf, adj_font(10));
       pStr->style |= SF_CENTER;
       pBuf = create_iconlabel(NULL, pWindow->dst, pStr,
@@ -528,9 +528,9 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       
       /* building */
       if(units[utype_index(i)].building_count > 0) {
-	fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].building_count);
+	my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].building_count);
       } else {
-	fc_snprintf(cBuf, sizeof(cBuf), "--");
+	my_snprintf(cBuf, sizeof(cBuf), "--");
       }
       pStr = create_str16_from_char(cBuf, adj_font(10));
       pStr->style |= SF_CENTER;
@@ -545,10 +545,10 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
       
       /* soonest completion */
       if(units[utype_index(i)].building_count > 0) {
-	fc_snprintf(cBuf, sizeof(cBuf), "%d %s", units[utype_index(i)].soonest_completions,
+	my_snprintf(cBuf, sizeof(cBuf), "%d %s", units[utype_index(i)].soonest_completions,
 			PL_("turn", "turns", units[utype_index(i)].soonest_completions));
       } else {
-	fc_snprintf(cBuf, sizeof(cBuf), "--");
+	my_snprintf(cBuf, sizeof(cBuf), "--");
       }
 	
       pStr = create_str16_from_char(cBuf, adj_font(10));
@@ -627,7 +627,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
   
   dst.y += 1;
   dst.x += ((name_w + tileset_full_tile_width(tileset) * 2 + adj_size(5)) - pText3->w) / 2;
@@ -669,7 +669,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
   
   dst.y += 1;
   dst.x += ((name_w + tileset_full_tile_width(tileset) * 2 + adj_size(5))- pText4->w) / 2;
@@ -685,7 +685,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
     
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
     
   dst.x += adj_size(3);
   alphablit(pText1, NULL, pWindow->theme, &dst);
@@ -702,7 +702,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
   
   dst.y = area.y + adj_size(3);
   dst.x += ((ww - pIcons->pBIG_Shield->w) / 2);
@@ -718,7 +718,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
   
   dst.y = area.y + adj_size(3);
   dst.x += ((ww - pIcons->pBIG_Food->w) / 2);
@@ -734,7 +734,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
   
   dst.y = area.y + adj_size(3);
   dst.x += ((ww - pIcons->pBIG_Coin->w) / 2);
@@ -751,7 +751,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
 			  
   dst.x += adj_size(3);
   alphablit(pText2, NULL, pWindow->theme, &dst);
@@ -766,7 +766,7 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_UNITSREP_FRAME));
+           get_game_colorRGB(COLOR_THEME_UNITSREP_FRAME));
 			  
   dst.x += adj_size(3);
   alphablit(pText5, NULL, pWindow->theme, &dst);
@@ -839,9 +839,9 @@ static void real_activeunits_report_dialog_update(struct units_entry *units,
 /**************************************************************************
   update the units report.
 **************************************************************************/
-void real_units_report_dialog_update(void)
+void activeunits_report_dialog_update(void)
 {
-  if (pUnitsDlg) {
+  if(pUnitsDlg && !is_report_dialogs_frozen()) {
     struct units_entry units[U_LAST];
     struct units_entry units_total;
     struct widget *pWidget, *pBuf;
@@ -898,41 +898,41 @@ void real_units_report_dialog_update(void)
 
             pBuf = pBuf->prev; /* unit type name */
             if(upgrade) {
-              pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_UNITUPGRADE_TEXT);
+              pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_UNITUPGRADE_TEXT);
               pBuf->action = popup_upgrade_unit_callback;
               set_wstate(pBuf, FC_WS_NORMAL);
             }
 
             pBuf = pBuf->prev; /* active */
-            fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].active_count);
+            my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].active_count);
             copy_chars_to_string16(pBuf->string16, cBuf);
 
             pBuf = pBuf->prev; /* shield upkeep */
-            fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_SHIELD]);
+            my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_SHIELD]);
             copy_chars_to_string16(pBuf->string16, cBuf);
 
             pBuf = pBuf->prev; /* food upkeep */
-            fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_FOOD]);
+            my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_FOOD]);
             copy_chars_to_string16(pBuf->string16, cBuf);
 
             pBuf = pBuf->prev; /* gold upkeep */
-            fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_GOLD]);
+            my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].upkeep[O_GOLD]);
             copy_chars_to_string16(pBuf->string16, cBuf);
 
             pBuf = pBuf->prev; /* building */
             if(units[utype_index(i)].building_count > 0) {
-              fc_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].building_count);
+              my_snprintf(cBuf, sizeof(cBuf), "%d", units[utype_index(i)].building_count);
             } else {
-              fc_snprintf(cBuf, sizeof(cBuf), "--");
+              my_snprintf(cBuf, sizeof(cBuf), "--");
             }
             copy_chars_to_string16(pBuf->string16, cBuf);
 
             pBuf = pBuf->prev; /* soonest completion */
             if(units[utype_index(i)].building_count > 0) {
-              fc_snprintf(cBuf, sizeof(cBuf), "%d %s", units[utype_index(i)].soonest_completions,
+              my_snprintf(cBuf, sizeof(cBuf), "%d %s", units[utype_index(i)].soonest_completions,
                           PL_("turn", "turns", units[utype_index(i)].soonest_completions));
             } else {
-              fc_snprintf(cBuf, sizeof(cBuf), "--");
+              my_snprintf(cBuf, sizeof(cBuf), "--");
             }
             copy_chars_to_string16(pBuf->string16, cBuf);
 
@@ -985,22 +985,22 @@ void real_units_report_dialog_update(void)
 
     /* total active */
     pBuf = pUnitsDlg->pEndWidgetList->prev->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", units_total.active_count);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", units_total.active_count);
     copy_chars_to_string16(pBuf->string16, cBuf);
   
     /* total shields cost */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", units_total.upkeep[O_SHIELD]);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", units_total.upkeep[O_SHIELD]);
     copy_chars_to_string16(pBuf->string16, cBuf);
   
     /* total food cost widget */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", units_total.upkeep[O_FOOD]);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", units_total.upkeep[O_FOOD]);
     copy_chars_to_string16(pBuf->string16, cBuf);
   
     /* total building count */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", units_total.building_count);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", units_total.building_count);
     copy_chars_to_string16(pBuf->string16, cBuf);
 
     /* -------------------------------------- */
@@ -1014,7 +1014,7 @@ void real_units_report_dialog_update(void)
 /**************************************************************************
   Popup (or raise) the units report (F2).  It may or may not be modal.
 **************************************************************************/
-void units_report_dialog_popup(bool make_modal)
+void popup_activeunits_report_dialog(bool make_modal)
 {
   struct units_entry units[U_LAST];
   struct units_entry units_total;
@@ -1030,7 +1030,7 @@ void units_report_dialog_popup(bool make_modal)
 /**************************************************************************
   Popdown the units report.
 **************************************************************************/
-void units_report_dialog_popdown(void)
+void popdown_activeunits_report_dialog(void)
 {
   if (pUnitsDlg) {
     if (pUnits_Upg_Dlg) {
@@ -1190,9 +1190,9 @@ static Uint16 report_scroll_mouse_motion_handler(
       *pMotion->src_rate += inc;
       *pMotion->dst_rate -= inc;
 	  	  
-      fc_snprintf(cBuf, sizeof(cBuf), "%d%%", *pMotion->src_rate);
+      my_snprintf(cBuf, sizeof(cBuf), "%d%%", *pMotion->src_rate);
       copy_chars_to_string16(pMotion->pLabel_Src->string16, cBuf);
-      fc_snprintf(cBuf, sizeof(cBuf), "%d%%", *pMotion->dst_rate);
+      my_snprintf(cBuf, sizeof(cBuf), "%d%%", *pMotion->dst_rate);
       copy_chars_to_string16(pMotion->pLabel_Dst->string16, cBuf);
       		      
       /* redraw label */
@@ -1519,14 +1519,14 @@ static int popup_sell_impv_callback(struct widget *pWidget)
     } city_list_iterate_end;
     
     if(count > 0) {
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
                   _("We have %d of %s\n(total value is : %d)\n"
                     "We can sell %d of them for %d gold."),
                   total_count,
                   improvement_name_translation(improvement_by_number(imp)),
                   total_count * value, count, gold); 
     } else {
-      fc_snprintf(cBuf, sizeof(cBuf),
+      my_snprintf(cBuf, sizeof(cBuf),
                   _("We can't sell any %s in this turn."),
                   improvement_name_translation(improvement_by_number(imp))); 
     }
@@ -1551,7 +1551,7 @@ static int popup_sell_impv_callback(struct widget *pWidget)
     /* create text label */
     pStr = create_str16_from_char(cBuf, adj_font(10));
     pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
-    pStr->fgcol = *get_theme_color(COLOR_THEME_SELLIMPR_TEXT);
+    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_SELLIMPR_TEXT);
     
     pText = create_text_surf_from_str16(pStr);
     FREESTRING16(pStr);
@@ -1589,7 +1589,7 @@ static int popup_sell_impv_callback(struct widget *pWidget)
     
     pEconomy_Sell_Dlg->pBeginWidgetList = pBuf;
     
-    resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+    resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                   (pWindow->size.w - pWindow->area.w) + area.w,
                   (pWindow->size.h - pWindow->area.h) + area.h);
     
@@ -1641,9 +1641,9 @@ static int popup_sell_impv_callback(struct widget *pWidget)
 /**************************************************************************
   Update the economy report.
 **************************************************************************/
-void real_economy_report_dialog_update(void)
+void economy_report_dialog_update(void)
 {
-  if (pEconomyDlg) {
+  if(pEconomyDlg && !is_report_dialogs_frozen()) {
     struct widget *pBuf = pEconomyDlg->pEndWidgetList;
     int tax, total, entries_used = 0;
     char cBuf[128];
@@ -1653,31 +1653,31 @@ void real_economy_report_dialog_update(void)
   
     /* tresure */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", client.conn.playing->economic.gold);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", client.conn.playing->economic.gold);
     copy_chars_to_string16(pBuf->string16, cBuf);
     remake_label_size(pBuf);
   
     /* Icome */
     pBuf = pBuf->prev->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", tax);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", tax);
     copy_chars_to_string16(pBuf->string16, cBuf);
     remake_label_size(pBuf);
   
     /* Cost */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", total);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", total);
     copy_chars_to_string16(pBuf->string16, cBuf);
     remake_label_size(pBuf);
   
     /* Netto */
     pBuf = pBuf->prev;
-    fc_snprintf(cBuf, sizeof(cBuf), "%d", tax - total);
+    my_snprintf(cBuf, sizeof(cBuf), "%d", tax - total);
     copy_chars_to_string16(pBuf->string16, cBuf);
     remake_label_size(pBuf);
     if(tax - total < 0) {
-      pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_ECONOMYDLG_NEG_TEXT);
+      pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_ECONOMYDLG_NEG_TEXT);
     } else {
-      pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_ECONOMYDLG_TEXT);
+      pBuf->string16->fgcol = *get_game_colorRGB(COLOR_THEME_ECONOMYDLG_TEXT);
     }
   
   
@@ -1690,7 +1690,7 @@ void real_economy_report_dialog_update(void)
 /**************************************************************************
   Popdown the economy report.
 **************************************************************************/
-void economy_report_dialog_popdown(void)
+void popdown_economy_report_dialog(void)
 {
   if(pEconomyDlg) {
     if (pEconomy_Sell_Dlg) {
@@ -1714,7 +1714,7 @@ void economy_report_dialog_popdown(void)
 /**************************************************************************
   Popup (or raise) the economy report (F5).  It may or may not be modal.
 **************************************************************************/
-void economy_report_dialog_popup(bool make_modal)
+void popup_economy_report_dialog(bool make_modal)
 {
   SDL_Color bg_color = {255,255,255,128};
   SDL_Color bg_color2 = {255,255,255,136};
@@ -1778,14 +1778,14 @@ void economy_report_dialog_popup(bool make_modal)
   /* ------------------------- */
   
   /* "Treasury" text surface */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Treasury: "));
+  my_snprintf(cBuf, sizeof(cBuf), _("Treasury: "));
   pStr2 = create_str16_from_char(cBuf, adj_font(12));
   pStr2->style |= TTF_STYLE_BOLD;
   pTreasuryText = create_text_surf_from_str16(pStr2);
   w3 = MAX(w3, pTreasuryText->w);
   
   /* "Treasury" value label*/
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", client.conn.playing->economic.gold);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", client.conn.playing->economic.gold);
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
 
@@ -1800,14 +1800,14 @@ void economy_report_dialog_popup(bool make_modal)
   h += pBuf->size.h;
   
   /* "Tax Rate" text surface */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Tax Rate: "));
+  my_snprintf(cBuf, sizeof(cBuf), _("Tax Rate: "));
   copy_chars_to_string16(pStr2, cBuf);
   pTaxRateText = create_text_surf_from_str16(pStr2);
   w3 = MAX(w3, pTaxRateText->w);
   
   /* "Tax Rate" value label */
   /* it is important to leave 1 space at ending of this string */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d%% " , client.conn.playing->economic.tax);
+  my_snprintf(cBuf, sizeof(cBuf), "%d%% " , client.conn.playing->economic.tax);
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
   
@@ -1821,13 +1821,13 @@ void economy_report_dialog_popup(bool make_modal)
   h += pBuf->size.h;
 
   /* "Total Income" text surface */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Total Income: "));
+  my_snprintf(cBuf, sizeof(cBuf), _("Total Income: "));
   copy_chars_to_string16(pStr2, cBuf);
   pTotalIncomeText = create_text_surf_from_str16(pStr2);
   w3 = MAX(w3, pTotalIncomeText->w);
 
   /* "Total Icome" value label */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", tax);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", tax);
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
   
@@ -1841,12 +1841,12 @@ void economy_report_dialog_popup(bool make_modal)
   h += pBuf->size.h;
 
   /* "Total Cost" text surface */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Total Cost: "));
+  my_snprintf(cBuf, sizeof(cBuf), _("Total Cost: "));
   copy_chars_to_string16(pStr2, cBuf);
   pTotalCostText = create_text_surf_from_str16(pStr2);
   
   /* "Total Cost" value label */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", total);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", total);
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pStr->style |= TTF_STYLE_BOLD;
   
@@ -1860,18 +1860,18 @@ void economy_report_dialog_popup(bool make_modal)
   h += pBuf->size.h;
   
   /* "Net Income" text surface */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Net Income: "));
+  my_snprintf(cBuf, sizeof(cBuf), _("Net Income: "));
   copy_chars_to_string16(pStr2, cBuf);
   pNetIncomeText = create_text_surf_from_str16(pStr2);
   w3 = MAX(w3, pNetIncomeText->w);
   
   /* "Net Icome" value label */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d", tax - total);
+  my_snprintf(cBuf, sizeof(cBuf), "%d", tax - total);
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
   
   if(tax - total < 0) {
-    pStr->fgcol = *get_theme_color(COLOR_THEME_ECONOMYDLG_NEG_TEXT);
+    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_ECONOMYDLG_NEG_TEXT);
   }
   
   pBuf = create_iconlabel(NULL, pWindow->dst, pStr, WF_RESTORE_BACKGROUND);
@@ -1884,7 +1884,7 @@ void economy_report_dialog_popup(bool make_modal)
   h += pBuf->size.h;
 
   /* gov and taxrate */
-  fc_snprintf(cBuf, sizeof(cBuf), _("%s max rate : %d%%"),
+  my_snprintf(cBuf, sizeof(cBuf), _("%s max rate : %d%%"),
     government_name_translation(pGov),
     get_player_bonus(client.conn.playing, EFT_MAX_RATES));
   copy_chars_to_string16(pStr2, cBuf);
@@ -1896,15 +1896,15 @@ void economy_report_dialog_popup(bool make_modal)
   /* lux rate */
   
   /* lux rate lock */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Lock"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Lock"));
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= TTF_STYLE_BOLD;
 
-  pBuf = create_checkbox(pWindow->dst,
-                         SDL_Client_Flags & CF_CHANGE_TAXRATE_LUX_BLOCK,
-                         WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL);
+  pBuf = create_checkbox(pWindow->dst, 
+      		(SDL_Client_Flags & CF_CHANGE_TAXRATE_LUX_BLOCK),
+      		(WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL));
   set_new_checkbox_theme(pBuf, pTheme->LOCK_Icon, pTheme->UNLOCK_Icon);
-  pBuf->info_label = pStr;
+  pBuf->string16 = pStr;
   pBuf->action = toggle_block_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
 
@@ -1928,7 +1928,7 @@ void economy_report_dialog_popup(bool make_modal)
   /* lux rate iconlabel */
   
   /* it is important to leave 1 space at ending of this string */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d%% ", client.conn.playing->economic.luxury);
+  my_snprintf(cBuf, sizeof(cBuf), "%d%% ", client.conn.playing->economic.luxury);
   pStr = create_str16_from_char(cBuf, adj_font(11));
   pStr->style |= TTF_STYLE_BOLD;
 
@@ -1942,17 +1942,17 @@ void economy_report_dialog_popup(bool make_modal)
   /* science rate */
 
   /* science rate lock */
-  fc_snprintf(cBuf, sizeof(cBuf), _("Lock"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Lock"));
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= TTF_STYLE_BOLD;
 
   pBuf = create_checkbox(pWindow->dst,
-                         SDL_Client_Flags & CF_CHANGE_TAXRATE_SCI_BLOCK,
-                         WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL);
+	      (SDL_Client_Flags & CF_CHANGE_TAXRATE_SCI_BLOCK),
+      		(WF_RESTORE_BACKGROUND|WF_WIDGET_HAS_INFO_LABEL));
 
   set_new_checkbox_theme(pBuf, pTheme->LOCK_Icon, pTheme->UNLOCK_Icon);
-
-  pBuf->info_label = pStr;
+    
+  pBuf->string16 = pStr;
   pBuf->action = toggle_block_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
 
@@ -1972,7 +1972,7 @@ void economy_report_dialog_popup(bool make_modal)
   
   /* science rate iconlabel */
   /* it is important to leave 1 space at ending of this string */
-  fc_snprintf(cBuf, sizeof(cBuf), "%d%% ", client.conn.playing->economic.science);
+  my_snprintf(cBuf, sizeof(cBuf), "%d%% ", client.conn.playing->economic.science);
   pStr = create_str16_from_char(cBuf, adj_font(11));
   pStr->style |= TTF_STYLE_BOLD;
 
@@ -1983,7 +1983,7 @@ void economy_report_dialog_popup(bool make_modal)
   
   /* ---- */
   
-  fc_snprintf(cBuf, sizeof(cBuf), _("Update"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Update"));
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pBuf = create_themeicon_button(pTheme->Small_OK_Icon, pWindow->dst, pStr, 0);
   pBuf->action = apply_taxrates_callback;
@@ -1993,11 +1993,11 @@ void economy_report_dialog_popup(bool make_modal)
   
   /* ---- */
   
-  fc_snprintf(cBuf, sizeof(cBuf), _("Close Dialog (Esc)"));
+  my_snprintf(cBuf, sizeof(cBuf), _("Close Dialog (Esc)"));
   pStr = create_str16_from_char(cBuf, adj_font(12));
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = pStr;
+                                  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = pStr;
   pBuf->action = exit_economy_dialog_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
@@ -2016,7 +2016,7 @@ void economy_report_dialog_popup(bool make_modal)
     SDL_FillRect(pBackground, NULL, map_rgba(pBackground->format, bg_color));
     putframe(pBackground,
              0, 0, pBackground->w - 1, pBackground->h - 1,
-             get_theme_color(COLOR_THEME_ECONOMYDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_ECONOMYDLG_FRAME));
     
     pStr = create_string16(NULL, 0, adj_font(10));
     pStr->style |= (SF_CENTER|TTF_STYLE_BOLD);
@@ -2028,13 +2028,13 @@ void economy_report_dialog_popup(bool make_modal)
 
       pSurf = crop_rect_from_surface(pBackground, NULL);
       
-      fc_snprintf(cBuf, sizeof(cBuf), "%s", improvement_name_translation(pImprove));
+      my_snprintf(cBuf, sizeof(cBuf), "%s", improvement_name_translation(pImprove));
       
       copy_chars_to_string16(pStr, cBuf);
       pStr->style |= TTF_STYLE_BOLD;
       pText_Name = create_text_surf_smaller_that_w(pStr, pSurf->w - adj_size(4));
             
-      fc_snprintf(cBuf, sizeof(cBuf), "%s %d\n%s %d",
+      my_snprintf(cBuf, sizeof(cBuf), "%s %d\n%s %d",
 			_("Built"), p->count, _("U Total"),p->total_cost);
       copy_chars_to_string16(pStr, cBuf);
       pStr->style &= ~TTF_STYLE_BOLD;
@@ -2198,7 +2198,7 @@ void economy_report_dialog_popup(bool make_modal)
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_ECONOMYDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_ECONOMYDLG_FRAME));
   
   /* draw statical strings */
   dst.x = area.x + adj_size(10);
@@ -2246,7 +2246,7 @@ void economy_report_dialog_popup(bool make_modal)
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_ECONOMYDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_ECONOMYDLG_FRAME));
   
   /* lock icon */
   pBuf = pBuf->prev;
@@ -2270,7 +2270,7 @@ void economy_report_dialog_popup(bool make_modal)
   
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_ECONOMYDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_ECONOMYDLG_FRAME));
   
   /* science lock icon */
   pBuf = pBuf->prev;
@@ -2342,7 +2342,7 @@ SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_type_id tech_id,
       w = adj_size(135);
       break;
     case MED_MODE:
-      color = *get_theme_color(COLOR_THEME_SCIENCEDLG_MED_TECHICON_BG);
+      color = *get_game_colorRGB(COLOR_THEME_SCIENCEDLG_MED_TECHICON_BG);
     default:
       h = adj_size(200);
       w = adj_size(100);
@@ -2354,7 +2354,7 @@ SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_type_id tech_id,
   /* create label surface */
   pSurf = create_surf_alpha(w, h, SDL_SWSURFACE);
   
-  if (tech_id == player_research_get(client.conn.playing)->researching)
+  if (tech_id == get_player_research(client.conn.playing)->researching)
   {
     color.unused = 180;
   } else {
@@ -2364,7 +2364,7 @@ SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_type_id tech_id,
   SDL_FillRect(pSurf, NULL, map_rgba(pSurf->format, color));
   putframe(pSurf,
            0,0, pSurf->w - 1, pSurf->h - 1,
-           get_theme_color(COLOR_THEME_SCIENCEDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME));
   
   pTmp = get_tech_icon(tech_id);
   
@@ -2519,11 +2519,11 @@ static void disable_science_dialog(void)
 /**************************************************************************
   Update the science report.
 **************************************************************************/
-void real_science_report_dialog_update(void)
+void science_dialog_update(void)
 {
   SDL_Color bg_color = {255, 255, 255, 136};
-
-  if (pScienceDlg) {
+  
+  if(pScienceDlg && !is_report_dialogs_frozen()) {
     char cBuf[128];
     SDL_String16 *pStr;
     SDL_Surface *pSurf;
@@ -2542,7 +2542,7 @@ void real_science_report_dialog_update(void)
     pChangeResearchButton = pWindow->prev;
     pChangeResearchGoalButton = pWindow->prev->prev;
     
-    if (A_UNSET != player_research_get(client.conn.playing)->researching) {
+    if (A_UNSET != get_player_research(client.conn.playing)->researching) {
       cost = total_bulbs_required(client.conn.playing);
     } else {
       cost = 0;
@@ -2550,9 +2550,9 @@ void real_science_report_dialog_update(void)
     
     /* update current research icons */
     FREESURFACE(pChangeResearchButton->theme);
-    pChangeResearchButton->theme = get_tech_icon(player_research_get(client.conn.playing)->researching);
+    pChangeResearchButton->theme = get_tech_icon(get_player_research(client.conn.playing)->researching);
     FREESURFACE(pChangeResearchGoalButton->theme);
-    pChangeResearchGoalButton->theme = get_tech_icon(player_research_get(client.conn.playing)->tech_goal);
+    pChangeResearchGoalButton->theme = get_tech_icon(get_player_research(client.conn.playing)->tech_goal);
     
     /* redraw Window */
     widget_redraw(pWindow);
@@ -2562,7 +2562,7 @@ void real_science_report_dialog_update(void)
     /* research progress text */
     pStr = create_str16_from_char(science_dialog_text(), adj_font(12));
     pStr->style |= SF_CENTER;
-    pStr->fgcol = *get_theme_color(COLOR_THEME_SCIENCEDLG_TEXT);
+    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_SCIENCEDLG_TEXT);
   
     pSurf = create_text_surf_from_str16(pStr);
       
@@ -2579,14 +2579,14 @@ void real_science_report_dialog_update(void)
     /* separator */
     putline(pWindow->dst->surface,
             dest.x, dest.y, (area.x + area.w - adj_size(16)), dest.y,
-            get_theme_color(COLOR_THEME_SCIENCEDLG_FRAME));
+            get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME));
 
     dest.y += adj_size(6);
     
     widget_set_position(pChangeResearchButton, dest.x, dest.y + adj_size(18));
     
     /* current research text */
-    fc_snprintf(cBuf, sizeof(cBuf), "%s: %s",
+    my_snprintf(cBuf, sizeof(cBuf), "%s: %s",
       advance_name_researching(client.conn.playing),
       get_science_target_text(NULL));
 
@@ -2619,17 +2619,17 @@ void real_science_report_dialog_update(void)
   
     putframe(pWindow->dst->surface,
              dest.x - 1, dest.y - 1, dest.x + dest.w, dest.y + dest.h,
-             get_theme_color(COLOR_THEME_SCIENCEDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME));
   
     if (cost > adj_size(286))
     {
       cost =
-        adj_size(286) * ((float) player_research_get(client.conn.playing)->bulbs_researched / cost);
+        adj_size(286) * ((float) get_player_research(client.conn.playing)->bulbs_researched / cost);
     }
     else
     {
       cost =
-        (float)cost * ((float)player_research_get(client.conn.playing)->bulbs_researched/cost);
+        (float)cost * ((float)get_player_research(client.conn.playing)->bulbs_researched/cost);
     }
   
     dest.y += adj_size(2);
@@ -2647,7 +2647,7 @@ void real_science_report_dialog_update(void)
     improvement_iterate(pImprove) {
       requirement_vector_iterate(&pImprove->reqs, preq) {
         if (VUT_ADVANCE == preq->source.kind
-         && advance_number(preq->source.value.advance) == player_research_get(client.conn.playing)->researching) {
+         && advance_number(preq->source.value.advance) == get_player_research(client.conn.playing)->researching) {
           pSurf = adj_surf(get_building_surface(pImprove));
           alphablit(pSurf, NULL, pWindow->dst->surface, &dest);
           dest.x += pSurf->w + 1;
@@ -2660,7 +2660,7 @@ void real_science_report_dialog_update(void)
     /* units */
     unit_type_iterate(un) {
       pUnit = un;
-      if (advance_number(pUnit->require_advance) == player_research_get(client.conn.playing)->researching) {
+      if (advance_number(pUnit->require_advance) == get_player_research(client.conn.playing)->researching) {
 	if (get_unittype_surface(un)->w > 64) {
 	  float zoom = DEFAULT_ZOOM * (64.0 / get_unittype_surface(un)->w);
 	  pSurf = zoomSurface(get_unittype_surface(un), zoom, zoom, 1);
@@ -2682,7 +2682,7 @@ void real_science_report_dialog_update(void)
 
     putline(pWindow->dst->surface,
             dest.x, dest.y, (area.x + area.w - adj_size(16)), dest.y,
-            get_theme_color(COLOR_THEME_SCIENCEDLG_FRAME));
+            get_game_colorRGB(COLOR_THEME_SCIENCEDLG_FRAME));
     
     dest.x = pChangeResearchButton->size.x;
     dest.y += adj_size(6);
@@ -2692,12 +2692,12 @@ void real_science_report_dialog_update(void)
     /* -------------------------------- */
     
     /* Goals */
-    if (A_UNSET != player_research_get(client.conn.playing)->tech_goal)
+    if (A_UNSET != get_player_research(client.conn.playing)->tech_goal)
     {
       /* current goal text */
-      fc_snprintf(cBuf, sizeof(cBuf), "%s",
+      my_snprintf(cBuf, sizeof(cBuf), "%s",
         advance_name_for_player(client.conn.playing,
-          player_research_get(client.conn.playing)->tech_goal));
+          get_player_research(client.conn.playing)->tech_goal));
       
       copy_chars_to_string16(pStr, cBuf);
       pSurf = create_text_surf_from_str16(pStr);
@@ -2709,7 +2709,7 @@ void real_science_report_dialog_update(void)
       
       FREESURFACE(pSurf);
       
-      copy_chars_to_string16(pStr, get_science_goal_text(player_research_get(client.conn.playing)->tech_goal));
+      copy_chars_to_string16(pStr, get_science_goal_text(get_player_research(client.conn.playing)->tech_goal));
       pSurf = create_text_surf_from_str16(pStr);
       
       dest.x = pChangeResearchGoalButton->size.x + pChangeResearchGoalButton->size.w + adj_size(10);
@@ -2723,7 +2723,7 @@ void real_science_report_dialog_update(void)
       improvement_iterate(pImprove) {
 	requirement_vector_iterate(&pImprove->reqs, preq) {  
           if (VUT_ADVANCE == preq->source.kind
-           && advance_number(preq->source.value.advance) == player_research_get(client.conn.playing)->tech_goal) {
+           && advance_number(preq->source.value.advance) == get_player_research(client.conn.playing)->tech_goal) {
             pSurf = adj_surf(get_building_surface(pImprove));
             alphablit(pSurf, NULL, pWindow->dst->surface, &dest);
             dest.x += pSurf->w + 1;
@@ -2736,7 +2736,7 @@ void real_science_report_dialog_update(void)
       /* units */
       unit_type_iterate(un) {
         pUnit = un;
-        if (advance_number(pUnit->require_advance) == player_research_get(client.conn.playing)->tech_goal) {
+        if (advance_number(pUnit->require_advance) == get_player_research(client.conn.playing)->tech_goal) {
 	  if (get_unittype_surface(un)->w > 64) {
 	    float zoom = DEFAULT_ZOOM * (64.0 / get_unittype_surface(un)->w);
 	    pSurf = zoomSurface(get_unittype_surface(un), zoom, zoom, 1);
@@ -2764,7 +2764,7 @@ void real_science_report_dialog_update(void)
 /**************************************************************************
   ...
 **************************************************************************/
-static void science_report_dialog_popdown(void)
+static void popdown_science_dialog()
 {
   if(pScienceDlg) {
     popdown_window_group_dialog(pScienceDlg->pBeginWidgetList,
@@ -2827,7 +2827,7 @@ static int change_research_goal_dialog_callback(struct widget *pWindow)
 /**************************************************************************
   ...
 **************************************************************************/
-static void popup_change_research_dialog(void)
+static void popup_change_research_dialog()
 {
   struct widget *pBuf = NULL;
   struct widget *pWindow;
@@ -2836,12 +2836,12 @@ static void popup_change_research_dialog(void)
   int max_col, max_row, col, i, count = 0, h;
   SDL_Rect area;
 
-  if (is_future_tech(player_research_get(client.conn.playing)->researching)) {
+  if (is_future_tech(get_player_research(client.conn.playing)->researching)) {
     return;
   }
     
   advance_index_iterate(A_FIRST, i) {
-    if (!player_invention_reachable(client.conn.playing, i, FALSE)
+    if (!player_invention_reachable(client.conn.playing, i)
      || TECH_PREREQS_KNOWN != player_invention_state(client.conn.playing, i)) {
       continue;
     }
@@ -2869,9 +2869,8 @@ static void popup_change_research_dialog(void)
   /* ------------------------- */
     /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = exit_change_tech_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -2910,7 +2909,7 @@ static void popup_change_research_dialog(void)
   count = 0;
   h = col * max_row;
   advance_index_iterate(A_FIRST, i) {
-    if (!player_invention_reachable(client.conn.playing, i, FALSE)
+    if (!player_invention_reachable(client.conn.playing, i)
      || TECH_PREREQS_KNOWN != player_invention_state(client.conn.playing, i)) {
       continue;
     }
@@ -3004,7 +3003,7 @@ static int change_research_goal_callback(struct widget *pWidget)
     
    /* Following is to make the menu go back to the current goal;
    * there may be a better way to do this?  --dwp */
-    real_science_report_dialog_update();
+    science_dialog_update();
   } else if (Main.event.button.button == SDL_BUTTON_MIDDLE) {
     popup_tech_info((MAX_ID - pWidget->ID));
   } 
@@ -3014,7 +3013,7 @@ static int change_research_goal_callback(struct widget *pWidget)
 /**************************************************************************
   ...
 **************************************************************************/
-static void popup_change_research_goal_dialog(void)
+static void popup_change_research_goal_dialog()
 {
   struct widget *pBuf = NULL;
   struct widget *pWindow;
@@ -3028,10 +3027,10 @@ static void popup_change_research_goal_dialog(void)
    * hist will hold afterwards the techid of the current choice
    */
   advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client.conn.playing, i, FALSE)
+    if (player_invention_reachable(client.conn.playing, i)
         && TECH_KNOWN != player_invention_state(client.conn.playing, i)
 	&& (11 > num_unknown_techs_for_goal(client.conn.playing, i)
-	    || i == player_research_get(client.conn.playing)->tech_goal)) {
+	    || i == get_player_research(client.conn.playing)->tech_goal)) {
       count++;
     }
   } advance_index_iterate_end;
@@ -3057,9 +3056,8 @@ static void popup_change_research_goal_dialog(void)
   /* ------------------------- */
     /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w += pBuf->size.w + adj_size(10);
   pBuf->action = exit_change_tech_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -3102,13 +3100,13 @@ static void popup_change_research_goal_dialog(void)
   count = 0;
   h = col * max_row;
   advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client.conn.playing, i, FALSE)
+    if (player_invention_reachable(client.conn.playing, i)
         && TECH_KNOWN != player_invention_state(client.conn.playing, i)
 	&& (11 > (num = num_unknown_techs_for_goal(client.conn.playing, i))
-	    || i == player_research_get(client.conn.playing)->tech_goal)) {
+	    || i == get_player_research(client.conn.playing)->tech_goal)) {
 
       count++;
-      fc_snprintf(cBuf, sizeof(cBuf), "%s\n%d %s",
+      my_snprintf(cBuf, sizeof(cBuf), "%s\n%d %s",
                   advance_name_translation(advance_by_number(i)),
                   num,
                   PL_("step", "steps", num));
@@ -3195,7 +3193,7 @@ static int science_dialog_callback(struct widget *pWindow)
         widget_flush(pWindow);
       }
       if (move_window_group_dialog(pScienceDlg->pBeginWidgetList, pWindow)) {
-        real_science_report_dialog_update();
+        science_dialog_update();
       }
     }
   }  
@@ -3231,7 +3229,7 @@ static int popup_change_research_goal_dialog_callback(struct widget *pWidget)
 static int popdown_science_dialog_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    science_report_dialog_popdown();
+    popdown_science_dialog();
   }
   return -1;
 }
@@ -3239,7 +3237,7 @@ static int popdown_science_dialog_callback(struct widget *pWidget)
 /**************************************************************************
   Popup (or raise) the science report(F6).  It may or may not be modal.
 **************************************************************************/
-void science_report_dialog_popup(bool raise)
+void popup_science_dialog(bool raise)
 {
   struct widget *pWidget, *pWindow;
   struct widget *pChangeResearchButton;
@@ -3292,14 +3290,14 @@ void science_report_dialog_popup(bool raise)
   /* count number of researchable techs */
   count = 0;
   advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client.conn.playing, i, FALSE)
+    if (player_invention_reachable(client.conn.playing, i)
      && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
 	count++;	  
     }
   }  advance_index_iterate_end;
 
   /* current research icon */
-  pTechIcon = get_tech_icon(player_research_get(client.conn.playing)->researching);
+  pTechIcon = get_tech_icon(get_player_research(client.conn.playing)->researching);
   pChangeResearchButton = create_icon2(pTechIcon, pWindow->dst, WF_RESTORE_BACKGROUND | WF_FREE_THEME);
 
   pChangeResearchButton->action = popup_change_research_dialog_callback;
@@ -3310,7 +3308,7 @@ void science_report_dialog_popup(bool raise)
   add_to_gui_list(ID_SCIENCE_DLG_CHANGE_REASARCH_BUTTON, pChangeResearchButton);
 
   /* current research goal icon */
-  pTechIcon = get_tech_icon(player_research_get(client.conn.playing)->tech_goal);
+  pTechIcon = get_tech_icon(get_player_research(client.conn.playing)->tech_goal);
   pChangeResearchGoalButton = create_icon2(pTechIcon, pWindow->dst, WF_RESTORE_BACKGROUND | WF_FREE_THEME);
   
   pChangeResearchGoalButton->action = popup_change_research_goal_dialog_callback;
@@ -3323,10 +3321,8 @@ void science_report_dialog_popup(bool raise)
   /* ------ */
   /* exit button */
   pExitButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                 WF_WIDGET_HAS_INFO_LABEL
-                                 | WF_RESTORE_BACKGROUND);
-  pExitButton->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                                   adj_font(12));
+                                 WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+  pExitButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   pExitButton->action = popdown_science_dialog_callback;
   set_wstate(pExitButton, FC_WS_NORMAL);
   pExitButton->key = SDLK_ESCAPE;
@@ -3340,13 +3336,13 @@ void science_report_dialog_popup(bool raise)
   /* ======================== */
   pScienceDlg->pBeginWidgetList = pExitButton;
 
-  real_science_report_dialog_update();
+  science_dialog_update();
 }
 
 /**************************************************************************
-  Popdown all the science reports (report, change tech, change goals).
+  Popdow all the science reports (report, chnge tech, change goals).
 **************************************************************************/
-void science_report_dialogs_popdown_all(void)
+void popdown_all_science_dialogs(void)
 {
   if(pChangeTechDlg) {
     popdown_window_group_dialog(pChangeTechDlg->pBeginWidgetList,
@@ -3367,9 +3363,20 @@ void science_report_dialogs_popdown_all(void)
 /****************************************************************************
   Resize and redraw the requirement tree.
 ****************************************************************************/
-void science_report_dialog_redraw(void)
+void science_dialog_redraw(void)
 {
   /* No requirement tree yet. */
+}
+
+/**************************************************************************
+  Update all report dialogs.
+**************************************************************************/
+void update_report_dialogs(void)
+{
+  economy_report_dialog_update();
+  activeunits_report_dialog_update();
+  science_dialog_update();
+  city_report_dialog_update();
 }
 
 /* ===================================================================== */
@@ -3380,23 +3387,31 @@ void science_report_dialog_redraw(void)
   Show a dialog with player statistics at endgame.
   TODO: Display all statistics in packet_endgame_report.
 *****************************************************************/
-void endgame_report_dialog_popup(const struct packet_endgame_report *packet)
+void popup_endgame_report_dialog(struct packet_endgame_report *packet)
 {
   char buffer[150 * MAX_NUM_PLAYERS];
   int i;
-
+ 
   buffer[0] = '\0';
-  for (i = 0; i < packet->player_num; i++) {
-    const struct player *pplayer = player_by_number(packet->player_id[i]);
-
+  for (i = 0; i < packet->nscores; i++) {
     cat_snprintf(buffer, sizeof(buffer),
                  PL_("%2d: The %s ruler %s scored %d point\n",
                      "%2d: The %s ruler %s scored %d points\n",
                      packet->score[i]),
-                 i + 1, nation_adjective_for_player(pplayer),
-                 player_name(pplayer), packet->score[i]);
+                 i + 1,
+                 nation_adjective_for_player(player_by_number(packet->id[i])),
+                 player_name(player_by_number(packet->id[i])),
+                 packet->score[i]);
   }
   popup_notify_dialog(_("Final Report:"),
                       _("The Greatest Civilizations in the world."),
                       buffer);
+}
+
+/*************************************************************************
+  Server options dialog
+*************************************************************************/
+void popup_settable_options_dialog(void)
+{
+  /* PORT ME */
 }

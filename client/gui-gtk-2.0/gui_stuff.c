@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -587,8 +587,8 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
       g_signal_connect_swapped(button, "clicked",
 	  G_CALLBACK(gui_dialog_delete_tab_handler), dlg);
 
-      fc_snprintf(buf, sizeof(buf), _("Close Tab:\n%s"), _("Ctrl+W"));
-      gtk_widget_set_tooltip_text(button, buf);
+      my_snprintf(buf, sizeof(buf), _("Close Tab:\n%s"), _("Ctrl+W"));
+      gtk_tooltips_set_tip(main_tips, button, buf, "");
 
       image = gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
       gtk_widget_set_size_request(button, w, h);
@@ -655,7 +655,7 @@ static void gui_dialog_pack_button(struct gui_dialog *dlg, GtkWidget *button,
 {
   gint signal_id;
 
-  fc_assert_ret(GTK_IS_BUTTON(button));
+  g_return_if_fail(GTK_IS_BUTTON(button));
 
   g_object_set_data(G_OBJECT(button), "gui-dialog-response-data",
       GINT_TO_POINTER(response));
@@ -822,7 +822,7 @@ void gui_dialog_show_all(struct gui_dialog *dlg)
 **************************************************************************/
 void gui_dialog_present(struct gui_dialog *dlg)
 {
-  fc_assert_ret(NULL != dlg);
+  g_return_if_fail(NULL != dlg);
 
   switch (dlg->type) {
   case GUI_DIALOG_WINDOW:
@@ -854,7 +854,7 @@ void gui_dialog_present(struct gui_dialog *dlg)
 **************************************************************************/
 void gui_dialog_raise(struct gui_dialog *dlg)
 {
-  fc_assert_ret(NULL != dlg);
+  g_return_if_fail(NULL != dlg);
 
   switch (dlg->type) {
   case GUI_DIALOG_WINDOW:
@@ -877,7 +877,7 @@ void gui_dialog_raise(struct gui_dialog *dlg)
 **************************************************************************/
 void gui_dialog_alert(struct gui_dialog *dlg)
 {
-  fc_assert_ret(NULL != dlg);
+  g_return_if_fail(NULL != dlg);
 
   switch (dlg->type) {
   case GUI_DIALOG_WINDOW:
@@ -891,12 +891,12 @@ void gui_dialog_alert(struct gui_dialog *dlg)
       n = gtk_notebook_page_num(notebook, dlg->vbox);
 
       if (current != n) {
-        GtkWidget *label = dlg->v.tab.label;
-        GdkColormap *cmap = gtk_widget_get_default_colormap();
-        GdkColor color = {.red = 0, .green = 0, .blue = 255 << 8};
+	GtkWidget *label = dlg->v.tab.label;
+	GdkColormap *cmap = gtk_widget_get_default_colormap();
+	GdkColor color = {.red = 0, .green = 0, .blue = 255 << 8};
 
-        gdk_rgb_find_color(cmap, &color);
-        gtk_widget_modify_fg(label, GTK_STATE_ACTIVE, &color);
+	gdk_rgb_find_color(cmap, &color);
+	gtk_widget_modify_fg(label, GTK_STATE_ACTIVE, &color);
       }
     }
     break;
@@ -927,7 +927,7 @@ void gui_dialog_set_title(struct gui_dialog *dlg, const char *title)
   if (dlg->title) {
     free(dlg->title);
   }
-  dlg->title = fc_strdup(title);
+  dlg->title = mystrdup(title);
   switch (dlg->type) {
   case GUI_DIALOG_WINDOW:
     gtk_window_set_title(GTK_WINDOW(dlg->v.window), title);
@@ -1001,7 +1001,7 @@ void gui_update_font(const char *font_name, const char *font_value)
 {
   char str[512];
 
-  fc_snprintf(str, sizeof(str),
+  my_snprintf(str, sizeof(str),
               "style \"ext-%s\" {\n"
               "  font_name = \"%s\"\n"
               "}\n"
@@ -1028,7 +1028,7 @@ void gui_update_font_full(const char *font_name, const char *font_value,
   screen = gdk_screen_get_default();
   settings = gtk_settings_get_for_screen(screen);
 
-  fc_snprintf(buf, sizeof(buf), "Freeciv*.%s", font_name);
+  my_snprintf(buf, sizeof(buf), "Freeciv*.%s", font_name);
   style = gtk_rc_get_style_by_paths(settings, buf, NULL, G_TYPE_NONE);
 
   if (style) {
@@ -1087,9 +1087,9 @@ GtkTreeViewColumn *add_treeview_column(GtkWidget *view, const char *title,
   GtkCellRenderer *rend;
   const char *attr;
 
-  fc_assert_ret_val(view != NULL, NULL);
-  fc_assert_ret_val(GTK_IS_TREE_VIEW(view), NULL);
-  fc_assert_ret_val(title != NULL, NULL);
+  g_return_val_if_fail(view != NULL, NULL);
+  g_return_val_if_fail(GTK_IS_TREE_VIEW(view), NULL);
+  g_return_val_if_fail(title != NULL, NULL);
 
   if (gtype == G_TYPE_BOOLEAN) {
     rend = gtk_cell_renderer_toggle_new();

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -39,17 +39,17 @@ enum Display_color_type get_visual(void)
 
   if (visual->type == GDK_VISUAL_STATIC_GRAY) { 
     /* StaticGray, use black and white */
-    log_verbose("found B/W display.");
+    freelog(LOG_VERBOSE, "found B/W display.");
     return BW_DISPLAY;
   }
 
   if(visual->type < GDK_VISUAL_STATIC_COLOR) {
     /* No color visual available at default depth */
-    log_verbose("found grayscale(?) display.");
+    freelog(LOG_VERBOSE, "found grayscale(?) display.");
     return GRAYSCALE_DISPLAY;
   }
 
-  log_verbose("color system booted ok.");
+  freelog(LOG_VERBOSE, "color system booted ok.");
 
   return COLOR_DISPLAY;
 }
@@ -85,14 +85,14 @@ void color_free(struct color *color)
 ****************************************************************************/
 size_t color_to_string(GdkColor *color, char *string, size_t length)
 {
-  fc_assert_ret_val(NULL != string, 0);
-  fc_assert_ret_val(0 < length, 0);
+  RETURN_VAL_IF_FAIL(NULL != string, 0);
+  RETURN_VAL_IF_FAIL(0 < length, 0);
 
   if (NULL == color) {
     string[0] = '\0';
     return 0;
   } else {
-    return fc_snprintf(string, length, "#%02x%02x%02x",
+    return my_snprintf(string, length, "#%02x%02x%02x",
                        color->red >> 8, color->green >> 8, color->blue >> 8);
   }
 }

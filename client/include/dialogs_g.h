@@ -13,7 +13,7 @@
 #ifndef FC__DIALOGS_G_H
 #define FC__DIALOGS_G_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 #include "fc_types.h"
 #include "featured_text.h"      /* struct text_tag_list */
@@ -33,7 +33,7 @@ void popup_connect_msg(const char *headline, const char *message);
 void popup_races_dialog(struct player *pplayer);
 void popdown_races_dialog(void);
 
-void unit_select_dialog_popup(struct tile *ptile);
+void popup_unit_select_dialog(struct tile *ptile);
 
 void races_toggles_set_sensitive(void);
 

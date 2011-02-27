@@ -12,13 +12,14 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
 #include "SDL.h"
 #endif
 
+#include <assert.h>
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
@@ -71,7 +72,6 @@
 
 /* gui-gtk-2.0 */
 #include "chatline.h"
-#include "citizensinfo.h"
 #include "connectdlg.h"
 #include "cma_fe.h"
 #include "dialogs.h"
@@ -103,11 +103,10 @@ GtkWidget *map_horizontal_scrollbar;
 GtkWidget *map_vertical_scrollbar;
 
 GtkWidget *overview_canvas;             /* GtkDrawingArea */
-GtkWidget *overview_scrolled_window;    /* GtkScrolledWindow */
 GdkPixmap *overview_canvas_store;       /* this pixmap acts as a backing store 
                                          * for the overview_canvas widget */
-int overview_canvas_store_width = 2 * 128;
-int overview_canvas_store_height = 2 * 92;
+int overview_canvas_store_width = 2 * 80;
+int overview_canvas_store_height = 2 * 50;
 
 GtkWidget *toplevel;
 GdkWindow *root_window;
@@ -140,6 +139,9 @@ GtkWidget *main_label_info;
 GtkWidget *avbox, *ahbox, *vbox, *conn_box;
 GtkWidget* scroll_panel;
 
+GtkTreeStore *connection_list_store;
+GtkTreeView *connection_list_view;
+
 GtkWidget *econ_label[10];
 GtkWidget *bulb_label;
 GtkWidget *sun_label;
@@ -152,6 +154,7 @@ GtkWidget *unit_info_label;
 GtkWidget *unit_info_box;
 GtkWidget *unit_info_frame;
 
+GtkTooltips *main_tips;
 GtkWidget *econ_ebox;
 GtkWidget *bulb_ebox;
 GtkWidget *sun_ebox;
@@ -179,9 +182,7 @@ static GtkWidget *allied_chat_toggle_button;
 
 static enum Display_color_type display_color_type;  /* practically unused */
 static gint timer_id;                               /*       ditto        */
-static GIOChannel *srv_channel;
-static GIOChannel *ggz_channel;
-static guint srv_id, ggz_id;
+static guint input_id, ggz_input_id;
 gint cur_x, cur_y;
 
 
@@ -189,8 +190,7 @@ static gboolean show_info_button_release(GtkWidget *w, GdkEventButton *ev, gpoin
 static gboolean show_info_popup(GtkWidget *w, GdkEventButton *ev, gpointer data);
 
 static void end_turn_callback(GtkWidget *w, gpointer data);
-static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data);
+static void get_net_input(gpointer data, gint fid, GdkInputCondition condition);
 static void set_wait_for_writable_socket(struct connection *pc,
                                          bool socket_writable);
 
@@ -237,10 +237,9 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 /**************************************************************************
 ...
 **************************************************************************/
-static void log_callback_utf8(enum log_level level, const char *message,
-                              bool file_too)
+static void log_callback_utf8(int level, const char *message, bool file_too)
 {
-  if (!file_too || level <= LOG_FATAL) {
+  if (! file_too || level <= LOG_FATAL) {
     fc_fprintf(stderr, "%d: %s\n", level, message);
   }
 }
@@ -421,8 +420,8 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
     return FALSE;
   }
 
-  fc_assert(MAX_NUM_BATTLEGROUPS == 4);
-
+  assert(MAX_NUM_BATTLEGROUPS == 4);
+  
   if ((ev->state & GDK_CONTROL_MASK)) {
     switch (ev->keyval) {
 
@@ -608,7 +607,7 @@ static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
      * latest text from other players; MUST NOT make spurious text windows
      * at the bottom of other dialogs.
      */
-    if (gui_gtk2_message_chat_location == GUI_GTK2_MSGCHAT_MERGED) {
+    if (gui_gtk2_merge_notebooks) {
       gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 1);
     } else {
       gtk_notebook_set_current_page(GTK_NOTEBOOK(bottom_notebook), 0);
@@ -783,33 +782,22 @@ static GtkWidget *detached_widget_fill(GtkWidget *ahbox)
 **************************************************************************/
 static void populate_unit_pixmap_table(void)
 {
-  int i, width;
+  int i;
   GtkWidget *table = unit_pixmap_table;
+ 
+  /* 135 below is rough value (could be more intelligent) --dwp */
+  num_units_below = 135 / (int) tileset_tile_width(tileset);
+  num_units_below = CLIP(1, num_units_below, MAX_NUM_UNITS_BELOW);
 
-  /* get width of the overview window */
-  width = (overview_canvas_store_width > GUI_GTK_OVERVIEW_MIN_XSIZE) ? overview_canvas_store_width
-                                               : GUI_GTK_OVERVIEW_MIN_XSIZE;
+  gtk_table_resize(GTK_TABLE(table), 2, num_units_below);
 
-  if (gui_gtk2_small_display_layout) {
-    /* We want arrow to appear if there is other units in addition
-       to active one in tile. Active unit is not counted, so there
-       can be 0 other units to not to display arrow. */
-    num_units_below = 1 - 1;
-  } else {
-    num_units_below = width / (int) tileset_tile_width(tileset);
-    num_units_below = CLIP(1, num_units_below, MAX_NUM_UNITS_BELOW);
-  }
-
-  gtk_table_resize(GTK_TABLE(table), 2, MAX(1,num_units_below));
-
-  /* Top row: the active unit. */
   /* Note, we ref this and other widgets here so that we can unref them
    * in reset_unit_table. */
   unit_pixmap = gtk_pixcomm_new(tileset_unit_width(tileset), tileset_unit_height(tileset));
-  g_object_ref(unit_pixmap);
+  gtk_widget_ref(unit_pixmap);
   gtk_pixcomm_clear(GTK_PIXCOMM(unit_pixmap));
   unit_pixmap_button = gtk_event_box_new();
-  g_object_ref(unit_pixmap_button);
+  gtk_widget_ref(unit_pixmap_button);
   gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
   gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
   g_signal_connect(unit_pixmap_button, "button_press_event",
@@ -817,13 +805,12 @@ static void populate_unit_pixmap_table(void)
 		   GINT_TO_POINTER(-1));
 
   if (!gui_gtk2_small_display_layout) {
-    /* Bottom row: other units in the same tile. */
     for (i = 0; i < num_units_below; i++) {
       unit_below_pixmap[i] = gtk_pixcomm_new(tileset_unit_width(tileset),
                                              tileset_unit_height(tileset));
-      g_object_ref(unit_below_pixmap[i]);
+      gtk_widget_ref(unit_below_pixmap[i]);
       unit_below_pixmap_button[i] = gtk_event_box_new();
-      g_object_ref(unit_below_pixmap_button[i]);
+      gtk_widget_ref(unit_below_pixmap_button[i]);
       gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
                         unit_below_pixmap[i]);
       g_signal_connect(unit_below_pixmap_button[i],
@@ -840,9 +827,9 @@ static void populate_unit_pixmap_table(void)
   /* create arrow (popup for all units on the selected tile) */
   more_arrow_pixmap = gtk_image_new_from_pixbuf(
           sprite_get_pixbuf(get_arrow_sprite(tileset, ARROW_RIGHT)));
-  g_object_ref(more_arrow_pixmap);
+  gtk_widget_ref(more_arrow_pixmap);
   more_arrow_pixmap_button = gtk_event_box_new();
-  g_object_ref(more_arrow_pixmap_button);
+  gtk_widget_ref(more_arrow_pixmap_button);
   gtk_container_add(GTK_CONTAINER(more_arrow_pixmap_button),
                     more_arrow_pixmap);
   g_signal_connect(more_arrow_pixmap_button,
@@ -850,13 +837,11 @@ static void populate_unit_pixmap_table(void)
                    G_CALLBACK(select_more_arrow_pixmap_callback), NULL);
 
   if (!gui_gtk2_small_display_layout) {
-    /* Display on bottom row. */
     gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap_button,
-                              MAX_NUM_UNITS_BELOW, MAX_NUM_UNITS_BELOW+1, 1, 2);
+                              4, 5, 1, 2);
   } else {
-    /* Display on top row (there is no bottom row). */
     gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap_button,
-                              MAX_NUM_UNITS_BELOW, MAX_NUM_UNITS_BELOW+1, 0, 1);
+                              4, 5, 0, 1);
   }
 
   gtk_widget_show_all(table);
@@ -876,20 +861,20 @@ void reset_unit_table(void)
      * populatate_unit_pixmap_table. */
     gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                          unit_pixmap_button);
-    g_object_unref(unit_pixmap);
-    g_object_unref(unit_pixmap_button);
+    gtk_widget_unref(unit_pixmap);
+    gtk_widget_unref(unit_pixmap_button);
     if (!gui_gtk2_small_display_layout) {
       for (i = 0; i < num_units_below; i++) {
         gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                              unit_below_pixmap_button[i]);
-        g_object_unref(unit_below_pixmap[i]);
-        g_object_unref(unit_below_pixmap_button[i]);
+        gtk_widget_unref(unit_below_pixmap[i]);
+        gtk_widget_unref(unit_below_pixmap_button[i]);
       }
     }
     gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                          more_arrow_pixmap_button);
-    g_object_unref(more_arrow_pixmap);
-    g_object_unref(more_arrow_pixmap_button);
+    gtk_widget_unref(more_arrow_pixmap);
+    gtk_widget_unref(more_arrow_pixmap_button);
   }
 
   populate_unit_pixmap_table();
@@ -918,7 +903,7 @@ void enable_menus(bool enable)
   if (enable) {
     main_menubar = setup_menus(toplevel);
     gtk_box_pack_start(GTK_BOX(top_vbox), main_menubar, FALSE, FALSE, 0);
-    menus_init();
+    update_menus();
     gtk_widget_show_all(main_menubar);
   } else {
     gtk_widget_destroy(main_menubar);
@@ -991,6 +976,8 @@ static void setup_widgets(void)
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
       create_network_page(), NULL);
 
+  main_tips = gtk_tooltips_new();
+
   editgui_create_widgets();
 
   ingame_votebar = voteinfo_bar_new(FALSE);
@@ -1043,28 +1030,17 @@ static void setup_widgets(void)
   avbox = detached_widget_fill(ahbox);
 
   align = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
-
-  overview_scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-  gtk_container_set_border_width(GTK_CONTAINER (overview_scrolled_window), 1);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW (overview_scrolled_window),
-                                    GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  gtk_box_pack_start(GTK_BOX(avbox), align, FALSE, FALSE, 0);
 
   overview_canvas = gtk_drawing_area_new();
-  gtk_widget_set_size_request(overview_canvas, overview_canvas_store_width,
-		              overview_canvas_store_height);
-  gtk_widget_set_size_request(overview_scrolled_window, overview_canvas_store_width,
-		              overview_canvas_store_height);
 
   gtk_widget_add_events(overview_canvas, GDK_EXPOSURE_MASK
         			        |GDK_BUTTON_PRESS_MASK
 				        |GDK_POINTER_MOTION_MASK);
-  gtk_box_pack_start(GTK_BOX(avbox), overview_scrolled_window, FALSE, FALSE, 0);
 
-  gtk_scrolled_window_add_with_viewport (
-                      GTK_SCROLLED_WINDOW (overview_scrolled_window), 
-                      align);
+  gtk_widget_set_size_request(overview_canvas, 160, 100);
   gtk_container_add(GTK_CONTAINER(align), overview_canvas);
- 
+
   g_signal_connect(overview_canvas, "expose_event",
         	   G_CALLBACK(overview_canvas_expose), NULL);
 
@@ -1194,9 +1170,8 @@ static void setup_widgets(void)
   g_signal_connect(turn_done_button, "clicked",
                    G_CALLBACK(end_turn_callback), NULL);
 
-  fc_snprintf(buf, sizeof(buf), "%s:\n%s",
-              _("Turn Done"), _("Shift+Return"));
-  gtk_widget_set_tooltip_text(turn_done_button, buf);
+  my_snprintf(buf, sizeof(buf), "%s:\n%s", _("Turn Done"), _("Shift+Return"));
+  gtk_tooltips_set_tip(main_tips, turn_done_button, buf, "");
 
   /* Selected unit status */
 
@@ -1247,7 +1222,7 @@ static void setup_widgets(void)
   
   if (gui_gtk2_small_display_layout) {
     gtk_paned_pack1(GTK_PANED(paned), top_notebook, TRUE, TRUE);
-  } else if (gui_gtk2_message_chat_location == GUI_GTK2_MSGCHAT_MERGED) {
+  } else if (gui_gtk2_merge_notebooks) {
     right_vbox = gtk_vbox_new(FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(right_vbox), top_notebook, TRUE, TRUE, 0);
@@ -1331,7 +1306,7 @@ static void setup_widgets(void)
 
   /* *** The message window -- this is a detachable widget *** */
 
-  if (gui_gtk2_message_chat_location == GUI_GTK2_MSGCHAT_MERGED) {
+  if (gui_gtk2_merge_notebooks) {
     bottom_hpaned = hpaned = paned;
     right_notebook = bottom_notebook = top_notebook;
   } else {
@@ -1364,7 +1339,7 @@ static void setup_widgets(void)
     gtk_notebook_set_scrollable(GTK_NOTEBOOK(right_notebook), TRUE);
     g_signal_connect(right_notebook, "button-release-event",
                      G_CALLBACK(right_notebook_button_release), NULL);
-    if (gui_gtk2_message_chat_location == GUI_GTK2_MSGCHAT_SPLIT) {
+    if (gui_gtk2_split_bottom_notebook) {
       gtk_paned_pack2(GTK_PANED(hpaned), right_notebook, TRUE, TRUE);
     }
   }
@@ -1421,7 +1396,7 @@ static void setup_widgets(void)
   gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(toplevel)));
 
   if (gui_gtk2_enable_tabs) {
-    meswin_dialog_popup(FALSE);
+    popup_meswin_dialog(FALSE);
   }
 
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
@@ -1546,24 +1521,27 @@ void ui_main(int argc, char **argv)
 
   civ_gc = gdk_gc_new(root_window);
 
-  options_iterate(client_optset, poption) {
-    if (OT_FONT == option_type(poption)) {
+  client_options_iterate(poption) {
+    if (COT_FONT == option_type(poption)) {
       /* Force to call the appropriated callback. */
       option_changed(poption);
     }
-  } options_iterate_end;
+  } client_options_iterate_end;
 
   if (NULL == city_names_style) {
     city_names_style = gtk_style_new();
-    log_error("city_names_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_names_style should have been set by options.");
   }
   if (NULL == city_productions_style) {
     city_productions_style = gtk_style_new();
-    log_error("city_productions_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "city_productions_style should have been set by options.");
   }
   if (NULL == reqtree_text_style) {
     reqtree_text_style = gtk_style_new();
-    log_error("reqtree_text_style should have been set by options.");
+    freelog(LOG_ERROR,
+            "reqtree_text_style should have been set by options.");
   }
 
   set_city_names_font_sizes(city_names_font_size, city_productions_font_size);
@@ -1633,7 +1611,6 @@ void ui_main(int argc, char **argv)
   cma_fe_init();
   diplomacy_dialog_init();
   happiness_dialog_init();
-  citizens_dialog_init();
   intel_dialog_init();
   spaceship_dialog_init();
   chatline_init();
@@ -1651,10 +1628,8 @@ void ui_main(int argc, char **argv)
 
   gtk_main();
 
-  free_mapcanvas_and_overview();
   spaceship_dialog_done();
   intel_dialog_done();
-  citizens_dialog_done();
   happiness_dialog_done();
   diplomacy_dialog_done();
   cma_fe_done();
@@ -1664,10 +1639,9 @@ void ui_main(int argc, char **argv)
 /**************************************************************************
   Do any necessary UI-specific cleanup
 **************************************************************************/
-void ui_exit(void)
+void ui_exit()
 {
-  g_object_unref(message_buffer);
-  message_buffer = NULL;
+
 }
 
 /**************************************************************************
@@ -1676,6 +1650,215 @@ void ui_exit(void)
 enum gui_type get_gui_type(void)
 {
   return GUI_GTK2;
+}
+
+/**************************************************************************
+ Update the connected users list at pregame state.
+**************************************************************************/
+void update_conn_list_dialog(void)
+{
+  if (client_has_player()) {
+    char *text;
+
+    if (client_player()->is_ready) {
+      text = _("Not _ready");
+    } else {
+      int num_unready = 0;
+
+      players_iterate(pplayer) {
+        if (!pplayer->ai_data.control && !pplayer->is_ready) {
+	  num_unready++;
+	}
+      } players_iterate_end;
+
+      if (num_unready > 1) {
+	text = _("_Ready");
+      } else {
+	/* We are the last unready player so clicking here will
+	 * immediately start the game. */
+	text = _("_Start");
+      }
+    }
+
+    gtk_stockbutton_set_label(ready_button, text);
+  } else {
+    gtk_stockbutton_set_label(ready_button, _("_Start"));
+  }
+
+  /* Sensitive only if client can control player */
+  gtk_widget_set_sensitive(ready_button, can_client_control());
+
+  if (!client_has_player()) {
+    /* Nation button will attach to player */
+    gtk_stockbutton_set_label(nation_button, _("_Take Player"));
+    gtk_widget_set_sensitive(nation_button, TRUE);
+  } else {
+    /* Nation button will go to Nation selection */
+    gtk_stockbutton_set_label(nation_button, _("Pick _Nation"));
+
+    /* Sensitive iff client is controlling a player. */
+    gtk_widget_set_sensitive(nation_button, game.info.is_new_game
+                             && can_client_control());
+  }
+
+  if (!client_is_observer()) {
+    gtk_stockbutton_set_label(take_button, _("_Observe"));
+  } else {
+    gtk_stockbutton_set_label(take_button, _("Do not _observe"));
+  }
+
+  if (connection_list_view != NULL) {
+    GObject *view;
+    GtkTreeViewColumn *col;
+    bool visible;
+
+    view = G_OBJECT(connection_list_view);
+    visible = (with_ggz || in_ggz);
+
+    col = g_object_get_data(view, "record_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+    col = g_object_get_data(view, "rating_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+  }
+
+  if (client_state() == C_S_PREPARING
+      && get_client_page() == PAGE_START
+      && connection_list_store != NULL) {
+    GtkTreeStore *store;
+    GtkTreeIter iter, parent;
+    GdkPixbuf *pixbuf;
+    bool is_ready;
+    const char *nation, *plr_name, *team;
+    char user_name[MAX_LEN_NAME + 8], rating_text[128], record_text[128];
+    int rating, wins, losses, ties, forfeits;
+    enum cmdlevel_id access_level;
+    int conn_id;
+
+    /* Clear the old list. */
+    store = connection_list_store;
+    gtk_tree_store_clear(store);
+
+    /* Insert players into the connection list. */
+    players_iterate(pplayer) {
+      conn_id = -1;
+      access_level = ALLOW_NONE;
+      pixbuf = pplayer->nation ? get_flag(pplayer->nation) : NULL;;
+
+      conn_list_iterate(pplayer->connections, pconn) {
+        if (pconn->playing == pplayer && !pconn->observer) {
+          conn_id = pconn->id;
+          access_level = pconn->access_level;
+          break;
+        }
+      } conn_list_iterate_end;
+
+      if (pplayer->ai_data.control && !pplayer->was_created
+          && !pplayer->is_connected) {
+        /* TRANS: "<Novice AI>" */
+        my_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
+                    ai_level_name(pplayer->ai_data.skill_level));
+      } else {
+        sz_strlcpy(user_name, pplayer->username);
+        if (access_level > ALLOW_BASIC) {
+          sz_strlcat(user_name, "*");
+        }
+      }
+
+      is_ready = pplayer->ai_data.control ? TRUE : pplayer->is_ready;
+
+      if (pplayer->nation == NO_NATION_SELECTED) {
+	nation = _("Random");
+        if (pplayer->was_created) {
+          plr_name = player_name(pplayer);
+        } else {
+          plr_name = "";
+        }
+      } else {
+	nation = nation_adjective_for_player(pplayer);
+	plr_name = player_name(pplayer);
+      }
+
+      team = pplayer->team ? team_name_translation(pplayer->team) : "";
+
+      rating_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_data.control
+	  && user_get_rating(pplayer->username, &rating)) {
+	my_snprintf(rating_text, sizeof(rating_text), "%d", rating);
+      }
+
+      record_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_data.control
+	  && user_get_record(pplayer->username,
+			       &wins, &losses, &ties, &forfeits)) {
+	if (forfeits == 0 && ties == 0) {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d",
+		      wins, losses);
+	} else if (forfeits == 0) {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
+		      wins, losses, ties);
+	} else {
+	  my_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
+		      wins, losses, ties, forfeits);
+	}
+      }
+
+      gtk_tree_store_append(store, &iter, NULL);
+      gtk_tree_store_set(store, &iter, 
+                         CL_COL_PLAYER_NUMBER, player_number(pplayer),
+                         CL_COL_USER_NAME, user_name,
+                         CL_COL_READY_STATE, is_ready,
+                         CL_COL_PLAYER_NAME, plr_name,
+			 CL_COL_FLAG, pixbuf,
+                         CL_COL_NATION, nation,
+                         CL_COL_TEAM, team,
+                         CL_COL_GGZ_RECORD, record_text,
+                         CL_COL_GGZ_RATING, rating_text,
+                         CL_COL_CONN_ID, conn_id, -1);
+      parent = iter;
+
+      /* Insert observers of this player as child nodes. */
+      conn_list_iterate(pplayer->connections, pconn) {
+        if (pconn->id == conn_id) {
+          continue;
+        }
+        gtk_tree_store_append(store, &iter, &parent);
+        gtk_tree_store_set(store, &iter,
+                           CL_COL_PLAYER_NUMBER, -1,
+                           CL_COL_USER_NAME, pconn->username,
+                           CL_COL_TEAM, _("Observer"),
+                           CL_COL_CONN_ID, pconn->id, -1);
+      } conn_list_iterate_end;
+
+      if (pixbuf) {
+	g_object_unref(pixbuf);
+      }
+    } players_iterate_end;
+
+    /* Finally, insert global observers and detached connections. */
+    conn_list_iterate(game.est_connections, pconn) {
+      if (pconn->playing != NULL) {
+	continue; /* Already listed above. */
+      }
+      team = pconn->observer ? _("Observer") : _("Detached");
+      gtk_tree_store_append(store, &iter, NULL);
+      gtk_tree_store_set(store, &iter,
+			 CL_COL_PLAYER_NUMBER, -1,
+			 CL_COL_USER_NAME, pconn->username,
+			 CL_COL_TEAM, team,
+			 CL_COL_CONN_ID, pconn->id, -1);
+    } conn_list_iterate_end;
+
+    if (connection_list_view != NULL) {
+      GtkTreeView *view = connection_list_view;
+      gtk_tree_view_expand_all(view);
+    }
+  }
 }
 
 /**************************************************************************
@@ -1695,8 +1878,8 @@ void sound_bell(void)
 void set_unit_icon(int idx, struct unit *punit)
 {
   GtkWidget *w;
-
-  fc_assert_ret(idx >= -1 && idx < num_units_below);
+  
+  assert(idx >= -1 && idx < num_units_below);
 
   if (idx == -1) {
     w = unit_pixmap;
@@ -1755,10 +1938,10 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
   struct unit *punit;
 
   if (i == -1) {
-    punit = game_unit_by_number(unit_id_top);
+    punit = game_find_unit_by_number(unit_id_top);
     if (punit && unit_is_in_focus(punit)) {
       /* Clicking on the currently selected unit will center it. */
-      center_tile_mapcanvas(unit_tile(punit));
+      center_tile_mapcanvas(punit->tile);
     }
     return TRUE;
   }
@@ -1766,10 +1949,10 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
   if (unit_ids[i] == 0) /* no unit displayed at this place */
     return TRUE;
 
-  punit = game_unit_by_number(unit_ids[i]);
+  punit = game_find_unit_by_number(unit_ids[i]);
   if (NULL != punit && unit_owner(punit) == client.conn.playing) {
     /* Unit shouldn't be NULL but may be owned by an ally. */
-    unit_focus_set(punit);
+    set_unit_focus(punit);
   }
 
   return TRUE;
@@ -1782,10 +1965,10 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
 static gboolean select_more_arrow_pixmap_callback(GtkWidget *w, GdkEvent *ev,
                                                   gpointer data)
 {
-  struct unit *punit = game_unit_by_number(unit_id_top);
+  struct unit *punit = game_find_unit_by_number(unit_id_top);
 
   if (punit) {
-    unit_select_dialog_popup(unit_tile(punit));
+    popup_unit_select_dialog(punit->tile);
   }
 
   return TRUE;
@@ -1843,23 +2026,17 @@ static void end_turn_callback(GtkWidget *w, gpointer data)
 /**************************************************************************
 ...
 **************************************************************************/
-static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data)
+static void get_net_input(gpointer data, gint fid, GdkInputCondition condition)
 {
-  input_from_server(g_io_channel_unix_get_fd(source));
-
-  return TRUE;
+  input_from_server(fid);
 }
 
 /**************************************************************************
   Callback for when the GGZ socket has data pending.
 **************************************************************************/
-static gboolean get_ggz_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data)
+static void get_ggz_input(gpointer data, gint fid, GdkInputCondition condition)
 {
-  input_from_ggz(g_io_channel_unix_get_fd(source));
-
-  return TRUE;
+  input_from_ggz(fid);
 }
 
 /**************************************************************************
@@ -1870,19 +2047,17 @@ static void set_wait_for_writable_socket(struct connection *pc,
 {
   static bool previous_state = FALSE;
 
-  fc_assert_ret(pc == &client.conn);
+  assert(pc == &client.conn);
 
   if (previous_state == socket_writable)
     return;
 
-  log_debug("set_wait_for_writable_socket(%d)", socket_writable);
-
-  g_source_remove(srv_id);
-  srv_id = g_io_add_watch(srv_channel,
-                          G_IO_IN | (socket_writable ? G_IO_OUT : 0) | G_IO_ERR,
-                          get_net_input,
-                          NULL);
-
+  freelog(LOG_DEBUG, "set_wait_for_writable_socket(%d)", socket_writable);
+  gtk_input_remove(input_id);
+  input_id = gtk_input_add_full(client.conn.sock, GDK_INPUT_READ
+				| (socket_writable ? GDK_INPUT_WRITE : 0)
+				| GDK_INPUT_EXCEPTION,
+				get_net_input, NULL, NULL, NULL);
   previous_state = socket_writable;
 }
 
@@ -1892,15 +2067,8 @@ static void set_wait_for_writable_socket(struct connection *pc,
 **************************************************************************/
 void add_net_input(int sock)
 {
-#ifdef WIN32_NATIVE
-  srv_channel = g_io_channel_win32_new_socket(sock);
-#else
-  srv_channel = g_io_channel_unix_new(sock);
-#endif
-  srv_id = g_io_add_watch(srv_channel,
-                          G_IO_IN | G_IO_ERR,
-                          get_net_input,
-                          NULL);
+  input_id = gtk_input_add_full(sock, GDK_INPUT_READ | GDK_INPUT_EXCEPTION,
+				get_net_input, NULL, NULL, NULL);
   client.conn.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
@@ -1910,8 +2078,7 @@ void add_net_input(int sock)
 **************************************************************************/
 void remove_net_input(void)
 {
-  g_source_remove(srv_id);
-  g_io_channel_unref(srv_channel);
+  gtk_input_remove(input_id);
   gdk_window_set_cursor(root_window, NULL);
 }
 
@@ -1920,15 +2087,8 @@ void remove_net_input(void)
 **************************************************************************/
 void add_ggz_input(int sock)
 {
-#ifdef WIN32_NATIVE
-  ggz_channel = g_io_channel_win32_new_socket(sock);
-#else
-  ggz_channel = g_io_channel_unix_new(sock);
-#endif
-  srv_id = g_io_add_watch(ggz_channel,
-                          G_IO_IN,
-                          get_ggz_input,
-                          NULL);
+  ggz_input_id = gtk_input_add_full(sock, GDK_INPUT_READ, get_ggz_input,
+				    NULL, NULL, NULL);
 }
 
 /**************************************************************************
@@ -1937,8 +2097,7 @@ void add_ggz_input(int sock)
 **************************************************************************/
 void remove_ggz_input(void)
 {
-  g_source_remove(ggz_id);
-  g_io_channel_unref(ggz_channel);
+  gtk_input_remove(ggz_input_id);
 }
 
 /****************************************************************
@@ -2022,16 +2181,33 @@ void add_idle_callback(void (callback)(void *), void *data)
 }
 
 /****************************************************************************
+  Option callback for the 'gui_gtk2_split_bottom_notebook' option.
+****************************************************************************/
+static void split_bottom_notebook_callback(struct client_option *poption)
+{
+  if (!gui_gtk2_merge_notebooks) {
+    popdown_meswin_dialog();
+    if (option_bool_get(poption)) {
+      gtk_paned_pack2(GTK_PANED(bottom_hpaned), right_notebook, TRUE, TRUE);
+      gtk_widget_show_all(right_notebook);
+    } else {
+      gtk_container_remove(GTK_CONTAINER(bottom_hpaned), right_notebook);
+    }
+    popup_meswin_dialog(FALSE);
+  }
+}
+
+/****************************************************************************
   Option callback for the 'gui_gtk2_allied_chat_only' option.
   This updates the state of the associated toggle button.
 ****************************************************************************/
-static void allied_chat_only_callback(struct option *poption)
+static void allied_chat_only_callback(struct client_option *poption)
 {
   GtkWidget *button;
 
   button = allied_chat_toggle_button;
-  fc_assert_ret(button != NULL);
-  fc_assert_ret(GTK_IS_TOGGLE_BUTTON(button));
+  g_return_if_fail(button != NULL);
+  g_return_if_fail(GTK_IS_TOGGLE_BUTTON(button));
 
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
                                option_bool_get(poption));
@@ -2040,7 +2216,7 @@ static void allied_chat_only_callback(struct option *poption)
 /****************************************************************************
   Change the city names font.
 ****************************************************************************/
-static void apply_city_names_font(struct option *poption)
+static void apply_city_names_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
@@ -2051,7 +2227,7 @@ static void apply_city_names_font(struct option *poption)
 /****************************************************************************
   Change the city productions font.
 ****************************************************************************/
-static void apply_city_productions_font(struct option *poption)
+static void apply_city_productions_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
@@ -2062,12 +2238,12 @@ static void apply_city_productions_font(struct option *poption)
 /****************************************************************************
   Change the city productions font.
 ****************************************************************************/
-static void apply_reqtree_text_font(struct option *poption)
+static void apply_reqtree_text_font(struct client_option *poption)
 {
   gui_update_font_full(option_font_target(poption),
                        option_font_get(poption),
                        &reqtree_text_style);
-  science_report_dialog_redraw();
+  science_dialog_update();
 }
 
 /****************************************************************************
@@ -2077,17 +2253,19 @@ static void apply_reqtree_text_font(struct option *poption)
 void gui_options_extra_init(void)
 {
 
-  struct option *poption;
+  struct client_option *poption;
 
 #define option_var_set_callback(var, callback)                              \
-  if ((poption = optset_option_by_name(client_optset, #var))) {             \
+  if ((poption = option_by_name(#var))) {                                   \
     option_set_changed_callback(poption, callback);                         \
   } else {                                                                  \
-    log_error("Didn't find option %s!", #var);                              \
+    freelog(LOG_ERROR, "Didn't find option %s!", #var);                     \
   }
 
   option_var_set_callback(gui_gtk2_allied_chat_only,
                           allied_chat_only_callback);
+  option_var_set_callback(gui_gtk2_split_bottom_notebook,
+                          split_bottom_notebook_callback);
 
   option_var_set_callback(gui_gtk2_font_city_names,
                           apply_city_names_font);
@@ -2107,8 +2285,8 @@ void refresh_chat_buttons(void)
   GtkWidget *button;
 
   button = allied_chat_toggle_button;
-  fc_assert_ret(button != NULL);
-  fc_assert_ret(GTK_IS_TOGGLE_BUTTON(button));
+  g_return_if_fail(button != NULL);
+  g_return_if_fail(GTK_IS_TOGGLE_BUTTON(button));
 
   /* Hide the "Allies Only" button for local games. */
   if (is_server_running()) {

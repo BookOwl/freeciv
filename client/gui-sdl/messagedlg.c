@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -25,5 +25,5 @@
 **************************************************************************/
 void popup_messageopt_dialog(void)
 {
-  log_debug("popup_messageopt_dialog : PORT ME");
+  freelog(LOG_DEBUG, "popup_messageopt_dialog : PORT ME");
 }

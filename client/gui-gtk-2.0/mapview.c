@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 
 #ifdef HAVE_UNISTD_H
@@ -172,14 +173,17 @@ void update_info_label(void)
   update_timeout_label();
 
   /* update tooltips. */
-  gtk_widget_set_tooltip_text(econ_ebox,
+  gtk_tooltips_set_tip(main_tips, econ_ebox,
 		       _("Shows your current luxury/science/tax rates;"
-			 "click to toggle them."));
+			 "click to toggle them."), "");
 
-  gtk_widget_set_tooltip_text(bulb_ebox, get_bulb_tooltip());
-  gtk_widget_set_tooltip_text(sun_ebox, get_global_warming_tooltip());
-  gtk_widget_set_tooltip_text(flake_ebox, get_nuclear_winter_tooltip());
-  gtk_widget_set_tooltip_text(government_ebox, get_government_tooltip());
+  gtk_tooltips_set_tip(main_tips, bulb_ebox, get_bulb_tooltip(), "");
+  gtk_tooltips_set_tip(main_tips, sun_ebox, get_global_warming_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, flake_ebox, get_nuclear_winter_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, government_ebox, get_government_tooltip(),
+		       "");
 }
 
 /**************************************************************************
@@ -271,15 +275,12 @@ void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
 }
 
 /****************************************************************************
-  Return the maximum dimensions of the area (container widget) for the
-  overview. Due to the fact that the scaling factor is at least 1, the real
-  size could be larger. The calculation in calculate_overview_dimensions()
-  limit it to the smallest possible size.
+  Return the dimensions of the area (container widget; maximum size) for
+  the overview.
 ****************************************************************************/
 void get_overview_area_dimensions(int *width, int *height)
 {
-  *width = GUI_GTK_OVERVIEW_MIN_XSIZE;
-  *height = GUI_GTK_OVERVIEW_MIN_YSIZE;
+  gdk_drawable_get_size(overview_canvas->window, width, height);
 }
 
 /**************************************************************************
@@ -339,7 +340,7 @@ void mapview_thaw(void)
   if (1 < mapview_frozen_level) {
     mapview_frozen_level--;
   } else {
-    fc_assert(0 < mapview_frozen_level);
+    assert(0 < mapview_frozen_level);
     mapview_frozen_level = 0;
     dirty_all();
   }
@@ -609,8 +610,8 @@ static void pixmap_put_sprite(GdkDrawable *pixmap,
 #ifdef DEBUG
   sprites++;
   if (sprites % 1000 == 0) {
-    log_debug("%5d / %5d pixbufs = %d%%",
-              pixbufs, sprites, 100 * pixbufs / sprites);
+    freelog(LOG_DEBUG, "%5d / %5d pixbufs = %d%%",
+	    pixbufs, sprites, 100 * pixbufs / sprites);
   }
 #endif
 }
@@ -674,8 +675,9 @@ void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
 	  || (!ssprite->pixmap && !ssprite->pixbuf_fogged))) {
     fog_sprite(ssprite);
     if ((ssprite->pixmap && !ssprite->pixmap_fogged)
-        || (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
-      log_normal(_("Better fog will only work in truecolor. Disabling it"));
+	|| (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
+      freelog(LOG_NORMAL,
+	      _("Better fog will only work in truecolor.  Disabling it"));
       gui_gtk2_better_fog = FALSE;
     }
   }
@@ -733,22 +735,6 @@ void put_cross_overlay_tile(struct tile *ptile)
 			    canvas_x, canvas_y,
 			    get_attention_crosshair_sprite(tileset));
   }
-}
-
-/**************************************************************************
- Sets the position of the overview scroll window based on mapview position.
-**************************************************************************/
-void update_overview_scroll_window_pos(int x, int y)
-{
-  GtkAdjustment *overview_hadj = gtk_scrolled_window_get_hadjustment (
-		  GTK_SCROLLED_WINDOW (overview_scrolled_window));
-  GtkAdjustment *overview_vadj = gtk_scrolled_window_get_vadjustment (
-		  GTK_SCROLLED_WINDOW (overview_scrolled_window));
-
-  gtk_adjustment_set_value(GTK_ADJUSTMENT(overview_hadj), 
-		                   x - (overview_canvas_store_width / 2));
-  gtk_adjustment_set_value(GTK_ADJUSTMENT(overview_vadj), 
-		                   y - (overview_canvas_store_height / 2));
 }
 
 /**************************************************************************
@@ -860,7 +846,7 @@ void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
 **************************************************************************/
 void tileset_changed(void)
 {
-  science_report_dialog_redraw();
+  science_dialog_redraw();
   reset_city_dialogs();
   reset_unit_table();
   blank_max_unit_size();

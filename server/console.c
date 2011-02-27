@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -51,8 +51,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...);
 Function to handle log messages.
 This must match the log_callback_fn typedef signature.
 ************************************************************************/
-static void con_handle_log(enum log_level level, const char *message,
-                           bool file_too)
+static void con_handle_log(int level, const char *message, bool file_too)
 {
   if (LOG_ERROR == level) {
     notify_conn(NULL, NULL, E_LOG_ERROR, ftc_warning, "%s", message);
@@ -93,62 +92,20 @@ static void con_update_prompt(void)
   } else {
     rl_forced_update_display();
   }
-#else  /* HAVE_LIBREADLINE */
+#else
   con_dump(C_READY,"> ");
   con_flush();
-#endif /* HAVE_LIBREADLINE */
+#endif
 
   console_prompt_is_showing = TRUE;
 }
 
-#ifdef DEBUG
-/************************************************************************
-  Prefix for log messages saved to file. At the moment the turn and the
-  current date and time are used.
-************************************************************************/
-static const char *log_prefix(void)
-{
-  static char buf[128];
-
-#ifdef LOG_TIMERS
-  char timestr[32];
-  time_t timestamp;
-
-  time(&timestamp);
-  strftime(timestr, sizeof(timestr), "%Y/%m/%d %H:%M:%S",
-           localtime(&timestamp));
-
-  fc_snprintf(buf, sizeof(buf), "T%03d - %s", game.info.turn, timestr);
-
-#else  /* LOG_TIMERS */
-  fc_snprintf(buf, sizeof(buf), "T%03d", game.info.turn);
-#endif /* LOG_TIMERS */
-
-  return buf;
-}
-#endif /* DEBUG */
-
 /************************************************************************
   Initialize logging via console.
 ************************************************************************/
-void con_log_init(const char *log_filename, enum log_level level,
-                  int fatal_assertions)
+void con_log_init(const char *log_filename, int log_level)
 {
-#ifdef DEBUG
-  log_init(log_filename, level, con_handle_log, log_prefix,
-           fatal_assertions);
-#else
-  log_init(log_filename, level, con_handle_log, NULL,
-           fatal_assertions);
-#endif /* DEBUG */
-}
-
-/************************************************************************
-  Deinitialize logging
-************************************************************************/
-void con_log_close(void)
-{
-  log_close();
+  log_init(log_filename, log_level, con_handle_log);
 }
 
 #ifndef HAVE_LIBREADLINE
@@ -161,7 +118,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   va_list args;
   
   va_start(args, message);
-  fc_vsnprintf(buf, sizeof(buf), message, args);
+  my_vsnprintf(buf, sizeof(buf), message, args);
   va_end(args);
 
   if (console_prompt_is_showing) {
@@ -175,7 +132,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   console_prompt_is_showing = FALSE;
   return (int) strlen(buf);
 }
-#endif /* HAVE_LIBREADLINE */
+#endif
 
 /************************************************************************
 Write to console and add line-break, and show prompt if required.
@@ -188,7 +145,7 @@ void con_write(enum rfc_status rfc_status, const char *message, ...)
   va_list args;
 
   va_start(args, message);
-  fc_vsnprintf(buf1, sizeof(buf1), message, args);
+  my_vsnprintf(buf1, sizeof(buf1), message, args);
   va_end(args);
 
   /* remove all format tags */

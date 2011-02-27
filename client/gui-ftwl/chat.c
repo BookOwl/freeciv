@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -232,11 +232,11 @@ void chat_add(const char *astring, int conn_id)
   struct ct_string *string;
   struct sw_widget *label;
   struct ct_rect rect;
-  struct connection *conn = conn_by_number(conn_id);
+  struct connection *conn = find_conn_by_id(conn_id);
   struct color *pcolor = color_alloc(0, 0, 0);
   struct player *pplayer=NULL;
 
-  log_verbose("ogg_add(%d,%s)",conn_id, astring);
+  freelog(LOG_VERBOSE,"ogg_add(%d,%s)",conn_id, astring);
 
   if (output.window) {
     sw_window_resize(output.window, output.outer_bounds.width,
@@ -251,7 +251,7 @@ void chat_add(const char *astring, int conn_id)
     pcolor = get_player_color(tileset, pplayer);
   }
 
-  log_verbose("id=%d conn=%p player=%s", conn_id, conn,
+  freelog(LOG_VERBOSE, "id=%d conn=%p player=%s", conn_id, conn,
 	  pplayer ? player_name(pplayer) : "none");
   
   string = ct_string_clone4(output.template, astring, pcolor->color);

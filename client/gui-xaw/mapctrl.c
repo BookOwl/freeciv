@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -84,14 +85,14 @@ static void name_new_city_callback(Widget w, XtPointer client_data,
  punit = (settler) unit which builds the city
  suggestname = suggetion of the new city's name
 **************************************************************************/
-void popup_newcity_dialog(struct unit *punit, const char *suggestname)
+void popup_newcity_dialog(struct unit *punit, char *suggestname)
 {
   input_dialog_create(toplevel, "shellnewcityname",
 		      _("What should we call our new city?"), suggestname,
 		      name_new_city_callback,
-                      INT_TO_XTPOINTER(tile_index(unit_tile(punit))),
-                      name_new_city_callback,
-                      INT_TO_XTPOINTER(-tile_index(unit_tile(punit)) - 1));
+                      INT_TO_XTPOINTER(tile_index(punit->tile)),
+		      name_new_city_callback,
+                      INT_TO_XTPOINTER(-tile_index(punit->tile)-1));
 }
 
 /**************************************************************************

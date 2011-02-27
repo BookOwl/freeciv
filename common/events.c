@@ -12,16 +12,15 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"
 #include "shared.h"
 #include "support.h"
 
@@ -64,6 +63,7 @@ static const char *event_sections[] = {
 };
 
 #define GEN_EV(event, section, descr) { #event, NULL, section, descr, NULL, event }
+#define GEN_EV_TERMINATOR { NULL, NULL, E_S_XYZZY, NULL, NULL, 0 }
 
 /*
  * Holds information about all event types. The entries don't have
@@ -102,7 +102,6 @@ static struct {
   GEN_EV(E_CITY_TRANSFER,	E_S_CITY,	N_("Transfer")),
   GEN_EV(E_CITY_BUILD,		E_S_CITY,	N_("Was Built")),
   GEN_EV(E_CITY_PLAGUE,		E_S_CITY,	N_("Has Plague")),
-  GEN_EV(E_CITY_RADIUS_SQ,	E_S_CITY,	N_("City Map changed")),
   GEN_EV(E_WORKLIST,		E_S_CITY,	N_("Worklist Events")),
   GEN_EV(E_CITY_PRODUCTION_CHANGED, E_S_CITY,	N_("Production changed")),
   GEN_EV(E_MY_DIPLOMAT_BRIBE,		E_S_D_ME,	N_("Bribe")),
@@ -157,14 +156,13 @@ static struct {
   GEN_EV(E_UNIT_LOST_MISC,      E_S_UNIT,       N_("Lost outside battle")),
   GEN_EV(E_UNIT_UPGRADED,	E_S_UNIT,	N_("Production Upgraded")),
   GEN_EV(E_UNIT_RELOCATED,	E_S_UNIT,	N_("Relocated")),
-  GEN_EV(E_UNIT_ORDERS,         E_S_UNIT,       N_("Orders / goto events")),
-  GEN_EV(E_UNIT_BUILT_POP_COST, E_S_UNIT,       N_("Built unit with population cost")),
+  GEN_EV(E_UNIT_ORDERS,		E_S_UNIT,	N_("Orders / goto events")),
   /* TRANS: "vote" as a process */
   GEN_EV(E_VOTE_NEW,		E_S_VOTE,	N_("New vote")),
   /* TRANS: "Vote" as a process */
   GEN_EV(E_VOTE_RESOLVED,	E_S_VOTE,	N_("Vote resolved")),
   /* TRANS: "Vote" as a process */
-  GEN_EV(E_VOTE_ABORTED,	E_S_VOTE,	N_("Vote canceled")),
+  GEN_EV(E_VOTE_ABORTED,	E_S_VOTE,	N_("Vote cancelled")),
   GEN_EV(E_WONDER_BUILD,	E_S_WONDER,	N_("Finished")),
   GEN_EV(E_WONDER_OBSOLETE,	E_S_WONDER,	N_("Made Obsolete")),
   GEN_EV(E_WONDER_STARTED,	E_S_WONDER,	N_("Started")),
@@ -190,6 +188,7 @@ static struct {
   GEN_EV(E_TURN_BELL,		E_S_XYZZY,	N_("Turn Bell")),
   GEN_EV(E_SCRIPT,		E_S_XYZZY,	N_("Scenario/ruleset script message")),
   GEN_EV(E_NEXT_YEAR,		E_S_XYZZY,	N_("Year Advance")),
+  GEN_EV_TERMINATOR
 };
 
 
@@ -197,9 +196,9 @@ static struct {
  * Maps from enum event_type to indexes of events[]. Set by
  * events_init. 
  */
-static int event_to_index[E_COUNT];
+static int event_to_index[E_LAST];
 
-enum event_type sorted_events[E_COUNT];
+enum event_type sorted_events[E_LAST];
 
 
 /**************************************************************************
@@ -207,13 +206,13 @@ enum event_type sorted_events[E_COUNT];
 **************************************************************************/
 const char *get_event_message_text(enum event_type event)
 {
-  fc_assert_ret_val(event_type_is_valid(event), NULL);
+  assert(event >= 0 && event < E_LAST);
 
   if (events[event_to_index[event]].event == event) {
     return events[event_to_index[event]].full_descr;
   }
 
-  log_error("unknown event %d", event);
+  freelog(LOG_ERROR, "unknown event %d", event);
   return "UNKNOWN EVENT"; /* FIXME: Should be marked for translation?
                            * we get non-translated in log message. */
 }
@@ -227,8 +226,8 @@ static int compar_event_message_texts(const void *i1, const void *i2)
   const enum event_type *j1 = i1;
   const enum event_type *j2 = i2;
   
-  return fc_strcasecmp(get_event_message_text(*j1),
-                       get_event_message_text(*j2));
+  return mystrcasecmp(get_event_message_text(*j1),
+		      get_event_message_text(*j2));
 }
 
 /****************************************************************************
@@ -236,12 +235,16 @@ static int compar_event_message_texts(const void *i1, const void *i2)
 ****************************************************************************/
 const char *get_event_sound_tag(enum event_type event)
 {
-  fc_assert_ret_val(event_type_is_valid(event), NULL);
+  if (event < 0 || event >= E_LAST) {
+    return NULL;
+  }
+
+  assert(event >= 0 && event < E_LAST);
 
   if (events[event_to_index[event]].event == event) {
     return events[event_to_index[event]].tag_name;
   }
-  log_error("unknown event %d", event);
+  freelog(LOG_ERROR, "unknown event %d", event);
   return NULL;
 }
 
@@ -291,12 +294,12 @@ bool is_city_event(enum event_type event)
 void events_init(void)
 {
   int i;
-
+  
   for (i = 0; i < ARRAY_SIZE(event_to_index); i++) {
     event_to_index[i] = 0;
   }
 
-  for (i = 0; i < E_COUNT; i++) {
+  for (i = 0; events[i].enum_name; i++) {
     int j;
 
     if (E_S_XYZZY > events[i].esn) {
@@ -304,7 +307,7 @@ void events_init(void)
       int l = 1 + strlen(event_format) + strlen(_(events[i].descr_orig));
 
       events[i].full_descr = fc_malloc(l);
-      fc_snprintf(events[i].full_descr, l, event_format,
+      my_snprintf(events[i].full_descr, l, event_format,
                   _(events[i].descr_orig));
     } else {
       /* No section part */
@@ -312,23 +315,21 @@ void events_init(void)
     }
 
     event_to_index[events[i].event] = i;
-    events[i].tag_name = fc_strdup(events[i].enum_name);
+    events[i].tag_name = mystrdup(events[i].enum_name);
     for (j = 0; j < strlen(events[i].tag_name); j++) {
-      events[i].tag_name[j] = fc_tolower(events[i].tag_name[j]);
+      events[i].tag_name[j] = my_tolower(events[i].tag_name[j]);
     }
-    log_debug("event[%d]=%d: name='%s' / '%s'\n"
-              "\tdescr_orig='%s'\n"
-              "\tdescr='%s'",
-              i, events[i].event, events[i].enum_name, events[i].tag_name,
-              events[i].descr_orig, events[i].full_descr);
+    freelog(LOG_DEBUG,
+	    "event[%d]=%d: name='%s' / '%s'\n\tdescr_orig='%s'\n\tdescr='%s'",
+	    i, events[i].event, events[i].enum_name, events[i].tag_name,
+	    events[i].descr_orig, events[i].full_descr);
   }
 
-  for (i = 0; i <= event_type_max(); i++) {
-    /* Initialise sorted list of all (even possble missing) events. */
+  for (i = 0; i < E_LAST; i++)  {
     sorted_events[i] = i;
   }
-  qsort(sorted_events, event_type_max() + 1, sizeof(*sorted_events),
-        compar_event_message_texts);
+  qsort(sorted_events, E_LAST, sizeof(*sorted_events),
+	compar_event_message_texts);
 }
 
 /****************************************************************************
@@ -338,7 +339,7 @@ void events_free(void)
 {
   int i;
 
-  for (i = 0; i <= event_type_max(); i++) {
+  for (i = 0; events[i].enum_name; i++) {
     if (E_S_XYZZY > events[i].esn) {
       /* We have allocated memory for this event */
       free(events[i].full_descr);

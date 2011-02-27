@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,26 +24,26 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
+#include "game.h" /* setting_class_is_changeable() */
+#include "government.h"
 #include "log.h"
+#include "packets.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "fc_types.h" /* LINE_BREAK */
-#include "game.h"
-#include "government.h"
-#include "packets.h"
-#include "research.h"
-#include "tech.h"
 #include "unitlist.h"
 
 /* client */
 #include "chatline_common.h"
+#include "cityrep.h"
 #include "client_main.h"
 #include "climisc.h"
 #include "control.h"
+#include "dialogs.h"
+#include "gui_main.h"
+#include "gui_stuff.h"
+#include "helpdlg.h"
 #include "mapview_common.h"
 #include "options.h"
 #include "packhand_gen.h"
@@ -50,152 +51,133 @@
 #include "reqtree.h"
 #include "text.h"
 
-/* client/gui-gtk-2.0 */
 #include "canvas.h"
-#include "cityrep.h"
-#include "dialogs.h"
-#include "gui_main.h"
-#include "gui_stuff.h"
-#include "helpdlg.h"
-#include "plrdlg.h"
-
+#include "repodlgs_common.h"
 #include "repodlgs.h"
 
+/******************************************************************/
 
-/****************************************************************************
-                         RESEARCH REPORT DIALOG
-****************************************************************************/
-struct science_report {
-  struct gui_dialog *shell;
-  GtkComboBox *reachable_techs;
-  GtkComboBox *reachable_goals;
-  GtkWidget *button_reachable;
-  GtkLabel *main_label;         /* Gets science_dialog_text(). */
-  GtkProgressBar *progress_bar;
-  GtkLabel *goal_label;
-  GtkLayout *drawing_area;
+static void create_science_dialog(bool make_modal);
+static void science_change_callback(GtkWidget * widget, gpointer data);
+static void science_goal_callback(GtkWidget * widget, gpointer data);
+/******************************************************************/
+static struct gui_dialog *science_dialog_shell = NULL;
+static GtkWidget *science_label;
+static GtkWidget *science_current_label, *science_goal_label;
+static GtkWidget *science_change_menu_button, *science_goal_menu_button;
+static GtkWidget *science_help_toggle;
+static GtkWidget *science_drawing_area;
+static int science_dialog_shell_is_modal;
+static GtkWidget *popupmenu, *goalmenu;
+
+/******************************************************************/
+enum {
+  ECONOMY_SELL_OBSOLETE = 1, ECONOMY_SELL_ALL
 };
 
-static GtkListStore *science_report_store_new(void);
-static inline void science_report_store_set(GtkListStore *store,
-                                            GtkTreeIter *iter,
-                                            Tech_type_id tech);
-static bool science_report_combo_get_active(GtkComboBox *combo,
-                                            Tech_type_id *tech,
-                                            const char **name);
-static void science_report_combo_set_active(GtkComboBox *combo,
-                                            Tech_type_id tech);
-static void science_diagram_button_release_callback(GtkWidget *widget,
-                                                    GdkEventButton *event,
-                                                    gpointer data);
-static void science_diagram_update(GtkWidget *widget, gpointer data);
-static GtkWidget *science_diagram_new(void);
-static void science_diagram_data(GtkWidget *widget, bool reachable);
-static void science_diagram_center(GtkWidget *diagram, Tech_type_id tech);
-static void science_report_redraw(struct science_report *preport);
-static gint cmp_func(gconstpointer a_p, gconstpointer b_p);
-static void science_report_update(struct science_report *preport);
-static void science_report_current_callback(GtkComboBox *combo,
-                                            gpointer data);
-static void science_report_unreachable_callback(GtkComboBox *combo,
-                                                gpointer data);
-static void science_report_goal_callback(GtkComboBox *combo, gpointer data);
-static void science_report_init(struct science_report *preport);
-static void science_report_free(struct science_report *preport);
+static void create_economy_report_dialog(bool make_modal);
+static void economy_command_callback(struct gui_dialog *dlg, int response,
+                                     gpointer data);
+static void economy_selection_callback(GtkTreeSelection *selection,
+				       gpointer data);
+static struct universal economy_row_type[U_LAST + B_LAST];
 
-static struct science_report science_report = { NULL, };
-static bool science_report_no_combo_callback = FALSE;
+static struct gui_dialog *economy_dialog_shell = NULL;
+static GtkWidget *economy_label2;
+static GtkListStore *economy_store;
+static GtkTreeSelection *economy_selection;
+static GtkWidget *sellall_command, *sellobsolete_command;
+static int economy_dialog_shell_is_modal;
 
-/* Those values must match the function science_report_store_new(). */
-enum science_report_columns {
-  SRD_COL_NAME,
-  SRD_COL_STEPS,
+/******************************************************************/
+static void create_activeunits_report_dialog(bool make_modal);
+static void activeunits_command_callback(struct gui_dialog *dlg, int response,
+                                         gpointer data);
+static void activeunits_selection_callback(GtkTreeSelection *selection,
+					   gpointer data);
+static struct gui_dialog *activeunits_dialog_shell = NULL;
+static GtkListStore *activeunits_store;
+static GtkTreeSelection *activeunits_selection;
 
-  /* Not visible. */
-  SRD_COL_ID,           /* Tech_type_id */
-
-  SRD_COL_NUM
+enum {
+  ACTIVEUNITS_NEAREST = 1, ACTIVEUNITS_UPGRADE
 };
 
-/****************************************************************************
-  Create a science report list store.
-****************************************************************************/
-static GtkListStore *science_report_store_new(void)
+static int activeunits_dialog_shell_is_modal;
+
+/******************************************************************/
+static void create_endgame_report(struct packet_endgame_report *packet);
+
+static GtkListStore *scores_store;
+static struct gui_dialog *endgame_report_shell;
+static GtkWidget *scores_list;
+static GtkWidget *sw;
+
+#define NUM_SCORE_COLS 14                
+
+/******************************************************************/
+static GtkWidget *settable_options_dialog_shell;
+
+/******************************************************************/
+
+/******************************************************************
+...
+*******************************************************************/
+void update_report_dialogs(void)
 {
-  return gtk_list_store_new(SRD_COL_NUM,
-                            G_TYPE_STRING,      /* SRD_COL_NAME */
-                            G_TYPE_INT,         /* SRD_COL_STEPS */
-                            G_TYPE_INT);        /* SRD_COL_ID */
+  if(is_report_dialogs_frozen()) return;
+  activeunits_report_dialog_update();
+  economy_report_dialog_update();
+  city_report_dialog_update(); 
+  science_dialog_update();
 }
 
-/****************************************************************************
-  Append a technology to the list store.
-****************************************************************************/
-static inline void science_report_store_set(GtkListStore *store,
-                                            GtkTreeIter *iter,
-                                            Tech_type_id tech)
-{
-  gtk_list_store_set(store, iter,
-                     SRD_COL_NAME,
-                     advance_name_for_player(client_player(), tech),
-                     SRD_COL_STEPS,
-                     num_unknown_techs_for_goal(client_player(), tech),
-                     SRD_COL_ID, tech,
-                     -1);
-}
 
-/****************************************************************************
-  Get the active tech of the combo.
-****************************************************************************/
-static bool science_report_combo_get_active(GtkComboBox *combo,
-                                            Tech_type_id *tech,
-                                            const char **name)
+/****************************************************************
+...
+*****************************************************************/
+void popup_science_dialog(bool raise)
 {
-  GtkTreeIter iter;
-
-  if (science_report_no_combo_callback
-      || !gtk_combo_box_get_active_iter(combo, &iter)) {
-    return FALSE;
+  if(!science_dialog_shell) {
+    science_dialog_shell_is_modal = FALSE;
+    
+    create_science_dialog(FALSE);
   }
 
-  gtk_tree_model_get(gtk_combo_box_get_model(combo), &iter,
-                     SRD_COL_NAME, name,
-                     SRD_COL_ID, tech,
-                     -1);
-  return TRUE;
-}
-
-/****************************************************************************
-  Set the active tech of the combo.
-****************************************************************************/
-static void science_report_combo_set_active(GtkComboBox *combo,
-                                            Tech_type_id tech)
-{
-  ITree iter;
-  Tech_type_id iter_tech;
-
-  for (itree_begin(gtk_combo_box_get_model(combo), &iter);
-       !itree_end(&iter); itree_next(&iter)) {
-    itree_get(&iter, SRD_COL_ID, &iter_tech, -1);
-    if (iter_tech == tech) {
-      science_report_no_combo_callback = TRUE;
-      gtk_combo_box_set_active_iter(combo, &iter.it);
-      science_report_no_combo_callback = FALSE;
-      return;
-    }
+  if (can_client_issue_orders()
+      && A_UNSET == get_player_research(client.conn.playing)->tech_goal
+      && A_UNSET == get_player_research(client.conn.playing)->researching) {
+    gui_dialog_alert(science_dialog_shell);
+  } else {
+    gui_dialog_present(science_dialog_shell);
   }
-  log_error("%s(): Tech %d not found in the combo.", __FUNCTION__, tech);
+
+  if (raise) {
+    gui_dialog_raise(science_dialog_shell);
+  }
+}
+
+
+/****************************************************************
+ Closes the science dialog.
+*****************************************************************/
+void popdown_science_dialog(void)
+{
+  if (science_dialog_shell) {
+    gui_dialog_destroy(science_dialog_shell);
+  }
 }
 
 /****************************************************************************
-  Change tech goal, research or open help dialog.
+ Change tech goal, research or open help dialog
 ****************************************************************************/
-static void science_diagram_button_release_callback(GtkWidget *widget,
-                                                    GdkEventButton *event,
-                                                    gpointer data)
+static void button_release_event_callback(GtkWidget *widget,
+					  GdkEventButton *event,
+                                          gpointer *data)
 {
-  struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
-  Tech_type_id tech = get_tech_on_reqtree(reqtree, event->x, event->y);
+  struct reqtree *tree = g_object_get_data(G_OBJECT(widget), "reqtree");
+  int x = event->x, y = event->y;
+  Tech_type_id tech = get_tech_on_reqtree(tree, x, y);
 
   if (tech == A_NONE) {
     return;
@@ -203,12 +185,12 @@ static void science_diagram_button_release_callback(GtkWidget *widget,
 
   if (event->button == 3) {
     /* RMB: get help */
-    popup_help_dialog_typed(advance_name_for_player(client_player(), tech),
-                            HELP_TECH);
+    /* FIXME: this should work for ctrl+LMB or shift+LMB (?) too */
+    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, tech), HELP_TECH);
   } else {
     if (event->button == 1 && can_client_issue_orders()) {
       /* LMB: set research or research goal */
-      switch (player_invention_state(client_player(), tech)) {
+      switch (player_invention_state(client.conn.playing, tech)) {
        case TECH_PREREQS_KNOWN:
          dsend_packet_player_research(&client.conn, tech);
          break;
@@ -219,19 +201,17 @@ static void science_diagram_button_release_callback(GtkWidget *widget,
          break;
       }
     }
-  }
+  } 
 }
 
 /****************************************************************************
   Draw the invalidated portion of the reqtree.
 ****************************************************************************/
-static void science_diagram_update(GtkWidget *widget, gpointer data)
+static void update_science_drawing_area(GtkWidget *widget, gpointer data)
 {
   /* FIXME: this currently redraws everything! */
-  struct canvas canvas = {
-    .type = CANVAS_PIXMAP,
-    .v.pixmap = GTK_LAYOUT(widget)->bin_window
-  };
+  struct canvas canvas = {.type = CANVAS_PIXMAP,
+			  .v.pixmap = GTK_LAYOUT(widget)->bin_window};
   struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
   int width, height;
 
@@ -240,1315 +220,838 @@ static void science_diagram_update(GtkWidget *widget, gpointer data)
 }
 
 /****************************************************************************
-  Return the drawing area widget of new technology diagram. Set in 'x' the
-  position of the current tech to center to it.
+  Return main widget of new technology diagram.
+  This is currently GtkScrolledWindow 
 ****************************************************************************/
-static GtkWidget *science_diagram_new(void)
+static GtkWidget *create_reqtree_diagram(void)
 {
-  GtkWidget *diagram;
-
-  diagram = gtk_layout_new(NULL, NULL);
-  gtk_widget_add_events(diagram,
-                        GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
-                        | GDK_BUTTON2_MOTION_MASK | GDK_BUTTON3_MOTION_MASK);
-  g_signal_connect(diagram, "expose-event",
-                   G_CALLBACK(science_diagram_update), NULL);
-  g_signal_connect(diagram, "button-release-event",
-                   G_CALLBACK(science_diagram_button_release_callback),
-                   NULL);
-
-  return diagram;
-}
-
-/****************************************************************************
-  Recreate the req tree.
-****************************************************************************/
-static void science_diagram_data(GtkWidget *widget, bool reachable)
-{
+  GtkWidget *sw;
   struct reqtree *reqtree;
+  GtkAdjustment* adjustment;
   int width, height;
+  int x;
+  Tech_type_id researching;
 
   if (can_conn_edit(&client.conn)) {
     /* Show all techs in editor mode, not only currently reachable ones */
-    reqtree = create_reqtree(NULL, FALSE);
+    reqtree = create_reqtree(NULL);
   } else {
     /* Show only at some point reachable techs */
-    reqtree = create_reqtree(client_player(), reachable);
+    reqtree = create_reqtree(client.conn.playing);
   }
 
   get_reqtree_dimensions(reqtree, &width, &height);
-  gtk_layout_set_size(GTK_LAYOUT(widget), width, height);
-  g_object_set_data_full(G_OBJECT(widget), "reqtree", reqtree,
-                         (GDestroyNotify) destroy_reqtree);
-}
 
-/****************************************************************************
-  Set the diagram parent to point to 'tech' location.
-****************************************************************************/
-static void science_diagram_center(GtkWidget *diagram, Tech_type_id tech)
-{
-  GtkScrolledWindow *sw = GTK_SCROLLED_WINDOW(gtk_widget_get_parent(diagram));
-  struct reqtree *reqtree;
-  int x, y, width, height;
+  sw = gtk_scrolled_window_new(NULL, NULL);
+  science_drawing_area = gtk_layout_new(NULL, NULL);
+  g_object_set_data_full(G_OBJECT(science_drawing_area), "reqtree", reqtree,
+			 (GDestroyNotify)destroy_reqtree);
+  g_signal_connect(G_OBJECT(science_drawing_area), "expose_event",
+		   G_CALLBACK(update_science_drawing_area), NULL);
+  g_signal_connect(G_OBJECT(science_drawing_area), "button-release-event",
+                   G_CALLBACK(button_release_event_callback), NULL);
+  gtk_widget_add_events(science_drawing_area,
+                        GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK
+                        | GDK_BUTTON2_MOTION_MASK | GDK_BUTTON3_MOTION_MASK);
 
-  if (!GTK_IS_SCROLLED_WINDOW(sw)) {
-    return;
-  }
+  gtk_layout_set_size(GTK_LAYOUT(science_drawing_area), width, height);
 
-  reqtree = g_object_get_data(G_OBJECT(diagram), "reqtree");
-  get_reqtree_dimensions(reqtree, &width, &height);
-  if (find_tech_on_reqtree(reqtree, tech, &x, &y, NULL, NULL)) {
-    GtkAdjustment *adjust = NULL;
-    gdouble value;
+  gtk_container_add(GTK_CONTAINER(sw), science_drawing_area);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+				 GTK_POLICY_AUTOMATIC,
+				 GTK_POLICY_AUTOMATIC);
 
-    adjust = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(sw));
-    value = (adjust->lower + adjust->upper - adjust->page_size) / width * x;
-    gtk_adjustment_set_value(adjust, value);
-    gtk_adjustment_value_changed(adjust);
-
-    adjust = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
-    value = (adjust->lower + adjust->upper - adjust->page_size) / height * y;
-    gtk_adjustment_set_value(adjust, value);
-    gtk_adjustment_value_changed(adjust);
-  }
-}
-
-/****************************************************************************
-  Resize and redraw the requirement tree.
-****************************************************************************/
-static void science_report_redraw(struct science_report *preport)
-{
-  Tech_type_id researching;
-
-  fc_assert_ret(NULL != preport);
-
-  science_diagram_data(GTK_WIDGET(preport->drawing_area),
-                       !gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
-                         preport->button_reachable)));
-
-  if (client_has_player()) {
-    researching = player_research_get(client_player())->researching;
+  adjustment = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(sw));
+  
+  /* Center on currently researched node */
+  if (NULL != client.conn.playing) {
+    researching = get_player_research(client.conn.playing)->researching;
   } else {
     researching = A_UNSET;
   }
-  science_diagram_center(GTK_WIDGET(preport->drawing_area), researching);
+  if (find_tech_on_reqtree(reqtree, researching,
+			   &x, NULL, NULL, NULL)) {
+    /* FIXME: this is just an approximation */
+    gtk_adjustment_set_value(adjustment, x - 100);
+  }
 
-  gtk_widget_queue_draw(GTK_WIDGET(preport->drawing_area));
+  return sw;
 }
 
-/****************************************************************************
-  Utility for g_list_sort.
-****************************************************************************/
-static gint cmp_func(gconstpointer a_p, gconstpointer b_p)
+/****************************************************************
+...
+*****************************************************************/
+void create_science_dialog(bool make_modal)
 {
-  const gchar *a_str, *b_str;
-  gint a = GPOINTER_TO_INT(a_p), b = GPOINTER_TO_INT(b_p);
+  GtkWidget *frame, *table, *w;
+  GtkWidget *science_diagram;
 
-  a_str = advance_name_for_player(client_player(), a);
-  b_str = advance_name_for_player(client_player(), b);
-
-  return fc_strcoll(a_str, b_str);
-}
-
-/****************************************************************************
-  Update a science report dialog.
-****************************************************************************/
-static void science_report_update(struct science_report *preport)
-{
-  GtkListStore *store;
-  GtkTreeIter iter;
-  GList *sorting_list, *item;
-  struct player_research *presearch = player_research_get(client_player());
-  const char *text;
-  double pct;
-  Tech_type_id tech;
-
-  fc_assert_ret(NULL != preport);
-  fc_assert_ret(NULL != presearch);
-
-  gtk_widget_queue_draw(GTK_WIDGET(preport->drawing_area));
-
-  gtk_label_set_text(preport->main_label, science_dialog_text());
-
-  /* Update the progress bar. */
-  text = get_science_target_text(&pct);
-  gtk_progress_bar_set_text(preport->progress_bar, text);
-  gtk_progress_bar_set_fraction(preport->progress_bar, pct);
-  /* Work around GTK+ refresh bug? */
-  gtk_widget_queue_resize(GTK_WIDGET(preport->progress_bar));
-
-  /* Update reachable techs. */
-  store = GTK_LIST_STORE(gtk_combo_box_get_model(preport->reachable_techs));
-  gtk_list_store_clear(store);
-  sorting_list = NULL;
-  if (A_UNSET == presearch->researching
-      || is_future_tech(presearch->researching)) {
-    gtk_list_store_append(store, &iter);
-    science_report_store_set(store, &iter, presearch->researching);
-    gtk_combo_box_set_active_iter(preport->reachable_techs, &iter);
-  }
-
-  /* Collect all techs which are reachable in the next step. */
-  advance_index_iterate(A_FIRST, i) {
-    if (TECH_PREREQS_KNOWN == presearch->inventions[i].state) {
-      sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(i));
-    }
-  } advance_index_iterate_end;
-
-  /* Sort the list, append it to the store. */
-  sorting_list = g_list_sort(sorting_list, cmp_func);
-  for (item = sorting_list; NULL != item; item = g_list_next(item)) {
-    tech = GPOINTER_TO_INT(item->data);
-    gtk_list_store_append(store, &iter);
-    science_report_store_set(store, &iter, tech);
-    if (tech == presearch->researching) {
-      gtk_combo_box_set_active_iter(preport->reachable_techs, &iter);
-    }
-  }
-
-  /* Free, re-init. */
-  g_list_free(sorting_list);
-  sorting_list = NULL;
-  store = GTK_LIST_STORE(gtk_combo_box_get_model(preport->reachable_goals));
-  gtk_list_store_clear(store);
-
-  /* Update the tech goal. */
-  gtk_label_set_text(preport->goal_label,
-                     get_science_goal_text(presearch->tech_goal));
-
-  if (A_UNSET == presearch->tech_goal) {
-    gtk_list_store_append(store, &iter);
-    science_report_store_set(store, &iter, A_UNSET);
-    gtk_combo_box_set_active_iter(preport->reachable_goals, &iter);
-  }
-
-  /* Collect all techs which are reachable in next 10 steps. */
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client_player(), i, FALSE)
-        && TECH_KNOWN != presearch->inventions[i].state
-        && (i == presearch->tech_goal
-            || 10 >= presearch->inventions[i].num_required_techs)) {
-      sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(i));
-    }
-  } advance_index_iterate_end;
-
-  /* Sort the list, append it to the store. */
-  sorting_list = g_list_sort(sorting_list, cmp_func);
-  for (item = sorting_list; NULL != item; item = g_list_next(item)) {
-    tech = GPOINTER_TO_INT(item->data);
-    gtk_list_store_append(store, &iter);
-    science_report_store_set(store, &iter, tech);
-    if (tech == presearch->tech_goal) {
-      gtk_combo_box_set_active_iter(preport->reachable_goals, &iter);
-    }
-  }
-
-  /* Free. */
-  g_list_free(sorting_list);
-}
-
-/****************************************************************************
-  Actived item in the reachable techs combo box.
-****************************************************************************/
-static void science_report_current_callback(GtkComboBox *combo,
-                                            gpointer data)
-{
-  Tech_type_id tech;
-  const char *tech_name;
-
-  if (!science_report_combo_get_active(combo, &tech, &tech_name)) {
-    return;
-  }
-
-  if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(data))) {
-    popup_help_dialog_typed(tech_name, HELP_TECH);
-  } else if (can_client_issue_orders()) {
-    dsend_packet_player_research(&client.conn, tech);
-  }
-  /* Revert, or we will be not synchron with the server. */
-  science_report_combo_set_active(combo, player_research_get
-                                  (client_player())->researching);
-}
-
-/****************************************************************************
-  Show or hide unreachable techs.
-****************************************************************************/
-static void science_report_unreachable_callback(GtkComboBox *combo,
-                                                gpointer data)
-{
-  struct science_report *preport = (struct science_report *) data;
-
-  science_report_redraw(preport);
-}
-
-/****************************************************************************
-  Actived item in the reachable goals combo box.
-****************************************************************************/
-static void science_report_goal_callback(GtkComboBox *combo, gpointer data)
-{
-  Tech_type_id tech;
-  const char *tech_name;
-
-  if (!science_report_combo_get_active(combo, &tech, &tech_name)) {
-    return;
-  }
-
-  if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(data))) {
-    popup_help_dialog_typed(tech_name, HELP_TECH);
-  } else if (can_client_issue_orders()) {
-    dsend_packet_player_tech_goal(&client.conn, tech);
-  }
-  /* Revert, or we will be not synchron with the server. */
-  science_report_combo_set_active(combo, player_research_get
-                                  (client_player())->tech_goal);
-}
-
-/****************************************************************************
-  Initialize a science report.
-****************************************************************************/
-static void science_report_init(struct science_report *preport)
-{
-  GtkWidget *frame, *table, *help_button, *reachable_button, *sw, *w;
-  GtkBox *vbox;
-  GtkListStore *store;
-  GtkCellRenderer *renderer;
-
-  fc_assert_ret(NULL != preport);
-
-  gui_dialog_new(&preport->shell, GTK_NOTEBOOK(top_notebook), NULL);
+  gui_dialog_new(&science_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
   /* TRANS: Research report title */
-  gui_dialog_set_title(preport->shell, _("Research"));
+  gui_dialog_set_title(science_dialog_shell, _("Research"));
 
-  gui_dialog_add_button(preport->shell, GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
-  gui_dialog_set_default_response(preport->shell, GTK_RESPONSE_CLOSE);
+  gui_dialog_add_button(science_dialog_shell,
+      GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+  gui_dialog_set_default_response(science_dialog_shell,
+      GTK_RESPONSE_CLOSE);
 
-  vbox = GTK_BOX(preport->shell->vbox);
+  science_label = gtk_label_new("no text set yet");
 
-  w = gtk_label_new(NULL);
-  gtk_box_pack_start(vbox, w, FALSE, FALSE, 0);
-  preport->main_label = GTK_LABEL(w);
+  gtk_box_pack_start(GTK_BOX(science_dialog_shell->vbox),
+        science_label, FALSE, FALSE, 0);
 
-  /* Current research target line. */
   frame = gtk_frame_new(_("Researching"));
-  gtk_box_pack_start(vbox, frame, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(science_dialog_shell->vbox),
+        frame, FALSE, FALSE, 0);
 
   table = gtk_table_new(1, 6, TRUE);
   gtk_table_set_col_spacings(GTK_TABLE(table), 4);
   gtk_container_add(GTK_CONTAINER(frame), table);
 
-  help_button = gtk_check_button_new_with_label(_("Help"));
-  gtk_table_attach(GTK_TABLE(table), help_button, 5, 6, 0, 1, 0, 0, 0, 0);
+  science_change_menu_button = gtk_option_menu_new();
+  gtk_table_attach_defaults(GTK_TABLE(table), science_change_menu_button, 0,
+                            2, 0, 1);
 
-  store = science_report_store_new();
-  w = gtk_combo_box_new_with_model(GTK_TREE_MODEL(store));
-  g_object_unref(G_OBJECT(store));
-  renderer = gtk_cell_renderer_text_new();
-  gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(w), renderer, TRUE);
-  gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(w), renderer, "text",
-                                 SRD_COL_NAME, NULL);
-  gtk_widget_set_sensitive(w, can_client_issue_orders());
-  g_signal_connect(w, "changed", G_CALLBACK(science_report_current_callback),
-                   help_button);
-  gtk_table_attach_defaults(GTK_TABLE(table), w, 0, 2, 0, 1);
-  preport->reachable_techs = GTK_COMBO_BOX(w);
+  popupmenu = gtk_menu_new();
+  gtk_widget_show_all(popupmenu);
 
-  w = gtk_progress_bar_new();
-  gtk_table_attach_defaults(GTK_TABLE(table), w, 2, 5, 0, 1);
-  gtk_widget_set_size_request(w, -1, 25);
-  preport->progress_bar = GTK_PROGRESS_BAR(w);
+  science_current_label=gtk_progress_bar_new();
+  gtk_table_attach_defaults(GTK_TABLE(table), science_current_label,
+                            2, 5, 0, 1);
+  gtk_widget_set_size_request(science_current_label, -1, 25);
 
-  /* Research goal line. */
+  science_help_toggle = gtk_check_button_new_with_label (_("Help"));
+  gtk_table_attach(GTK_TABLE(table), science_help_toggle,
+                   5, 6, 0, 1, 0, 0, 0, 0);
+
   frame = gtk_frame_new( _("Goal"));
-  gtk_box_pack_start(vbox, frame, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(science_dialog_shell->vbox),
+        frame, FALSE, FALSE, 0);
 
   table = gtk_table_new(1, 6, TRUE);
   gtk_table_set_col_spacings(GTK_TABLE(table), 4);
   gtk_container_add(GTK_CONTAINER(frame),table);
 
-  store = science_report_store_new();
-  w = gtk_combo_box_new_with_model(GTK_TREE_MODEL(store));
-  g_object_unref(G_OBJECT(store));
-  renderer = gtk_cell_renderer_text_new();
-  gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(w), renderer, TRUE);
-  gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(w), renderer, "text",
-                                 SRD_COL_NAME, NULL);
-  renderer = gtk_cell_renderer_text_new();
-  gtk_cell_layout_pack_end(GTK_CELL_LAYOUT(w), renderer, FALSE);
-  gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(w), renderer, "text",
-                                 SRD_COL_STEPS, NULL);
-  gtk_widget_set_sensitive(w, can_client_issue_orders());
-  g_signal_connect(w, "changed", G_CALLBACK(science_report_goal_callback),
-                   help_button);
-  gtk_table_attach_defaults(GTK_TABLE(table), w, 0, 2, 0, 1);
-  preport->reachable_goals = GTK_COMBO_BOX(w);
+  science_goal_menu_button = gtk_option_menu_new();
+  gtk_table_attach_defaults(GTK_TABLE(table), science_goal_menu_button,
+                            0, 2, 0, 1);
 
-  w = gtk_label_new(NULL);
-  gtk_table_attach_defaults(GTK_TABLE(table), w, 2, 5, 0, 1);
-  gtk_widget_set_size_request(w, -1, 25);
-  preport->goal_label = GTK_LABEL(w);
+  goalmenu = gtk_menu_new();
+  gtk_widget_show_all(goalmenu);
 
-  /* Toggle unreachable button. */
-  /* TRANS: As in 'Show all (even currently not reachable) techs'. */
-  reachable_button = gtk_toggle_button_new_with_label(_("Show all"));
-  gtk_table_attach(GTK_TABLE(table), reachable_button, 5, 6, 0, 1, 0, 0, 0,
-                   0);
-  g_signal_connect(reachable_button, "toggled",
-                   G_CALLBACK(science_report_unreachable_callback), preport);
-  gtk_widget_set_sensitive(reachable_button, can_client_issue_orders()
-                                             && !client_is_global_observer());
-  preport->button_reachable = reachable_button;
+  science_goal_label = gtk_label_new("");
+  gtk_table_attach_defaults(GTK_TABLE(table), science_goal_label,
+                            2, 5, 0, 1);
+  gtk_widget_set_size_request(science_goal_label, -1, 25);
 
-  /* Science diagram. */
-  sw = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_box_pack_start(vbox, sw, TRUE, TRUE, 0);
+  w = gtk_label_new("");
+  gtk_table_attach_defaults(GTK_TABLE(table), w, 5, 6, 0, 1);
 
-  w = science_diagram_new();
-  gtk_container_add(GTK_CONTAINER(sw), w);
-  preport->drawing_area = GTK_LAYOUT(w);
+  science_diagram = create_reqtree_diagram();
+  gtk_box_pack_start(GTK_BOX(science_dialog_shell->vbox), science_diagram,
+                     TRUE, TRUE, 0);
 
-  science_report_update(preport);
-  gui_dialog_show_all(preport->shell);
+  gui_dialog_show_all(science_dialog_shell);
 
-  /* This must be _after_ the dialog is drawn to really center it ... */
-  science_report_redraw(preport);
-}
-
-/****************************************************************************
-  Free a science report.
-****************************************************************************/
-static void science_report_free(struct science_report *preport)
-{
-  fc_assert_ret(NULL != preport);
-
-  gui_dialog_destroy(preport->shell);
-  fc_assert(NULL == preport->shell);
-
-  memset(preport, 0, sizeof(*preport));
-}
-
-/****************************************************************************
-  Create the science report is needed.
-****************************************************************************/
-void science_report_dialog_popup(bool raise)
-{
-  struct player_research *presearch =
-      (client_has_player() ? player_research_get(client_player()) : NULL);
-
-  if (NULL == science_report.shell) {
-    science_report_init(&science_report);
-  }
-
-  if (NULL != presearch
-      && A_UNSET == presearch->tech_goal
-      && A_UNSET == presearch->researching) {
-    gui_dialog_alert(science_report.shell);
-  } else {
-    gui_dialog_present(science_report.shell);
-  }
-
-  if (raise) {
-    gui_dialog_raise(science_report.shell);
-  }
-}
-
-/****************************************************************************
-  Closes the science report dialog.
-****************************************************************************/
-void science_report_dialog_popdown(void)
-{
-  if (NULL != science_report.shell) {
-    science_report_free(&science_report);
-    fc_assert(NULL == science_report.shell);
-  }
-}
-
-/****************************************************************************
-  Update the science report dialog.
-****************************************************************************/
-void real_science_report_dialog_update(void)
-{
-  if (NULL != science_report.shell) {
-    science_report_update(&science_report);
-  }
+  science_dialog_update();
+  gtk_widget_grab_focus(science_change_menu_button);
 }
 
 /****************************************************************************
   Resize and redraw the requirement tree.
 ****************************************************************************/
-void science_report_dialog_redraw(void)
+void science_dialog_redraw(void)
 {
-  if (NULL != science_report.shell) {
-    science_report_redraw(&science_report);
-  }
-}
+  struct reqtree *reqtree;
+  int width, height;
 
-
-/****************************************************************************
-                      ECONOMY REPORT DIALOG
-****************************************************************************/
-struct economy_report {
-  struct gui_dialog *shell;
-  GtkTreeView *tree_view;
-  GtkLabel *label;
-};
-
-static struct economy_report economy_report = { NULL, };
-
-enum economy_report_response {
-  ERD_RES_SELL_OBSOLETE = 1,
-  ERD_RES_SELL_ALL,
-  ERD_RES_DISBAND_UNITS
-};
-
-/* Those values must match the functions economy_report_store_new() and
- * economy_report_column_name(). */
-enum economy_report_columns {
-  ERD_COL_SPRITE,
-  ERD_COL_NAME,
-  ERD_COL_OBSOLETE,
-  ERD_COL_COUNT,
-  ERD_COL_COST,
-  ERD_COL_TOTAL_COST,
-
-  /* Not visible. */
-  ERD_COL_BOOL_VISIBLE,
-  ERD_COL_CID,
-
-  ERD_COL_NUM
-};
-
-/****************************************************************************
-  Create a new economy report list store.
-****************************************************************************/
-static GtkListStore *economy_report_store_new(void)
-{
-  return gtk_list_store_new(ERD_COL_NUM,
-                            GDK_TYPE_PIXBUF,    /* ERD_COL_SPRITE */
-                            G_TYPE_STRING,      /* ERD_COL_NAME */
-                            G_TYPE_BOOLEAN,     /* ERD_COL_OBSOLETE */
-                            G_TYPE_INT,         /* ERD_COL_COUNT */
-                            G_TYPE_INT,         /* ERD_COL_COST */
-                            G_TYPE_INT,         /* ERD_COL_TOTAL_COST */
-                            G_TYPE_BOOLEAN,     /* ERD_COL_BOOL_VISIBLE */
-                            G_TYPE_INT,         /* ERD_COL_UNI_KIND */
-                            G_TYPE_INT);        /* ERD_COL_UNI_VALUE_ID */
-}
-
-/****************************************************************************
-  Returns the title of the column (translated).
-****************************************************************************/
-static const char *
-economy_report_column_name(enum economy_report_columns col)
-{
-  switch (col) {
-  case ERD_COL_SPRITE:
-    /* TRANS: Image header */
-    return _("Type");
-  case ERD_COL_NAME:
-    return Q_("?Building or Unit type:Name");
-  case ERD_COL_OBSOLETE:
-    return _("Obsolete");
-  case ERD_COL_COUNT:
-    return _("Count");
-  case ERD_COL_COST:
-    return _("Cost");
-  case ERD_COL_TOTAL_COST:
-    /* TRANS: Upkeep total, count*cost. */
-    return _("U Total");
-  case ERD_COL_BOOL_VISIBLE:
-  case ERD_COL_CID:
-  case ERD_COL_NUM:
-    break;
+  if (NULL == science_dialog_shell) {
+    /* Not existant. */
+    return;
   }
 
-  return NULL;
-}
-
-/****************************************************************************
-  Update the economy report dialog.
-****************************************************************************/
-static void economy_report_update(struct economy_report *preport)
-{
-  GtkTreeSelection *selection;
-  GtkTreeModel *model;
-  GtkListStore *store;
-  GtkTreeIter iter;
-  struct improvement_entry building_entries[B_LAST];
-  struct unit_entry unit_entries[U_LAST];
-  int entries_used, building_total, unit_total, tax, i;
-  char buf[256];
-  cid selected;
-
-  fc_assert_ret(NULL != preport);
-
-  /* Save the selection. */
-  selection = gtk_tree_view_get_selection(preport->tree_view);
-  if (gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    gtk_tree_model_get(model, &iter, ERD_COL_CID, &selected, -1);
+  if (can_conn_edit(&client.conn)) {
+    /* Show all techs in editor mode, not only currently reachable ones */
+    reqtree = create_reqtree(NULL);
   } else {
-    selected = -1;
+    /* Show only at some point reachable techs */
+    reqtree = create_reqtree(client_player());
   }
 
-  model = gtk_tree_view_get_model(preport->tree_view);
-  store = GTK_LIST_STORE(model);
-  gtk_list_store_clear(store);
+  get_reqtree_dimensions(reqtree, &width, &height);
+  gtk_layout_set_size(GTK_LAYOUT(science_drawing_area), width, height);
+  g_object_set_data_full(G_OBJECT(science_drawing_area), "reqtree", reqtree,
+                         (GDestroyNotify) destroy_reqtree);
 
-  /* Buildings. */
-  get_economy_report_data(building_entries, &entries_used,
-                          &building_total, &tax);
-  for (i = 0; i < entries_used; i++) {
-    struct improvement_entry *pentry = building_entries + i;
-    struct impr_type *pimprove = pentry->type;
-    struct sprite *sprite = get_building_sprite(tileset, pimprove);
-    cid cid = cid_encode_building(pimprove);
-
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       ERD_COL_SPRITE, sprite_get_pixbuf(sprite),
-                       ERD_COL_NAME, improvement_name_translation(pimprove),
-                       ERD_COL_OBSOLETE, client_has_player()
-                       && improvement_obsolete(client_player(), pimprove),
-                       ERD_COL_COUNT, pentry->count,
-                       ERD_COL_COST, pentry->cost,
-                       ERD_COL_TOTAL_COST, pentry->total_cost,
-                       ERD_COL_BOOL_VISIBLE, TRUE,
-                       ERD_COL_CID, cid,
-                       -1);
-    if (selected == cid) {
-      /* Restore the selection. */
-      gtk_tree_selection_select_iter(selection, &iter);
-    }
-  }
-
-  /* Units. */
-  get_economy_report_units_data(unit_entries, &entries_used, &unit_total);
-  for (i = 0; i < entries_used; i++) {
-    struct unit_entry *pentry = unit_entries + i;
-    struct unit_type *putype = pentry->type;
-    struct sprite *sprite = get_unittype_sprite(tileset, putype);
-    cid cid = cid_encode_unit(putype);
-
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       ERD_COL_SPRITE, sprite_get_pixbuf(sprite),
-                       ERD_COL_NAME, utype_name_translation(putype),
-                       ERD_COL_COUNT, pentry->count,
-                       ERD_COL_COST, pentry->cost,
-                       ERD_COL_TOTAL_COST, pentry->total_cost,
-                       ERD_COL_BOOL_VISIBLE, FALSE,
-                       ERD_COL_CID, cid,
-                       -1);
-    if (selected == cid) {
-      /* Restore the selection. */
-      gtk_tree_selection_select_iter(selection, &iter);
-    }
-  }
-
-  /* Update the label. */
-  fc_snprintf(buf, sizeof(buf), _("Income: %d    Total Costs: %d"),
-              tax, building_total + unit_total);
-  gtk_label_set_text(preport->label, buf);
+  gtk_widget_queue_draw(science_drawing_area);
 }
 
 /****************************************************************************
-  Issue a command on the economy report.
+  Called to set several texts in the science dialog.
 ****************************************************************************/
-static void economy_report_command_callback(struct gui_dialog *pdialog,
-                                            int response,
-                                            gpointer data)
+static void update_science_text(void)
 {
-  GtkTreeSelection *selection = data;
-  GtkTreeModel *model;
-  GtkTreeIter iter;
-  GtkWidget *shell;
-  struct universal selected;
-  cid cid;
-  char buf[256] = "";
+  double pct;
+  const char *text = get_science_target_text(&pct);
 
-  switch (response) {
-  case ERD_RES_SELL_OBSOLETE:
-  case ERD_RES_SELL_ALL:
-  case ERD_RES_DISBAND_UNITS:
-    break;
-  default:
-    gui_dialog_destroy(pdialog);
+  gtk_progress_bar_set_text(GTK_PROGRESS_BAR(science_current_label), text);
+  gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(science_current_label), pct);
+
+  /* work around GTK+ refresh bug. */
+  gtk_widget_queue_resize(science_current_label);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void science_change_callback(GtkWidget *widget, gpointer data)
+{
+  size_t to = (size_t) data;
+
+  if (GTK_TOGGLE_BUTTON(science_help_toggle)->active) {
+    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, to), HELP_TECH);
+    /* Following is to make the menu go back to the current research;
+     * there may be a better way to do this?  --dwp */
+    science_dialog_update();
+  } else {
+
+    gtk_widget_set_sensitive(science_change_menu_button,
+			     can_client_issue_orders());
+    update_science_text();
+    
+    dsend_packet_player_research(&client.conn, to);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void science_goal_callback(GtkWidget *widget, gpointer data)
+{
+  size_t to = (size_t) data;
+
+  if (GTK_TOGGLE_BUTTON(science_help_toggle)->active) {
+    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, to), HELP_TECH);
+    /* Following is to make the menu go back to the current goal;
+     * there may be a better way to do this?  --dwp */
+    science_dialog_update();
+  }
+  else {  
+    gtk_label_set_text(GTK_LABEL(science_goal_label),
+		       get_science_goal_text(to));
+    dsend_packet_player_tech_goal(&client.conn, to);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static gint cmp_func(gconstpointer a_p, gconstpointer b_p)
+{
+  const gchar *a_str, *b_str;
+  gint a = GPOINTER_TO_INT(a_p), b = GPOINTER_TO_INT(b_p);
+
+  a_str = advance_name_for_player(client.conn.playing, a);
+  b_str = advance_name_for_player(client.conn.playing, b);
+
+  return compare_strings(a_str, b_str);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void science_dialog_update(void)
+{
+  if(science_dialog_shell) {
+  int i, hist;
+  char text[512];
+  GtkWidget *item;
+  GList *sorting_list = NULL, *it;
+  GtkSizeGroup *group1, *group2;
+  struct player_research *research = get_player_research(client.conn.playing);
+
+  if (!research || is_report_dialogs_frozen()) {
     return;
   }
 
-  if (!can_client_issue_orders()
-      || !gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    return;
+  gtk_widget_queue_draw(science_drawing_area);
+
+  gtk_label_set_text(GTK_LABEL(science_label), science_dialog_text());
+  
+  /* collect all researched techs in sorting_list */
+  advance_index_iterate(A_FIRST, i) {
+    if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
+      sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(i));
+    }
+  } advance_index_iterate_end;
+
+  /* sort them, and install them in the list */
+  sorting_list = g_list_sort(sorting_list, cmp_func);
+  g_list_free(sorting_list);
+  sorting_list = NULL;
+
+  gtk_widget_destroy(popupmenu);
+  popupmenu = gtk_menu_new();
+  gtk_option_menu_set_menu(GTK_OPTION_MENU(science_change_menu_button),
+	popupmenu);
+  gtk_widget_set_sensitive(science_change_menu_button,
+			   can_client_issue_orders());
+
+  update_science_text();
+
+  /* work around GTK+ refresh bug. */
+  gtk_widget_queue_resize(science_current_label);
+ 
+  if (research->researching == A_UNSET) {
+    item = gtk_menu_item_new_with_label(advance_name_for_player(client.conn.playing,
+						      A_NONE));
+    gtk_menu_shell_append(GTK_MENU_SHELL(popupmenu), item);
   }
 
-  gtk_tree_model_get(model, &iter, ERD_COL_CID, &cid, -1);
-  selected = cid_decode(cid);
-
-  switch (selected.kind) {
-  case VUT_IMPROVEMENT:
-    {
-      struct impr_type *pimprove = selected.value.building;
-
-      if (can_sell_building(pimprove)
-          && (ERD_RES_SELL_ALL == response
-              || (ERD_RES_SELL_OBSOLETE == response
-                  && improvement_obsolete(client_player(), pimprove)))) {
-        shell = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL
-                                       | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                       GTK_MESSAGE_QUESTION,
-                                       GTK_BUTTONS_YES_NO,
-                                       _("Do you really wish to sell "
-                                         "your %s?\n"),
-                                       improvement_name_translation(pimprove));
-        setup_dialog(shell, gui_dialog_get_toplevel(pdialog));
-        gtk_window_set_title(GTK_WINDOW(shell), _("Sell Improvements"));
-
-        if (GTK_RESPONSE_YES == gtk_dialog_run(GTK_DIALOG(shell))) {
-          sell_all_improvements(pimprove, ERD_RES_SELL_OBSOLETE == response,
-                                buf, sizeof(buf));
-        }
-        gtk_widget_destroy(shell);
+  /* collect all techs which are reachable in the next step
+   * hist will hold afterwards the techid of the current choice
+   */
+  hist=0;
+  if (!is_future_tech(research->researching)) {
+    advance_index_iterate(A_FIRST, i) {
+      if (TECH_PREREQS_KNOWN !=
+            player_invention_state(client.conn.playing, i)) {
+	continue;
       }
-    }
-    break;
-  case VUT_UTYPE:
-    {
-      if (ERD_RES_DISBAND_UNITS == response) {
-        struct unit_type *putype = selected.value.utype;
 
-        shell = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL
-                                       | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                       GTK_MESSAGE_QUESTION,
-                                       GTK_BUTTONS_YES_NO,
-                                       _("Do you really wish to disband "
-                                         "your %s?\n"),
-                                       utype_name_translation(putype));
-        setup_dialog(shell, gui_dialog_get_toplevel(pdialog));
-        gtk_window_set_title(GTK_WINDOW(shell), _("Disband Units"));
+      if (i == research->researching)
+	hist=i;
+      sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(i));
+    } advance_index_iterate_end;
+  } else {
+    int value = (advance_count() + research->future_tech + 1);
 
-        if (GTK_RESPONSE_YES == gtk_dialog_run(GTK_DIALOG(shell))) {
-          disband_all_units(putype, FALSE, buf, sizeof(buf));
-        }
-        gtk_widget_destroy(shell);
-      }
-    }
-    break;
-  default:
-    log_error("Not supported type: %d.", selected.kind);
+    sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(value));
   }
 
-  if ('\0' != buf[0]) {
-    shell = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT,
-                                   GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-                                   "%s", buf);
-    setup_dialog(shell, gui_dialog_get_toplevel(pdialog));
-    g_signal_connect(shell, "response", G_CALLBACK(gtk_widget_destroy),
-                     NULL);
-    gtk_window_set_title(GTK_WINDOW(shell), _("Sell-Off: Results"));
-    gtk_window_present(GTK_WINDOW(shell));
+  /* sort the list and build from it the menu */
+  sorting_list = g_list_sort(sorting_list, cmp_func);
+  for (i = 0; i < g_list_length(sorting_list); i++) {
+    const gchar *data;
+
+    if (GPOINTER_TO_INT(g_list_nth_data(sorting_list, i)) < advance_count()) {
+      data = advance_name_for_player(client.conn.playing,
+			GPOINTER_TO_INT(g_list_nth_data(sorting_list, i)));
+    } else {
+      my_snprintf(text, sizeof(text), _("Future Tech. %d"),
+		  GPOINTER_TO_INT(g_list_nth_data(sorting_list, i))
+		  - advance_count());
+      data=text;
+    }
+
+    item = gtk_menu_item_new_with_label(data);
+    gtk_menu_shell_append(GTK_MENU_SHELL(popupmenu), item);
+    if (strlen(data) > 0)
+      g_signal_connect(item, "activate",
+		       G_CALLBACK(science_change_callback),
+		       g_list_nth_data(sorting_list, i));
+  }
+
+  gtk_widget_show_all(popupmenu);
+  gtk_option_menu_set_history(GTK_OPTION_MENU(science_change_menu_button),
+	g_list_index(sorting_list, GINT_TO_POINTER(hist)));
+  g_list_free(sorting_list);
+  sorting_list = NULL;
+
+  gtk_widget_destroy(goalmenu);
+  goalmenu = gtk_menu_new();
+  gtk_option_menu_set_menu(GTK_OPTION_MENU(science_goal_menu_button),
+	goalmenu);
+  gtk_widget_set_sensitive(science_goal_menu_button,
+			   can_client_issue_orders());
+  
+  gtk_label_set_text(GTK_LABEL(science_goal_label),
+		get_science_goal_text(
+		  research->tech_goal));
+
+  if (research->tech_goal == A_UNSET) {
+    item = gtk_menu_item_new_with_label(advance_name_for_player(client.conn.playing,
+						      A_NONE));
+    gtk_menu_shell_append(GTK_MENU_SHELL(goalmenu), item);
+  }
+
+  /* collect all techs which are reachable in under 11 steps
+   * hist will hold afterwards the techid of the current choice
+   */
+  hist=0;
+  advance_index_iterate(A_FIRST, i) {
+    if (player_invention_reachable(client.conn.playing, i)
+        && TECH_KNOWN != player_invention_state(client.conn.playing, i)
+        && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
+	    || i == research->tech_goal)) {
+      if (i == research->tech_goal) {
+	hist = i;
+      }
+      sorting_list = g_list_prepend(sorting_list, GINT_TO_POINTER(i));
+    }
+  } advance_index_iterate_end;
+
+  group1 = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
+  group2 = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
+
+  /* sort the list and build from it the menu */
+  sorting_list = g_list_sort(sorting_list, cmp_func);
+  for (it = g_list_first(sorting_list); it; it = g_list_next(it)) {
+    GtkWidget *hbox, *label;
+    char text[512];
+    gint tech = GPOINTER_TO_INT(g_list_nth_data(it, 0));
+
+    item = gtk_menu_item_new();
+    hbox = gtk_hbox_new(FALSE, 18);
+    gtk_container_add(GTK_CONTAINER(item), hbox);
+
+    label = gtk_label_new(advance_name_for_player(client.conn.playing, tech));
+    gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
+    gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
+    gtk_size_group_add_widget(group1, label);
+
+    my_snprintf(text, sizeof(text), "%d",
+	num_unknown_techs_for_goal(client.conn.playing, tech));
+
+    label = gtk_label_new(text);
+    gtk_misc_set_alignment(GTK_MISC(label), 1.0, 0.5);
+    gtk_box_pack_start(GTK_BOX(hbox), label, FALSE, FALSE, 0);
+    gtk_size_group_add_widget(group2, label);
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(goalmenu), item);
+    g_signal_connect(item, "activate",
+		     G_CALLBACK(science_goal_callback),
+		     GINT_TO_POINTER(tech));
+  }
+
+  gtk_widget_show_all(goalmenu);
+  gtk_option_menu_set_history(GTK_OPTION_MENU(science_goal_menu_button),
+	g_list_index(sorting_list, GINT_TO_POINTER(hist)));
+  g_list_free(sorting_list);
+  sorting_list = NULL;
+ 
   }
 }
 
-/****************************************************************************
-  Called when a building or a unit type is selected in the economy list.
-****************************************************************************/
-static void economy_report_selection_callback(GtkTreeSelection *selection,
-                                              gpointer data)
+
+/****************************************************************
+
+                      ECONOMY REPORT DIALOG
+ 
+****************************************************************/
+
+/****************************************************************
+...
+****************************************************************/
+void popup_economy_report_dialog(bool raise)
 {
-  struct gui_dialog *pdialog = data;
-  GtkTreeModel *model;
-  GtkTreeIter iter;
+  if(!economy_dialog_shell) {
+    economy_dialog_shell_is_modal = FALSE;
 
-  if (can_client_issue_orders()
-      && gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    struct universal selected;
-    cid cid;
-
-    gtk_tree_model_get(model, &iter, ERD_COL_CID, &cid, -1);
-    selected = cid_decode(cid);
-    switch (selected.kind) {
-    case VUT_IMPROVEMENT:
-      {
-        bool can_sell = can_sell_building(selected.value.building);
-
-        gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_OBSOLETE,
-            can_sell && improvement_obsolete(client_player(),
-                                             selected.value.building));
-        gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_ALL, can_sell);
-        gui_dialog_set_response_sensitive(pdialog, ERD_RES_DISBAND_UNITS,
-                                          FALSE);
-      }
-      return;
-    case VUT_UTYPE:
-      gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_OBSOLETE,
-                                        FALSE);
-      gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_ALL, FALSE);
-      gui_dialog_set_response_sensitive(pdialog, ERD_RES_DISBAND_UNITS,
-                                        TRUE);
-      return;
-    default:
-      log_error("Not supported type: %d.", selected.kind);
-      break;
-    }
+    create_economy_report_dialog(FALSE);
   }
 
-  gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_OBSOLETE, FALSE);
-  gui_dialog_set_response_sensitive(pdialog, ERD_RES_SELL_ALL, FALSE);
-  gui_dialog_set_response_sensitive(pdialog, ERD_RES_DISBAND_UNITS, FALSE);
+  gui_dialog_present(economy_dialog_shell);
+  if (raise) {
+    gui_dialog_raise(economy_dialog_shell);
+  }
 }
 
-/****************************************************************************
-  Create a new economy report.
-****************************************************************************/
-static void economy_report_init(struct economy_report *preport)
+/****************************************************************
+ Close the economy report dialog.
+****************************************************************/
+void popdown_economy_report_dialog(void)
 {
-  GtkWidget *view, *sw, *align, *label, *button;
-  GtkListStore *store;
-  GtkTreeSelection *selection;
-  GtkBox *vbox;
-  const char *title;
-  enum economy_report_columns i;
+  if (economy_dialog_shell) {
+    gui_dialog_destroy(economy_dialog_shell);
+  }
+}
+ 
+/****************************************************************
+...
+*****************************************************************/
+void create_economy_report_dialog(bool make_modal)
+{
+  const char *titles[5] = {
+    /* TRANS: Image header */
+    _("Type"),
+    Q_("?Building:Name"),
+    _("Count"),
+    _("Cost"),
+    /* TRANS: Upkeep total, count*cost */
+    _("U Total")
+  };
+  int i;
 
-  fc_assert_ret(NULL != preport);
+  static GType model_types[5] = {
+    G_TYPE_NONE,
+    G_TYPE_STRING,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT
+  };
+  GtkWidget *view, *sw, *align;
 
-  gui_dialog_new(&preport->shell, GTK_NOTEBOOK(top_notebook), preport);
-  gui_dialog_set_title(preport->shell, _("Economy"));
-  vbox = GTK_BOX(preport->shell->vbox);
+  model_types[0] = GDK_TYPE_PIXBUF;
+
+  gui_dialog_new(&economy_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
+  gui_dialog_set_title(economy_dialog_shell, _("Economy"));
 
   align = gtk_alignment_new(0.5, 0.0, 0.0, 1.0);
-  gtk_box_pack_start(vbox, align, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(economy_dialog_shell->vbox), align,
+      TRUE, TRUE, 0);
 
-  sw = gtk_scrolled_window_new(NULL, NULL);
+  economy_store = gtk_list_store_newv(ARRAY_SIZE(model_types), model_types);
+
+  sw = gtk_scrolled_window_new(NULL,NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-                                      GTK_SHADOW_ETCHED_IN);
+				      GTK_SHADOW_ETCHED_IN);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-                                 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+				 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(align), sw);
 
-  store = economy_report_store_new();
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
-  g_object_unref(store);
+  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(economy_store));
+  g_object_unref(economy_store);
   gtk_widget_set_name(view, "small_font");
   gtk_tree_view_columns_autosize(GTK_TREE_VIEW(view));
-  gtk_container_add(GTK_CONTAINER(sw), view);
-  preport->tree_view = GTK_TREE_VIEW(view);
+  economy_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
+  g_signal_connect(economy_selection, "changed",
+		   G_CALLBACK(economy_selection_callback), NULL);
 
-  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
-  g_signal_connect(selection, "changed",
-                   G_CALLBACK(economy_report_selection_callback), preport);
-
-  for (i = 0; (title = economy_report_column_name(i)); i++) {
+  for (i=0; i<ARRAY_SIZE(model_types); i++) {
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *col;
-    GType type = gtk_tree_model_get_column_type(GTK_TREE_MODEL(store), i);
 
-    if (GDK_TYPE_PIXBUF == type) {
+    if (model_types[i] == GDK_TYPE_PIXBUF) {
       renderer = gtk_cell_renderer_pixbuf_new();
-      col = gtk_tree_view_column_new_with_attributes(title, renderer,
-                                                     "pixbuf", i, NULL);
-    } else if (G_TYPE_BOOLEAN == type) {
-      renderer = gtk_cell_renderer_toggle_new();
-      col = gtk_tree_view_column_new_with_attributes(title, renderer,
-                                                     "active", i, "visible",
-                                                     ERD_COL_BOOL_VISIBLE,
-                                                     NULL);
+
+      col = gtk_tree_view_column_new_with_attributes(titles[i], renderer,
+	  "pixbuf", i, NULL);
     } else {
       renderer = gtk_cell_renderer_text_new();
-      col = gtk_tree_view_column_new_with_attributes(title, renderer,
-                                                     "text", i, NULL);
-    }
 
-    if (i > 1) {
-      g_object_set(G_OBJECT(renderer), "xalign", 1.0, NULL);
-      gtk_tree_view_column_set_alignment(col, 1.0);
+      col = gtk_tree_view_column_new_with_attributes(titles[i], renderer,
+	  "text", i, NULL);
+
+      if (i > 1) {
+	GValue value = { 0, };
+
+	g_value_init(&value, G_TYPE_FLOAT);
+	g_value_set_float(&value, 1.0);
+	g_object_set_property(G_OBJECT(renderer), "xalign", &value);
+	g_value_unset(&value);
+
+	gtk_tree_view_column_set_alignment(col, 1.0);
+      }
     }
 
     gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
   }
+  gtk_container_add(GTK_CONTAINER(sw), view);
 
-  label = gtk_label_new(NULL);
-  gtk_box_pack_start(vbox, label, FALSE, FALSE, 0);
-  gtk_misc_set_padding(GTK_MISC(label), 5, 5);
-  preport->label = GTK_LABEL(label);
+  economy_label2 = gtk_label_new(_("Total Cost:"));
+  gtk_box_pack_start(GTK_BOX(economy_dialog_shell->vbox), economy_label2,
+      FALSE, FALSE, 0);
+  gtk_misc_set_padding(GTK_MISC(economy_label2), 5, 5);
 
-  button = gui_dialog_add_button(preport->shell, _("Sell _Obsolete"),
-                                 ERD_RES_SELL_OBSOLETE);
-  gtk_widget_set_sensitive(button, FALSE);
+  sellobsolete_command =
+    gui_dialog_add_button(economy_dialog_shell, _("Sell _Obsolete"),
+	ECONOMY_SELL_OBSOLETE);
+  gtk_widget_set_sensitive(sellobsolete_command, FALSE);
 
-  button = gui_dialog_add_button(preport->shell, _("Sell _All"),
-                                 ERD_RES_SELL_ALL);
-  gtk_widget_set_sensitive(button, FALSE);
+  sellall_command =
+    gui_dialog_add_button(economy_dialog_shell, _("Sell _All"),
+	ECONOMY_SELL_ALL);
+  gtk_widget_set_sensitive(sellall_command, FALSE);
 
-  button = gui_dialog_add_button(preport->shell, _("_Disband"),
-                                 ERD_RES_DISBAND_UNITS);
-  gtk_widget_set_sensitive(button, FALSE);
+  gui_dialog_add_button(economy_dialog_shell,
+      GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
 
-  gui_dialog_add_button(preport->shell, GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+  gui_dialog_response_set_callback(economy_dialog_shell,
+      economy_command_callback);
 
-  gui_dialog_set_default_response(preport->shell, GTK_RESPONSE_CLOSE);
-  gui_dialog_response_set_callback(preport->shell,
-                                   economy_report_command_callback);
+  economy_report_dialog_update();
+  gui_dialog_set_default_size(economy_dialog_shell, -1, 350);
 
-  gui_dialog_set_default_size(preport->shell, -1, 350);
-  gui_dialog_show_all(preport->shell);
+  gui_dialog_set_default_response(economy_dialog_shell, GTK_RESPONSE_CLOSE);
 
-  economy_report_update(preport);
+  gui_dialog_show_all(economy_dialog_shell);
 
   gtk_tree_view_focus(GTK_TREE_VIEW(view));
 }
 
-/****************************************************************************
-  Free an economy report.
-****************************************************************************/
-static void economy_report_free(struct economy_report *preport)
+
+/****************************************************************
+  Called when a building type is selected in the economy list.
+*****************************************************************/
+static void economy_selection_callback(GtkTreeSelection *selection,
+				       gpointer data)
 {
-  fc_assert_ret(NULL != preport);
+  gint row = gtk_tree_selection_get_row(selection);
 
-  gui_dialog_destroy(preport->shell);
-  fc_assert(NULL == preport->shell);
+  if (row >= 0) {
+    switch (economy_row_type[row].kind) {
+    case VUT_IMPROVEMENT:
+    {
+      /* The user has selected an improvement type. */
+      struct impr_type *pimprove = economy_row_type[row].value.building;
+      bool is_sellable = can_sell_building(pimprove);
 
-  memset(preport, 0, sizeof(*preport));
-}
-
-/****************************************************************************
-  Create the economy report if needed.
-****************************************************************************/
-void economy_report_dialog_popup(bool raise)
-{
-  if (NULL == economy_report.shell) {
-    economy_report_init(&economy_report);
-  }
-
-  gui_dialog_present(economy_report.shell);
-  if (raise) {
-    gui_dialog_raise(economy_report.shell);
-  }
-}
-
-/****************************************************************************
-  Close the economy report dialog.
-****************************************************************************/
-void economy_report_dialog_popdown(void)
-{
-  if (NULL != economy_report.shell) {
-    economy_report_free(&economy_report);
-  }
-}
-
-/****************************************************************************
-  Update the economy report dialog.
-****************************************************************************/
-void real_economy_report_dialog_update(void)
-{
-  if (NULL != economy_report.shell) {
-    economy_report_update(&economy_report);
-  }
-}
-
-
-/****************************************************************************
-                           UNITS REPORT DIALOG
-****************************************************************************/
-struct units_report {
-  struct gui_dialog *shell;
-  GtkTreeView *tree_view;
-};
-
-static struct units_report units_report = { NULL, };
-
-enum units_report_response {
-  URD_RES_NEAREST = 1,
-  URD_RES_UPGRADE
-};
-
-/* Those values must match the functions units_report_store_new() and
- * units_report_column_name(). */
-enum units_report_columns {
-  URD_COL_UTYPE_NAME,
-  URD_COL_UPGRADABLE,
-  URD_COL_IN_PROJECT,
-  URD_COL_ACTIVE,
-  URD_COL_SHIELD,
-  URD_COL_FOOD,
-  URD_COL_GOLD,
-
-  /* Not visible. */
-  URD_COL_TEXT_WEIGHT,
-  URD_COL_BOOL_VISIBLE,
-  URD_COL_UTYPE_ID,
-
-  URD_COL_NUM
-};
-
-/****************************************************************************
-  Create a new units report list store.
-****************************************************************************/
-static GtkListStore *units_report_store_new(void)
-{
-  return gtk_list_store_new(URD_COL_NUM,
-                            G_TYPE_STRING,      /* URD_COL_UTYPE_NAME */
-                            G_TYPE_BOOLEAN,     /* URD_COL_UPGRADABLE */
-                            G_TYPE_INT,         /* URD_COL_IN_PROJECT */
-                            G_TYPE_INT,         /* URD_COL_ACTIVE */
-                            G_TYPE_INT,         /* URD_COL_SHIELD */
-                            G_TYPE_INT,         /* URD_COL_FOOD */
-                            G_TYPE_INT,         /* URD_COL_GOLD */
-                            G_TYPE_INT,         /* URD_COL_TEXT_WEIGHT */
-                            G_TYPE_BOOLEAN,     /* URD_COL_BOOL_VISIBLE */
-                            G_TYPE_INT);        /* URD_COL_UTYPE_ID */
-}
-
-/****************************************************************************
-  Returns the title of the column (translated).
-****************************************************************************/
-static const char *units_report_column_name(enum units_report_columns col)
-{
-  switch (col) {
-  case URD_COL_UTYPE_NAME:
-    return _("Unit Type");
-  case URD_COL_UPGRADABLE:
-    return Q_("?Upgradable unit [short]:U");
-  case URD_COL_IN_PROJECT:
-    /* TRANS: "In project" abbreviation. */
-    return _("In-Prog");
-  case URD_COL_ACTIVE:
-    return _("Active");
-  case URD_COL_SHIELD:
-    return _("Shield");
-  case URD_COL_FOOD:
-    return _("Food");
-  case URD_COL_GOLD:
-    return _("Gold");
-  case URD_COL_TEXT_WEIGHT:
-  case URD_COL_BOOL_VISIBLE:
-  case URD_COL_UTYPE_ID:
-  case URD_COL_NUM:
-    break;
-  }
-
-  return NULL;
-}
-
-/****************************************************************************
-  Update the units report.
-****************************************************************************/
-static void units_report_update(struct units_report *preport)
-{
-  struct urd_info {
-    int active_count;
-    int building_count;
-    int upkeep[O_LAST];
-  };
-
-  struct urd_info unit_array[utype_count()];
-  struct urd_info unit_totals;
-  struct urd_info *info;
-  GtkTreeSelection *selection;
-  GtkTreeModel *model;
-  GtkListStore *store;
-  GtkTreeIter iter;
-  Unit_type_id selected, utype_id;
-
-  fc_assert_ret(NULL != preport);
-
-  memset(unit_array, '\0', sizeof(unit_array));
-  memset(&unit_totals, '\0', sizeof(unit_totals));
-
-  /* Count units. */
-  players_iterate(pplayer) {
-    if (client_has_player() && pplayer != client_player()) {
-      continue;
+      gtk_widget_set_sensitive(sellobsolete_command, is_sellable
+			       && can_client_issue_orders()
+			       && improvement_obsolete(client.conn.playing, pimprove));
+      gtk_widget_set_sensitive(sellall_command, is_sellable
+			       && can_client_issue_orders());
+      break;
     }
-
-    unit_list_iterate(pplayer->units, punit) {
-      info = unit_array + utype_index(unit_type(punit));
-
-      if (0 != punit->homecity) {
-        output_type_iterate(o) {
-          info->upkeep[o] += punit->upkeep[o];
-        } output_type_iterate_end;
-      }
-      info->active_count++;
-    } unit_list_iterate_end;
-    city_list_iterate(pplayer->cities, pcity) {
-      if (VUT_UTYPE == pcity->production.kind) {
-        info = unit_array + utype_index(pcity->production.value.utype);
-        info->building_count++;
-      }
-    } city_list_iterate_end;
-  } players_iterate_end;
-
-  /* Save selection. */
-  selection = gtk_tree_view_get_selection(preport->tree_view);
-  if (gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    gtk_tree_model_get(model, &iter, URD_COL_UTYPE_ID, &selected, -1);
+    case VUT_UTYPE:
+      /* An unit has been selected */
+      gtk_widget_set_sensitive(sellall_command, can_client_issue_orders());
+      break;
+    default:
+      assert(0);
+      break;
+    };
   } else {
-    selected = -1;
-  }
-
-  /* Make the store. */
-  model = gtk_tree_view_get_model(preport->tree_view);
-  store = GTK_LIST_STORE(model);
-  gtk_list_store_clear(store);
-
-  unit_type_iterate(utype) {
-    utype_id = utype_index(utype);
-    info = unit_array + utype_id;
-
-    if (0 == info->active_count && 0 == info->building_count) {
-      continue;         /* We don't need a row for this type. */
-    }
-
-    
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       URD_COL_UTYPE_NAME, utype_name_translation(utype),
-                       URD_COL_UPGRADABLE, (client_has_player()
-                           && NULL != can_upgrade_unittype(client_player(),
-                                                           utype)),
-                       URD_COL_IN_PROJECT, info->building_count,
-                       URD_COL_ACTIVE, info->active_count,
-                       URD_COL_SHIELD, info->upkeep[O_SHIELD],
-                       URD_COL_FOOD, info->upkeep[O_FOOD],
-                       URD_COL_GOLD, info->upkeep[O_GOLD],
-                       URD_COL_TEXT_WEIGHT, PANGO_WEIGHT_NORMAL,
-                       URD_COL_BOOL_VISIBLE, TRUE,
-                       URD_COL_UTYPE_ID, utype_id,
-                       -1);
-    if (selected == utype_id) {
-      /* Restore the selection. */
-      gtk_tree_selection_select_iter(selection, &iter);
-    }
-
-    /* Update totals. */
-    unit_totals.active_count += info->active_count;
-    output_type_iterate(o) {
-      unit_totals.upkeep[o] += info->upkeep[o];
-    } output_type_iterate_end;
-    unit_totals.building_count += info->building_count;
-  } unit_type_iterate_end;
-
-  /* Add the total row. */
-  gtk_list_store_append(store, &iter);
-  gtk_list_store_set(store, &iter,
-                     URD_COL_UTYPE_NAME, _("Totals:"),
-                     URD_COL_UPGRADABLE, FALSE,
-                     URD_COL_IN_PROJECT, unit_totals.building_count,
-                     URD_COL_ACTIVE, unit_totals.active_count,
-                     URD_COL_SHIELD, unit_totals.upkeep[O_SHIELD],
-                     URD_COL_FOOD, unit_totals.upkeep[O_FOOD],
-                     URD_COL_GOLD, unit_totals.upkeep[O_GOLD],
-                     URD_COL_TEXT_WEIGHT, PANGO_WEIGHT_BOLD,
-                     URD_COL_BOOL_VISIBLE, FALSE,
-                     URD_COL_UTYPE_ID, U_LAST,
-                     -1);
-  if (selected == U_LAST) {
-    /* Restore the selection. */
-    gtk_tree_selection_select_iter(selection, &iter);
+    /* No selection has been made. */
+    gtk_widget_set_sensitive(sellobsolete_command, FALSE);
+    gtk_widget_set_sensitive(sellall_command, FALSE);
   }
 }
 
-/****************************************************************************
-  GtkTreeSelection "changed" signal handler.
-****************************************************************************/
-static void units_report_selection_callback(GtkTreeSelection *selection,
-                                            gpointer data)
+/****************************************************************
+...
+*****************************************************************/
+static void economy_command_callback(struct gui_dialog *dlg, int response,
+                                     gpointer callback)
 {
-  struct units_report *preport = data;
-  GtkTreeModel *model;
-  GtkTreeIter it;
-  int active_count;
-  struct unit_type *utype = NULL;
+  gint row;
+  GtkWidget *shell;
+  char buf[1024];
 
-  if (gtk_tree_selection_get_selected(selection, &model, &it)) {
-    int ut;
-
-    gtk_tree_model_get(model, &it,
-                       URD_COL_ACTIVE, &active_count,
-                       URD_COL_UTYPE_ID, &ut,
-                       -1);
-    if (0 < active_count) {
-      utype = utype_by_number(ut);
-    }
-  }
-
-  if (NULL == utype) {
-    gui_dialog_set_response_sensitive(preport->shell, URD_RES_NEAREST,
-                                      FALSE);
-    gui_dialog_set_response_sensitive(preport->shell, URD_RES_UPGRADE,
-                                      FALSE);
-  } else {
-    gui_dialog_set_response_sensitive(preport->shell, URD_RES_NEAREST, TRUE);
-    gui_dialog_set_response_sensitive(preport->shell, URD_RES_UPGRADE,
-        (can_client_issue_orders()
-         && NULL != can_upgrade_unittype(client_player(), utype)));
-  }
-}
-
-/****************************************************************************
-  Returns the nearest unit of the type 'utype'.
-****************************************************************************/
-static struct unit *find_nearest_unit(const struct unit_type *utype,
-                                      struct tile *ptile)
-{
-  struct unit *best_candidate = NULL;
-  int best_dist = FC_INFINITY, dist;
-
-  players_iterate(pplayer) {
-    if (client_has_player() && pplayer != client_player()) {
-      continue;
-    }
-
-    unit_list_iterate(pplayer->units, punit) {
-      if (utype == unit_type(punit)
-          && FOCUS_AVAIL == punit->client.focus_status
-          && 0 < punit->moves_left
-          && !punit->done_moving
-          && !punit->ai_controlled) {
-        dist = sq_map_distance(unit_tile(punit), ptile);
-        if (dist < best_dist) {
-          best_candidate = punit;
-          best_dist = dist;
-        }
-      }
-    } unit_list_iterate_end;
-  } players_iterate_end;
-
-  return best_candidate;
-}
-
-/****************************************************************************
-  Gui dialog handler.
-****************************************************************************/
-static void units_report_command_callback(struct gui_dialog *pdialog,
-                                          int response,
-                                          gpointer data)
-{
-  struct units_report *preport = data;
-  struct unit_type *utype = NULL;
-  GtkTreeSelection *selection;
-  GtkTreeModel *model;
-  GtkTreeIter it;
-
-  switch (response) {
-  case URD_RES_NEAREST:
-  case URD_RES_UPGRADE:
-    break;
-  default:
-    gui_dialog_destroy(pdialog);
+  if (response != ECONOMY_SELL_OBSOLETE && response != ECONOMY_SELL_ALL) {
+    gui_dialog_destroy(dlg);
     return;
   }
 
-  /* Nearest & upgrade commands. */
-  selection = gtk_tree_view_get_selection(preport->tree_view);
-  if (gtk_tree_selection_get_selected(selection, &model, &it)) {
-    int ut;
+  /* sell obsolete and sell all. */
+  row = gtk_tree_selection_get_row(economy_selection);
 
-    gtk_tree_model_get(model, &it, URD_COL_UTYPE_ID, &ut, -1);
-    utype = utype_by_number(ut);
-  }
+  switch (economy_row_type[row].kind) {
+  case VUT_IMPROVEMENT:
+  {
+    struct impr_type *pimprove = economy_row_type[row].value.building;
+    if (response == ECONOMY_SELL_ALL) {
+      shell = gtk_message_dialog_new(
+	  NULL,
+	  GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+	  GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
+	  _("Do you really wish to sell your %s?\n"),
+	  improvement_name_translation(pimprove));
+      setup_dialog(shell, gui_dialog_get_toplevel(dlg));
+      gtk_window_set_title(GTK_WINDOW(shell), _("Sell Improvements"));
 
-  if (response == URD_RES_NEAREST) {
-    struct tile *ptile;
-    struct unit *punit;
-
-    ptile = get_center_tile_mapcanvas();
-    if ((punit = find_nearest_unit(utype, ptile))) {
-      center_tile_mapcanvas(unit_tile(punit));
-
-      if (ACTIVITY_IDLE == punit->activity
-          || ACTIVITY_SENTRY == punit->activity) {
-        if (can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-          unit_focus_set_and_select(punit);
-        }
+      if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
+	gtk_widget_destroy(shell);
+      } else {
+	gtk_widget_destroy(shell);
+	return;
       }
     }
-  } else if (can_client_issue_orders()) {
-    GtkWidget *shell;
-    struct unit_type *upgrade = can_upgrade_unittype(client_player(), utype);
 
-    shell = gtk_message_dialog_new(NULL,
-                                   GTK_DIALOG_MODAL
-                                   | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                   GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-                                   _("Upgrade as many %s to %s as possible "
-                                     "for %d gold each?\nTreasury contains "
-                                     "%d gold."),
-                                   utype_name_translation(utype),
-                                   utype_name_translation(upgrade),
-                                   unit_upgrade_price(client_player(),
-                                                      utype, upgrade),
-                                   client_player()->economic.gold);
-    setup_dialog(shell, gui_dialog_get_toplevel(preport->shell));
+    sell_all_improvements(pimprove, response!= ECONOMY_SELL_ALL, buf, sizeof(buf));
+    break;
+  }
+  case VUT_UTYPE:
+    if (response== ECONOMY_SELL_OBSOLETE) {
+      return;
+    }
+    disband_all_units(economy_row_type[row].value.utype, FALSE, buf, sizeof(buf));
+    break;
+  default:
+    assert(0);
+    break;
+  };
 
-    gtk_window_set_title(GTK_WINDOW(shell), _("Upgrade Obsolete Units"));
+  shell = gtk_message_dialog_new(
+      NULL,
+      GTK_DIALOG_DESTROY_WITH_PARENT,
+      GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
+      "%s", buf);
+  setup_dialog(shell, gui_dialog_get_toplevel(dlg));
 
-    if (GTK_RESPONSE_YES == gtk_dialog_run(GTK_DIALOG(shell))) {
-      dsend_packet_unit_type_upgrade(&client.conn, utype_number(utype));
+  g_signal_connect(shell, "response", G_CALLBACK(gtk_widget_destroy), NULL);
+  gtk_window_set_title(GTK_WINDOW(shell), _("Sell-Off: Results"));
+  gtk_window_present(GTK_WINDOW(shell));
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void economy_report_dialog_update(void)
+{
+  if(!is_report_dialogs_frozen() && economy_dialog_shell) {
+    int tax, total_impr, total_unit, i, entries_used, nbr_impr;
+    char economy_total[48];
+    struct improvement_entry entries[B_LAST];
+    struct unit_entry entries_units[U_LAST];
+    GtkTreeIter it;
+    GValue value = { 0, };
+
+    gtk_list_store_clear(economy_store);
+
+    get_economy_report_data(entries, &entries_used, &total_impr, &tax);
+
+    for (i = 0; i < entries_used; i++) {
+      struct improvement_entry *p = &entries[i];
+      struct sprite *sprite = get_building_sprite(tileset, p->type);
+
+      gtk_list_store_append(economy_store, &it);
+      gtk_list_store_set(economy_store, &it,
+			 0, sprite_get_pixbuf(sprite),
+			 2, p->count,
+			 3, p->cost,
+			 4, p->total_cost, -1);
+      g_value_init(&value, G_TYPE_STRING);
+      g_value_set_static_string(&value, improvement_name_translation(p->type));
+      gtk_list_store_set_value(economy_store, &it, 1, &value);
+      g_value_unset(&value);
+
+      economy_row_type[i].kind = VUT_IMPROVEMENT;
+      economy_row_type[i].value.building = p->type;
     }
 
-    gtk_widget_destroy(shell);
+    nbr_impr = entries_used;
+    entries_used = 0;
+    get_economy_report_units_data(entries_units, &entries_used, &total_unit);
+
+    for (i = 0; i < entries_used; i++) {
+      gtk_list_store_append(economy_store, &it);
+      gtk_list_store_set(economy_store, &it,
+			 2, entries_units[i].count,
+			 3, entries_units[i].cost,
+			 4, entries_units[i].total_cost, -1);
+      g_value_init(&value, G_TYPE_STRING);
+      g_value_set_static_string(&value, utype_name_translation(entries_units[i].type));
+      gtk_list_store_set_value(economy_store, &it, 1, &value);
+      g_value_unset(&value);
+    
+      economy_row_type[i + nbr_impr].kind = VUT_UTYPE;
+      economy_row_type[i + nbr_impr].value.utype = entries_units[i].type;
+    }
+
+    my_snprintf(economy_total, sizeof(economy_total),
+		_("Income: %d    Total Costs: %d"), tax, total_impr + total_unit); 
+    gtk_label_set_text(GTK_LABEL(economy_label2), economy_total);
+  }  
+}
+
+/****************************************************************
+
+                      ACTIVE UNITS REPORT DIALOG
+ 
+****************************************************************/
+
+#define AU_COL 7
+
+/****************************************************************
+...
+****************************************************************/
+void popup_activeunits_report_dialog(bool raise)
+{
+  if(!activeunits_dialog_shell) {
+    activeunits_dialog_shell_is_modal = FALSE;
+    
+    create_activeunits_report_dialog(FALSE);
+  }
+
+  gui_dialog_present(activeunits_dialog_shell);
+  if (raise) {
+    gui_dialog_raise(activeunits_dialog_shell);
   }
 }
 
-/****************************************************************************
-  Create a units report.
-****************************************************************************/
-static void units_report_init(struct units_report *preport)
+/****************************************************************
+ Closes the units report dialog.
+****************************************************************/
+void popdown_activeunits_report_dialog(void)
 {
-  GtkWidget *view, *sw, *align, *button;
-  GtkListStore *store;
-  GtkTreeSelection *selection;
-  GtkBox *vbox;
-  const char *title;
-  enum units_report_columns i;
+  if (activeunits_dialog_shell) {
+    gui_dialog_destroy(activeunits_dialog_shell);
+  }
+}
 
-  fc_assert_ret(NULL != preport);
+ 
+/****************************************************************
+...
+*****************************************************************/
+void create_activeunits_report_dialog(bool make_modal)
+{
+  static const char *titles[AU_COL] = {
+    N_("Unit Type"),
+    N_("?Upgradable unit [short]:U"),
+    N_("In-Prog"),
+    N_("Active"),
+    N_("Shield"),
+    N_("Food"),
+    N_("Gold")
+  };
+  static bool titles_done;
+  int i;
 
-  gui_dialog_new(&preport->shell, GTK_NOTEBOOK(top_notebook), preport);
-  gui_dialog_set_title(preport->shell, _("Units"));
-  vbox = GTK_BOX(preport->shell->vbox);
+  static GType model_types[AU_COL+2] = {
+    G_TYPE_STRING,
+    G_TYPE_BOOLEAN,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_BOOLEAN,
+    G_TYPE_INT
+  };
+  GtkWidget *view, *sw, *align;
+
+  intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+
+  gui_dialog_new(&activeunits_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL);
+  gui_dialog_set_title(activeunits_dialog_shell, _("Units"));
 
   align = gtk_alignment_new(0.5, 0.0, 0.0, 1.0);
-  gtk_box_pack_start(vbox, align, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(activeunits_dialog_shell->vbox), align,
+      TRUE, TRUE, 0);
+
+  activeunits_store = gtk_list_store_newv(ARRAY_SIZE(model_types), model_types);
 
   sw = gtk_scrolled_window_new(NULL,NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-                                      GTK_SHADOW_ETCHED_IN);
+				      GTK_SHADOW_ETCHED_IN);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-                                 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+				 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(align), sw);
 
-  store = units_report_store_new();
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
-  g_object_unref(store);
+  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(activeunits_store));
+  g_object_unref(activeunits_store);
   gtk_widget_set_name(view, "small_font");
   gtk_tree_view_columns_autosize(GTK_TREE_VIEW(view));
-  gtk_container_add(GTK_CONTAINER(sw), view);
-  preport->tree_view = GTK_TREE_VIEW(view);
+  activeunits_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
+  g_signal_connect(activeunits_selection, "changed",
+	G_CALLBACK(activeunits_selection_callback), NULL);
 
-  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
-  g_signal_connect(selection, "changed",
-                   G_CALLBACK(units_report_selection_callback), preport);
-
-  for (i = 0; (title = units_report_column_name(i)); i++) {
+  for (i=0; i<AU_COL; i++) {
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *col;
 
-    if (G_TYPE_BOOLEAN
-        == gtk_tree_model_get_column_type(GTK_TREE_MODEL(store), i)) {
+    if (model_types[i] == G_TYPE_BOOLEAN) {
       renderer = gtk_cell_renderer_toggle_new();
-      col = gtk_tree_view_column_new_with_attributes(title, renderer,
-                                                     "active", i, "visible",
-                                                     URD_COL_BOOL_VISIBLE,
-                                                     NULL);
+      
+      col = gtk_tree_view_column_new_with_attributes(titles[i], renderer,
+	"active", i, "visible", AU_COL, NULL);
     } else {
       renderer = gtk_cell_renderer_text_new();
-      col = gtk_tree_view_column_new_with_attributes(title, renderer,
-                                                     "text", i, "weight",
-                                                     URD_COL_TEXT_WEIGHT,
-                                                     NULL);
+      
+      col = gtk_tree_view_column_new_with_attributes(titles[i], renderer,
+	"text", i, NULL);
     }
 
     if (i > 0) {
@@ -1558,206 +1061,346 @@ static void units_report_init(struct units_report *preport)
 
     gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
   }
+  gtk_container_add(GTK_CONTAINER(sw), view);
 
-  button = gui_dialog_add_stockbutton(preport->shell, GTK_STOCK_FIND,
-                                      _("Find _Nearest"), URD_RES_NEAREST);
-  gtk_widget_set_sensitive(button, FALSE);
+  gui_dialog_add_stockbutton(activeunits_dialog_shell, GTK_STOCK_FIND,
+      _("Find _Nearest"), ACTIVEUNITS_NEAREST);
+  gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+      				    ACTIVEUNITS_NEAREST, FALSE);	
+  
+  gui_dialog_add_button(activeunits_dialog_shell,
+      _("_Upgrade"), ACTIVEUNITS_UPGRADE);
+  gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+      				    ACTIVEUNITS_UPGRADE, FALSE);	
 
-  button = gui_dialog_add_button(preport->shell, _("_Upgrade"),
-                                 URD_RES_UPGRADE);
-  gtk_widget_set_sensitive(button, FALSE);
+  gui_dialog_add_button(activeunits_dialog_shell, GTK_STOCK_CLOSE,
+      GTK_RESPONSE_CLOSE);
 
-  gui_dialog_add_button(preport->shell, GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+  gui_dialog_set_default_response(activeunits_dialog_shell,
+      GTK_RESPONSE_CLOSE);
 
-  gui_dialog_set_default_response(preport->shell, GTK_RESPONSE_CLOSE);
-  gui_dialog_response_set_callback(preport->shell,
-                                   units_report_command_callback);
+  gui_dialog_response_set_callback(activeunits_dialog_shell,
+      activeunits_command_callback);
 
-  gui_dialog_set_default_size(preport->shell, -1, 350);
-  gui_dialog_show_all(preport->shell);
+  activeunits_report_dialog_update();
+  gui_dialog_set_default_size(activeunits_dialog_shell, -1, 350);
 
-  units_report_update(preport);
+  gui_dialog_show_all(activeunits_dialog_shell);
+
   gtk_tree_view_focus(GTK_TREE_VIEW(view));
 }
 
-/****************************************************************************
-  Free an units report.
-****************************************************************************/
-static void units_report_free(struct units_report *preport)
+/****************************************************************
+...
+*****************************************************************/
+static void activeunits_selection_callback(GtkTreeSelection *selection,
+					   gpointer data)
 {
-  fc_assert_ret(NULL != preport);
+  struct unit_type *utype;
+  GtkTreeModel *model;
+  GtkTreeIter it;
 
-  gui_dialog_destroy(preport->shell);
-  fc_assert(NULL == preport->shell);
+  utype = NULL;
+  if (gtk_tree_selection_get_selected(activeunits_selection, &model, &it)) {
+    int ut;
 
-  memset(preport, 0, sizeof(*preport));
-}
-
-/****************************************************************************
-  Create the units report if needed.
-****************************************************************************/
-void units_report_dialog_popup(bool raise)
-{
-  if (NULL == units_report.shell) {
-    units_report_init(&units_report);
+    gtk_tree_model_get(model, &it, AU_COL + 1, &ut, -1);
+    utype = utype_by_number(ut);
   }
 
-  gui_dialog_present(units_report.shell);
-  if (raise) {
-    gui_dialog_raise(units_report.shell);
-  }
-}
 
-/****************************************************************************
-  Closes the units report dialog.
-****************************************************************************/
-void units_report_dialog_popdown(void)
-{
-  if (NULL != units_report.shell) {
-    units_report_free(&units_report);
-    fc_assert(NULL == units_report.shell);
-  }
-}
+  if (utype == NULL) {
+    gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+				      ACTIVEUNITS_NEAREST, FALSE);
 
-/****************************************************************************
-  Update the units report dialog.
-****************************************************************************/
-void real_units_report_dialog_update(void)
-{
-  if (NULL != units_report.shell) {
-    units_report_update(&units_report);
+    gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+				      ACTIVEUNITS_UPGRADE, FALSE);
+  } else {
+    gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+				      ACTIVEUNITS_NEAREST,
+				      can_client_issue_orders());	
+    
+    gui_dialog_set_response_sensitive(activeunits_dialog_shell,
+		ACTIVEUNITS_UPGRADE,
+		(can_client_issue_orders()
+		 && NULL != can_upgrade_unittype(client.conn.playing, utype)));
   }
 }
 
-
-/****************************************************************************
-                         FINAL REPORT DIALOG
-****************************************************************************/
-struct endgame_report {
-  struct gui_dialog *shell;
-  GtkTreeView *tree_view;
-};
-
-enum endgame_report_columns {
-  FRD_COL_PLAYER,
-  FRD_COL_NATION,
-  FRD_COL_SCORE,
-
-  FRD_COL_NUM
-};
-
-static struct endgame_report endgame_report = { NULL, };
-
-/****************************************************************************
-  Returns the title of the column (translated).
-****************************************************************************/
-static const char *
-endgame_report_column_name(enum endgame_report_columns col)
+/****************************************************************
+...
+*****************************************************************/
+static struct unit *find_nearest_unit(const struct unit_type *type,
+				      struct tile *ptile)
 {
-  switch (col) {
-  case FRD_COL_PLAYER:
-    return _("Player\n");
-  case FRD_COL_NATION:
-    return _("Nation\n");
-  case FRD_COL_SCORE:
-    return _("Score\n");
-  case FRD_COL_NUM:
-    break;
+  struct unit *best_candidate;
+  int best_dist = FC_INFINITY;
+
+  best_candidate = NULL;
+  if (NULL == client.conn.playing) {
+    return NULL;
   }
 
-  return NULL;
+  unit_list_iterate(client.conn.playing->units, punit) {
+    if (unit_type(punit) == type) {
+      if (punit->focus_status==FOCUS_AVAIL
+	  && punit->moves_left > 0
+	  && !punit->done_moving
+	  && !punit->ai.control) {
+	int d;
+	d=sq_map_distance(punit->tile, ptile);
+	if(d<best_dist) {
+	  best_candidate = punit;
+	  best_dist = d;
+	}
+      }
+    }
+  }
+  unit_list_iterate_end;
+  return best_candidate;
 }
 
-/****************************************************************************
-  Fill a final report with statistics for each player.
-****************************************************************************/
-static void endgame_report_update(struct endgame_report *preport,
-                                  const struct packet_endgame_report *packet)
+/****************************************************************
+...
+*****************************************************************/
+static void activeunits_command_callback(struct gui_dialog *dlg, int response,
+                                         gpointer data)
 {
-  const size_t col_num = packet->category_num + FRD_COL_NUM;
-  GType col_types[col_num];
-  GtkListStore *store;
-  GtkTreeIter iter;
-  GtkTreeViewColumn *col;
-  int i, j;
+  struct unit_type *utype1 = NULL;
+  GtkTreeModel *model;
+  GtkTreeIter   it;
 
-  fc_assert_ret(NULL != preport);
-
-  /* Remove the old columns. */
-  while ((col = gtk_tree_view_get_column(preport->tree_view, 0))) {
-    gtk_tree_view_remove_column(preport->tree_view, col);
+  switch (response) {
+    case ACTIVEUNITS_NEAREST:
+    case ACTIVEUNITS_UPGRADE:
+      break;
+    default:
+      gui_dialog_destroy(dlg);
+      return;
   }
 
-  /* Create the new model. */
-  col_types[FRD_COL_PLAYER] = G_TYPE_STRING;
-  col_types[FRD_COL_NATION] = GDK_TYPE_PIXBUF;
-  col_types[FRD_COL_SCORE] = G_TYPE_INT;
-  for (i = FRD_COL_NUM; i < col_num; i++) {
-    col_types[i] = G_TYPE_INT;
-  }
-  store = gtk_list_store_newv(col_num, col_types);
-  gtk_tree_view_set_model(preport->tree_view, GTK_TREE_MODEL(store));
-  g_object_unref(G_OBJECT(store));
+  /* nearest & upgrade commands. */
+  if (gtk_tree_selection_get_selected(activeunits_selection, &model, &it)) {
+    int ut;
 
-  /* Create the new columns. */
-  for (i = 0; i < col_num; i++) {
+    gtk_tree_model_get(model, &it, AU_COL + 1, &ut, -1);
+    utype1 = utype_by_number(ut);
+  }
+
+  CHECK_UNIT_TYPE(utype1);
+
+  if (response == ACTIVEUNITS_NEAREST) {
+    struct tile *ptile;
+    struct unit *punit;
+
+    ptile = get_center_tile_mapcanvas();
+    if ((punit = find_nearest_unit(utype1, ptile))) {
+      center_tile_mapcanvas(punit->tile);
+
+      if (punit->activity == ACTIVITY_IDLE
+	  || punit->activity == ACTIVITY_SENTRY) {
+	if (can_unit_do_activity(punit, ACTIVITY_IDLE)) {
+	  set_unit_focus_and_select(punit);
+	}
+      }
+    }
+  } else if (can_client_issue_orders()) {
+    GtkWidget *shell;
+    struct unit_type *ut2 = can_upgrade_unittype(client.conn.playing, utype1);
+
+    shell = gtk_message_dialog_new(
+	  NULL,
+	  GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+	  GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
+	  _("Upgrade as many %s to %s as possible for %d gold each?\n"
+	    "Treasury contains %d gold."),
+	  utype_name_translation(utype1),
+	  utype_name_translation(ut2),
+	  unit_upgrade_price(client.conn.playing, utype1, ut2),
+	  client.conn.playing->economic.gold);
+    setup_dialog(shell, gui_dialog_get_toplevel(dlg));
+
+    gtk_window_set_title(GTK_WINDOW(shell), _("Upgrade Obsolete Units"));
+
+    if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
+      dsend_packet_unit_type_upgrade(&client.conn, utype_number(utype1));
+    }
+
+    gtk_widget_destroy(shell);
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+void activeunits_report_dialog_update(void)
+{
+  struct repoinfo {
+    int active_count;
+    int upkeep[O_LAST];
+    int building_count;
+  };
+
+  if (is_report_dialogs_frozen() || !activeunits_dialog_shell) {
+    return;
+  }
+
+  gtk_list_store_clear(activeunits_store);
+  if (client_has_player()) {
+    int    k, can;
+    struct repoinfo unitarray[U_LAST];
+    struct repoinfo unittotals;
+    GtkTreeIter it;
+    GValue value = { 0, };
+
+    gtk_list_store_clear(activeunits_store);
+
+    memset(unitarray, '\0', sizeof(unitarray));
+    unit_list_iterate(client_player()->units, punit) {
+      struct repoinfo *info = unitarray + utype_index(unit_type(punit));
+
+      if (0 != punit->homecity) {
+        output_type_iterate(o) {
+          info->upkeep[o] += punit->upkeep[o];
+        } output_type_iterate_end;
+      }
+      info->active_count++;
+    } unit_list_iterate_end;
+    city_list_iterate(client_player()->cities, pcity) {
+      if (VUT_UTYPE == pcity->production.kind) {
+        unitarray[utype_index(pcity->production.value.utype)].building_count++;
+      }
+    } city_list_iterate_end;
+
+    k = 0;
+    memset(&unittotals, '\0', sizeof(unittotals));
+    unit_type_iterate(punittype) {
+      Unit_type_id uti = utype_index(punittype);
+      if (unitarray[uti].active_count > 0
+	  || unitarray[uti].building_count > 0) {
+	can = (NULL != can_upgrade_unittype(client.conn.playing, punittype));
+	
+        gtk_list_store_append(activeunits_store, &it);
+	gtk_list_store_set(activeunits_store, &it,
+		1, can,
+		2, unitarray[uti].building_count,
+		3, unitarray[uti].active_count,
+		4, unitarray[uti].upkeep[O_SHIELD],
+		5, unitarray[uti].upkeep[O_FOOD],
+		6, unitarray[uti].upkeep[O_GOLD],
+		7, TRUE,
+		8, ((unitarray[uti].active_count > 0)
+		    ? uti : U_LAST),
+		-1);
+	g_value_init(&value, G_TYPE_STRING);
+	g_value_set_static_string(&value, utype_name_translation(punittype));
+	gtk_list_store_set_value(activeunits_store, &it, 0, &value);
+	g_value_unset(&value);
+
+	k++;
+	unittotals.active_count += unitarray[uti].active_count;
+	output_type_iterate(o) {
+	  unittotals.upkeep[o] += unitarray[uti].upkeep[o];
+	} output_type_iterate_end;
+	unittotals.building_count += unitarray[uti].building_count;
+      }
+    } unit_type_iterate_end;
+
+    gtk_list_store_append(activeunits_store, &it);
+    gtk_list_store_set(activeunits_store, &it,
+	    1, FALSE,
+    	    2, unittotals.building_count,
+    	    3, unittotals.active_count,
+    	    4, unittotals.upkeep[O_SHIELD],
+    	    5, unittotals.upkeep[O_FOOD],
+	    6, unittotals.upkeep[O_GOLD],
+	    7, FALSE,
+	    8, U_LAST, -1);
+    g_value_init(&value, G_TYPE_STRING);
+    g_value_set_static_string(&value, _("Totals:"));
+    gtk_list_store_set_value(activeunits_store, &it, 0, &value);
+    g_value_unset(&value);
+  }
+}
+
+/****************************************************************
+
+                      FINAL REPORT DIALOG
+ 
+****************************************************************/
+
+/****************************************************************
+  Prepare the Final Report dialog, and fill it with 
+  statistics for each player.
+*****************************************************************/
+static void create_endgame_report(struct packet_endgame_report *packet)
+{
+  int i;
+  static bool titles_done;
+  GtkTreeIter it;
+      
+  static const char *titles[NUM_SCORE_COLS] = {
+    N_("Player\n"),
+    N_("Score\n"),
+    N_("Population\n"),
+    /* TRANS: "M goods" = million goods */
+    N_("Trade\n(M goods)"), 
+    /* TRANS: "M tons" = million tons */
+    N_("Production\n(M tons)"), 
+    N_("Cities\n"),
+    N_("Technologies\n"),
+    N_("Military Service\n(months)"), 
+    N_("Wonders\n"),
+    N_("Research Speed\n(%)"), 
+    /* TRANS: "sq. mi." is abbreviation for "square miles" */
+    N_("Land Area\n(sq. mi.)"), 
+    /* TRANS: "sq. mi." is abbreviation for "square miles" */
+    N_("Settled Area\n(sq. mi.)"), 
+    N_("Literacy\n(%)"), 
+    N_("Spaceship\n")
+  };
+
+  static GType model_types[NUM_SCORE_COLS] = {
+    G_TYPE_STRING,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT,
+    G_TYPE_INT
+  };
+
+  intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+
+  gui_dialog_new(&endgame_report_shell, GTK_NOTEBOOK(top_notebook), NULL);
+  gui_dialog_set_title(endgame_report_shell, _("Score"));
+  gui_dialog_add_button(endgame_report_shell, GTK_STOCK_CLOSE,
+      GTK_RESPONSE_CLOSE);
+
+  gui_dialog_set_default_size(endgame_report_shell, 700, 420);
+
+  scores_store = gtk_list_store_newv(ARRAY_SIZE(model_types), model_types);
+  scores_list = gtk_tree_view_new_with_model(GTK_TREE_MODEL(scores_store));
+  g_object_unref(scores_store);
+  gtk_widget_set_name(scores_list, "small_font");
+    
+  for (i = 0; i < NUM_SCORE_COLS; i++) {
     GtkCellRenderer *renderer;
-    const char *title;
-    const char *attribute;
-
-    if (GDK_TYPE_PIXBUF == col_types[i]) {
-      renderer = gtk_cell_renderer_pixbuf_new();
-      attribute = "pixbuf";
-    } else {
-      renderer = gtk_cell_renderer_text_new();
-      attribute = "text";
-    }
-
-    if (i < FRD_COL_NUM) {
-      title = endgame_report_column_name(i);
-    } else {
-      title = packet->category_name[i - FRD_COL_NUM];
-    }
-
-    col = gtk_tree_view_column_new_with_attributes(Q_(title), renderer,
-                                                   attribute, i, NULL);
-    gtk_tree_view_append_column(preport->tree_view, col);
-    if (GDK_TYPE_PIXBUF != col_types[i]) {
-      gtk_tree_view_column_set_sort_column_id(col, i);
-    }
-  }
-
-  /* Fill the model with player stats. */
-  for (i = 0; i < packet->player_num; i++) {
-    const struct player *pplayer = player_by_number(packet->player_id[i]);
-
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       FRD_COL_PLAYER, player_name(pplayer),
-                       FRD_COL_NATION, get_flag(nation_of_player(pplayer)),
-                       FRD_COL_SCORE, packet->score[i],
-                       -1);
-    for (j = 0; j < packet->category_num; j++) {
-      gtk_list_store_set(store, &iter,
-                         j + FRD_COL_NUM, packet->category_score[j][i],
-                         -1);
-    }
-  }
-}
-
-/****************************************************************************
-  Prepare a final report.
-****************************************************************************/
-static void endgame_report_init(struct endgame_report *preport)
-{
-  GtkWidget *sw, *view;
-
-  fc_assert_ret(NULL != preport);
-
-  gui_dialog_new(&preport->shell, GTK_NOTEBOOK(top_notebook), NULL);
-  gui_dialog_set_title(preport->shell, _("Score"));
-
-  gui_dialog_set_default_size(preport->shell, 700, 420);
+    GtkTreeViewColumn *col;
+      
+    renderer = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes(titles[i], renderer,
+                                                   "text", i, NULL);
+    gtk_tree_view_column_set_sort_column_id(col, i);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(scores_list), col);
+  }  
 
   /* Setup the layout. */
   sw = gtk_scrolled_window_new(NULL, NULL);
@@ -1765,25 +1408,283 @@ static void endgame_report_init(struct endgame_report *preport)
                                       GTK_SHADOW_ETCHED_IN);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
                                  GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-  gtk_box_pack_start(GTK_BOX(preport->shell->vbox), sw, TRUE, TRUE, 0);
-
-  view = gtk_tree_view_new();
-  gtk_widget_set_name(view, "small_font");
-  gtk_container_add(GTK_CONTAINER(sw), view);
-  preport->tree_view = GTK_TREE_VIEW(view);
-
-  gui_dialog_show_all(preport->shell);
-}
-
-/****************************************************************************
-  Show a dialog with player statistics at endgame.
-****************************************************************************/
-void endgame_report_dialog_popup(const struct packet_endgame_report *packet)
-{
-  if (NULL == endgame_report.shell) {
-    endgame_report_init(&endgame_report);
+  gtk_container_add(GTK_CONTAINER(sw), scores_list);
+  gtk_box_pack_start(GTK_BOX(endgame_report_shell->vbox), sw, TRUE, TRUE, 0);
+  gui_dialog_set_default_response(endgame_report_shell, GTK_RESPONSE_CLOSE);
+  gui_dialog_show_all(endgame_report_shell);
+  
+  /* Insert score statistics into table.  */
+  gtk_list_store_clear(scores_store);
+  for (i = 0; i < packet->nscores; i++) {
+    gtk_list_store_append(scores_store, &it);
+    gtk_list_store_set(scores_store, &it,
+                       0, (gchar *)player_name(player_by_number(packet->id[i])),
+                       1, packet->score[i],
+                       2, packet->pop[i],
+                       3, packet->bnp[i],
+                       4, packet->mfg[i],
+                       5, packet->cities[i],
+                       6, packet->techs[i],
+                       7, packet->mil_service[i],
+                       8, packet->wonders[i],
+                       9, packet->research[i],
+                       10, packet->landarea[i],
+                       11, packet->settledarea[i],
+                       12, packet->literacy[i],
+                       13, packet->spaceship[i],
+                       -1);
   }
-  endgame_report_update(&endgame_report, packet);
-
-  gui_dialog_present(endgame_report.shell);
 }
+
+/**************************************************************************
+  Show a dialog with player statistics at endgame.
+**************************************************************************/
+void popup_endgame_report_dialog(struct packet_endgame_report *packet)
+{
+  if (!endgame_report_shell){
+    create_endgame_report(packet);
+  }
+  gui_dialog_present(endgame_report_shell);
+}
+
+/*************************************************************************
+  helper function for server options dialog
+*************************************************************************/
+static void option_changed_callback(GtkWidget *widget, gpointer data) 
+{
+  /* pass along the pointer to the changed option */
+  g_object_set_data(G_OBJECT(widget), "changed", data); 
+}
+
+/*************************************************************************
+  helper function for server options dialog
+*************************************************************************/
+static void settable_options_processing(GtkWidget *final, gboolean local_update)
+{
+  const char *desired_string;
+  GtkWidget *w = final;
+
+  while (NULL != w) {
+    struct options_settable *o =
+      (struct options_settable *)g_object_get_data(G_OBJECT(w), "changed");
+
+    /* If the entry has been changed, then send the changes to the server. */
+    if (NULL != o) {
+      desired_string = NULL;
+
+      /* Get the setting string value. */
+      switch (o->stype) {
+      case SSET_BOOL:
+        desired_string = (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(w))
+                          ? "1" : "0");
+        break;
+      case SSET_INT:
+      case SSET_STRING:
+        desired_string = gtk_entry_get_text(GTK_ENTRY(w));
+        break;
+      };
+
+      if (NULL != desired_string) {
+        /* Send to server. */
+        send_chat_printf("/set %s %s", gtk_widget_get_name(w), desired_string);
+        if (local_update) {
+          /* Make a local change of the desired value for this option,
+           * probably because we want to save it before the server send its
+           * new value to us. */
+          desired_settable_option_update(gtk_widget_get_name(w),
+                                         desired_string, TRUE);
+        }
+      }
+    }
+
+    /* using the linked list, work backwards and check the previous widget */
+    w = (GtkWidget *)g_object_get_data(G_OBJECT(w), "prev");
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void settable_options_callback(GtkWidget *win, gint rid, GtkWidget *w)
+{
+  switch (rid) {
+  case GTK_RESPONSE_ACCEPT:
+    desired_settable_options_update();
+    settable_options_processing(w, TRUE);
+    options_save();
+    break;
+  case GTK_RESPONSE_APPLY:
+    settable_options_processing(w, FALSE);
+    break;
+  default:
+    break;
+  };
+  gtk_widget_destroy(win);
+}
+
+/*************************************************************************
+  Server options dialog.
+*************************************************************************/
+static void create_settable_options_dialog(void)
+{
+  int i;
+  GtkWidget *win, *book, **vbox, *label;
+  GtkWidget *prev_widget = NULL;
+  GtkTooltips *tips = gtk_tooltips_new();
+  bool *used = fc_calloc(num_options_categories, sizeof(*used));
+
+  settable_options_dialog_shell =
+    gtk_dialog_new_with_buttons(_("Game Settings"),
+      NULL, 0,
+      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
+      GTK_STOCK_APPLY, GTK_RESPONSE_APPLY,
+      GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
+      NULL);
+  win = settable_options_dialog_shell;
+
+  gtk_dialog_set_has_separator(GTK_DIALOG(win), FALSE);
+  g_signal_connect(settable_options_dialog_shell, "destroy",
+		   G_CALLBACK(gtk_widget_destroyed), &settable_options_dialog_shell);
+  setup_dialog(win, toplevel);
+
+  /* create a notebook for the options */
+  book = gtk_notebook_new();
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(win)->vbox), book, FALSE, FALSE, 2);
+
+  /* create a number of notebook pages for each category */
+  vbox = fc_calloc(num_options_categories, sizeof(*vbox));
+
+  for (i = 0; i < num_options_categories; i++) {
+    vbox[i] = gtk_vbox_new(FALSE, 2);
+    gtk_container_set_border_width(GTK_CONTAINER(vbox[i]), 6);
+    label = gtk_label_new(_(options_categories[i]));
+    gtk_notebook_append_page(GTK_NOTEBOOK(book), vbox[i], label);
+  }
+
+  /* fill each category */
+  for (i = 0; i < num_settable_options; i++) {
+    GtkWidget *ebox, *hbox, *ent = NULL;
+    struct options_settable *o = &settable_options[i];
+
+    /* create a box for the new option and insert it in the correct page */
+    hbox = gtk_hbox_new(FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox[o->scategory]), hbox, FALSE, FALSE, 0);
+    used[o->scategory] = TRUE;
+
+    /* create an event box for the option label */
+    ebox = gtk_event_box_new();
+    gtk_box_pack_start(GTK_BOX(hbox), ebox, FALSE, FALSE, 5);
+
+    /* insert the option short help as the label into the event box */
+    label = gtk_label_new(_(o->short_help));
+    gtk_container_add(GTK_CONTAINER(ebox), label);
+
+    /* if we have extra help, use that as a tooltip */
+    if ('\0' != o->extra_help[0]) {
+      char buf[4096];
+
+      my_snprintf(buf, sizeof(buf), "%s\n\n%s",
+		  o->name,
+		  _(o->extra_help));
+      gtk_tooltips_set_tip(tips, ebox, buf, NULL);
+    }
+
+    if (setting_class_is_changeable(o->sclass)
+	&& o->is_visible) {
+      double step, max, min;
+
+      /* create the proper entry method depending on the type */
+      switch (o->stype) {
+      case SSET_BOOL:
+	/* boolean */
+	ent = gtk_check_button_new();
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(ent), o->val);
+
+	g_signal_connect(ent, "toggled", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+
+      case SSET_INT:
+	/* integer */
+
+	min = o->min;
+	max = o->max;
+ 
+	/* pick a reasonable step size */
+	step = ceil((max - min) / 100.0);
+	if (step > 100.0) {
+	  /* this is ridiculous, the bounds must be meaningless */
+	  step = 5.0;
+	}
+
+	ent = gtk_spin_button_new_with_range(min, max, step);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(ent), o->val);
+
+	g_signal_connect(ent, "changed", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+      case SSET_STRING:
+	/* string */
+	ent = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(ent), o->strval);
+
+	g_signal_connect(ent, "changed", 
+			 G_CALLBACK(option_changed_callback), o);
+	break;
+      }
+    } else {
+      char buf[1024];
+
+      if (o->is_visible) {
+	switch (o->stype) {
+	case SSET_BOOL:
+	  my_snprintf(buf, sizeof(buf), "%s",
+		      o->val != 0 ? _("true") : _("false"));
+	  break;
+	case SSET_INT:
+	  my_snprintf(buf, sizeof(buf), "%d", o->val);
+	  break;
+	case SSET_STRING:
+	  my_snprintf(buf, sizeof(buf), "%s", o->strval);
+	  break;
+	}
+      } else {
+	my_snprintf(buf, sizeof(buf), "%s", _("(hidden)"));
+      }
+      ent = gtk_label_new(buf);
+    }
+    gtk_box_pack_end(GTK_BOX(hbox), ent, FALSE, FALSE, 0);
+
+    /* set up a linked list so we can work our way through the widgets */
+    gtk_widget_set_name(ent, o->name);
+    g_object_set_data(G_OBJECT(ent), "prev", prev_widget);
+    g_object_set_data(G_OBJECT(ent), "changed", NULL);
+    prev_widget = ent;
+  }
+
+  /* remove any unused categories pages */
+  for (i = num_options_categories - 1; i >= 0; i--) {
+    if (!used[i]) {
+      gtk_notebook_remove_page(GTK_NOTEBOOK(book), i);
+    }
+  }
+  free(used);
+
+  g_signal_connect(win, "response",
+		   G_CALLBACK(settable_options_callback), prev_widget);
+
+  gtk_widget_show_all(GTK_DIALOG(win)->vbox);
+}
+
+/**************************************************************************
+  Show a dialog with the server options.
+**************************************************************************/
+void popup_settable_options_dialog(void)
+{
+  if (!settable_options_dialog_shell) {
+    create_settable_options_dialog();
+    gtk_window_set_position(GTK_WINDOW(settable_options_dialog_shell), GTK_WIN_POS_MOUSE);
+  }
+  gtk_window_present(GTK_WINDOW(settable_options_dialog_shell));
+}
+

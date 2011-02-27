@@ -12,26 +12,26 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
+#include <stdio.h> /* for sprintf */
 #include <stdlib.h>
 #include <string.h>
 
-/* utility */
-#include "fcintl.h"
-#include "log.h"
-#include "mem.h"
-#include "shared.h"
-#include "support.h"
-#include "timing.h"
-
-/* common */
 #include "city.h"
+#include "fcintl.h"
 #include "game.h"
 #include "government.h"
+#include "hash.h"
+#include "log.h"
 #include "map.h"
+#include "mem.h"
+#include "shared.h"
 #include "specialist.h"
+#include "support.h"
+#include "timing.h"
 
 #include "cm.h"
 
@@ -72,13 +72,8 @@
  defines, structs, globals, forward declarations
 *****************************************************************************/
 
-/* Maximal iterations before the search loop is stoped. */
-#define CM_MAX_LOOP 10000
-
-#ifdef DEBUG_TIMERS
-#define GATHER_TIME_STATS
-#endif
 #ifdef DEBUG
+#define GATHER_TIME_STATS
 #define CM_DEBUG
 #endif
 
@@ -106,7 +101,7 @@ static struct {
 } performance;
 
 static void print_performance(struct one_perf *counts);
-#endif /* GATHER_TIME_STATS */
+#endif
 
 /* Fitness of a solution.  */
 struct cm_fitness {
@@ -128,7 +123,7 @@ struct cm_tile;
  */
 struct cm_tile {
   const struct cm_tile_type *type;
-  int index; /* city map index; only valid if !is_specialist */
+  int x, y; /* valid only if !is_specialist */
 };
 
 /* define the tile_vector as array<cm_tile> */
@@ -146,6 +141,12 @@ struct cm_tile {
       var = *var##p; \
       {
 #define tile_type_vector_iterate_end }} VECTOR_ITERATE_END; }
+
+static inline void tile_type_vector_add(struct tile_type_vector *tthis,
+    struct cm_tile_type *toadd) {
+  tile_type_vector_append(tthis, &toadd);
+}
+
 
 /*
  * A tile type.
@@ -216,13 +217,11 @@ struct cm_state {
   /*
    * Where we are in the search.  When we add a worker to the current
    * partial solution, we also push the tile type index on the stack.
-   */
+ */
   struct {
     int *stack;
     int size;
   } choice;
-
-  bool *workers_map; /* placement of the workers within the city map */
 };
 
 
@@ -232,47 +231,19 @@ static int num_types(const struct cm_state *state);
 
 /* debugging functions */
 #ifdef CM_DEBUG
-static void real_print_tile_type(enum log_level level, const char *file,
-                                 const char *function, int line,
-                                 const struct cm_tile_type *ptype,
-                                 const char *prefix);
-#define print_tile_type(loglevel, ptype, prefix)                            \
-  if (log_do_output_for_level(loglevel)) {                                  \
-    real_print_tile_type(loglevel, __FILE__, __FUNCTION__, __LINE__,        \
-                         ptype, prefix);                                    \
-  }
-
-static void real_print_lattice(enum log_level level, const char *file,
-                               const char *function, int line,
-                               const struct tile_type_vector *lattice);
-#define print_lattice(loglevel, lattice)                                    \
-  if (log_do_output_for_level(loglevel)) {                                  \
-    real_print_lattice(loglevel, __FILE__, __FUNCTION__, __LINE__, lattice);\
-  }
-
-static void real_print_partial_solution(enum log_level level,
-                                        const char *file,
-                                        const char *function, int line,
-                                        const struct partial_solution *soln,
-                                        const struct cm_state *state);
-#define print_partial_solution(loglevel, soln, state)                       \
-  if (log_do_output_for_level(loglevel)) {                                  \
-    real_print_partial_solution(loglevel, __FILE__, __FUNCTION__, __LINE__, \
-                                soln, state);                               \
-  }
-
+static void print_tile_type(int loglevel, const struct cm_tile_type *ptype,
+    const char *prefix);
+static void print_lattice(int loglevel,
+    const struct tile_type_vector *lattice);
+static void print_partial_solution(int loglevel,
+    const struct partial_solution *soln,
+    const struct cm_state *state);
 #else
 #define print_tile_type(loglevel, ptype, prefix)
 #define print_lattice(loglevel, lattice)
 #define print_partial_solution(loglevel, soln, state)
-#endif /* CM_DEBUG */
+#endif
 
-static void cm_result_copy(struct cm_result *result,
-                           const struct city *pcity, bool *workers_map);
-
-static double estimate_fitness(const struct cm_state *state,
-			       const int production[]);
-static bool choice_is_promising(struct cm_state *state, int newchoice);
 
 /****************************************************************************
   Initialize the CM data at the start of each game.  Note the citymap
@@ -290,7 +261,7 @@ void cm_init(void)
 
   performance.opt.wall_timer = new_timer(TIMER_USER, TIMER_ACTIVE);
   performance.opt.name = "opt";
-#endif /* GATHER_TIME_STATS */
+#endif
 }
 
 /****************************************************************************
@@ -323,44 +294,9 @@ void cm_free(void)
   free_timer(performance.greedy.wall_timer);
   free_timer(performance.opt.wall_timer);
   memset(&performance, 0, sizeof(performance));
-#endif /* GATHER_TIME_STATS */
+#endif
 }
 
-/****************************************************************************
-  Create a new cm_result.
-****************************************************************************/
-struct cm_result *cm_result_new(struct city *pcity)
-{
-  struct cm_result *result;
-
-  /* initialise all values */
-  result = fc_calloc(1, sizeof(*result));
-  result->city_radius_sq = pcity ? city_map_radius_sq_get(pcity)
-                                 : CITY_MAP_MAX_RADIUS_SQ;
-  result->worker_positions
-    = fc_calloc(city_map_tiles(result->city_radius_sq),
-                sizeof(*result->worker_positions));
-
-  /* test if the city pointer is valid; the cm_result struct can be
-   * returned as it uses the maximal possible value for the size of
-   * 'worker_positions' (= city_map_tiles(CITY_MAP_MAX_RADIUS_SQ))*/
-  fc_assert_ret_val(pcity != NULL, result);
-
-  return result;
-}
-
-/****************************************************************************
-  Destroy a cm_result.
-****************************************************************************/
-void cm_result_destroy(struct cm_result *result)
-{
-  if (result != NULL) {
-    if (result->worker_positions != NULL) {
-      FC_FREE(result->worker_positions);
-    }
-    FC_FREE(result);
-  }
-}
 
 /***************************************************************************
   Functions of tile-types.
@@ -523,8 +459,8 @@ static const struct cm_tile_type *tile_type_get(const struct cm_state *state,
 						int type)
 {
   /* Sanity check the index. */
-  fc_assert_ret_val(0 <= type, NULL);
-  fc_assert_ret_val(state->lattice.size > type, NULL);
+  assert(type >= 0);
+  assert(type < state->lattice.size);
   return state->lattice.p[type];
 }
 
@@ -536,9 +472,9 @@ static const struct cm_tile_type *tile_type_get(const struct cm_state *state,
 ****************************************************************************/
 static const struct cm_tile *tile_get(const struct cm_tile_type *ptype, int j)
 {
-  fc_assert_ret_val(!ptype->is_specialist, NULL);
-  fc_assert_ret_val(0 <= j, NULL);
-  fc_assert_ret_val(j < ptype->tiles.size, NULL);
+  assert(!ptype->is_specialist);
+  assert(j >= 0);
+  assert(j < ptype->tiles.size);
   return &ptype->tiles.p[j];
 }
 
@@ -655,29 +591,36 @@ static void copy_partial_solution(struct partial_solution *dst,
 **************************************************************************/
 
 /****************************************************************************
-  Apply the solution to state->workers_map.
+  Apply the solution to the city_map[].
+
+  Note: this function writes directly into the city_map[], unlike most
+  other code that uses accessor functions.  The city_map[] is merely a
+  scratch pad, and not applied here to the main map tiles.
 ****************************************************************************/
 static void apply_solution(struct cm_state *state,
                            const struct partial_solution *soln)
 {
+  int i;
+  int citizens = 0;
   struct city *pcity = state->pcity;
-  int i, citizens = 0, city_radius_sq = city_map_radius_sq_get(pcity);
 
 #ifdef GATHER_TIME_STATS
   performance.current->apply_count++;
 #endif
 
-  fc_assert_ret(0 == soln->idle);
+  assert(soln->idle == 0);
 
   /* Clear all specialists, and remove all workers from fields (except
    * the city center). */
   memset(&pcity->specialists, 0, sizeof(pcity->specialists));
 
-  city_map_iterate(city_radius_sq, cindex, x, y) {
-    if (is_free_worked_index(cindex)) {
-      state->workers_map[cindex] = TRUE;
-    } else {
-      state->workers_map[cindex] = FALSE;
+  city_map_iterate(x, y) {
+    if (is_free_worked_cxy(x, y)) {
+      continue;
+    }
+
+    if (C_TILE_WORKER == pcity->city_map[x][y]) {
+      pcity->city_map[x][y] = C_TILE_EMPTY;
     }
   } city_map_iterate_end;
 
@@ -704,16 +647,16 @@ static void apply_solution(struct cm_state *state,
 
       /* Place citizen workers onto the citymap tiles. */
       for (j = 0; j < nworkers; j++) {
-        const struct cm_tile *cmtile = tile_get(type, j);
+        const struct cm_tile *tile = tile_get(type, j);
 
-        state->workers_map[cmtile->index] = TRUE;
+        pcity->city_map[tile->x][tile->y] = C_TILE_WORKER;
       }
     }
   }
 
   /* Finally we must refresh the city to reset all the precomputed fields. */
-  city_refresh_from_main_map(pcity, state->workers_map);
-  fc_assert_ret(citizens == city_size_get(pcity));
+  city_refresh_from_main_map(pcity, FALSE); /* from city_map[] instead */
+  assert(citizens == pcity->size);
 }
 
 /****************************************************************************
@@ -775,13 +718,13 @@ static void convert_solution_to_result(struct cm_state *state,
   /* make a backup, apply and evaluate the solution, and restore */
   memcpy(&backup, state->pcity, sizeof(backup));
   apply_solution(state, soln);
-  cm_result_copy(result, state->pcity, state->workers_map);
+  cm_result_from_main_map(result, state->pcity, FALSE);
   memcpy(state->pcity, &backup, sizeof(backup));
 
   /* result->found_a_valid should be only true if it matches the
-   *  parameter; figure out if it does */
+     parameter ; figure out if it does */
   fitness = compute_fitness(result->surplus, result->disorder,
-                            result->happy, &state->parameter);
+			    result->happy, &state->parameter);
   result->found_a_valid = fitness.sufficient;
 }
 
@@ -816,7 +759,7 @@ static int compare_tile_type_by_lattice_order(const struct cm_tile_type *a,
   } output_type_iterate_end;
 
   /* If we get here, then we have two copies of identical types, an error */
-  fc_assert(FALSE);
+  assert(0);
   return 0;
 }
 
@@ -902,8 +845,8 @@ static void compute_tile_production(const struct city *pcity,
   The lattice_depth is not set.
 ****************************************************************************/
 static void tile_type_lattice_add(struct tile_type_vector *lattice,
-                                  const struct cm_tile_type *newtype,
-                                  int index)
+				  const struct cm_tile_type *newtype,
+				  int x, int y)
 {
   struct cm_tile_type *type;
   int i;
@@ -919,17 +862,17 @@ static void tile_type_lattice_add(struct tile_type_vector *lattice,
     /* link up to the types we dominate, and those that dominate us */
     tile_type_vector_iterate(lattice, other) {
       if (tile_type_better(other, type)) {
-        tile_type_vector_append(&type->better_types, other);
-        tile_type_vector_append(&other->worse_types, type);
+        tile_type_vector_add(&type->better_types, other);
+        tile_type_vector_add(&other->worse_types, type);
       } else if (tile_type_better(type, other)) {
-        tile_type_vector_append(&other->better_types, type);
-        tile_type_vector_append(&type->worse_types, other);
+        tile_type_vector_add(&other->better_types, type);
+        tile_type_vector_add(&type->worse_types, other);
       }
     } tile_type_vector_iterate_end;
 
     /* insert into the list */
     type->lattice_index = lattice->size;
-    tile_type_vector_append(lattice, type);
+    tile_type_vector_add(lattice, type);
   }
 
   /* Finally, add the tile to the tile type. */
@@ -937,9 +880,9 @@ static void tile_type_lattice_add(struct tile_type_vector *lattice,
     struct cm_tile tile;
 
     tile.type = type;
-    tile.index = index;
-
-    tile_vector_append(&type->tiles, tile);
+    tile.x = x;
+    tile.y = y;
+    tile_vector_append(&type->tiles, &tile);
   }
 }
 
@@ -968,7 +911,7 @@ static void init_specialist_lattice_nodes(struct tile_type_vector *lattice,
 	type.production[output] = get_specialist_output(pcity, i, output);
       } output_type_iterate_end;
 
-      tile_type_lattice_add(lattice, &type, 0);
+      tile_type_lattice_add(lattice, &type, 0, 0);
     }
   } specialist_type_iterate_end;
 }
@@ -999,7 +942,7 @@ static void top_sort_lattice(struct tile_type_vector *lattice)
   /* fill up 'next' */
   tile_type_vector_iterate(lattice, ptype) {
     if (tile_type_num_prereqs(ptype) == 0) {
-      tile_type_vector_append(next, ptype);
+      tile_type_vector_add(next, ptype);
     }
   } tile_type_vector_iterate_end;
 
@@ -1042,7 +985,7 @@ static void top_sort_lattice(struct tile_type_vector *lattice)
         /* mark and put successors on the next frontier */
         will_mark[ptype->lattice_index] = TRUE;
         tile_type_vector_iterate(&ptype->worse_types, worse) {
-          tile_type_vector_append(next, worse);
+          tile_type_vector_add(next, worse);
         } tile_type_vector_iterate_end;
 
         /* this is what we spent all this time computing. */
@@ -1099,8 +1042,8 @@ static void clean_lattice(struct tile_type_vector *lattice,
 
     forced_loop = FALSE;
 
-    if (ptype->lattice_depth >= city_size_get(pcity)) {
-      tile_type_vector_append(&tofree, ptype);
+    if (ptype->lattice_depth >= pcity->size) {
+      tile_type_vector_add(&tofree, ptype);
     } else {
       /* Remove links to children that are being removed. */
 
@@ -1113,7 +1056,7 @@ static void clean_lattice(struct tile_type_vector *lattice,
       for (ci = 0, cj = 0; ci < ptype->worse_types.size; ci++) {
         const struct cm_tile_type *ptype2 = ptype->worse_types.p[ci];
 
-        if (ptype2->lattice_depth < city_size_get(pcity)) {
+        if (ptype2->lattice_depth < pcity->size) {
           ptype->worse_types.p[cj] = ptype->worse_types.p[ci];
           cj++;
         }
@@ -1131,6 +1074,9 @@ static void clean_lattice(struct tile_type_vector *lattice,
   estimate_fitness is later, in a section of code that isolates
   much of the domain-specific knowledge.
 ****************************************************************************/
+static double estimate_fitness(const struct cm_state *state,
+			       const int production[]);
+
 static void sort_lattice_by_fitness(const struct cm_state *state,
 				    struct tile_type_vector *lattice)
 {
@@ -1150,15 +1096,19 @@ static void sort_lattice_by_fitness(const struct cm_state *state,
     lattice->p[i]->lattice_index = i;
   }
 
-  log_base(LOG_LATTICE, "sorted lattice:");
+  freelog(LOG_LATTICE, "sorted lattice:");
   print_lattice(LOG_LATTICE, lattice);
 }
 
 /****************************************************************************
-  Create the lattice.
+  Create the lattice and update related city_map[].
+
+  Note: this function writes directly into the city_map[], unlike most
+  other code that uses accessor functions.  The city_map[] is merely a
+  scratch pad, and not assumed to accurately reflect main map tiles.
 ****************************************************************************/
 static void init_tile_lattice(struct city *pcity,
-                              struct tile_type_vector *lattice)
+			      struct tile_type_vector *lattice)
 {
   struct cm_tile_type type;
   struct tile *pcenter = city_tile(pcity);
@@ -1166,15 +1116,23 @@ static void init_tile_lattice(struct city *pcity,
   /* add all the fields into the lattice */
   tile_type_init(&type); /* init just once */
 
-  city_tile_iterate_index(city_map_radius_sq_get(pcity), pcenter, ptile,
-                          index) {
+  city_tile_iterate_cxy(pcenter, ptile, x, y) {
     if (is_free_worked(pcity, ptile)) {
+      pcity->city_map[x][y] = C_TILE_WORKER;
       continue;
+    } else if (tile_worked(ptile) == pcity) {
+      /* is currently worked, but actually may be unavailable */
+      pcity->city_map[x][y] = C_TILE_WORKER;
     } else if (city_can_work_tile(pcity, ptile)) {
-      compute_tile_production(pcity, ptile, &type); /* clobbers type */
-      tile_type_lattice_add(lattice, &type, index); /* copy type if needed */
+      pcity->city_map[x][y] = C_TILE_EMPTY;
+    } else {
+      pcity->city_map[x][y] = C_TILE_UNAVAILABLE;
+      continue;
     }
-  } city_tile_iterate_index_end;
+
+    compute_tile_production(pcity, ptile, &type); /* clobbers type */
+    tile_type_lattice_add(lattice, &type, x, y); /* copy type if needed */
+  } city_tile_iterate_cxy_end;
 
   /* Add all the specialists into the lattice.  */
   init_specialist_lattice_nodes(lattice, pcity);
@@ -1208,7 +1166,7 @@ static bool choice_stack_empty(struct cm_state *state)
 ****************************************************************************/
 static int last_choice(struct cm_state *state)
 {
-  fc_assert_ret_val(!choice_stack_empty(state), -1);
+  assert(!choice_stack_empty(state));
   return state->choice.stack[state->choice.size - 1];
 }
 
@@ -1242,29 +1200,29 @@ static void add_workers(struct partial_solution *soln,
 
   /* update the number of idle workers */
   newcount = soln->idle - number;
-  fc_assert_ret(newcount >= 0);
-  fc_assert_ret(newcount <= city_size_get(state->pcity));
+  assert(newcount >= 0);
+  assert(newcount <= state->pcity->size);
   soln->idle = newcount;
 
   /* update the worker counts */
   newcount = soln->worker_counts[itype] + number;
-  fc_assert_ret(newcount >= 0);
-  fc_assert_ret(newcount <= tile_type_num_tiles(ptype));
+  assert(newcount >= 0);
+  assert(newcount <= tile_type_num_tiles(ptype));
   soln->worker_counts[itype] = newcount;
 
   /* update prereqs array: if we are no longer full but we were,
    * we need to decrement the count, and vice-versa. */
   if (old_worker_count == tile_type_num_tiles(ptype)) {
-    fc_assert_ret(number < 0);
+    assert(number < 0);
     tile_type_vector_iterate(&ptype->worse_types, other) {
       soln->prereqs_filled[other->lattice_index]--;
-      fc_assert_ret(soln->prereqs_filled[other->lattice_index] >= 0);
+      assert(soln->prereqs_filled[other->lattice_index] >= 0);
     } tile_type_vector_iterate_end;
   } else if (soln->worker_counts[itype] == tile_type_num_tiles(ptype)) {
-    fc_assert_ret(number > 0);
+    assert(number > 0);
     tile_type_vector_iterate(&ptype->worse_types, other) {
       soln->prereqs_filled[other->lattice_index]++;
-      fc_assert_ret(soln->prereqs_filled[other->lattice_index]
+      assert(soln->prereqs_filled[other->lattice_index]
           <= tile_type_num_prereqs(other));
     } tile_type_vector_iterate_end;
   }
@@ -1272,7 +1230,7 @@ static void add_workers(struct partial_solution *soln,
   /* update production */
   output_type_iterate(stat) {
     newcount = soln->production[stat] + number * ptype->production[stat];
-    fc_assert_ret(newcount >= 0);
+    assert(newcount >= 0);
     soln->production[stat] = newcount;
   } output_type_iterate_end;
 }
@@ -1301,7 +1259,7 @@ static void remove_worker(struct partial_solution *soln,
 ****************************************************************************/
 static void pop_choice(struct cm_state *state)
 {
-  fc_assert_ret(!choice_stack_empty(state));
+  assert(!choice_stack_empty(state));
   remove_worker(&state->current, last_choice(state), state);
   state->choice.size--;
 }
@@ -1327,6 +1285,8 @@ static bool prereqs_filled(const struct partial_solution *soln, int type,
     solution so far.
   If oldchoice == -1 then we return the first possible choice.
 ****************************************************************************/
+static bool choice_is_promising(struct cm_state *state, int newchoice);
+
 static int next_choice(struct cm_state *state, int oldchoice)
 {
   int newchoice;
@@ -1346,11 +1306,11 @@ static int next_choice(struct cm_state *state, int oldchoice)
     }
     if (!choice_is_promising(state, newchoice)) {
       /* heuristic says we can't beat the best going this way */
-      log_base(LOG_PRUNE_BRANCH, "--- pruning branch ---");
+      freelog(LOG_PRUNE_BRANCH, "--- pruning branch ---");
       print_partial_solution(LOG_PRUNE_BRANCH, &state->current, state);
       print_tile_type(LOG_PRUNE_BRANCH, tile_type_get(state, newchoice),
-                      " + worker on ");
-      log_base(LOG_PRUNE_BRANCH, "--- branch pruned ---");
+          " + worker on ");
+      freelog(LOG_PRUNE_BRANCH, "--- branch pruned ---");
       continue;
     }
     break;
@@ -1510,8 +1470,7 @@ static void compute_max_stats_heuristic(const struct cm_state *state,
   }
 
   /* initialize solnplus here, after the shortcut check */
-  init_partial_solution(&solnplus, num_types(state),
-                        city_size_get(state->pcity));
+  init_partial_solution(&solnplus, num_types(state), state->pcity->size);
 
   output_type_iterate(stat) {
     /* compute the solution that has soln, then the check_choice,
@@ -1541,9 +1500,9 @@ static bool choice_is_promising(struct cm_state *state, int newchoice)
 
   output_type_iterate(stat) {
     if (production[stat] < state->min_production[stat]) {
-      log_base(LOG_PRUNE_BRANCH, "--- pruning: insufficient %s (%d < %d)",
-               get_output_name(stat), production[stat],
-               state->min_production[stat]);
+      freelog(LOG_PRUNE_BRANCH, "--- pruning: insufficient %s (%d < %d)",
+	      get_output_name(stat), production[stat],
+	      state->min_production[stat]);
       return FALSE;
     }
     if (production[stat] > state->best.production[stat]) {
@@ -1553,7 +1512,7 @@ static bool choice_is_promising(struct cm_state *state, int newchoice)
     }
   } output_type_iterate_end;
   if (!beats_best) {
-    log_base(LOG_PRUNE_BRANCH, "--- pruning: best is better in all ways");
+    freelog(LOG_PRUNE_BRANCH, "--- pruning: best is better in all ways");
   }
   return beats_best;
 }
@@ -1577,6 +1536,14 @@ static void init_min_production(struct cm_state *state)
      * here is incorrectly too high, then the algorithm will fail. */
     int min;
 
+    if (o != O_SHIELD && o != O_FOOD) {
+      /* min-production calculations are only possible for food and
+       * shields.  The others depend on complex trade calculations
+       * that cannot be accounted for since the bonus from trade
+       * routes depends on the amount of trade in an unpredictable way. */
+      continue;
+    }
+
     /* 1.  Calculate the minimum final production that is needed.
      * 2.  Divide by the bonus (rounding down) to get the minimum citizen
      *     production that is needed.
@@ -1589,7 +1556,7 @@ static void init_min_production(struct cm_state *state)
       min = min * 100 / pcity->bonus[o];
     }
 
-    city_tile_iterate(city_map_radius_sq_get(pcity), pcenter, ptile) {
+    city_tile_iterate(pcenter, ptile) {
       if (is_free_worked(pcity, ptile)) {
 	min -= city_tile_output(pcity, ptile, is_celebrating, o);
       }
@@ -1665,7 +1632,7 @@ static bool bb_next(struct cm_state *state)
 
     print_partial_solution(LOG_REACHED_LEAF, &state->current, state);
     if (fitness_better(value, state->best_value)) {
-      log_base(LOG_BETTER_LEAF, "-> replaces previous best");
+      freelog(LOG_BETTER_LEAF, "-> replaces previous best");
       copy_partial_solution(&state->best, &state->current, state);
       state->best_value = value;
     }
@@ -1693,13 +1660,13 @@ static bool bb_next(struct cm_state *state)
 /****************************************************************************
   Initialize the state for the branch-and-bound algorithm.
 ****************************************************************************/
-static struct cm_state *cm_state_init(struct city *pcity)
+static struct cm_state *cm_init_state(struct city *pcity)
 {
   int numtypes;
   struct cm_state *state = fc_malloc(sizeof(*state));
 
-  log_base(LOG_CM_STATE, "creating cm_state for %s (size %d)",
-           city_name(pcity), city_size_get(pcity));
+  freelog(LOG_CM_STATE, "creating cm_state for %s (size %d)",
+	  city_name(pcity), pcity->size);
 
   /* copy the arguments */
   state->pcity = pcity;
@@ -1720,18 +1687,14 @@ static struct cm_state *cm_state_init(struct city *pcity)
   } output_type_iterate_end;
 
   /* We have no best solution yet, so its value is the worst possible. */
-  init_partial_solution(&state->best, numtypes, city_size_get(pcity));
+  init_partial_solution(&state->best, numtypes, pcity->size);
   state->best_value = worst_fitness();
 
   /* Initialize the current solution and choice stack to empty */
-  init_partial_solution(&state->current, numtypes, city_size_get(pcity));
-  state->choice.stack = fc_malloc(city_size_get(pcity)
+  init_partial_solution(&state->current, numtypes, pcity->size);
+  state->choice.stack = fc_malloc(pcity->size
 				  * sizeof(*state->choice.stack));
   state->choice.size = 0;
-
-  /* Initialize workers map */
-  state->workers_map = fc_calloc(city_map_tiles_from_city(state->pcity),
-                                 sizeof(state->workers_map));
 
   return state;
 }
@@ -1757,7 +1720,7 @@ static void begin_search(struct cm_state *state,
   state->best_value = worst_fitness();
   destroy_partial_solution(&state->current);
   init_partial_solution(&state->current, num_types(state),
-			city_size_get(state->pcity));
+			state->pcity->size);
   state->choice.size = 0;
 }
 
@@ -1776,13 +1739,13 @@ static void end_search(struct cm_state *state)
 #endif
 
   performance.current = NULL;
-#endif /* GATHER_TIME_STATS */
+#endif
 }
 
 /****************************************************************************
   Release all the memory allocated by the state.
 ****************************************************************************/
-static void cm_state_free(struct cm_state *state)
+static void cm_free_state(struct cm_state *state)
 {
   tile_type_vector_free_all(&state->lattice);
   output_type_iterate(stat) {
@@ -1790,10 +1753,8 @@ static void cm_state_free(struct cm_state *state)
   } output_type_iterate_end;
   destroy_partial_solution(&state->best);
   destroy_partial_solution(&state->current);
-
-  FC_FREE(state->choice.stack);
-  FC_FREE(state->workers_map);
-  FC_FREE(state);
+  free(state->choice.stack);
+  free(state);
 }
 
 
@@ -1804,7 +1765,6 @@ static void cm_find_best_solution(struct cm_state *state,
                                   const struct cm_parameter *const parameter,
                                   struct cm_result *result)
 {
-  int loop_count = 0;
 #ifdef GATHER_TIME_STATS
   performance.current = &performance.opt;
 #endif
@@ -1813,14 +1773,7 @@ static void cm_find_best_solution(struct cm_state *state,
 
   /* search until we find a feasible solution */
   while (!bb_next(state)) {
-    /* Limit the number of loops. */
-    loop_count++;
-
-    if (loop_count > CM_MAX_LOOP) {
-      log_error("Did not find a cm solution in %d iterations for %s.",
-                CM_MAX_LOOP, city_name(state->pcity));
-      break;
-    }
+    /* nothing */
   }
 
   /* convert to the caller's format */
@@ -1837,15 +1790,15 @@ void cm_query_result(struct city *pcity,
 		     const struct cm_parameter *param,
 		     struct cm_result *result)
 {
-  struct cm_state *state = cm_state_init(pcity);
+  struct cm_state *state = cm_init_state(pcity);
 
   /* Refresh the city.  Otherwise the CM can give wrong results or just be
    * slower than necessary.  Note that cities are often passed in in an
    * unrefreshed state (which should probably be fixed). */
-  city_refresh_from_main_map(pcity, NULL);
+  city_refresh_from_main_map(pcity, TRUE);
 
   cm_find_best_solution(state, param, result);
-  cm_state_free(state);
+  cm_free_state(state);
 }
 
 /**************************************************************************
@@ -1927,12 +1880,12 @@ int cm_result_workers(const struct cm_result *result)
 {
   int count = 0;
 
-  city_map_iterate(result->city_radius_sq, cindex, x, y) {
-    if (is_free_worked_index(cindex)) {
+  city_map_iterate(x, y) {
+    if (is_free_worked_cxy(x, y)) {
       continue;
     }
 
-    if (result->worker_positions[cindex]) {
+    if (result->worker_positions_used[x][y]) {
       count++;
     }
   } city_map_iterate_end;
@@ -1963,38 +1916,27 @@ int cm_result_citizens(const struct cm_result *result)
 }
 
 /****************************************************************************
-  Copy the city's current setup into the cm result structure. Wrapper for
-  cm_result_main().
+  Copy the city's current setup into the cm result structure.
 ****************************************************************************/
 void cm_result_from_main_map(struct cm_result *result,
-                             const struct city *pcity)
-{
-  cm_result_copy(result, pcity, NULL);
-}
-
-/****************************************************************************
-  Copy the city's current setup into the cm result structure. 'workers_map'
-  is a bool array with the size city_map_tiles_from_city(pcity). It is TRUE
-  for tiles worked by the city.
-****************************************************************************/
-static void cm_result_copy(struct cm_result *result,
-                           const struct city *pcity, bool *workers_map)
+                             const struct city *pcity, bool main_map)
 {
   struct tile *pcenter = city_tile(pcity);
 
-  /* clear worker positions */
-  memset(result->worker_positions, 0, sizeof(result->worker_positions));
+  memset(result->worker_positions_used, 0,
+	 sizeof(result->worker_positions_used));
 
-  city_tile_iterate_index(result->city_radius_sq, pcenter, ptile, index) {
-    if (workers_map == NULL) {
-      /* use the main map */
+  city_tile_iterate_cxy(pcenter, ptile, x, y) {
+    if (main_map) {
       struct city *pwork = tile_worked(ptile);
 
-      result->worker_positions[index] = (NULL != pwork && pwork == pcity);
+      result->worker_positions_used[x][y] =
+        (NULL != pwork && pwork == pcity);
     } else {
-      result->worker_positions[index] = workers_map[index];
+      result->worker_positions_used[x][y] =
+        (C_TILE_WORKER == pcity->city_map[x][y]);
     }
-  } city_tile_iterate_index_end;
+  } city_tile_iterate_cxy_end;
 
   /* copy the specialist counts */
   specialist_type_iterate(spec) {
@@ -2014,76 +1956,66 @@ static void cm_result_copy(struct cm_result *result,
 ****************************************************************************/
 #ifdef CM_DEBUG
 static void snprint_production(char *buffer, size_t bufsz,
-                               const int production[])
+			       const int production[])
 {
-  fc_snprintf(buffer, bufsz, "[%d %d %d %d %d %d]",
-              production[O_FOOD], production[O_SHIELD],
-              production[O_TRADE], production[O_GOLD],
-              production[O_LUXURY], production[O_SCIENCE]);
+  my_snprintf(buffer, bufsz, "[%d %d %d %d %d %d]",
+	      production[O_FOOD], production[O_SHIELD],
+	      production[O_TRADE], production[O_GOLD],
+	      production[O_LUXURY], production[O_SCIENCE]);
 }
 
 /****************************************************************************
   Print debugging data about a particular tile type.
 ****************************************************************************/
-static void real_print_tile_type(enum log_level level, const char *file,
-                                 const char *function, int line,
-                                 const struct cm_tile_type *ptype,
-                                 const char *prefix)
+static void print_tile_type(int loglevel, const struct cm_tile_type *ptype,
+			    const char *prefix)
 {
   char prodstr[256];
 
   snprint_production(prodstr, sizeof(prodstr), ptype->production);
-  do_log(file, function, line, FALSE, level,
-         "%s%s fitness %g depth %d, idx %d; %d tiles", prefix,
-         prodstr, ptype->estimated_fitness, ptype->lattice_depth,
-         ptype->lattice_index, tile_type_num_tiles(ptype));
+  freelog(loglevel, "%s%s fitness %g depth %d, idx %d; %d tiles", prefix,
+	  prodstr, ptype->estimated_fitness, ptype->lattice_depth,
+	  ptype->lattice_index, tile_type_num_tiles(ptype));
 }
 
 /****************************************************************************
   Print debugging data about a whole B&B lattice.
 ****************************************************************************/
-static void real_print_lattice(enum log_level level, const char *file,
-                               const char *function, int line,
-                               const struct tile_type_vector *lattice)
+static void print_lattice(int loglevel,
+			  const struct tile_type_vector *lattice)
 {
-  do_log(file, function, line, FALSE, level,
-         "lattice has %u terrain types", (unsigned) lattice->size);
+  freelog(loglevel, "lattice has %u terrain types", (unsigned)lattice->size);
   tile_type_vector_iterate(lattice, ptype) {
-    real_print_tile_type(level, file, function, line, ptype, "  ");
+    print_tile_type(loglevel, ptype, "  ");
   } tile_type_vector_iterate_end;
 }
-
 
 /****************************************************************************
   Print debugging data about a partial CM solution.
 ****************************************************************************/
-static void real_print_partial_solution(enum log_level level,
-                                        const char *file,
-                                        const char *function, int line,
-                                        const struct partial_solution *soln,
-                                        const struct cm_state *state)
+static void print_partial_solution(int loglevel,
+				   const struct partial_solution *soln,
+				   const struct cm_state *state)
 {
   int i;
   int last_type = 0;
   char buf[256];
 
-  if (soln->idle != 0) {
-    do_log(file, function, line, FALSE, level,
-           "** partial solution has %d idle workers", soln->idle);
+  if(soln->idle != 0) {
+    freelog(loglevel, "** partial solution has %d idle workers", soln->idle);
   } else {
-    do_log(file, function, line, FALSE, level, "** completed solution:");
+    freelog(loglevel, "** completed solution:");
   }
 
   snprint_production(buf, sizeof(buf), soln->production);
-  do_log(file, function, line, FALSE, level, "production: %s", buf);
+  freelog(loglevel, "production: %s", buf);
 
-  do_log(file, function, line, FALSE, level, "tiles used:");
+  freelog(loglevel, "tiles used:");
   for (i = 0; i < num_types(state); i++) {
     if (soln->worker_counts[i] != 0) {
-      fc_snprintf(buf, sizeof(buf), "  %d tiles of type ",
-                  soln->worker_counts[i]);
-      real_print_tile_type(level, file, function, line,
-                           tile_type_get(state, i), buf);
+      my_snprintf(buf, sizeof(buf), "  %d tiles of type ",
+		  soln->worker_counts[i]);
+      print_tile_type(loglevel, tile_type_get(state, i), buf);
     }
   }
 
@@ -2093,14 +2025,13 @@ static void real_print_partial_solution(enum log_level level,
     }
   }
 
-  do_log(file, function, line, FALSE, level, "tiles available:");
+  freelog(loglevel, "tiles available:");
   for (i = last_type; i < num_types(state); i++) {
     const struct cm_tile_type *ptype = tile_type_get(state, i);
 
     if (soln->prereqs_filled[i] == tile_type_num_prereqs(ptype)
-        && soln->worker_counts[i] < tile_type_num_tiles(ptype)) {
-      real_print_tile_type(level, file, function, line,
-                           tile_type_get(state, i), "  ");
+	&& soln->worker_counts[i] < tile_type_num_tiles(ptype)) {
+      print_tile_type(loglevel, tile_type_get(state, i), "  ");
     }
   }
 }
@@ -2125,11 +2056,11 @@ static void print_performance(struct one_perf *counts)
 
   applies = counts->apply_count;
 
-  log_base(LOG_TIME_STATS,
-           "CM-%s: overall=%fs queries=%d %fms / query, %d applies",
-           counts->name, s, queries, ms / q, applies);
+  freelog(LOG_TIME_STATS,
+      "CM-%s: overall=%fs queries=%d %fms / query, %d applies",
+      counts->name, s, queries, ms / q, applies);
 }
-#endif /* GATHER_TIME_STATS */
+#endif
 
 /****************************************************************************
   Print debugging information about one city.
@@ -2138,64 +2069,83 @@ void cm_print_city(const struct city *pcity)
 {
   struct tile *pcenter = city_tile(pcity);
 
-  log_test("cm_print_city(city %d=\"%s\")", pcity->id, city_name(pcity));
-  log_test("  size=%d, specialists=%s",
-           city_size_get(pcity), specialists_string(pcity->specialists));
+  freelog(LOG_TEST, "cm_print_city(city %d=\"%s\")",
+          pcity->id,
+          city_name(pcity));
+  freelog(LOG_TEST,
+	  "  size=%d, specialists=%s",
+	  pcity->size, specialists_string(pcity->specialists));
 
-  log_test("  workers at:");
-  city_tile_iterate_index(city_map_radius_sq_get(pcity), pcenter, ptile,
-                          cindex) {
+  freelog(LOG_TEST, "  workers at:");
+  city_tile_iterate_cxy(pcenter, ptile, x, y) {
     struct city *pwork = tile_worked(ptile);
 
     if (NULL != pwork && pwork == pcity) {
-      int cx, cy;
-      city_tile_index_to_xy(&cx, &cy, cindex,
-                            city_map_radius_sq_get(pcity));
-      log_test("    {%2d,%2d} (%4d,%4d)", cx, cy, TILE_XY(ptile));
+      freelog(LOG_TEST, "    {%2d,%2d} (%4d,%4d)", x, y, TILE_XY(ptile));
     }
-  } city_tile_iterate_index_end;
 
-  log_test("  food    = %3d (%+3d)",
-           pcity->prod[O_FOOD], pcity->surplus[O_FOOD]);
-  log_test("  shield  = %3d (%+3d)",
-           pcity->prod[O_SHIELD], pcity->surplus[O_SHIELD]);
-  log_test("  trade   = %3d", pcity->surplus[O_TRADE]);
+    if (C_TILE_WORKER == pcity->city_map[x][y]) {
+      freelog(LOG_TEST, "    {%2d,%2d}", x, y);
+    }
+  } city_tile_iterate_cxy_end;
 
-  log_test("  gold    = %3d (%+3d)",
-           pcity->prod[O_GOLD], pcity->surplus[O_GOLD]);
-  log_test("  luxury  = %3d", pcity->prod[O_LUXURY]);
-  log_test("  science = %3d", pcity->prod[O_SCIENCE]);
+  freelog(LOG_TEST, "  food    = %3d (%+3d)",
+          pcity->prod[O_FOOD], pcity->surplus[O_FOOD]);
+  freelog(LOG_TEST, "  shield  = %3d (%+3d)",
+          pcity->prod[O_SHIELD], pcity->surplus[O_SHIELD]);
+  freelog(LOG_TEST, "  trade   = %3d", pcity->surplus[O_TRADE]);
+
+  freelog(LOG_TEST, "  gold    = %3d (%+3d)", pcity->prod[O_GOLD],
+	  pcity->surplus[O_GOLD]);
+  freelog(LOG_TEST, "  luxury  = %3d", pcity->prod[O_LUXURY]);
+  freelog(LOG_TEST, "  science = %3d", pcity->prod[O_SCIENCE]);
 }
+
 
 /****************************************************************************
   Print debugging information about a full CM result.
 ****************************************************************************/
 void cm_print_result(const struct cm_result *result)
 {
-  int *city_map_data = fc_calloc(city_map_tiles(result->city_radius_sq),
-                                 sizeof(*city_map_data));
+  int y;
+  int workers = cm_result_workers(result);
 
-  log_test("cm_print_result(result=%p)", (void *) result);
-  log_test("  found_a_valid=%d disorder=%d happy=%d",
-           result->found_a_valid, result->disorder, result->happy);
+  freelog(LOG_TEST, "cm_print_result(result=%p)", (void *)result);
+  freelog(LOG_TEST, "  found_a_valid=%d disorder=%d happy=%d",
+      result->found_a_valid, result->disorder, result->happy);
 
-  city_map_iterate(result->city_radius_sq, cindex, x, y) {
-    if (is_free_worked_index(cindex)) {
-      city_map_data[cindex] = 2;
-    } else if (result->worker_positions[cindex]) {
-      city_map_data[cindex] = 1;
-    } else {
-      city_map_data[cindex] = 0;
+  freelog(LOG_TEST, "  workers at:");
+  city_map_iterate(x, y) {
+    if (result->worker_positions_used[x][y]) {
+      freelog(LOG_TEST, "    {%2d,%2d}", x, y);
     }
   } city_map_iterate_end;
-  log_test("workers map (2: free worked; 1: worker; 0: not used):");
-  citylog_map_data(LOG_TEST, result->city_radius_sq, city_map_data);
-  FC_FREE(city_map_data);
 
-  log_test("  (workers/specialists) %d/%s", cm_result_workers(result),
-           specialists_string(result->specialists));
+  for (y = 0; y < CITY_MAP_SIZE; y++) {
+    char line[CITY_MAP_SIZE + 1];
+    int x;
+
+    line[CITY_MAP_SIZE] = 0;
+
+    for (x = 0; x < CITY_MAP_SIZE; x++) {
+      if (!is_valid_city_coords(x, y)) {
+        line[x] = '-';
+      } else if (is_free_worked_cxy(x, y)) {
+        line[x] = '+';
+      } else if (result->worker_positions_used[x][y]) {
+        line[x] = 'w';
+      } else {
+        line[x] = '.';
+      }
+    }
+    freelog(LOG_TEST, "  %s", line);
+  }
+  freelog(LOG_TEST, "  (workers/specialists) %d/%s",
+          workers,
+          specialists_string(result->specialists));
 
   output_type_iterate(i) {
-    log_test("  %10s surplus=%d", get_output_name(i), result->surplus[i]);
+    freelog(LOG_TEST, "  %10s surplus=%d",
+        get_output_name(i), result->surplus[i]);
   } output_type_iterate_end;
 }

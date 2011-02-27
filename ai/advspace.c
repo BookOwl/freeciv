@@ -12,25 +12,25 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* common */
+#include <assert.h>
+
 #include "government.h"
 #include "packets.h"
 #include "spaceship.h"
 
-/* server */
 #include "spacerace.h"
 
 #include "advspace.h"
 
-/****************************************************************************
-  This borrows heavily from autoplace code already in the client source.
-  AJS, 19990610
-****************************************************************************/
-bool ai_spaceship_autoplace(struct player *pplayer,
-                            struct player_spaceship *ship)
+/*
+ *  This borrows heavily from autoplace code already in the client source.
+ *  AJS, 19990610
+ */
+
+bool ai_spaceship_autoplace(struct player *pplayer, struct player_spaceship *ship)
 {
   enum spaceship_place_type type;
   int num, i;
@@ -62,7 +62,7 @@ bool ai_spaceship_autoplace(struct player *pplayer,
     } else {
       num = ship->solar_panels + 1;
     }
-    fc_assert_ret_val(num <= NUM_SS_MODULES / 3, FALSE);
+    assert(num <= NUM_SS_MODULES / 3);
 
     handle_spaceship_place(pplayer, type, num);
     retval = TRUE;
@@ -135,8 +135,8 @@ bool ai_spaceship_autoplace(struct player *pplayer,
       }
     }
     /* sanity: */
-    fc_assert_ret_val(-1 != req, FALSE);
-    fc_assert_ret_val(!ship->structure[req], FALSE);
+    assert(req!=-1);
+    assert(!ship->structure[req]);
     
     /* Now we want to find a structural we can build which leads to req.
        This loop should bottom out, because everything leads back to s0,

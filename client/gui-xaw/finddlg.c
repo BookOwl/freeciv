@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -163,7 +163,7 @@ void update_find_dialog(Widget find_list)
   
   players_iterate(pplayer) {
     city_list_iterate(pplayer->cities, pcity) {
-      *(city_name_ptrs+j++)=fc_strdup(city_name(pcity));
+      *(city_name_ptrs+j++)=mystrdup(city_name(pcity));
     } city_list_iterate_end;
   } players_iterate_end;
   
@@ -200,12 +200,10 @@ void find_center_command_callback(Widget w, XtPointer client_data,
   
   ret=XawListShowCurrent(find_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    if ((pcity = game_city_by_name(ret->string))) {
+  if(ret->list_index!=XAW_LIST_NONE)
+    if((pcity=game_find_city_by_name(ret->string)))
       center_tile_mapcanvas(pcity->tile);
-    }
-  }
-
+  
   popdown_find_dialog();
 }
 
@@ -229,9 +227,7 @@ void find_list_callback(Widget w, XtPointer client_data, XtPointer call_data)
   
   ret=XawListShowCurrent(find_list);
 
-  if (ret->list_index != XAW_LIST_NONE) {
-    if ((pcity = game_city_by_name(ret->string))) {
+  if(ret->list_index!=XAW_LIST_NONE)
+    if((pcity=game_find_city_by_name(ret->string)))
       center_tile_mapcanvas(pcity->tile);
-    }
-  }
 }

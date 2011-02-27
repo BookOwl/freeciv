@@ -18,7 +18,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -43,9 +43,11 @@
 #include "terrain.h"
 #include "unitlist.h"
 
+/* ai */
+#include "aidata.h"
+#include "aitools.h"
+
 /* server */
-#include "aiiface.h"
-#include "citytools.h"
 #include "gamehand.h"
 #include "maphand.h"
 #include "notify.h"
@@ -55,9 +57,6 @@
 #include "techtools.h"
 #include "unithand.h"
 #include "unittools.h"
-
-/* server/advisors */
-#include "advdata.h"
 
 #include "barbarian.h"
 
@@ -69,7 +68,7 @@
 **************************************************************************/
 bool is_land_barbarian(struct player *pplayer)
 {
-  return (pplayer->ai_common.barbarian_type == LAND_BARBARIAN);
+  return (pplayer->ai_data.barbarian_type == LAND_BARBARIAN);
 }
 
 /**************************************************************************
@@ -77,7 +76,7 @@ bool is_land_barbarian(struct player *pplayer)
 **************************************************************************/
 bool is_sea_barbarian(struct player *pplayer)
 {
-  return (pplayer->ai_common.barbarian_type == SEA_BARBARIAN);
+  return (pplayer->ai_data.barbarian_type == SEA_BARBARIAN);
 }
 
 /**************************************************************************
@@ -98,10 +97,9 @@ static struct player *create_barbarian_player(enum barbarian_type type)
       if (!barbarians->is_alive) {
         barbarians->economic.gold = 0;
         barbarians->is_alive = TRUE;
-        player_status_reset(barbarians);
-        sz_strlcpy(barbarians->name,
-                   pick_random_player_name(nation_of_player(barbarians)));
-        sz_strlcpy(barbarians->username, ANON_USER_NAME);
+        barbarians->is_dying = FALSE;
+        pick_random_player_name(nation_of_player(barbarians), barbarians->name);
+	sz_strlcpy(barbarians->username, ANON_USER_NAME);
         /* I need to make them to forget the map, I think */
 	whole_map_iterate(ptile) {
 	  map_clear_known(ptile, barbarians);
@@ -113,31 +111,32 @@ static struct player *create_barbarian_player(enum barbarian_type type)
   } players_iterate_end;
 
   /* make a new player, or not */
-  barbarians = server_create_player(-1, FC_AI_DEFAULT_NAME, NULL);
+  barbarians = server_create_player();
   if (!barbarians) {
     return NULL;
   }
+
   server_player_init(barbarians, TRUE, TRUE);
 
   nation = pick_a_nation(NULL, FALSE, TRUE, type);
   player_set_nation(barbarians, nation);
-  sz_strlcpy(barbarians->name, pick_random_player_name(nation));
+  pick_random_player_name(nation, barbarians->name);
 
   server.nbarbarians++;
-  game.server.max_players = MAX(player_count(), game.server.max_players);
+  game.info.max_players = MAX(player_count(), game.info.max_players);
 
   sz_strlcpy(barbarians->username, ANON_USER_NAME);
   barbarians->is_connected = FALSE;
-  barbarians->government = nation->server.init_government;
-  fc_assert(barbarians->revolution_finishes < 0);
-  barbarians->server.capital = FALSE;
+  barbarians->government = nation->init_government;
+  assert(barbarians->revolution_finishes < 0);
+  barbarians->capital = FALSE;
   barbarians->economic.gold = 100;
 
   barbarians->phase_done = TRUE;
 
   /* Do the ai */
-  barbarians->ai_controlled = TRUE;
-  barbarians->ai_common.barbarian_type = type;
+  barbarians->ai_data.control = TRUE;
+  barbarians->ai_data.barbarian_type = type;
   set_ai_level_directer(barbarians, game.info.skill_level);
   init_tech(barbarians, TRUE);
   give_global_initial_techs(barbarians);
@@ -146,22 +145,21 @@ static struct player *create_barbarian_player(enum barbarian_type type)
   /* Ensure that we are at war with everyone else */
   players_iterate(pplayer) {
     if (pplayer != barbarians) {
-      player_diplstate_get(pplayer, barbarians)->type = DS_WAR;
-      player_diplstate_get(barbarians, pplayer)->type = DS_WAR;
+      pplayer->diplstates[player_index(barbarians)].type = DS_WAR;
+      barbarians->diplstates[player_index(pplayer)].type = DS_WAR;
     }
   } players_iterate_end;
 
-  CALL_PLR_AI_FUNC(gained_control, barbarians, barbarians);
-
-  log_verbose("Created barbarian %s, player %d", player_name(barbarians),
-              player_number(barbarians));
+  freelog(LOG_VERBOSE, "Created barbarian %s, player %d",
+          player_name(barbarians),
+          player_number(barbarians));
   notify_player(NULL, NULL, E_UPRISING, ftc_server,
                 _("%s gain a leader by the name %s. Dangerous "
                   "times may lie ahead."),
                 nation_plural_for_player(barbarians),
                 player_name(barbarians));
 
-  send_player_all_c(barbarians, NULL);
+  send_player_info(barbarians, NULL);
 
   return barbarians;
 }
@@ -210,12 +208,12 @@ static int random_unchecked_direction(int possibilities, const bool *checked)
   int j = -1;
   int i;
 
-  int num = fc_rand(possibilities);
+  int num = myrand(possibilities);
   for (i = 0; i <= num; i++) {
     j++;
     while (checked[j]) {
       j++;
-      fc_assert(j < 8);
+      assert(j < 8);
     }
   }
 
@@ -251,8 +249,8 @@ bool unleash_barbarians(struct tile *ptile)
    *        but L_BARBARIAN_TECH is already available,
    *        we should unleash those.
    *        Doesn't affect any ruleset I'm aware of. */
-  if (BARBS_DISABLED == game.server.barbarianrate
-      || game.info.turn < game.server.onsetbarbarian
+  if (game.info.barbarianrate == 0
+      || game.info.turn < game.info.onsetbarbarian
       || num_role_units(L_BARBARIAN) == 0) {
     unit_list_iterate_safe((ptile)->units, punit) {
       wipe_unit(punit);
@@ -265,10 +263,7 @@ bool unleash_barbarians(struct tile *ptile)
     return FALSE;
   }
 
-  adv_data_phase_init(barbarians, TRUE);
-  CALL_PLR_AI_FUNC(phase_begin, barbarians, barbarians, TRUE);
-
-  unit_cnt = 3 + fc_rand(4);
+  unit_cnt = 3 + myrand(4);
   for (i = 0; i < unit_cnt; i++) {
     struct unit_type *punittype
       = find_a_unit_type(L_BARBARIAN, L_BARBARIAN_TECH);
@@ -280,7 +275,8 @@ bool unleash_barbarians(struct tile *ptile)
       struct unit *barb_unit;
 
       barb_unit = create_unit(barbarians, ptile, punittype, 0, 0, -1);
-      log_debug("Created barbarian unit %s", utype_rule_name(punittype));
+      freelog(LOG_DEBUG, "Created barbarian unit %s",
+              utype_rule_name(punittype));
       send_unit_info(NULL, barb_unit);
     }
   }
@@ -290,7 +286,7 @@ bool unleash_barbarians(struct tile *ptile)
   for (dir = 0; dir < 8; dir++) {
     dir_tiles[dir] = mapstep(ptile, dir);
     if (dir_tiles[dir] == NULL) {
-      terrainc[dir] = terrain_class_invalid();
+      terrainc[dir] = TC_LAST;
     } else if (is_free_land(dir_tiles[dir], barbarians)) {
       terrainc[dir] = TC_LAND;
       land_tiles++;
@@ -298,7 +294,7 @@ bool unleash_barbarians(struct tile *ptile)
       terrainc[dir] = TC_OCEAN;
       ocean_tiles++;
     } else {
-      terrainc[dir] = terrain_class_invalid();
+      terrainc[dir] = TC_LAST;
     }
   }
 
@@ -316,10 +312,10 @@ bool unleash_barbarians(struct tile *ptile)
              checked_count++) {
           int rdir = random_unchecked_direction(land_tiles - checked_count, checked);
 
-          if (unit_can_move_to_tile(punit2, dir_tiles[rdir], TRUE)) {
+          if (can_unit_move_to_tile(punit2, dir_tiles[rdir], TRUE)) {
             (void) unit_move_handling(punit2, dir_tiles[rdir], TRUE, FALSE);
-            log_debug("Moved barbarian unit from (%d, %d) to (%d, %d)", 
-                      TILE_XY(ptile), TILE_XY(dir_tiles[rdir]));
+            freelog(LOG_DEBUG, "Moved barbarian unit from %d %d to %d, %d", 
+                    ptile->x, ptile->y, dir_tiles[rdir]->x, dir_tiles[rdir]->y);
             dest_found = TRUE;
           }
 
@@ -359,7 +355,7 @@ bool unleash_barbarians(struct tile *ptile)
         /* We do have a boat. Try to get everybody in */
         unit_list_iterate_safe((ptile)->units, punit2) {
           if (unit_owner(punit2) == barbarians) {
-            if (unit_can_move_to_tile(punit2, btile, TRUE)) {
+            if (can_unit_move_to_tile(punit2, btile, TRUE)) {
               (void) unit_move_handling(punit2, btile, TRUE, FALSE);
             }
           }
@@ -380,7 +376,7 @@ bool unleash_barbarians(struct tile *ptile)
             int rdir;
             rdir = random_unchecked_direction(land_tiles - checked_count, checked);
 
-            if (unit_can_move_to_tile(punit2, dir_tiles[rdir], TRUE)) {
+            if (can_unit_move_to_tile(punit2, dir_tiles[rdir], TRUE)) {
               (void) unit_move_handling(punit2, dir_tiles[rdir], TRUE, FALSE);
               dest_found = TRUE;
             }
@@ -486,8 +482,8 @@ static void try_summon_barbarians(void)
     return;
   }
 
-  if (!(pc = find_closest_city(ptile, NULL, NULL, FALSE, FALSE, FALSE, FALSE,
-                               FALSE))) {
+
+  if (!(pc = dist_nearest_city(NULL, ptile, TRUE, FALSE))) {
     /* any city */
     return;
   }
@@ -495,8 +491,8 @@ static void try_summon_barbarians(void)
   victim = city_owner(pc);
 
   dist = real_map_distance(ptile, pc->tile);
-  log_debug("Closest city (to %d,%d) is %s (at %d,%d) distance %d.",
-            TILE_XY(ptile), city_name(pc), TILE_XY(pc->tile), dist);
+  freelog(LOG_DEBUG,"Closest city (to %d,%d) is %s (at %d,%d) distance %d.", 
+          TILE_XY(ptile), city_name(pc), TILE_XY(pc->tile), dist);
   if (dist > MAX_UNREST_DIST || dist < MIN_UNREST_DIST) {
     return;
   }
@@ -509,16 +505,14 @@ static void try_summon_barbarians(void)
     return;
   }
 
-  fc_assert(1 < game.server.barbarianrate);
-
   /* do not harass small civs - in practice: do not uprise at the beginning */
-  if ((int)fc_rand(UPRISE_CIV_MORE) >
+  if ((int)myrand(UPRISE_CIV_MORE) >
            (int)city_list_size(victim->cities) -
-                UPRISE_CIV_SIZE/(game.server.barbarianrate-1)
-      || fc_rand(100) > get_player_bonus(victim, EFT_CIVIL_WAR_CHANCE)) {
+                UPRISE_CIV_SIZE/(game.info.barbarianrate-1)
+      || myrand(100) > get_player_bonus(victim, EFT_CIVIL_WAR_CHANCE)) {
     return;
   }
-  log_debug("Barbarians are willing to fight");
+  freelog(LOG_DEBUG, "Barbarians are willing to fight");
 
   if (tile_has_special(utile, S_HUT)) {
     /* remove the hut in place of uprising */
@@ -526,7 +520,7 @@ static void try_summon_barbarians(void)
     update_tile_knowledge(utile);
   }
 
-  barb_count = fc_rand(3) + uprise * game.server.barbarianrate;
+  barb_count = myrand(3) + uprise * game.info.barbarianrate;
   leader_type = get_role_unit(L_BARBARIAN_LEADER, 0);
 
   if (!is_ocean_tile(utile)) {
@@ -548,7 +542,8 @@ static void try_summon_barbarians(void)
       if (is_native_tile(punittype, utile)) {
         (void) create_unit(barbarians, utile, punittype, 0, 0, -1);
         really_created++;
-        log_debug("Created barbarian unit %s",utype_rule_name(punittype));
+        freelog(LOG_DEBUG, "Created barbarian unit %s",
+                utype_rule_name(punittype));
       }
     }
  
@@ -560,25 +555,12 @@ static void try_summon_barbarians(void)
   } else {                   /* sea raiders - their units will be veteran */
     struct unit *ptrans;
     struct unit_type *boat;
-    bool miniphase;
 
     barbarians = create_barbarian_player(SEA_BARBARIAN);
     if (!barbarians) {
       return;
     }
-    /* Setup data phase if it's not already set up. Created ferries may
-       need that data.
-       We don't know if create_barbarian_player() above created completely
-       new player or did it just return existing one. If it was existing
-       one, phase has already been set up at turn begin and will be closed
-       at turn end. If this is completely new player, we have to take care
-       of both opening and closing the data phase. Return value of
-       adv_data_phase_init() tells us if data phase was already initialized
-       at turn beginning. */
-    miniphase = adv_data_phase_init(barbarians, TRUE);
-    if (miniphase) {
-      CALL_PLR_AI_FUNC(phase_begin, barbarians, barbarians, TRUE);
-    }
+    ai_data_phase_init(barbarians, TRUE); /* Created ferry may need ai data */
 
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
 
@@ -599,7 +581,8 @@ static void try_summon_barbarians(void)
           (void) create_unit_full(barbarians, utile, barb, 0, 0, -1, -1,
                                   ptrans);
           really_created++;
-          log_debug("Created barbarian unit %s", utype_rule_name(barb));
+          freelog(LOG_DEBUG, "Created barbarian unit %s",
+                  utype_rule_name(barb));
         }
       }
 
@@ -610,10 +593,7 @@ static void try_summon_barbarians(void)
       }
     }
 
-    if (miniphase) {
-      CALL_PLR_AI_FUNC(phase_finished, barbarians, barbarians);
-      adv_data_phase_done(barbarians);
-    }
+    ai_data_phase_done(barbarians);
   }
 
   if (really_created == 0) {
@@ -651,12 +631,11 @@ void summon_barbarians(void)
 {
   int i, n;
 
-  if (BARBS_DISABLED == game.server.barbarianrate
-      || BARBS_HUTS_ONLY == game.server.barbarianrate) {
+  if (game.info.barbarianrate == 0) {
     return;
   }
 
-  if (game.info.turn < game.server.onsetbarbarian) {
+  if (game.info.turn < game.info.onsetbarbarian) {
     return;
   }
 
@@ -666,7 +645,7 @@ void summon_barbarians(void)
     n = 1;
   }
 
-  for (i = 0; i < n * (game.server.barbarianrate - 1); i++) {
+  for (i = 0; i < n * (game.info.barbarianrate - 1); i++) {
     try_summon_barbarians();
   }
 }

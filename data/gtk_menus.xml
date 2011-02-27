@@ -14,8 +14,6 @@
       <menuitem action="RELOAD_TILESET" />
       <menuitem action="GAME_SAVE" />
       <menuitem action="GAME_SAVE_AS" />
-      <menuitem action="MAPIMG_SAVE" />
-      <menuitem action="MAPIMG_SAVE_AS" />
       <separator />
       <menuitem action="LEAVE" />
       <menuitem action="QUIT" />
@@ -75,8 +73,6 @@
       <menuitem action="SELECT_SAME_TYPE_CONT" />
       <menuitem action="SELECT_SAME_TYPE" />
       <separator />
-      <menuitem action="SELECT_DLG" />
-      <separator />
       <menuitem action="UNIT_WAIT" />
       <menuitem action="UNIT_DONE" />
     </menu>
@@ -98,7 +94,6 @@
       <separator />
       <menuitem action="UNIT_HOMECITY" />
       <menuitem action="UNIT_UPGRADE" />
-      <menuitem action="UNIT_CONVERT" />
       <menuitem action="UNIT_DISBAND" />
     </menu>
 
@@ -170,7 +165,6 @@
       <menuitem action="HELP_TECH" />
       <menuitem action="HELP_SPACE_RACE" />
       <menuitem action="HELP_RULESET" />
-      <menuitem action="HELP_NATIONS" />
       <separator />
       <menuitem action="HELP_CONNECTING" />
       <menuitem action="HELP_CONTROLS" />

@@ -12,13 +12,13 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 /* utility */
-#include "bitvector.h"
 #include "log.h"
 #include "mem.h"
 
@@ -44,7 +44,7 @@ static inline int single_move_cost(const struct pf_parameter *param,
       && !is_safe_ocean(dest_tile)) {
     return PF_IMPOSSIBLE_MC;
   } else if (uclass_has_flag(param->uclass, UCF_TERRAIN_SPEED)) {
-    return map_move_cost(param->owner, src_tile, dest_tile);
+    return map_move_cost(src_tile, dest_tile);
   } else {
     return SINGLE_MOVE;
   }
@@ -53,7 +53,7 @@ static inline int single_move_cost(const struct pf_parameter *param,
 /* ===================== Move Cost Callbacks ========================= */
 
 /*************************************************************
-  A cost function for UMT_SEA.  Allows shore bombardment.
+  A cost function for SEA_MOVING.  Allows shore bombardment.
   Should be used in conjunction with a TB callback which 
   prohibits going through an enemy city/tile.
 *************************************************************/
@@ -90,7 +90,7 @@ static int airmove(const struct tile *ptile, enum direction8 dir,
 }
 
 /**************************************************************************
-  A cost function for UMT_SEA.  Does not allow shore bombardment.
+  A cost function for SEA_MOVING.  Does not allow shore bombardment.
 ***************************************************************************/
 static int seamove_no_bombard(const struct tile *ptile, enum direction8 dir,
                               const struct tile *ptile1,
@@ -296,7 +296,7 @@ static int reverse_move_unit(const struct tile *tile0,
 
   return move_cost;
 }
-#endif /* UNUSED */
+#endif
 
 /************************************************************ 
   IGTER_MOVE cost function for a unit 
@@ -324,7 +324,7 @@ static int igter_move_unit(const struct tile *ptile,
       move_cost = MOVE_COST_ROAD;
     }
   } else if (uclass_has_flag(param->uclass, UCF_TERRAIN_SPEED)) {
-    move_cost = (map_move_cost(param->owner, ptile, ptile1) != 0
+    move_cost = (map_move_cost(ptile, ptile1) != 0
                  ? MOVE_COST_ROAD : 0);
   } else {
     move_cost = SINGLE_MOVE;
@@ -361,7 +361,7 @@ static int reverse_igter_move_unit(const struct tile *tile0,
   }
   return move_cost;
 }
-#endif /* UNUSED */
+#endif
 
 
 /****************************************************************************
@@ -430,7 +430,7 @@ static int afraid_of_dark_forest(const struct tile *ptile,
 
   return 0;
 }
-#endif /* UNUSED */
+#endif
 
 /****************************************************************************
   Extra cost call back for amphibious movement
@@ -671,6 +671,7 @@ static void pft_fill_default_parameter(struct pf_parameter *parameter,
 {
   struct unit_class *punitclass = utype_class(punittype);
 
+  parameter->turn_mode = TM_CAPPED;
   parameter->unknown_MC = SINGLE_MOVE;
 
   if (uclass_has_flag(punitclass, UCF_TERRAIN_SPEED)) {
@@ -698,7 +699,7 @@ static void pft_fill_default_parameter(struct pf_parameter *parameter,
       }
     } terrain_type_iterate_end;
   }
-  if (uclass_move_type(punitclass) == UMT_SEA) {
+  if (uclass_move_type(punitclass) == SEA_MOVING) {
     /* Sailing units explore less */
     parameter->unknown_MC *= 2;
   }
@@ -736,12 +737,6 @@ static void pft_fill_utype_default_parameter(struct pf_parameter *parameter,
     parameter->fuel_left_initially = 1;
   }
   parameter->owner = powner;
-
-  if (!BV_ISSET(parameter->unit_flags, F_CIVILIAN)) {
-    parameter->can_invade_tile = player_can_invade_tile;
-  } else {
-    parameter->can_invade_tile = NULL;
-  }
 
   parameter->omniscience = !ai_handicap(powner, H_MAP);
 }
@@ -782,31 +777,32 @@ static void pft_fill_parameter(struct pf_parameter *parameter,
                                const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     if (utype_has_flag(punittype, F_IGTER)) {
       parameter->get_MC = igter_move_unit;
     } else {
       parameter->get_MC = normal_move_unit;
     }
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     if (can_attack_non_native(punittype)) {
       parameter->get_MC = seamove;
     } else {
       parameter->get_MC = seamove_no_bombard;
     }
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove;
     break;
   default:
-    log_error("pft_fill_parameter() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_parameter() impossible move type!");
     break;
   }
 
   if (!parameter->get_moves_left_req && utype_fuel(punittype)) {
     /* Unit needs fuel */
     parameter->get_moves_left_req = get_fuel_moves_left_req;
+    parameter->turn_mode = TM_WORST_TIME;
   }
 
   if (!unit_type_really_ignores_zoc(punittype)) {
@@ -849,18 +845,18 @@ static void pft_fill_overlap_param(struct pf_parameter *parameter,
                                    const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     parameter->get_MC = land_overlap_move;
     parameter->get_TB = dont_cross_ocean;
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     parameter->get_MC = sea_overlap_move;
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove; /* very crude */
     break;
   default:
-    log_error("pft_fill_overlap_param() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_overlap_param() impossible move type!");
     break;
   }
 
@@ -906,17 +902,17 @@ static void pft_fill_attack_param(struct pf_parameter *parameter,
                                   const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     parameter->get_MC = land_attack_move;
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     parameter->get_MC = sea_attack_move;
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove; /* very crude */
     break;
   default:
-    log_error("pft_fill_attack_param() impossible move type!");
+    freelog(LOG_ERROR, "pft_fill_attack_param() impossible move type!");
     break;
   }
 
@@ -979,6 +975,8 @@ void pft_fill_amphibious_parameter(struct pft_amphibious *parameter)
   parameter->sea_scale = move_rate / parameter->sea.move_rate;
   parameter->combined.moves_left_initially *= parameter->sea_scale;
   parameter->combined.move_rate = move_rate;
+  /* To ensure triremes behave correctly: FIXME: Probably incorrect now */
+  parameter->combined.turn_mode = TM_WORST_TIME;
   parameter->combined.get_MC = amphibious_move;
   parameter->combined.get_TB = amphibious_behaviour;
   parameter->combined.get_EC = amphibious_extra_cost;
@@ -1009,10 +1007,10 @@ struct pf_path *pft_concat(struct pf_path *dest_path,
   } else {
     int old_length = dest_path->length;
 
-    fc_assert_ret_val(pf_path_last_position(dest_path)->tile
-                      == src_path->positions[0].tile, NULL);
-    fc_assert_ret_val(pf_path_last_position(dest_path)->moves_left
-                      == src_path->positions[0].moves_left, NULL);
+    assert(pf_path_get_last_position(dest_path)->tile
+	   == src_path->positions[0].tile);
+    assert(pf_path_get_last_position(dest_path)->moves_left
+	   == src_path->positions[0].moves_left);
     dest_path->length += src_path->length - 1;
     dest_path->positions =
 	fc_realloc(dest_path->positions,
@@ -1042,7 +1040,7 @@ bool pft_advance_path(struct pf_path *path, struct tile *ptile)
       return FALSE;
     }
   }
-  fc_assert_ret_val(i < path->length, FALSE);
+  assert(i < path->length);
   path->length -= i;
   new_positions = fc_malloc(sizeof(*path->positions) * path->length);
   memcpy(new_positions, path->positions + i,

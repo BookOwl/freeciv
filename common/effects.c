@@ -11,21 +11,21 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <ctype.h>
 #include <string.h>
 
-/* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
 #include "support.h"
 #include "shared.h" /* ARRAY_SIZE */
 
-/* common */
 #include "city.h"
+#include "effects.h"
 #include "game.h"
 #include "government.h"
 #include "improvement.h"
@@ -33,11 +33,134 @@
 #include "packets.h"
 #include "player.h"
 #include "tech.h"
-
-#include "effects.h"
-
+ 
+/* Names of effect types.
+ * (These must correspond to enum effect_type_id in effects.h.) */
+static const char *effect_type_names[EFT_LAST] = {
+  "Tech_Parasite",
+  "Airlift",
+  "Any_Government",
+  "Capital_City",
+  "Enable_Nuke",
+  "Enable_Space",
+  "Specialist_Output",
+  "Output_Bonus",
+  "Output_Bonus_2",
+  "Output_Add_Tile",
+  "Output_Inc_Tile",
+  "Output_Per_Tile",
+  "Output_Waste_Pct",
+  "Force_Content",
+  /* TODO: "Force_Content_Pct", */
+  "Give_Imm_Tech",
+  "Growth_Food",
+  "Health_Pct",
+  "Have_Embassies",
+  "Make_Content",
+  "Make_Content_Mil",
+  "Make_Content_Mil_Per",
+  /* TODO: "Make_Content_Pct", */
+  "Make_Happy",
+  "No_Anarchy",
+  "Nuke_Proof",
+  /* TODO: "Pollu_Adj", */
+  /* TODO: "Pollu_Pct", */
+  /* TODO: "Pollu_Pop_Adj", */
+  "Pollu_Pop_Pct",
+  /* TODO: "Pollu_Prod_Adj", */
+  "Pollu_Prod_Pct",
+  "Reveal_Cities",
+  "Reveal_Map",
+  /* TODO: "Incite_Dist_Adj", */
+  "Incite_Cost_Pct",
+  "Size_Adj",
+  "Size_Unlimit",
+  "SS_Structural",
+  "SS_Component",
+  "SS_Module",
+  "Spy_Resistant",
+  "Move_Bonus",
+  "Unit_No_Lose_Pop",
+  "Unit_Recover",
+  "Upgrade_Unit",
+  "Upkeep_Free",
+  "No_Unhappy",
+  "Veteran_Build",
+  "Veteran_Combat",
+  "HP_Regen",
+  "City_Vision_Radius_Sq",
+  "Unit_Vision_Radius_Sq",
+  "Defend_Bonus",
+  "No_Incite",
+  "Gain_AI_Love",
+  "Turn_Years",
+  "Slow_Down_Timeline",
+  "Civil_War_Chance",
+  "Migration_Pct",
+  "Empire_Size_Base",
+  "Empire_Size_Step",
+  "Max_Rates",
+  "Martial_Law_Each",
+  "Martial_Law_Max",
+  "Rapture_Grow",
+  "Unbribable_Units",
+  "Revolution_When_Unhappy",
+  "Has_Senate",
+  "Inspire_Partisans",
+  "Happiness_To_Gold",
+  "Fanatics",
+  "No_Diplomacy",
+  "Trade_Revenue_Bonus",
+  "Unhappy_Factor",
+  "Upkeep_Factor",
+  "Unit_Upkeep_Free_Per_City",
+  "Output_Waste",
+  "Output_Waste_By_Distance",
+  "Output_Penalty_Tile",
+  "Output_Inc_Tile_Celebrate",
+  "City_Unhappy_Size",
+  "Upgrade_Price_Pct",
+  "Visible_Walls",
+  "Tech_Cost_Factor",
+  "Shield2Gold_Factor",
+  "Tile_Workable"
+};
 
 static bool initialized = FALSE;
+
+/**************************************************************************
+  Convert effect type names to enum; case insensitive;
+  returns EFT_LAST if can't match.
+**************************************************************************/
+enum effect_type effect_type_from_str(const char *str)
+{
+  enum effect_type effect_type;
+
+  assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
+
+  for (effect_type = 0; effect_type < EFT_LAST; effect_type++) {
+    if (0 == mystrcasecmp(effect_type_names[effect_type], str)) {
+      return effect_type;
+    }
+  }
+
+  return EFT_LAST;
+}
+
+/**************************************************************************
+  Return the name for an effect type enumeration.  Returns NULL if the
+  effect_type is invalid.  This is the inverse of effect_type_from_str.
+**************************************************************************/
+const char *effect_type_name(enum effect_type effect_type)
+{
+  assert(ARRAY_SIZE(effect_type_names) == EFT_LAST);
+  if (effect_type >= 0 && effect_type < EFT_LAST) {
+    return effect_type_names[effect_type];
+  } else {
+    assert(0);
+    return NULL;
+  }
+}
 
 /**************************************************************************
   The code creates a ruleset cache on ruleset load. This constant cache
@@ -183,12 +306,12 @@ static void effect_free(struct effect *peffect)
   requirement_list_iterate(peffect->reqs, preq) {
     free(preq);
   } requirement_list_iterate_end;
-  requirement_list_destroy(peffect->reqs);
+  requirement_list_free(peffect->reqs);
 
   requirement_list_iterate(peffect->nreqs, preq) {
     free(preq);
   } requirement_list_iterate_end;
-  requirement_list_destroy(peffect->nreqs);
+  requirement_list_free(peffect->nreqs);
 
   free(peffect);
 }
@@ -257,7 +380,7 @@ void ruleset_cache_free(void)
     effect_list_iterate(plist, peffect) {
       effect_free(peffect);
     } effect_list_iterate_end;
-    effect_list_destroy(plist);
+    effect_list_free(plist);
     ruleset_cache.tracker = NULL;
   }
 
@@ -265,7 +388,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.effects[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.effects[i] = NULL;
     }
   }
@@ -274,7 +397,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.reqs.buildings[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.reqs.buildings[i] = NULL;
     }
   }
@@ -283,7 +406,7 @@ void ruleset_cache_free(void)
     struct effect_list *plist = ruleset_cache.reqs.govs[i];
 
     if (plist) {
-      effect_list_destroy(plist);
+      effect_list_free(plist);
       ruleset_cache.reqs.govs[i] = NULL;
     }
   }
@@ -291,23 +414,23 @@ void ruleset_cache_free(void)
   initialized = FALSE;
 }
 
-/****************************************************************************
+/**************************************************************************
   Receives a new effect.  This is called by the client when the packet
   arrives.
-****************************************************************************/
-void recv_ruleset_effect(const struct packet_ruleset_effect *packet)
+**************************************************************************/
+void recv_ruleset_effect(struct packet_ruleset_effect *packet)
 {
   effect_new(packet->effect_type, packet->effect_value);
 }
 
-/****************************************************************************
+/**************************************************************************
   Receives a new effect *requirement*.  This is called by the client when
   the packet arrives.
-****************************************************************************/
-void recv_ruleset_effect_req(const struct packet_ruleset_effect_req *packet)
+**************************************************************************/
+void recv_ruleset_effect_req(struct packet_ruleset_effect_req *packet)
 {
   if (packet->effect_id != effect_list_size(ruleset_cache.tracker) - 1) {
-    log_error("Bug in recv_ruleset_effect_req.");
+    freelog(LOG_ERROR, "Bug in recv_ruleset_effect_req.");
   } else {
     struct effect *peffect = effect_list_get(ruleset_cache.tracker, -1);
     struct requirement req, *preq;
@@ -391,8 +514,7 @@ Impr_type_id ai_find_source_building(struct city *pcity,
 
   /* There's no point in defining both of these as uclass is more restrictive
    * than move_type */
-  fc_assert_ret_val(uclass == NULL || move == unit_move_type_invalid(),
-                    B_LAST);
+  assert(uclass == NULL || move == MOVETYPE_LAST);
 
   effect_list_iterate(get_effects(effect_type), peffect) {
     if (peffect->value > greatest_value) {
@@ -411,7 +533,7 @@ Impr_type_id ai_find_source_building(struct city *pcity,
         }
         if (VUT_UCLASS == preq->source.kind) {
           if ((uclass != NULL && preq->source.value.uclass != uclass)
-              || (move != unit_move_type_invalid()
+              || (move != MOVETYPE_LAST
                   && uclass_move_type(preq->source.value.uclass) != move)) {
             /* Effect requires other kind of unit than what we are interested about */
             wrong_unit = TRUE;
@@ -728,9 +850,9 @@ int get_city_specialist_output_bonus(const struct city *pcity,
 				     const struct output_type *poutput,
 				     enum effect_type effect_type)
 {
-  fc_assert_ret_val(pcity != NULL, 0);
-  fc_assert_ret_val(pspecialist != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
+  assert(pcity != NULL);
+  assert(pspecialist != NULL);
+  assert(poutput != NULL);
   return get_target_bonus_effects(NULL,
 				  city_owner(pcity), pcity, NULL,
 				  NULL, NULL, poutput, pspecialist,
@@ -751,7 +873,7 @@ int get_city_tile_output_bonus(const struct city *pcity,
 			       const struct output_type *poutput,
 			       enum effect_type effect_type)
 {
-  fc_assert_ret_val(pcity != NULL, 0);
+  assert(pcity != NULL);
   return get_target_bonus_effects(NULL,
 			 	  city_owner(pcity), pcity, NULL,
 				  ptile, NULL, poutput, NULL,
@@ -769,9 +891,9 @@ int get_player_output_bonus(const struct player *pplayer,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  assert(pplayer != NULL);
+  assert(poutput != NULL);
+  assert(effect_type != EFT_LAST);
   return get_target_bonus_effects(NULL, pplayer, NULL, NULL, NULL,
                                   NULL, poutput, NULL, effect_type);
 }
@@ -787,9 +909,9 @@ int get_city_output_bonus(const struct city *pcity,
     return 0;
   }
 
-  fc_assert_ret_val(pcity != NULL, 0);
-  fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  assert(pcity != NULL);
+  assert(poutput != NULL);
+  assert(effect_type != EFT_LAST);
   return get_target_bonus_effects(NULL, city_owner(pcity), pcity, NULL,
                                   NULL, NULL, poutput, NULL, effect_type);
 }
@@ -805,7 +927,7 @@ int get_building_bonus(const struct city *pcity,
     return 0;
   }
 
-  fc_assert_ret_val(NULL != pcity && NULL != building, 0);
+  assert(NULL != pcity && NULL != building);
   return get_target_bonus_effects(NULL,
 			 	  city_owner(pcity), pcity,
 				  building,
@@ -830,15 +952,14 @@ int get_unittype_bonus(const struct player *pplayer,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL && ptile != NULL && punittype != NULL,
-                    0);
+  assert(pplayer != NULL && ptile != NULL && punittype != NULL);
   return get_target_bonus_effects(NULL,
                                  pplayer, tile_city(ptile), NULL, ptile,
                                  punittype, NULL, NULL, effect_type);
 }
 
 /**************************************************************************
-  Returns the effect bonus at an unit
+  Returns the effect bonus at a building.
 **************************************************************************/
 int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
 {
@@ -846,44 +967,13 @@ int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
     return 0;
   }
 
-  fc_assert_ret_val(punit != NULL, 0);
+  assert(punit != NULL);
   return get_target_bonus_effects(NULL,
-                                  unit_owner(punit),
-                                  unit_tile(punit)
-                                    ? tile_city(unit_tile(punit)) : NULL,
-                                  NULL, unit_tile(punit),
-                                  unit_type(punit), NULL, NULL,
-                                  effect_type);
-}
-
-/**************************************************************************
-  Returns the effect bonus at an tile
-**************************************************************************/
-int get_tile_bonus(const struct tile *ptile, const struct unit *punit,
-                   enum effect_type etype)
-{
-  struct player *pplayer = NULL;
-  struct unit_type *utype = NULL;
-
-  if (!initialized) {
-    return 0;
-  }
-
-  fc_assert_ret_val(ptile != NULL, 0);
-
-  if (punit != NULL) {
-    pplayer = unit_owner(punit);
-    utype = unit_type(punit);
-  }
-
-  return get_target_bonus_effects(NULL,
-                                  pplayer,
-                                  tile_city(ptile),
-                                  NULL,
-                                  ptile,
-                                  utype,
-                                  NULL, NULL,
-                                  etype);
+				  unit_owner(punit),
+				  punit->tile ? tile_city(punit->tile) : NULL,
+				  NULL, punit->tile,
+				  unit_type(punit), NULL, NULL,
+				  effect_type);
 }
 
 /**************************************************************************
@@ -900,7 +990,7 @@ int get_player_bonus_effects(struct effect_list *plist,
     return 0;
   }
 
-  fc_assert_ret_val(pplayer != NULL, 0);
+  assert(pplayer != NULL);
   return get_target_bonus_effects(plist,
 			  	  pplayer, NULL, NULL,
 				  NULL, NULL, NULL, NULL,
@@ -922,7 +1012,7 @@ int get_city_bonus_effects(struct effect_list *plist,
     return 0;
   }
 
-  fc_assert_ret_val(pcity != NULL, 0);
+  assert(pcity != NULL);
   return get_target_bonus_effects(plist,
 			 	  city_owner(pcity), pcity, NULL,
 				  NULL, NULL, poutput, NULL,
@@ -984,7 +1074,7 @@ void get_effect_req_text(struct effect *peffect, char *buf, size_t buf_len)
 
   requirement_list_iterate(peffect->reqs, preq) {
     if (buf[0] != '\0') {
-      fc_strlcat(buf, "+", buf_len);
+      mystrlcat(buf, "+", buf_len);
     }
 
     universal_name_translation(&preq->source,
@@ -1000,7 +1090,7 @@ void get_effect_req_text(struct effect *peffect, char *buf, size_t buf_len)
 **************************************************************************/
 bool iterate_effect_cache(iec_cb cb)
 {
-  fc_assert_ret_val(cb != NULL, FALSE);
+  assert(cb != NULL);
 
   effect_list_iterate(ruleset_cache.tracker, peffect) {
     if (!cb(peffect)) {

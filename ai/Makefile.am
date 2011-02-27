@@ -1,21 +1,8 @@
 ## Process this file with automake to produce Makefile.in
 
-if AI_MODULES
-if EXP_AI_MODULES
-module_dirs = stub threaded
-else
-# AI module loading supported, but experimental modules not built
-module_dirs =
-endif
-else
-module_dirs =
-endif
-
-SUBDIRS = default $(module_dirs)
-
 noinst_LTLIBRARIES = libcivai.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(top_srcdir)/server -I$(top_srcdir)/server/advisors -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator -I$(srcdir)/default
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../server -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/generator
 
 libcivai_la_SOURCES = \
 		advdomestic.c	\
@@ -32,6 +19,8 @@ libcivai_la_SOURCES = \
 		aicity.h	\
 		aidata.c	\
 		aidata.h	\
+		aiexplorer.c	\
+		aiexplorer.h	\
 		aiferry.c	\
 		aiferry.h	\
 		aiguard.c	\
@@ -44,8 +33,6 @@ libcivai_la_SOURCES = \
 		ailog.h		\
 		aiparatrooper.c \
 		aiparatrooper.h \
-		aiplayer.c	\
-		aiplayer.h	\
 		aisettler.c	\
 		aisettler.h	\
 		aitech.c	\
@@ -58,3 +45,4 @@ libcivai_la_SOURCES = \
 		aidiplomat.h
 
 libcivai_la_LIBADD = -lm
+

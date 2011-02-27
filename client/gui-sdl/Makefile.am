@@ -99,8 +99,6 @@ libgui_sdl_la_SOURCES = \
 	widget_button.h \
 	widget_checkbox.c \
 	widget_checkbox.h \
-	widget_combo.c \
-	widget_combo.h \
 	widget_core.c	\
 	widget_edit.c	\
 	widget_edit.h	\

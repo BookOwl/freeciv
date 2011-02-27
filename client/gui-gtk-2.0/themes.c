@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <dirent.h>
@@ -21,17 +21,12 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "mem.h"
-#include "string_vector.h"
 #include "support.h"
 
-/* client */
-#include "themes_common.h"
-
-/* gui-gtk-2.0 */
 #include "gui_main.h"
 
+#include "themes_common.h"
 #include "themes_g.h"
 
 /* Array of default files. First num_default_files positions
@@ -44,7 +39,7 @@ static int num_default_files;
 /****************************************************************************
   Initialize the default_files array.
 ****************************************************************************/
-static void load_default_files(void)
+static void load_default_files()
 {
   int i;
   gchar** f;
@@ -62,7 +57,7 @@ static void load_default_files(void)
   default_files = fc_malloc(sizeof(char*) * (i + 2));
   
   for (i = 0; i < num_default_files; i++) {
-    default_files[i] = fc_strdup(f[i]);
+    default_files[i] = mystrdup(f[i]);
   }
   default_files[i] = default_files[i + 1] = NULL;
 }
@@ -80,8 +75,8 @@ void gui_load_theme(const char *directory, const char *theme_name)
   default_files[num_default_files + 1] = NULL;
   
   /* Gtk theme is a directory containing gtk-2.0/gtkrc file */
-  fc_snprintf(buf, sizeof(buf), "%s/%s/gtk-2.0/gtkrc", directory,
-              theme_name);
+  my_snprintf(buf, sizeof(buf), "%s/%s/gtk-2.0/gtkrc", directory,
+	      theme_name);
 
   gtk_rc_set_default_files(default_files);
 
@@ -142,24 +137,25 @@ char **get_gui_specific_themes_directories(int *count)
 {
   gchar *standard_dir;
   char *home_dir;
-  const struct strvec *data_dirs = get_data_dirs();
-  char **directories = fc_malloc((2 + strvec_size(data_dirs))
-                                 * sizeof(char *));
+  int i;
 
-  *count = 0;
-
+  const char **data_directories = get_data_dirs(count);
+    
+  char **directories = fc_malloc(sizeof(char *) * (*count + 2));
+    
   /* Freeciv-specific GTK+ themes directories */
-  strvec_iterate(data_dirs, dir_name) {
-    char buf[strlen(dir_name) + strlen("/themes/gui-gtk-2.0") + 1];
+  for (i = 0; i < *count; i++) {
+    char buf[strlen(data_directories[i]) + strlen("/themes/gui-gtk-2.0") + 1];
+    
+    my_snprintf(buf, sizeof(buf), "%s/themes/gui-gtk-2.0", data_directories[i]);
 
-    fc_snprintf(buf, sizeof(buf), "%s/themes/gui-gtk-2.0", dir_name);
-
-    directories[(*count)++] = fc_strdup(buf);
-  } strvec_iterate_end;
-
+    directories[i] = mystrdup(buf);
+  }
+    
   /* standard GTK+ themes directory (e.g. /usr/share/themes) */
   standard_dir = gtk_rc_get_theme_dir();
-  directories[(*count)++] = fc_strdup(standard_dir);
+  directories[*count] = mystrdup(standard_dir);
+  (*count)++;
   g_free(standard_dir);
 
   /* user GTK+ themes directory (~/.themes) */
@@ -167,8 +163,9 @@ char **get_gui_specific_themes_directories(int *count)
   if (home_dir) {
     char buf[strlen(home_dir) + 16];
     
-    fc_snprintf(buf, sizeof(buf), "%s/.themes/", home_dir);
-    directories[(*count)++] = fc_strdup(buf);
+    my_snprintf(buf, sizeof(buf), "%s/.themes/", home_dir);
+    directories[*count] = mystrdup(buf);
+    (*count)++;
   }
 
   return directories;
@@ -202,8 +199,8 @@ char **get_useable_themes_in_directory(const char *directory, int *count)
     char buf[strlen(directory) + strlen(entry->d_name) + 32];
     struct stat stat_result;
 
-    fc_snprintf(buf, sizeof(buf),
-                "%s/%s/gtk-2.0/gtkrc", directory, entry->d_name);
+    my_snprintf(buf, sizeof(buf),
+		"%s/%s/gtk-2.0/gtkrc", directory, entry->d_name);
 
     if (fc_stat(buf, &stat_result) != 0) {
       /* File doesn't exist */
@@ -223,7 +220,7 @@ char **get_useable_themes_in_directory(const char *directory, int *count)
       t_size *= 2;
     }
 
-    theme_names[*count] = fc_strdup(entry->d_name);
+    theme_names[*count] = mystrdup(entry->d_name);
     (*count)++;
   }
 

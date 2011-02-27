@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -20,13 +20,11 @@
 #include "fcintl.h"
 #include "rand.h"
 
-/* client/include */
+/* client */
 #include "gui_main_g.h"
 #include "ggz_g.h"
 
-/* client */
 #include "clinet.h"
-
 #include "ggzclient.h"
 
 #ifdef GGZ_CLIENT
@@ -76,9 +74,9 @@ static void handle_ggzmod_server(GGZMod * ggzmod, GGZModEvent e,
   Callback for when the GGZ client tells us player stats.
 ****************************************************************************/
 static void handle_ggzmod_stats(GGZMod *ggzmod, GGZModEvent e,
-                                const void *data)
+				const void *data)
 {
-  conn_list_dialog_update();
+  update_conn_list_dialog();
 }
 
 /****************************************************************************
@@ -166,4 +164,4 @@ bool user_get_record(const char *name,
 
 }
 
-#endif /* GGZ_CLIENT */
+#endif

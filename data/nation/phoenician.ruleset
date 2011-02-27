@@ -12,29 +12,27 @@ legend=_("Phoenicia was an ancient civilization, based in what is now the\
  Greek and Latin names.  They referred to themselves a Kan'ani and their\
  Punic (Carthaginian) descendents in St. Augustine's day called themselves\
  Chanani.")
-
-leaders = {
- "name",        "sex"
- "Hiram",       "Male"
- "Agenor",      "Male"
- "Eshmunazar",  "Male"
- "Kadmos",      "Male"
- "Ithobaal",    "Male"
- "Abd'ashtart", "Male"
-}
-ruler_titles = {
- "government",      "male_title",        "female_title"
- "Anarchy",         _("Usurper %s"),     _("?female:Usurper %s")
-}
+leader=
+ "Hiram",
+ "Agenor",
+ "Eshmunazar",
+ "Kadmos",
+ "Ithobaal",
+ "Abd'ashtart"
+leader_sex="Male", "Male", "Male", "Male", "Male",
+           "Male"
 flag="phoenicia"
 flag_alt = "-"
 city_style = "Classical"
+ruler_titles = { "government",      "male_title",      "female_title"
+                 "Monarchy",       _("Milk"),           _("Milkot")
+               }
 
 init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations="aramean", "carthaginian", "israelite"
+civilwar_nations="turkish", "carthaginian", "israeli"
 
 cities =
  "Sur", 	; English: "Tyre"

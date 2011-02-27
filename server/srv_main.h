@@ -14,12 +14,10 @@
 #define FC__SRV_MAIN_H
 
 /* utility */
-#include "log.h"        /* enum log_level */
 #include "netintf.h"
 
 /* common */
 #include "fc_types.h"
-#include "game.h"
 
 struct conn_list;
 
@@ -34,7 +32,7 @@ struct server_arguments {
   /* this server's listen port */
   int port;
   /* the log level */
-  enum log_level loglevel;
+  int loglevel;
   /* filenames */
   char *log_filename;
   char *ranklog_filename;
@@ -43,25 +41,26 @@ struct server_arguments {
   char *saves_pathname;
   char *scenarios_pathname;
   char serverid[256];
+  /* save a ppm of the map? */
+  bool save_ppm;
   /* quit if there no players after a given time interval */
   int quitidle;
   /* exit the server on game ending */
   bool exit_on_end;
   /* authentication options */
-  bool fcdb_enabled;            /* defaults to FALSE */
-  char *fcdb_conf;              /* freeciv database configuration file */
   bool auth_enabled;            /* defaults to FALSE */
+  char *auth_conf;              /* auth configuration file */
   bool auth_allow_guests;       /* defaults to TRUE */
   bool auth_allow_newusers;     /* defaults to TRUE */
   enum announce_type announce;
-  int fatal_assertions;         /* default to -1 (disabled). */
 };
 
 /* used in savegame values */
 #define SPECENUM_NAME server_states
 #define SPECENUM_VALUE0 S_S_INITIAL
-#define SPECENUM_VALUE1 S_S_RUNNING
-#define SPECENUM_VALUE2 S_S_OVER
+#define SPECENUM_VALUE1 S_S_GENERATING_WAITING
+#define SPECENUM_VALUE2 S_S_RUNNING
+#define SPECENUM_VALUE3 S_S_OVER
 #include "specenum_gen.h"
 
 /* Structure for holding global server data.
@@ -86,21 +85,20 @@ void init_game_seed(void);
 void srv_init(void);
 void srv_main(void);
 void server_quit(void);
-void save_game_auto(const char *save_reason, enum autosave_type type);
+void save_game_auto(const char *save_reason, const char *reason_filename);
 
 enum server_states server_state(void);
 void set_server_state(enum server_states newstate);
 
 void check_for_full_turn_done(void);
 bool check_for_game_over(void);
-bool game_was_started(void);
 
 bool server_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
-void save_game(const char *orig_filename, const char *save_reason,
-               bool scenario);
-const char *pick_random_player_name(const struct nation_type *pnation);
-void send_all_info(struct conn_list *dest);
+void save_game(char *orig_filename, const char *save_reason, bool scenario);
+void pick_random_player_name(const struct nation_type *pnation,
+			     char *newname);
+void send_all_info(struct conn_list *dest, bool force);
 
 void identity_number_release(int id);
 void identity_number_reserve(int id);

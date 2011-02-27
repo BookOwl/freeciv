@@ -12,16 +12,15 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
 
 /* utility */
 #include "log.h"
-#include "mem.h"
 
-/* client/gui-sdl */
+/* gui-sdl */
 #include "SDL_ttf.h"
 #include "colors.h"
 #include "graphics.h"

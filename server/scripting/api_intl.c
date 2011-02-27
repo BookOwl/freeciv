@@ -12,35 +12,32 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
 #include "fcintl.h"
 
-/* server/scripting */
-#include "script_game.h"
-
 #include "api_intl.h"
+#include "script.h"
 
 const char *api_intl__(const char *untranslated) {
-  SCRIPT_CHECK_ARG_NIL(untranslated, 1, string, "");
+  SCRIPT_ASSERT(NULL != untranslated, NULL);
   return _(untranslated);
 }
 
 const char *api_intl_N_(const char *untranslated) {
-  SCRIPT_CHECK_ARG_NIL(untranslated, 1, string, "");
+  SCRIPT_ASSERT(NULL != untranslated, NULL);
   return N_(untranslated);
 }
 
 const char *api_intl_Q_(const char *untranslated) {
-  SCRIPT_CHECK_ARG_NIL(untranslated, 1, string, "");
+  SCRIPT_ASSERT(NULL != untranslated, NULL);
   return Q_(untranslated);
 }
 
 const char *api_intl_PL_(const char *singular, const char *plural, int n) {
-  SCRIPT_CHECK_ARG_NIL(singular, 1, string, "");
-  SCRIPT_CHECK_ARG_NIL(plural, 2, string, "");
+  SCRIPT_ASSERT(NULL != singular, NULL);
+  SCRIPT_ASSERT(NULL != plural, NULL);
   return PL_(singular, plural, n);
 }
 

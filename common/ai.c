@@ -12,29 +12,29 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-#include <string.h>
+#include <assert.h>
 
 /* utility */
-#include "log.h"                /* fc_assert */
+#include "fcintl.h"
+#include "log.h"
 
 /* common */
 #include "ai.h"
 
-static struct ai_type ai_types[FC_AI_LAST];
-
-static int ai_type_count = 0;
+static struct ai_type default_ai;
 
 /***************************************************************
-  Returns ai_type of given id.
+  Returns ai_type of given id. Currently only one ai_type,
+  id AI_DEFAULT, is supported.
 ***************************************************************/
 struct ai_type *get_ai_type(int id)
 {
-  fc_assert(id >= 0 && id < FC_AI_LAST);
+  assert(id == FC_AI_DEFAULT);
 
-  return &ai_types[id];
+  return &default_ai;
 }
 
 /***************************************************************
@@ -43,45 +43,4 @@ struct ai_type *get_ai_type(int id)
 void init_ai(struct ai_type *ai)
 {
   memset(ai, 0, sizeof(*ai));
-}
-
-/***************************************************************
-  Returns id of the given ai_type.
-***************************************************************/
-int ai_type_number(const struct ai_type *ai)
-{
-  int ainbr = ai - ai_types;
-
-  fc_assert_ret_val(ainbr >= 0 && ainbr < FC_AI_LAST, 0);
-
-  return ainbr;
-}
-
-/***************************************************************
-  Find ai type with given name.
-***************************************************************/
-struct ai_type *ai_type_by_name(const char *search)
-{
-  size_t len = strlen(search);
-
-  ai_type_iterate(ai) {
-    if (!strncmp(ai->name, search, len)) {
-      return ai;
-    }
-  } ai_type_iterate_end;
-
-  return NULL;
-}
-
-/***************************************************************
-  Return next free ai_type
-***************************************************************/
-struct ai_type *ai_type_alloc(void)
-{
-  if (ai_type_count >= FC_AI_LAST) {
-    log_error(_("Too many AI modules. Max is %d."), FC_AI_LAST);
-    return NULL;
-  }
-
-  return get_ai_type(ai_type_count++);
 }

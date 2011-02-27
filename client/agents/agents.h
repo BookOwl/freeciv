@@ -11,14 +11,10 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__AGENTS_H
-#define FC__AGENTS_H
+#ifndef FC__CLIENT_AGENTS_AGENTS_H
+#define FC__CLIENT_AGENTS_AGENTS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 #include "fc_types.h"
 
@@ -83,9 +79,4 @@ void cause_a_unit_changed_for_agent(const char *name_of_calling_agent,
 				    struct unit *punit);
 void wait_for_requests(const char *agent_name, int first_request_id,
 		       int last_request_id);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* FC__AGENTS_H */
+#endif

@@ -13,11 +13,8 @@
 #ifndef FC__WORKLIST_H
 #define FC__WORKLIST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "registry.h"
+#include "shared.h"		/* MAX_LEN_NAME */
 
 #include "fc_types.h"
 
@@ -59,9 +56,5 @@ bool are_worklists_equal(const struct worklist *wlist1,
 #define worklist_iterate_end						\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__WORKLIST_H */

@@ -5,19 +5,16 @@ plural=_("?plural:Arameans")
 groups="Ancient", "Asian" 
 legend=_("According to legend, the Aramean people are the descendants of\
  Aram, the grandson of Noah.") 
-
-leaders = {
- "name",        "sex"
- "Ahuni",       "Male"
- "Kapara",      "Male"
- "Barrakib",    "Male"
- "Bar Hadad",   "Male"
- "Hasael",      "Male"
- "Zenobia",     "Female"
- "Aryo",        "Male"
- "Abgar VIII",  "Male" ; a.k.a. Abgar the Great
-}
-
+leader=
+ "Ahuni",
+ "Kapara",
+ "Barrakib",
+ "Bar Hadad",
+ "Hasael",
+ "Zenobia",
+ "Aryo",
+ "Abgar VIII"	; a.k.a. Abgar the Great
+leader_sex="Male", "Male", "Male", "Male", "Male", "Female", "Male", "Male" 
 flag="aram" 
 flag_alt = "-" 
 city_style = "Classical" 
@@ -26,7 +23,7 @@ init_techs=""
 init_buildings="" 
 init_government="Despotism" 
 init_units="" 
-civilwar_nations = "assyrian", "babylonian", "palmyrene"
+civilwar_nations = "assyrian", "babylonian"
 
 cities = 
  "Aram",

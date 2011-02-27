@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -304,7 +305,7 @@ static void editbar_player_pov_combobox_changed(GtkComboBox *combo,
     return;
   }
 
-  pplayer = player_by_number(id);
+  pplayer = valid_player_by_number(id);
   if (pplayer != NULL) {
     send_chat_printf("/take \"%s\"", pplayer->name);
   }
@@ -429,13 +430,14 @@ static void editbar_add_tool_button(struct editbar *eb,
   }
 
   sprite = editor_tool_get_sprite(ett);
-  fc_assert_ret(sprite != NULL);
+  assert(sprite != NULL);
   pixbuf = sprite_get_pixbuf(sprite);
   image = gtk_image_new_from_pixbuf(pixbuf);
 
   gtk_container_add(GTK_CONTAINER(button), image);
   gtk_toggle_button_set_mode(GTK_TOGGLE_BUTTON(button), FALSE);
-  gtk_widget_set_tooltip_text(button, editor_tool_get_tooltip(ett));
+  gtk_tooltips_set_tip(eb->tooltips, button,
+                       editor_tool_get_tooltip(ett), "");
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
@@ -487,7 +489,7 @@ static void editbar_add_mode_button(struct editbar *eb,
   button = gtk_toggle_button_new();
 
   sprite = editor_get_mode_sprite(etm);
-  fc_assert_ret(sprite != NULL);
+  assert(sprite != NULL);
   pixbuf = sprite_get_pixbuf(sprite);
   image = gtk_image_new_from_pixbuf(pixbuf);
 
@@ -495,7 +497,7 @@ static void editbar_add_mode_button(struct editbar *eb,
   gtk_toggle_button_set_mode(GTK_TOGGLE_BUTTON(button), FALSE);
   tooltip = editor_get_mode_tooltip(etm);
   if (tooltip != NULL) {
-    gtk_widget_set_tooltip_text(button, tooltip);
+    gtk_tooltips_set_tip(eb->tooltips, button, tooltip, "");
   }
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
@@ -525,6 +527,7 @@ static struct editbar *editbar_create(void)
 
   hbox = gtk_hbox_new(FALSE, 4);
   eb->widget = hbox;
+  eb->tooltips = gtk_tooltips_new();
   eb->size_group = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
 
   sprites = get_editor_sprites(tileset);
@@ -574,10 +577,10 @@ static struct editbar *editbar_create(void)
                    G_CALLBACK(editbar_player_pov_combobox_changed), eb);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox,
+  gtk_tooltips_set_tip(eb->tooltips, evbox,
       _("Switch player point-of-view. Use this to edit "
         "from the perspective of different players, or "
-        "even as a global observer."));
+        "even as a global observer."), "");
   gtk_container_add(GTK_CONTAINER(evbox), combo);
   gtk_box_pack_start(GTK_BOX(vbox), evbox, TRUE, FALSE, 0);
   eb->player_pov_combobox = combo;
@@ -587,7 +590,8 @@ static struct editbar *editbar_create(void)
   pixbuf = sprite_get_pixbuf(sprites->properties);
   image = gtk_image_new_from_pixbuf(pixbuf);
   gtk_container_add(GTK_CONTAINER(button), image);
-  gtk_widget_set_tooltip_text(button, _("Show the property editor."));
+  gtk_tooltips_set_tip(eb->tooltips, button,
+      _("Show the property editor."), "");
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
@@ -1169,6 +1173,7 @@ static struct editinfobox *editinfobox_create(void)
   char buf[128];
 
   ei = fc_calloc(1, sizeof(*ei));
+  ei->tooltips = gtk_tooltips_new();
 
   frame = gtk_frame_new(_("Editor Tool"));
   gtk_container_set_border_width(GTK_CONTAINER(frame), 4);
@@ -1183,7 +1188,8 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox, _("Click to change value if applicable."));
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
+                       _("Click to change value if applicable."), "");
   g_signal_connect(evbox, "button_press_event",
       G_CALLBACK(editinfobox_handle_tool_image_button_press), NULL);
   gtk_box_pack_start(GTK_BOX(hbox), evbox, FALSE, FALSE, 0);
@@ -1210,7 +1216,8 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox, _("Click to change tool mode."));
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
+                       _("Click to change tool mode."), "");
   g_signal_connect(evbox, "button_press_event",
       G_CALLBACK(editinfobox_handle_mode_image_button_press), NULL);
   gtk_box_pack_start(GTK_BOX(hbox), evbox, FALSE, FALSE, 0);
@@ -1223,7 +1230,7 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(hbox), vbox2, FALSE, FALSE, 0);
 
   label = gtk_label_new(NULL);
-  fc_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
+  my_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
               _("Mode"));
   gtk_label_set_markup(GTK_LABEL(label), buf);
   gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
@@ -1239,11 +1246,11 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
   ei->size_hbox = hbox;
   spin = gtk_spin_button_new_with_range(1, 255, 1);
-  gtk_widget_set_tooltip_text(spin,
+  gtk_tooltips_set_tip(ei->tooltips, spin,
       _("Use this to change the \"size\" parameter for the tool. "
         "This parameter controls for example the half-width "
         "of the square of tiles that will be affected by the "
-        "tool, or the size of a created city."));
+        "tool, or the size of a created city."), "");
   g_signal_connect(spin, "value-changed",
                    G_CALLBACK(editinfobox_spin_button_value_changed),
                    GINT_TO_POINTER(SPIN_BUTTON_SIZE));
@@ -1256,10 +1263,10 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
   ei->count_hbox = hbox;
   spin = gtk_spin_button_new_with_range(1, 255, 1);
-  gtk_widget_set_tooltip_text(spin,
+  gtk_tooltips_set_tip(ei->tooltips, spin,
       _("Use this to change the tool's \"count\" parameter. "
         "This controls for example how many units are placed "
-        "at once with the unit tool."));
+        "at once with the unit tool."), "");
   g_signal_connect(spin, "value-changed",
                    G_CALLBACK(editinfobox_spin_button_value_changed),
                    GINT_TO_POINTER(SPIN_BUTTON_COUNT));
@@ -1291,10 +1298,10 @@ static struct editinfobox *editinfobox_create(void)
                    G_CALLBACK(editinfobox_tool_applied_player_changed), ei);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox,
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
       _("Use this to change the \"applied player\" tool parameter. "
         "This controls for example under which player units and cities "
-        "are created."));
+        "are created."), "");
   gtk_container_add(GTK_CONTAINER(evbox), combo);
   gtk_box_pack_start(GTK_BOX(vbox), evbox, FALSE, FALSE, 0);
   ei->tool_applied_player_combobox = combo;
@@ -1528,7 +1535,7 @@ static void editinfobox_refresh(struct editinfobox *ei)
     pixbuf = NULL;
   }
 
-  fc_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
+  my_snprintf(buf, sizeof(buf), "<span weight=\"bold\">%s</span>",
               editor_tool_get_name(ett));
   gtk_label_set_markup(GTK_LABEL(ei->tool_label), buf);
 
@@ -1859,10 +1866,6 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 {
   struct property_editor *pe;
 
-  if (!editor_is_active()) {
-    return;
-  }
-
   pe = editprop_get_property_editor();
   property_editor_handle_object_changed(pe, objtype, object_id, remove);
 }
@@ -1873,10 +1876,6 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void editgui_notify_object_created(int tag, int id)
 {
   struct property_editor *pe;
-
-  if (!editor_is_active()) {
-    return;
-  }
 
   pe = editprop_get_property_editor();
   property_editor_handle_object_created(pe, tag, id);

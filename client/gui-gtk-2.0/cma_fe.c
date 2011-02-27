@@ -12,8 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+
+#include <assert.h>
 
 #include <gdk/gdkkeysyms.h>
 
@@ -93,7 +95,7 @@ void cma_fe_init()
 **************************************************************************/
 void cma_fe_done()
 {
-  dialog_list_destroy(dialog_list);
+  dialog_list_free(dialog_list);
 }
 
 /**************************************************************************
@@ -117,7 +119,9 @@ static void cma_dialog_destroy_callback(GtkWidget *w, gpointer data)
 {
   struct cma_dialog *pdialog = (struct cma_dialog *) data;
 
-  dialog_list_remove(dialog_list, pdialog);
+  g_object_unref(pdialog->tips);
+
+  dialog_list_unlink(dialog_list, pdialog);
   free(pdialog);
 }
 
@@ -222,6 +226,10 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   g_signal_connect(pdialog->shell, "destroy",
 		   G_CALLBACK(cma_dialog_destroy_callback), pdialog);
 
+  pdialog->tips = gtk_tooltips_new();
+  g_object_ref(pdialog->tips);
+  gtk_object_sink(GTK_OBJECT(pdialog->tips));
+
   page = gtk_hbox_new(FALSE, 12);
   gtk_box_pack_start(GTK_BOX(pdialog->shell), page, TRUE, TRUE, 0);
 
@@ -246,11 +254,12 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
   g_signal_connect(pdialog->preset_list, "button_press_event",
       		   G_CALLBACK(button_press_callback), pdialog);
 
-  gtk_widget_set_tooltip_text(view,
-                              _("For information on\n"
-                                "the citizen governor and governor presets,\n"
-                                "including sample presets,\n"
-                                "see README.cma."));
+  gtk_tooltips_set_tip(pdialog->tips, view,
+		       _("For information on\n"
+		         "the citizen governor and governor presets,\n"
+			 "including sample presets,\n"
+		         "see README.cma."),
+		       "");
 
   rend = gtk_cell_renderer_text_new();
   column = gtk_tree_view_column_new_with_attributes(NULL, rend,
@@ -426,7 +435,7 @@ struct cma_dialog *create_cma_dialog(struct city *pcity)
 **************************************************************************/
 void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 {
-  struct cm_result *result = cm_result_new(pcity);
+  struct cm_result result;
   struct cm_parameter param;
   struct cma_dialog *pdialog = get_cma_dialog(pcity);
   int controlled = cma_is_city_under_agent(pcity, NULL);
@@ -434,9 +443,9 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
   cmafec_get_fe_parameter(pcity, &param);
 
   /* fill in result label */
-  cm_result_from_main_map(result, pcity);
+  cm_result_from_main_map(&result, pcity, TRUE);
   gtk_label_set_text(GTK_LABEL(pdialog->result_label),
-                     cmafec_get_result_descr(pcity, result, &param));
+		     cmafec_get_result_descr(pcity, &result, &param));
 
   /* if called from a hscale, we _don't_ want to do this */
   if (refresh != DONT_REFRESH_HSCALES) {
@@ -467,8 +476,6 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 	_("Governor Disabl_ed"));
   }
   gtk_widget_set_sensitive(pdialog->result_label, controlled);
-
-  cm_result_destroy(result);
 }
 
 /**************************************************************************
@@ -485,11 +492,15 @@ static void update_cma_preset_list(struct cma_dialog *pdialog)
 
   /* Append the presets */
   if (cmafec_preset_num()) {
+    gtk_tooltips_disable(pdialog->tips);
+
     for (i = 0; i < cmafec_preset_num(); i++) {
-      fc_strlcpy(buf, cmafec_preset_get_descr(i), sizeof(buf));
+      mystrlcpy(buf, cmafec_preset_get_descr(i), sizeof(buf));
       gtk_list_store_append(pdialog->store, &it);
       gtk_list_store_set(pdialog->store, &it, 0, buf, -1);
     }
+  } else {
+    gtk_tooltips_enable(pdialog->tips);
   }
 }
 

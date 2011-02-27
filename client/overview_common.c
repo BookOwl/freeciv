@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* floor */
@@ -262,7 +262,6 @@ static double wrap_double(double value, double wrap)
 void center_tile_overviewcanvas(void)
 {
   double ntl_x, ntl_y;
-  int ox, oy;
 
   gui_to_natural_pos(tileset, &ntl_x, &ntl_y,
 		     mapview.gui_x0 + mapview.width / 2,
@@ -285,10 +284,6 @@ void center_tile_overviewcanvas(void)
   }
 
   redraw_overview();
-
-  gui_to_overview_pos(tileset, &ox, &oy,
-		      mapview.gui_x0, mapview.gui_y0);
-  update_overview_scroll_window_pos(ox, oy);
 }
 
 /**************************************************************************
@@ -339,8 +334,10 @@ void overview_to_map_pos(int *map_x, int *map_y,
   }
 
   NATURAL_TO_MAP_POS(map_x, map_y, ntl_x, ntl_y);
-  /* All positions on the overview should be valid. */
-  fc_assert(normalize_map_pos(map_x, map_y));
+  if (!normalize_map_pos(map_x, map_y)) {
+    /* All positions on the overview should be valid. */
+    assert(FALSE);
+  }
 }
 
 /**************************************************************************
@@ -431,7 +428,9 @@ void calculate_overview_dimensions(void)
   recursion++;
 
   get_overview_area_dimensions(&w, &h);
-  get_overview_area_dimensions(&w, &h);
+
+  freelog(LOG_DEBUG, "Map size %d,%d - area size %d,%d",
+	  map.xsize, map.ysize, w, h);
 
   /* Set the scale of the overview map.  This attempts to limit the
    * overview to the size of the area available.
@@ -439,11 +438,8 @@ void calculate_overview_dimensions(void)
    * It rounds up since this gives good results with the default settings.
    * It may need tweaking if the panel resizes itself. */
   OVERVIEW_TILE_SIZE = MIN((w - 1) / (map.xsize * xfact) + 1,
-                           (h - 1) / map.ysize + 1);
+			   (h - 1) / map.ysize + 1);
   OVERVIEW_TILE_SIZE = MAX(OVERVIEW_TILE_SIZE, 1);
-
-  log_debug("Map size %d,%d - area size %d,%d - scale: %d", map.xsize,
-            map.ysize, w, h, OVERVIEW_TILE_SIZE);
 
   overview.width
     = OVERVIEW_TILE_WIDTH * map.xsize + shift * OVERVIEW_TILE_SIZE; 
@@ -473,7 +469,7 @@ void calculate_overview_dimensions(void)
 /****************************************************************************
   Callback to be called when an overview option is changed.
 ****************************************************************************/
-void overview_redraw_callback(struct option *option)
+void overview_redraw_callback(struct client_option *option)
 {
   /* This is called once for each option changed so it is slower than
    * necessary.  If this becomes a problem it could be switched to use a

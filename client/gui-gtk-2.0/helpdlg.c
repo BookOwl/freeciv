@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +30,6 @@
 #include "government.h"
 #include "mem.h"
 #include "shared.h"
-#include "specialist.h"
 #include "tech.h"
 #include "unit.h"
 #include "map.h"
@@ -69,7 +69,6 @@ static GtkWidget *help_itable;
 static GtkWidget *help_wtable;
 static GtkWidget *help_utable;
 static GtkWidget *help_ttable;
-static GtkWidget *help_btable;
 static GtkWidget *help_tree;
 static GtkTreeStore *tstore;
 
@@ -81,7 +80,6 @@ static GtkWidget *help_ilabel[6];
 static GtkWidget *help_wlabel[6];
 static GtkWidget *help_ulabel[5][5];
 static GtkWidget *help_tlabel[4][5];
-static GtkWidget *help_blabel[4];
 
 static bool help_advances[A_LAST];
 
@@ -111,14 +109,6 @@ static const char *help_tlabel_name[4][5] =
     { N_("Road Rslt/Time:"),	NULL, NULL, N_("Irrig. Rslt/Time:"),	NULL },
     { N_("Mine Rslt/Time:"),	NULL, NULL, N_("Trans. Rslt/Time:"),	NULL }
 };
-
-static const char *help_blabel_name[4] =
-/* TRANS: Label for build cost for bases in help. Will be followed by
- * something like "3 MP" (where MP = Movement Points) */
-{ N_("Build:"), NULL,
-/* TRANS: Base conflicts in help. Will be followed by a list of bases
- * that can't be built on the same tile as this one. */
-  N_("Conflicts with:"), NULL };
 
 #define REQ_LABEL_NONE _("None")
 #define REQ_LABEL_NEVER _("(Never)")
@@ -359,7 +349,6 @@ static void help_box_hide(void)
   gtk_widget_hide(help_wtable);
   gtk_widget_hide(help_utable);
   gtk_widget_hide(help_ttable);
-  gtk_widget_hide(help_btable);
   
   gtk_widget_hide(help_tile); /* FIXME: twice? */
 
@@ -612,17 +601,6 @@ static void create_help_dialog(void)
     }
   }
 
-  help_btable = gtk_table_new(1, 4, FALSE);
-  gtk_box_pack_start(GTK_BOX(help_box), help_btable, FALSE, FALSE, 0);
-
-  for (i=0; i<4; i++) {
-    help_blabel[i] =
-      gtk_label_new(help_blabel_name[i] ? _(help_blabel_name[i]) : "");
-    gtk_table_attach_defaults(GTK_TABLE(help_btable),
-                              help_blabel[i], i, i+1, 0, 1);
-    gtk_widget_set_name(help_blabel[i], "help_label");
-    gtk_widget_show(help_blabel[i]);
-  }
 
   help_vbox = gtk_vbox_new(FALSE, 1);
   gtk_container_set_border_width(GTK_CONTAINER(help_vbox), 5);
@@ -720,7 +698,7 @@ static void help_update_improvement(const struct help_item *pitem,
 				    char *title)
 {
   char buf[8192];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
 
   create_help_page(HELP_IMPROVEMENT);
 
@@ -764,7 +742,7 @@ static void help_update_wonder(const struct help_item *pitem,
 			       char *title)
 {
   char buf[8192];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
 
   create_help_page(HELP_WONDER);
 
@@ -816,7 +794,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 				  char *title)
 {
   char buf[8192];
-  struct unit_type *utype = unit_type_by_translated_name(title);
+  struct unit_type *utype = find_unit_type_by_translated_name(title);
 
   create_help_page(HELP_UNIT);
 
@@ -915,7 +893,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
   int i, j;
   GtkWidget *w, *hbox;
   char buf[8192];
-  struct advance *padvance = advance_by_translated_name(title);
+  struct advance *padvance = find_advance_by_translated_name(title);
 
   create_help_page(HELP_TECH);
 
@@ -1064,7 +1042,7 @@ static void help_update_terrain(const struct help_item *pitem,
 				char *title)
 {
   char buf[8192];
-  struct terrain *pterrain = terrain_by_translated_name(title);
+  struct terrain *pterrain = find_terrain_by_translated_name(title);
 
   create_help_page(HELP_TERRAIN);
 
@@ -1159,97 +1137,18 @@ static void help_update_terrain(const struct help_item *pitem,
 }
 
 /**************************************************************************
-  Help page for bases.
-**************************************************************************/
-static void help_update_base(const struct help_item *pitem, char *title)
-{
-  char buf[8192];
-  struct base_type *pbase = base_type_by_translated_name(title);
-
-  create_help_page(HELP_BASE);
-
-  if (!pbase) {
-    strcat(buf, pitem->text);
-  } else {
-    /* Cost to build */
-    if (pbase->buildable) {
-      /* TRANS: "MP" = movement points */
-      sprintf(buf, _("%d MP"), pbase->build_time);
-    } else {
-      sprintf(buf, "-");
-    }
-    gtk_label_set_text(GTK_LABEL(help_blabel[1]), buf);
-    /* Conflicting bases */
-    buf[0] = '\0';
-    base_type_iterate(pbase2) {
-      if (!can_bases_coexist(pbase, pbase2)) {
-        if (buf[0] != '\0') {
-          strcat(buf, "/");
-        }
-        strcat(buf, base_name_translation(pbase2));
-      }
-    } base_type_iterate_end;
-    /* TRANS: "Conflicts with: (none)" (bases) */
-    gtk_label_set_text(GTK_LABEL(help_blabel[3]), buf[0] ? buf : _("(none)"));
-    helptext_base(buf, sizeof(buf), client.conn.playing, pitem->text, pbase);
-  }
-  gtk_widget_show(help_btable);
-
-  gtk_text_buffer_set_text(help_text, buf, -1);
-  gtk_widget_show(help_text_sw);
-}
-
-/**************************************************************************
-  This is currently just a text page, with special text:
-**************************************************************************/
-static void help_update_specialist(const struct help_item *pitem,
-				   char *title)
-{
-  char buf[8192];
-  struct specialist *pspec = specialist_by_translated_name(title);
-
-  if (!pspec) {
-    strcat(buf, pitem->text);
-  } else {
-    helptext_specialist(buf, sizeof(buf), client.conn.playing, pitem->text,
-                        pspec);
-  }
-  create_help_page(HELP_TEXT);
-  gtk_text_buffer_set_text(help_text, buf, -1);
-  gtk_widget_show(help_text_sw);
-}
-
-/**************************************************************************
   This is currently just a text page, with special text:
 **************************************************************************/
 static void help_update_government(const struct help_item *pitem,
 				   char *title)
 {
   char buf[8192];
-  struct government *gov = government_by_translated_name(title);
+  struct government *gov = find_government_by_translated_name(title);
 
   if (!gov) {
     strcat(buf, pitem->text);
   } else {
     helptext_government(buf, sizeof(buf), client.conn.playing, pitem->text, gov);
-  }
-  create_help_page(HELP_TEXT);
-  gtk_text_buffer_set_text(help_text, buf, -1);
-  gtk_widget_show(help_text_sw);
-}
-
-/**************************************************************************
-  This is currently just a text page, with special text
-**************************************************************************/
-static void help_update_nation(const struct help_item *pitem, char *title,
-			       struct nation_type *pnation)
-{
-  char buf[4096];
-
-  if (!pnation) {
-    strcat(buf, pitem->text);
-  } else {
-    helptext_nation(buf, sizeof(buf), pnation, pitem->text);
   }
   create_help_page(HELP_TEXT);
   gtk_text_buffer_set_text(help_text, buf, -1);
@@ -1288,17 +1187,8 @@ static void help_update_dialog(const struct help_item *pitem)
   case HELP_TERRAIN:
     help_update_terrain(pitem, top);
     break;
-  case HELP_BASE:
-    help_update_base(pitem, top);
-    break;
-  case HELP_SPECIALIST:
-    help_update_specialist(pitem, top);
-    break;
   case HELP_GOVERNMENT:
     help_update_government(pitem, top);
-    break;
-  case HELP_NATIONS:
-    help_update_nation(pitem, top, nation_by_rule_name(top));
     break;
   case HELP_TEXT:
   default:

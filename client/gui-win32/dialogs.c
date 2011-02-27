@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -24,7 +24,6 @@
 #include <commctrl.h>
 
 /* common & utility */
-#include "bitvector.h"
 #include "capability.h"
 #include "fcintl.h"
 #include "game.h"
@@ -325,7 +324,7 @@ static void update_nation_info()
 **************************************************************************/
 static void select_random_race(HWND hWnd)
 {
-  selected_nation = fc_rand(nation_count());
+  selected_nation = myrand(nation_count());
   update_nation_info();
   update_radio_buttons(0);
 }
@@ -343,7 +342,7 @@ static void select_random_leader(HWND hWnd)
   for (j = 0; j < leader_num; j++) {
     ComboBox_AddString(GetDlgItem(hWnd,ID_RACESDLG_LEADER), leaders[j].name);
   }
-  selected_leader=fc_rand(leader_num);
+  selected_leader=myrand(leader_num);
   ComboBox_SetCurSel(GetDlgItem(hWnd,ID_RACESDLG_LEADER),selected_leader);
   SetWindowText(GetDlgItem(hWnd,ID_RACESDLG_LEADER),
 		leaders[selected_leader].name);
@@ -673,7 +672,7 @@ static int number_of_rows(int n)
 /**************************************************************************
 
 **************************************************************************/     
-static void unit_select_dialog_popdown(void)
+static void popdown_unit_select_dialog(void)
 {
   if (unit_select_main)
     DestroyWindow(unit_select_main);
@@ -690,7 +689,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
   switch(message)
     {
     case WM_CLOSE:
-      unit_select_dialog_popdown();
+      popdown_unit_select_dialog();
       return TRUE;
       break;
     case WM_DESTROY:
@@ -710,7 +709,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	    struct unit *punit = player_find_unit_by_id(client.conn.playing,
 							unit_select_ids[i]);
 	    if(punit) {
-	      unit_focus_set(punit);
+	      set_unit_focus(punit);
 	    }
 	  }  
 	  break;
@@ -721,12 +720,12 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	      struct unit *punit = player_find_unit_by_id(client.conn.playing,
 							  unit_select_ids[id]);
 	      if (NULL != punit && unit_owner(punit) == client.conn.playing) {
-		unit_focus_set(punit);
+		set_unit_focus(punit);
 	      }   
 	    }
 	  break;
 	}
-      unit_select_dialog_popdown();
+      popdown_unit_select_dialog();
       break;
     default:
       return DefWindowProc(hWnd,message,wParam,lParam);
@@ -768,7 +767,7 @@ BOOL unitselect_init(HINSTANCE hInstance)
 
 **************************************************************************/
 void
-unit_select_dialog_popup(struct tile *ptile)
+popup_unit_select_dialog(struct tile *ptile)
 {
   int i,n,r,c;
   int max_width,max_height;
@@ -787,7 +786,7 @@ unit_select_dialog_popup(struct tile *ptile)
   
   /* unit select box might already be open; if so, close it */
   if (unit_select_main) {
-    unit_select_dialog_popdown ();
+    popdown_unit_select_dialog ();
   }
   
   GetCursorPos(&pt);
@@ -817,7 +816,7 @@ unit_select_dialog_popup(struct tile *ptile)
 
       unit_select_ids[i]=punit->id;
 
-      fc_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
+      my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  utype_name_translation(punittemp),
 		  pcity ? city_name(pcity) : "",
 		  unit_activity_text(punit));
@@ -851,7 +850,7 @@ unit_select_dialog_popup(struct tile *ptile)
       canvas_store.wnd = NULL;
       canvas_store.tmp = NULL;
 
-      fc_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
+      my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s",
 		  utype_name_translation(punittemp),
 		  pcity ? city_name(pcity) : "",
 		  unit_activity_text(punit));
@@ -1047,7 +1046,7 @@ popup_caravan_dialog(struct unit *punit,
   char buf[128];
   bool can_establish, can_trade;
   
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
               _("Your caravan from %s reaches the city of %s.\nWhat now?"),
               city_name(phomecity), city_name(pdestcity));
  
@@ -1135,7 +1134,7 @@ static void diplomat_sabotage_callback(HWND w, void * data)
   if(game_find_unit_by_number(diplomat_id) &&
      game_find_city_by_number(diplomat_target_id)) {
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-			    diplomat_target_id, B_LAST + 1);
+			    diplomat_target_id, -1);
   }
  
   process_diplomat_arrival(NULL, 0);
@@ -1376,7 +1375,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                          _("This unit cannot be bribed!"),
                          diplomat_bribe_no_callback, 0, 0);
   } else if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
                 _("Bribe unit for %d gold?\nTreasury contains %d gold."), 
                 cost, client.conn.playing->economic.gold);
     popup_message_dialog(root_window, /*"diplomatbribedialog"*/_("Bribe Enemy Unit"
@@ -1384,7 +1383,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                         _("_Yes"), diplomat_bribe_yes_callback, 0,
                         _("_No"), diplomat_bribe_no_callback, 0, 0);
   } else {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
                 _("Bribing the unit costs %d gold.\n"
                   "Treasury contains %d gold."), 
                 cost, client.conn.playing->economic.gold);
@@ -1557,12 +1556,12 @@ void popup_incite_dialog(struct city *pcity, int cost)
   char buf[128];
 
   if (INCITE_IMPOSSIBLE_COST == cost) {
-    fc_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
+    my_snprintf(buf, sizeof(buf), _("You can't incite a revolt in %s."),
 		city_name(pcity));
     popup_message_dialog(root_window, _("City can't be incited!"), buf,
 			 _("Darn"), diplomat_incite_no_callback, 0, 0);
   } else if (cost <= client.conn.playing->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Incite a revolt for %d gold?\nTreasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
    diplomat_target_id = pcity->id;
@@ -1570,7 +1569,7 @@ void popup_incite_dialog(struct city *pcity, int cost)
 		       _("_Yes"), diplomat_incite_yes_callback, 0,
 		       _("_No"), diplomat_incite_no_callback, 0, 0);
   } else {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Inciting a revolt costs %d gold.\n"
 		  "Treasury contains %d gold."), 
 		cost, client.conn.playing->economic.gold);
@@ -1609,7 +1608,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id=pcity->id;
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
 		_("Your %s has arrived at %s.\nWhat is your command?"),
 		unit_name_translation(punit),
 		city_name(pcity));

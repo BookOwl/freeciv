@@ -11,8 +11,10 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+
+#include <assert.h>
 
 #include <unistd.h>
 #include <string.h>
@@ -25,7 +27,7 @@
 #include "string_vector.h"
 #include "support.h"
 
-/* client/include */
+/* include */
 #include "themes_g.h"
 
 /* client */
@@ -133,10 +135,10 @@ bool load_theme(const char *theme_name)
 /****************************************************************************
   Wrapper for load_theme. It's is used by local options dialog
 ****************************************************************************/
-void theme_reread_callback(struct option *poption)
+void theme_reread_callback(struct client_option *poption)
 {
   const char *theme_name = option_str_get(poption);
 
-  fc_assert_ret(NULL != theme_name && theme_name[0] != '\0');
+  RETURN_IF_FAIL(NULL != theme_name && theme_name[0] != '\0');
   load_theme(theme_name);
 }

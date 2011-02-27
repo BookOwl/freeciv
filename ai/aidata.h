@@ -13,28 +13,34 @@
 #ifndef FC__AIDATA_H
 #define FC__AIDATA_H
 
-/* utility */
-#include "support.h"
+/* max size of a short */
+#define MAX_NUM_ID (1+MAX_UINT16)
 
-/* common */
+#include "shared.h"		/* bool type */
+
 #include "fc_types.h"
+#include "improvement.h"
 
-struct player;
+#include "advdiplomacy.h"
+
+/* 
+ * This file and aidata.c contains global data structures for the AI
+ * and some of the functions that fill them with useful values at the 
+ * start of every turn. 
+ */
+
+enum ai_improvement_status {
+  AI_IMPR_CALCULATE, /* Calculate exactly its effect */
+  AI_IMPR_CALCULATE_FULL, /* Calculate including tile changes */
+  AI_IMPR_ESTIMATE,  /* Estimate its effect using wild guesses */
+  AI_IMPR_LAST
+};
 
 enum winning_strategy {
   WIN_OPEN,     /* still undetermined */
   WIN_WAR,      /* we have no other choice than to crush all opposition */
   WIN_SPACE,    /* we will race for space, peace very important */
   WIN_CAPITAL   /* we cannot win unless we take war_target's capital */
-};
-
-enum war_reason {
-  WAR_REASON_BEHAVIOUR,
-  WAR_REASON_SPACE,
-  WAR_REASON_EXCUSE,
-  WAR_REASON_HATRED,
-  WAR_REASON_ALLIANCE,
-  WAR_REASON_NONE
 };
 
 struct ai_dip_intel {
@@ -54,49 +60,122 @@ struct ai_dip_intel {
   signed char warned_about_space;
 };
 
-struct ai_plr
-{
-  bool phase_initialized;
+BV_DEFINE(bv_id, MAX_NUM_ID);
+struct ai_data {
+  /* Whether ai_data_phase_init() has been called or not. */
+  bool phase_is_initialized;
 
-  int last_num_continents;
-  int last_num_oceans;
+  /* The Wonder City */
+  int wonder_city;
 
-  /* Keep track of available ocean channels */
-  bool *channels;
-
-  struct {
-    int passengers;   /* number of passengers waiting for boats */
-    int boats;
-    int available_boats;
-  } stats;
+  /* Precalculated info about city improvements */
+  enum ai_improvement_status impr_calc[MAX_NUM_ITEMS];
+  enum req_range impr_range[MAX_NUM_ITEMS];
 
   /* AI diplomacy and opinions on other players */
   struct {
-    const struct ai_dip_intel **player_intel_slots;
+    struct ai_dip_intel player_intel[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
     enum winning_strategy strategy;
     int timer; /* pursue our goals with some stubbornness, in turns */
     char love_coeff;          /* Reduce love with this % each turn */
     char love_incr;           /* Modify love with this fixed amount */
     int req_love_for_peace;
     int req_love_for_alliance;
+    struct player *spacerace_leader; /* who is leading the space pack */
+    struct player *production_leader;
   } diplomacy;
 
-  /* Cache map for AI settlers; defined in aisettler.c. */
-  struct ai_settler *settler;
+  /* Long-term threats, not to be confused with short-term danger */
+  struct {
+    bool invasions;   /* check if we need to consider invasions */
+    bool *continent;  /* non-allied cities on continent? */
+    bool *ocean;      /* non-allied offensive ships in ocean? */
+    bool missile;     /* check for non-allied missiles */
+    int nuclear;      /* nuke check: 0=no, 1=capability, 2=built */
+    bool igwall;      /* enemies have igwall units */
+  } threats;
+
+  /* Keeps track of which continents are fully explored already */
+  struct {
+    bool *ocean;      /* are we done exploring this ocean? */
+    bool *continent;  /* are we done exploring this continent? */
+    bool land_done;   /* nothing more on land to explore anywhere */
+    bool sea_done;    /* nothing more to explore at sea */
+  } explore;
+
+  /* Keep track of available ocean channels */
+  bool *channels;
+
+  /* This struct is used for statistical unit building, eg to ensure
+   * that we don't build too few or too many units of a given type. */
+  struct {
+    /* Counts of specific types of units. */
+    struct {
+      /* Unit-flag counts. */
+      int triremes, missiles;
+
+      /* Move-type counts */
+      int land, sea, amphibious;
+
+      /* Upgradeable units */
+      int upgradeable;
+      
+      int paratroopers;
+    } units;
+    int *workers;     /* cities to workers on continent*/
+    int *cities;      /* number of cities we have on continent */
+    int passengers;   /* number of passengers waiting for boats */
+    int boats;
+    int available_boats;
+    int average_production;
+    bv_id diplomat_reservations;
+  } stats;
+
+  int num_continents; /* last time we updated our continent data */
+  int num_oceans; /* last time we updated our continent data */
+
+  /* Dynamic weights used in addition to Syela's hardcoded weights */
+  int shield_priority;
+  int food_priority;
+  int luxury_priority;
+  int gold_priority;
+  int science_priority;
+  int happy_priority;
+  int unhappy_priority;
+  int angry_priority;
+  int pollution_priority;
+
+  /* Government data */
+  int *government_want;
+  short govt_reeval;
+
+  /* Goals */
+  struct {
+    struct {
+      struct government *gov;        /* The ideal government */
+      int val;        /* Its value (relative to the current gov) */
+      int req;        /* The tech requirement for the ideal gov */
+    } govt;
+    struct government *revolution;   /* The best gov of the now available */
+  } goal;
+  
+  /* If the ai doesn't want/need any research */
+  bool wants_no_science;
+  
+  /* AI doesn't like having more than this number of cities */
+  int max_num_cities;
 };
 
 void ai_data_init(struct player *pplayer);
-void ai_data_close(struct player *pplayer);
+void ai_data_phase_init(struct player *pplayer, bool is_new_phase);
+void ai_data_phase_done(struct player *pplayer);
 
-void ai_data_phase_begin(struct player *pplayer, bool is_new_phase);
-void ai_data_phase_finished(struct player *pplayer);
-bool is_ai_data_phase_open(struct player *pplayer);
+void ai_data_analyze_rulesets(struct player *pplayer);
 
-struct ai_plr *ai_plr_data_get(struct player *pplayer);
+struct ai_data *ai_data_get(struct player *pplayer);
+const struct ai_dip_intel *ai_diplomacy_get(const struct player *pplayer,
+					    const struct player *aplayer);
 
 bool ai_channel(struct player *pplayer, Continent_id c1, Continent_id c2);
 
-struct ai_dip_intel *ai_diplomacy_get(const struct player *plr1,
-                                      const struct player *plr2);
-
-#endif /* FC__AIDATA_H */
+#endif

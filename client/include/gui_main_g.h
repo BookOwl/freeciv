@@ -13,10 +13,8 @@
 #ifndef FC__GUI_MAIN_G_H
 #define FC__GUI_MAIN_G_H
 
-/* utility */
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
-/* common */
 #include "fc_types.h"
 
 void set_city_names_font_sizes(int city_names_font_size,
@@ -27,7 +25,7 @@ void ui_main(int argc, char *argv[]);
 void ui_exit(void);
 void gui_options_extra_init(void);
 
-void real_conn_list_dialog_update(void);
+void update_conn_list_dialog(void);
 void sound_bell(void);
 void add_net_input(int);
 void remove_net_input(void);
@@ -44,8 +42,5 @@ enum gui_type get_gui_type(void);
 void gui_update_font(const char *font_name, const char *font_value);
 
 extern const char *client_string;
-
-/* Actually defined in update_queue.c */
-void conn_list_dialog_update(void);
 
 #endif  /* FC__GUI_MAIN_G_H */

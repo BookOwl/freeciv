@@ -12,11 +12,14 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+
+#include <assert.h>
 
 /* utility */
 #include "fcintl.h"
+#include "hash.h"
 #include "log.h"
 #include "rand.h"
 #include "support.h"
@@ -28,7 +31,7 @@
 #include "map.h"
 #include "unitlist.h"
 
-/* client/include */
+/* include */
 #include "graphics_g.h"
 #include "gui_main_g.h"
 #include "mapctrl_g.h"
@@ -41,33 +44,17 @@
 #include "editor.h"
 #include "goto.h"
 #include "citydlg_common.h"
+#include "mapview_common.h"
 #include "overview_common.h"
 #include "tilespec.h"
 
-#include "mapview_common.h"
-
-
-struct tile_hash *mapdeco_highlight_table;
-struct tile_hash *mapdeco_crosshair_table;
+struct hash_table *mapdeco_highlight_table;
+struct hash_table *mapdeco_crosshair_table;
 
 struct gotoline_counter {
   int line_count[DIR8_COUNT];
 };
-
-static inline struct gotoline_counter *gotoline_counter_new(void);
-static void gotoline_counter_destroy(struct gotoline_counter *pglc);
-
-#define SPECHASH_TAG gotoline
-#define SPECHASH_KEY_TYPE struct tile *
-#define SPECHASH_DATA_TYPE struct gotoline_counter *
-#define SPECHASH_DATA_FREE gotoline_counter_destroy
-#include "spechash.h"
-#define gotoline_hash_iterate(hash, ptile, pglc)                            \
-  TYPED_HASH_ITERATE(struct tile *, struct gotoline_counter *,              \
-                     hash, ptile, pglc)
-#define gotoline_hash_iterate_end HASH_ITERATE_END
-
-struct gotoline_hash *mapdeco_gotoline_table;
+struct hash_table *mapdeco_gotoline_table;
 
 struct view mapview;
 bool can_slide = TRUE;
@@ -78,9 +65,8 @@ static void base_canvas_to_map_pos(int *map_x, int *map_y,
 enum update_type {
   /* Masks */
   UPDATE_NONE = 0,
-  UPDATE_CITY_DESCRIPTIONS  = 1,
-  UPDATE_MAP_CANVAS_VISIBLE = 2,
-  UPDATE_TILE_LABELS        = 4
+  UPDATE_CITY_DESCRIPTIONS = 1,
+  UPDATE_MAP_CANVAS_VISIBLE = 2
 };
 
 /* A tile update has a tile associated with it as well as an area type.
@@ -91,7 +77,6 @@ enum tile_update_type {
   TILE_UPDATE_UNIT,
   TILE_UPDATE_CITY_DESC,
   TILE_UPDATE_CITYMAP,
-  TILE_UPDATE_TILE_LABEL,
   TILE_UPDATE_COUNT
 };
 static void queue_mapview_update(enum update_type update);
@@ -106,24 +91,6 @@ struct trade_route_line {
 /* A trade route line might need to be drawn in two parts. */
 static const int MAX_TRADE_ROUTE_DRAW_LINES = 2;
 
-
-/****************************************************************************
-  Create a new goto line counter.
-****************************************************************************/
-static inline struct gotoline_counter *gotoline_counter_new(void)
-{
-  struct gotoline_counter *pglc = fc_calloc(1, sizeof(*pglc));
-  return pglc;
-}
-
-/****************************************************************************
-  Create a new goto line counter.
-****************************************************************************/
-static void gotoline_counter_destroy(struct gotoline_counter *pglc)
-{
-  fc_assert_ret(NULL != pglc);
-  free(pglc);
-}
 
 /**************************************************************************
  Refreshes a single tile on the map canvas.
@@ -241,14 +208,14 @@ static void gui_to_map_pos(const struct tileset *t,
     int x, y, dx, dy;
     int xmult, ymult, mod, compar;
 
-    fc_assert(tileset_is_isometric(t));
+    assert(tileset_is_isometric(t));
 
     x = DIVIDE(gui_x, W);
     y = DIVIDE(gui_y, H);
     dx = gui_x - x * W;
     dy = gui_y - y * H;
-    fc_assert(dx >= 0 && dx < W);
-    fc_assert(dy >= 0 && dy < H);
+    assert(dx >= 0 && dx < W);
+    assert(dy >= 0 && dy < H);
 
     /* Now fold so we consider only one-quarter tile. */
     xmult = (dx >= W / 2) ? -1 : 1;
@@ -651,9 +618,9 @@ void set_mapview_origin(int gui_x0, int gui_y0)
     currtime = read_timer_seconds(anim_timer);
     total_frames += frames;
     total_time += currtime;
-    log_debug("Got %d frames in %f seconds: %f FPS (avg %f).",
-              frames, currtime, (double)frames / currtime,
-              total_frames / total_time);
+    freelog(LOG_DEBUG, "Got %d frames in %f seconds: %f FPS (avg %f).",
+	    frames, currtime, (double)frames / currtime,
+	    total_frames / total_time);
 
     /* A very small decay factor to make things more accurate when something
      * changes (mapview size, tileset change, etc.).  This gives a
@@ -767,8 +734,8 @@ void get_mapview_scroll_window(int *xmin, int *ymin, int *xmax, int *ymax,
     *ymax += (diff + 1) / 2;
   }
 
-  log_debug("x: %d<-%d->%d; y: %d<-%d->%d",
-            *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
+  freelog(LOG_DEBUG, "x: %d<-%d->%d; y: %d<-%d->%d",
+	  *xmin, *xsize, *xmax, *ymin, *ymax, *ysize);
 }
 
 /****************************************************************************
@@ -941,17 +908,17 @@ void put_drawn_sprites(struct canvas *pcanvas,
   canvas at the given position.
 **************************************************************************/
 void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
-                     const struct tile *ptile,
-                     const struct tile_edge *pedge,
-                     const struct tile_corner *pcorner,
-                     const struct unit *punit, const struct city *pcity,
-                     int canvas_x, int canvas_y,
-                     const struct city *citymode)
+		     struct tile *ptile,
+		     const struct tile_edge *pedge,
+		     const struct tile_corner *pcorner,
+		     const struct unit *punit, struct city *pcity,
+		     int canvas_x, int canvas_y,
+		     const struct city *citymode)
 {
   struct drawn_sprite tile_sprs[80];
   int count = fill_sprite_array(tileset, tile_sprs, layer,
-                                ptile, pedge, pcorner,
-                                punit, pcity, citymode);
+				ptile, pedge, pcorner,
+				punit, pcity, citymode);
   bool fog = (ptile && draw_fog_of_war
 	      && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile));
 
@@ -1077,7 +1044,7 @@ void toggle_unit_color(struct unit *punit)
     color_index = (color_index + 1) % NUM_CITY_COLORS;
   }
 
-  refresh_unit_mapcanvas(punit, unit_tile(punit), TRUE, FALSE);
+  refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
 }
 
 /****************************************************************************
@@ -1109,7 +1076,7 @@ void put_nuke_mushroom_pixmaps(struct tile *ptile)
   flush_dirty();
   gui_flush();
 
-  fc_usleep(1000000);
+  myusleep(1000000);
 
   update_map_canvas_visible();
 }
@@ -1219,7 +1186,7 @@ static void draw_trade_routes_for_city(const struct city *pcity_src)
   }
 
   for (i = 0; i < NUM_TRADE_ROUTES; i++) {
-    pcity_dest = game_city_by_number(pcity_src->trade[i]);
+    pcity_dest = game_find_city_by_number(pcity_src->trade[i]);
     if (!pcity_dest) {
       continue;
     }
@@ -1284,8 +1251,9 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 	  && width == mapview.store_width
 	  && height == mapview.store_height);
 
-  log_debug("update_map_canvas(pos=(%d,%d), size=(%d,%d))",
-            canvas_x, canvas_y, width, height);
+  freelog(LOG_DEBUG,
+	  "update_map_canvas(pos=(%d,%d), size=(%d,%d))",
+	  canvas_x, canvas_y, width, height);
 
   /* If a full redraw is done, we just draw everything onto the canvas.
    * However if a partial redraw is done we draw everything onto the
@@ -1309,9 +1277,6 @@ void update_map_canvas(int canvas_x, int canvas_y, int width, int height)
 		       canvas_x, canvas_y, width, height);
 
   mapview_layer_iterate(layer) {
-    if (layer == LAYER_TILELABEL) {
-      show_tile_labels(canvas_x, canvas_y, width, height);
-    }
     if (layer == LAYER_CITYBAR) {
       show_city_descriptions(canvas_x, canvas_y, width, height);
       continue;
@@ -1389,23 +1354,12 @@ void update_map_canvas_visible(void)
  * next redraw. */
 static int max_desc_width = 0, max_desc_height = 0;
 
-/* Same for tile labels */
-static int max_label_width = 0, max_label_height = 0 ;
-
 /**************************************************************************
   Update the city description for the given city.
 **************************************************************************/
 void update_city_description(struct city *pcity)
 {
   queue_mapview_tile_update(pcity->tile, TILE_UPDATE_CITY_DESC);
-}
-
-/**************************************************************************
-  Update the label for the given tile
-**************************************************************************/
-void update_tile_label(struct tile *ptile)
-{
-  queue_mapview_tile_update(ptile, TILE_UPDATE_TILE_LABEL);
 }
 
 /****************************************************************************
@@ -1470,7 +1424,7 @@ static void show_full_citybar(struct canvas *pcanvas,
 				   growth, sizeof(growth), &growth_color);
 
   if (draw_city_names) {
-    fc_snprintf(size, sizeof(size), "%d", city_size_get(pcity));
+    my_snprintf(size, sizeof(size), "%d", pcity->size);
 
     get_text_size(&size_rect.w, &size_rect.h, FONT_CITY_SIZE, size);
     get_text_size(&name_rect.w, &name_rect.h, FONT_CITY_NAME, name);
@@ -1782,7 +1736,7 @@ static void show_small_citybar(struct canvas *pcanvas,
   (canvas_x, canvas_y) gives the location on the given canvas at which to
   draw the description.  This is the location of the city itself so the
   text must be drawn underneath it.  pcity gives the city to be drawn,
-  while (*width, *height) should be set by show_city_desc to contain the
+  while (*width, *height) should be set by show_ctiy_desc to contain the
   width and height of the text block (centered directly underneath the
   city's tile).
 ****************************************************************************/
@@ -1795,34 +1749,6 @@ static void show_city_desc(struct canvas *pcanvas,
   } else {
     show_small_citybar(pcanvas, canvas_x, canvas_y, pcity, width, height);
   }
-}
-
-/****************************************************************************
-  Draw a label for the given tile.
-
-  (canvas_x, canvas_y) gives the location on the given canvas at which to
-  draw the label.  This is the location of the tile itself so the
-  text must be drawn underneath it.  pcity gives the city to be drawn,
-  while (*width, *height) should be set by show_tile_label to contain the
-  width and height of the text block (centered directly underneath the
-  city's tile).
-****************************************************************************/
-static void show_tile_label(struct canvas *pcanvas,
-			   int canvas_x, int canvas_y,
-			   struct tile *ptile, int *width, int *height)
-{
-  const enum client_font FONT_TILE_LABEL = FONT_CITY_NAME; /* TODO: new font */
-#define COLOR_MAPVIEW_TILELABEL COLOR_MAPVIEW_CITYTEXT
-
-  canvas_x += tileset_tile_width(tileset) / 2;
-  canvas_y += tileset_tilelabel_offset_y(tileset);
-
-  get_text_size(width, height, FONT_TILE_LABEL, ptile->label);
-
-  canvas_put_text(pcanvas, canvas_x - *width / 2, canvas_y,
-                  FONT_TILE_LABEL,
-                  get_color(tileset, COLOR_MAPVIEW_TILELABEL), ptile->label);
-#undef COLOR_MAPVIEW_TILELABEL
 }
 
 /**************************************************************************
@@ -1877,15 +1803,15 @@ void show_city_descriptions(int canvas_x, int canvas_y,
 
       show_city_desc(mapview.store, canvas_x, canvas_y,
 		     pcity, &width, &height);
-      log_debug("Drawing %s.", city_name(pcity));
+      freelog(LOG_DEBUG, "Drawing %s.", city_name(pcity));
 
       if (width > max_desc_width || height > max_desc_height) {
-        /* The update was incomplete! We queue a new update. Note that
-         * this is recursively queueing an update within a dequeuing of an
-         * update. This is allowed specifically because of the code in
-         * unqueue_mapview_updates. See that function for more. */
-        log_debug("Re-queuing %s.", city_name(pcity));
-        update_city_description(pcity);
+	/* The update was incomplete!  We queue a new update.  Note that
+	 * this is recursively queueing an update within a dequeuing of an
+	 * update.  This is allowed specifically because of the code in
+	 * unqueue_mapview_updates.  See that function for more. */
+	freelog(LOG_DEBUG, "Re-queuing %s.", city_name(pcity));
+	update_city_description(pcity);
       }
       new_max_width = MAX(width, new_max_width);
       new_max_height = MAX(height, new_max_height);
@@ -1898,48 +1824,6 @@ void show_city_descriptions(int canvas_x, int canvas_y,
   max_desc_height = MAX(max_desc_height, new_max_height);
 }
 
-/**************************************************************************
-  Show labels for all tiles visible on the map canvas.
-**************************************************************************/
-void show_tile_labels(int canvas_x, int canvas_y,
-                      int width, int height)
-{
-  const int dx = max_label_width - tileset_tile_width(tileset), dy = max_label_height;
-  int new_max_width = max_label_width, new_max_height = max_label_height;
-
-  gui_rect_iterate(mapview.gui_x0 + canvas_x - dx / 2,
-		   mapview.gui_y0 + canvas_y - dy,
-		   width + dx, height + dy,
-		   ptile, pedge, pcorner, gui_x, gui_y) {
-    const int canvas_x = gui_x - mapview.gui_x0;
-    const int canvas_y = gui_y - mapview.gui_y0;
-
-    if (ptile && ptile->label != NULL) {
-      int width = 0, height = 0;
-
-      show_tile_label(mapview.store, canvas_x, canvas_y,
-                      ptile, &width, &height);
-      log_debug("Drawing label %s.", ptile->label);
-
-      if (width > max_label_width || height > max_label_height) {
-        /* The update was incomplete! We queue a new update. Note that
-         * this is recursively queueing an update within a dequeuing of an
-         * update. This is allowed specifically because of the code in
-         * unqueue_mapview_updates. See that function for more. */
-        log_debug("Re-queuing tile label %s drawing.", ptile->label);
-        update_tile_label(ptile);
-      }
-      new_max_width = MAX(width, new_max_width);
-      new_max_height = MAX(height, new_max_height);
-    }
-  } gui_rect_iterate_end;
-
-  /* We don't update the new max values until the end, so that the
-   * check above to see what cities need redrawing will be complete. */
-  max_label_width = MAX(max_label_width, new_max_width);
-  max_label_height = MAX(max_label_height, new_max_height);
-}
-
 /****************************************************************************
   Draw the goto route for the unit.  Return TRUE if anything is drawn.
 
@@ -1948,7 +1832,7 @@ void show_tile_labels(int canvas_x, int canvas_y,
 bool show_unit_orders(struct unit *punit)
 {
   if (punit && unit_has_orders(punit)) {
-    struct tile *ptile = unit_tile(punit);
+    struct tile *ptile = punit->tile;
     int i;
 
     for (i = 0; i < punit->orders.length; i++) {
@@ -1970,7 +1854,7 @@ bool show_unit_orders(struct unit *punit)
 	  /* This shouldn't happen unless the server gives us invalid
 	   * data.  To avoid disaster we need to break out of the
 	   * switch and the enclosing for loop. */
-          fc_assert(NULL != ptile);
+	  assert(0);
 	  i = punit->orders.length;
 	}
 	break;
@@ -2048,12 +1932,12 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
 
     anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
-    if (fc_rand(diff0 + diff1) < diff0) {
+    if (myrand(diff0 + diff1) < diff0) {
       punit0->hp--;
-      refresh_unit_mapcanvas(punit0, unit_tile(punit0), FALSE, FALSE);
+      refresh_unit_mapcanvas(punit0, punit0->tile, FALSE, FALSE);
     } else {
       punit1->hp--;
-      refresh_unit_mapcanvas(punit1, unit_tile(punit1), FALSE, FALSE);
+      refresh_unit_mapcanvas(punit1, punit1->tile, FALSE, FALSE);
     }
 
     unqueue_mapview_updates(TRUE);
@@ -2064,8 +1948,8 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
 
   if (num_tiles_explode_unit > 0
       && tile_to_canvas_pos(&canvas_x, &canvas_y,
-			   unit_tile(losing_unit))) {
-    refresh_unit_mapcanvas(losing_unit, unit_tile(losing_unit), FALSE, FALSE);
+			   losing_unit->tile)) {
+    refresh_unit_mapcanvas(losing_unit, losing_unit->tile, FALSE, FALSE);
     unqueue_mapview_updates(FALSE);
     canvas_copy(mapview.tmp_store, mapview.store,
 		canvas_x, canvas_y, canvas_x, canvas_y,
@@ -2098,8 +1982,8 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
   }
 
   set_units_in_combat(NULL, NULL);
-  refresh_unit_mapcanvas(punit0, unit_tile(punit0), TRUE, FALSE);
-  refresh_unit_mapcanvas(punit1, unit_tile(punit1), TRUE, FALSE);
+  refresh_unit_mapcanvas(punit0, punit0->tile, TRUE, FALSE);
+  refresh_unit_mapcanvas(punit1, punit1->tile, TRUE, FALSE);
 }
 
 /**************************************************************************
@@ -2136,7 +2020,7 @@ void move_unit_map_canvas(struct unit *punit,
     int canvas_dx, canvas_dy;
     double timing_sec = (double)smooth_move_unit_msec / 1000.0, mytime;
 
-    fc_assert(smooth_move_unit_msec > 0);
+    assert(smooth_move_unit_msec > 0);
 
     map_to_gui_vector(tileset, &canvas_dx, &canvas_dy, dx, dy);
 
@@ -2221,8 +2105,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
   /* rule e */
   closest_city = NULL;
 
-  /* check within maximum (squared) city radius */
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, tile1) {
+  city_tile_iterate(ptile, tile1) {
     pcity = tile_city(tile1);
     if (pcity
 	&& (NULL == client.conn.playing
@@ -2249,21 +2132,20 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
     return closest_city;
   }
 
-  /* check within maximum (squared) city radius */
-  city_tile_iterate(CITY_MAP_MAX_RADIUS_SQ, ptile, tile1) {
-    unit_list_iterate(tile1->units, psettler) {
-      if ((NULL == client.conn.playing
-           || unit_owner(psettler) == client.conn.playing)
-          && unit_has_type_flag(psettler, F_CITIES)
-          && city_can_be_built_here(unit_tile(psettler), psettler)) {
-        if (!closest_settler) {
-          closest_settler = psettler;
-        }
-        if (!best_settler && psettler->client.colored) {
-          best_settler = psettler;
-        }
-      }
-    } unit_list_iterate_end;
+  city_tile_iterate(ptile, tile1) {
+      unit_list_iterate(tile1->units, psettler) {
+	if ((NULL == client.conn.playing
+	     || unit_owner(psettler) == client.conn.playing)
+	    && unit_has_type_flag(psettler, F_CITIES)
+	    && city_can_be_built_here(psettler->tile, psettler)) {
+	  if (!closest_settler) {
+	    closest_settler = psettler;
+	  }
+	  if (!best_settler && psettler->client.colored) {
+	    best_settler = psettler;
+	  }
+	}
+      } unit_list_iterate_end;
   } city_tile_iterate_end;
 
   if (best_settler) {
@@ -2364,7 +2246,7 @@ void get_city_mapview_trade_routes(struct city *pcity,
     num_trade_routes++;
   }
 
-  fc_snprintf(trade_routes_buffer, trade_routes_buffer_len,
+  my_snprintf(trade_routes_buffer, trade_routes_buffer_len,
               "%d/%d", num_trade_routes, NUM_TRADE_ROUTES);
 
   if (pcolor) {
@@ -2487,8 +2369,7 @@ void unqueue_mapview_updates(bool write_to_screen)
     {-W / 2, -H / 2, 2 * W, 2 * H},
     {(W - UW) / 2, H - UH, UW, UH},
     {-(max_desc_width - W) / 2, H, max_desc_width, max_desc_height},
-    {-(city_width - W) / 2, -(city_height - H) / 2, city_width, city_height},
-    {-(max_label_width - W) / 2, H, max_label_width, max_label_height}
+    {-(city_width - W) / 2, -(city_height - H) / 2, city_width, city_height}
   };
   struct tile_list *my_tile_updates[TILE_UPDATE_COUNT];
 
@@ -2500,8 +2381,8 @@ void unqueue_mapview_updates(bool write_to_screen)
     return;
   }
 
-  log_debug("unqueue_mapview_update: needed_updates=%d",
-            needed_updates);
+  freelog(LOG_DEBUG, "unqueue_mapview_update: needed_updates=%d",
+	  needed_updates);
 
   /* This code "pops" the lists of tile updates off of the static array and
    * stores them locally.  This allows further updates to be queued within
@@ -2513,8 +2394,7 @@ void unqueue_mapview_updates(bool write_to_screen)
 
   if (map_exists()) {
     if ((needed_updates & UPDATE_MAP_CANVAS_VISIBLE)
-	|| (needed_updates & UPDATE_CITY_DESCRIPTIONS)
-        || (needed_updates & UPDATE_TILE_LABELS)) {
+	|| (needed_updates & UPDATE_CITY_DESCRIPTIONS)) {
       dirty_all();
       update_map_canvas(0, 0, mapview.store_width,
 			mapview.store_height);
@@ -2560,7 +2440,7 @@ void unqueue_mapview_updates(bool write_to_screen)
   }
   for (i = 0; i < TILE_UPDATE_COUNT; i++) {
     if (my_tile_updates[i]) {
-      tile_list_destroy(my_tile_updates[i]);
+      tile_list_free(my_tile_updates[i]);
     }
   }
   needed_updates = UPDATE_NONE;
@@ -2582,20 +2462,20 @@ void get_city_mapview_name_and_growth(struct city *pcity,
 				      size_t growth_buffer_len,
 				      enum color_std *growth_color)
 {
-  fc_strlcpy(name_buffer, city_name(pcity), name_buffer_len);
+  mystrlcpy(name_buffer, city_name(pcity), name_buffer_len);
 
   if (NULL == client.conn.playing
       || city_owner(pcity) == client.conn.playing) {
     int turns = city_turns_to_grow(pcity);
 
     if (turns == 0) {
-      fc_snprintf(growth_buffer, growth_buffer_len, "X");
+      my_snprintf(growth_buffer, growth_buffer_len, "X");
     } else if (turns == FC_INFINITY) {
-      fc_snprintf(growth_buffer, growth_buffer_len, "-");
+      my_snprintf(growth_buffer, growth_buffer_len, "-");
     } else {
       /* Negative turns means we're shrinking, but that's handled
          down below. */
-      fc_snprintf(growth_buffer, growth_buffer_len, "%d", abs(turns));
+      my_snprintf(growth_buffer, growth_buffer_len, "%d", abs(turns));
     }
 
     if (turns <= 0) {
@@ -2694,9 +2574,9 @@ void mapdeco_init(void)
   mapview.can_do_cached_drawing = can_do_cached_drawing();
 
   mapdeco_free();
-  mapdeco_highlight_table = tile_hash_new();
-  mapdeco_crosshair_table = tile_hash_new();
-  mapdeco_gotoline_table = gotoline_hash_new();
+  mapdeco_highlight_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
+  mapdeco_crosshair_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
+  mapdeco_gotoline_table = hash_new(hash_fval_keyval, hash_fcmp_keyval);
 }
 
 /**************************************************************************
@@ -2705,15 +2585,18 @@ void mapdeco_init(void)
 void mapdeco_free(void)
 {
   if (mapdeco_highlight_table) {
-    tile_hash_destroy(mapdeco_highlight_table);
+    hash_free(mapdeco_highlight_table);
     mapdeco_highlight_table = NULL;
   }
   if (mapdeco_crosshair_table) {
-    tile_hash_destroy(mapdeco_crosshair_table);
+    hash_free(mapdeco_crosshair_table);
     mapdeco_crosshair_table = NULL;
   }
   if (mapdeco_gotoline_table) {
-    gotoline_hash_destroy(mapdeco_gotoline_table);
+    hash_values_iterate(mapdeco_gotoline_table, pglc) {
+      free(pglc);
+    } hash_values_iterate_end;
+    hash_free(mapdeco_gotoline_table);
     mapdeco_gotoline_table = NULL;
   }
 }
@@ -2730,9 +2613,10 @@ void mapdeco_set_highlight(const struct tile *ptile, bool highlight)
   }
 
   if (highlight) {
-    changed = tile_hash_insert(mapdeco_highlight_table, ptile, NULL);
+    changed = hash_insert(mapdeco_highlight_table, ptile, NULL);
   } else {
-    changed = tile_hash_remove(mapdeco_highlight_table, ptile);
+    changed = hash_key_exists(mapdeco_highlight_table, ptile);
+    hash_delete_entry(mapdeco_highlight_table, ptile);
   }
 
   if (changed) {
@@ -2749,7 +2633,7 @@ bool mapdeco_is_highlight_set(const struct tile *ptile)
   if (!ptile || !mapdeco_highlight_table) {
     return FALSE;
   }
-  return tile_hash_lookup(mapdeco_highlight_table, ptile, NULL);
+  return hash_key_exists(mapdeco_highlight_table, ptile);
 }
 
 /**************************************************************************
@@ -2762,11 +2646,11 @@ void mapdeco_clear_highlights(void)
     return;
   }
 
-  tile_hash_iterate(mapdeco_highlight_table, ptile) {
+  hash_keys_iterate(mapdeco_highlight_table, ptile) {
     refresh_tile_mapcanvas(ptile, TRUE, FALSE);
-  } tile_hash_iterate_end;
+  } hash_keys_iterate_end;
 
-  tile_hash_clear(mapdeco_highlight_table);
+  hash_delete_all_entries(mapdeco_highlight_table);
 }
 
 /**************************************************************************
@@ -2781,9 +2665,10 @@ void mapdeco_set_crosshair(const struct tile *ptile, bool crosshair)
   }
 
   if (crosshair) {
-    changed = tile_hash_insert(mapdeco_crosshair_table, ptile, NULL);
+    changed = hash_insert(mapdeco_crosshair_table, ptile, NULL);
   } else {
-    changed = tile_hash_remove(mapdeco_crosshair_table, ptile);
+    changed = hash_key_exists(mapdeco_crosshair_table, ptile);
+    hash_delete_entry(mapdeco_crosshair_table, ptile);
   }
 
   if (changed) {
@@ -2800,7 +2685,7 @@ bool mapdeco_is_crosshair_set(const struct tile *ptile)
   if (!mapdeco_crosshair_table || !ptile) {
     return FALSE;
   }
-  return tile_hash_lookup(mapdeco_crosshair_table, ptile, NULL);
+  return hash_key_exists(mapdeco_crosshair_table, ptile);
 }
 
 /**************************************************************************
@@ -2813,11 +2698,11 @@ void mapdeco_clear_crosshairs(void)
     return;
   }
 
-  tile_hash_iterate(mapdeco_crosshair_table, ptile) {
+  hash_keys_iterate(mapdeco_crosshair_table, ptile) {
     refresh_tile_mapcanvas(ptile, FALSE, FALSE);
-  } tile_hash_iterate_end;
+  } hash_keys_iterate_end;
 
-  tile_hash_clear(mapdeco_crosshair_table);
+  hash_delete_all_entries(mapdeco_crosshair_table);
 }
 
 /**************************************************************************
@@ -2840,9 +2725,10 @@ void mapdeco_add_gotoline(const struct tile *ptile, enum direction8 dir)
     return;
   }
 
-  if (!gotoline_hash_lookup(mapdeco_gotoline_table, ptile, &pglc)) {
-    pglc = gotoline_counter_new();
-    gotoline_hash_insert(mapdeco_gotoline_table, ptile, pglc);
+  pglc = hash_lookup_data(mapdeco_gotoline_table, ptile);
+  if (!pglc) {
+    pglc = fc_calloc(1, sizeof(*pglc));
+    hash_insert(mapdeco_gotoline_table, ptile, pglc);
   }
   changed = (pglc->line_count[dir] < 1);
   pglc->line_count[dir]++;
@@ -2870,7 +2756,8 @@ void mapdeco_remove_gotoline(const struct tile *ptile,
     return;
   }
 
-  if (!gotoline_hash_lookup(mapdeco_gotoline_table, ptile, &pglc)) {
+  pglc = hash_lookup_data(mapdeco_gotoline_table, ptile);
+  if (!pglc) {
     return;
   }
 
@@ -2939,7 +2826,8 @@ bool mapdeco_is_gotoline_set(const struct tile *ptile,
     return FALSE;
   }
 
-  if (!gotoline_hash_lookup(mapdeco_gotoline_table, ptile, &pglc)) {
+  pglc = hash_lookup_data(mapdeco_gotoline_table, ptile);
+  if (!pglc) {
     return FALSE;
   }
 
@@ -2952,19 +2840,28 @@ bool mapdeco_is_gotoline_set(const struct tile *ptile,
 **************************************************************************/
 void mapdeco_clear_gotoroutes(void)
 {
+  const struct tile *ptile;
+  struct gotoline_counter *pglc;
+
   if (!mapdeco_gotoline_table) {
     return;
   }
 
-  gotoline_hash_iterate(mapdeco_gotoline_table, ptile, pglc) {
-    refresh_tile_mapcanvas(ptile, FALSE, FALSE);
+  hash_iterate(mapdeco_gotoline_table, iter) {
+    ptile = hash_iter_get_key(iter);
+    pglc = hash_iter_get_value(iter);
+
+    /* FIXME: Remove the casts. */
+    refresh_tile_mapcanvas((struct tile *) ptile, FALSE, FALSE);
     adjc_dir_iterate(ptile, ptile_dest, dir) {
       if (pglc->line_count[dir] > 0) {
-        refresh_tile_mapcanvas(ptile_dest, FALSE, FALSE);
+        refresh_tile_mapcanvas((struct tile *) ptile_dest, FALSE, FALSE);
       }
     } adjc_dir_iterate_end;
-  } gotoline_hash_iterate_end;
-  gotoline_hash_clear(mapdeco_gotoline_table);
+
+    free(pglc);
+  } hash_iterate_end;
+  hash_delete_all_entries(mapdeco_gotoline_table);
 }
 
 /**************************************************************************
@@ -3042,15 +2939,6 @@ void init_mapcanvas_and_overview(void)
 {
   /* Create a dummy map to make sure mapview.store is never NULL. */
   map_canvas_resized(1, 1);
-}
-
-/**************************************************************************
-  Frees resources allocated for mapview and overview
-**************************************************************************/
-void free_mapcanvas_and_overview(void)
-{
-  canvas_free(mapview.store);
-  canvas_free(mapview.tmp_store);
 }
 
 /****************************************************************************
@@ -3183,6 +3071,7 @@ static struct link_mark *link_mark_new(enum text_link_type type,
   pmark->type = type;
   pmark->id = id;
   pmark->turn_counter = turns;
+  link_mark_list_append(link_marks, pmark);
 
   return pmark;
 }
@@ -3190,8 +3079,9 @@ static struct link_mark *link_mark_new(enum text_link_type type,
 /********************************************************************** 
   Remove a link mark.
 ***********************************************************************/
-static void link_mark_destroy(struct link_mark *pmark)
+static void link_mark_remove(struct link_mark *pmark)
 {
+  link_mark_list_unlink(link_marks, pmark);
   free(pmark);
 }
 
@@ -3203,15 +3093,15 @@ static struct tile *link_mark_tile(const struct link_mark *pmark)
   switch (pmark->type) {
   case TLT_CITY:
     {
-      struct city *pcity = game_city_by_number(pmark->id);
+      struct city *pcity = game_find_city_by_number(pmark->id);
       return pcity ? pcity->tile : NULL;
     }
   case TLT_TILE:
     return index_to_tile(pmark->id);
   case TLT_UNIT:
     {
-      struct unit *punit = game_unit_by_number(pmark->id);
-      return punit ? unit_tile(punit) : NULL;
+      struct unit *punit = game_find_unit_by_number(pmark->id);
+      return punit ? punit->tile : NULL;
     }
   }
   return NULL;
@@ -3277,7 +3167,7 @@ void link_marks_init(void)
     link_marks_free();
   }
 
-  link_marks = link_mark_list_new_full(link_mark_destroy);
+  link_marks = link_mark_list_new();
 }
 
 /********************************************************************** 
@@ -3289,7 +3179,10 @@ void link_marks_free(void)
     return;
   }
 
-  link_mark_list_destroy(link_marks);
+  link_marks_iterate(pmark) {
+    free(pmark);
+  } link_marks_iterate_end;
+  link_mark_list_free(link_marks);
   link_marks = NULL;
 }
 
@@ -3308,7 +3201,10 @@ void link_marks_draw_all(void)
 ***********************************************************************/
 void link_marks_clear_all(void)
 {
-  link_mark_list_clear(link_marks);
+  link_marks_iterate(pmark) {
+    link_mark_remove(pmark);
+  } link_marks_iterate_end;
+
   update_map_canvas_visible();
 }
 
@@ -3319,7 +3215,7 @@ void link_marks_decrease_turn_counters(void)
 {
   link_marks_iterate(pmark) {
     if (--pmark->turn_counter <= 0) {
-      link_mark_list_remove(link_marks, pmark);
+      link_mark_remove(pmark);
     }
   } link_marks_iterate_end;
 
@@ -3341,7 +3237,6 @@ void link_mark_add_new(enum text_link_type type, int id)
   }
 
   pmark = link_mark_new(type, id, 2);
-  link_mark_list_append(link_marks, pmark);
   ptile = link_mark_tile(pmark);
   if (ptile && tile_visible_mapcanvas(ptile)) {
     refresh_tile_mapcanvas(ptile, FALSE, FALSE);
@@ -3361,7 +3256,6 @@ void link_mark_restore(enum text_link_type type, int id)
   }
 
   pmark = link_mark_new(type, id, 1);
-  link_mark_list_append(link_marks, pmark);
   ptile = link_mark_tile(pmark);
   if (ptile && tile_visible_mapcanvas(ptile)) {
     refresh_tile_mapcanvas(ptile, FALSE, FALSE);

@@ -19,17 +19,12 @@
 #ifndef FC__INPUTFILE_H
 #define FC__INPUTFILE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "ioz.h"
-#include "log.h"                /* enum log_level */
-#include "support.h"            /* bool type and fc__attribute */
+#include "shared.h"		/* bool type */
 
 struct inputfile;		/* opaque */
 
-typedef const char *(*datafilename_fn_t)(const char *filename);
+typedef char *(*datafilename_fn_t)(const char *filename);
 
 struct inputfile *inf_from_file(const char *filename,
 				datafilename_fn_t datafn);
@@ -53,11 +48,6 @@ enum inf_token_type {
 const char *inf_token(struct inputfile *inf, enum inf_token_type type);
 int inf_discard_tokens(struct inputfile *inf, enum inf_token_type type);
 
-char *inf_log_str(struct inputfile *inf, const char *message, ...)
-                  fc__attribute((__format__ (__printf__, 2, 3)));
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
+void inf_log(struct inputfile *inf, int loglevel, const char *message);
 
 #endif  /* FC__INPUTFILE_H */

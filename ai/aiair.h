@@ -13,7 +13,7 @@
 #ifndef FC__AIAIR_H
 #define FC__AIAIR_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 #include "fc_types.h"
 

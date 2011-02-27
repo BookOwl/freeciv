@@ -5,7 +5,7 @@ description=_("Classic-style 140x90 map of France.")
 
 [game]
 version=20000
-server_state=0
+server_state=2
 metapatches="none"
 metatopic=""
 metamessage="France"
@@ -64,7 +64,7 @@ turnblock=1
 savepalace=0
 fixedlength=0
 barbarians=2
-onsetbarbs=60
+onsetbarbs=-2000
 revolen=0
 occupychance=0
 demography="NASRLPEMOqrb"

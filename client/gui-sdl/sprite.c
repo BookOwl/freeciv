@@ -12,8 +12,9 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+#include <assert.h>
 
 #include "SDL.h"
 #include "SDL_image.h"
@@ -21,10 +22,8 @@
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"
 
-/* client/gui-sdl */
-#include "colors.h"
+/* gui-sdl */
 #include "graphics.h"
 
 #include "sprite.h"
@@ -58,7 +57,9 @@ struct sprite * load_gfxfile(const char *filename)
   SDL_Surface *pBuf = NULL;
 
   if ((pBuf = IMG_Load(filename)) == NULL) {
-    log_error(_("load_gfxfile: Unable to load graphic file %s!"), filename);
+    freelog(LOG_ERROR,
+	    _("load_gfxfile: Unable to load graphic file %s!"),
+	    filename);
     return NULL;		/* Should I use abotr() ? */
   }
 
@@ -115,27 +116,6 @@ struct sprite *crop_sprite(struct sprite *source,
 }
 
 /****************************************************************************
-  Create a sprite with the given height, width and color.
-****************************************************************************/
-struct sprite *create_sprite(int width, int height, struct color *pcolor)
-{
-  SDL_Surface *mypixbuf = NULL;
-  SDL_Surface *pmask = NULL;
-
-  fc_assert_ret_val(width > 0, NULL);
-  fc_assert_ret_val(height > 0, NULL);
-  fc_assert_ret_val(pcolor != NULL, NULL);
-
-  mypixbuf = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 32,
-                                  0x00ff0000, 0x0000ff00, 0x000000ff,
-                                  0xff000000);
-  pmask = SDL_DisplayFormatAlpha(mypixbuf);
-  SDL_FillRect(mypixbuf, NULL, map_rgba(pmask->format, *pcolor->color));
-
-  return ctor_sprite(mypixbuf);
-}
-
-/****************************************************************************
   Find the dimensions of the sprite.
 ****************************************************************************/
 void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
@@ -149,7 +129,7 @@ void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
 ****************************************************************************/
 void free_sprite(struct sprite *s)
 {
-  fc_assert_ret(s != NULL);
+  assert(s != NULL);
   FREESURFACE(GET_SURF_REAL(s));
   FC_FREE(s);
 }
