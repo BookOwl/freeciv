@@ -14,10 +14,6 @@
 #ifndef FC__CMAFEC_H
 #define FC__CMAFEC_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "cma_core.h"
 
 void cmafec_init(void);
@@ -49,8 +45,4 @@ int cmafec_preset_num(void);
 
 void create_default_cma_presets(void);
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* FC__CMAFEC_H */
+#endif

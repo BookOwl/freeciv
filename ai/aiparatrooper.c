@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -25,7 +25,7 @@
 #include "unit.h"
 #include "unitlist.h"
 
-/* common/aicore */
+/* aicore */
 #include "pf_tools.h"
 
 /* server */
@@ -37,14 +37,14 @@
 /* server/advisors */
 #include "advdata.h"
 
-/* server/generator */
+/* generator */
 #include "utilities.h"
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aiunit.h"
 #include "aitools.h"
+#include "defaultai.h"
 
 #include "aiparatrooper.h"
 
@@ -64,7 +64,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
   struct player* pplayer = unit_owner(punit);
 
   /* First, we search for undefended cities in danger */
-  square_iterate(unit_tile(punit), range, ptile) {
+  square_iterate(punit->tile, range, ptile) {
     if (!map_is_known(ptile, pplayer)) {
       continue;
     }
@@ -72,7 +72,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
     acity = tile_city(ptile);
     if (acity && city_owner(acity) == unit_owner(punit)
         && unit_list_size(ptile->units) == 0) {
-      val = city_size_get(acity) * def_ai_city_data(acity)->urgency;
+      val = acity->size * def_ai_city_data(acity)->urgency;
       if (val > best) {
 	best = val;
 	best_tile = ptile;
@@ -90,7 +90,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
   }
 
   /* Second, we search for undefended enemy cities */
-  square_iterate(unit_tile(punit), range, ptile) {
+  square_iterate(punit->tile, range, ptile) {
     acity = tile_city(ptile);
     if (acity && pplayers_at_war(unit_owner(punit), city_owner(acity)) &&
         (unit_list_size(ptile->units) == 0)) {
@@ -99,8 +99,8 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
         continue;
       }
       /* Prefer big cities on other continents */
-      val = city_size_get(acity)
-            + (tile_continent(unit_tile(punit)) != tile_continent(ptile));
+      val = acity->size
+            + (tile_continent(punit->tile) != tile_continent(ptile));
       if (val > best) {
         best = val;
 	best_tile = ptile;
@@ -117,7 +117,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
   }
 
   /* Jump to kill adjacent units */
-  square_iterate(unit_tile(punit), range, ptile) {
+  square_iterate(punit->tile, range, ptile) {
     struct terrain *pterrain = tile_terrain(ptile);
     if (is_ocean(pterrain)) {
       continue;
@@ -179,7 +179,7 @@ static struct tile* find_best_tile_to_paradrop_to(struct unit *punit)
 **********************************************************************/
 void ai_manage_paratrooper(struct player *pplayer, struct unit *punit)
 {
-  struct city *pcity = tile_city(unit_tile(punit));
+  struct city *pcity = tile_city(punit->tile);
   struct tile *ptile_dest = NULL;
 
   int sanity = punit->id;
@@ -202,7 +202,7 @@ void ai_manage_paratrooper(struct player *pplayer, struct unit *punit)
     return;
   }
   
-  if (pcity && unit_list_size(unit_tile(punit)->units) == 1) {
+  if (pcity && unit_list_size(punit->tile->units) == 1) {
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, "Defending the city.");
     return;
   }
@@ -301,16 +301,15 @@ static int calculate_want_for_paratrooper(struct unit *punit,
     /* Prefer long jumps.
      * If a city is near we can take/protect it with normal units */
     if (pplayers_allied(pplayer, city_owner(pcity))) {
-      profit += city_size_get(pcity)
+      profit += pcity->size
                 * multiplier * real_map_distance(ptile_city, ptile) / 2;
     } else {
 
-      profit += city_size_get(pcity) * multiplier
-                * real_map_distance(ptile_city, ptile);
+      profit += pcity->size * multiplier * real_map_distance(ptile_city, ptile);
     }
   } square_iterate_end;
   
-  total = adv_data_get(pplayer)->stats.units.paratroopers;
+  total = ai_data_get(pplayer)->stats.units.paratroopers;
   total_cities = city_list_size(pplayer->cities);
   
   if (total > total_cities) {
@@ -367,10 +366,10 @@ void ai_choose_paratrooper(struct player *pplayer, struct city *pcity,
     }
 
     /* it's worth building that unit? */
-    virtual_unit = unit_virtual_create(pplayer, pcity, u_type,
+    virtual_unit = create_unit_virtual(pplayer, pcity, u_type,
                                        do_make_unit_veteran(pcity, u_type));
     profit = calculate_want_for_paratrooper(virtual_unit, pcity->tile);
-    unit_virtual_destroy(virtual_unit);
+    destroy_unit_virtual(virtual_unit);
 
     /* update choise struct if it's worth */
     if (profit > choice->want) {

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -39,9 +39,9 @@
 
 /* ai */
 #include "aicity.h"
-#include "aiplayer.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "aiair.h"
 
@@ -277,12 +277,12 @@ static struct tile *ai_find_strategic_airbase(const struct unit *punit,
 
     if (!pvirtual) {
       pvirtual =
-        unit_virtual_create(pplayer,
+        create_unit_virtual(pplayer,
                             player_city_by_number(pplayer, punit->homecity),
                             unit_type(punit), punit->veteran);
     }
 
-    unit_tile_set(pvirtual, ptile);
+    pvirtual->tile = ptile;
     target_worth = find_something_to_bomb(pvirtual, NULL, NULL);
     if (target_worth > best_worth) {
       /* It's either a first find or it's better than the previous. */
@@ -293,7 +293,7 @@ static struct tile *ai_find_strategic_airbase(const struct unit *punit,
   } pf_map_move_costs_iterate_end;
 
   if (pvirtual) {
-    unit_virtual_destroy(pvirtual);
+    destroy_unit_virtual(pvirtual);
   }
 
   if (path) {
@@ -320,7 +320,7 @@ static struct tile *ai_find_strategic_airbase(const struct unit *punit,
 ***********************************************************************/
 void ai_manage_airunit(struct player *pplayer, struct unit *punit)
 {
-  struct tile *dst_tile = unit_tile(punit);
+  struct tile *dst_tile = punit->tile;
   /* Loop prevention */
   int moves = punit->moves_left;
   int id = punit->id;
@@ -453,7 +453,7 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
     }
     if (can_city_build_unit_now(pcity, punittype)) {
       struct unit *virtual_unit = 
-	unit_virtual_create(pplayer, pcity, punittype,
+	create_unit_virtual(pplayer, pcity, punittype, 
                             do_make_unit_veteran(pcity, punittype));
       int profit = find_something_to_bomb(virtual_unit, NULL, NULL);
 
@@ -470,7 +470,7 @@ bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity,
         log_debug("%s doesn't want to build %s (want=%d)",
                   city_name(pcity), utype_rule_name(punittype), profit);
       }
-      unit_virtual_destroy(virtual_unit);
+      destroy_unit_virtual(virtual_unit);
     }
   } unit_type_iterate_end;
 

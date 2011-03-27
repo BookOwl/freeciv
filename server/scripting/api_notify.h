@@ -14,7 +14,7 @@
 #ifndef FC__API_NOTIFY_H
 #define FC__API_NOTIFY_H
 
-#include "script_types.h"
+#include "api_types.h"
 
 void api_notify_embassies_msg(Player *pplayer, Tile *ptile,
 			      int event, const char *message);

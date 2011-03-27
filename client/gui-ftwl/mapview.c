@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -669,12 +669,12 @@ static void update_focus_tile_list2(void)
   int i;
   struct tile *ptile;
 
-  unit_focus_set(NULL);
+  set_unit_focus(NULL);
 
   ptile = get_focus_tile();
   unit_list_iterate(ptile->units, aunit) {
     if (unit_owner(aunit) == client.conn.playing) {
-      unit_focus_set(aunit);
+      set_unit_focus(aunit);
       break;
     }
   } unit_list_iterate_end;
@@ -1414,7 +1414,7 @@ static void fill_actions(void)
     }
 
     if (can_unit_add_or_build_city(punit)) {
-      if (tile_city(unit_tile(punit))) {
+      if (tile_city(punit->tile)) {
 	ADD("unit_add_to_city");
       } else {
 	ADD("unit_build_city");
@@ -1432,7 +1432,7 @@ static void fill_actions(void)
     if (get_transporter_occupancy(punit) > 0) {
       ADD("unit_unload");
     }
-    if (is_unit_activity_on_tile(ACTIVITY_SENTRY, unit_tile(punit))) {
+    if (is_unit_activity_on_tile(ACTIVITY_SENTRY, punit->tile)) {
       ADD("unit_wake_others");
     }
     if (can_unit_do_connect(punit, ACTIVITY_IDLE)) {
@@ -1449,7 +1449,7 @@ static void fill_actions(void)
     }
     if ((is_diplomat_unit(punit)
 	 && diplomat_can_do_action(punit, DIPLOMAT_ANY_ACTION,
-				   unit_tile(punit)))) {
+				   punit->tile))) {
       ADD("unit_spy");
     }
     

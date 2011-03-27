@@ -13,15 +13,10 @@
 #ifndef FC__PLAYER_H
 #define FC__PLAYER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
 /* common */
-#include "ai.h" /* FC_AI_LAST */
 #include "city.h"
 #include "connection.h"
 #include "fc_types.h"
@@ -38,13 +33,6 @@ extern "C" {
 
 #define ANON_PLAYER_NAME "noname"
 #define ANON_USER_NAME "Unassigned"
-
-enum plrcolor_mode {
-  PLRCOL_PLR_ORDER,
-  PLRCOL_PLR_RANDOM,
-  PLRCOL_PLR_SET,
-  PLRCOL_TEAM_ORDER
-};
 
 struct player_slot;
 
@@ -215,7 +203,7 @@ struct player {
 
   bool ai_controlled; /* 0: not automated; 1: automated */
   struct player_ai ai_common;
-  const struct ai_type *ai;
+  struct ai_type *ai;
 
   bool was_created;                    /* if the player was /created */
   bool is_connected;
@@ -228,8 +216,6 @@ struct player {
   struct attribute_block_s attribute_block_buffer;
 
   struct dbv tile_known;
-
-  struct rgbcolor *rgb;
 
   union {
     struct {
@@ -245,14 +231,7 @@ struct player {
 
       bv_debug debug;
 
-      struct adv_data *adv;
-
-      void *ais[FC_AI_LAST];
-
-      /* Delegation to this user. */
-      char delegate_to[MAX_LEN_NAME];
-      /* Set if the delegation is active. */
-      char orig_username[MAX_LEN_NAME];
+      struct ai_data *aidata;
     } server;
 
     struct {
@@ -282,9 +261,6 @@ struct player_slot *player_slot_by_number(int player_id);
 
 /* General player accessor functions. */
 struct player *player_new(struct player_slot *pslot);
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor);
-const char *player_color_ftstr(struct player *pplayer);
 void player_clear(struct player *pplayer, bool full);
 void player_destroy(struct player *pplayer);
 
@@ -337,7 +313,7 @@ int num_known_tech_with_flag(const struct player *pplayer,
 			     enum tech_flag_id flag);
 int player_get_expected_income(const struct player *pplayer);
 
-struct city *player_capital(const struct player *pplayer);
+struct city *player_palace(const struct player *pplayer);
 
 bool ai_handicap(const struct player *pplayer, enum handicap_type htype);
 bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
@@ -414,13 +390,5 @@ const char *ai_level_name(enum ai_level level);
 const char *ai_level_cmd(enum ai_level level);
 bool is_settable_ai_level(enum ai_level level);
 int number_of_ai_levels(void);
-
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai);
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PLAYER_H */

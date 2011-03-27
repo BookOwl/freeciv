@@ -24,10 +24,8 @@ leaders = {
 }
 
 ruler_titles = {
- "government",        "male_title",       "female_title"
- "Fundamentalism",    _("Presbyter %s"),  _("?female:Presbyter %s") 
- "Anarchy",           _("Usurper %s"),    _("?female:Usurper %s") 
- "Republic",          _("Consul %s"),     _("?female:Consul %s") 
+ "government",      "male_title",       "female_title"
+ "Fundamentalism",  _("Presbyter %s"),  _("?female:Presbyter %s") 
 }
 
 flag="vandal"

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -365,29 +365,14 @@ const char *popup_info_text(struct tile *ptile)
 
     /* TRANS: A is attack power, D is defense power, FP is firepower,
      * HP is hitpoints (current and max). */
-    {
-      const struct veteran_level *vlevel
-        = utype_veteran_level(ptype, punit->veteran);
-
-      fc_assert(vlevel != NULL);
-      astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d (%s)"),
-                    ptype->attack_strength, ptype->defense_strength,
-                    ptype->firepower, punit->hp, ptype->hp,
-                    vlevel ? name_translation(&vlevel->name) : "?");
-    }
-
-    if (unit_owner(punit) == client_player()
-        || client_is_global_observer()) {
-      /* Show bribe cost for own units. */
-      astr_add_line(&str, _("Bribe cost: %d"), unit_bribe_cost(punit));
-    } else {
-      /* We can only give an (lower) boundary for units of other players. */
-      astr_add_line(&str, _("Estimated bribe cost: > %d"),
-                    unit_bribe_cost(punit));
-    }
+    astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d (%s)"),
+		  ptype->attack_strength, 
+		  ptype->defense_strength, ptype->firepower, punit->hp, 
+		  ptype->hp,
+                  name_translation(&ptype->veteran[punit->veteran].name));
 
     if ((NULL == client.conn.playing || owner == client.conn.playing)
-        && unit_list_size(ptile->units) >= 2) {
+	&& unit_list_size(ptile->units) >= 2) {
       /* TRANS: "5 more" units on this tile */
       astr_add(&str, _("  (%d more)"), unit_list_size(ptile->units) - 1);
     }
@@ -539,11 +524,8 @@ const char *unit_description(struct unit *punit)
 
   astr_add(&str, "%s", utype_name_translation(ptype));
 
-  if (punit->veteran < utype_veteran_levels(ptype)) {
-    const struct veteran_level *vlevel
-      = utype_veteran_level(ptype, punit->veteran);
-
-    astr_add(&str, " (%s)", vlevel ? name_translation(&vlevel->name) : "?");
+  if (rule_name(&ptype->veteran[punit->veteran].name)[0] != '\0') {
+    astr_add(&str, " (%s)", name_translation(&ptype->veteran[punit->veteran].name));
   }
 
   if (pplayer == unit_owner(punit)) {
@@ -948,9 +930,6 @@ const char *get_info_label_text_popup(void)
   astr_add_line(&str, _("Turn: %d"), game.info.turn);
 
   if (NULL != client.conn.playing) {
-    int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
-    int upkeep = player_research_get(client_player())->tech_upkeep;
-
     astr_add_line(&str, _("Gold: %d"),
 		  client.conn.playing->economic.gold);
     astr_add_line(&str, _("Net Income: %d"),
@@ -963,9 +942,14 @@ const char *get_info_label_text_popup(void)
     astr_add_line(&str, _("Researching %s: %s"),
 		  advance_name_researching(client.conn.playing),
 		  get_science_target_text(NULL));
-    /* perturn is defined as: (bulbs produced) - upkeep */
-    astr_add_line(&str, _("Bulbs per turn: %d - %d = %d"), perturn + upkeep,
-                  upkeep, perturn);
+    if (game.info.tech_upkeep_style == 1) {
+      int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
+      int upkeep = player_research_get(client_player())->tech_upkeep;
+
+      /* perturn is defined as: (bulbs produced) - upkeep */
+      astr_add_line(&str, _("Bulbs per turn: %d - %d = %d"), perturn + upkeep,
+                    upkeep, perturn);
+    }
   }
 
   /* See also get_global_warming_tooltip and get_nuclear_winter_tooltip. */
@@ -1073,12 +1057,10 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     struct city *pcity = player_city_by_number(unit_owner(punit),
                                                punit->homecity);
 
-    astr_add_line(&str, "%s", tile_get_info_text(unit_tile(punit),
-                                                 linebreaks));
+    astr_add_line(&str, "%s", tile_get_info_text(punit->tile, linebreaks));
     {
-      const char *infratext
-        = get_infrastructure_text(unit_tile(punit)->special,
-                                  unit_tile(punit)->bases);
+      const char *infratext = get_infrastructure_text(punit->tile->special,
+                                                      punit->tile->bases);
       if (*infratext != '\0') {
         astr_add_line(&str, "%s", infratext);
       } else {
@@ -1166,7 +1148,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
   } else {
     astr_add_line(&str, " ");
   }
-#endif /* DEBUG */
+#endif
 
   return astr_str(&str);
 }
@@ -1241,34 +1223,11 @@ const char *get_bulb_tooltip(void)
     if (research->researching == A_UNSET) {
       astr_add_line(&str, _("no research target."));
     } else {
-      int turns = 0;
-      int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
-      int done = research->bulbs_researched;
-      int total = total_bulbs_required(client_player());
-      char buf1[128], buf2[128];
-
-      if (perturn > 0) {
-        turns = MAX(1, ceil((double) (total - done) / perturn));
-      } else if (perturn < 0 ) {
-        turns = ceil((double) done / -perturn);
-      }
-
-      if (turns == 0) {
-        fc_snprintf(buf1, sizeof(buf1), _("No progress"));
-      } else {
-        fc_snprintf(buf1, sizeof(buf1), PL_("%d turn", "%d turns", turns),
-                    turns);
-      }
-
-      /* TRANS: <perturn> bulbs/turn */
-      fc_snprintf(buf2, sizeof(buf2), PL_("%d bulb/turn", "%d bulbs/turn",
-                                        perturn), perturn);
-
       /* TRANS: <tech>: <amount>/<total bulbs> */
-      astr_add_line(&str, _("%s: %d/%d (%s, %s)."),
-                    advance_name_researching(client.conn.playing),
-                    research->bulbs_researched,
-                    total_bulbs_required(client.conn.playing), buf1, buf2);
+      astr_add_line(&str, _("%s: %d/%d."),
+		    advance_name_researching(client.conn.playing),
+		    research->bulbs_researched,
+		    total_bulbs_required(client.conn.playing));
     }
   }
   return astr_str(&str);

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -39,11 +39,11 @@
 /* server/advisors */
 #include "advdata.h"
 #include "advtools.h"
-#include "infracache.h" /* adv_city */
 
 /* ai */
-#include "aiplayer.h"
+#include "aicity.h"
 #include "aitools.h"
+#include "defaultai.h"
 
 #include "advbuilding.h"
 
@@ -101,7 +101,7 @@ static void calculate_city_clusters(struct player *pplayer)
   if (!punittype) {
     punittype = get_role_unit(F_HELP_WONDER, 0); /* simulate future unit */
   }
-  ghost = unit_virtual_create(pplayer, NULL, punittype, 0);
+  ghost = create_unit_virtual(pplayer, NULL, punittype, 0);
   range = unit_move_rate(ghost) * 4;
 
   city_list_iterate(pplayer->cities, pcity) {
@@ -109,7 +109,7 @@ static void calculate_city_clusters(struct player *pplayer)
     struct pf_map *pfm;
     struct ai_city *city_data = def_ai_city_data(pcity);
 
-    unit_tile_set(ghost, pcity->tile);
+    ghost->tile = pcity->tile;
     pft_fill_unit_parameter(&parameter, ghost);
     pfm = pf_map_new(&parameter);
 
@@ -130,14 +130,14 @@ static void calculate_city_clusters(struct player *pplayer)
     pf_map_destroy(pfm);
   } city_list_iterate_end;
 
-  unit_virtual_destroy(ghost);
+  destroy_unit_virtual(ghost);
 }
 
 /**************************************************************************
   Calculate walking distances to wonder city from nearby cities.
 **************************************************************************/
 static void calculate_wonder_helpers(struct player *pplayer, 
-                                     struct adv_data *ai)
+                                     struct ai_data *ai)
 {
   struct pf_map *pfm;
   struct pf_parameter parameter;
@@ -162,7 +162,7 @@ static void calculate_wonder_helpers(struct player *pplayer,
   if (!punittype) {
     return;
   }
-  ghost = unit_virtual_create(pplayer, wonder_city, punittype, 0);
+  ghost = create_unit_virtual(pplayer, wonder_city, punittype, 0);
   maxrange = unit_move_rate(ghost) * 7;
 
   pft_fill_unit_parameter(&parameter, ghost);
@@ -183,7 +183,7 @@ static void calculate_wonder_helpers(struct player *pplayer,
   } pf_map_move_costs_iterate_end;
 
   pf_map_destroy(pfm);
-  unit_virtual_destroy(ghost);
+  destroy_unit_virtual(ghost);
 }
 
 
@@ -193,7 +193,7 @@ static void calculate_wonder_helpers(struct player *pplayer,
   base want of a city.
 **************************************************************************/
 static inline int city_want(struct player *pplayer, struct city *acity, 
-                            struct adv_data *ai, struct impr_type *pimprove)
+                            struct ai_data *ai, struct impr_type *pimprove)
 {
   int want = 0, prod[O_LAST], bonus[O_LAST], waste[O_LAST], i;
 
@@ -260,7 +260,7 @@ static inline int city_want(struct player *pplayer, struct city *acity,
 static int base_want(struct player *pplayer, struct city *pcity, 
                      struct impr_type *pimprove)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   int final_want = 0;
   int wonder_player_id = WONDER_NOT_OWNED;
   int wonder_city_id = WONDER_NOT_BUILT;
@@ -393,7 +393,7 @@ static struct unit_class *affected_unit_class(const struct effect *peffect)
   Number of AI stats units affected by effect
 **************************************************************************/
 static int num_affected_units(const struct effect *peffect,
-                              const struct adv_data *ai)
+                              const struct ai_data *ai)
 {
   struct unit_class *uclass;
   enum unit_move_type move;
@@ -402,12 +402,14 @@ static int num_affected_units(const struct effect *peffect,
   if (uclass) {
     move = uclass_move_type(uclass);
     switch (move) {
-     case UMT_LAND:
+     case LAND_MOVING:
          return ai->stats.units.land;
-     case UMT_SEA:
+     case SEA_MOVING:
        return ai->stats.units.sea;
-     case UMT_BOTH:
+     case BOTH_MOVING:
        return ai->stats.units.amphibious;
+     case MOVETYPE_LAST:
+       break;
     }
   }
   return ai->stats.units.land + ai->stats.units.sea
@@ -421,7 +423,7 @@ static int num_affected_units(const struct effect *peffect,
 **************************************************************************/
 static int improvement_effect_value(struct player *pplayer,
 				    struct government *gov,
-				    const struct adv_data *ai,
+				    const struct ai_data *ai,
 				    const struct city *pcity,
 				    const bool capital, 
 				    const struct impr_type *pimprove,
@@ -432,7 +434,7 @@ static int improvement_effect_value(struct player *pplayer,
 {
   int amount = peffect->value;
   struct unit_class *uclass;
-  enum unit_move_type move = unit_move_type_invalid();
+  enum unit_move_type move = MOVETYPE_LAST;
   int num;
 
   switch (peffect->type) {
@@ -579,13 +581,13 @@ static int improvement_effect_value(struct player *pplayer,
   case EFT_ENABLE_SPACE:
     if (game.info.spacerace) {
       v += 5;
-      if (ai->dipl.production_leader == pplayer) {
+      if (ai->diplomacy.production_leader == pplayer) {
 	v += 100;
       }
     }
     break;
   case EFT_GIVE_IMM_TECH:
-    if (adv_wants_science(pplayer)) {
+    if (!ai_wants_no_science(pplayer)) {
       v += amount * (game.info.sciencebox + 1);
     }
     break;
@@ -597,8 +599,8 @@ static int improvement_effect_value(struct player *pplayer,
     break;  /* Useless for AI */
   case EFT_NUKE_PROOF:
     if (ai->threats.nuclear) {
-      v += city_size_get(pcity) * unit_list_size(pcity->tile->units)
-           * (capital + 1) * amount / 100;
+      v += pcity->size * unit_list_size(pcity->tile->units) * (capital + 1)
+	* amount / 100;
     }
     break;
   case EFT_REVEAL_MAP:
@@ -617,9 +619,9 @@ static int improvement_effect_value(struct player *pplayer,
     if (get_city_bonus(pcity, EFT_SIZE_UNLIMIT) == 0) {
       const int aqueduct_size = get_city_bonus(pcity, EFT_SIZE_ADJ);
 
-      if (!city_can_grow_to(pcity, city_size_get(pcity) + 1)) {
+      if (!city_can_grow_to(pcity, pcity->size + 1)) {
 	v += pcity->surplus[O_FOOD] * ai->food_priority * amount;
-	if (city_size_get(pcity) == aqueduct_size) {
+	if (pcity->size == aqueduct_size) {
 	  v += 30 * pcity->surplus[O_FOOD];
 	}
       }
@@ -632,8 +634,8 @@ static int improvement_effect_value(struct player *pplayer,
     if (game.info.spacerace
 	/* If someone has started building spaceship already or
 	 * we have chance to win a spacerace */
-	&& (ai->dipl.spacerace_leader
-	    || ai->dipl.production_leader == pplayer)) {
+	&& (ai->diplomacy.spacerace_leader
+	    || ai->diplomacy.production_leader == pplayer)) {
       v += 95;
     }
     break;
@@ -678,7 +680,7 @@ static int improvement_effect_value(struct player *pplayer,
       move = uclass_move_type(uclass);
     }
 
-    if (uclass == NULL || move == UMT_SEA) {
+    if (uclass == NULL || move == SEA_MOVING) {
       /* Helps against sea units */
       if (is_ocean_tile(pcity->tile)) {
         v += ai->threats.ocean[-tile_continent(pcity->tile)]
@@ -695,13 +697,10 @@ static int improvement_effect_value(struct player *pplayer,
       }
     }
     v += (amount/20 + ai->threats.invasions - 1) * c; /* for wonder */
-    if (capital || uclass == NULL || move != UMT_SEA) {
+    if (capital || uclass == NULL || move != SEA_MOVING) {
       if (ai->threats.continent[tile_continent(pcity->tile)]
           || capital
           || (ai->threats.invasions
-              /* FIXME: This ignores riverboats on some rulesets.
-                        We should analyze rulesets when game starts
-                        and have relevant checks here. */
               && is_ocean_near_tile(pcity->tile))) {
         if (ai->threats.continent[tile_continent(pcity->tile)]) {
           v += amount;
@@ -757,11 +756,9 @@ static int improvement_effect_value(struct player *pplayer,
   case EFT_OUTPUT_INC_TILE_CELEBRATE:
   case EFT_TRADE_REVENUE_BONUS:
   case EFT_TILE_WORKABLE:
-   case EFT_IRRIG_POSSIBLE:
     break;
     /* This has no effect for AI */
   case EFT_VISIBLE_WALLS:
-  case EFT_CITY_IMAGE:
   case EFT_SHIELD2GOLD_FACTOR:
     break;
   case EFT_TECH_COST_FACTOR:
@@ -840,11 +837,15 @@ static bool adjust_wants_for_reqs(struct player *pplayer,
    */
   n_needed_techs = tech_vector_size(&needed_techs);
   if (0 < v && 0 < n_needed_techs) {
-    /* Tell AI module how much we want this improvement and what techs are
-     * required to get it. */
+    /* Because we want this improvements,
+     * we want the techs that will make it possible */
     const int dv = v / n_needed_techs;
+    int t;
 
-    CALL_PLR_AI_FUNC(impr_want, pplayer, pplayer, pcity, pimprove, &needed_techs, dv);
+    for (t = 0; t < n_needed_techs; t++) {
+      want_tech_for_improvement_effect(pplayer, pcity, pimprove,
+                                       *tech_vector_get(&needed_techs, t), dv);
+    }
   }
 
   /* If v is negative, the improvement is not worth building,
@@ -913,7 +914,7 @@ static void adjust_improvement_wants_by_effects(struct player *pplayer,
   int v = 0;
   int cities[REQ_RANGE_COUNT];
   int nplayers = normal_player_count();
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   bool capital = is_capital(pcity);
   bool can_build = TRUE;
   struct government *gov = government_of_player(pplayer);
@@ -1033,21 +1034,25 @@ static void adjust_improvement_wants_by_effects(struct player *pplayer,
 	 */
         const int a = already? 5: 4; /* WAG */
         const int dv = (v1 - v) * a / (4 * n_needed_techs);
-
-        CALL_PLR_AI_FUNC(impr_want, pplayer, pplayer, pcity, pimprove, &needed_techs, dv);
+	int t;
+	for (t = 0; t < n_needed_techs; t++) {
+	  want_tech_for_improvement_effect(pplayer, pcity, pimprove,
+                                           *tech_vector_get(&needed_techs, t),
+                                           dv);
+	}
       }
     }
 
     tech_vector_free(&needed_techs);
   } effect_list_iterate_end;
 
-  if (already) {
+  if (already && valid_advance(pimprove->obsolete_by)) {
     /* Discourage research of the technology that would make this building
      * obsolete. The bigger the desire for this building, the more
      * we want to discourage the technology. */
-    CALL_PLR_AI_FUNC(impr_keep_want, pplayer, pplayer, pcity, pimprove, v);
-
-  } else {
+    want_tech_for_improvement_effect(pplayer, pcity, pimprove,
+				     pimprove->obsolete_by, -v);
+  } else if (!already) {
     /* Increase the want for technologies that will enable
      * construction of this improvement, if necessary.
      */
@@ -1058,7 +1063,7 @@ static void adjust_improvement_wants_by_effects(struct player *pplayer,
   if (is_coinage && can_build) {
     /* Could have a negative want for coinage,
      * if we have some stock in a building already. */
-    pcity->server.adv->building_want[improvement_index(pimprove)] += v;
+    def_ai_city_data(pcity)->building_want[improvement_index(pimprove)] += v;
   } else if (!already && can_build) {
     /* Convert the base 'want' into a building want
      * by applying various adjustments */
@@ -1084,7 +1089,7 @@ static void adjust_improvement_wants_by_effects(struct player *pplayer,
     }
 
     /* Set */
-    pcity->server.adv->building_want[improvement_index(pimprove)] += v;
+    def_ai_city_data(pcity)->building_want[improvement_index(pimprove)] += v;
   }
   /* Else we either have the improvement already,
    * or we can not build it (yet) */
@@ -1127,12 +1132,12 @@ static void adjust_wants_by_effects(struct player *pplayer,
     if (!pplayer->ai_controlled) {
       /* For a human player, any building is worth building until discarded */
       improvement_iterate(pimprove) {
-        pcity->server.adv->building_want[improvement_index(pimprove)] = 1;
+        city_data->building_want[improvement_index(pimprove)] = 1;
       } improvement_iterate_end;
     } else if (city_data->building_turn <= game.info.turn) {
       /* Do a scheduled recalculation this turn */
       improvement_iterate(pimprove) {
-        pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+        city_data->building_want[improvement_index(pimprove)] = 0;
       } improvement_iterate_end;
     } else if (should_force_recalc(pcity)) {
       /* Do an emergency recalculation this turn. */
@@ -1141,7 +1146,7 @@ static void adjust_wants_by_effects(struct player *pplayer,
       city_data->building_turn = game.info.turn;
 
       improvement_iterate(pimprove) {
-        pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+        city_data->building_want[improvement_index(pimprove)] = 0;
       } improvement_iterate_end;
     }
   } city_list_iterate_end;
@@ -1157,12 +1162,12 @@ static void adjust_wants_by_effects(struct player *pplayer,
 
         if (pcity != wonder_city && is_wonder(pimprove)) {
           /* Only wonder city should build wonders! */
-          pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+          city_data->building_want[improvement_index(pimprove)] = 0;
         } else if ((!is_coinage
                     && !can_city_build_improvement_later(pcity, pimprove))
                    || is_improvement_redundant(pcity, pimprove)) {
           /* Don't consider impossible or redundant buildings */
-          pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+          city_data->building_want[improvement_index(pimprove)] = 0;
         } else if (pplayer->ai_controlled
                    && city_data->building_turn <= game.info.turn) {
           /* Building wants vary relatively slowly, so not worthwhile
@@ -1175,17 +1180,18 @@ static void adjust_wants_by_effects(struct player *pplayer,
                                               pimprove, already);
 
           fc_assert(!(already
-                      && 0 < pcity->server.adv->building_want[improvement_index(pimprove)]));
+                      && 0 < city_data->building_want
+                      [improvement_index(pimprove)]));
         } else if (city_has_building(pcity, pimprove)) {
           /* Never want to build something we already have. */
-          pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+          city_data->building_want[improvement_index(pimprove)] = 0;
         }
         /* else wait until a later turn */
       } city_list_iterate_end;
     } else {
       /* An impossible improvement */
       city_list_iterate(pplayer->cities, pcity) {
-        pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
+        def_ai_city_data(pcity)->building_want[improvement_index(pimprove)] = 0;
       } city_list_iterate_end;
     }
   } improvement_iterate_end;
@@ -1193,11 +1199,12 @@ static void adjust_wants_by_effects(struct player *pplayer,
 #ifdef DEBUG
   /* This logging is relatively expensive, so activate only if necessary */
   city_list_iterate(pplayer->cities, pcity) {
+    struct ai_city *city_data = def_ai_city_data(pcity);
     improvement_iterate(pimprove) {
-      if (pcity->server.adv->building_want[improvement_index(pimprove)] != 0) {
+      if (city_data->building_want[improvement_index(pimprove)] != 0) {
         CITY_LOG(LOG_DEBUG, pcity, "want to build %s with %d", 
                  improvement_rule_name(pimprove),
-                 pcity->server.adv->building_want[improvement_index(pimprove)]);
+                 city_data->building_want[improvement_index(pimprove)]);
       }
     } improvement_iterate_end;
   } city_list_iterate_end;
@@ -1209,7 +1216,7 @@ static void adjust_wants_by_effects(struct player *pplayer,
 **************************************************************************/
 void building_advisor(struct player *pplayer)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct city *wonder_city = game_city_by_number(ai->wonder_city);
 
   if (wonder_city && city_owner(wonder_city) != pplayer) {
@@ -1296,79 +1303,4 @@ void building_advisor(struct player *pplayer)
         + city_data->building_wait;
     }
   } city_list_iterate_end;
-}
-
-/**************************************************************************
-  Choose improvement we like most and put it into ai_choice.
-
- "I prefer the ai_choice as a return value; gcc prefers it as an arg" 
-  -- Syela 
-**************************************************************************/
-void building_advisor_choose(struct city *pcity, struct ai_choice *choice)
-{
-  struct player *plr = city_owner(pcity);
-  struct impr_type *chosen = NULL;
-  int want = 0;
-
-  improvement_iterate(pimprove) {
-    if (is_wonder(pimprove)) {
-      continue; /* Humans should not be advised to build wonders or palace */
-    }
-    if (pcity->server.adv->building_want[improvement_index(pimprove)] > want
-          && can_city_build_improvement_now(pcity, pimprove)) {
-      want = pcity->server.adv->building_want[improvement_index(pimprove)];
-      chosen = pimprove;
-    }
-  } improvement_iterate_end;
-
-  choice->want = want;
-  choice->value.building = chosen;
-
-  if (chosen) {
-    choice->type = CT_BUILDING;
-
-    CITY_LOG(LOG_DEBUG, pcity, "wants most to build %s at %d",
-             improvement_rule_name(chosen),
-             want);
-  } else {
-    choice->type = CT_NONE;
-  }
-  choice->need_boat = FALSE;
-
-  /* Allow ai to override */
-  CALL_PLR_AI_FUNC(choose_building, plr, pcity, choice);
-}
-
-/**************************************************************************
-  Setup improvement building
-**************************************************************************/
-void advisor_choose_build(struct player *pplayer, struct city *pcity)
-{
-  struct ai_choice choice;
-
-  building_advisor_choose(pcity, &choice);
-
-  if (valid_improvement(choice.value.building)) {
-    struct universal target = {
-      .kind = VUT_IMPROVEMENT,
-      .value = {.building = choice.value.building}
-    };
-
-    change_build_target(pplayer, pcity, target, E_IMP_AUTO);
-    return;
-  }
-
-  /* Build the first thing we can think of (except a new palace). */
-  improvement_iterate(pimprove) {
-    if (can_city_build_improvement_now(pcity, pimprove)
-	&& !building_has_effect(pimprove, EFT_CAPITAL_CITY)) {
-      struct universal target = {
-        .kind = VUT_IMPROVEMENT,
-        .value = {.building = pimprove}
-      };
-
-      change_build_target(pplayer, pcity, target, E_IMP_AUTO);
-      return;
-    }
-  } improvement_iterate_end;
 }

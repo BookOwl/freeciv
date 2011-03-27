@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -37,19 +37,16 @@
 #include "srv_log.h"
 
 /* server/advisors */
-#include "advbuilding.h"
 #include "advdata.h"
 #include "autosettlers.h"
-#include "infracache.h" /* adv_city */
 
 /* ai */
 #include "advmilitary.h"
 #include "aicity.h"
-#include "aidata.h"
-#include "aiplayer.h"
 #include "aitech.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "advdomestic.h"
 
@@ -62,7 +59,7 @@
  ***************************************************************************/
 static void ai_choose_help_wonder(struct city *pcity,
 				  struct ai_choice *choice,
-                                  struct adv_data *ai)
+                                  struct ai_data *ai)
 {
   struct player *pplayer = city_owner(pcity);
   Continent_id continent = tile_continent(pcity->tile);
@@ -92,7 +89,7 @@ static void ai_choose_help_wonder(struct city *pcity,
   /* Count existing caravans */
   unit_list_iterate(pplayer->units, punit) {
     if (unit_has_type_flag(punit, F_HELP_WONDER)
-        && tile_continent(unit_tile(punit)) == continent)
+        && tile_continent(punit->tile) == continent)
       caravans++;
   } unit_list_iterate_end;
 
@@ -117,7 +114,8 @@ static void ai_choose_help_wonder(struct city *pcity,
   if (build_points_left(wonder_city) 
       > utype_build_shield_cost(unit_type) * caravans) {
     struct impr_type *wonder = wonder_city->production.value.building;
-    int want = wonder_city->server.adv->building_want[improvement_index(wonder)];
+    struct ai_city *wdr_data = def_ai_city_data(wonder_city);
+    int want = wdr_data->building_want[improvement_index(wonder)];
     int dist = city_data->distance_to_wonder_city /
                unit_type->move_rate;
 
@@ -151,7 +149,7 @@ static void ai_choose_help_wonder(struct city *pcity,
  ***************************************************************************/
 static void ai_choose_trade_route(struct city *pcity,
 				  struct ai_choice *choice,
-                                  struct adv_data *ai)
+                                  struct ai_data *ai)
 {
   struct player *pplayer = city_owner(pcity);
   struct unit_type *unit_type;
@@ -261,7 +259,7 @@ static void ai_choose_trade_route(struct city *pcity,
 void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 				   struct ai_choice *choice)
 {
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   /* Unit type with certain role */
   struct unit_type *settler_type;
   struct unit_type *founder_type;
@@ -332,7 +330,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
       /* We need boats to colonize! */
       /* We might need boats even if there are boats free,
        * if they are blockaded or in inland seas. */
-      struct ai_plr *ai = ai_plr_data_get(pplayer);
+      struct ai_data *ai = ai_data_get(pplayer);
 
       CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d and asks"
 	       " for a new boat (%d of %d free)",
@@ -365,7 +363,7 @@ void domestic_advisor_choose_build(struct player *pplayer, struct city *pcity,
 
     init_choice(&cur);
     /* Consider city improvements */
-    building_advisor_choose(pcity, &cur);
+    ai_advisor_choose_building(pcity, &cur);
     copy_if_better_choice(&cur, choice);
 
     init_choice(&cur);

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -290,7 +290,7 @@ void update_intel_dialog(struct player *p)
       
     /* ---------- */
     
-    pCapital = player_capital(p);
+    pCapital = player_palace(p);
     research = player_research_get(p);
     change_ptsize16(pStr, adj_font(10));
     pStr->style &= ~TTF_STYLE_BOLD;

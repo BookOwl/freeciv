@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -116,14 +116,14 @@ int city_gold_worth(struct city *pcity)
   if (u) {
     worth += utype_buy_gold_cost(u, 0); /* cost of settler */
   }
-  for (i = 1; i < city_size_get(pcity); i++) {
+  for (i = 1; i < pcity->size; i++) {
     worth += city_granary_size(i); /* cost of growing city */
   }
   output_type_iterate(o) {
     worth += pcity->prod[o] * 10;
   } output_type_iterate_end;
   unit_list_iterate(pcity->units_supported, punit) {
-    if (same_pos(unit_tile(punit), pcity->tile)) {
+    if (same_pos(punit->tile, pcity->tile)) {
       struct unit_type *punittype = unit_type(punit)->obsoleted_by;
 
       if (punittype && can_city_build_unit_direct(pcity, punittype)) {
@@ -145,3 +145,4 @@ int city_gold_worth(struct city *pcity)
   }
   return worth;
 }
+

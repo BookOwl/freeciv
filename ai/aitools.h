@@ -20,16 +20,40 @@
 #include "fc_types.h"
 #include "unit.h"		/* enum ai_unit_task */
 
-/* server/advisors */
-#include "advgoto.h"
-
 /* ai */
 #include "aicity.h"
-#include "aiunit.h"
 
 struct pf_path;
 struct pf_parameter;
 struct pft_amphibious;
+
+/*
+ * WAGs: how hard to avoid tall stacks of units.
+ * Pass as fearfulness values to ai_avoid_risks.
+ */
+#define NORMAL_STACKING_FEARFULNESS ((double)PF_TURN_FACTOR / 36.0)
+
+#ifdef DEBUG
+#define CHECK_UNIT(punit)                                                   \
+  (fc_assert(punit != NULL),                                                \
+   fc_assert(unit_type(punit) != NULL),                                     \
+   fc_assert(unit_owner(punit) != NULL),                                    \
+   fc_assert(player_by_number(player_index(unit_owner(punit)))              \
+             == unit_owner(punit)),                                         \
+   fc_assert(game_unit_by_number(punit->id) != NULL))
+#else
+#define CHECK_UNIT(punit) /* Do nothing */
+#endif
+
+/*
+ * Initialise using ai_avoid_risks()
+ */
+struct ai_risk_cost
+{
+  double base_value;
+  double fearfulness;
+  double enemy_zoc_cost;
+};
 
 const char *ai_unit_task_rule_name(const enum ai_unit_task task);
 const char *ai_choice_rule_name(const struct ai_choice *choice);
@@ -41,8 +65,12 @@ int stack_cost(struct unit *pattacker, struct unit *pdefender);
 void ai_unit_move_or_attack(struct unit *punit, struct tile *ptile,
                             struct pf_path *path, int step);
 
+void ai_avoid_risks(struct pf_parameter *parameter,
+		    struct ai_risk_cost *risk_cost,
+		    struct unit *punit,
+		    const double fearfulness);
 void ai_fill_unit_param(struct pf_parameter *parameter,
-			struct adv_risk_cost *risk_cost,
+			struct ai_risk_cost *risk_cost,
 			struct unit *punit, struct tile *ptile);
 bool ai_gothere(struct player *pplayer, struct unit *punit, 
                 struct tile *dst_tile);
@@ -55,10 +83,8 @@ bool ai_unit_goto_constrained(struct unit *punit, struct tile *ptile,
 bool ai_unit_goto(struct unit *punit, struct tile *ptile);
 bool goto_is_sane(struct unit *punit, struct tile *ptile, bool omni);
 
-void ai_unit_new_task(struct unit *punit, enum ai_unit_task task, 
+void ai_unit_new_role(struct unit *punit, enum ai_unit_task task, 
                       struct tile *ptile);
-void ai_unit_new_adv_task(struct unit *punit, enum adv_unit_task task,
-                          struct tile *ptile);
 bool ai_unit_make_homecity(struct unit *punit, struct city *pcity);
 bool ai_unit_attack(struct unit *punit, struct tile *ptile);
 bool ai_unit_move(struct unit *punit, struct tile *ptile);
@@ -75,10 +101,11 @@ bool is_unit_choice_type(enum choice_type type);
 bool ai_choose_role_unit(struct player *pplayer, struct city *pcity,
                          struct ai_choice *choice, enum choice_type type,
                          int role, int want, bool need_boat);
-void ai_build_adv_override(struct city *pcity, struct ai_choice *choice);
+void ai_advisor_choose_building(struct city *pcity, struct ai_choice *choice);
 bool ai_assess_military_unhappiness(struct city *pcity);
 
-void ai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
-                               enum danger_consideration *result);
+bool ai_wants_no_science(struct player *pplayer);
+
+bool is_player_dangerous(struct player *pplayer, struct player *aplayer);
 
 #endif  /* FC__AITOOLS_H */

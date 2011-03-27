@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef WIN32_NATIVE
@@ -44,13 +44,12 @@
 #include "game.h"
 #include "idex.h"
 #include "map.h"
-#include "mapimg.h"
 #include "netintf.h"
 #include "packets.h"
 #include "player.h"
 #include "version.h"
 
-/* client/include */
+/* include */
 #include "chatline_g.h"
 #include "citydlg_g.h"
 #include "connectdlg_g.h"
@@ -92,25 +91,6 @@
 #include "voteinfo.h"
 
 #include "client_main.h"
-
-
-static enum known_type mapimg_client_tile_known(const struct tile *ptile,
-                                                const struct player *pplayer,
-                                                bool knowledge);
-static struct terrain
-  *mapimg_client_tile_terrain(const struct tile *ptile,
-                              const struct player *pplayer, bool knowledge);
-static struct player *mapimg_client_tile_owner(const struct tile *ptile,
-                                               const struct player *pplayer,
-                                               bool knowledge);
-static struct player *mapimg_client_tile_city(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge);
-static struct player *mapimg_client_tile_unit(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge);
-static int mapimg_client_plrcolor_count(void);
-static struct rgbcolor *mapimg_client_plrcolor_get(int i);
 
 static void fc_interface_init_client(void);
 
@@ -222,10 +202,6 @@ static void client_game_init(void)
   voteinfo_queue_init();
   server_options_init();
   update_queue_init();
-  mapimg_init(mapimg_client_tile_known, mapimg_client_tile_terrain,
-              mapimg_client_tile_owner, mapimg_client_tile_city,
-              mapimg_client_tile_unit, mapimg_client_plrcolor_count,
-              mapimg_client_plrcolor_get);
 }
 
 /**************************************************************************
@@ -235,7 +211,6 @@ static void client_game_free(void)
 {
   editgui_popdown_all();
 
-  mapimg_free();
   packhand_free();
   server_options_free();
   voteinfo_queue_free();
@@ -269,7 +244,6 @@ static void client_game_reset(void)
   agents_free();
 
   game_reset();
-  mapimg_reset();
 
   attribute_init();
   agents_init();
@@ -296,10 +270,10 @@ int client_main(int argc, char *argv[])
   if (LoadLibrary("exchndl.dll") == NULL) {
 #  ifdef DEBUG
     fprintf(stderr, "exchndl.dll could not be loaded, no crash debugger\n");
-#  endif /* DEBUG */
+#  endif
   }
-# endif /* NDEBUG */
-#endif /* WIN32_NATIVE */
+# endif
+#endif
 
   i_am_client(); /* Tell to libfreeciv that we are client */
 
@@ -384,7 +358,7 @@ int client_main(int argc, char *argv[])
         fc_fprintf(stderr, _("Try using --help.\n"));
         exit(EXIT_FAILURE);
       }
-#endif /* NDEBUG */
+#endif
     } else  if ((option = get_option_malloc("--read", argv, &i, argc))) {
       scriptfile = option; /* never free()d */
     } else if ((option = get_option_malloc("--name", argv, &i, argc))) {
@@ -536,14 +510,13 @@ int client_main(int argc, char *argv[])
 
   /* termination */
   client_exit();
-
+  
   /* not reached */
   return EXIT_SUCCESS;
 }
 
 /**************************************************************************
-  Main client execution stop function. This calls ui_exit() and not the
-  other way around.
+...
 **************************************************************************/
 void client_exit(void)
 {
@@ -571,14 +544,12 @@ void client_exit(void)
 
   free_nls();
 
-  log_close();
-
   exit(EXIT_SUCCESS);
 }
 
 
 /**************************************************************************
-  Handle packet received from server.
+...
 **************************************************************************/
 void client_packet_input(void *packet, int type)
 {
@@ -588,7 +559,6 @@ void client_packet_input(void *packet, int type)
       && PACKET_PROCESSING_FINISHED != type
       && PACKET_SERVER_JOIN_REPLY != type
       && PACKET_AUTHENTICATION_REQ != type
-      && PACKET_SERVER_SHUTDOWN != type
       && PACKET_CONNECT_MSG != type) {
     log_error("Received packet %s (%d) before establishing connection!",
               packet_name(type), type);
@@ -600,7 +570,7 @@ void client_packet_input(void *packet, int type)
 }
 
 /**************************************************************************
-  Handle user ending his/her turn.
+...
 **************************************************************************/
 void user_ended_turn(void)
 {
@@ -608,7 +578,7 @@ void user_ended_turn(void)
 }
 
 /**************************************************************************
-  Send information about player having finished his/her turn to server.
+...
 **************************************************************************/
 void send_turn_done(void)
 {
@@ -638,7 +608,7 @@ void send_turn_done(void)
 }
 
 /**************************************************************************
-  Send request for some report to server
+...
 **************************************************************************/
 void send_report_request(enum report_type type)
 {
@@ -646,7 +616,7 @@ void send_report_request(enum report_type type)
 }
 
 /**************************************************************************
-  Change client state.
+  ...
 **************************************************************************/
 void set_client_state(enum client_states newstate)
 {
@@ -687,7 +657,7 @@ void set_client_state(enum client_states newstate)
     meswin_clear();
 
     if (oldstate > C_S_DISCONNECTED) {
-      unit_focus_set(NULL);
+      set_unit_focus(NULL);
       agents_disconnect();
       global_worklists_unbuild();
       client_remove_all_cli_conn();
@@ -717,7 +687,7 @@ void set_client_state(enum client_states newstate)
       options_dialogs_update();
     }
 
-    unit_focus_set(NULL);
+    set_unit_focus(NULL);
 
     if (get_client_page() != PAGE_SCENARIO
         && get_client_page() != PAGE_LOAD) {
@@ -742,7 +712,7 @@ void set_client_state(enum client_states newstate)
     boot_help_texts(pplayer);   /* reboot with player */
     global_worklists_build();
     can_slide = FALSE;
-    unit_focus_update();
+    update_unit_focus();
     can_slide = TRUE;
     set_client_page(PAGE_GAME);
     /* Find something sensible to display instead of the intro gfx. */
@@ -755,7 +725,7 @@ void set_client_state(enum client_states newstate)
     refresh_overview_canvas();
 
     update_info_label();        /* get initial population right */
-    unit_focus_update();
+    update_unit_focus();
     update_unit_info_label(get_units_in_focus());
 
     if (auto_center_each_turn) {
@@ -776,7 +746,7 @@ void set_client_state(enum client_states newstate)
       popdown_all_city_dialogs();
       close_all_diplomacy_dialogs();
       popdown_all_game_dialogs();
-      unit_focus_set(NULL);
+      set_unit_focus(NULL);
     } else {
       /* From C_S_PREPARING. */
       init_city_report_game_data();
@@ -788,14 +758,14 @@ void set_client_state(enum client_states newstate)
       role_unit_precalcs();
       boot_help_texts(pplayer);            /* reboot */
       global_worklists_build();
-      unit_focus_set(NULL);
+      set_unit_focus(NULL);
       set_client_page(PAGE_GAME);
       center_on_something();
     }
     refresh_overview_canvas();
 
     update_info_label();
-    unit_focus_update();
+    update_unit_focus();
     update_unit_info_label(NULL);
 
     break;
@@ -813,7 +783,7 @@ void set_client_state(enum client_states newstate)
 }
 
 /**************************************************************************
-  Return current client state.
+  ...
 **************************************************************************/
 enum client_states client_state(void)
 {
@@ -847,7 +817,7 @@ void client_remove_all_cli_conn(void)
 }
 
 /**************************************************************************
-  Send attribute block.
+..
 **************************************************************************/
 void send_attribute_block_request()
 {
@@ -855,7 +825,7 @@ void send_attribute_block_request()
 }
 
 /**************************************************************************
-  Wait until server has responsed to given request id.
+..
 **************************************************************************/
 void wait_till_request_got_processed(int request_id)
 {
@@ -864,7 +834,7 @@ void wait_till_request_got_processed(int request_id)
 }
 
 /**************************************************************************
-  Returns whether client is observer.
+..
 **************************************************************************/
 bool client_is_observer(void)
 {
@@ -1044,7 +1014,7 @@ bool is_server_busy(void)
 }
 
 /****************************************************************************
-  Returns whether client is global observer
+  ...
 ****************************************************************************/
 bool client_is_global_observer(void)
 {
@@ -1052,7 +1022,7 @@ bool client_is_global_observer(void)
 }
 
 /****************************************************************************
-  Returns number of player attached to client.
+  ...
 ****************************************************************************/
 int client_player_number(void)
 {
@@ -1097,105 +1067,8 @@ static void fc_interface_init_client(void)
   struct functions *funcs = fc_interface_funcs();
 
   funcs->player_tile_vision_get = client_map_is_known_and_seen;
-  funcs->gui_color_free = color_free;
 
   /* Keep this function call at the end. It checks if all required functions
      are defined. */
   fc_interface_init();
-}
-
-/***************************************************************************
-  Helper function for the mapimg module - tile knowledge.
-****************************************************************************/
-static enum known_type mapimg_client_tile_known(const struct tile *ptile,
-                                                const struct player *pplayer,
-                                                bool knowledge)
-{
-  if (client_is_global_observer()) {
-    return TILE_KNOWN_SEEN;
-  }
-
-  return tile_get_known(ptile, pplayer);
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - tile terrain.
-****************************************************************************/
-static struct terrain *
-  mapimg_client_tile_terrain(const struct tile *ptile,
-                             const struct player *pplayer, bool knowledge)
-{
-  return tile_terrain(ptile);
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - tile owner.
-****************************************************************************/
-static struct player *mapimg_client_tile_owner(const struct tile *ptile,
-                                               const struct player *pplayer,
-                                               bool knowledge)
-{
-  return tile_owner(ptile);
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - city owner.
-****************************************************************************/
-static struct player *mapimg_client_tile_city(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge)
-{
-  struct city *pcity = tile_city(ptile);
-
-  if (!pcity) {
-    return NULL;
-  }
-
-  return city_owner(tile_city(ptile));
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - unit owner.
-****************************************************************************/
-static struct player *mapimg_client_tile_unit(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge)
-{
-  int unit_count = unit_list_size(ptile->units);
-
-  if (unit_count == 0) {
-    return NULL;
-  }
-
-  return unit_owner(unit_list_get(ptile->units, 0));
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - number of player colors.
-****************************************************************************/
-static int mapimg_client_plrcolor_count(void)
-{
-  return player_count();
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - one player color. For the client
-  only the colors of the defined players are shown.
-****************************************************************************/
-static struct rgbcolor *mapimg_client_plrcolor_get(int i)
-{
-  int count = 0;
-
-  if (0 > i || i > player_count()) {
-    return NULL;
-  }
-
-  players_iterate(pplayer) {
-    if (count == i) {
-      return pplayer->rgb;
-    }
-    count++;
-  } players_iterate_end;
-
-  return NULL;
 }

@@ -21,6 +21,9 @@
 #include "fc_types.h"
 #include "improvement.h"
 
+/* ai */
+#include "advdiplomacy.h"
+
 /* max size of a short */
 #define MAX_NUM_ID (1+MAX_UINT16)
 
@@ -37,17 +40,33 @@ enum ai_improvement_status {
   AI_IMPR_LAST
 };
 
-struct ai_settler; /* see aisettler.c */
+enum winning_strategy {
+  WIN_OPEN,     /* still undetermined */
+  WIN_WAR,      /* we have no other choice than to crush all opposition */
+  WIN_SPACE,    /* we will race for space, peace very important */
+  WIN_CAPITAL   /* we cannot win unless we take war_target's capital */
+};
 
-struct adv_dipl {
+struct ai_dip_intel {
   /* Remember one example of each for text spam purposes. */
-  bool allied_with_enemy;
+  struct player *is_allied_with_enemy;
+  struct player *at_war_with_ally;
+  struct player *is_allied_with_ally;
+
+  signed char spam;      /* timer to avoid spamming a player with chat */
+  int distance;   /* average distance to that player's cities */
+  int countdown;  /* we're on a countdown to war declaration */
+  enum war_reason war_reason; /* why we declare war */
+  signed char ally_patience; /* we EXPECT our allies to help us! */
+  signed char asked_about_peace;     /* don't ask again */
+  signed char asked_about_alliance;  /* don't nag! */
+  signed char asked_about_ceasefire; /* don't ... you get the point */
+  signed char warned_about_space;
 };
 
 BV_DEFINE(bv_id, MAX_NUM_ID);
-
-struct adv_data {
-  /* Whether adv_data_phase_init() has been called or not. */
+struct ai_data {
+  /* Whether ai_data_phase_init() has been called or not. */
   bool phase_is_initialized;
 
   /* The Wonder City */
@@ -56,6 +75,19 @@ struct adv_data {
   /* Precalculated info about city improvements */
   enum ai_improvement_status impr_calc[MAX_NUM_ITEMS];
   enum req_range impr_range[MAX_NUM_ITEMS];
+
+  /* AI diplomacy and opinions on other players */
+  struct {
+    const struct ai_dip_intel **player_intel_slots;
+    enum winning_strategy strategy;
+    int timer; /* pursue our goals with some stubbornness, in turns */
+    char love_coeff;          /* Reduce love with this % each turn */
+    char love_incr;           /* Modify love with this fixed amount */
+    int req_love_for_peace;
+    int req_love_for_alliance;
+    struct player *spacerace_leader; /* who is leading the space pack */
+    struct player *production_leader;
+  } diplomacy;
 
   /* Long-term threats, not to be confused with short-term danger */
   struct {
@@ -75,6 +107,9 @@ struct adv_data {
     bool sea_done;    /* nothing more to explore at sea */
   } explore;
 
+  /* Keep track of available ocean channels */
+  bool *channels;
+
   /* This struct is used for statistical unit building, eg to ensure
    * that we don't build too few or too many units of a given type. */
   struct {
@@ -93,16 +128,12 @@ struct adv_data {
     } units;
     int *workers;     /* cities to workers on continent*/
     int *cities;      /* number of cities we have on continent */
+    int passengers;   /* number of passengers waiting for boats */
+    int boats;
+    int available_boats;
     int average_production;
     bv_id diplomat_reservations;
   } stats;
-
-  struct {
-    struct adv_dipl **adv_dipl_slots;
-
-    struct player *spacerace_leader; /* who is leading the space pack */
-    struct player *production_leader;
-  } dipl;
 
   int num_continents; /* last time we updated our continent data */
   int num_oceans; /* last time we updated our continent data */
@@ -132,33 +163,27 @@ struct adv_data {
     struct government *revolution;   /* The best gov of the now available */
   } goal;
   
-  /* Whether science would benefit player at all */
-  bool wants_science;
-
-  /* If the AI celebrates. */
-  bool celebrate;
-
+  /* If the ai doesn't want/need any research */
+  bool wants_no_science;
+  
   /* AI doesn't like having more than this number of cities */
   int max_num_cities;
 };
 
-void adv_data_init(struct player *pplayer);
-void adv_data_default(struct player *pplayer);
-void adv_data_close(struct player *pplayer);
+void ai_data_init(struct player *pplayer);
+void ai_data_default(struct player *pplayer);
+void ai_data_close(struct player *pplayer);
 
-bool adv_data_phase_init(struct player *pplayer, bool is_new_phase);
-void adv_data_phase_done(struct player *pplayer);
-bool is_adv_data_phase_open(struct player *pplayer);
+bool ai_data_phase_init(struct player *pplayer, bool is_new_phase);
+void ai_data_phase_done(struct player *pplayer);
+bool is_ai_data_phase_open(struct player *pplayer);
 
 void ai_data_analyze_rulesets(struct player *pplayer);
 
-struct adv_data *adv_data_get(struct player *pplayer);
+struct ai_data *ai_data_get(struct player *pplayer);
+struct ai_dip_intel *ai_diplomacy_get(const struct player *plr1,
+                                      const struct player *plr2);
 
-void adv_best_government(struct player *pplayer);
-
-bool adv_wants_science(struct player *pplayer);
-
-bool adv_is_player_dangerous(struct player *pplayer,
-                             struct player *aplayer);
+bool ai_channel(struct player *pplayer, Continent_id c1, Continent_id c2);
 
 #endif /* FC__ADVDATA_H */

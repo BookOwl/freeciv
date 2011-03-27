@@ -13,19 +13,12 @@
 #ifndef FC__AIUNIT_H
 #define FC__AIUNIT_H
 
-/* common */
 #include "combat.h"
 #include "fc_types.h"
 #include "unittype.h"
 
 struct pf_map;
 struct pf_path;
-
-struct section_file;
-
-enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
-                    AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_ESCORT, 
-                    AIUNIT_EXPLORE, AIUNIT_RECOVER, AIUNIT_HUNTER };
 
 struct unit_ai {
   /* The following are unit ids or special indicator values (<=0) */
@@ -40,8 +33,6 @@ struct unit_ai {
   int target; /* target we hunt */
   bv_player hunted; /* if a player is hunting us, set by that player */
   bool done;  /* we are done controlling this unit this turn */
-
-  enum ai_unit_task task;
 };
 
 /*
@@ -92,6 +83,7 @@ void ai_manage_units(struct player *pplayer);
 void ai_manage_unit(struct player *pplayer, struct unit *punit);
 void ai_manage_military(struct player *pplayer,struct unit *punit);
 struct city *find_nearest_safe_city(struct unit *punit);
+int could_unit_move_to_tile(struct unit *punit, struct tile *dst_tile);
 int look_for_charge(struct player *pplayer, struct unit *punit,
                     struct unit **aunit, struct city **acity);
 
@@ -107,6 +99,11 @@ int find_something_to_kill(struct player *pplayer, struct unit *punit,
                            int *pmove_time);
 
 int build_cost_balanced(const struct unit_type *punittype);
+int unittype_att_rating(const struct unit_type *punittype, int veteran,
+                        int moves_left, int hp);
+int unit_att_rating(const struct unit *punit);
+int unit_def_rating_basic(const struct unit *punit);
+int unit_def_rating_basic_sq(const struct unit *punit);
 int unittype_def_rating_sq(const struct unit_type *att_type,
 			   const struct unit_type *def_type,
 			   const struct player *def_player,
@@ -116,11 +113,12 @@ int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
 bool is_on_unit_upgrade_path(const struct unit_type *test,
 			     const struct unit_type *base);
 
-void ai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
-                                enum danger_consideration *result);
+void update_simple_ai_types(void);
+
+bool enemies_at(struct unit *punit, struct tile *ptile);
 
 /* Call this after rulesets are loaded */
-void ai_units_ruleset_init(void);
+void unit_class_ai_init(void);
 
 void ai_unit_init(struct unit *punit);
 void ai_unit_turn_end(struct unit *punit);
@@ -135,10 +133,5 @@ void ai_unit_close(struct unit *punit);
 #define simple_ai_unit_type_iterate_end					\
   }									\
 }
-
-void ai_unit_save(struct section_file *file, const struct unit *punit,
-                  const char *unitstr);
-void ai_unit_load(const struct section_file *file, struct unit *punit,
-                  const char *unitstr);
 
 #endif  /* FC__AIUNIT_H */

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -20,7 +20,6 @@
 
 /* utility */
 #include "rand.h"
-#include "registry.h"
 
 /* common */
 #include "game.h"
@@ -38,17 +37,15 @@
 #include "advdata.h"
 #include "autosettlers.h"
 #include "advbuilding.h"
-#include "infracache.h"
 
 /* ai */
-#include "advdiplomacy.h"
 #include "advdomestic.h"
 #include "advmilitary.h"
 #include "aihand.h"
-#include "aiplayer.h"
 #include "aisettler.h"
 #include "aitools.h"
 #include "aiunit.h"
+#include "defaultai.h"
 
 #include "aicity.h"
 
@@ -59,10 +56,6 @@
 /* TODO:  AI_CITY_RECALC_SPEED should be configurable to ai difficulty.
           -kauf  */
 #define AI_CITY_RECALC_SPEED 5
-
-#define SPECVEC_TAG tech
-#define SPECVEC_TYPE struct advance *
-#include "specvec.h"
 
 #define CITY_EMERGENCY(pcity)						\
  (pcity->surplus[O_SHIELD] < 0 || city_unhappy(pcity)			\
@@ -83,11 +76,36 @@
         fc_assert(_uindex >= 0 && _uindex < utype_count());              \
       }                                                                  \
     }                                                                    \
-  } while(FALSE);
+  } while(0);
 #endif /* NDEBUG */
 
 static void ai_sell_obsolete_buildings(struct city *pcity);
 static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
+
+/**************************************************************************
+  This calculates the usefulness of pcity to us. Note that you can pass
+  another player's ai_data structure here for evaluation by different
+  priorities.
+**************************************************************************/
+int ai_eval_calc_city(struct city *pcity, struct ai_data *ai)
+{
+  int i = (pcity->surplus[O_FOOD] * ai->food_priority
+           + pcity->surplus[O_SHIELD] * ai->shield_priority
+           + pcity->prod[O_LUXURY] * ai->luxury_priority
+           + pcity->prod[O_GOLD] * ai->gold_priority
+           + pcity->prod[O_SCIENCE] * ai->science_priority
+           + pcity->feel[CITIZEN_HAPPY][FEELING_FINAL] * ai->happy_priority
+           - pcity->feel[CITIZEN_UNHAPPY][FEELING_FINAL] * ai->unhappy_priority
+           - pcity->feel[CITIZEN_ANGRY][FEELING_FINAL] * ai->angry_priority
+           - pcity->pollution * ai->pollution_priority);
+
+  if (pcity->surplus[O_FOOD] < 0 || pcity->surplus[O_SHIELD] < 0) {
+    /* The city is unmaintainable, it can't be good */
+    i = MIN(i, 0);
+  }
+
+  return i;
+}
 
 /************************************************************************** 
   Increase want for a technology because of the value of that technology
@@ -101,11 +119,11 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
   We put this conversion in a function because the 'want' scales are
   unclear and kludged. Consequently, this conversion might require tweaking.
 **************************************************************************/
-static void want_tech_for_improvement_effect(struct player *pplayer,
-                                             const struct city *pcity,
-                                             const struct impr_type *pimprove,
-                                             const struct advance *tech,
-                                             int building_want)
+void want_tech_for_improvement_effect(struct player *pplayer,
+                                      const struct city *pcity,
+                                      const struct impr_type *pimprove,
+                                      const struct advance *tech,
+                                      int building_want)
 {
   /* The conversion factor was determined by experiment,
    * and might need adjustment.
@@ -119,44 +137,9 @@ static void want_tech_for_improvement_effect(struct player *pplayer,
     "wanted by %s for building: %d -> %d",
     city_name(pcity), improvement_rule_name(pimprove),
     building_want, tech_want);
-#endif /* 0 */
+#endif
   if (tech) {
     pplayer->ai_common.tech_want[advance_index(tech)] += tech_want;
-  }
-}
-
-/************************************************************************** 
-  Increase want for a technologies because of the value of that technology
-  in providing an improvement effect.
-**************************************************************************/
-void want_techs_for_improvement_effect(struct player *pplayer,
-                                       const struct city *pcity,
-                                       const struct impr_type *pimprove,
-                                       struct tech_vector *needed_techs,
-                                       int building_want)
-{
-  int t;
-  int n_needed_techs = tech_vector_size(needed_techs);
-
-  for (t = 0; t < n_needed_techs; t++) {
-    want_tech_for_improvement_effect(pplayer, pcity, pimprove,
-                                     *tech_vector_get(needed_techs, t),
-                                     building_want);
-  }
-}
-
-/************************************************************************** 
-  Decrease want for a technology because of the value of that technology
-  in obsoleting an improvement effect.
-**************************************************************************/
-void dont_want_tech_obsoleting_impr(struct player *pplayer,
-                                    const struct city *pcity,
-                                    const struct impr_type *pimprove,
-                                    int building_want)
-{
-  if (valid_advance(pimprove->obsolete_by)) {
-    want_tech_for_improvement_effect(pplayer, pcity, pimprove, pimprove->obsolete_by,
-                                     -building_want);
   }
 }
 
@@ -219,7 +202,7 @@ static void ai_barbarian_choose_build(struct player *pplayer,
 static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 {
   struct ai_choice newchoice;
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct ai_city *city_data = def_ai_city_data(pcity);
 
   init_choice(&newchoice);
@@ -320,7 +303,7 @@ static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 }
 
 /************************************************************************** 
-  Sell building from city
+...
 **************************************************************************/
 static void try_to_sell_stuff(struct player *pplayer, struct city *pcity)
 {
@@ -353,7 +336,7 @@ static void ai_upgrade_units(struct city *pcity, int limit, bool military)
   struct player *pplayer = city_owner(pcity);
   int expenses;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   unit_list_iterate(pcity->tile->units, punit) {
     if (pcity->owner == punit->owner) {
@@ -416,7 +399,7 @@ static void ai_spend_gold(struct player *pplayer)
     } unit_list_iterate_safe_end;
   } city_list_iterate_end;
 
-  ai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses);
 
   do {
     bool expensive; /* don't buy when it costs x2 unless we must */
@@ -482,8 +465,8 @@ static void ai_spend_gold(struct player *pplayer)
     if (is_unit_choice_type(bestchoice.type)
         && utype_has_flag(bestchoice.value.utype, F_CITIES)) {
       if (get_city_bonus(pcity, EFT_GROWTH_FOOD) == 0
-          && city_size_get(pcity) == 1
-          && city_granary_size(city_size_get(pcity))
+          && pcity->size == 1
+          && city_granary_size(pcity->size)
              > pcity->food_stock + pcity->surplus[O_FOOD]) {
         /* Don't buy settlers in size 1 cities unless we grow next turn */
         continue;
@@ -585,14 +568,14 @@ static int unit_foodbox_cost(struct unit *punit)
 
   if (punit->id == 0) {
     /* It is a virtual unit, so must start in a city... */
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
     /* The default is to lose 100%.  The growth bonus reduces this. */
     int foodloss_pct = 100 - get_city_bonus(pcity, EFT_GROWTH_FOOD);
 
     foodloss_pct = CLIP(0, foodloss_pct, 100);
     fc_assert_ret_val(pcity != NULL, -1);
-    cost = city_granary_size(city_size_get(pcity));
+    cost = city_granary_size(pcity->size);
     cost = cost * foodloss_pct / 100;
   }
 
@@ -613,7 +596,7 @@ static void contemplate_terrain_improvements(struct city *pcity)
   struct tile *best_tile = NULL; /* May be accessed by log_*() calls. */
   struct tile *pcenter = city_tile(pcity);
   struct player *pplayer = city_owner(pcity);
-  struct adv_data *ai = adv_data_get(pplayer);
+  struct ai_data *ai = ai_data_get(pplayer);
   struct unit_type *unit_type = best_role_unit(pcity, F_SETTLERS);
   Continent_id place = tile_continent(pcenter);
 
@@ -623,15 +606,15 @@ static void contemplate_terrain_improvements(struct city *pcity)
   }
 
   /* Create a localized "virtual" unit to do operations with. */
-  virtualunit = unit_virtual_create(pplayer, pcity, unit_type, 0);
+  virtualunit = create_unit_virtual(pplayer, pcity, unit_type, 0);
   /* Advisors data space not allocated as it's not needed in the
      lifetime of the virtualunit. */
-  unit_tile_set(virtualunit, pcenter);
+  virtualunit->tile = pcenter;
   want = settler_evaluate_improvements(virtualunit, &best_act, &best_tile,
                                        NULL, NULL);
   want = (want - unit_food_upkeep(virtualunit) * FOOD_WEIGHTING) * 100
          / (40 + unit_foodbox_cost(virtualunit));
-  unit_virtual_destroy(virtualunit);
+  destroy_unit_virtual(virtualunit);
 
   /* Massage our desire based on available statistics to prevent
    * overflooding with worker type units if they come cheap in
@@ -712,8 +695,6 @@ void ai_manage_cities(struct player *pplayer)
     TIMING_LOG(AIT_CITY_SETTLERS, TIMER_STOP);
     ASSERT_CHOICE(city_data->choice);
   } city_list_iterate_end;
-  /* Reset auto settler state for the next run. */
-  ai_auto_settler_reset(pplayer);
 
   city_list_iterate(pplayer->cities, pcity) {
     ai_city_choose_build(pplayer, pcity);
@@ -723,7 +704,7 @@ void ai_manage_cities(struct player *pplayer)
 }
 
 /**************************************************************************
-  Are effects provided by this building not needed?
+... 
 **************************************************************************/
 static bool building_unwanted(struct player *plr, struct impr_type *pimprove)
 {
@@ -867,59 +848,4 @@ void ai_city_free(struct city *pcity)
     city_set_ai_data(pcity, default_ai_get_self(), NULL);
     FC_FREE(city_data);
   }
-}
-
-/**************************************************************************
-  Write ai city segments to savefile
-**************************************************************************/
-void ai_city_save(struct section_file *file, const struct city *pcity,
-                  const char *citystr)
-{
-  struct ai_city *city_data = def_ai_city_data(pcity);
-
-  /* FIXME: remove this when the urgency is properly recalculated. */
-  secfile_insert_int(file, city_data->urgency, "%s.ai.urgency", citystr);
-
-  /* avoid fc_rand recalculations on subsequent reload. */
-  secfile_insert_int(file, city_data->building_turn, "%s.ai.building_turn",
-                     citystr);
-  secfile_insert_int(file, city_data->building_wait, "%s.ai.building_wait",
-                     citystr);
-
-  /* avoid fc_rand and expensive recalculations on subsequent reload. */
-  secfile_insert_int(file, city_data->founder_turn, "%s.ai.founder_turn",
-                     citystr);
-  secfile_insert_int(file, city_data->founder_want, "%s.ai.founder_want",
-                     citystr);
-  secfile_insert_bool(file, city_data->founder_boat, "%s.ai.founder_boat",
-                      citystr);
-}
-
-/**************************************************************************
-  Load ai city segment from savefile
-**************************************************************************/
-void ai_city_load(const struct section_file *file, struct city *pcity,
-                  const char *citystr)
-{
-  struct ai_city *city_data = def_ai_city_data(pcity);
-
-  /* FIXME: remove this when the urgency is properly recalculated. */
-  city_data->urgency
-    = secfile_lookup_int_default(file, 0, "%s.ai.urgency", citystr);
-
-  /* avoid fc_rand recalculations on subsequent reload. */
-  city_data->building_turn
-    = secfile_lookup_int_default(file, 0, "%s.ai.building_turn", citystr);
-  city_data->building_wait
-    = secfile_lookup_int_default(file, BUILDING_WAIT_MINIMUM,
-                                 "%s.ai.building_wait", citystr);
-
-  /* avoid fc_rand and expensive recalculations on subsequent reload. */
-  city_data->founder_turn
-    = secfile_lookup_int_default(file, 0, "%s.ai.founder_turn", citystr);
-  city_data->founder_want
-    = secfile_lookup_int_default(file, 0, "%s.ai.founder_want", citystr);
-  city_data->founder_boat
-    = secfile_lookup_bool_default(file, (city_data->founder_want < 0),
-                                  "%s.ai.founder_boat", citystr);
 }

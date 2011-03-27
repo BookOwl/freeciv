@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -20,7 +20,6 @@
 #include "unittype.h"
 
 /* server */
-#include "aiiface.h"
 #include "barbarian.h"
 #include "citytools.h"
 #include "console.h" /* enum rfc_status */
@@ -34,9 +33,8 @@
 
 /* server/scripting */
 #include "api_find.h"
-#include "script_game.h"
+#include "script.h"
 #include "script_signal.h"
-#include "script_types.h"
 
 #include "api_actions.h"
 
@@ -94,12 +92,12 @@ Unit *api_actions_create_unit_full(Player *pplayer, Tile *ptile,
   if (ptransport) {
     /* Extensive check to see if transport and unit are compatible */
     int ret;
-    struct unit *pvirt = unit_virtual_create(pplayer, NULL, ptype,
+    struct unit *pvirt = create_unit_virtual(pplayer, NULL, ptype,
                                              veteran_level);
-    unit_tile_set(pvirt, ptile);
+    pvirt->tile = ptile;
     pvirt->homecity = homecity ? homecity->id : 0;
     ret = can_unit_load(pvirt, ptransport);
-    unit_virtual_destroy(pvirt);
+    destroy_unit_virtual(pvirt);
     if (!ret) {
       log_error("create_unit_full: '%s' cannot transport '%s' here",
                 utype_rule_name(unit_type(ptransport)),
@@ -144,12 +142,10 @@ Player *api_actions_create_player(const char *username,
   SCRIPT_CHECK_ARG_NIL(username, 1, string, NULL);
 
   if (game_was_started()) {
-    status = create_command_newcomer(username, FC_AI_DEFAULT_NAME,
-                                     FALSE, pnation, &pplayer,
+    status = create_command_newcomer(username, FALSE, pnation, &pplayer,
                                      buf, sizeof(buf));
   } else {
-    status = create_command_pregame(username, FC_AI_DEFAULT_NAME,
-                                    FALSE, &pplayer,
+    status = create_command_pregame(username, FALSE, &pplayer,
                                     buf, sizeof(buf));
   }
 

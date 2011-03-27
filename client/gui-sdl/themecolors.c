@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -33,7 +33,7 @@ struct rgbacolor {
 };
 
 struct theme_color_system {
-  struct rgbacolor colors[COLOR_THEME_LAST];
+  struct rgbacolor colors[(THEME_COLOR_LAST - COLOR_LAST)];
 };
 
 static char *color_names[] = {
@@ -150,8 +150,9 @@ struct theme_color_system *theme_color_system_read(struct section_file *file)
   int i;
   struct theme_color_system *colors = fc_malloc(sizeof(*colors));
 
-  fc_assert_ret_val(ARRAY_SIZE(color_names) == COLOR_THEME_LAST, NULL);
-  for (i = 0; i < COLOR_THEME_LAST; i++) {
+  fc_assert_ret_val(ARRAY_SIZE(color_names)
+                    == (THEME_COLOR_LAST - COLOR_LAST), NULL);
+  for (i = 0; i < (THEME_COLOR_LAST - COLOR_LAST); i++) {
     colors->colors[i].r
       = secfile_lookup_int_default(file, 0, "colors.%s0.r", color_names[i]);
     colors->colors[i].g
@@ -173,19 +174,19 @@ void theme_color_system_free(struct theme_color_system *colors)
 {
   int i;
 
-  for (i = 0; i < COLOR_THEME_LAST; i++) {
+  for (i = 0; i < (THEME_COLOR_LAST - COLOR_LAST); i++) {
     if (colors->colors[i].color) {
       color_free(colors->colors[i].color);
     }
   }
-
+  
   free(colors);
 }
 
 /****************************************************************************
   Return the RGBA color, allocating it if necessary.
 ****************************************************************************/
-static struct color *ensure_color_rgba(struct rgbacolor *rgba)
+static struct color *ensure_color(struct rgbacolor *rgba)
 {
   if (!rgba->color) {
     rgba->color = color_alloc_rgba(rgba->r, rgba->g, rgba->b, rgba->a);
@@ -198,5 +199,5 @@ static struct color *ensure_color_rgba(struct rgbacolor *rgba)
 ****************************************************************************/
 struct color *theme_get_color(const struct theme *t, enum theme_color color)
 {
-  return ensure_color_rgba(&theme_get_color_system(t)->colors[color]);
+  return ensure_color(&theme_get_color_system(t)->colors[color]);
 }

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -161,7 +161,7 @@ static void ai_select_tech(struct player *pplayer,
               "turn end want: %d", values[id]);
     }
   } advance_index_iterate_end;
-#endif /* REALLY_DEBUG_THIS */
+#endif
   if (choice) {
     choice->choice = newtech;
     choice->want = values[newtech] / num_cities_nonzero;

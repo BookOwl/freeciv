@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -172,20 +172,23 @@ void update_info_label(void)
   update_timeout_label();
 
   /* update tooltips. */
-  gtk_widget_set_tooltip_text(econ_ebox,
+  gtk_tooltips_set_tip(main_tips, econ_ebox,
 		       _("Shows your current luxury/science/tax rates;"
-			 "click to toggle them."));
+			 "click to toggle them."), "");
 
-  gtk_widget_set_tooltip_text(bulb_ebox, get_bulb_tooltip());
-  gtk_widget_set_tooltip_text(sun_ebox, get_global_warming_tooltip());
-  gtk_widget_set_tooltip_text(flake_ebox, get_nuclear_winter_tooltip());
-  gtk_widget_set_tooltip_text(government_ebox, get_government_tooltip());
+  gtk_tooltips_set_tip(main_tips, bulb_ebox, get_bulb_tooltip(), "");
+  gtk_tooltips_set_tip(main_tips, sun_ebox, get_global_warming_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, flake_ebox, get_nuclear_winter_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, government_ebox, get_government_tooltip(),
+		       "");
 }
 
 /**************************************************************************
   This function is used to animate the mouse cursor. 
 **************************************************************************/
-static gboolean anim_cursor_cb(gpointer data)
+static gint anim_cursor_cb(gpointer data)
 {
   if (!cursor_timer_id) {
     return FALSE;
@@ -215,7 +218,7 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
 {
   cursor_type = new_cursor_type;
   if (!cursor_timer_id) {
-    cursor_timer_id = g_timeout_add(CURSOR_INTERVAL, anim_cursor_cb, NULL);
+    cursor_timer_id = gtk_timeout_add(CURSOR_INTERVAL, anim_cursor_cb, NULL);
   }
 }
 
@@ -401,15 +404,14 @@ static GdkRectangle dirty_rects[MAX_DIRTY_RECTS];
 static bool is_flush_queued = FALSE;
 
 /**************************************************************************
-  A callback invoked as a result of g_idle_add, this function simply
+  A callback invoked as a result of gtk_idle_add, this function simply
   flushes the mapview canvas.
 **************************************************************************/
-static gboolean unqueue_flush(gpointer data)
+static gint unqueue_flush(gpointer data)
 {
   flush_dirty();
   is_flush_queued = FALSE;
-
-  return FALSE;
+  return 0;
 }
 
 /**************************************************************************
@@ -420,7 +422,7 @@ static gboolean unqueue_flush(gpointer data)
 static void queue_flush(void)
 {
   if (!is_flush_queued) {
-    g_idle_add(unqueue_flush, NULL);
+    gtk_idle_add(unqueue_flush, NULL);
     is_flush_queued = TRUE;
   }
 }

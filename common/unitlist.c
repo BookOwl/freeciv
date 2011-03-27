@@ -12,7 +12,7 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -144,8 +144,7 @@ bool can_units_do_base_gui(const struct unit_list *punits,
                            enum base_gui_type base_gui)
 {
   unit_list_iterate(punits, punit) {
-    struct base_type *pbase = get_base_by_gui_type(base_gui, punit,
-                                                   unit_tile(punit));
+    struct base_type *pbase = get_base_by_gui_type(base_gui, punit, punit->tile);
 
     if (pbase) {
       /* Some unit can build base of given gui_type */
@@ -164,7 +163,7 @@ bool can_units_do_diplomat_action(const struct unit_list *punits,
 {
   unit_list_iterate(punits, punit) {
     if (is_diplomat_unit(punit)
-	&& diplomat_can_do_action(punit, action, unit_tile(punit))) {
+	&& diplomat_can_do_action(punit, action, punit->tile)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -225,7 +224,7 @@ bool units_can_unload(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
     if (can_unit_unload(punit, game_unit_by_number(punit->transported_by))
-	&& can_unit_exist_at_tile(punit, unit_tile(punit))) {
+	&& can_unit_exist_at_tile(punit, punit->tile)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -241,7 +240,7 @@ bool units_have_activity_on_tile(const struct unit_list *punits,
 				 enum unit_activity activity)
 {
   unit_list_iterate(punits, punit) {
-    if (is_unit_activity_on_tile(activity, unit_tile(punit))) {
+    if (is_unit_activity_on_tile(activity, punit->tile)) {
       return TRUE;
     }
   } unit_list_iterate_end;

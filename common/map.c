@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 #include <string.h>             /* strlen */
 
@@ -329,7 +329,7 @@ void map_init_topology(bool set_sizes)
 }
 
 /***************************************************************
-  Initialize tile structure
+...
 ***************************************************************/
 static void tile_init(struct tile *ptile)
 {
@@ -437,20 +437,14 @@ struct tile *index_to_tile(int index)
 }
 
 /***************************************************************
-  Free memory associated with one tile.
+...
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
   unit_list_destroy(ptile->units);
-
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
-  }
-
-  if (ptile->label) {
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
   }
 }
 
@@ -582,7 +576,7 @@ int map_vector_to_sq_distance(int dx, int dy)
 }
 
 /***************************************************************
-  Return real distance between two tiles.
+...
 ***************************************************************/
 int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -593,7 +587,7 @@ int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return squared distance between two tiles.
+...
 ***************************************************************/
 int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -606,7 +600,7 @@ int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return Manhattan distance between two tiles.
+...
 ***************************************************************/
 int map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -643,11 +637,9 @@ bool is_safe_ocean(const struct tile *ptile)
 }
 
 /***************************************************************
-  Can tile be irrigated by given unit? Unit can be NULL to check if
-  any settler type unit of any player can irrigate.
+...
 ***************************************************************/
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit)
+bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
   struct terrain* pterrain = tile_terrain(ptile);
 
@@ -655,7 +647,27 @@ bool can_be_irrigated(const struct tile *ptile,
     return FALSE;
   }
 
-  return get_tile_bonus(ptile, punit, EFT_IRRIG_POSSIBLE) > 0;
+  if (tile_has_special(ptile, S_RIVER)
+   || tile_has_special(ptile, S_IRRIGATION)
+   || terrain_has_flag(pterrain, TER_OCEANIC)) {
+    return TRUE;
+  }
+
+  cardinal_adjc_iterate(ptile, tile1) {
+    struct terrain* pterrain1 = tile_terrain(tile1);
+
+    if (T_UNKNOWN == pterrain1) {
+      continue;
+    }
+
+    if (tile_has_special(tile1, S_RIVER)
+     || tile_has_special(tile1, S_IRRIGATION)
+     || terrain_has_flag(pterrain1, TER_OCEANIC)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
@@ -845,7 +857,7 @@ int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
 {
   return tile_move_cost_ptrs(punit, unit_owner(punit),
-                             unit_tile(punit), ptile);
+                             punit->tile, ptile);
 }
 
 /***************************************************************
@@ -858,7 +870,7 @@ int map_move_cost(const struct player *pplayer,
 }
 
 /***************************************************************
-  Are two tiles adjacent to each other.
+...
 ***************************************************************/
 bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 {
@@ -875,9 +887,6 @@ bool same_pos(const struct tile *tile1, const struct tile *tile2)
   return (tile1 == tile2);
 }
 
-/***************************************************************
-  Is given position real position
-***************************************************************/
 bool is_real_map_pos(int x, int y)
 {
   return normalize_map_pos(&x, &y);
@@ -1579,7 +1588,7 @@ struct startpos *map_startpos_new(struct tile *ptile)
   fc_assert_ret_val(NULL != map.startpos_table, NULL);
 
   psp = startpos_new(ptile);
-  startpos_hash_replace(map.startpos_table, tile_hash_key(ptile), psp);
+  startpos_hash_replace(map.startpos_table, ptile, psp);
   return psp;
 }
 
@@ -1594,7 +1603,7 @@ struct startpos *map_startpos_get(const struct tile *ptile)
   fc_assert_ret_val(NULL != ptile, NULL);
   fc_assert_ret_val(NULL != map.startpos_table, NULL);
 
-  startpos_hash_lookup(map.startpos_table, tile_hash_key(ptile), &psp);
+  startpos_hash_lookup(map.startpos_table, ptile, &psp);
   return psp;
 }
 
@@ -1607,7 +1616,7 @@ bool map_startpos_remove(struct tile *ptile)
   fc_assert_ret_val(NULL != ptile, FALSE);
   fc_assert_ret_val(NULL != map.startpos_table, FALSE);
 
-  return startpos_hash_remove(map.startpos_table, tile_hash_key(ptile));
+  return startpos_hash_remove(map.startpos_table, ptile);
 }
 
 /****************************************************************************

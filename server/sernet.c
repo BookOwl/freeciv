@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -59,24 +59,21 @@
 #include <winsock.h>
 #endif
 
-/* utility */
-#include "capability.h"
 #include "fciconv.h"
+
+#include "capability.h"
+#include "dataio.h"
+#include "events.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
+#include "packets.h"
 #include "shared.h"
 #include "support.h"
 #include "timing.h"
 
-/* common */
-#include "dataio.h"
-#include "events.h"
-#include "game.h"
-#include "packets.h"
-
-/* server */
 #include "auth.h"
 #include "connecthand.h"
 #include "console.h"
@@ -172,7 +169,7 @@ static bool readline_handled_input = FALSE;
 static bool readline_initialized = FALSE;
 
 /*****************************************************************************
-  Readline callback for input.
+...
 *****************************************************************************/
 static void handle_readline_input_callback(char *line)
 {
@@ -232,8 +229,7 @@ static void close_connection(struct connection *pconn)
 }
 
 /*****************************************************************************
-  Close all network stuff: connections, listening sockets, metaserver
-  connection...
+...
 *****************************************************************************/
 void close_connections_and_socket(void)
 {
@@ -306,8 +302,8 @@ static void really_close_connections(void)
 }
 
 /****************************************************************************
-  Break a client connection. You should almost always use
-  connection_close_server() instead of calling this function directly.
+  Break a client connection. You should almost always use connection_close()
+  instead of calling this function directly.
 ****************************************************************************/
 static void server_conn_close_callback(struct connection *pconn)
 {
@@ -336,7 +332,7 @@ static void cut_lagging_connection(struct connection *pconn)
      * disconnected and reconnect. */
     log_verbose("connection (%s) cut due to lagging player",
                 conn_description(pconn));
-    connection_close_server(pconn, _("lagging connection"));
+    connection_close(pconn, _("lagging connection"));
   }
 }
 
@@ -390,7 +386,7 @@ void flush_packets(void)
         if(FD_ISSET(pconn->sock, &exceptfs)) {
           log_verbose("connection (%s) cut due to exception data",
                       conn_description(pconn));
-          connection_close_server(pconn, _("network exception"));
+          connection_close(pconn, _("network exception"));
         } else {
 	  if(pconn->send_buffer && pconn->send_buffer->ndata > 0) {
 	    if(FD_ISSET(pconn->sock, &writefs)) {
@@ -461,7 +457,7 @@ static void incoming_client_packets(struct connection *pconn)
 #endif
 
     if (!command_ok) {
-      connection_close_server(pconn, _("rejected"));
+      connection_close(pconn, _("rejected"));
     }
   }
 
@@ -544,7 +540,7 @@ enum server_events server_sniff_all_input(void)
       if (connections && conn_list_size(game.est_connections) == 0) {
 	if (last_noplayers != 0) {
 	  if (time(NULL) > last_noplayers + srvarg.quitidle) {
-	    save_game_auto("Lost all connections", AS_QUITIDLE);
+	    save_game_auto("Lost all connections", "quitidle");
             log_normal(_("Restarting for lack of players."));
             set_meta_message_string("restarting for lack of players");
 	    (void) send_server_info_to_metaserver(META_INFO);
@@ -592,7 +588,7 @@ enum server_events server_sniff_all_input(void)
           } else {
             log_verbose("connection (%s) cut due to ping timeout",
                         conn_description(pconn));
-            connection_close_server(pconn, _("ping timeout"));
+            connection_close(pconn, _("ping timeout"));
           }
         } else {
           connection_ping(pconn);
@@ -606,7 +602,7 @@ enum server_events server_sniff_all_input(void)
       if (srvarg.auth_enabled
           && !pconn->server.is_closing
           && pconn->server.status != AS_ESTABLISHED) {
-        auth_process_status(pconn);
+        process_authentication_status(pconn);
       }
     } conn_list_iterate_end
 
@@ -740,7 +736,7 @@ enum server_events server_sniff_all_input(void)
           && FD_ISSET(pconn->sock, &exceptfs)) {
         log_verbose("connection (%s) cut due to exception data",
                     conn_description(pconn));
-        connection_close_server(pconn, _("network exception"));
+        connection_close(pconn, _("network exception"));
       }
     }
 #ifdef GGZ_SERVER
@@ -828,10 +824,10 @@ enum server_events server_sniff_all_input(void)
           /* We read packets; now handle them. */
           incoming_client_packets(pconn);
         } else if (-2 == nb) {
-          connection_close_server(pconn, _("client disconnected"));
+          connection_close(pconn, _("client disconnected"));
         } else {
           /* Read failure; the connection is closed. */
-          connection_close_server(pconn, _("read error"));
+          connection_close(pconn, _("read error"));
         }
       }
 
@@ -1059,7 +1055,7 @@ int server_open_socket(void)
       name_count = 2;
     }
   }
-#endif /* IPv6 support */
+#endif
 
   cause = NULL;
   on = 1;
@@ -1096,9 +1092,9 @@ int server_open_socket(void)
                   fc_strerror(fc_get_errno()));
         sockaddr_debug(&names[i]);
       }
-#endif /* IPV6_V6ONLY */
+#endif
     }
-#endif /* IPv6 support */
+#endif
 
     if (bind(s, &names[i].saddr, sockaddr_size(&names[i])) == -1) {
       cause = "bind";
@@ -1147,7 +1143,7 @@ int server_open_socket(void)
   if (srvarg.announce == ANNOUNCE_IPV6) {
     lan_family = AF_INET6;
   } else
-#endif /* IPV6 support */
+#endif /* IPV6 used */
   {
     lan_family = AF_INET;
   }
@@ -1249,7 +1245,7 @@ void init_connections(void)
 }
 
 /**************************************************************************
-  Starts processing of request packet from client.
+...
 **************************************************************************/
 static void start_processing_request(struct connection *pconn,
                                      int request_id)
@@ -1264,7 +1260,7 @@ static void start_processing_request(struct connection *pconn,
 }
 
 /**************************************************************************
-  Finish processing of request packet from client.
+...
 **************************************************************************/
 static void finish_processing_request(struct connection *pconn)
 {
@@ -1292,7 +1288,7 @@ static void connection_ping(struct connection *pconn)
 }
 
 /**************************************************************************
-  Handle response to ping.
+...
 **************************************************************************/
 void handle_conn_pong(struct connection *pconn)
 {
@@ -1313,7 +1309,7 @@ void handle_conn_pong(struct connection *pconn)
 }
 
 /**************************************************************************
-  Send ping time info about all connections to all connections.
+...
 **************************************************************************/
 static void send_ping_times_to_all(void)
 {
@@ -1397,8 +1393,6 @@ static void send_lanserver_response(void)
   char port[256];
   char version[256];
   char players[256];
-  int nhumans;
-  char humans[256];
   char status[256];
   struct data_out dout;
   union fc_sockaddr addr;
@@ -1432,7 +1426,7 @@ static void send_lanserver_response(void)
     log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return;
   }
-#endif /* HAVE_WINSOCK */
+#endif
 
   if (setsockopt(socksend, SOL_SOCKET, SO_BROADCAST, 
                  (const char*)&setting, sizeof(setting))) {
@@ -1465,15 +1459,6 @@ static void send_lanserver_response(void)
 
    fc_snprintf(players, sizeof(players), "%d",
                normal_player_count());
-
-   nhumans = 0;
-   players_iterate(pplayer) {
-     if (pplayer->is_alive && !pplayer->ai_controlled) {
-       nhumans++;
-     }
-   } players_iterate_end;
-   fc_snprintf(humans, sizeof(humans), "%d", nhumans);
-
    fc_snprintf(port, sizeof(port), "%d",
               srvarg.port );
 
@@ -1484,7 +1469,6 @@ static void send_lanserver_response(void)
   dio_put_string(&dout, version);
   dio_put_string(&dout, status);
   dio_put_string(&dout, players);
-  dio_put_string(&dout, humans);
   dio_put_string(&dout, get_meta_message_string());
   size = dio_output_used(&dout);
 

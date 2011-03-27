@@ -14,7 +14,7 @@
 #ifndef FC__API_METHODS_H
 #define FC__API_METHODS_H
 
-#include "script_types.h"
+#include "api_types.h"
 
 /* Building Type */
 bool api_methods_building_type_is_wonder(Building_Type *pbuilding);
@@ -28,8 +28,6 @@ const char *api_methods_building_type_name_translation(Building_Type
 /* City */
 bool api_methods_city_has_building(City *pcity, Building_Type *building);
 int api_methods_city_map_sq_radius(City *pcity);
-int api_methods_city_size_get(City *pcity);
-Tile *api_methods_city_tile_get(City *pcity);
 
 /* Government */
 const char *api_methods_government_rule_name(Government *pgovernment);
@@ -74,8 +72,6 @@ Unit_List_Link *api_methods_private_tile_unit_list_head(Tile *ptile);
 
 /* Unit */
 bool api_methods_unit_city_can_be_built_here(Unit *punit);
-Tile *api_methods_unit_tile_get(Unit * punit);
-bool api_methods_unit_teleport(Unit *punit, Tile *dest);
 
 /* Unit Type */
 bool api_methods_unit_type_has_flag(Unit_Type *punit_type, const char *flag);

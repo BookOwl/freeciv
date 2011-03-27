@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -377,7 +377,7 @@ void update_intel_dialog(struct player *p)
           sz_strlcpy(buf, government_name_for_player(p));
           break;
         case LABEL_CAPITAL:
-          pcity = player_capital(p);
+          pcity = player_palace(p);
           /* TRANS: "unknown" location */
           sz_strlcpy(buf, (!pcity) ? _("(unknown)") : city_name(pcity));
           break;

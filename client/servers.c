@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -278,9 +278,9 @@ static void my_uname(char *buf, size_t len)
     fc_snprintf(buf, len, "%s %ld.%ld [%s]",
                 osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
   }
-#else  /* WIN32_NATIVE */
+#else
   fc_snprintf(buf, len, "unknown unknown [unknown]");
-#endif /* WIN32_NATIVE */
+#endif
 #endif /* HAVE_UNAME */
 }
 
@@ -339,7 +339,7 @@ static void meta_read_response(struct server_scan *scan)
     scan->meta.fp = fc_fopen(filename, "w+b");
 #else
     scan->meta.fp = tmpfile();
-#endif /* WIN32_NATIVE */
+#endif
 
     if (!scan->meta.fp) {
       scan->error_func(scan, _("Could not open temp file."));
@@ -443,7 +443,7 @@ static bool begin_metaserver_scan(struct server_scan *scan)
       name_count = 2;
     }
   }
-#endif /* IPv6 support */
+#endif
 
   /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */  
   for (i = 0; i < name_count; i++) {
@@ -602,7 +602,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   if (announce == ANNOUNCE_IPV6) {
     family = AF_INET6;
   } else
-#endif /* IPv6 support */
+#endif
   {
     family = AF_INET;
   }
@@ -761,7 +761,6 @@ get_lan_server_list(struct server_scan *scan)
   char version[256];
   char status[256];
   char players[256];
-  char humans[256];
   char message[1024];
   bool found_new = FALSE;
 
@@ -789,7 +788,6 @@ get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, version, sizeof(version));
     dio_get_string(&din, status, sizeof(status));
     dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, humans, sizeof(humans));
     dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
@@ -849,7 +847,7 @@ get_lan_server_list(struct server_scan *scan)
     pserver->version = fc_strdup(version);
     pserver->state = fc_strdup(status);
     pserver->nplayers = atoi(players);
-    pserver->humans = atoi(humans);
+    pserver->humans = -1;
     pserver->message = fc_strdup(message);
     pserver->players = NULL;
     found_new = TRUE;

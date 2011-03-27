@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -215,8 +215,8 @@ void popup_caravan_dialog(struct unit *pUnit,
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
-
+                           pUnit->tile);
+  
   /* setup widget size and start position */
     
   pBuf = pWindow->prev;

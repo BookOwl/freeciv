@@ -14,8 +14,6 @@
       <menuitem action="RELOAD_TILESET" />
       <menuitem action="GAME_SAVE" />
       <menuitem action="GAME_SAVE_AS" />
-      <menuitem action="MAPIMG_SAVE" />
-      <menuitem action="MAPIMG_SAVE_AS" />
       <separator />
       <menuitem action="LEAVE" />
       <menuitem action="QUIT" />
@@ -74,8 +72,6 @@
       <menuitem action="SELECT_SAME_TYPE_TILE" />
       <menuitem action="SELECT_SAME_TYPE_CONT" />
       <menuitem action="SELECT_SAME_TYPE" />
-      <separator />
-      <menuitem action="SELECT_DLG" />
       <separator />
       <menuitem action="UNIT_WAIT" />
       <menuitem action="UNIT_DONE" />

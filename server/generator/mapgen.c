@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -1301,7 +1301,7 @@ FIXME: Some continent numbers are unused at the end of this function, fx
   based on the map.server.size server parameter and the specified topology.
   If not map.xsize and map.ysize will be used.
 **************************************************************************/
-bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
+void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 {
   /* save the current random state: */
   RANDOM_STATE rstate = fc_rand_state();
@@ -1319,10 +1319,7 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
   /* also, don't delete (the handcrafted!) tiny islands in a scenario */
   if (map.server.generator != MAPGEN_SCENARIO) {
     generator_init_topology(autosize);
-    /* Map can be already allocated, if we failed first map generation */
-    if (map_is_empty()) {
-      map_allocate();
-    }
+    map_allocate();
     adjust_terrain_param();
     /* if one mapgenerator fails, it will choose another mapgenerator */
     /* with a lower number to try again */
@@ -1409,7 +1406,8 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
    * provides them. */
   if (0 == map_startpos_count()) {
     enum map_startpos mode = MAPSTARTPOS_ALL;
-
+    bool success;
+    
     switch (map.server.generator) {
     case MAPGEN_SCENARIO:
     case MAPGEN_RANDOM:
@@ -1441,15 +1439,13 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
       }
       break;
     }
-
+    
     for(;;) {
-      bool success;
-
       success = create_start_positions(mode, initial_unit);
       if (success) {
         break;
       }
-
+      
       switch(mode) {
         case MAPSTARTPOS_SINGLE:
           log_verbose("Falling back to startpos=2or3");
@@ -1464,9 +1460,8 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
           mode = MAPSTARTPOS_VARIABLE;
           break;
         default:
-          log_error(_("The server couldn't allocate starting positions."));
-          destroy_tmap();
-          return FALSE;
+          fc_assert_exit_msg(FALSE, "The server couldn't allocate "
+                             "starting positions.");
       }
     }
   }
@@ -1475,8 +1470,6 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
   destroy_tmap();
 
   print_mapgen_map();
-
-  return TRUE;
 }
 
 /**************************************************************************
@@ -1617,7 +1610,7 @@ static struct tile *get_random_map_position_from_state(
 }
 
 /**************************************************************************
-  Allocate and initialize new terrain_select structure.
+  ...
 **************************************************************************/
 static struct terrain_select *tersel_new(int weight,
                                          enum mapgen_terrain_property target,
@@ -1639,7 +1632,7 @@ static struct terrain_select *tersel_new(int weight,
 }
 
 /**************************************************************************
-  Free resources allocated for terrain_select structure.
+  ...
 **************************************************************************/
 static void tersel_free(struct terrain_select *ptersel)
 {
@@ -2414,7 +2407,7 @@ static void mapgenerator3(void)
 }
 
 /**************************************************************************
-  Generator for placing a couple of players to each island.
+...
 **************************************************************************/
 static void mapgenerator4(void)
 {

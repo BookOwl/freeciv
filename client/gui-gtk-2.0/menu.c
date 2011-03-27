@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -59,7 +59,6 @@
 #include "ratesdlg.h"
 #include "repodlgs.h"
 #include "spaceshipdlg.h"
-#include "unitselect.h"
 #include "wldlg.h"
 
 #include "menu.h"
@@ -158,23 +157,7 @@ static void save_game_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void save_game_as_callback(GtkAction *action, gpointer data)
 {
-  save_game_dialog_popup();
-}
-
-/****************************************************************************
-  Action "SAVE_MAPIMG" callback.
-****************************************************************************/
-static void save_mapimg_callback(GtkAction *action, gpointer data)
-{
-  mapimg_client_save(NULL);
-}
-
-/****************************************************************************
-  Action "SAVE_MAPIMG_AS" callback.
-****************************************************************************/
-static void save_mapimg_as_callback(GtkAction *action, gpointer data)
-{
-  save_mapimg_dialog_popup();
+  popup_save_dialog(FALSE);
 }
 
 /****************************************************************
@@ -814,7 +797,7 @@ static void scenario_properties_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void save_scenario_callback(GtkAction *action, gpointer data)
 {
-  save_scenario_dialog_popup();
+  popup_save_dialog(TRUE);
 }
 
 /****************************************************************
@@ -855,14 +838,6 @@ static void select_same_type_cont_callback(GtkAction *action, gpointer data)
 static void select_same_type_callback(GtkAction *action, gpointer data)
 {
   request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_ALL);
-}
-
-/*****************************************************************************
-  Open unit selection dialog.
-*****************************************************************************/
-static void select_dialog_callback(GtkAction *action, gpointer data)
-{
-  unit_select_dialog_popup(NULL);
 }
 
 /****************************************************************
@@ -1137,7 +1112,7 @@ static void build_fortress_callback(GtkAction *action, gpointer data)
     /* FIXME: this can provide different actions for different units...
      * not good! */
     struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, unit_tile(punit));
+                                                   punit, punit->tile);
 
     if (pbase && can_unit_do_activity_base(punit, pbase->item_number)) {
       request_new_unit_activity_base(punit, pbase);
@@ -1281,10 +1256,6 @@ static GtkActionGroup *get_safe_group(void)
        NULL, NULL, G_CALLBACK(save_game_callback)},
       {"GAME_SAVE_AS", GTK_STOCK_SAVE_AS, _("Save Game _As..."),
        NULL, NULL, G_CALLBACK(save_game_as_callback)},
-      {"MAPIMG_SAVE", NULL, _("Save Map _Image"),
-       NULL, NULL, G_CALLBACK(save_mapimg_callback)},
-      {"MAPIMG_SAVE_AS", NULL, _("Save _Map Image As ..."),
-       NULL, NULL, G_CALLBACK(save_mapimg_as_callback)},
       {"LEAVE", NULL, _("_Leave"),
        NULL, NULL, G_CALLBACK(leave_callback)},
       {"QUIT", GTK_STOCK_QUIT, _("_Quit"),
@@ -1512,9 +1483,6 @@ static GtkActionGroup *get_unit_group(void)
       {"SELECT_SAME_TYPE", NULL, _("Same Type _Everywhere"),
        "<shift>x", NULL, G_CALLBACK(select_same_type_callback)},
 
-      {"SELECT_DLG", NULL, _("Unit selection dialog"),
-       NULL, NULL, G_CALLBACK(select_dialog_callback)},
-
       {"UNIT_WAIT", NULL, _("_Wait"),
        "w", NULL, G_CALLBACK(unit_wait_callback)},
       {"UNIT_DONE", NULL, _("_Done"),
@@ -1709,8 +1677,7 @@ GtkWidget *setup_menus(GtkWidget *window)
 
   /* Creates the UI manager. */
   ui_manager = gtk_ui_manager_new();
-  /* FIXME - following line commented out due to Gna bug #17162 */
-  /* gtk_ui_manager_set_add_tearoffs(ui_manager, TRUE); */
+  gtk_ui_manager_set_add_tearoffs(ui_manager, TRUE);
   g_signal_connect(ui_manager, "add_widget",
                    G_CALLBACK(add_widget_callback), menubar);
 
@@ -1949,14 +1916,14 @@ void real_menus_update(void)
     unit_list_iterate(punits, punit) {
       fc_assert((ptile==NULL) == (ptype==NULL));
       if (ptile || ptype) {
-        if (unit_tile(punit) != ptile) {
+        if (punit->tile != ptile) {
           units_all_same_tile = FALSE;
         }
         if (unit_type(punit) != ptype) {
           units_all_same_type = FALSE;
         }
       } else {
-        ptile = unit_tile(punit);
+        ptile = punit->tile;
         ptype = unit_type(punit);
       }
     } unit_list_iterate_end;
@@ -2093,7 +2060,7 @@ void real_menus_update(void)
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-      if (tile_city(unit_tile(punit))) {
+      if (tile_city(punit->tile)) {
         city_on_tile = TRUE;
         break;
       }
@@ -2115,7 +2082,7 @@ void real_menus_update(void)
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-      if (tile_has_special(unit_tile(punit), S_ROAD)) {
+      if (tile_has_special(punit->tile, S_ROAD)) {
         has_road = TRUE;
         break;
       }
@@ -2174,13 +2141,13 @@ void real_menus_update(void)
   if (units_all_same_tile) {
     struct unit *punit = unit_list_get(punits, 0);
 
-    pterrain = tile_terrain(unit_tile(punit));
+    pterrain = tile_terrain(punit->tile);
     if (pterrain->irrigation_result != T_NONE
         && pterrain->irrigation_result != pterrain) {
       fc_snprintf(irrtext, sizeof(irrtext), _("Change to %s (_I)"),
-                  get_tile_change_menu_text(unit_tile(punit),
+                  get_tile_change_menu_text(punit->tile,
                                             ACTIVITY_IRRIGATE));
-    } else if (tile_has_special(unit_tile(punit), S_IRRIGATION)
+    } else if (tile_has_special(punit->tile, S_IRRIGATION)
                && player_knows_techs_with_flag(unit_owner(punit),
                                                TF_FARMLAND)) {
       sz_strlcpy(irrtext, _("Bu_ild Farmland"));
@@ -2191,7 +2158,7 @@ void real_menus_update(void)
     if (pterrain->mining_result != T_NONE
         && pterrain->mining_result != pterrain) {
       fc_snprintf(mintext, sizeof(mintext), _("Change to %s (_M)"),
-                  get_tile_change_menu_text(unit_tile(punit), ACTIVITY_MINE));
+                  get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
     } else {
       sz_strlcpy(mintext, _("Build _Mine"));
     }
@@ -2199,7 +2166,7 @@ void real_menus_update(void)
     if (pterrain->transform_result != T_NONE
         && pterrain->transform_result != pterrain) {
       fc_snprintf(transtext, sizeof(transtext), _("Transf_orm to %s"),
-                  get_tile_change_menu_text(unit_tile(punit),
+                  get_tile_change_menu_text(punit->tile,
                                             ACTIVITY_TRANSFORM));
     } else {
       sz_strlcpy(transtext, _("Transf_orm Terrain"));

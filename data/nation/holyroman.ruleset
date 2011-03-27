@@ -24,13 +24,11 @@ leaders = {
  "Ferdinandus I",               "Male"
  "Carolus VII Albertus",        "Male"
  "Franciscus II",               "Male"
- "Maria Theresia",              "Female"
 }
 
 ruler_titles = {
  "government",      "male_title",       "female_title"
- "Anarchy",        _("Pretender %s"),   _("?female:Pretender %s")
- "Democracy",      _("Chancellor %s"),  _("?female:Chancellor %s") 
+ "Republic",       _("Chancellor %s"),  _("?female:Chancellor %s") 
  "Fundamentalism", _("Pope %s"),        _("?female:Popess %s")
  "Monarchy",       _("Emperor %s"),     _("?female:Empress %s")
 }

@@ -16,8 +16,6 @@
 /* common */
 #include "fc_types.h"
 
-struct adv_data;
-
 enum choice_type {
   CT_NONE = 0,
   CT_BUILDING = 1,
@@ -46,6 +44,13 @@ struct ai_city {
   int building_turn;            /* only recalculate every Nth turn */
   int building_wait;            /* for weighting values */
 #define BUILDING_WAIT_MINIMUM (1)
+
+  /* building desirabilities - easiest to handle them here -- Syela */
+  /* The units of building_want are output
+   * (shields/gold/luxuries) multiplied by a priority
+   * (SHIELD_WEIGHTING, etc or ai->shields_priority, etc)
+   */
+  int building_want[B_LAST];
 
   struct ai_choice choice;      /* to spend gold in the right place only */
 
@@ -83,24 +88,15 @@ struct ai_city {
 
 void ai_manage_cities(struct player *pplayer);
 
+int ai_eval_calc_city(struct city *pcity, struct ai_data *ai);
+
 void ai_city_alloc(struct city *pcity);
 void ai_city_free(struct city *pcity);
 
-struct section_file;
-void ai_city_save(struct section_file *file, const struct city *pcity,
-                  const char *citystr);
-void ai_city_load(const struct section_file *file, struct city *pcity,
-                  const char *citystr);
-
-void want_techs_for_improvement_effect(struct player *pplayer,
-                                       const struct city *pcity,
-                                       const struct impr_type *pimprove,
-                                       struct tech_vector *needed_techs,
-                                       int building_want);
-
-void dont_want_tech_obsoleting_impr(struct player *pplayer,
-                                    const struct city *pcity,
-                                    const struct impr_type *pimprove,
-                                    int building_want);
+void want_tech_for_improvement_effect(struct player *pplayer,
+                                      const struct city *pcity,
+                                      const struct impr_type *pimprove,
+                                      const struct advance *tech,
+                                      int building_want);
 
 #endif  /* FC__AICITY_H */

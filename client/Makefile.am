@@ -16,9 +16,6 @@ endif
 if CLIENT_GUI_XAW
 GUI_SUBDIRS += gui-xaw
 endif
-if CLIENT_GUI_QT
-GUI_SUBDIRS += gui-qt
-endif
 if CLIENT_GUI_STUB
 GUI_SUBDIRS += gui-stub
 endif
@@ -53,12 +50,7 @@ endif
 
 SUBDIRS = $(GUI_SUBDIRS) $(CLI_INCLUDE) agents
 
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility -I$(srcdir)/include \
-	-I$(top_srcdir)/common -I$(top_srcdir)/common/aicore \
-	-I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) \
-	$(MAPIMG_WAND_CFLAGS) \
-	$(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/include -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/agents $(CLIENT_CFLAGS) $(SOUND_CFLAGS) $(LIBGGZ_INCLUDES) $(GGZMOD_INCLUDES) $(GGZ_GTK_INCLUDES)
 
 # Build client common functionality in to library
 # instead linking them directly to civclient. This is necessary
@@ -155,7 +147,6 @@ freeciv_gtk2_LDADD = \
  libfcgui-gtk2.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_gtk2_LIBS)
 endif
 
@@ -171,7 +162,6 @@ freeciv_sdl_LDADD = \
  libfcgui-sdl.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_sdl_LIBS)
 endif
 
@@ -186,23 +176,7 @@ freeciv_xaw_LDADD = \
  libfcgui-xaw.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_xaw_LIBS)
-endif
-
-if CLIENT_GUI_QT
-bin_PROGRAMS += freeciv-qt
-noinst_LTLIBRARIES += libfcgui-qt.la
-libfcgui_qt_la_SOURCES = $(freeciv_client_src)
-libfcgui_qt_la_LIBADD = gui-qt/libgui-qt.la agents/libagents.la
-freeciv_qt_SOURCES = dummycxx.cpp
-freeciv_qt_LDFLAGS = $(GUI_qt_LDFLAGS) $(GGZMOD_LDFLAGS)
-freeciv_qt_LDADD = \
- libfcgui-qt.la \
- $(top_builddir)/common/libfreeciv.la \
- $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
- $(GUI_qt_LIBS)
 endif
 
 if CLIENT_GUI_FTWL
@@ -217,7 +191,6 @@ freeciv_ftwl_LDADD = \
  $(top_builddir)/common/libfreeciv.la \
  $(top_builddir)/utility/ftwl/libftwl.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_ftwl_LIBS)
 endif
 
@@ -233,7 +206,6 @@ freeciv_win32_LDADD = \
  libfcgui-win32.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_win32_LIBS)
 endif
 
@@ -248,6 +220,5 @@ freeciv_stub_LDADD = \
  libfcgui-stub.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
  $(GUI_stub_LIBS)
 endif

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -588,7 +588,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
 	  G_CALLBACK(gui_dialog_delete_tab_handler), dlg);
 
       fc_snprintf(buf, sizeof(buf), _("Close Tab:\n%s"), _("Ctrl+W"));
-      gtk_widget_set_tooltip_text(button, buf);
+      gtk_tooltips_set_tip(main_tips, button, buf, "");
 
       image = gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
       gtk_widget_set_size_request(button, w, h);
