@@ -14,7 +14,7 @@
 #ifndef FC__COMMANDS_H
 #define FC__COMMANDS_H
 
-#include "connection.h"         /* enum cmdlevel */
+#include "connection.h"		/* for enum cmdlevel_id */
 
 enum cmd_echo {
   CMD_ECHO_NONE = 0,
@@ -71,9 +71,6 @@ enum command_id {
   CMD_FIRSTLEVEL,
   CMD_TIMEOUT,
   CMD_CANCELVOTE,
-  CMD_IGNORE,
-  CMD_UNIGNORE,
-  CMD_PLAYERCOLOR,
 
   /* potentially harmful: */
   CMD_END_GAME,
@@ -84,15 +81,6 @@ enum command_id {
   CMD_READ_SCRIPT,
   CMD_WRITE_SCRIPT,
   CMD_RESET,
-  CMD_LUA,
-  CMD_LUAFILE,
-  CMD_KICK,
-#ifdef DEBUG
-  CMD_OLDSAVE,
-#endif /* DEBUG */
-  CMD_DELEGATE,
-  CMD_FCDB,
-  CMD_MAPIMG,
 
   /* undocumented */
   CMD_RFCSTYLE,
@@ -112,7 +100,7 @@ const char *command_synopsis(const struct command *pcommand);
 const char *command_short_help(const struct command *pcommand);
 const char *command_extra_help(const struct command *pcommand);
 
-enum cmdlevel command_level(const struct command *pcommand);
+enum cmdlevel_id command_level(const struct command *pcommand);
 enum cmd_echo command_echo(const struct command *pcommand);
 int command_vote_flags(const struct command *pcommand);
 int command_vote_percent(const struct command *pcommand);

@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +34,6 @@
 #include <X11/Xaw/Viewport.h>	/* for racesdlg */
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
@@ -50,17 +50,17 @@
 
 /* client */
 #include "chatline.h"
-#include "cityrep.h"    /* city_report_dialog_popdown() */
+#include "cityrep.h"	/* for popdown_city_report_dialog */
 #include "client_main.h"
 #include "climisc.h"
-#include "control.h" /* request_xxx and unit_focus_set */
+#include "control.h" /* request_xxx and set_unit_focus */
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapctrl.h"
 #include "mapctrl_common.h"
 #include "mapview.h"
-#include "messagewin.h" /* meswin_dialog_popdown() */
+#include "messagewin.h"	/* for popdown_meswin_dialog */
 #include "options.h"
 #include "packhand.h"
 #include "plrdlg.h"	/* for popdown_players_dialog */
@@ -176,7 +176,7 @@ static void select_random_race(void)
   /* try to find a free nation */
   /* FIXME: this code should be done another way. -ev */
   while (1) {
-    unsigned int race_toggle_index = fc_rand(nation_count());
+    unsigned int race_toggle_index = myrand(nation_count());
 
     if (!is_nation_playable(nation_by_number(race_toggle_index))
 	|| !nation_by_number(race_toggle_index)->is_available
@@ -451,10 +451,9 @@ void popup_caravan_dialog(struct unit *punit,
 {
   char buf[128];
   
-  fc_snprintf(buf, sizeof(buf),
-              _("Your %s from %s reaches the city of %s.\nWhat now?"),
-              unit_name_translation(punit),
-              city_name(phomecity), city_name(pdestcity));
+  my_snprintf(buf, sizeof(buf),
+	      _("Your caravan from %s reaches the city of %s.\nWhat now?"),
+	      city_name(phomecity), city_name(pdestcity));
   
   caravan_city_id=pdestcity->id; /* callbacks need these */
   caravan_unit_id=punit->id;
@@ -542,7 +541,7 @@ static void pillage_callback(Widget w, XtPointer client_data,
   }
 
   if (client_data) {
-    struct unit *punit = game_unit_by_number(unit_to_use_to_pillage);
+    struct unit *punit = game_find_unit_by_number (unit_to_use_to_pillage);
     if (punit) {
       Base_type_id pillage_base = -1;
       int what = XTPOINTER_TO_INT(client_data);
@@ -659,7 +658,7 @@ Widget popup_message_dialog(Widget parent, const char *dialogname,
   while((fcb=((void(*)(Widget, XtPointer, XtPointer))(va_arg(args, void *))))) {
     client_data=va_arg(args, XtPointer);
     fixed_width=va_arg(args, int);
-    fc_snprintf(button_name, sizeof(button_name), "button%d", i++);
+    my_snprintf(button_name, sizeof(button_name), "button%d", i++);
     
     button=XtVaCreateManagedWidget(button_name, commandWidgetClass, 
 				   dform, NULL);
@@ -702,7 +701,7 @@ static int number_of_columns(int n)
   double sqrt(); double ceil();
   return ceil(sqrt((double)n/5.0));
 #else
-  fc_assert(MAX_SELECT_UNITS == 100);
+  assert(MAX_SELECT_UNITS == 100);
   if(n<=5) return 1;
   else if(n<=20) return 2;
   else if(n<=45) return 3;
@@ -719,7 +718,7 @@ static int number_of_rows(int n)
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   int i,n,r;
   char buffer[512];
@@ -766,9 +765,9 @@ void unit_select_dialog_popup(struct tile *ptile)
 
     unit_select_ids[i]=punit->id;
 
-    pcity = player_city_by_number(client_player(), punit->homecity);
+    pcity = player_find_city_by_id(client.conn.playing, punit->homecity);
     
-    fc_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s", 
+    my_snprintf(buffer, sizeof(buffer), "%s(%s)\n%s", 
 	    utype_name_translation(punittemp), 
 	    pcity ? city_name(pcity) : "",
 	    unit_activity_text(punit));
@@ -844,10 +843,10 @@ void unit_select_all_callback(Widget w, XtPointer client_data,
   XtDestroyWidget(unit_select_dialog_shell);
   
   for(i=0; i<unit_select_no; i++) {
-    struct unit *punit = player_unit_by_number(client_player(),
-                                               unit_select_ids[i]);
+    struct unit *punit = player_find_unit_by_id(client.conn.playing,
+						unit_select_ids[i]);
     if(punit) {
-      unit_focus_set(punit);
+      set_unit_focus(punit);
     }
   }
 }
@@ -866,10 +865,10 @@ void unit_select_callback(Widget w, XtPointer client_data,
   for(i=0; i<unit_select_no; i++) {
 
     if(unit_select_commands[i]==w) {
-      struct unit *punit = player_unit_by_number(client_player(),
-                                                 unit_select_ids[i]);
+      struct unit *punit = player_find_unit_by_id(client.conn.playing,
+						  unit_select_ids[i]);
       if(punit) {
-	unit_focus_set(punit);
+	set_unit_focus(punit);
       }
       return;
     }
@@ -934,7 +933,7 @@ void create_races_dialog(struct player *pplayer)
     }
   } nations_iterate_end;
   maxracelen = MIN(maxracelen, MAX_LEN_NAME-1);
-  fc_snprintf(maxracename, sizeof(maxracename), "%*s", maxracelen+2, "W");
+  my_snprintf(maxracename, sizeof(maxracename), "%*s", maxracelen+2, "W");
 
   races_dialog_shell = I_T(XtCreatePopupShell("racespopup", 
 					  transientShellWidgetClass,
@@ -977,7 +976,7 @@ void create_races_dialog(struct player *pplayer)
 
     if (j == 0) {
       index = i * per_row;
-      fc_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
       if (i == 0) {
 	races_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -999,7 +998,7 @@ void create_races_dialog(struct player *pplayer)
       }
     } else {
       index = i * per_row + j;
-      fc_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racestoggle%d", index);
       if (i == 0) {
 	races_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -1126,7 +1125,7 @@ void create_races_dialog(struct player *pplayer)
 
   for( i = 0; i < ((b_s_num-1)/per_row)+1; i++) {
     index = i * per_row;
-    fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
+    my_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
     if( i == 0 ) {
       races_style_toggles[index] =
 	XtVaCreateManagedWidget(namebuf,
@@ -1150,7 +1149,7 @@ void create_races_dialog(struct player *pplayer)
     for( j = 1; j < per_row; j++) {
       index = i * per_row + j;
       if( index >= b_s_num ) break;
-      fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
+      my_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
       if( i == 0 ) {
 	races_style_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
@@ -1307,8 +1306,10 @@ void races_toggles_set_sensitive(void)
         nation_index(races_toggles_to_nations[races_buttons_get_current()]);
     }
 
-    log_debug("  [%d]: %d = %s", selected_nation,
-              nation_number(nation), nation_rule_name(nation));
+    freelog(LOG_DEBUG, "  [%d]: %d = %s",
+	    selected_nation,
+	    nation_number(nation),
+	    nation_rule_name(nation));
 
     if (this_index == selected_nation) {
       XawToggleUnsetCurrent(races_toggles[0]);
@@ -1332,6 +1333,8 @@ void races_toggles_callback(Widget w, XtPointer client_data,
   int index = XTPOINTER_TO_INT(client_data);
   struct nation_type *race = races_toggles_to_nations[index];
   int j;
+  int leader_count;
+  struct nation_leader *leaders = get_nation_leaders(race, &leader_count);
   Widget entry;
 
   if(races_leader_pick_popupmenu)
@@ -1345,20 +1348,17 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 
   local_nation_count = nation_count();
 
-  j = 0;
-  nation_leader_list_iterate(nation_leaders(race), pleader) {
+  for(j=0; j<leader_count; j++) {
     entry =
-      XtVaCreateManagedWidget(nation_leader_name(pleader),
-                              smeBSBObjectClass,
-                              races_leader_pick_popupmenu,
-                              NULL);
+      XtVaCreateManagedWidget(leaders[j].name,
+			      smeBSBObjectClass,
+			      races_leader_pick_popupmenu,
+			      NULL);
     XtAddCallback(entry, XtNcallback, races_leader_pick_callback,
-                  INT_TO_XTPOINTER(local_nation_count * j
-                                   + nation_index(race)));
-    j++;
-  } nation_leader_list_iterate_end;
+		  INT_TO_XTPOINTER(local_nation_count * j + nation_index(race)));
+  }
 
-  races_leader_set_values(race, fc_rand(j));
+  races_leader_set_values(race, myrand(leader_count));
 
   x_simulate_button_click
   (
@@ -1383,14 +1383,13 @@ void races_leader_pick_callback(Widget w, XtPointer client_data,
 **************************************************************************/
 void races_leader_set_values(struct nation_type *race, int lead)
 {
-  const struct nation_leader *pleader =
-      nation_leader_list_get(nation_leaders(race), lead);
+  int leader_count;
+  struct nation_leader *leaders = get_nation_leaders(race, &leader_count);
 
-  XtVaSetValues(races_leader, XtNstring, nation_leader_name(pleader), NULL);
-  XawTextSetInsertionPoint(races_leader,
-                           strlen(nation_leader_name(pleader)));
+  XtVaSetValues(races_leader, XtNstring, leaders[lead].name, NULL);
+  XawTextSetInsertionPoint(races_leader, strlen(leaders[lead].name));
 
-  races_sex_buttons_set_current(!nation_leader_is_male(pleader));
+  races_sex_buttons_set_current(!leaders[lead].is_male);
 }
 
 /**************************************************************************
@@ -1488,7 +1487,7 @@ int races_indirect_compare(const void *first, const void *second)
   first_string = nation_adjective_translation(first_nation);
   second_string = nation_adjective_translation(second_nation);
 
-  return fc_strcasecmp(first_string, second_string);
+  return mystrcasecmp(first_string, second_string);
 }
 
 /**************************************************************************
@@ -1604,11 +1603,11 @@ bool popup_theme_suggestion_dialog(const char *theme_name)
 ***********************************************************************/
 void popdown_all_game_dialogs(void)
 {
-  city_report_dialog_popdown();
-  meswin_dialog_popdown();
-  science_report_dialog_popdown();
-  economy_report_dialog_popdown();
-  units_report_dialog_popdown();
+  popdown_city_report_dialog();
+  popdown_meswin_dialog();
+  popdown_science_dialog();
+  popdown_economy_report_dialog();
+  popdown_activeunits_report_dialog();
   popdown_players_dialog();
   popdown_notify_dialog();
 }

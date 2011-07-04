@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -130,7 +130,7 @@ static void build_row(const char **row, int player_index, int update)
   /* we cassume that neither name nor the nation of a player changes */
   if (update == 0) {
     /* the playername */
-    fc_snprintf(namebuf, sizeof(namebuf), "%-16s", player_name(pplayer));
+    my_snprintf(namebuf, sizeof(namebuf), "%-16s", player_name(pplayer));
     row[0] = namebuf;
 
 
@@ -139,19 +139,19 @@ static void build_row(const char **row, int player_index, int update)
   }
 
   /* text for name, plus AI marker */
-  aibuf[0] = (pplayer->ai_controlled ? '*' : '\0');
+  aibuf[0] = (pplayer->ai_data.control ? '*' : '\0');
   aibuf[1] = '\0';
 
   /* text for diplstate type and turns -- not applicable if this is me */
   if (pplayer == client.conn.playing) {
     strcpy(dsbuf, "-");
   } else {
-    pds = player_diplstate_get(client.conn.playing, pplayer);
+    pds = pplayer_get_diplstate(client.conn.playing, pplayer);
     if (pds->type == DS_CEASEFIRE) {
-      fc_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
+      my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		  diplstate_text(pds->type), pds->turns_left);
     } else {
-      fc_snprintf(dsbuf, sizeof(dsbuf), "%s", diplstate_text(pds->type));
+      my_snprintf(dsbuf, sizeof(dsbuf), "%s", diplstate_text(pds->type));
     }
   }
 
@@ -160,7 +160,7 @@ static void build_row(const char **row, int player_index, int update)
 
   /* text for idleness */
   if (pplayer->nturns_idle > 3) {
-    fc_snprintf(idlebuf, sizeof(idlebuf),
+    my_snprintf(idlebuf, sizeof(idlebuf),
 		PL_("(idle %d turn)",
 		    "(idle %d turns)",
 		    pplayer->nturns_idle - 1),
@@ -194,7 +194,7 @@ static int CALLBACK sort_proc(LPARAM lParam1, LPARAM lParam2,
   sz_strlcpy(text1,row_texts[lParamSort]);
   build_row(row_texts,lParam2,0);
   sz_strlcpy(text2,row_texts[lParamSort]);
-  return sort_dir*fc_strcasecmp(text1,text2);
+  return sort_dir*mystrcasecmp(text1,text2);
 }
 
 /******************************************************************
@@ -210,8 +210,8 @@ static void enable_buttons(int player_index)
   else
     EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_SSHIP),
 		 FALSE);
-  switch (player_diplstate_get(client.conn.playing,
-                               player_by_number(player_index))->type) {
+  switch (pplayer_get_diplstate(client.conn.playing,
+                                player_by_number(player_index))->type) {
   case DS_WAR:
   case DS_NO_CONTACT:
     EnableWindow(GetDlgItem(players_dialog,ID_PLAYERS_WAR), FALSE);

@@ -14,10 +14,6 @@
 #ifndef FC__NETINTF_H
 #define FC__NETINTF_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /********************************************************************** 
   Common network interface.
 ***********************************************************************/
@@ -45,7 +41,7 @@ extern "C" {
 #endif
 
 #include "ioz.h"
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 /* map symbolic Winsock error names to symbolic errno names */
 #ifdef HAVE_WINSOCK
@@ -66,9 +62,9 @@ extern "C" {
 #endif /* HAVE_WINSOCK */
 
 #ifdef FD_ZERO
-#define FC_FD_ZERO FD_ZERO
+#define MY_FD_ZERO FD_ZERO
 #else
-#define FC_FD_ZERO(p) memset((void *)(p), 0, sizeof(*(p)))
+#define MY_FD_ZERO(p) memset((void *)(p), 0, sizeof(*(p)))
 #endif
 
 #ifdef IPV6_ADD_MEMBERSHIP
@@ -119,9 +115,5 @@ const char *fc_url_encode(const char *txt);
 void sockaddr_debug(union fc_sockaddr *addr);
 int sockaddr_size(union fc_sockaddr *addr);
 bool sockaddr_ipv6(union fc_sockaddr *addr);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__NETINTF_H */

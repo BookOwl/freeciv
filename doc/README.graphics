@@ -9,7 +9,7 @@ To use different graphics with Freeciv, use the '--tiles' argument to
 the Freeciv client.  Eg, to use the 'engels' graphics, start the
 client as:
   
-    freeciv-gtk2 --tiles engels
+    civclient --tiles engels
 
 What Freeciv actually does in this case is look for a file called
 'engels.tilespec' somewhere in your Freeciv data path.  (See the file
@@ -78,7 +78,7 @@ options include:
 
   String vectors
   --------------
-  prefered_themes       : List of preferred client themes to use with this
+  prefered_themes       : List of prefered client themes to use with this
                           tileset
 
   Integers
@@ -129,7 +129,7 @@ options include:
   unit_offset_x        : Gives an offset from the tile origin at which to
   unit_offset_y          draw units.
   citybar_offset_y     : Gives an offset from city tile origin at which to
-                         draw city bar text.
+                         draw citybar text.
   hex_side             : When is_hex is specified (see is_hex, below), this
                          value gives the length of the "extra" side of the
                          hexagon.  This extra side will be on the top/bottom
@@ -157,7 +157,7 @@ options include:
                           Hex tilesets should be used with topologies 8-11 and
                           iso-hex tilesets with topologies 12-15.
   is_mountainous        : set to 1 for blending hills and mountains together.
-  is_full_citybar       : set to 1 to enable city bar.
+  is_full_citybar       : set to 1 to enable citybar.
 
   String lists (a comma-separated list of strings)
   ------------------------------------------------
@@ -257,7 +257,7 @@ If a given tag appears multiple times in the spec files, the *last*
 such tag is used.  (That is, in the order of files listed in the
 tilespec file, and order within each file.)  This allows selected
 graphics to be "overridden" by listing a replacement spec file near
-the end of the 'files' list in the top-level tilespec file, without
+the end of the 'files' list in the toplevel tilespec file, without
 having to modify earlier files in the list.
 
 ----------------------------------------------------------------------

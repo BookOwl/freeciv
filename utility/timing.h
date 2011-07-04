@@ -16,25 +16,7 @@
 #ifndef FC__TIMING_H
 #define FC__TIMING_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#include "support.h"            /* bool type */
-
-/* Undefine this if you don't want timing measurements to appear in logs.
-   This is useful if you want to compare logs of two freeciv runs and
-   want to see only differences in control flow, and not diffs full of
-   different timing results.
-*/
-#define LOG_TIMERS
-
-/* Timing logging happens so often only in debug builds that it makes
-   sense to have macro defined for it once here and to have all the
-   checks against that single macro instead of two separate. */
-#if defined(LOG_TIMERS) && defined(DEBUG)
-#define DEBUG_TIMERS
-#endif
+#include "shared.h"		/* bool type */
 
 enum timer_timetype {
   TIMER_CPU,			/* time spent by the CPU */
@@ -78,12 +60,9 @@ void stop_timer(struct timer *t);
 void clear_timer_start(struct timer *t);
 
 double read_timer_seconds(struct timer *t);
+double read_timer_seconds_free(struct timer *t);
 
 void usleep_since_timer_start(struct timer *t, long usec);
 void usleep_since_timer_start_free(struct timer *t, long usec);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__TIMER_H */

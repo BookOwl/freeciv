@@ -13,18 +13,10 @@
 #ifndef FC__PLAYER_H
 #define FC__PLAYER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+#include "fc_types.h"
 
-/* utility */
-#include "bitvector.h"
-
-/* common */
-#include "ai.h" /* FC_AI_LAST */
 #include "city.h"
 #include "connection.h"
-#include "fc_types.h"
 #include "nation.h"
 #include "shared.h"
 #include "spaceship.h"
@@ -38,15 +30,6 @@ extern "C" {
 
 #define ANON_PLAYER_NAME "noname"
 #define ANON_USER_NAME "Unassigned"
-
-enum plrcolor_mode {
-  PLRCOL_PLR_ORDER,
-  PLRCOL_PLR_RANDOM,
-  PLRCOL_PLR_SET,
-  PLRCOL_TEAM_ORDER
-};
-
-struct player_slot;
 
 enum handicap_type {
   H_DIPLOMAT = 0,     /* Can't build offensive diplomats */
@@ -67,6 +50,8 @@ enum handicap_type {
   H_LAST
 };
 
+BV_DEFINE(bv_player, MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS);
+
 BV_DEFINE(bv_handicap, H_LAST);
 
 struct player_economic {
@@ -75,21 +60,6 @@ struct player_economic {
   int science;
   int luxury;
 };
-
-#define SPECENUM_NAME player_status
-/* 'normal' status */
-#define SPECENUM_VALUE0      PSTATUS_NORMAL
-/* set once the player is in the process of dying */
-#define SPECENUM_VALUE1      PSTATUS_DYING
-/* this player is winner in scenario game */
-#define SPECENUM_VALUE2      PSTATUS_WINNER
-/* has indicated willingness to surrender */
-#define SPECENUM_VALUE3      PSTATUS_SURRENDER
-/* keep this last */
-#define SPECENUM_COUNT       PSTATUS_COUNT
-#include "specenum_gen.h"
-
-BV_DEFINE(bv_pstatus, PSTATUS_COUNT);
 
 struct player_score {
   int happy;
@@ -110,15 +80,20 @@ struct player_score {
   int bnp;
   int mfg;
   int spaceship;
-  int units_built;      /* Number of units this player produced. */
-  int units_killed;     /* Number of enemy units killed. */
-  int units_lost;       /* Number of own units that died,
-                         * by combat or otherwise. */
-  int game;             /* Total score you get in player dialog. */
+  int game;             /* total score you get in player dialog */
 };
 
 struct player_ai {
+  bool control;
+
+  /* 
+   * Valid values for tech_goal are:
+   *  - any existing tech but not A_NONE or
+   *  - A_UNSET.
+   */
+  int prev_gold;
   int maxbuycost;
+  int est_upkeep; /* estimated upkeep of buildings in cities */
   /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
   bv_handicap handicaps;        /* sum of enum handicap_type */
@@ -130,7 +105,7 @@ struct player_ai {
   int warmth, frost; /* threat of global warming / nuclear winter */
   enum barbarian_type barbarian_type;
 
-  int love[MAX_NUM_PLAYER_SLOTS];
+  int love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
 };
 
 /* Diplomatic states (how one player views another).
@@ -150,18 +125,17 @@ enum diplstate_type {
 };
 
 enum dipl_reason {
-  DIPL_OK, DIPL_ERROR, DIPL_SENATE_BLOCKING,
-  DIPL_ALLIANCE_PROBLEM_US, DIPL_ALLIANCE_PROBLEM_THEM
+  DIPL_OK, DIPL_ERROR, DIPL_SENATE_BLOCKING, DIPL_ALLIANCE_PROBLEM
 };
 
 /* the following are for "pacts" */
 struct player_diplstate {
-  enum diplstate_type type; /* this player's disposition towards other */
+  enum diplstate_type type;	/* this player's disposition towards other */
   enum diplstate_type max_state; /* maximum treaty level ever had */
   int first_contact_turn; /* turn we had first contact with this player */
-  int turns_left; /* until pact (e.g., cease-fire) ends */
-  int has_reason_to_cancel; /* 0: no, 1: this turn, 2: this or next turn */
-  int contact_turns_left; /* until contact ends */
+  int turns_left;		/* until pact (e.g., cease-fire) ends */
+  int has_reason_to_cancel;	/* 0: no, 1: this turn, 2: this or next turn */
+  int contact_turns_left;	/* until contact ends */
 };
 
 /***************************************************************************
@@ -182,10 +156,9 @@ struct attribute_block_s {
 };
 
 struct ai_type;
-struct ai_data;
 
 struct player {
-  struct player_slot *slot;
+  bool used;
   char name[MAX_LEN_NAME];
   char username[MAX_LEN_NAME];
   char ranked_username[MAX_LEN_NAME]; /* the user who will be ranked */
@@ -199,12 +172,16 @@ struct player {
   bool phase_done;
   int nturns_idle;
   bool is_alive;
+  bool is_dying; /* set once the player is in the process of dying */
+  bool is_winner; /* This player is winner in scenario game */
+  bool surrendered; /* has indicated willingness to surrender */
 
   /* Turn in which the player's revolution is over; see update_revolution. */
   int revolution_finishes;
 
+  bool capital; /* used to give player init_buildings in first city. */
   bv_player real_embassy;
-  const struct player_diplstate **diplstates;
+  struct player_diplstate diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   int city_style;
   struct city_list *cities;
   struct unit_list *units;
@@ -213,94 +190,45 @@ struct player {
 
   int bulbs_last_turn;    /* # bulbs researched last turn only */
   struct player_spaceship spaceship;
-
-  bool ai_controlled; /* 0: not automated; 1: automated */
-  struct player_ai ai_common;
-  const struct ai_type *ai;
-
+  struct player_ai ai_data;
+  struct ai_type *ai;
   bool was_created;                    /* if the player was /created */
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
-  bv_player gives_shared_vision;       /* bitvector those that give you
-                                        * shared vision */
+  struct player_tile *private_map;
+  unsigned int gives_shared_vision; /* bitvector those that give you shared vision */
+  unsigned int really_gives_vision; /* takes into account that p3 may see what p1 has via p2 */
   int wonders[B_LAST];              /* contains city id's or WONDER_NOT_BUILT */
   struct attribute_block_s attribute_block;
   struct attribute_block_s attribute_block_buffer;
-
-  struct dbv tile_known;
-
-  struct rgbcolor *rgb;
-
-  union {
-    struct {
-      /* Only used in the server (./ai/ and ./server/). */
-      bv_pstatus status;
-
-      bool capital; /* used to give player init_buildings in first city. */
-
-      struct player_tile *private_map;
-
-      bv_player really_gives_vision; /* takes into account that p3 may see
-                                      * what p1 has via p2 */
-
-      bv_debug debug;
-
-      struct adv_data *adv;
-
-      void *ais[FC_AI_LAST];
-
-      /* Delegation to this user. */
-      char delegate_to[MAX_LEN_NAME];
-      /* Set if the delegation is active. */
-      char orig_username[MAX_LEN_NAME];
-    } server;
-
-    struct {
-      /* Only used at the client (the server is omniscient; ./client/). */
-
-      /* Corresponds to the result of
-         (player:server:private_map[tile_index]:seen_count[vlayer] != 0). */
-      struct dbv tile_vision[V_COUNT];
-    } client;
-  };
+  bv_debug debug;
 };
 
-/* Initialization and iteration */
-void player_slots_init(void);
-bool player_slots_initialised(void);
-void player_slots_free(void);
-
-struct player_slot *player_slot_first(void);
-struct player_slot *player_slot_next(struct player_slot *pslot);
-
-/* A player slot contains a possibly uninitialized player. */
+/* A slot is a possibly uninitialized player. */
 int player_slot_count(void);
-int player_slot_index(const struct player_slot *pslot);
-struct player *player_slot_get_player(const struct player_slot *pslot);
-bool player_slot_is_used(const struct player_slot *pslot);
-struct player_slot *player_slot_by_number(int player_id);
+bool player_slot_is_used(const struct player *pslot);
+void player_slot_set_used(struct player *pslot, bool used);
+struct player *player_slot_by_number(int player_id);
 
 /* General player accessor functions. */
-struct player *player_new(struct player_slot *pslot);
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor);
-const char *player_color_ftstr(struct player *pplayer);
-void player_clear(struct player *pplayer, bool full);
-void player_destroy(struct player *pplayer);
-
 int player_count(void);
+void set_player_count(int count);
+
 int player_index(const struct player *pplayer);
 int player_number(const struct player *pplayer);
+
 struct player *player_by_number(const int player_id);
+struct player *valid_player_by_number(const int player_id);
 
 const char *player_name(const struct player *pplayer);
-struct player *player_by_name(const char *name);
-struct player *player_by_name_prefix(const char *name,
-                                     enum m_pre_result *result);
-struct player *player_by_user(const char *name);
+struct player *find_player_by_name(const char *name);
+struct player *find_player_by_name_prefix(const char *name,
+					  enum m_pre_result *result);
+struct player *find_player_by_user(const char *name);
 
 bool player_set_nation(struct player *pplayer, struct nation_type *pnation);
+void player_set_unit_focus_status(struct player *pplayer);
 
 bool player_has_embassy(const struct player *pplayer,
                         const struct player *pplayer2);
@@ -325,20 +253,22 @@ bool player_owns_city(const struct player *pplayer,
 bool player_can_invade_tile(const struct player *pplayer,
                             const struct tile *ptile);
 
-struct city *player_city_by_number(const struct player *pplayer,
-                                   int city_id);
-struct unit *player_unit_by_number(const struct player *pplayer,
-                                    int unit_id);
+struct city *player_find_city_by_id(const struct player *pplayer,
+				    int city_id);
+struct unit *player_find_unit_by_id(const struct player *pplayer,
+				    int unit_id);
 
-bool player_in_city_map(const struct player *pplayer,
-                        const struct tile *ptile);
+bool player_in_city_radius(const struct player *pplayer,
+			   const struct tile *ptile);
 bool player_knows_techs_with_flag(const struct player *pplayer,
 				  enum tech_flag_id flag);
 int num_known_tech_with_flag(const struct player *pplayer,
 			     enum tech_flag_id flag);
 int player_get_expected_income(const struct player *pplayer);
 
-struct city *player_capital(const struct player *pplayer);
+struct player_economic player_limit_to_max_rates(struct player *pplayer);
+
+struct city *find_palace(const struct player *pplayer);
 
 bool ai_handicap(const struct player *pplayer, enum handicap_type htype);
 bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
@@ -346,8 +276,10 @@ bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
 const char *diplstate_text(const enum diplstate_type type);
 const char *love_text(const int love);
 
-struct player_diplstate *player_diplstate_get(const struct player *plr1,
-                                              const struct player *plr2);
+const struct player_diplstate *pplayer_get_diplstate(const struct player
+						     *pplayer,
+						     const struct player
+						     *pplayer2);
 bool are_diplstates_equal(const struct player_diplstate *pds1,
 			  const struct player_diplstate *pds2);
 enum dipl_reason pplayer_can_make_treaty(const struct player *p1,
@@ -374,34 +306,37 @@ bool is_barbarian(const struct player *pplayer);
 
 bool gives_shared_vision(const struct player *me, const struct player *them);
 
-/* iterate over all player slots */
-#define player_slots_iterate(_pslot)                                        \
-  if (player_slots_initialised()) {                                         \
-    struct player_slot *_pslot = player_slot_first();                       \
-    for (; NULL != _pslot; _pslot = player_slot_next(_pslot)) {
-#define player_slots_iterate_end                                            \
-    }                                                                       \
-  }
+struct player_research *get_player_research(const struct player *p1);
 
-/* iterate over all players, which are used at the moment */
-#define players_iterate(_pplayer)                                           \
-  player_slots_iterate(_pslot) {                                            \
-    if (!player_slot_is_used(_pslot)) {                                     \
-      continue;                                                             \
-    }                                                                       \
-    struct player *_pplayer = player_slot_get_player(_pslot);
-#define players_iterate_end                                                 \
-  } player_slots_iterate_end;
+void player_set_winner(struct player *plr);
 
-/* get 'struct player_list' and related functions: */
-#define SPECLIST_TAG player
-#define SPECLIST_TYPE struct player
-#include "speclist.h"
+/* Initialization and iteration */
+void player_init(struct player *plr);
 
-#define player_list_iterate(playerlist, pplayer)                            \
-  TYPED_LIST_ITERATE(struct player, playerlist, pplayer)
-#define player_list_iterate_end                                             \
-  LIST_ITERATE_END
+#define player_slots_iterate(NAME_pslot)\
+do {\
+  struct player *NAME_pslot;\
+  int MY_i;\
+  for (MY_i = 0; MY_i < player_slot_count(); MY_i++) {\
+    NAME_pslot = player_slot_by_number(MY_i);\
+    if (NAME_pslot != NULL) {\
+
+#define player_slots_iterate_end\
+    }\
+  }\
+} while (0)
+
+/* NB!!! This will only iterate over players for
+ * which player_slot_is_used() returns TRUE. */
+#define players_iterate(NAME_pplayer)\
+do {\
+  player_slots_iterate(NAME_pplayer) {\
+    if (player_slot_is_used(NAME_pplayer)) {
+
+#define players_iterate_end\
+    }\
+  } player_slots_iterate_end;\
+} while (0)
 
 /* ai love values should be in range [-MAX_AI_LOVE..MAX_AI_LOVE] */
 #define MAX_AI_LOVE 1000
@@ -410,18 +345,10 @@ bool gives_shared_vision(const struct player *me, const struct player *them);
 /* User functions. */
 bool is_valid_username(const char *name);
 
-enum ai_level ai_level_by_name(const char *name);
+enum ai_level find_ai_level_by_name(const char *name);
 const char *ai_level_name(enum ai_level level);
 const char *ai_level_cmd(enum ai_level level);
 bool is_settable_ai_level(enum ai_level level);
 int number_of_ai_levels(void);
-
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai);
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PLAYER_H */

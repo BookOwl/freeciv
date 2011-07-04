@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -306,7 +306,7 @@ Uint16 widget_pressed_action(struct widget * pWidget)
     FC_FREE(pInfo_Area);
     FREESURFACE(pInfo_Label);
   }
-
+  
   switch (get_wtype(pWidget)) {
     case WT_TI_BUTTON:
     case WT_I_BUTTON:    
@@ -387,14 +387,6 @@ Uint16 widget_pressed_action(struct widget * pWidget)
         }
       }
       break;
-    case WT_COMBO:
-      if (Main.event.button.button == SDL_BUTTON_LEFT) {
-        set_wstate(pWidget, FC_WS_PRESSED);
-        combo_popup(pWidget);
-      } else {
-        combo_popdown(pWidget);
-      }
-      break;
     default:
       ID = pWidget->ID;
       if (pWidget->action) {
@@ -450,9 +442,9 @@ void widget_sellected_action(struct widget *pWidget)
   set_wstate(pWidget, FC_WS_SELLECTED);  
   
   pWidget->select(pWidget);
-    
-  pSellected_Widget = pWidget  ;
-
+  
+  pSellected_Widget = pWidget;
+  
   if (get_wflags(pWidget) & WF_WIDGET_HAS_INFO_LABEL) {
     widget_info_counter = 1;
   }
@@ -469,25 +461,25 @@ void redraw_widget_info_label(SDL_Rect *rect)
 
   struct widget *pWidget = pSellected_Widget;
 
-  if (!pWidget || !pWidget->info_label) {
+  if (!pWidget) {
     return;
   }
 
   if (!pInfo_Label) {
+  
     pInfo_Area = fc_calloc(1, sizeof(SDL_Rect));
-
-    color = pWidget->info_label->fgcol;
-    pWidget->info_label->style |= TTF_STYLE_BOLD;
-    pWidget->info_label->fgcol =
-        *get_theme_color(COLOR_THEME_QUICK_INFO_TEXT);
-
+  
+    color = pWidget->string16->fgcol;
+    pWidget->string16->style |= TTF_STYLE_BOLD;
+    pWidget->string16->fgcol = *get_game_colorRGB(COLOR_THEME_QUICK_INFO_TEXT);
+    
     /* create string and bcgd theme */
-    pText = create_text_surf_from_str16(pWidget->info_label);
+    pText = create_text_surf_from_str16(pWidget->string16);
 
-    pWidget->info_label->fgcol = color;
-
+    pWidget->string16->fgcol = color;
+    
     pBcgd = create_filled_surface(pText->w + adj_size(10), pText->h + adj_size(6),
-              SDL_SWSURFACE, get_theme_color(COLOR_THEME_QUICK_INFO_BG), TRUE);
+              SDL_SWSURFACE, get_game_colorRGB(COLOR_THEME_QUICK_INFO_BG), TRUE);
     
     /* calculate start position */
     if ((pWidget->dst->dest_rect.y + pWidget->size.y) - pBcgd->h - adj_size(6) < 0) {
@@ -520,7 +512,7 @@ void redraw_widget_info_label(SDL_Rect *rect)
     /* draw frame */
     putframe(pInfo_Label,
              0, 0, pInfo_Label->w - 1, pInfo_Label->h - 1,
-             get_theme_color(COLOR_THEME_QUICK_INFO_FRAME));
+             get_game_colorRGB(COLOR_THEME_QUICK_INFO_FRAME));
     
   }
 

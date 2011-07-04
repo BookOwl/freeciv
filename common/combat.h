@@ -13,10 +13,6 @@
 #ifndef FC__COMBAT_H
 #define FC__COMBAT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "unittype.h"
 
@@ -28,16 +24,15 @@ extern "C" {
  */
 #define POWER_FACTOR	10
 
-bool is_unit_reachable_at(const struct unit *defender,
-                          const struct unit *attacker,
-                          const struct tile *location);
+bool is_unit_reachable_by_unit(const struct unit *defender,
+                               const struct unit *attacker);
 bool can_player_attack_tile(const struct player *pplayer,
 			    const struct tile *ptile);
 bool can_unit_attack_unit_at_tile(const struct unit *punit,
 				  const struct unit *pdefender,
 				  const struct tile *dest_tile);
-bool can_unit_attack_units_at_tile(const struct unit *punit,
-                                   const struct tile *ptile);
+bool can_unit_attack_all_at_tile(const struct unit *punit,
+				 const struct tile *ptile);
 bool can_unit_attack_tile(const struct unit *punit,
 			  const struct tile *ptile);
 
@@ -74,9 +69,4 @@ struct unit *get_attacker(const struct unit *defender,
 			  const struct tile *ptile);
 
 bool is_stack_vulnerable(const struct tile *ptile);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif /* FC__COMBAT_H */

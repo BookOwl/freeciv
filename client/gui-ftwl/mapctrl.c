@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -28,7 +28,7 @@
 void popup_newcity_dialog(struct unit *punit, char *suggestname)
 {
   /* PORTME */
-  log_error("PORTME: popup_newcity_dialog()");
+  freelog(LOG_ERROR, "PORTME: popup_newcity_dialog()");
 }
 
 /**************************************************************************

@@ -12,7 +12,7 @@
 
 [datafile]
 description="Default tile_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2011.Feb.21"
+options="1.9+2007.Oct.26"
 
 [options]
 may_road=1           ; 0 means no, 1 means yes
@@ -59,7 +59,7 @@ Any land terrain type may have a River on it.  A River adds 1\
  trade to the resources produced by that tile.  It also increases a tile's\
  defense factor by 50%.  Finally, land units may move along a River (but\
  not diagonally); movement along a River costs only 1/3 of a movement point.\
-"), _("\
+\n\n\
 Roads and railroads can only be built on River tiles if your\
  civilization has learned Bridge Building technology.\
 ")
@@ -94,8 +94,6 @@ fallout_shield_penalty=50
 ; percent subtracted from trade production if tile has fallout
 fallout_trade_penalty=50
 
-; /* <-- avoid gettext warnings
-;
 ; The individual terrain types, one per section.
 ; Roughly sorted by identifier.
 ; The actual tag used (the * in [terrain_*]) must be unique for each terrain,
@@ -105,13 +103,8 @@ fallout_trade_penalty=50
 ;
 ; Notes:
 ;
-; name                 = translatable name as seen by user; if "unused", it is
-;                        not used, but is included for conversion and/or the
-;                        editor.
-; rule_name            = (optional) name for savegames, rulesets etc; if not
-;                        present, 'name' is used. Since the name used in
-;                        savegames must not change, use this when renaming a
-;                        terrain after a ruleset has been released.
+; name                 = name as seen by user; if "unused", it is not used,
+;                        but is included for conversion and/or the editor.
 ; graphic              = preferred graphic [tile_*] in tilespec.
 ; graphic_alt          = alternate graphic [tile_*] when preferred is not found;
 ;                        otherwise may be "-"
@@ -143,7 +136,7 @@ fallout_trade_penalty=50
 ;                        terrain section -- transformation changes to that terrain
 ; transform_time       = time to transform; if 0, cannot transform
 ; warmer_wetter_result = result of global warming for wet terrains; one of:
-;                        "no"  -- no change; does not count for warming
+;                        "no"  -- no change; doesn't count for warming
 ;                        "yes" -- no change; counts for warming
 ;                        terrain section -- warming changes to that terrain
 ; warmer_drier_result  = result of global warming for dry terrains;
@@ -185,13 +178,8 @@ fallout_trade_penalty=50
 ;  - wet               = how "wet" the terrain is (moisture)
 ;  - dry               = how "dry" the terrain is (moisture)
 ;  - ocean_depth       = the depth of an ocean, as an average level
-; color.r              = color of the terrain (red value)
-; color.g              = color of the terrain (green value)
-; color.b              = color of the terrain (blue value)
 ; helptext             = optional help text string; should escape all raw 
 ;                        newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings
 
 [terrain_lake]
 name                 = _("Lake")
@@ -218,15 +206,12 @@ rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
 warmer_wetter_result = "no"
-warmer_drier_result  = "terrain_swamp"
-cooler_wetter_result = "terrain_glacier"
-cooler_drier_result  = "terrain_tundra"
+warmer_drier_result  = "no"
+cooler_wetter_result = "no"
+cooler_drier_result  = "no"
 native_to            = "Sea", "Air", "Missile", "Helicopter", "Trireme"
 flags                = "Oceanic", "NoCities", "NoPollution", "FreshWater"
 property_ocean_depth = 0
-color.r              = 0
-color.g              = 0
-color.b              = 220
 helptext             = _("\
 Lakes are substantial bodies of fresh water.\
 ")
@@ -256,15 +241,12 @@ rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
 warmer_wetter_result = "no"
-warmer_drier_result  = "terrain_swamp"
-cooler_wetter_result = "terrain_glacier"
-cooler_drier_result  = "terrain_glacier"
+warmer_drier_result  = "no"
+cooler_wetter_result = "no"
+cooler_drier_result  = "no"
 native_to            = "Sea", "Air", "Missile", "Helicopter", "Trireme"
 flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"
 property_ocean_depth = 32
-color.r              = 0
-color.g              = 0
-color.b              = 200
 helptext             = _("\
 Shallow oceans are mostly found near coastlines, and are often rich\
  sources of food and other resources. They can be traversed by sea\
@@ -302,9 +284,6 @@ cooler_drier_result  = "no"
 native_to            = "Sea", "Air", "Missile", "Helicopter"
 flags                = "Oceanic", "NoCities", "NoPollution", "UnsafeCoast"
 property_ocean_depth = 87
-color.r              = 0
-color.g              = 0
-color.b              = 170
 helptext             = _("\
 Deep oceans cover much of the world away from coastlines, and only\
  seaworthy units (not including Triremes) can travel on them.\
@@ -334,16 +313,13 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_tundra"
-warmer_drier_result  = "terrain_tundra"
+warmer_wetter_result = "no"
+warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "NoBarbs", "NoCities", "CanHaveRiver"
 property_frozen      = 100
-color.r              = 232
-color.g              = 232
-color.b              = 232
 helptext             = _("\
 Glaciers are found only in the most northerly or southerly\
  reaches of the world.  They are very cold, and hence difficult to\
@@ -374,18 +350,15 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_grassland"
+warmer_wetter_result = "terrain_swamp"
 warmer_drier_result  = "no"
-cooler_wetter_result = "terrain_plains"
-cooler_drier_result  = "terrain_tundra"
+cooler_wetter_result = "no"
+cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_dry         = 100
 property_tropical    = 50
 property_temperate   = 20
-color.r              = 212
-color.g              = 179
-color.b              = 101
 helptext             = _("\
 Deserts are regions of extreme dryness, making agriculture and\
  trade very difficult.\
@@ -416,18 +389,15 @@ rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
 warmer_wetter_result = "terrain_jungle"
-warmer_drier_result  = "terrain_plains"
-cooler_wetter_result = "terrain_swamp"
-cooler_drier_result  = "terrain_tundra"
+warmer_drier_result  = "terrain_desert"
+cooler_wetter_result = "no"
+cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_cold        = 20
 property_wet         = 20
 property_foliage     = 50
 property_temperate   = 50
-color.r              = 43
-color.g              = 107
-color.b              = 19
 helptext             = _("\
 Forests are densely wooded, making agriculture somewhat\
  problematic.\
@@ -457,17 +427,14 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_ocean"
+warmer_wetter_result = "terrain_swamp"
 warmer_drier_result  = "terrain_desert"
-cooler_wetter_result = "terrain_glacier"
+cooler_wetter_result = "terrain_desert"
 cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_temperate   = 50
-color.r              = 10
-color.g              = 123
-color.b              = 2
 helptext             = _("\
 Grasslands afford exceptional agricultural opportunities.\
 ")
@@ -504,9 +471,6 @@ native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_mountainous = 30
-color.r              = 142
-color.g              = 121
-color.b              = 63
 helptext             = _("\
 In addition to being amenable to agriculture, Hills are frequently\
  rich in resources.\
@@ -536,18 +500,15 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_ocean"
-warmer_drier_result  = "terrain_desert"
-cooler_wetter_result = "terrain_swamp"
+warmer_wetter_result = "no"
+warmer_drier_result  = "no"
+cooler_wetter_result = "terrain_desert"
 cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_foliage     = 50
 property_tropical    = 50
 property_wet         = 50
-color.r              = 54
-color.g              = 162
-color.b              = 38
 helptext             = _("\
 Jungles are densely overgrown, making agriculture somewhat\
  problematic.\
@@ -584,9 +545,6 @@ cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_mountainous = 70
-color.r              = 167
-color.g              = 77
-color.b              = 38
 helptext             = _("\
 Mountains are regions of extreme altitude, making agriculture and\
  trade very difficult.\
@@ -616,17 +574,14 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_ocean"
+warmer_wetter_result = "terrain_swamp"
 warmer_drier_result  = "terrain_desert"
-cooler_wetter_result = "terrain_glacier"
+cooler_wetter_result = "terrain_desert"
 cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_temperate   = 50
-color.r              = 138
-color.g              = 168
-color.b              = 60
 helptext             = _("\
 Plains are very broad, sparse regions, which makes trade slightly\
  inconvenient.\
@@ -656,9 +611,9 @@ transform_time       = 36
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_ocean"
+warmer_wetter_result = "no"
 warmer_drier_result  = "terrain_desert"
-cooler_wetter_result = "terrain_glacier"
+cooler_wetter_result = "no"
 cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
@@ -666,9 +621,6 @@ property_wet         = 100
 property_tropical    = 10
 property_temperate   = 10
 property_cold        = 10
-color.r              = 44
-color.g              = 64
-color.b              = 44
 helptext             = _("\
 Swamps suffer from an over-abundance of water, making agriculture\
  somewhat problematic.\
@@ -698,16 +650,13 @@ transform_time       = 24
 rail_time            = 3
 clean_pollution_time = 3
 clean_fallout_time   = 3
-warmer_wetter_result = "terrain_ocean"
-warmer_drier_result  = "terrain_desert"
+warmer_wetter_result = "no"
+warmer_drier_result  = "no"
 cooler_wetter_result = "terrain_glacier"
-cooler_drier_result  = "no"
+cooler_drier_result  = "terrain_glacier"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
 property_cold        = 50
-color.r              = 74
-color.g              = 74
-color.b              = 74
 helptext             = _("\
 Tundra are broad, cold regions, fit for some agriculture and little\
  else.\
@@ -911,15 +860,9 @@ identifier  = "x"
 shield      = 3 ; glacier used to have 4
 # glacier, desert
 
-; /* <-- avoid gettext warnings
-;
 ; Base types:
 ;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for savegames, rulesets etc; if not
-;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming a
-;                           base after a ruleset has been released.
+; name                    = Name of the base type.
 ; buildable               = Can base be built? Defaults to true
 ; pillageable             = Can base be pillaged? Defaults to true
 ; graphic                 = tag specifing preferred graphic
@@ -944,10 +887,6 @@ shield      = 3 ; glacier used to have 4
 ;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
 ;   - "ParadropFrom"      = Paradrop can be initiated from base
 ;   - "NativeTile"        = Units consider tile native regardless of terrain
-; helptext                = optional help text string; should escape all raw 
-;                           newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings
 
 [base_fortress]
 name           = _("Fortress")
@@ -966,12 +905,6 @@ defense_bonus  = 100
 border_sq      = 5
 native_to      = "Land"
 flags          = "NoAggressive", "NoStackDeath", "DiplomatDefense"
-helptext       = _("\
-Fortresses improve defense for land units. Among other effects, a land \
-unit remaining in a fortress for a whole turn without moving recovers \
-a quarter of its hit points. With Invention, fortresses gain watchtowers \
-from which units can see further afield.\
-")
 
 [base_airbase]
 name           = _("Airbase")
@@ -987,11 +920,7 @@ reqs           =
 gui_type       = "Airbase"
 build_time     = 3
 native_to      = "Air", "Helicopter", "Missile"
-flags          = "NoStackDeath", "ParadropFrom"
-helptext       = _("\
-Airbases allow your air units to land and refuel. Air units in an \
-airbase may be attacked by land units.\
-")
+flags          = "NoStackDeath", "DiplomatDefense", "ParadropFrom"
 
 [base_buoy]
 name           = _("Buoy")
@@ -1008,9 +937,6 @@ gui_type       = "Fortress"
 build_time     = 3
 border_sq      = 0
 vision_main_sq = 5
-helptext       = _("\
-Buoys may be built in the ocean (by units on a sea-going vessel).\
-")
 
 [base_ruins]
 name           = _("Ruins")
@@ -1024,7 +950,3 @@ reqs           =
 buildable      = 0
 build_time     = 0
 gui_type       = "Other"
-helptext       = _("\
-Ruins mark the former site of a city that was destroyed or abandoned. \
-They have no effect on gameplay.\
-")

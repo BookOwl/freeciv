@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -50,13 +50,11 @@
 
 /* client */
 #include "client_main.h"
-#include "climisc.h"
 #include "clinet.h"
 #include "editgui_g.h"
 #include "ggzclient.h"
 #include "ggz_g.h"
 #include "tilespec.h"
-#include "update_queue.h"
 
 /* gui-sdl */
 #include "chatline.h"
@@ -104,6 +102,7 @@ bool RSHIFT;
 bool LCTRL;
 bool RCTRL;
 bool LALT;
+bool do_focus_animation = TRUE;
 int city_names_font_size = 12;
 int city_productions_font_size = 12;
 
@@ -230,21 +229,21 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(unit_tile(pUnit))) != NULL &&
+                (pCity = tile_city(pUnit->tile)) != NULL &&
                 city_owner(pCity) == client.conn.playing) {
                 popup_city_dialog(pCity);
               }
 	    }
           return ID_ERROR;
 
-          case SDLK_F2:
-            units_report_dialog_popup(FALSE);
-          return ID_ERROR;
-
-          case SDLK_F4:
-            city_report_dialog_popup(FALSE);
-            return ID_ERROR;
-
+	  case SDLK_F2:
+	    popup_activeunits_report_dialog(FALSE);
+	  return ID_ERROR;
+	   
+	  case SDLK_F4:
+            popup_city_report_dialog(FALSE);
+	  return ID_ERROR;
+	    
 	  case SDLK_F7:
             send_report_request(REPORT_WONDERS_OF_THE_WORLD);
           return ID_ERROR;
@@ -252,16 +251,16 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
           case SDLK_F8:
             send_report_request(REPORT_TOP_5_CITIES);
           return ID_ERROR;
-
-          case SDLK_F9:
-            if (meswin_dialog_is_open()) {
-              meswin_dialog_popdown();
+	    
+	  case SDLK_F9:
+            if(is_meswin_open()) {
+              popdown_meswin_dialog();
             } else {
-              meswin_dialog_popup(TRUE);
+              popup_meswin_dialog(true);
             }
-            flush_dirty();
-            return ID_ERROR;
-
+	    flush_dirty();
+          return ID_ERROR;
+	    	        
 	  case SDLK_F11:
             send_report_request(REPORT_DEMOGRAPHIC);
           return ID_ERROR;
@@ -632,8 +631,8 @@ Uint16 gui_event_loop(void *pData,
         case SDL_KEYDOWN:
           switch(Main.event.key.keysym.sym) {
             case SDLK_PRINT:
-              fc_snprintf(schot, sizeof(schot), "fc_%05d.bmp", schot_nr++);
-              log_normal(_("Making screenshot %s"), schot);
+              my_snprintf(schot, sizeof(schot), "fc_%05d.bmp", schot_nr++);
+              freelog(LOG_NORMAL, _("Making screenshot %s"), schot);
               SDL_SaveBMP(Main.screen, schot);
             break;
             
@@ -730,7 +729,7 @@ Uint16 gui_event_loop(void *pData,
     if (ID == ID_ERROR) {
       if (callbacks && callback_list_size(callbacks) > 0) {
         struct callback *cb = callback_list_get(callbacks, 0);
-        callback_list_remove(callbacks, cb);
+        callback_list_unlink(callbacks, cb);
         (cb->callback)(cb->data);
         free(cb);
       }
@@ -764,20 +763,19 @@ void ui_init(void)
   putenv((char *)"SDL_VIDEO_CENTERED=yes");
   
   init_sdl(iSDL_Flags);
-
-  log_normal(_("Using Video Output: %s"),
-             SDL_VideoDriverName(device, sizeof(device)));
+  
+  freelog(LOG_NORMAL, _("Using Video Output: %s"),
+	  SDL_VideoDriverName(device, sizeof(device)));
   
   /* create splash screen */  
 #ifdef SMALL_SCREEN
   {
-    SDL_Surface *pTmpSurf = load_surf(fileinfoname(get_data_dirs(),
-                                                   "misc/intro.png"));
+    SDL_Surface *pTmpSurf = load_surf(datafilename("misc/intro.png"));
     pBgd = zoomSurface(pTmpSurf, DEFAULT_ZOOM, DEFAULT_ZOOM, 0);
     FREESURFACE(pTmpSurf);
   }
 #else
-  pBgd = load_surf(fileinfoname(get_data_dirs(), "misc/intro.png"));
+  pBgd = load_surf(datafilename("misc/intro.png"));
 #endif
   
   if(pBgd && SDL_GetVideoInfo()->wm_available) {
@@ -839,73 +837,11 @@ void ui_init(void)
 }
 
 /****************************************************************************
-  Really resize the main window.
-****************************************************************************/
-static void real_resize_window_callback(void *data)
-{
-  struct widget *widget;
-  Uint32 flags = Main.screen->flags;
-
-  if (gui_sdl_fullscreen) {
-    flags |= SDL_FULLSCREEN;
-  } else {
-    flags &= ~SDL_FULLSCREEN;
-  }
-  set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height, flags);
-
-  if (C_S_RUNNING == client_state()) {
-    /* Move units window to botton-right corner. */
-    set_new_unitinfo_window_pos();
-    /* Move minimap window to botton-left corner. */
-    set_new_minimap_window_pos();
-
-    /* Move cooling/warming icons to botton-right corner. */
-    widget = get_widget_pointer_form_main_list(ID_WARMING_ICON);
-    widget_set_position(widget, (Main.screen->w - adj_size(10)
-                                 - (widget->size.w * 2)), widget->size.y);
-
-    widget = get_widget_pointer_form_main_list(ID_COOLING_ICON);
-    widget_set_position(widget, (Main.screen->w - adj_size(10)
-                                 - widget->size.w), widget->size.y);
-
-    map_canvas_resized(Main.screen->w, Main.screen->h);
-    update_info_label();
-    update_unit_info_label(get_units_in_focus());
-    center_on_something();      /* With redrawing full map. */
-    update_order_widgets();
-  } else {
-    draw_intro_gfx();
-    dirty_all();
-  }
-  flush_all();
-}
-
-/****************************************************************************
-  Resize the main window.
-****************************************************************************/
-static void resize_window_callback(struct option *poption)
-{
-  update_queue_add(real_resize_window_callback, NULL);
-}
-
-/****************************************************************************
-  Extra initializers for client options. Here we make set the callback
-  for the specific gui-sdl options.
+  Extra initializers for client options.
 ****************************************************************************/
 void gui_options_extra_init(void)
 {
-  struct option *poption;
-
-#define option_var_set_callback(var, callback)                              \
-  if ((poption = optset_option_by_name(client_optset, #var))) {             \
-    option_set_changed_callback(poption, callback);                         \
-  } else {                                                                  \
-    log_error("Didn't find option %s!", #var);                              \
-  }
-
-  option_var_set_callback(gui_sdl_fullscreen, resize_window_callback);
-  option_var_set_callback(gui_sdl_screen, resize_window_callback);
-#undef option_var_set_callback
+  /* Nothing to do. */
 }
 
 /**************************************************************************
@@ -915,8 +851,9 @@ static void clear_double_messages_call(void)
 {
   int i;
   /* clear double call */
-  for(i = 0; i <= event_type_max(); i++) {
-    if (messages_where[i] & MW_MESSAGES) {
+  for(i=0; i<E_LAST; i++) {
+    if (messages_where[i] & MW_MESSAGES)
+    {
       messages_where[i] &= ~MW_OUTPUT;
     }
   }
@@ -1010,15 +947,15 @@ void ui_main(int argc, char *argv[])
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE
         /* set 320x240 fullscreen */
-        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
                        SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
       #else
         /* small screen on desktop -> don't set 320x240 fullscreen mode */
-        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
                        SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif
     #else
-      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
                      SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
     #endif
     
@@ -1026,14 +963,14 @@ void ui_main(int argc, char *argv[])
     
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE    
-      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #else
-      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif
     #else
-    set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
+    set_video_mode(gui_sdl_screen_width, gui_sdl_screen_height,
       SDL_SWSURFACE | SDL_ANYFORMAT);
     #endif
     
@@ -1048,8 +985,8 @@ void ui_main(int argc, char *argv[])
   /* SDL_WM_SetCaption(_("SDL Client for Freeciv"), _("Freeciv")); */
 
   /* this need correct Main.screen size */
-  init_mapcanvas_and_overview();
-
+  init_mapcanvas_and_overview();    
+  
   set_client_state(C_S_DISCONNECTED);
 
   /* Main game loop */
@@ -1064,13 +1001,11 @@ void ui_main(int argc, char *argv[])
 **************************************************************************/
 void ui_exit()
 {
-
+  
 #if defined UNDER_CE && defined SMALL_SCREEN
   /* change back to window mode to restore the title bar */
   set_video_mode(320, 240, SDL_SWSURFACE | SDL_ANYFORMAT);
 #endif
-
-  free_mapcanvas_and_overview();
   
   free_auxiliary_tech_icons();
   free_intro_radar_sprites();
@@ -1078,14 +1013,14 @@ void ui_exit()
   diplomacy_dialog_done();
   intel_dialog_done();  
 
-  callback_list_destroy(callbacks);
+  callback_list_free(callbacks);
   
   unload_cursors();
 
   FC_FREE(button_behavior.event);
 
-  meswin_dialog_popdown();
-
+  popdown_meswin_dialog();
+        
   del_main_list();
   
   free_font_system();
@@ -1108,7 +1043,7 @@ enum gui_type get_gui_type(void)
 **************************************************************************/
 void sound_bell(void)
 {
-  log_debug("sound_bell : PORT ME");
+  freelog(LOG_DEBUG, "sound_bell : PORT ME");
 }
 
 /**************************************************************************
@@ -1134,7 +1069,7 @@ void disable_focus_animation(void)
 **************************************************************************/
 void add_net_input(int sock)
 {
-  log_debug("Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "Connection UP (%d)", sock);
   net_socket = sock;
   autoconnect = FALSE;
   enable_focus_animation();
@@ -1145,7 +1080,7 @@ void add_net_input(int sock)
 **************************************************************************/
 void remove_net_input(void)
 {
-  log_debug("Connection DOWN... ");
+  freelog(LOG_DEBUG, "Connection DOWN... ");
   net_socket = (-1);
   disable_focus_animation();
   draw_goto_patrol_lines = FALSE;
@@ -1157,7 +1092,7 @@ void remove_net_input(void)
 **************************************************************************/
 void add_ggz_input(int sock)
 {
-  log_debug("GGZ Connection UP (%d)", sock);
+  freelog(LOG_DEBUG, "GGZ Connection UP (%d)", sock);
   ggz_socket = sock;
 }
 
@@ -1167,7 +1102,7 @@ void add_ggz_input(int sock)
 **************************************************************************/
 void remove_ggz_input(void)
 {
-  log_debug("GGZ Connection DOWN... ");
+  freelog(LOG_DEBUG, "GGZ Connection DOWN... ");
   ggz_socket = (-1);
 }
 

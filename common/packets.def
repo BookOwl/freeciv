@@ -62,18 +62,6 @@ Syntax:
               the client outside of the reception of that packet, or for
               any packet with side effects at the client.
 
-     is-game-info: same as is-info, but the state is reset every time a
-                   connection changes of player target.
-
-     force: sending functions will take an extra argument 'force_to_send'
-            to force to send the packet (at least an empty one). In this
-            case, the is-info or is-game-info flags are ignored. It has no
-            effect if the packets doesn't have the is-info or is-game-info
-            flags.
-
-     cancel(PACKET_number): Cancel a packet with the same key (must be the
-     same key type at the start of the packet), useful for is-info packets.
-
      pre-send:
      post-recv:
      post-send: generate calls to pre-send, post-receive and post-send
@@ -153,7 +141,7 @@ Syntax:
       add-cap: only transfer this field if the given capability is
       available at runtime. If you have a capability named
       "new_version" a field line may look like this:
-        TILE tile; add-cap(new_version)
+        COORD x; add-cap(new_version)
       when making an optional capability mandatory, go through and remove
       the add-cap flag for it while leaving the field intact.
 
@@ -164,97 +152,90 @@ Syntax:
 */
 
 # typedefs for numbers
-type BOOL               = bool8(bool)
-type FLOAT              = float10000(float)
-type FLOAT10x7          = float1000000(float)
-type SINT8              = sint8(int)
-type SINT16             = sint16(int)
-type SINT32             = sint32(int)
-type UINT8              = uint8(int)
-type UINT16             = uint16(int)
-type UINT32             = uint32(int)
+type UINT8		= uint8(int)
+type UINT16		= uint16(int)
+type UINT32		= uint32(int)
+type SINT8		= sint8(int)
+type SINT16		= sint16(int)
+type SINT32		= sint32(int)
+type BOOL		= bool8(bool)
+type FLOAT		= float10000(float)
+type FLOAT10x7		= float1000000(float)
 
 # typedefs for arrays/structs
-type BIT_STRING         = bit_string(char)
-type MEMORY             = memory(unsigned char)
-type REQUIREMENT        = requirement(struct requirement)
-type STRING             = string(char)
-type TECH_LIST          = tech_list(int)
-type WORKLIST           = worklist(struct worklist)
+type MEMORY		= memory(unsigned char)
+type STRING		= string(char)
+type BIT_STRING		= bit_string(char)
+type WORKLIST		= worklist(struct worklist)
+type TECH_LIST		= tech_list(int)
+type REQUIREMENT	= requirement(struct requirement)
 
 # typedefs for enums
-type ACTIVITY           = uint8(enum unit_activity)
-type AIRLIFTING_STYLE   = uint8(enum airlifting_style)
-type AUTH_TYPE          = uint8(enum authentication_type)
-type BASE_GUI           = uint8(enum base_gui_type)
-type BORDERS_MODE       = uint8(enum borders_mode)
-type CLAUSE             = uint8(enum clause_type)
-type CMDLEVEL           = uint8(enum cmdlevel)
-type DIPLOMACY_MODE     = uint8(enum diplomacy_mode)
-type DIPLOMAT_ACTION    = uint8(enum diplomat_actions)
-type DIRECTION          = uint8(enum direction8)
-type EFFECT_TYPE        = uint8(enum effect_type)
-type EVENT              = sint16(enum event_type)
-type GUI_TYPE           = uint8(enum gui_type)
-type IMPR_GENUS         = uint8(enum impr_genus_id)
-type IMPR_RANGE         = uint8(enum impr_range)
-type KNOWN              = uint8(enum known_type)
-type ORDERS             = uint8(enum unit_orders)
-type PHASE_MODE         = uint8(enum phase_mode_types)
-type PLACE_TYPE         = uint8(enum spaceship_place_type)
-type REPORT_TYPE        = uint8(enum report_type)
-type REQ_RANGE          = uint8(enum req_range)
-type REQ_TYPE           = uint8(enum universals_n)
-type RIVER_MOVE         = uint8(enum special_river_move)
-type SPECIAL            = uint16(enum tile_special_type)
+type CLAUSE		= uint8(enum clause_type)
+type ACTIVITY		= uint8(enum unit_activity)
+type EVENT		= sint16(enum event_type)
+type KNOWN		= uint8(enum known_type)
+type SPECIAL		= uint16(enum tile_special_type)
+type DIPLOMAT_ACTION	= uint8(enum diplomat_actions)
+type CMDLEVEL		= uint8(enum cmdlevel_id)
+type PLACE_TYPE		= uint8(enum spaceship_place_type)
+type RIVER_MOVE		= uint8(enum special_river_move)
+type REPORT_TYPE	= uint8(enum report_type)
+type AUTH_TYPE		= uint8(enum authentication_type)
+type CITY_MAP		= uint8(enum city_tile_type)
+type IMPR_RANGE		= uint8(enum impr_range)
+type IMPR_GENUS		= uint8(enum impr_genus_id)
+type DIRECTION		= uint8(enum direction8)
+type ORDERS		= uint8(enum unit_orders)
+type SSET_TYPE		= uint8(enum sset_type)
 type SSET_CLASS         = uint8(enum sset_class)
-type SSET_TYPE          = uint8(enum sset_type)
+type REQ_TYPE	        = uint8(enum universals_n)
+type REQ_RANGE		= uint8(enum req_range)
+type EFFECT_TYPE	= uint8(enum effect_type)
+type BASE               = sint8(Base_type_id)
+type BASE_GUI           = uint8(enum base_gui_type)
+type GUI_TYPE           = uint8(enum gui_type)
 
-# typedefs for bit vectors
-type BV_BASE_FLAGS      = bitvector(bv_base_flags)
-type BV_BASES           = bitvector(bv_bases)
-type BV_CITY_OPTIONS    = bitvector(bv_city_options)
-type BV_IMPR_FLAGS      = bitvector(bv_impr_flags)
-type BV_IMPRS           = bitvector(bv_imprs)
-type BV_PLAYER          = bitvector(bv_player)
-type BV_SPECIAL         = bitvector(bv_special)
-type BV_STARTPOS_NATIONS= bitvector(bv_startpos_nations)
-type BV_TECH_FLAGS      = bitvector(bv_tech_flags)
-type BV_TERRAIN_FLAGS   = bitvector(bv_terrain_flags)
+type BV_IMPRS		= bitvector(bv_imprs)
 type BV_UCLASS_FLAGS    = bitvector(bv_unit_class_flags)
+type BV_FLAGS		= bitvector(bv_flags)
+type BV_ROLES		= bitvector(bv_roles)
+type BV_TERRAIN_FLAGS	= bitvector(bv_terrain_flags)
+type BV_BASE_FLAGS      = bitvector(bv_base_flags)
+type BV_CITY_OPTIONS    = bitvector(bv_city_options)
+type BV_SPECIAL         = bitvector(bv_special)
+type BV_PLAYER          = bitvector(bv_player)
 type BV_UNIT_CLASSES    = bitvector(bv_unit_classes)
-type BV_UTYPE_FLAGS     = bitvector(bv_unit_type_flags)
-type BV_UTYPE_ROLES     = bitvector(bv_unit_type_roles)
+type BV_BASES           = bitvector(bv_bases)
+type DIPLSTATE		= diplstate(struct player_diplstate)
+type VISION		= uint32(unsigned int)
 
 # typedefs for IDs
-type BASE               = sint8(Base_type_id)
-type CITY               = UINT16
-type CONNECTION         = SINT16
+type PLAYER 		= SINT8
+type CITY   		= UINT16
+type UNIT   		= UINT16
+type TECH     		= UINT8
+type UNIT_TYPE		= uint8(Unit_type_id)
+type NATION		= sint16(Nation_type_id)
+type GOVERNMENT		= UINT8
+type CONNECTION		= UINT8
+type TEAM		= UINT8
 type CONTINENT          = sint16(Continent_id)
-type EDIT_TECH_MODE     = uint8(enum editor_tech_mode)
-type GOVERNMENT         = UINT8
-type IMPROVEMENT        = uint8(Impr_type_id)
-type NATION             = sint16(Nation_type_id)
-type PLAYER             = SINT8
+type IMPROVEMENT	= uint8(Impr_type_id)
 type RESOURCE           = uint8(Resource_type_id)
 type SPECIALIST         = uint8(Specialist_type_id)
-type TEAM               = UINT8
-type TECH               = UINT8
 type TERRAIN            = uint8(Terrain_type_id)
-type TILE               = SINT32
-type UNIT               = UINT16
-type UNIT_TYPE          = uint8(Unit_type_id)
+type EDIT_TECH_MODE     = uint8(enum editor_tech_mode)
 
 # other typedefs
-type CITY_COORD         = UINT8
-type GOLD               = UINT32
-type HP                 = UINT8
-type PERCENT            = UINT8
+type COORD  		= UINT8
+type XYSIZE  		= UINT16
+type YEAR     		= SINT16
+type HP     		= UINT8
+type PERCENT  		= UINT8
+type GOLD		= UINT32
+type TURN		= SINT16
 type PHASE              = SINT16
-type TURN               = SINT16
-type XYSIZE             = UINT16
-type YEAR               = SINT16
-type CITIZENS           = UINT8
 
 /****************************************************
 The remaining lines are the definition of the packets. These are
@@ -275,25 +256,30 @@ grouped together. There are the following groups:
   Scenario
   Voting
   Editor
+
+The last used packet number is 182.
 ****************************************************/
 
 
 /************** General packets **********************/
 
-# For compatibility with older versions, this number cannot be changed.
-PACKET_PROCESSING_STARTED = 0; sc
+PACKET_PROCESSING_STARTED=0; sc
 end
 
-# For compatibility with older versions, this number cannot be changed.
-PACKET_PROCESSING_FINISHED = 1; sc
+PACKET_PROCESSING_FINISHED=1; sc
+end
+
+PACKET_FREEZE_HINT=2;sc,lsend
+end
+
+PACKET_THAW_HINT=3;sc,lsend
 end
 
 /************** Login/pregame/endgame packets **********************/
 
 # This packet is the first real (freeciv specific) packet send by the
 # client. The player hasn't been accepted yet.
-# For compatibility with older versions, this number cannot be changed.
-PACKET_SERVER_JOIN_REQ = 4; cs, dsend, no-delta, no-handle
+PACKET_SERVER_JOIN_REQ=4; cs, dsend,no-delta,no-handle
   STRING username[MAX_LEN_NAME];
   STRING capability[MAX_LEN_CAPSTR];
   STRING version_label[MAX_LEN_NAME];
@@ -301,8 +287,7 @@ PACKET_SERVER_JOIN_REQ = 4; cs, dsend, no-delta, no-handle
 end
 
 # ... and the server replies.
-# For compatibility with older versions, this number cannot be changed.
-PACKET_SERVER_JOIN_REPLY = 5; sc, no-delta
+PACKET_SERVER_JOIN_REPLY=5; sc,no-delta
   BOOL you_can_join;
   STRING message[MAX_LEN_MSG];
   STRING capability[MAX_LEN_CAPSTR];
@@ -311,20 +296,20 @@ PACKET_SERVER_JOIN_REPLY = 5; sc, no-delta
   CONNECTION conn_id;
 end
 
-PACKET_AUTHENTICATION_REQ = 6; sc, handle-per-conn, dsend
+PACKET_AUTHENTICATION_REQ=6;sc,handle-per-conn,dsend
   AUTH_TYPE type;
   STRING message[MAX_LEN_MSG]; /* explain to the client if there's a problem */
 end
 
-PACKET_AUTHENTICATION_REPLY = 7; cs, no-handle
+PACKET_AUTHENTICATION_REPLY=7;cs,no-handle
   STRING password[MAX_LEN_PASSWORD];
 end
 
 
-PACKET_SERVER_SHUTDOWN = 8; sc, lsend
+PACKET_SERVER_SHUTDOWN=8;sc,lsend
 end
 
-PACKET_NATION_SELECT_REQ = 10; cs, handle-per-conn, dsend
+PACKET_NATION_SELECT_REQ=10;cs,handle-per-conn,dsend
   PLAYER player_no;
   NATION nation_no;
   BOOL is_male;
@@ -332,29 +317,38 @@ PACKET_NATION_SELECT_REQ = 10; cs, handle-per-conn, dsend
   UINT8 city_style;
 end
 
-PACKET_PLAYER_READY = 11; cs, dsend
+PACKET_PLAYER_READY=116;cs,dsend
   PLAYER player_no;
   BOOL is_ready;
 end
 
-PACKET_ENDGAME_REPORT = 12; sc, lsend, no-delta
-  UINT8 category_num;
-  STRING category_name[32:category_num][MAX_LEN_NAME];
+# 12 removed in 2.2
 
-  UINT8 player_num;
-  PLAYER player_id[MAX_NUM_PLAYERS:player_num];
-  UINT16 score[MAX_NUM_PLAYERS:player_num];
-  UINT32 category_score[32:category_num][MAX_NUM_PLAYERS:player_num];
+PACKET_ENDGAME_REPORT=13;sc,lsend
+  UINT8 nscores;
+  PLAYER id[MAX_NUM_PLAYERS:nscores];
+  UINT16 score[MAX_NUM_PLAYERS:nscores];
+  UINT32 pop[MAX_NUM_PLAYERS:nscores];
+  UINT16 bnp[MAX_NUM_PLAYERS:nscores];
+  UINT16 mfg[MAX_NUM_PLAYERS:nscores];
+  UINT16 cities[MAX_NUM_PLAYERS:nscores];
+  UINT16 techs[MAX_NUM_PLAYERS:nscores];
+  UINT16 mil_service[MAX_NUM_PLAYERS:nscores];
+  UINT8 wonders[MAX_NUM_PLAYERS:nscores];
+  UINT16 research[MAX_NUM_PLAYERS:nscores];
+  UINT32 landarea[MAX_NUM_PLAYERS:nscores];
+  UINT32 settledarea[MAX_NUM_PLAYERS:nscores];
+  UINT16 literacy[MAX_NUM_PLAYERS:nscores];
+  UINT32 spaceship[MAX_NUM_PLAYERS:nscores];
 end
 
 /************** Info packets **********************/
 
-# Use of is-game-info on this packet is dangerous but speeds things up
-# greatly. Packet spam from excess sending of tiles has slowed the client
-# greatly in the past.  However see the comment on is-game-info at the top
-# about the dangers.
-PACKET_TILE_INFO = 15; sc, lsend, is-game-info
-  TILE tile; key
+# Use of is-info on this packet is dangerous but speeds things up greatly.
+# Packet spam from excess sending of tiles has slowed the client greatly in
+# the past.  However see the comment on is_info at the top about the dangers.
+PACKET_TILE_INFO=14; sc,lsend,is-info
+  COORD x, y; key
 
   CONTINENT continent;
   KNOWN known;
@@ -366,160 +360,188 @@ PACKET_TILE_INFO = 15; sc, lsend, is-game-info
   BOOL special[S_LAST];
   BV_BASES bases;
   STRING spec_sprite[MAX_LEN_NAME];
-  STRING label[MAX_LEN_NAME];
+  NATION nation_start;
 end
 
 # This packet used to have is_info set but that doesn't work with the
 # seconds_to_phasedone field: sending the same value a second time after a
 # while has passed means a completely reset timeout.
-#
-# The variables in the packet are listed in alphabetical order.
-PACKET_GAME_INFO = 16; sc
-  UINT8 add_to_size_limit;
-  UINT8 aifill;
-  AIRLIFTING_STYLE airlifting_style;
-  UINT8 angrycitizen;
-  SINT16 base_pollution;
-  UINT8 base_tech_cost;
-  UINT8 border_city_radius_sq;
-  UINT8 border_size_effect;
-  BORDERS_MODE borders;
-  UINT32 base_bribe_cost;
-  BOOL calendar_skip_0;
-  /* size limit for cities before they can celebrate */
-  UINT8 celebratesize;
-  BOOL changable_tax;
-  BOOL citizen_nationality;
-  UINT8 citymindist;
-  UINT32 cooling;
-  UINT32 coolinglevel;
-  DIPLOMACY_MODE diplomacy;
-  BOOL fogofwar;
-  UINT8 food_cost;
-  UINT32 foodbox;
-  UINT8 forced_gold;
-  UINT8 forced_luxury;
-  UINT8 forced_science;
-  UINT8 fulltradesize;
-  /* True if at least one civilization has researched a tech */
-  BOOL global_advances[A_LAST]; diff
-  BOOL global_warming;
-  UINT32 globalwarming;
+PACKET_GAME_INFO=15; sc
   GOLD gold;
+  UINT32 tech;
+  UINT32 skill_level;
+  
+  UINT8 aifill;
+
+  BOOL is_new_game;   # TRUE only in pregame for "new" (not loaded) games
+  BOOL is_edit_mode;  # If set, editing is allowed
+  FLOAT seconds_to_phasedone;
+  UINT32 timeout;
+  TURN turn;
+  PHASE phase;
+  YEAR year, start_year;
+  BOOL year_0_hack;
+  UINT32 end_turn;
+  STRING positive_year_label[MAX_LEN_NAME];
+  STRING negative_year_label[MAX_LEN_NAME];
+
+  UINT8 phase_mode;
+  UINT32 num_phases;
+
+  PLAYER min_players;
+  PLAYER max_players;
+
+  UINT32 globalwarming, heating, warminglevel;
+  UINT32 nuclearwinter, cooling, coolinglevel;
+
+  UINT8 diplcost, freecost, conquercost;
+  UINT8 angrycitizen;
+  UINT8 techpenalty;
+  UINT32 foodbox;
+  UINT32 shieldbox;
+  UINT32 sciencebox;
+  UINT8 diplomacy;
+  UINT8 dispersion;
+  UINT16 tcptimeout;
+  UINT16 netwait;
+  UINT16 pingtimeout;
+  UINT16 pingtime;
+  UINT8 diplchance;
+  UINT8 citymindist;
+  UINT8 civilwarsize;
+  UINT8 contactturns;
+  UINT8 rapturedelay;
+  UINT8 celebratesize; /* size limit for cities before they can celebrate */
+  UINT8 barbarianrate;
+  UINT32 onsetbarbarian;
+  UINT8 occupychance;
+  BOOL autoattack;
+  BOOL spacerace;
+  BOOL endspaceship;
+  UINT8 aqueductloss;
+  UINT8 killcitizen;
+  UINT8 razechance;
+  BOOL savepalace;
+  BOOL natural_city_names;
+  BOOL migration;
+  UINT8 mgr_turninterval;
+  BOOL mgr_foodneeded;
+  UINT8 mgr_distance;
+  UINT8 mgr_nationchance;
+  UINT8 mgr_worldchance;
+  BOOL turnblock;
+  BOOL fixedlength;
+  BOOL auto_ai_toggle;
+  BOOL fogofwar;  
+  UINT8 borders;
+  BOOL happyborders;
+  BOOL slow_invasions;
+  UINT8 add_to_size_limit;
+  UINT8 notradesize, fulltradesize;
+  UINT8 trademindist;
+  UINT8 allowed_city_names;
+  IMPROVEMENT palace_building;
+  IMPROVEMENT land_defend_building;
+  BOOL changable_tax;
+  UINT8 forced_science;
+  UINT8 forced_luxury;
+  UINT8 forced_gold;
+  BOOL vision_reveal_tiles;
+  UINT8 min_city_center_output[O_LAST];
+  UINT8 min_dist_bw_cities;
+  UINT8 init_vis_radius_sq;
+  BOOL pillage_select;
+  UINT8 nuke_contamination;
   UINT8 gold_upkeep_style;
-  GOVERNMENT government_during_revolution_id;
-  UINT8 granary_food_inc;
   UINT8 granary_food_ini[MAX_GRANARY_INIS];
   UINT8 granary_num_inis;
-  PLAYER great_wonder_owners[B_LAST]; diff
-  UINT8 happy_cost;
-  BOOL happyborders;
-  UINT32 heating;
-  UINT8 illness_base_factor;
-  UINT8 illness_min_size;
+  UINT8 granary_food_inc;
   BOOL illness_on;
-  UINT8 illness_pollution_factor;
+  UINT8 illness_min_size;
+  UINT8 illness_base_factor;
   UINT8 illness_trade_infection;
-  UINT8 init_city_radius_sq;
-  /* If set, editing is allowed */
-  BOOL is_edit_mode;
-  /* TRUE only in pregame for "new" (not loaded) games */
-  BOOL is_new_game;
-  UINT8 killcitizen;
-  BOOL killstack;
-  UINT8 min_city_center_output[O_LAST];
-  STRING negative_year_label[MAX_LEN_NAME];
-  UINT8 notradesize;
-  BOOL nuclear_winter;
-  UINT32 nuclearwinter;
-  PHASE phase;
-  PHASE_MODE phase_mode;
-  BOOL pillage_select;
-  STRING positive_year_label[MAX_LEN_NAME];
-  UINT8 rapturedelay;
-  BOOL restrictinfra;
-  BOOL unreachable_protects;
-  UINT32 sciencebox;
-  FLOAT seconds_to_phasedone;
-  UINT32 shieldbox;
-  UINT32 skill_level;
-  BOOL slow_invasions;
-  BOOL spacerace;
-  BOOL team_pooled_research;
-  UINT32 tech;
+  UINT8 illness_pollution_factor;
   UINT8 tech_cost_style;
   UINT8 tech_leakage;
-  UINT16 tech_upkeep_divider;
-  UINT8 tech_upkeep_style;
-  UINT32 timeout;
+  BOOL killstack;
   BOOL tired_attack;
-  UINT8 trademindist;
-  BOOL trading_city;
-  BOOL trading_gold;
-  BOOL trading_tech;
-  TURN turn;
-  UINT32 warminglevel;
-  YEAR year;
-  BOOL year_0_hack;
+  UINT8 border_city_radius_sq;
+  UINT8 border_size_effect;
+  BOOL calendar_skip_0;
+  UINT8 upgrade_veteran_loss;
+  UINT8 autoupgrade_veteran_loss;
+  UINT16 incite_improvement_factor;
+  UINT16 incite_unit_factor;
+  UINT16 incite_total_factor;
+  GOVERNMENT government_during_revolution_id;
+  UINT8 revolution_length;
+  SINT16 base_pollution;
+  UINT8 happy_cost;
+  UINT8 food_cost;
+  UINT16 base_bribe_cost;
+  UINT16 base_incite_cost;
+  UINT8 base_tech_cost;
+  UINT16 ransom_gold;
+
+  UINT8 save_nturns;
+  UINT8 save_compress_level;
+  UINT8 save_compress_type;
+
+  STRING start_units[MAX_LEN_STARTUNIT];
+
+  UINT8 num_teams;
+  STRING team_names_orig[MAX_NUM_TEAMS:num_teams][MAX_LEN_NAME];
+  
+  /* True if at least one civilization has researched a tech */
+  BOOL global_advances[A_LAST]; diff
+  PLAYER great_wonder_owners[B_LAST]; diff
 end
 
-PACKET_MAP_INFO = 17; sc, lsend
+PACKET_MAP_INFO=16; sc,lsend
   XYSIZE xsize;
   XYSIZE ysize;
   UINT8 topology_id;
 end
 
-PACKET_NUKE_TILE_INFO = 18; sc, dsend,lsend
-  TILE tile;
-end
-
-PACKET_TEAM_NAME_INFO = 19; sc, lsend
-  TEAM team_id; key
-  STRING team_name[MAX_LEN_NAME];
+PACKET_NUKE_TILE_INFO=17;sc,dsend,lsend
+  COORD x,y;
 end
 
 /************** Chat/event packets **********************/
 
-PACKET_CHAT_MSG = 25; sc, lsend
+PACKET_CHAT_MSG=18;sc, pre-send, post-recv,lsend
   STRING message[MAX_LEN_MSG];
-  TILE tile;
+  COORD x, y;
   EVENT event;
   CONNECTION conn_id;
 end
 
-PACKET_CHAT_MSG_REQ = 26; cs, handle-per-conn, dsend
+PACKET_CHAT_MSG_REQ=19;cs,handle-per-conn,dsend
   STRING message[MAX_LEN_MSG];
 end
 
-PACKET_CONNECT_MSG = 27; sc, dsend
+PACKET_CONNECT_MSG=182;sc,dsend
   STRING message[MAX_LEN_MSG];
 end
 
 /************** City packets **********************/
 
-PACKET_CITY_REMOVE = 30; sc, dsend, lsend, cancel(PACKET_CITY_INFO), cancel(PACKET_CITY_SHORT_INFO)
+PACKET_CITY_REMOVE=20;sc,dsend,lsend
   CITY city_id;
 end
 
-PACKET_CITY_INFO = 31; sc, lsend, is-game-info, force, cancel(PACKET_CITY_SHORT_INFO)
+PACKET_CITY_INFO=21; sc,lsend
   CITY id; key
-  TILE tile;
+  COORD x;
+  COORD y;
 
   PLAYER owner;
-  CITIZENS size;
-  UINT8 city_radius_sq;
+  UINT8 size;
 
-  CITIZENS ppl_happy[FEELING_LAST];
-  CITIZENS ppl_content[FEELING_LAST];
-  CITIZENS ppl_unhappy[FEELING_LAST];
-  CITIZENS ppl_angry[FEELING_LAST];
+  UINT8 ppl_happy[5], ppl_content[5], ppl_unhappy[5], ppl_angry[5];
 
   UINT8 specialists_size;
-  CITIZENS specialists[SP_MAX:specialists_size];
-
-  UINT8 nationalities_count;
-  PLAYER nation_id[MAX_NUM_PLAYER_SLOTS:nationalities_count];
-  CITIZENS nation_citizens[MAX_NUM_PLAYER_SLOTS:nationalities_count];
+  UINT8 specialists[SP_MAX:specialists_size];
 
   SINT16 surplus[O_LAST];
   UINT16 waste[O_LAST];
@@ -533,13 +555,15 @@ PACKET_CITY_INFO = 31; sc, lsend, is-game-info, force, cancel(PACKET_CITY_SHORT_
   UINT8 trade_value[NUM_TRADE_ROUTES];
 
   UINT16 pollution;
-  UINT16 illness_trade;
+  UINT16 illness; remove-cap(trade_illness)
+  UINT16 illness_trade; add-cap(trade_illness)
 
   UINT8 production_kind;
   UINT8 production_value;
 
   TURN turn_founded;
   TURN turn_last_built;
+  FLOAT migration_score_unused;
   UINT8 changed_from_kind;
   UINT8 changed_from_value;
   UINT16 before_change_shields;
@@ -560,12 +584,15 @@ PACKET_CITY_INFO = 31; sc, lsend, is-game-info, force, cancel(PACKET_CITY_SHORT_
   STRING name[MAX_LEN_NAME];
 end
 
-PACKET_CITY_SHORT_INFO = 32; sc, lsend, is-game-info, cancel(PACKET_CITY_INFO)
+PACKET_CITY_SHORT_INFO=22; sc,lsend
   CITY id; key
-  TILE tile;
+  COORD x;
+  COORD y;
 
   PLAYER owner;
   UINT8 size;
+
+  UINT16 tile_trade;
 
   BOOL occupied;
   BOOL walls;
@@ -577,54 +604,56 @@ PACKET_CITY_SHORT_INFO = 32; sc, lsend, is-game-info, cancel(PACKET_CITY_INFO)
   STRING name[MAX_LEN_NAME];
 end
 
-PACKET_CITY_SELL = 33; cs, dsend
+PACKET_CITY_SELL=23;cs,dsend
   CITY city_id;
   UINT8 build_id;
 end
 
-PACKET_CITY_BUY = 34; cs, dsend
+PACKET_CITY_BUY=24;cs,dsend
   CITY city_id;
 end
 
-PACKET_CITY_CHANGE = 35; cs, dsend
+PACKET_CITY_CHANGE=25;cs,dsend
   CITY city_id;
   UINT8 production_kind;
   UINT8 production_value;
 end
 
-PACKET_CITY_WORKLIST = 36; cs, dsend
+PACKET_CITY_WORKLIST=26;cs,dsend
   CITY city_id;
   WORKLIST worklist;
 end
 
-PACKET_CITY_MAKE_SPECIALIST = 37; cs, dsend
+PACKET_CITY_MAKE_SPECIALIST=27;cs,dsend
   CITY city_id;
-  CITY_COORD worker_x, worker_y;
+  COORD worker_x, worker_y;
 end
 
-PACKET_CITY_MAKE_WORKER = 38; cs, dsend
+PACKET_CITY_MAKE_WORKER=28;cs,dsend
   CITY city_id;
-  CITY_COORD worker_x, worker_y;
+  COORD worker_x, worker_y;
 end
 
-PACKET_CITY_CHANGE_SPECIALIST = 39; cs, dsend
+PACKET_CITY_CHANGE_SPECIALIST=29;cs,dsend
   CITY city_id;
   SPECIALIST from, to;
 end
 
-PACKET_CITY_RENAME = 40; cs, dsend
+PACKET_CITY_RENAME=30;cs,dsend
   CITY city_id;
   STRING name[MAX_LEN_NAME];
 end
 
-PACKET_CITY_OPTIONS_REQ = 41; cs, dsend
+PACKET_CITY_OPTIONS_REQ=31;cs,dsend
   CITY city_id;
   BV_CITY_OPTIONS options;
 end
 
-PACKET_CITY_REFRESH = 42; cs, dsend
+PACKET_CITY_REFRESH=32;cs,dsend
   CITY city_id;
 end
+
+# 33-34 removed in 2.1
 
 # For city name suggestions, client sends unit id of unit building the
 # city.  The server does not use the id, but sends it back to the
@@ -632,16 +661,16 @@ end
 # it arrives back. (Currently, for city renaming, default is existing
 # name; if wanted to suggest a new name, could do the same thing
 # sending the city id as id, and only client needs to change.)
-PACKET_CITY_NAME_SUGGESTION_REQ = 43; cs, dsend
+PACKET_CITY_NAME_SUGGESTION_REQ=35;cs,dsend
   UNIT unit_id;
 end
 
-PACKET_CITY_NAME_SUGGESTION_INFO = 44; sc, dsend, lsend
+PACKET_CITY_NAME_SUGGESTION_INFO=36;sc,dsend,lsend
   UNIT unit_id;
   STRING name[MAX_LEN_NAME];
 end
 
-PACKET_CITY_SABOTAGE_LIST = 45; sc, lsend
+PACKET_CITY_SABOTAGE_LIST=37;sc,lsend
   UNIT diplomat_id;
   CITY city_id;
   BV_IMPRS improvements;
@@ -649,12 +678,12 @@ end
 
 /************** Player packets **********************/
 
-PACKET_PLAYER_REMOVE = 50; sc, dsend, cancel(PACKET_PLAYER_INFO)
+PACKET_PLAYER_REMOVE=38;sc,dsend
   PLAYER playerno;
 end
 
-PACKET_PLAYER_INFO = 51; sc, is-info
-  PLAYER playerno; key
+PACKET_PLAYER_INFO=39;sc
+  PLAYER playerno; key 
   STRING name[MAX_LEN_NAME];
   STRING username[MAX_LEN_NAME];
 
@@ -663,7 +692,7 @@ PACKET_PLAYER_INFO = 51; sc, is-info
   BOOL was_created;
   GOVERNMENT government;
   GOVERNMENT target_government;
-  BOOL real_embassy[MAX_NUM_PLAYER_SLOTS];
+  BOOL real_embassy[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   UINT8 city_style;
   NATION nation;
   TEAM team;
@@ -672,6 +701,8 @@ PACKET_PLAYER_INFO = 51; sc, is-info
   TURN nturns_idle;
   BOOL is_alive;
 
+  DIPLSTATE diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
+  
   GOLD gold;
   PERCENT tax, science,luxury;
 
@@ -688,68 +719,53 @@ PACKET_PLAYER_INFO = 51; sc, is-info
   BOOL ai;
   UINT8 ai_skill_level;
   UINT8 barbarian_type;
-  BV_PLAYER gives_shared_vision;
+  VISION gives_shared_vision;
   STRING inventions[A_LAST+1];
-  SINT16 love[MAX_NUM_PLAYER_SLOTS];
-
-  UINT8 color_red;
-  UINT8 color_green;
-  UINT8 color_blue;
+  SINT16 love[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
 
   CITY wonders[B_LAST]; diff
 end
 
-PACKET_PLAYER_PHASE_DONE = 52; cs, dsend
+PACKET_PLAYER_PHASE_DONE=40;cs,dsend
   TURN turn;
 end
 
-PACKET_PLAYER_RATES = 53; cs, dsend
+PACKET_PLAYER_RATES=41;cs,dsend
   PERCENT tax, luxury, science;
 end
 
-PACKET_PLAYER_CHANGE_GOVERNMENT = 54; cs, dsend
+PACKET_PLAYER_CHANGE_GOVERNMENT=43;cs,dsend
   GOVERNMENT government;
 end
 
-PACKET_PLAYER_RESEARCH = 55; cs, dsend
+PACKET_PLAYER_RESEARCH=44;cs,dsend
   TECH tech;
 end
 
-PACKET_PLAYER_TECH_GOAL = 56; cs, dsend
+PACKET_PLAYER_TECH_GOAL=45;cs,dsend
   TECH tech;
 end
 
-PACKET_PLAYER_ATTRIBUTE_BLOCK = 57; cs
+PACKET_PLAYER_ATTRIBUTE_BLOCK=46;cs
 end
 
-PACKET_PLAYER_ATTRIBUTE_CHUNK = 58; pre-send, sc, cs, handle-via-packet
+PACKET_PLAYER_ATTRIBUTE_CHUNK=47; pre-send, sc,cs,handle-via-packet
   UINT32 offset; key
   UINT32 total_length, chunk_length;
   /* to keep memory management simple don't allocate dynamic memory */
   MEMORY data[ATTRIBUTE_CHUNK_SIZE:chunk_length]; diff
 end
 
-PACKET_PLAYER_DIPLSTATE = 59; sc
-  UINT32 diplstate_id; key
-  PLAYER plr1;
-  PLAYER plr2;
-  UINT8 type;
-  UINT16 turns_left;
-  UINT8 has_reason_to_cancel;
-  UINT16 contact_turns_left;
-end
-
 /************** Unit packets **********************/
 
-PACKET_UNIT_REMOVE = 62; sc, dsend, lsend, cancel(PACKET_UNIT_INFO), cancel(PACKET_UNIT_SHORT_INFO)
+PACKET_UNIT_REMOVE=48;sc,dsend,lsend
   UNIT unit_id;
 end
 
-PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
+PACKET_UNIT_INFO=49; sc,lsend
   UNIT id; key
   PLAYER owner;
-  TILE tile;
-  DIRECTION facing;
+  COORD x,y;
   CITY homecity;
 
   UINT8 upkeep[O_LAST];
@@ -760,15 +776,12 @@ PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
 
   UNIT_TYPE type;
   UNIT transported_by; /* Only valid if transported is set. */
-  UINT8 movesleft, hp, fuel, activity_count, changed_from_count;
+  UINT8 movesleft, hp, fuel, activity_count;
   UINT8 occupy;
-  TILE goto_tile;
+  COORD goto_dest_x,goto_dest_y;
   ACTIVITY activity;
   SPECIAL activity_target;
   BASE activity_base;
-  ACTIVITY changed_from;
-  SPECIAL changed_from_target;
-  BASE changed_from_base;
 
   SINT8 battlegroup;
 
@@ -781,11 +794,10 @@ PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
   BASE orders_bases[MAX_LEN_ROUTE:orders_length];
 end
 
-PACKET_UNIT_SHORT_INFO = 64; sc, lsend, is-game-info, cancel(PACKET_UNIT_INFO)
+PACKET_UNIT_SHORT_INFO=50; sc,lsend
   UNIT id; key
   PLAYER owner;
-  TILE tile;
-  DIRECTION facing;
+  COORD x,y;
   UNIT_TYPE type;
 
   UINT8 veteran;
@@ -803,7 +815,7 @@ PACKET_UNIT_SHORT_INFO = 64; sc, lsend, is-game-info, cancel(PACKET_UNIT_INFO)
 			   (not used by UNIT_INFO_IDENTITY) */
 end
 
-PACKET_UNIT_COMBAT_INFO = 65; sc, lsend
+PACKET_UNIT_COMBAT_INFO=51; sc,lsend
   UNIT attacker_unit_id;
   UNIT defender_unit_id;
   HP attacker_hp;
@@ -811,42 +823,42 @@ PACKET_UNIT_COMBAT_INFO = 65; sc, lsend
   BOOL make_winner_veteran;
 end
 
-PACKET_UNIT_MOVE = 66;cs, dsend
+PACKET_UNIT_MOVE=52;cs,dsend
   UNIT unit_id;
-  TILE tile;
+  COORD x, y;
 end
 
-PACKET_UNIT_BUILD_CITY = 67; cs, dsend
+PACKET_UNIT_BUILD_CITY=53;cs,dsend
   UNIT unit_id;
   STRING name[MAX_LEN_NAME];
 end
 
-PACKET_UNIT_DISBAND = 68; cs, dsend
+PACKET_UNIT_DISBAND=54;cs,dsend
   UNIT unit_id;
 end
 
-PACKET_UNIT_CHANGE_HOMECITY = 69; cs, dsend
+PACKET_UNIT_CHANGE_HOMECITY=55;cs,dsend
   UNIT unit_id;
   CITY city_id;
 end
 
-PACKET_UNIT_ESTABLISH_TRADE = 70; cs, dsend
+PACKET_UNIT_ESTABLISH_TRADE=56;cs,dsend
   UNIT unit_id;
 end
 
-PACKET_UNIT_BATTLEGROUP = 71; cs, dsend
+PACKET_UNIT_BATTLEGROUP=117;cs,dsend
   UNIT unit_id;
   SINT8 battlegroup;
 end
 
-PACKET_UNIT_HELP_BUILD_WONDER = 72; cs, dsend
+PACKET_UNIT_HELP_BUILD_WONDER=57;cs,dsend
   UNIT unit_id;
 end
 
 # used for client orders: currently client-side goto and patrol
-PACKET_UNIT_ORDERS = 73; cs
+PACKET_UNIT_ORDERS=59;cs
   UNIT unit_id;
-  TILE src_tile; # Origin tile, included for sanity checking
+  COORD src_x, src_y; # Origin tile, included for sanity checking
 
   UINT16 length;
   BOOL repeat, vigilant;
@@ -854,146 +866,140 @@ PACKET_UNIT_ORDERS = 73; cs
   DIRECTION dir[MAX_LEN_ROUTE:length];
   ACTIVITY activity[MAX_LEN_ROUTE:length];
   BASE base[MAX_LEN_ROUTE:length];
-  TILE dest_tile;
+  COORD dest_x, dest_y;
 end
 
 # Enable autosettlers for a unit.  Only works for settler units naturally.
-PACKET_UNIT_AUTOSETTLERS = 74; cs, dsend
+PACKET_UNIT_AUTOSETTLERS=60;cs,dsend
   UNIT unit_id;
 end
 
 # Load the given cargo into the transporter.
-PACKET_UNIT_LOAD = 75; cs, dsend
+PACKET_UNIT_LOAD=107;cs,dsend
   UNIT cargo_id, transporter_id;
 end
 
 # Unload the given cargo from the transporter.
-PACKET_UNIT_UNLOAD = 76; cs, dsend
+PACKET_UNIT_UNLOAD=61;cs,dsend
   UNIT cargo_id, transporter_id;
 end
 
-PACKET_UNIT_UPGRADE = 77; cs, dsend
+PACKET_UNIT_UPGRADE=62;cs,dsend
   UNIT unit_id;
 end
 
-PACKET_UNIT_CONVERT = 78; cs, dsend
+PACKET_UNIT_NUKE=63;cs,dsend
   UNIT unit_id;
 end
 
-PACKET_UNIT_NUKE = 79; cs, dsend
+PACKET_UNIT_PARADROP_TO=64;cs,dsend
   UNIT unit_id;
+  COORD x, y;
 end
 
-PACKET_UNIT_PARADROP_TO = 80; cs, dsend
-  UNIT unit_id;
-  TILE tile;
-end
-
-PACKET_UNIT_AIRLIFT = 81; cs, dsend
+PACKET_UNIT_AIRLIFT=65;cs,dsend
   UNIT unit_id;
   CITY city_id;
 end
 
-PACKET_UNIT_DIPLOMAT_QUERY = 82; cs, handle-per-conn, dsend
+PACKET_UNIT_DIPLOMAT_QUERY=66;cs,handle-per-conn,dsend
   UNIT diplomat_id;
   UNIT target_id;   # city_id or unit_id
   SINT16 value;
   DIPLOMAT_ACTION action_type;
 end
 
-PACKET_UNIT_TYPE_UPGRADE = 83; cs, dsend
+# 67-68 removed in 2.1
+
+PACKET_UNIT_TYPE_UPGRADE=69;cs,dsend
   UNIT_TYPE type;
 end
 
-PACKET_UNIT_DIPLOMAT_ACTION = 84; cs, dsend
+PACKET_UNIT_DIPLOMAT_ACTION=70;cs,dsend
   UNIT diplomat_id;
   UNIT target_id;   # city_id or unit_id
   SINT16 value;
   DIPLOMAT_ACTION action_type;
 end
 
-PACKET_UNIT_DIPLOMAT_ANSWER = 85; sc, dsend, lsend
+PACKET_UNIT_DIPLOMAT_ANSWER=71;sc,dsend,lsend
   UNIT diplomat_id;
   UNIT target_id;   # city_id or unit_id
   GOLD cost;
   DIPLOMAT_ACTION action_type;
 end
 
-PACKET_UNIT_CHANGE_ACTIVITY = 86; cs, dsend
+PACKET_UNIT_CHANGE_ACTIVITY=72; cs,dsend
   UNIT unit_id;
   ACTIVITY activity;
   SPECIAL activity_target;
   BASE activity_base;
 end
 
-/* 88 & 89 are ping packets (not modifiable). */
-
 /************** Diplomacy packets **********************/
 
-PACKET_DIPLOMACY_INIT_MEETING_REQ = 95; cs, dsend
+PACKET_DIPLOMACY_INIT_MEETING_REQ=73;cs,dsend
   PLAYER counterpart;
 end
 
-PACKET_DIPLOMACY_INIT_MEETING = 96; sc, dsend, lsend
+PACKET_DIPLOMACY_INIT_MEETING=74;sc,dsend,lsend
   PLAYER counterpart, initiated_from;
 end
 
-PACKET_DIPLOMACY_CANCEL_MEETING_REQ = 97; cs, dsend
+PACKET_DIPLOMACY_CANCEL_MEETING_REQ=75;cs,dsend
   PLAYER counterpart;
 end
 
-PACKET_DIPLOMACY_CANCEL_MEETING = 98; sc, dsend, lsend
+PACKET_DIPLOMACY_CANCEL_MEETING=76;sc,dsend,lsend
   PLAYER counterpart, initiated_from;
 end
 
-PACKET_DIPLOMACY_CREATE_CLAUSE_REQ = 99; cs, dsend
+PACKET_DIPLOMACY_CREATE_CLAUSE_REQ=77;cs,dsend
   PLAYER counterpart, giver;
   CLAUSE type;
   UINT32 value;
 end
 
-PACKET_DIPLOMACY_CREATE_CLAUSE = 100; sc, dsend, lsend
+PACKET_DIPLOMACY_CREATE_CLAUSE=78;sc,dsend,lsend
   PLAYER counterpart, giver;
   CLAUSE type;
   UINT32 value;
 end
 
-PACKET_DIPLOMACY_REMOVE_CLAUSE_REQ = 101; cs, dsend
+PACKET_DIPLOMACY_REMOVE_CLAUSE_REQ=79;cs,dsend
   PLAYER counterpart, giver;
   CLAUSE type;
   UINT32 value;
 end
 
-PACKET_DIPLOMACY_REMOVE_CLAUSE = 102; sc, dsend, lsend
+PACKET_DIPLOMACY_REMOVE_CLAUSE=80;sc,dsend,lsend
   PLAYER counterpart, giver;
   CLAUSE type;
   UINT32 value;
 end
 
-PACKET_DIPLOMACY_ACCEPT_TREATY_REQ = 103; cs, dsend
+PACKET_DIPLOMACY_ACCEPT_TREATY_REQ=81;cs,dsend
   PLAYER counterpart;
 end
 
-PACKET_DIPLOMACY_ACCEPT_TREATY = 104;sc, dsend, lsend
+PACKET_DIPLOMACY_ACCEPT_TREATY=82;sc,dsend,lsend
   PLAYER counterpart;
   BOOL I_accepted, other_accepted;
 end
 
-PACKET_DIPLOMACY_CANCEL_PACT = 105; cs, dsend
+PACKET_DIPLOMACY_CANCEL_PACT=83;cs,dsend
   PLAYER other_player_id;
   CLAUSE clause;
 end
 
 /**************  Report packets **********************/
 
-PACKET_PAGE_MSG = 110; sc, lsend
-  STRING caption[MAX_LEN_MSG];
-  STRING headline[MAX_LEN_MSG];
-  STRING lines[MAX_LEN_PACKET];
+PACKET_PAGE_MSG=84;sc,lsend
+  STRING message[MAX_LEN_MSG];
   EVENT event;
 end
 
-PACKET_REPORT_REQ = 111; cs, handle-per-conn, dsend
+PACKET_REPORT_REQ=85;cs,handle-per-conn,dsend
   REPORT_TYPE type;
 end
 
@@ -1002,7 +1008,7 @@ end
 # For telling clients information about other connections to server.
 # Clients may not use all info, but supply now to avoid unnecessary
 # protocol changes later.
-PACKET_CONN_INFO = 115; sc, lsend, is-info
+PACKET_CONN_INFO=86; sc,lsend
   CONNECTION id; key
 
   # 0 means client should forget its
@@ -1018,62 +1024,60 @@ PACKET_CONN_INFO = 115; sc, lsend, is-info
 end
 
 # Information about the ping times of the connections.
-PACKET_CONN_PING_INFO = 116; sc, lsend
+PACKET_CONN_PING_INFO=87; sc,lsend
   UINT8 connections;
   CONNECTION conn_id[MAX_NUM_CONNECTIONS:connections];
   FLOAT10x7 ping_time[MAX_NUM_CONNECTIONS:connections];
 end
 
-# For compatibility with older versions, this number cannot be changed.
-PACKET_CONN_PING = 88; sc
+PACKET_CONN_PING=88;sc
 end
 
-# For compatibility with older versions, this number cannot be changed.
-PACKET_CONN_PONG = 89; cs, handle-per-conn
+PACKET_CONN_PONG=89;cs,handle-per-conn
 end
 
-PACKET_CLIENT_INFO = 119; cs, handle-per-conn
+PACKET_CLIENT_INFO=139;cs,handle-per-conn
   GUI_TYPE gui;
 end
 
 /************** New turn packets **********************/
 
-PACKET_END_PHASE = 125; sc, lsend
+PACKET_END_PHASE=90;sc,lsend
 end
 
 # sent to everyone, not just the player whose phase it is
-PACKET_START_PHASE = 126; sc, lsend, dsend
+PACKET_START_PHASE=91;sc,lsend,dsend
   PHASE phase;
 end
 
 # send to each client whenever the turn has ended.
-PACKET_NEW_YEAR = 127; sc, lsend
+PACKET_NEW_YEAR=92;sc,lsend
   YEAR year;
   TURN turn;
 end
 
 # Server has finished processing turn change
-PACKET_BEGIN_TURN = 128; sc, lsend
+PACKET_BEGIN_TURN=137;sc,lsend
 end
 
 # Server starts processing turn change
-PACKET_END_TURN = 129; sc, lsend
+PACKET_END_TURN=138;sc,lsend
 end
 
 # Freeze reports and agents
-PACKET_FREEZE_CLIENT = 130; sc, lsend
+PACKET_FREEZE_CLIENT=135;sc,lsend
 end
 
 # Thaw reports and agents
-PACKET_THAW_CLIENT = 131; sc, lsend
+PACKET_THAW_CLIENT=136;sc,lsend
 end
 
 /************** Spaceship packets **********************/
 
-PACKET_SPACESHIP_LAUNCH = 135; cs
+PACKET_SPACESHIP_LAUNCH=93;cs
 end
 
-PACKET_SPACESHIP_PLACE = 136; cs, dsend
+PACKET_SPACESHIP_PLACE=94;cs,dsend
   PLACE_TYPE type;
 
   # Meaning of num:
@@ -1087,7 +1091,7 @@ PACKET_SPACESHIP_PLACE = 136; cs, dsend
   UINT8 num;
 end
 
-PACKET_SPACESHIP_INFO = 137; sc, lsend
+PACKET_SPACESHIP_INFO=95; sc,lsend
   PLAYER player_num; key
   UINT8 sship_state;
   UINT8 structurals;
@@ -1110,10 +1114,9 @@ end
 
 /************** Ruleset packets **********************/
 
-PACKET_RULESET_UNIT = 140; sc, lsend
+PACKET_RULESET_UNIT=96;sc,lsend
   UNIT_TYPE id;
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   STRING sound_move[MAX_LEN_NAME];
@@ -1134,7 +1137,6 @@ PACKET_RULESET_UNIT = 140; sc, lsend
   UINT8 hp;
   UINT8 firepower;
   SINT8 obsoleted_by;
-  SINT8 converted_to;
   UINT8 fuel;
 
   UINT8 happy_cost;   # unhappy people in home city
@@ -1144,10 +1146,9 @@ PACKET_RULESET_UNIT = 140; sc, lsend
   UINT8 paratroopers_mr_req;
   UINT8 paratroopers_mr_sub;
 
-  UINT8 veteran_levels;
-  STRING veteran_name[MAX_VET_LEVELS:veteran_levels][MAX_LEN_NAME];
-  UINT16 power_fact[MAX_VET_LEVELS:veteran_levels];
-  UINT8 move_bonus[MAX_VET_LEVELS:veteran_levels];
+  STRING veteran_name[MAX_VET_LEVELS][MAX_LEN_NAME];
+  FLOAT power_fact[MAX_VET_LEVELS];
+  UINT8 move_bonus[MAX_VET_LEVELS];
 
   UINT8 bombard_rate;
   UINT8 city_size;
@@ -1157,69 +1158,60 @@ PACKET_RULESET_UNIT = 140; sc, lsend
 
   STRING helptext[MAX_LEN_PACKET];
 
-  BV_UTYPE_FLAGS flags;
-  BV_UTYPE_ROLES roles;
+  BV_FLAGS flags;
+  BV_ROLES roles;
 end
 
-PACKET_RULESET_GAME = 141; sc, lsend
+PACKET_RULESET_GAME=97;sc,lsend
   UINT8 default_specialist;
 
   TECH_LIST global_init_techs[MAX_NUM_TECH_LIST];
-
-  UINT8 veteran_levels;
-  STRING veteran_name[MAX_VET_LEVELS:veteran_levels][MAX_LEN_NAME];
-  UINT16 power_fact[MAX_VET_LEVELS:veteran_levels];
-  UINT8 move_bonus[MAX_VET_LEVELS:veteran_levels];
-
-  UINT8 background_red;
-  UINT8 background_green;
-  UINT8 background_blue;
+  UINT8 work_veteran_chance[MAX_VET_LEVELS];
+  UINT8 veteran_chance[MAX_VET_LEVELS];
 end
 
-PACKET_RULESET_SPECIALIST = 142; sc, lsend
+PACKET_RULESET_SPECIALIST=58;sc,lsend
   SPECIALIST id;
-  STRING plural_name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
+  STRING name[MAX_LEN_NAME];
   STRING short_name[MAX_LEN_NAME];
   UINT8 reqs_count;
   REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
-  STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_GOVERNMENT_RULER_TITLE = 143; sc, lsend
+PACKET_RULESET_GOVERNMENT_RULER_TITLE=98;sc,lsend
   GOVERNMENT gov;
+  UINT8 id;
   NATION nation;
   STRING male_title[MAX_LEN_NAME];
   STRING female_title[MAX_LEN_NAME];
 end
 
-PACKET_RULESET_TECH = 144; sc, lsend
+PACKET_RULESET_TECH=99;sc,lsend
   TECH id;
   TECH req[2];
   TECH root_req;
-  BV_TECH_FLAGS flags;
-  UINT32 preset_cost, num_reqs;
+  UINT32 flags, preset_cost, num_reqs;
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING helptext[MAX_LEN_PACKET];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
 end
 
-PACKET_RULESET_GOVERNMENT = 145; sc, lsend
+PACKET_RULESET_GOVERNMENT=100;sc,lsend
   GOVERNMENT id;
 
   UINT8 reqs_count;
   REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
 
+  UINT8 num_ruler_titles;
+       
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_TERRAIN_CONTROL = 146; sc, lsend
+PACKET_RULESET_TERRAIN_CONTROL=101;sc,lsend
   BOOL may_road;       /* may build roads/railroads */
   BOOL may_irrigate;   /* may build irrigation/farmland */
   BOOL may_mine;       /* may build mines */
@@ -1241,26 +1233,29 @@ PACKET_RULESET_TERRAIN_CONTROL = 146; sc, lsend
   UINT8 fallout_tile_penalty[O_LAST]; /* % taken from output if polluted */
 end
 
-PACKET_RULESET_NATION_GROUPS = 147; sc, lsend
+PACKET_RULESET_NATION_GROUPS=118;sc,lsend
   UINT8 ngroups;
   STRING groups[MAX_NUM_NATION_GROUPS:ngroups][MAX_LEN_NAME];
 end
 
-PACKET_RULESET_NATION = 148; sc, lsend
+PACKET_RULESET_NATION=102;sc,lsend
   NATION id; key
 
   STRING adjective[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING noun_plural[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   STRING legend[MAX_LEN_MSG];
 
   UINT8 city_style;
+  TECH_LIST init_techs[MAX_NUM_TECH_LIST];
+  UNIT_TYPE init_units[MAX_NUM_UNIT_LIST];
+  IMPROVEMENT init_buildings[MAX_NUM_BUILDING_LIST];
+  GOVERNMENT init_government;
 
   UINT8 leader_count;
   STRING leader_name[MAX_NUM_LEADERS:leader_count][MAX_LEN_NAME];
-  BOOL leader_is_male[MAX_NUM_LEADERS:leader_count];
+  BOOL leader_sex[MAX_NUM_LEADERS:leader_count];
 
   BOOL is_available, is_playable;
   UINT8 barbarian_type;
@@ -1269,10 +1264,9 @@ PACKET_RULESET_NATION = 148; sc, lsend
   UINT8 groups[MAX_NUM_NATION_GROUPS:ngroups];
 end
 
-PACKET_RULESET_CITY = 149; sc, lsend
+PACKET_RULESET_CITY=103;sc,lsend
   UINT8 style_id; 
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING citizens_graphic[MAX_LEN_NAME];
   STRING citizens_graphic_alt[MAX_LEN_NAME];
   UINT8 reqs_count;
@@ -1284,11 +1278,10 @@ PACKET_RULESET_CITY = 149; sc, lsend
   SINT8 replaced_by;
 end
 
-PACKET_RULESET_BUILDING = 150; sc, lsend
+PACKET_RULESET_BUILDING=104;sc,lsend
   IMPROVEMENT id;
   IMPR_GENUS genus;
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   UINT8 reqs_count;
@@ -1297,20 +1290,19 @@ PACKET_RULESET_BUILDING = 150; sc, lsend
   IMPROVEMENT replaced_by;
   UINT16 build_cost;
   UINT8 upkeep, sabotage;
-  BV_IMPR_FLAGS flags;
+  UINT16 flags;
   STRING soundtag[MAX_LEN_NAME];
   STRING soundtag_alt[MAX_LEN_NAME];
   STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_TERRAIN = 151; sc, lsend
+PACKET_RULESET_TERRAIN=105;sc,lsend
   TERRAIN id;
 
   BV_TERRAIN_FLAGS flags;
   BV_UNIT_CLASSES native_to;
 
-  STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
+  STRING name_orig[MAX_LEN_NAME];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
 
@@ -1337,18 +1329,13 @@ PACKET_RULESET_TERRAIN = 151; sc, lsend
   UINT8 rail_time;
   UINT8 clean_pollution_time;
   UINT8 clean_fallout_time;
-
-  UINT8 color_red;
-  UINT8 color_green;
-  UINT8 color_blue;
-
+  
   STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_UNIT_CLASS = 152; sc, lsend
+PACKET_RULESET_UNIT_CLASS=119;sc,lsend
   UINT8 id;
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   UINT8 move_type;
   UINT8 min_speed;
   UINT8 hp_loss_pct;
@@ -1356,10 +1343,9 @@ PACKET_RULESET_UNIT_CLASS = 152; sc, lsend
   BV_UCLASS_FLAGS flags;
 end
 
-PACKET_RULESET_BASE = 153; sc, lsend
+PACKET_RULESET_BASE=120;sc,lsend
   UINT8 id;
   STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
   BOOL buildable;
   BOOL pillageable;
   STRING graphic_str[MAX_LEN_NAME];
@@ -1371,12 +1357,10 @@ PACKET_RULESET_BASE = 153; sc, lsend
   BV_UNIT_CLASSES native_to;
   UINT8 build_time;
   UINT8 defense_bonus;
-  SINT8 border_sq;
-  SINT8 vision_main_sq;
-  SINT8 vision_invis_sq;
+  UINT8 border_sq;
+  UINT8 vision_main_sq;
+  UINT8 vision_invis_sq;
   BV_BASE_FLAGS flags;
-  BV_BASES conflicts;
-  STRING helptext[MAX_LEN_PACKET];
 end
 
 /**************************************************************************
@@ -1385,7 +1369,7 @@ end
   other part of the rulesets.  (Terrain ruleset has enough info for its
   own "control" packet, done separately.)
 **************************************************************************/
-PACKET_RULESET_CONTROL = 155; sc, lsend
+PACKET_RULESET_CONTROL=106; sc, post-send, post-recv, lsend
   UINT16 num_unit_classes;
   UINT16 num_unit_types;
   UINT16 num_impr_types;
@@ -1407,107 +1391,70 @@ end
 /*********************************************************
  Below are the packets that control single-player mode.  
 *********************************************************/
-PACKET_SINGLE_WANT_HACK_REQ = 160; cs, handle-per-conn, handle-via-packet
+PACKET_SINGLE_WANT_HACK_REQ=108;cs,handle-per-conn,handle-via-packet
  STRING token[MAX_LEN_NAME];
 end
 
-PACKET_SINGLE_WANT_HACK_REPLY = 161; sc, dsend
+PACKET_SINGLE_WANT_HACK_REPLY=109;sc,dsend
  BOOL you_have_hack;
 end
 
-PACKET_RULESET_CHOICES = 162; sc
+PACKET_RULESET_CHOICES=115;sc
   UINT8 ruleset_count;
   STRING rulesets[MAX_NUM_RULESETS:ruleset_count][MAX_RULESET_NAME_LENGTH];
 end
 
-PACKET_GAME_LOAD = 163; sc, lsend, dsend
+PACKET_GAME_LOAD=111;sc,handle-via-packet,lsend
   BOOL load_successful;
+  PLAYER nplayers;
   STRING load_filename[MAX_LEN_PACKET];
+  STRING name[MAX_NUM_PLAYERS:nplayers][MAX_LEN_NAME]; 
+  STRING username[MAX_NUM_PLAYERS:nplayers][MAX_LEN_NAME]; 
+  NATION nations[MAX_NUM_PLAYERS:nplayers];
+  BOOL is_alive[MAX_NUM_PLAYERS:nplayers];
+  BOOL is_ai[MAX_NUM_PLAYERS:nplayers];
 end
 
-PACKET_SERVER_SETTING_CONTROL = 164; sc, handle-via-packet, is-info
-  UINT16 settings_num;
-  UINT8 categories_num;
-  STRING category_names[256:categories_num][MAX_LEN_NAME];
+PACKET_OPTIONS_SETTABLE_CONTROL=112;sc,handle-via-packet,lsend
+  UINT16 num_settings;
+  UINT8 num_categories;
+  STRING category_names[256:num_categories][MAX_LEN_NAME];
 end
 
-PACKET_SERVER_SETTING_CONST = 165; sc, handle-via-packet, is-info
-  UINT16 id; key
+PACKET_OPTIONS_SETTABLE=113;sc,lsend
+  UINT16 id;
   STRING name[MAX_LEN_NAME];
   STRING short_help[MAX_LEN_PACKET];
   STRING extra_help[MAX_LEN_PACKET];
-  UINT8 category;
-end
 
-PACKET_SERVER_SETTING_BOOL = 166; sc, handle-via-packet, is-info
-  UINT16 id; key
+  SSET_TYPE stype;
+  SSET_CLASS sclass;
   BOOL is_visible;
-  BOOL is_changeable;
+
+  SINT32 val;					/* value for bool or int */
+  SINT32 default_val;				/* default for bool or int */
+  SINT32 min;					/* min value for int */
+  SINT32 max;					/* max value for int */
+
+  STRING strval[MAX_LEN_PACKET];		/* space for string */
+  STRING default_strval[MAX_LEN_PACKET];	/* space for string */
+
+  UINT8 scategory;
+
   BOOL initial_setting;
-
-  BOOL val;
-  BOOL default_val;
-end
-
-PACKET_SERVER_SETTING_INT = 167; sc, handle-via-packet, is-info
-  UINT16 id; key
-  BOOL is_visible;
-  BOOL is_changeable;
-  BOOL initial_setting;
-
-  SINT32 val;
-  SINT32 default_val;
-  SINT32 min_val;
-  SINT32 max_val;
-end
-
-PACKET_SERVER_SETTING_STR = 168; sc, handle-via-packet, is-info
-  UINT16 id; key
-  BOOL is_visible;
-  BOOL is_changeable;
-  BOOL initial_setting;
-
-  STRING val[MAX_LEN_PACKET];
-  STRING default_val[MAX_LEN_PACKET];
-end
-
-PACKET_SERVER_SETTING_ENUM = 169; sc, handle-via-packet, is-info
-  UINT16 id; key
-  BOOL is_visible;
-  BOOL is_changeable;
-  BOOL initial_setting;
-
-  SINT8 val;
-  SINT8 default_val;
-  SINT8 values_num;
-  STRING support_names[64:values_num][MAX_LEN_NAME];
-  STRING pretty_names[64:values_num][MAX_LEN_ENUM];
-end
-
-PACKET_SERVER_SETTING_BITWISE = 170; sc, handle-via-packet, is-info
-  UINT16 id; key
-  BOOL is_visible;
-  BOOL is_changeable;
-  BOOL initial_setting;
-
-  UINT16 val;
-  UINT16 default_val;
-  UINT8 bits_num;
-  STRING support_names[64:bits_num][MAX_LEN_NAME];
-  STRING pretty_names[64:bits_num][MAX_LEN_ENUM];
 end
 
 /************** Effects hash packets **********************/
 
-PACKET_RULESET_EFFECT = 175; sc, lsend
+PACKET_RULESET_EFFECT=122;sc,lsend
   EFFECT_TYPE effect_type;
   SINT32 effect_value;
 end
 
-PACKET_RULESET_EFFECT_REQ = 176; sc, lsend
+PACKET_RULESET_EFFECT_REQ=123;sc,lsend
   UINT32 effect_id;
   BOOL neg;
-
+	
   REQ_TYPE source_type;
   SINT32 source_value;
 
@@ -1516,11 +1463,10 @@ PACKET_RULESET_EFFECT_REQ = 176; sc, lsend
   BOOL negated;
 end
 
-PACKET_RULESET_RESOURCE = 177; sc, lsend
+PACKET_RULESET_RESOURCE=124;sc,lsend
   RESOURCE id;
   
-  STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
+  STRING name_orig[MAX_LEN_NAME];
   UINT8 output[O_LAST];
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
@@ -1528,20 +1474,20 @@ end
 
 /****************** Scenario Related Packets ******************/
 
-PACKET_SCENARIO_INFO = 180; sc, cs, handle-via-packet, handle-per-conn
+PACKET_SCENARIO_INFO=140;sc,cs,handle-via-packet,handle-per-conn
   BOOL   is_scenario;
   STRING name[256];
   STRING description[MAX_LEN_PACKET];
   BOOL   players;
 end
 
-PACKET_SAVE_SCENARIO = 181; cs, handle-per-conn, dsend
+PACKET_SAVE_SCENARIO=141;cs,handle-per-conn,dsend
   STRING name[MAX_LEN_NAME];
 end
 
-/*************** Vote Packets ***************/
+/*************** "voteinfo" Capability Packets ***************/
 
-PACKET_VOTE_NEW = 185; sc, handle-via-packet
+PACKET_VOTE_NEW=145;sc,handle-via-packet,no-delta
   UINT32 vote_no;
   STRING user[MAX_LEN_NAME];
   STRING desc[512];
@@ -1550,7 +1496,7 @@ PACKET_VOTE_NEW = 185; sc, handle-via-packet
 end
 
 /* Sent to the client to give the new vote totals. */
-PACKET_VOTE_UPDATE = 186; sc, is-info
+PACKET_VOTE_UPDATE=146;sc,no-delta
   UINT32 vote_no; key
   UINT8 yes;
   UINT8 no;
@@ -1558,11 +1504,11 @@ PACKET_VOTE_UPDATE = 186; sc, is-info
   UINT8 num_voters;
 end
 
-PACKET_VOTE_REMOVE = 187; sc
+PACKET_VOTE_REMOVE=147;sc,no-delta
   UINT32 vote_no;
 end
 
-PACKET_VOTE_RESOLVE = 188; sc
+PACKET_VOTE_RESOLVE=148;sc,no-delta
   UINT32 vote_no;
   BOOL passed;
 end
@@ -1572,7 +1518,7 @@ end
  * - yes     (value = +1)
  * - no      (value = -1)
  * - abstain (value =  0) */
-PACKET_VOTE_SUBMIT = 189; cs, handle-per-conn, no-delta
+PACKET_VOTE_SUBMIT=149;cs,handle-per-conn,no-delta
   UINT32 vote_no;
   SINT8 value;
 end
@@ -1582,88 +1528,80 @@ end
 /* Always keep this as the first edit type packet sent by
  * the client, so that the test in server/srv_main.c in
  * the function is_client_edit_packet() is easy to write. */
-PACKET_EDIT_MODE = 190; cs, handle-per-conn, dsend
+PACKET_EDIT_MODE=150;cs,handle-per-conn,dsend
   BOOL state;
 end
 
-PACKET_EDIT_RECALCULATE_BORDERS = 197; cs, handle-per-conn
+PACKET_EDIT_RECALCULATE_BORDERS=151;cs,handle-per-conn
 end
 
-PACKET_EDIT_CHECK_TILES = 198; cs, handle-per-conn
+PACKET_EDIT_CHECK_TILES=152;cs,handle-per-conn
 end
 
-PACKET_EDIT_TOGGLE_FOGOFWAR = 199; cs, handle-per-conn, dsend
+PACKET_EDIT_TOGGLE_FOGOFWAR=153;cs,handle-per-conn,dsend
   PLAYER player;
 end
 
-PACKET_EDIT_TILE_TERRAIN = 200; cs, handle-per-conn, dsend
-  TILE tile; key
+PACKET_EDIT_TILE_TERRAIN=154;cs,handle-per-conn,dsend
+  COORD x, y; key
   TERRAIN terrain;
   UINT8 size;
 end
 
-PACKET_EDIT_TILE_RESOURCE = 201; cs, handle-per-conn, dsend
-  TILE tile; key
+PACKET_EDIT_TILE_RESOURCE=155;cs,handle-per-conn,dsend
+  COORD x, y; key
   RESOURCE resource;
   UINT8 size;
 end
 
-PACKET_EDIT_TILE_SPECIAL = 202; cs, handle-per-conn, dsend
-  TILE tile; key
+PACKET_EDIT_TILE_SPECIAL=156;cs,handle-per-conn,dsend
+  COORD x, y; key
   SPECIAL special;
   BOOL remove;
   UINT8 size;
 end
 
-PACKET_EDIT_TILE_BASE = 203; cs, handle-per-conn, dsend
-  TILE tile; key
+PACKET_EDIT_TILE_BASE=157;cs,handle-per-conn,dsend
+  COORD x, y; key
   BASE base_type_id;
   BOOL remove;
   UINT8 size;
 end
 
-PACKET_EDIT_STARTPOS = 204; cs, sc, dsend, handle-per-conn, handle-via-packet, no-delta
-  TILE id;
-  BOOL remove;
-  SINT32 tag;
+PACKET_EDIT_STARTPOS=159;cs,handle-per-conn,dsend
+  COORD x, y; key
+  NATION nation; # NATION_NONE for erase
 end
 
-PACKET_EDIT_STARTPOS_FULL = 205; cs, sc, handle-per-conn, handle-via-packet, no-delta
-  TILE id;
-  BOOL exclude;
-  BV_STARTPOS_NATIONS nations;
-end
-
-PACKET_EDIT_TILE = 206; cs, handle-per-conn, handle-via-packet
-  TILE tile; key
+PACKET_EDIT_TILE=160;cs,handle-per-conn,handle-via-packet
+  UNIT id; key
   BV_SPECIAL specials;
   BV_BASES bases;
   RESOURCE resource;
   TERRAIN terrain;
   NATION startpos_nation;
-  STRING label[MAX_LEN_NAME];
 end
 
-PACKET_EDIT_UNIT_CREATE = 207; cs, handle-per-conn, dsend
+PACKET_EDIT_UNIT_CREATE=161;cs,handle-per-conn,dsend
   PLAYER owner;
-  TILE tile;
+  COORD x,y;
   UNIT_TYPE type;
   UINT8 count;
   SINT32 tag;
 end
 
-PACKET_EDIT_UNIT_REMOVE = 208; cs, handle-per-conn, dsend
+PACKET_EDIT_UNIT_REMOVE=162;cs,handle-per-conn,dsend
   PLAYER owner;
-  TILE tile;
+  COORD x,y;
   UNIT_TYPE type;
   UINT8 count;
 end
 
-PACKET_EDIT_UNIT_REMOVE_BY_ID = 209; cs, handle-per-conn, dsend
+PACKET_EDIT_UNIT_REMOVE_BY_ID=163;cs,handle-per-conn,dsend
   UNIT id;
 end
 
-PACKET_EDIT_UNIT = 210; cs, handle-per-conn, handle-via-packet
+PACKET_EDIT_UNIT=164;cs,handle-per-conn,handle-via-packet
   UNIT id; key
   UNIT_TYPE utype;
   PLAYER owner;
@@ -1682,18 +1620,18 @@ PACKET_EDIT_UNIT = 210; cs, handle-per-conn, handle-via-packet
   UNIT transported_by;
 end
 
-PACKET_EDIT_CITY_CREATE = 211; cs, handle-per-conn, dsend
+PACKET_EDIT_CITY_CREATE=165;cs,handle-per-conn,dsend
   PLAYER owner;
-  TILE tile;
+  COORD x, y;
   UINT8 size;
   SINT32 tag;
 end
 
-PACKET_EDIT_CITY_REMOVE = 212; cs, handle-per-conn, dsend
+PACKET_EDIT_CITY_REMOVE=166;cs,handle-per-conn,dsend
   CITY id;
 end
 
-PACKET_EDIT_CITY = 213; cs, handle-per-conn, handle-via-packet
+PACKET_EDIT_CITY=167;cs,handle-per-conn,handle-via-packet
   CITY id; key
   STRING name[MAX_LEN_NAME];
   PLAYER owner;
@@ -1721,15 +1659,15 @@ PACKET_EDIT_CITY = 213; cs, handle-per-conn, handle-via-packet
   BV_CITY_OPTIONS city_options;
 end
 
-PACKET_EDIT_PLAYER_CREATE = 214; cs, handle-per-conn, dsend
+PACKET_EDIT_PLAYER_CREATE=168;cs,handle-per-conn,dsend
   SINT32 tag;
 end
 
-PACKET_EDIT_PLAYER_REMOVE = 215; cs, handle-per-conn, dsend
+PACKET_EDIT_PLAYER_REMOVE=169;cs,handle-per-conn,dsend
   PLAYER id;
 end
 
-PACKET_EDIT_PLAYER = 216; cs, handle-per-conn, lsend
+PACKET_EDIT_PLAYER=170;cs,handle-per-conn,lsend
   PLAYER id; key 
   STRING name[MAX_LEN_NAME];
   STRING username[MAX_LEN_NAME];
@@ -1745,10 +1683,12 @@ PACKET_EDIT_PLAYER = 216; cs, handle-per-conn, lsend
   BOOL phase_done;
   TURN nturns_idle;
   BOOL is_alive;
+  BOOL surrendered;
   TURN revolution_finishes;
 
   BOOL capital;
   BV_PLAYER embassy;
+  DIPLSTATE diplstates[MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS];
   UINT8 city_style;
   GOLD gold;
   PERCENT tax, science, luxury;
@@ -1761,9 +1701,9 @@ PACKET_EDIT_PLAYER = 216; cs, handle-per-conn, lsend
   BOOL ai;
 end
 
-PACKET_EDIT_PLAYER_VISION = 217; cs, handle-per-conn, dsend
+PACKET_EDIT_PLAYER_VISION=171;cs,handle-per-conn,dsend
   PLAYER player;
-  TILE tile;
+  COORD x, y;
   BOOL known;
   UINT8 size;
 end
@@ -1771,7 +1711,7 @@ end
 /* Always keep this as the last edit type packet sent by
  * the client, so that the test in server/srv_main.c in
  * the function is_client_edit_packet() is easy to write. */
-PACKET_EDIT_GAME = 218; cs, handle-per-conn, handle-via-packet
+PACKET_EDIT_GAME=180;cs,handle-per-conn,handle-via-packet
   YEAR year;
   BOOL scenario;
   STRING scenario_name[256];
@@ -1781,7 +1721,7 @@ end
 
 /************** Server Editor Packets **********************/
 
-PACKET_EDIT_OBJECT_CREATED = 219; sc, dsend
+PACKET_EDIT_OBJECT_CREATED=181;sc,dsend
   SINT32 tag;
   SINT32 id;
 end

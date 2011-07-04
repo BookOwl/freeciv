@@ -77,15 +77,18 @@ dnl
 dnl get the cflags and libraries from the LIBRARY-config script
 dnl
 AC_ARG_WITH(DOWN-prefix,
-            AS_HELP_STRING([--with-DOWN-prefix=PFX],[prefix where UP is installed (optional)]),
+            AC_HELP_STRING([--with-DOWN-prefix=PFX],
+	                   [prefix where UP is installed (optional)]),
             [LDOWN[]_config_prefix="$withval"],
 	    [LDOWN[]_config_prefix=""])dnl
 AC_ARG_WITH(DOWN-exec-prefix,
-            AS_HELP_STRING([--with-DOWN-exec-prefix=PFX],[exec-prefix where UP is installed (optional)]),
+            AC_HELP_STRING([--with-DOWN-exec-prefix=PFX],
+	                   [exec-prefix where UP is installed (optional)]),
             [LDOWN[]_config_exec_prefix="$withval"],
 	    [LDOWN[]_config_exec_prefix=""])dnl
 AC_ARG_ENABLE(DOWN[]test,
-              AS_HELP_STRING([--disable-DOWN[]test],[do not try to compile and run a test UP program]),
+              AC_HELP_STRING([--disable-DOWN[]test],
+	                     [do not try to compile and run a test UP program]),
               [LDOWN[]_test_enabled="no"],
               [LDOWN[]_test_enabled="yes"])dnl
 dnl
@@ -166,7 +169,7 @@ dnl now check if the installed UP is sufficiently new. (Also sanity
 dnl checks the results of DOWN-config to some extent
 dnl
   rm -f conf.DOWN[]test
-  AC_RUN_IFELSE([AC_LANG_SOURCE([[
+  AC_TRY_RUN([
 #include <$]LDOWN[_header>
 #include <stdio.h>
 #include <stdlib.h>
@@ -254,7 +257,8 @@ main ()
     }
   return 1;
 }
-]])],[],[CACHEDOWN[]_present="no"],[echo $ac_n "cross compiling; assumed OK... $ac_c" >>error.]DOWN[test])
+],, [CACHEDOWN[]_present="no"],
+    [echo $ac_n "cross compiling; assumed OK... $ac_c" >>error.]DOWN[test])
   CFLAGS="$ac_save_CFLAGS"
   LIBS="$ac_save_LIBS"
 else
@@ -291,9 +295,9 @@ dnl
     ac_save_LIBS="$LIBS"
     CFLAGS="$CFLAGS $UP[]_CFLAGS"
     LIBS="$UP[]_LIBS $LIBS"
-    AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+    AC_TRY_LINK([
 #include <stdio.h>
-]], [[]])],[],[CACHEDOWN[]_present="no"
+],,,            [CACHEDOWN[]_present="no"
                  if test x$LDOWN[]_version_test_error = xyes ; then
                    echo "***" >>error.]DOWN[test
                  fi
@@ -324,10 +328,11 @@ if test x$CACHEDOWN[]_present = xno ; then
       echo "***" >>error.]DOWN[test
       CFLAGS="$CFLAGS $UP[]_CFLAGS"
       LIBS="$LIBS $UP[]_LIBS"
-      AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+      AC_TRY_LINK([
 #include <$]LDOWN[_header>
 #include <stdio.h>
-]], [[ return ((]DOWN[_major_version) || (]DOWN[_minor_version) || (]DOWN[_micro_version)); ]])],[ echo "*** The test program compiled, but did not run.  This usually" >>error.]DOWN[test
+],      [ return ((]DOWN[_major_version) || (]DOWN[_minor_version) || (]DOWN[_micro_version)); ],
+        [ echo "*** The test program compiled, but did not run.  This usually" >>error.]DOWN[test
           echo "*** means that the run-time linker is not finding UP or finding" >>error.]DOWN[test
           echo "*** finding the wrong version of UP.  If it is not finding" >>error.]DOWN[test
           echo "*** UP, you'll need to set your LD_LIBRARY_PATH environment" >>error.]DOWN[test
@@ -337,7 +342,8 @@ if test x$CACHEDOWN[]_present = xno ; then
 	  echo "***" >>error.]DOWN[test
           echo "*** If you have an old version installed, it is best to remove" >>error.]DOWN[test
 	  echo "*** it, although you may also be able to get things to work by" >>error.]DOWN[test
-	  echo "*** modifying LD_LIBRARY_PATH" >>error.]DOWN[test],[ echo "*** The test program failed to compile or link.  See the file" >>error.]DOWN[test
+	  echo "*** modifying LD_LIBRARY_PATH" >>error.]DOWN[test],
+        [ echo "*** The test program failed to compile or link.  See the file" >>error.]DOWN[test
 	  echo "*** config.log for the exact error that occured.  This usually" >>error.]DOWN[test
           echo "*** means UP was incorrectly installed or that you have" >>error.]DOWN[test
           echo "*** moved UP since it was installed.  In the latter case," >>error.]DOWN[test

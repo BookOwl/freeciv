@@ -12,21 +12,21 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
-/* utility */
-#include "log.h"
-#include "mem.h"
-#include "support.h"
-
-/* common */
 #include "city.h"
 #include "game.h"
+#ifdef DEBUG
+#include "log.h"
+#endif
 #include "map.h"
+#include "mem.h"
+#include "support.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "unittype.h"
@@ -52,7 +52,7 @@
 
 static int *citymap = NULL;
 
-#define log_citymap log_debug
+#define LOG_CITYMAP LOG_DEBUG
 
 /**************************************************************************
   Initialize citymap by reserving worked tiles and establishing the
@@ -70,10 +70,7 @@ void citymap_turn_init(struct player *pplayer)
     city_list_iterate(pplayer->cities, pcity) {
       struct tile *pcenter = city_tile(pcity);
 
-      /* reserve at least the default (squared) city radius */
-      city_tile_iterate(MAX(city_map_radius_sq_get(pcity),
-                            CITY_MAP_DEFAULT_RADIUS_SQ),
-                        pcenter, ptile) {
+      city_tile_iterate(pcenter, ptile) {
         struct city *pwork = tile_worked(ptile);
 
         if (NULL != pwork) {
@@ -87,11 +84,9 @@ void citymap_turn_init(struct player *pplayer)
 
   unit_list_iterate(pplayer->units, punit) {
     if (unit_has_type_flag(punit, F_CITIES)
-        && punit->server.adv->task == AUT_BUILD_CITY) {
+        && punit->ai.ai_role == AIUNIT_BUILD_CITY) {
 
-      /* use default (squared) city radius */
-      city_tile_iterate(CITY_MAP_DEFAULT_RADIUS_SQ, punit->goto_tile,
-                        ptile) {
+      city_tile_iterate(punit->goto_tile, ptile) {
         if (citymap[tile_index(ptile)] >= 0) {
           citymap[tile_index(ptile)]++;
         }
@@ -103,16 +98,6 @@ void citymap_turn_init(struct player *pplayer)
 }
 
 /**************************************************************************
-  Free resources allocated for citymap.
-**************************************************************************/
-void citymap_free(void)
-{
-  if (citymap != NULL) {
-    FC_FREE(citymap);
-  }
-}
-
-/**************************************************************************
   This function reserves a single tile for a (possibly virtual) city with
   a settler's or a city's id. Then it 'crowds' tiles that this city can 
   use to make them less attractive to other cities we may consider making.
@@ -120,15 +105,15 @@ void citymap_free(void)
 void citymap_reserve_city_spot(struct tile *ptile, int id)
 {
 #ifdef DEBUG
-  log_citymap("id %d reserving (%d, %d), was %d", 
-              id, TILE_XY(ptile), citymap[tile_index(ptile)]);
-  fc_assert_ret(0 <= citymap[tile_index(ptile)]);
+  freelog(LOG_CITYMAP, "id %d reserving (%d, %d), was %d", 
+          id, TILE_XY(ptile), citymap[tile_index(ptile)]);
+  assert(citymap[tile_index(ptile)] >= 0);
 #endif
 
   /* Tiles will now be "reserved" by actual workers, so free excess
-   * reservations. Also mark tiles for city overlapping, or 'crowding'.
-   * Uses the default city map size / squared city radius. */
-  city_tile_iterate(CITY_MAP_DEFAULT_RADIUS_SQ, ptile, ptile1) {
+   * reservations. Also mark tiles for city overlapping, or 
+   * 'crowding'. */
+  city_tile_iterate(ptile, ptile1) {
     if (citymap[tile_index(ptile1)] == -id) {
       citymap[tile_index(ptile1)] = 0;
     }
@@ -145,7 +130,7 @@ void citymap_reserve_city_spot(struct tile *ptile, int id)
 **************************************************************************/
 void citymap_free_city_spot(struct tile *ptile, int id)
 {
-  city_tile_iterate(CITY_MAP_DEFAULT_RADIUS_SQ, ptile, ptile1) {
+  city_tile_iterate(ptile, ptile1) {
     if (citymap[tile_index(ptile1)] == -(id)) {
       citymap[tile_index(ptile1)] = 0;
     } else if (citymap[tile_index(ptile1)] > 0) {
@@ -161,7 +146,7 @@ void citymap_free_city_spot(struct tile *ptile, int id)
 void citymap_reserve_tile(struct tile *ptile, int id)
 {
 #ifdef DEBUG
-  fc_assert_ret(!citymap_is_reserved(ptile));
+  assert(!citymap_is_reserved(ptile));
 #endif
 
   citymap[tile_index(ptile)] = -id;

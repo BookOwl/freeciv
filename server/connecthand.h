@@ -13,7 +13,7 @@
 #ifndef FC__CONNECTHAND_H
 #define FC__CONNECTHAND_H
 
-#include "support.h"            /* bool type */
+#include "shared.h"		/* bool type */
 
 #include "fc_types.h"
 
@@ -23,7 +23,7 @@ struct packet_authentication_reply;
 struct packet_login_request;
 struct packet_server_join_req;
 
-void conn_set_access(struct connection *pconn, enum cmdlevel new_level,
+void conn_set_access(struct connection *pconn, enum cmdlevel_id new_level,
                      bool granted);
 
 void establish_new_connection(struct connection *pconn);
@@ -41,11 +41,5 @@ struct player *find_uncontrolled_player(void);
 bool connection_attach(struct connection *pconn, struct player *pplayer,
                        bool observing);
 void connection_detach(struct connection *pconn);
-
-bool connection_delegate_take(struct connection *pconn,
-                              struct player *pplayer);
-bool connection_delegate_restore(struct connection *pconn);
-
-void connection_close_server(struct connection *pconn, const char *reason);
 
 #endif /* FC__CONNECTHAND_H */

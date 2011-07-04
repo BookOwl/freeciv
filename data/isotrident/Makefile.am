@@ -23,6 +23,8 @@ pkgdata_DATA =          \
 	tiles.png	\
 	tiles.spec	\
 	unitextras.png	\
-	unitextras.spec
+	unitextras.spec	\
+	water.png	\
+	water.spec
 
 EXTRA_DIST = $(pkgdata_DATA)

@@ -14,17 +14,9 @@
 #ifndef FC__MAPCTRL_COMMON_H
 #define FC__MAPCTRL_COMMON_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+#include "map.h"		/* enum direction8 */
+#include "shared.h"		/* bool type */
 
-/* utility */
-#include "support.h"            /* bool type */
-
-/* common */
-#include "map.h"                /* enum direction8 */
-
-/* client */
 #include "control.h"            /* quickselect_type */
 
 extern bool rbutton_down;
@@ -70,9 +62,5 @@ void overview_update_line(int overview_x, int overview_y);
 void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list);
 
 extern struct city *city_workers_display;
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__MAPCTRL_COMMON_H */

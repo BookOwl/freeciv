@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -61,20 +61,20 @@ static int redraw_ibutton(struct widget *pIButton)
     return ret;
   }
 
-  if (pIButton->string16) {
+  if (pIButton->string16 && !(get_wflags(pIButton) & WF_WIDGET_HAS_INFO_LABEL)) {
 
     /* make copy of string16 */
     TMPString = *pIButton->string16;
 
     if (get_wstate(pIButton) == FC_WS_NORMAL) {
-      TMPString.fgcol = *get_theme_color(COLOR_THEME_WIDGET_NORMAL_TEXT);
+      TMPString.fgcol = *get_game_colorRGB(COLOR_THEME_WIDGET_NORMAL_TEXT);
     } else if (get_wstate(pIButton) == FC_WS_SELLECTED) {
-      TMPString.fgcol = *get_theme_color(COLOR_THEME_WIDGET_SELECTED_TEXT);
+      TMPString.fgcol = *get_game_colorRGB(COLOR_THEME_WIDGET_SELECTED_TEXT);
       TMPString.style |= TTF_STYLE_BOLD;
     } else if (get_wstate(pIButton) == FC_WS_PRESSED) {
-      TMPString.fgcol = *get_theme_color(COLOR_THEME_WIDGET_PRESSED_TEXT);
+      TMPString.fgcol = *get_game_colorRGB(COLOR_THEME_WIDGET_PRESSED_TEXT);
     } else if (get_wstate(pIButton) == FC_WS_DISABLED) {
-      TMPString.fgcol = *get_theme_color(COLOR_THEME_WIDGET_DISABLED_TEXT);
+      TMPString.fgcol = *get_game_colorRGB(COLOR_THEME_WIDGET_DISABLED_TEXT);
     }
 
     pText = create_text_surf_from_str16(&TMPString);
@@ -286,7 +286,7 @@ struct widget * create_icon_button(SDL_Surface *pIcon, struct gui_layer *pDest,
   baseclass_redraw = pButton->redraw;  
   pButton->redraw = redraw_ibutton;
 
-  if (pStr) {
+  if (pStr && !(flags & WF_WIDGET_HAS_INFO_LABEL)) {
     pButton->string16->style |= SF_CENTER;
     /* if BOLD == true then longest wight */
     if (!(pStr->style & TTF_STYLE_BOLD)) {

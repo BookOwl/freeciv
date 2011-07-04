@@ -24,7 +24,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -208,7 +208,7 @@ char *convertcopy_to_chars(char *pToString, size_t length,
       size_t Res =
 	  iconv(cd, (ICONV_CONST char **) &pInptr, &Insize, &pOutptr, &Outsize);
       if (Res == (size_t) (-1)) {
-        log_error("iconv() error: %s", fc_strerror(fc_get_errno()));
+        freelog(LOG_ERROR, "iconv() error: %s", fc_strerror(fc_get_errno()));        
 	if (errno == EINVAL) {
 	  break;
 	} else {

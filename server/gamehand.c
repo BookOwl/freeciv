@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h> /* for remove() */ 
 
 /* utility */
@@ -25,7 +26,6 @@
 #include "rand.h"
 #include "registry.h"
 #include "shared.h"
-#include "string_vector.h"
 #include "support.h"
 
 /* common */
@@ -48,14 +48,6 @@
 
 #define CHALLENGE_ROOT "challenge"
 
-
-#define SPECLIST_TAG startpos
-#define SPECLIST_TYPE struct startpos
-#include "speclist.h"
-#define startpos_list_iterate(list, plink, psp)                             \
-  TYPED_LIST_BOTH_ITERATE(struct startpos_list_link, struct startpos,       \
-                          list, plink, psp)
-#define startpos_list_iterate_end LIST_BOTH_ITERATE_END
 
 /****************************************************************************
   Get unit_type for given role character
@@ -97,7 +89,7 @@ struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
     role = L_ATTACK_STRONG;
     break;
   default: 
-    fc_assert_ret_val(FALSE, NULL);
+    assert(FALSE);
     return NULL;
   }
 
@@ -140,7 +132,7 @@ static struct tile *place_starting_unit(struct tile *starttile,
     return NULL;
   }
 
-  fc_assert_ret_val(!is_non_allied_unit_tile(ptile, pplayer), NULL);
+  assert(!is_non_allied_unit_tile(ptile, pplayer));
 
   /* For scenarios or dispersion, huts may coincide with player starts (in 
    * other cases, huts are avoided as start positions).  Remove any such hut,
@@ -149,20 +141,20 @@ static struct tile *place_starting_unit(struct tile *starttile,
   if (tile_has_special(ptile, S_HUT)) {
     tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
-    log_verbose("Removed hut on start position for %s",
-                player_name(pplayer));
+    freelog(LOG_VERBOSE, "Removed hut on start position for %s",
+	    player_name(pplayer));
   }
 
   /* Expose visible area. */
-  map_show_circle(pplayer, ptile, game.server.init_vis_radius_sq);
+  map_show_circle(pplayer, ptile, game.info.init_vis_radius_sq);
 
   if (utype != NULL) {
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
-    if (utype_move_type(utype) == UMT_SEA) {
-      log_error("Sea moving start units are not yet supported, "
-                "%s not created.",
-                utype_rule_name(utype));
+    if (utype_move_type(utype) == SEA_MOVING) {
+      freelog(LOG_ERROR, "Sea moving start units are not yet supported, "
+                           "%s not created.",
+                         utype_rule_name(utype));
       notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
                     _("Sea moving start units are not yet supported. "
                       "Nobody gets %s."),
@@ -181,18 +173,18 @@ static struct tile *place_starting_unit(struct tile *starttile,
   Find a valid position not far from our starting position.
 ****************************************************************************/
 static struct tile *find_dispersed_position(struct player *pplayer,
-                                            struct tile *pcenter)
+                                            struct start_position *p)
 {
   struct tile *ptile;
   int x, y;
 
   do {
-    x = pcenter->x + fc_rand(2 * game.server.dispersion + 1) 
-        - game.server.dispersion;
-    y = pcenter->y + fc_rand(2 * game.server.dispersion + 1)
-        - game.server.dispersion;
+    x = p->tile->x + myrand(2 * game.info.dispersion + 1) 
+        - game.info.dispersion;
+    y = p->tile->y + myrand(2 * game.info.dispersion + 1)
+        - game.info.dispersion;
   } while (!((ptile = map_pos_to_tile(x, y))
-             && tile_continent(pcenter) == tile_continent(ptile)
+             && tile_continent(p->tile) == tile_continent(ptile)
              && !is_ocean_tile(ptile)
              && !is_non_allied_unit_tile(ptile, pplayer)));
 
@@ -204,185 +196,83 @@ static struct tile *find_dispersed_position(struct player *pplayer,
 ****************************************************************************/
 void init_new_game(void)
 {
-  struct startpos_list *impossible_list, *targeted_list, *flexible_list;
-  struct tile *player_startpos[player_slot_count()];
+  const int NO_START_POS = -1;
+  int start_pos[player_slot_count()];
   int placed_units[player_slot_count()];
-  int players_to_place = player_count();
+  bool pos_used[map.server.num_start_positions];
+  int i, num_used = 0;
 
   randomize_base64url_string(server.game_identifier,
                              sizeof(server.game_identifier));
 
-  fc_assert(player_count() <= map_startpos_count());
+  /* Shuffle starting positions around so that they match up with the
+   * desired players. */
 
-  /* Convert the startposition hash table in a linked lists, as we mostly
-   * need now to iterate it now. And then, we will be able to remove the
-   * assigned start postions one by one. */
-  impossible_list = startpos_list_new();
-  targeted_list = startpos_list_new();
-  flexible_list = startpos_list_new();
+  /* First set up some data fields. */
+  freelog(LOG_VERBOSE, "Placing players at start positions.");
+  for (i = 0; i < map.server.num_start_positions; i++) {
+    struct nation_type *n = map.server.start_positions[i].nation;
 
-  map_startpos_iterate(psp) {
-    if (startpos_allows_all(psp)) {
-      startpos_list_append(flexible_list, psp);
-    } else {
-      startpos_list_append(targeted_list, psp);
+    pos_used[i] = FALSE;
+    freelog(LOG_VERBOSE, "%3d : (%2d,%2d) : \"%s\" (%d)",
+	    i, TILE_XY(map.server.start_positions[i].tile),
+	    n ? nation_rule_name(n) : "", n ? nation_number(n) : -1);
+  }
+  players_iterate(pplayer) {
+    start_pos[player_index(pplayer)] = NO_START_POS;
+  } players_iterate_end;
+
+  /* Second, assign a nation to a start position for that nation. */
+  freelog(LOG_VERBOSE, "Assigning matching nations.");
+  players_iterate(pplayer) {
+    for (i = 0; i < map.server.num_start_positions; i++) {
+      assert(pplayer->nation != NO_NATION_SELECTED);
+      if (pplayer->nation == map.server.start_positions[i].nation) {
+	freelog(LOG_VERBOSE, "Start_pos %d matches player %d (%s).",
+		i,
+		player_number(pplayer),
+		nation_rule_name(nation_of_player(pplayer)));
+	start_pos[player_index(pplayer)] = i;
+	pos_used[i] = TRUE;
+	num_used++;
+      }
     }
-  } map_startpos_iterate_end;
+  } players_iterate_end;
 
-  fc_assert(startpos_list_size(targeted_list)
-            + startpos_list_size(flexible_list) == map_startpos_count());
+  /* Third, assign players randomly to the remaining start positions. */
+  freelog(LOG_VERBOSE, "Assigning random nations.");
+  players_iterate(pplayer) {
+    if (start_pos[player_index(pplayer)] == NO_START_POS) {
+      int which = myrand(map.server.num_start_positions - num_used);
 
-  memset(player_startpos, 0, sizeof(player_startpos));
-  log_verbose("Placing players at start positions.");
-
-  /* First assign start positions which requires certain nations only this
-   * one. */
-  if (0 < startpos_list_size(targeted_list)) {
-    log_verbose("Assigning matching nations.");
-
-    startpos_list_shuffle(targeted_list); /* Randomize. */
-    do {
-      struct nation_type *pnation;
-      struct startpos_list_link *choice;
-      bool removed = FALSE;
-
-      /* Assign first players which can pick only one start position. */
-      players_iterate(pplayer) {
-        if (NULL != player_startpos[player_index(pplayer)]) {
-          /* Already assigned. */
-          continue;
-        }
-
-        pnation = nation_of_player(pplayer);
-        choice = NULL;
-        startpos_list_iterate(targeted_list, plink, psp) {
-          if (startpos_nation_allowed(psp, pnation)) {
-            if (NULL != choice) {
-              choice = NULL;
-              break; /* Many choices. */
-            } else {
-              choice = plink;
-            }
-          }
-        } startpos_list_iterate_end;
-
-        if (NULL != choice) {
-          struct tile *ptile =
-              startpos_tile(startpos_list_link_data(choice));
-
-          player_startpos[player_index(pplayer)] = ptile;
-          startpos_list_erase(targeted_list, choice);
-          players_to_place--;
-          removed = TRUE;
-          log_verbose("Start position (%d, %d) matches player %s (%s).",
-                      TILE_XY(ptile), player_name(pplayer),
-                      nation_rule_name(pnation));
-        }
-      } players_iterate_end;
-
-      if (!removed) {
-        /* Make arbitrary choice for a player. */
-        struct startpos *psp = startpos_list_back(targeted_list);
-        struct tile *ptile = startpos_tile(psp);
-        struct player *rand_plr = NULL;
-        int i = 0;
-
-        startpos_list_pop_back(targeted_list); /* Detach 'psp'. */
-        players_iterate(pplayer) {
-          if (NULL != player_startpos[player_index(pplayer)]) {
-            /* Already assigned. */
-            continue;
-          }
-
-          pnation = nation_of_player(pplayer);
-          if (startpos_nation_allowed(psp, pnation) && 0 == fc_rand(++i)) {
-            rand_plr = pplayer;
-          }
-        } players_iterate_end;
-
-        if (NULL != rand_plr) {
-          player_startpos[player_index(rand_plr)] = ptile;
-          players_to_place--;
-          log_verbose("Start position (%d, %d) matches player %s (%s).",
-                      TILE_XY(ptile), player_name(rand_plr),
-                      nation_rule_name(nation_of_player(rand_plr)));
-        } else {
-          /* This start position cannot be assigned. */
-          log_verbose("Start position (%d, %d) cannot be assigned for "
-                      "any player, keeping for the moment...",
-                      TILE_XY(ptile));
-          /* Keep it for later, we may need it. */
-          startpos_list_append(impossible_list, psp);
-        }
+      for (i = 0; i < map.server.num_start_positions; i++) {
+	if (!pos_used[i]) {
+	  if (which == 0) {
+	    freelog(LOG_VERBOSE,
+		    "Randomly assigning player %d (%s) to pos %d.",
+		    player_number(pplayer),
+		    nation_rule_name(nation_of_player(pplayer)),
+		    i);
+	    start_pos[player_index(pplayer)] = i;
+	    pos_used[i] = TRUE;
+	    num_used++;
+	    break;
+	  }
+	  which--;
+	}
       }
-    } while (0 < players_to_place && 0 < startpos_list_size(targeted_list));
-  }
-
-  /* Now assign left start positions to every players. */
-  if (0 < players_to_place && 0 < startpos_list_size(flexible_list)) {
-    struct tile *ptile;
-
-    log_verbose("Assigning random start positions.");
-
-    startpos_list_shuffle(flexible_list); /* Randomize. */
-    players_iterate(pplayer) {
-      if (NULL != player_startpos[player_index(pplayer)]) {
-        /* Already assigned. */
-        continue;
-      }
-
-      ptile = startpos_tile(startpos_list_front(flexible_list));
-      player_startpos[player_index(pplayer)] = ptile;
-      players_to_place--;
-      startpos_list_pop_front(flexible_list);
-      log_verbose("Start position (%d, %d) assigned randomly "
-                  "to player %s (%s).", TILE_XY(ptile), player_name(pplayer),
-                  nation_rule_name(nation_of_player(pplayer)));
-      if (0 == startpos_list_size(flexible_list)) {
-        break;
-      }
-    } players_iterate_end;
-  }
-
-  if (0 < players_to_place && 0 < startpos_list_size(impossible_list)) {
-    struct tile *ptile;
-
-    startpos_list_shuffle(impossible_list); /* Randomize. */
-    players_iterate(pplayer) {
-      if (NULL != player_startpos[player_index(pplayer)]) {
-        /* Already assigned. */
-        continue;
-      }
-
-      ptile = startpos_tile(startpos_list_front(impossible_list));
-      player_startpos[player_index(pplayer)] = ptile;
-      players_to_place--;
-      startpos_list_pop_front(impossible_list);
-      log_verbose("Start position (%d, %d) assigned by default "
-                  "to player %s (%s).", TILE_XY(ptile), player_name(pplayer),
-                  nation_rule_name(nation_of_player(pplayer)));
-      if (0 == startpos_list_size(impossible_list)) {
-        break;
-      }
-    } players_iterate_end;
-  }
-
-  fc_assert(0 == players_to_place);
-
-  startpos_list_destroy(impossible_list);
-  startpos_list_destroy(targeted_list);
-  startpos_list_destroy(flexible_list);
-
+    }
+    assert(start_pos[player_index(pplayer)] != NO_START_POS);
+  } players_iterate_end;
 
   /* Loop over all players, creating their initial units... */
   players_iterate(pplayer) {
-    struct tile *ptile = player_startpos[player_index(pplayer)];
-
-    fc_assert_action(NULL != ptile, continue);
+    struct start_position pos
+      = map.server.start_positions[start_pos[player_index(pplayer)]];
 
     /* Place the first unit. */
-    if (place_starting_unit(ptile, pplayer,
-                            game.server.start_units[0]) != NULL) {
+    if (place_starting_unit(pos.tile, pplayer,
+                            game.info.start_units[0]) != NULL) {
       placed_units[player_index(pplayer)] = 1;
     } else {
       placed_units[player_index(pplayer)] = 0;
@@ -392,36 +282,37 @@ void init_new_game(void)
   /* Place all other units. */
   players_iterate(pplayer) {
     int i;
-    struct tile *const ptile = player_startpos[player_index(pplayer)];
+    struct tile *ptile;
     struct nation_type *nation = nation_of_player(pplayer);
-
-    fc_assert_action(NULL != ptile, continue);
+    struct start_position p
+      = map.server.start_positions[start_pos[player_index(pplayer)]];
 
     /* Place global start units */
-    for (i = 1; i < strlen(game.server.start_units); i++) {
-      struct tile *rand_tile = find_dispersed_position(pplayer, ptile);
+    for (i = 1; i < strlen(game.info.start_units); i++) {
+      ptile = find_dispersed_position(pplayer, &p);
 
       /* Create the unit of an appropriate type. */
-      if (place_starting_unit(rand_tile, pplayer,
-                              game.server.start_units[i]) != NULL) {
+      if (place_starting_unit(ptile, pplayer,
+                              game.info.start_units[i]) != NULL) {
         placed_units[player_index(pplayer)]++;
       }
     }
 
     /* Place nation specific start units (not role based!) */
     i = 0;
-    while (NULL != nation->server.init_units[i] && MAX_NUM_UNIT_LIST > i) {
-      struct tile *rand_tile = find_dispersed_position(pplayer, ptile);
-
-      create_unit(pplayer, rand_tile, nation->server.init_units[i], FALSE, 0, 0);
+    while (nation->init_units[i] != NULL && i < MAX_NUM_UNIT_LIST) {
+      ptile = find_dispersed_position(pplayer, &p);
+      create_unit(pplayer, ptile, nation->init_units[i], FALSE, 0, 0);
       placed_units[player_index(pplayer)]++;
       i++;
     }
   } players_iterate_end;
 
   players_iterate(pplayer) {
-    fc_assert_msg(0 < placed_units[player_index(pplayer)],
-                  _("No units placed for %s!"), player_name(pplayer));
+    if (placed_units[player_index(pplayer)] == 0) {
+      /* No units at all for some player! */
+      die(_("No units placed for %s!"), player_name(pplayer));
+    }
   } players_iterate_end;
 
   shuffle_players();
@@ -468,14 +359,9 @@ void send_game_info(struct conn_list *dest)
 
   /* the following values are computed every
      time a packet_game_info packet is created */
-
-  /* Sometimes this function is called before the phase_timer is
-   * initialized.  In that case we want to send the dummy value. */
   if (game.info.timeout > 0 && game.server.phase_timer) {
-    /* Whenever the client sees this packet, it starts a new timer at 0;
-     * but the server's timer is only ever reset at the start of a phase
-     * (and game.info.seconds_to_phasedone is relative to this).
-     * Account for the difference. */
+    /* Sometimes this function is called before the phase_timer is
+     * initialized.  In that case we want to send the dummy value. */
     ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
         - read_timer_seconds(game.server.phase_timer);
   } else {
@@ -535,7 +421,7 @@ int update_timeout(void)
       notify_conn(game.est_connections, NULL, E_SETTING, ftc_server,
                   _("The turn timeout has exceeded its maximum value, "
                     "fixing at its maximum."));
-      log_debug("game.info.timeout exceeded maximum value");
+      freelog(LOG_DEBUG, "game.info.timeout exceeded maximum value");
       game.info.timeout = GAME_MAX_TIMEOUT;
       game.server.timeoutint = 0;
       game.server.timeoutinc = 0;
@@ -543,19 +429,19 @@ int update_timeout(void)
       notify_conn(game.est_connections, NULL, E_SETTING, ftc_server,
                   _("The turn timeout is smaller than zero, "
                     "fixing at zero."));
-      log_debug("game.info.timeout less than zero");
+      freelog(LOG_DEBUG, "game.info.timeout less than zero");
       game.info.timeout = 0;
     }
   } else {
     game.server.timeoutcounter++;
   }
 
-  log_debug("timeout=%d, inc=%d incmult=%d\n   "
-            "int=%d, intinc=%d, turns till next=%d",
-            game.info.timeout, game.server.timeoutinc,
-            game.server.timeoutincmult, game.server.timeoutint,
-            game.server.timeoutintinc,
-            game.server.timeoutint - game.server.timeoutcounter);
+  freelog(LOG_DEBUG, "timeout=%d, inc=%d incmult=%d\n   "
+	  "int=%d, intinc=%d, turns till next=%d",
+	  game.info.timeout, game.server.timeoutinc,
+          game.server.timeoutincmult, game.server.timeoutint,
+          game.server.timeoutintinc,
+          game.server.timeoutint - game.server.timeoutcounter);
 
   return game.info.timeout;
 }
@@ -595,7 +481,7 @@ static const char *get_challenge_filename(struct connection *pc)
 {
   static char filename[MAX_LEN_PATH];
 
-  fc_snprintf(filename, sizeof(filename), "%s_%d_%d",
+  my_snprintf(filename, sizeof(filename), "%s_%d_%d",
       CHALLENGE_ROOT, srvarg.port, pc->id);
 
   return filename;
@@ -632,48 +518,44 @@ const char *new_challenge_filename(struct connection *pc)
 static void send_ruleset_choices(struct connection *pc)
 {
   struct packet_ruleset_choices packet;
-  static struct strvec *rulesets = NULL;
-  size_t i;
+  static char **rulesets = NULL;
+  int i;
 
   if (!rulesets) {
     /* This is only read once per server invocation.  Add a new ruleset
      * and you have to restart the server. */
-    rulesets = fileinfolist(get_data_dirs(), RULESET_SUFFIX);
+    rulesets = datafilelist(RULESET_SUFFIX);
   }
 
-  packet.ruleset_count = MIN(MAX_NUM_RULESETS, strvec_size(rulesets));
-  for (i = 0; i < packet.ruleset_count; i++) {
-    sz_strlcpy(packet.rulesets[i], strvec_get(rulesets, i));
+  for (i = 0; i < MAX_NUM_RULESETS && rulesets[i]; i++) {
+    sz_strlcpy(packet.rulesets[i], rulesets[i]);
   }
+  packet.ruleset_count = i;
 
   send_packet_ruleset_choices(pc, &packet);
 }
 
 
-/**************************************************************************** 
-  Opens a file specified by the packet and compares the packet values with
-  the file values. Sends an answer to the client once it's done.
-****************************************************************************/
+/************************************************************************** 
+opens a file specified by the packet and compares the packet values with
+the file values. Sends an answer to the client once it's done.
+**************************************************************************/
 void handle_single_want_hack_req(struct connection *pc,
-                                 const struct packet_single_want_hack_req *
-                                 packet)
+    				 struct packet_single_want_hack_req *packet)
 {
-  struct section_file *secfile;
-  const char *token = NULL;
+  struct section_file file;
+  char *token = NULL;
   bool you_have_hack = FALSE;
 
   if (!with_ggz) {
-    if ((secfile = secfile_load(get_challenge_fullname(pc), FALSE))) {
-      token = secfile_lookup_str(secfile, "challenge.token");
+    if (section_file_load_nodup(&file, get_challenge_fullname(pc))) {
+      token = secfile_lookup_str_default(&file, NULL, "challenge.token");
       you_have_hack = (token && strcmp(token, packet->token) == 0);
-      secfile_destroy(secfile);
-    } else {
-      log_debug("Error reading '%s':\n%s", get_challenge_fullname(pc),
-                secfile_error());
+      section_file_free(&file);
     }
 
     if (!token) {
-      log_debug("Failed to read authentication token");
+      freelog(LOG_DEBUG, "Failed to read authentication token");
     }
   }
 

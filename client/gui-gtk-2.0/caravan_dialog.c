@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -43,7 +43,7 @@ static int caravan_unit_id;
 static GtkWidget *caravan_dialog;
 
 /****************************************************************
-  User selected traderoute from caravan dialog
+...
 *****************************************************************/
 static void caravan_establish_trade_callback(GtkWidget *w, gpointer data)
 {
@@ -51,7 +51,7 @@ static void caravan_establish_trade_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  User selected wonder building helping from caravan dialog
+...
 *****************************************************************/
 static void caravan_help_build_wonder_callback(GtkWidget *w, gpointer data)
 {
@@ -59,7 +59,7 @@ static void caravan_help_build_wonder_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Close caravan dialog
+...
 *****************************************************************/
 static void caravan_destroy_callback(GtkWidget *w, gpointer data)
 {
@@ -74,37 +74,33 @@ static void caravan_destroy_callback(GtkWidget *w, gpointer data)
 static void get_help_build_wonder_button_label(char* buf, int bufsize,
                                                bool* help_build_possible)
 {
-  struct city* destcity = game_city_by_number(caravan_city_id);
-  struct unit* caravan = game_unit_by_number(caravan_unit_id);
+  struct city* destcity = game_find_city_by_number(caravan_city_id);
+  struct unit* caravan = game_find_unit_by_number(caravan_unit_id);
   
   if (destcity && caravan
       && unit_can_help_build_wonder(caravan, destcity)) {
-    fc_snprintf(buf, bufsize, _("Help build _Wonder (%d remaining)"),
-                impr_build_shield_cost(destcity->production.value.building)
-                - destcity->shield_stock);
+    my_snprintf(buf, bufsize, _("Help build _Wonder (%d remaining)"),
+	impr_build_shield_cost(destcity->production.value.building)
+	- destcity->shield_stock);
     *help_build_possible = TRUE;
   } else {
-    fc_snprintf(buf, bufsize, _("Help build _Wonder"));
+    my_snprintf(buf, bufsize, _("Help build _Wonder"));
     *help_build_possible = FALSE;
   }
 }
 
 /****************************************************************
-  Open caravan dialog
+...
 *****************************************************************/
 void popup_caravan_dialog(struct unit *punit,
 			  struct city *phomecity, struct city *pdestcity)
 {
-  char title_buf[128], buf[128], wonder[128];
+  char buf[128], wonder[128];
   bool can_establish, can_trade, can_wonder;
   
-  fc_snprintf(title_buf, sizeof(title_buf),
-              /* TRANS: %s is a unit type */
-              _("Your %s Has Arrived"), unit_name_translation(punit));
-  fc_snprintf(buf, sizeof(buf),
-              _("Your %s from %s reaches the city of %s.\nWhat now?"),
-              unit_name_translation(punit),
-              city_name(phomecity), city_name(pdestcity));
+  my_snprintf(buf, sizeof(buf),
+	      _("Your caravan from %s reaches the city of %s.\nWhat now?"),
+	      city_name(phomecity), city_name(pdestcity));
   
   caravan_city_id=pdestcity->id; /* callbacks need these */
   caravan_unit_id=punit->id;
@@ -117,7 +113,8 @@ void popup_caravan_dialog(struct unit *punit,
 
 
   caravan_dialog = popup_choice_dialog(GTK_WINDOW(toplevel),
-    title_buf, buf,
+    _("Your Caravan Has Arrived"), 
+    buf,
     (can_establish ? _("Establish _Trade route") :
     _("Enter Marketplace")),caravan_establish_trade_callback, NULL,
     wonder,caravan_help_build_wonder_callback, NULL,

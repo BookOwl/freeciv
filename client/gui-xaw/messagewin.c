@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -72,7 +72,7 @@ static char *dummy_message_list[] = {
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void meswin_dialog_popup(bool raise)
+void popup_meswin_dialog(bool raise)
 {
   int updated = 0;
   
@@ -89,10 +89,9 @@ void meswin_dialog_popup(bool raise)
 
   xaw_set_relative_position(toplevel, meswin_dialog_shell, 25, 25);
   XtPopup(meswin_dialog_shell, XtGrabNone);
-  if (!updated) {
-    real_meswin_dialog_update();
-  }
-
+  if(!updated) 
+    update_meswin_dialog();
+  
   /* Is this necessary here? 
    * from popup_city_report_dialog():
    * force refresh of viewport so the scrollbar is added.
@@ -106,7 +105,7 @@ void meswin_dialog_popup(bool raise)
 /****************************************************************
   Closes the message window dialog.
 *****************************************************************/
-void meswin_dialog_popdown(void)
+void popdown_meswin_dialog(void)
 {
   if (meswin_dialog_shell) {
     if (meswin_dialog_shell_is_raised) {
@@ -120,7 +119,7 @@ void meswin_dialog_popdown(void)
 /****************************************************************
 ...
 *****************************************************************/
-bool meswin_dialog_is_open(void)
+bool is_meswin_open(void)
 {
   return meswin_dialog_shell != NULL;
 }
@@ -189,8 +188,8 @@ static void create_meswin_dialog(bool raise)
   
   XtAddCallback(meswin_popcity_command, XtNcallback, meswin_popcity_callback, 
 		NULL);
-
-  real_meswin_dialog_update();
+  
+  real_update_meswin_dialog();
 
   XtRealizeWidget(meswin_dialog_shell);
   
@@ -219,23 +218,22 @@ static void meswin_scroll_down(void)
   if (!meswin_dialog_shell || creating) {
     return;
   }
-  if (meswin_get_num_messages() <= N_MSG_VIEW) {
+  if (get_num_messages() <= N_MSG_VIEW) {
     return;
   }
   
   XtVaGetValues(meswin_list, XtNheight, &height, NULL);
-  pos = (((double) (meswin_get_num_messages() - 1))
-         / meswin_get_num_messages()) * height;
+  pos = (((double) (get_num_messages() - 1)) / get_num_messages()) * height;
   XawViewportSetCoordinates(meswin_viewport, 0, pos);
 }
 
 /**************************************************************************
 ...
 **************************************************************************/
-void real_meswin_dialog_update(void)
+void real_update_meswin_dialog(void)
 {
   Dimension height, iheight, width, oldheight, newheight;
-  int i, num = meswin_get_num_messages();
+  int i, num = get_num_messages();
 
   XawFormDoLayout(meswin_form, False);
 
@@ -250,7 +248,7 @@ void real_meswin_dialog_update(void)
     strings = fc_realloc(strings, num * sizeof(char *));
 
     for (i = 0; i < num; i++) {
-      strings[i] = meswin_get_message(i)->descr;
+      strings[i] = get_message(i)->descr;
     }
 
     XawListChange(meswin_list, strings, num, 0, True);
@@ -307,9 +305,8 @@ static void meswin_list_callback(Widget w, XtPointer client_data,
 {
   XawListReturnStruct *ret = XawListShowCurrent(meswin_list);
 
-  if ((ret->list_index != XAW_LIST_NONE)
-      && (meswin_get_num_messages() != 0)) {
-    const struct message *message = meswin_get_message(ret->list_index);
+  if ((ret->list_index != XAW_LIST_NONE) && (get_num_messages() != 0)) {
+    struct message *message = get_message(ret->list_index);
 
     XtSetSensitive(meswin_goto_command, message->location_ok ? True : False);
     XtSetSensitive(meswin_popcity_command, message->city_ok ? True : False);
@@ -325,7 +322,7 @@ static void meswin_list_callback(Widget w, XtPointer client_data,
 static void meswin_close_callback(Widget w, XtPointer client_data,
 				  XtPointer call_data)
 {
-  meswin_dialog_popdown();
+  popdown_meswin_dialog();
 }
 
 /****************************************************************

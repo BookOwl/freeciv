@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -124,11 +124,11 @@ struct ct_string *ct_string_create(const char *font, int size,
 {
   struct ct_string *result = fc_malloc(sizeof(*result));
 
-  result->font = fc_strdup(font);
+  result->font = mystrdup(font);
   result->font_size = size;
   result->foreground = foreground;
   result->background = background;
-  result->text = fc_strdup(text);
+  result->text = mystrdup(text);
   result->anti_alias = anti_alias;
   result->outline_width = outline_width;
   result->outline_color = outline_color;
@@ -141,7 +141,7 @@ struct ct_string *ct_string_create(const char *font, int size,
     int i;
 
     for (i = 0; i < len; i++) {
-      result->text[i] = fc_toupper(result->text[i]);
+      result->text[i] = my_toupper(result->text[i]);
     }
   } else {
     assert(0);
@@ -150,7 +150,7 @@ struct ct_string *ct_string_create(const char *font, int size,
   /* split the string */
   {
       int row;
-      char *s, *tmp = fc_strdup(result->text);
+      char *s, *tmp = mystrdup(result->text);
 
       result->rows = 1;
       for (s = tmp; *s != '\0'; s++) {
@@ -166,10 +166,10 @@ struct ct_string *ct_string_create(const char *font, int size,
 
 	if (end) {
 	  *end = '\0';
-	  result->row[row].text = fc_strdup(s);
+	  result->row[row].text = mystrdup(s);
 	  s = end + 1;
 	} else {
-	  result->row[row].text = fc_strdup(s);
+	  result->row[row].text = mystrdup(s);
 	}
 	//printf("[%d]='%s'\n", row, result->row[row].text);
       }
@@ -267,9 +267,9 @@ struct ct_string *ct_string_wrap(const struct ct_string *orig, int max_width)
   int columns;
 
   for (columns = 100; columns > 1; columns--) {
-    char *copy = fc_strdup(orig->text);
+    char *copy = mystrdup(orig->text);
 
-    fc_break_lines(copy, columns);
+    wordwrap_string(copy, columns);
     result = ct_string_clone3(orig, copy);
     free(copy);
     if (result->size.width <= max_width) {
@@ -287,7 +287,7 @@ const char *ct_rect_to_string(const struct ct_rect *rect)
 {
   static char buffer[100];
 
-  fc_snprintf(buffer, 100, "{x=%d, y=%d, width=%d, height=%d}", rect->x,
+  my_snprintf(buffer, 100, "{x=%d, y=%d, width=%d, height=%d}", rect->x,
 	      rect->y, rect->width, rect->height);
   return buffer;
 }
@@ -476,14 +476,14 @@ const char *ct_key_format(const struct be_key *key)
   char buffer[100];
 
   if (key->type == BE_KEY_NORMAL) {
-    fc_snprintf(buffer, sizeof(buffer), "%c", key->key);
+    my_snprintf(buffer, sizeof(buffer), "%c", key->key);
   } else {
     int i;
     bool found = FALSE;
 
     for (i = 0; i < ARRAY_SIZE(keymap); i++) {
       if (keymap[i].type == key->type) {
-	fc_snprintf(buffer, sizeof(buffer), "%s", keymap[i].name);
+	my_snprintf(buffer, sizeof(buffer), "%s", keymap[i].name);
 	found = TRUE;
 	break;
       }
@@ -491,7 +491,7 @@ const char *ct_key_format(const struct be_key *key)
     assert(found);
   }
 
-  fc_snprintf(out, sizeof(out), "%s%s%s%s",
+  my_snprintf(out, sizeof(out), "%s%s%s%s",
 	   (key->alt ? "Alt-" : ""),
 	   (key->control ? "Ctrl-" : ""),
 	   (key->shift ? "Shift-" : ""), buffer);

@@ -40,10 +40,7 @@
    which _is_ itself protected against multiple inclusions.
 */
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
+#include <assert.h>
 #include <string.h>		/* for memcpy */
 
 #include "mem.h"
@@ -123,10 +120,10 @@ static inline void SPECVEC_FOO(_vector_free) (SPECVEC_VECTOR *tthis)
 }
 
 static inline void SPECVEC_FOO(_vector_append) (SPECVEC_VECTOR *tthis,
-                                                SPECVEC_TYPE const pfoo)
+						SPECVEC_TYPE *pfoo)
 {
   SPECVEC_FOO(_vector_reserve) (tthis, tthis->size + 1);
-  tthis->p[tthis->size - 1] = pfoo;
+  tthis->p[tthis->size - 1] = *pfoo;
 }
 
 
@@ -147,7 +144,3 @@ static inline void SPECVEC_FOO(_vector_append) (SPECVEC_VECTOR *tthis,
 #undef SPECVEC_PASTE
 #undef SPECVEC_VECTOR
 #undef SPECVEC_FOO
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */

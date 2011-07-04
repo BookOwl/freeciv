@@ -12,8 +12,10 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+
+#include <assert.h>
 
 /* utility */
 #include "fcintl.h"
@@ -34,7 +36,7 @@ int tile_border_source_radius_sq(struct tile *ptile)
   struct city *pcity;
   int radius_sq = 0;
 
-  if (BORDERS_DISABLED == game.info.borders) {
+  if (game.info.borders == 0) {
     return 0;
   }
 
@@ -42,10 +44,7 @@ int tile_border_source_radius_sq(struct tile *ptile)
 
   if (pcity) {
     radius_sq = game.info.border_city_radius_sq;
-    /* Limit the addition due to the city size. A city size of 60 or more is
-     * possible with a city radius of 5 (radius_sq = 26). */
-    radius_sq += MIN(city_size_get(pcity), CITY_MAP_MAX_RADIUS_SQ)
-                 * game.info.border_size_effect;
+    radius_sq += pcity->size * game.info.border_size_effect;
   } else {
     base_type_iterate(pbase) {
       if (tile_has_base(ptile, pbase) && territory_claiming_base(pbase)) {
@@ -66,14 +65,14 @@ int tile_border_source_strength(struct tile *ptile)
   struct city *pcity;
   int strength = 0;
 
-  if (BORDERS_DISABLED == game.info.borders) {
+  if (game.info.borders == 0) {
     return 0;
   }
 
   pcity = tile_city(ptile);
 
   if (pcity) {
-    strength = city_size_get(pcity) + 2;
+    strength = pcity->size + 2;
   } else {
     base_type_iterate(pbase) {
       if (tile_has_base(ptile, pbase) && territory_claiming_base(pbase)) {

@@ -16,9 +16,6 @@
 #include "plrdlg_common.h"
 
 void popup_players_dialog(bool raise);
-void real_players_dialog_update(void);
-
-/* Actually defined in update_queue.c */
-void players_dialog_update(void);
+void update_players_dialog(void);
 
 #endif  /* FC__PLRDLG_G_H */

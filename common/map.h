@@ -13,18 +13,9 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
+#include <assert.h>
 #include <math.h> /* sqrt */
 
-/* utility */
-#include "bitvector.h"
-#include "iterator.h"
-#include "log.h"                /* fc_assert */
-
-/* common */
 #include "fc_types.h"
 
 #include "tile.h"
@@ -42,35 +33,7 @@ miscellaneous terrain information
 *****************************************************************/
 #define terrain_misc packet_ruleset_terrain_control
 
-/* Some types used below. */
-struct nation_hash;
-struct nation_type;
-struct packet_edit_startpos_full;
-struct startpos;
-struct startpos_hash;
-
-enum mapsize_type {
-  MAPSIZE_FULLSIZE = 0, /* Using the number of tiles / 1000. */
-  MAPSIZE_PLAYER,       /* Define the number of (land) tiles per player;
-                         * the setting 'landmass' and the number of players
-                         * are used to calculate the map size. */
-  MAPSIZE_XYSIZE        /* 'xsize' and 'ysize' are defined. */
-};
-
-enum map_generator {
-  MAPGEN_SCENARIO = 0,
-  MAPGEN_RANDOM,
-  MAPGEN_FRACTAL,
-  MAPGEN_ISLAND
-};
-
-enum map_startpos {
-  MAPSTARTPOS_DEFAULT = 0,      /* Generator's choice. */
-  MAPSTARTPOS_SINGLE,           /* One player per continent. */
-  MAPSTARTPOS_2or3,             /* Two on three players per continent. */
-  MAPSTARTPOS_ALL,              /* All players on a single continent. */
-  MAPSTARTPOS_VARIABLE,         /* Depending on size of continents. */
-};
+struct hash_table;
 
 struct civ_map {
   int topology_id;
@@ -82,7 +45,7 @@ struct civ_map {
   int num_continents;
   int num_oceans;               /* not updated at the client */
   struct tile *tiles;
-  struct startpos_hash *startpos_table;
+  struct hash_table *startpos_table;
 
   union {
     struct {
@@ -90,25 +53,29 @@ struct civ_map {
     } client;
 
     struct {
-      enum mapsize_type mapsize; /* how the map size is defined */
       int size; /* used to calculate [xy]size */
-      int tilesperplayer; /* tiles per player; used to calculate size */
       int seed;
       int riches;
       int huts;
       int landpercent;
-      enum map_generator generator;
-      enum map_startpos startpos;
+      int generator;
+      int startpos;
       bool tinyisles;
       bool separatepoles;
       bool alltemperate;
       int temperature;
       int wetness;
       int steepness;
+      int num_start_positions;
       bool have_resources;
       bool ocean_resources;         /* Resources in the middle of the ocean */
       bool have_huts;
       bool have_rivers_overlay;	/* only applies if !have_resources */
+
+      struct start_position {
+        struct tile *tile;
+        struct nation_type *nation; /* May be NO_NATION_SELECTED. */
+      } *start_positions;	/* allocated at runtime */
     } server;
   };
 };
@@ -153,74 +120,22 @@ bool base_get_direction_for_step(const struct tile *src_tile,
 int get_direction_for_step(const struct tile *src_tile,
 			   const struct tile *dst_tile);
 
-
-/* Specific functions for start positions. */
-struct startpos *map_startpos_by_number(int id);
-int startpos_number(const struct startpos *psp);
-
-bool startpos_allow(struct startpos *psp, struct nation_type *pnation);
-bool startpos_disallow(struct startpos *psp, struct nation_type *pnation);
-
-struct tile *startpos_tile(const struct startpos *psp);
-bool startpos_nation_allowed(const struct startpos *psp,
-                             const struct nation_type *pnation);
-bool startpos_allows_all(const struct startpos *psp);
-
-bool startpos_pack(const struct startpos *psp,
-                   struct packet_edit_startpos_full *packet);
-bool startpos_unpack(struct startpos *psp,
-                     const struct packet_edit_startpos_full *packet);
-
-/* See comment in "common/map.c". */
-bool startpos_is_excluding(const struct startpos *psp);
-const struct nation_hash *startpos_raw_nations(const struct startpos *psp);
-
-/****************************************************************************
-  Iterate over all nations at the start position for which the function
-  startpos_nation_allowed() would return TRUE. This automatically takes into
-  account the value of startpos_is_excluding() and startpos_allows_all() to
-  iterate over the correct set of nations.
-****************************************************************************/
-struct startpos_iter;
-size_t startpos_iter_sizeof(void);
-struct iterator *startpos_iter_init(struct startpos_iter *it,
-                                    const struct startpos *psp);
-#define startpos_nations_iterate(ARG_psp, NAME_pnation)                     \
-  generic_iterate(struct startpos_iter, const struct nation_type *,         \
-                  NAME_pnation, startpos_iter_sizeof,                       \
-                  startpos_iter_init, (ARG_psp))
-#define startpos_nations_iterate_end generic_iterate_end
-
-
-/* General map start positions functions. */
-int map_startpos_count(void);
-struct startpos *map_startpos_new(struct tile *ptile);
-struct startpos *map_startpos_get(const struct tile *ptile);
-bool map_startpos_remove(struct tile *ptile);
-
-/****************************************************************************
-  Iterate over all start positions placed on the map.
-****************************************************************************/
-struct map_startpos_iter;
-size_t map_startpos_iter_sizeof(void);
-struct iterator *map_startpos_iter_init(struct map_startpos_iter *iter);
-
-#define map_startpos_iterate(NAME_psp)                                      \
-  generic_iterate(struct map_startpos_iter, struct startpos *,              \
-                  NAME_psp, map_startpos_iter_sizeof, map_startpos_iter_init)
-#define map_startpos_iterate_end generic_iterate_end
+bool map_startpositions_set(void);
+void map_set_startpos(const struct tile *ptile,
+                      const struct nation_type *pnation);
+bool map_has_startpos(const struct tile *ptile);
+const struct nation_type *map_get_startpos(const struct tile *ptile);
+void map_clear_startpos(const struct tile *ptile);
 
 
 /* Number of index coordinates (for sanity checks and allocations) */
 #define MAP_INDEX_SIZE (map.xsize * map.ysize)
 
 #ifdef DEBUG
-#define CHECK_MAP_POS(x,y) \
-  fc_assert(is_normal_map_pos((x),(y)))
-#define CHECK_NATIVE_POS(x, y) \
-  fc_assert((x) >= 0 && (x) < map.xsize && (y) >= 0 && (y) < map.ysize)
-#define CHECK_INDEX(index) \
-  fc_assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
+#define CHECK_MAP_POS(x,y) assert(is_normal_map_pos((x),(y)))
+#define CHECK_NATIVE_POS(x, y) assert((x) >= 0 && (x) < map.xsize \
+				      && (y) >= 0 && (y) < map.ysize)
+#define CHECK_INDEX(index) assert((index) >= 0 && (index) < MAP_INDEX_SIZE)
 #else
 #define CHECK_MAP_POS(x,y) ((void)0)
 #define CHECK_NATIVE_POS(x, y) ((void)0)
@@ -340,7 +255,6 @@ void base_map_distance_vector(int *dx, int *dy,
 void map_distance_vector(int *dx, int *dy, const struct tile *ptile0,
 			 const struct tile *ptile1);
 int map_num_tiles(void);
-#define map_size_checked()  MAX(map_num_tiles() / 1000, 1)
 
 struct tile *rand_neighbour(const struct tile *ptile);
 struct tile *rand_map_pos(void);
@@ -348,16 +262,13 @@ struct tile *rand_map_pos_filtered(void *data,
 				   bool (*filter)(const struct tile *ptile,
 						  const void *data));
 
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit);
+bool is_water_adjacent_to_tile(const struct tile *ptile);
 bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
-int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
-                     const struct tile *tile1);
-int map_move_cost(const struct player *pplayer, const struct tile *src_tile,
-                  const struct tile *dst_tile);
+int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1);
+int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
 bool is_cardinally_adj_to_ocean(const struct tile *ptile);
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
@@ -559,30 +470,25 @@ extern const int DIR_DY[8];
 #define MAP_MIN_HUTS             0
 #define MAP_MAX_HUTS             500
 
-#define MAP_DEFAULT_MAPSIZE     MAPSIZE_FULLSIZE
-
 /* Size of the map in thousands of tiles.  Setting the maximal size over
  * than 30 is dangerous, because some parts of the code (e.g. path finding)
  * assume the tile index is of type (signed short int). */
 #define MAP_DEFAULT_SIZE         4
-#define MAP_MIN_SIZE             0
-#define MAP_MAX_SIZE             128
-
-#define MAP_DEFAULT_TILESPERPLAYER      100
-#define MAP_MIN_TILESPERPLAYER            1
-#define MAP_MAX_TILESPERPLAYER         1000
+#define MAP_MIN_SIZE             1
+#define MAP_MAX_SIZE             30
 
 /* This defines the maximum linear size in _map_ coordinates.
  * This must be smaller than 255 because of the way coordinates are sent
  * across the network. */
-#define MAP_DEFAULT_LINEAR_SIZE  64
-#define MAP_MAX_LINEAR_SIZE      512
-#define MAP_MIN_LINEAR_SIZE      16
+#define MAP_MAX_LINEAR_SIZE      254
+#define MAP_MIN_LINEAR_SIZE      8
 #define MAP_MAX_WIDTH            MAP_MAX_LINEAR_SIZE
 #define MAP_MAX_HEIGHT           MAP_MAX_LINEAR_SIZE
 
 #define MAP_ORIGINAL_TOPO        TF_WRAPX
 #define MAP_DEFAULT_TOPO         TF_WRAPX
+#define MAP_MIN_TOPO             0
+#define MAP_MAX_TOPO             15
 
 #define MAP_DEFAULT_SEED         0
 #define MAP_MIN_SEED             0
@@ -604,9 +510,13 @@ extern const int DIR_DY[8];
 #define MAP_MIN_WETNESS          0
 #define MAP_MAX_WETNESS          100
 
-#define MAP_DEFAULT_GENERATOR    MAPGEN_RANDOM
+#define MAP_DEFAULT_GENERATOR    1
+#define MAP_MIN_GENERATOR        1
+#define MAP_MAX_GENERATOR        3
 
-#define MAP_DEFAULT_STARTPOS     MAPSTARTPOS_DEFAULT
+#define MAP_DEFAULT_STARTPOS     0
+#define MAP_MIN_STARTPOS         0
+#define MAP_MAX_STARTPOS         4
 
 #define MAP_DEFAULT_TINYISLES    FALSE
 #define MAP_MIN_TINYISLES        FALSE
@@ -657,11 +567,5 @@ static inline bool is_border_tile(const struct tile *ptile, int dist)
 	  || ptile->nat_x >= map.xsize - xdist
 	  || ptile->nat_y >= map.ysize - ydist);
 }
-
-enum direction8 rand_direction(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__MAP_H */

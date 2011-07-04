@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -21,9 +21,6 @@
 #include "log.h"
 #include "rand.h"
 
-/* server */
-#include "stdinhand.h"
-
 #include "api_utilities.h"
 
 /************************************************************************
@@ -31,31 +28,23 @@
 ************************************************************************/
 int api_utilities_random(int min, int max)
 {
-  double roll = ((double) (fc_rand(MAX_UINT32) % MAX_UINT32)
-                 / (double) MAX_UINT32);
+  double roll = (double)(myrand(MAX_UINT32) % MAX_UINT32) / (double)MAX_UINT32;
 
   return (min + floor(roll * (max - min + 1)));
 }
 
-/**************************************************************************
-  One log message. This module is used by script_game and script_auth.
-**************************************************************************/
-void api_utilities_log_base(int level, const char *message)
+/************************************************************************
+  Error message from script to log
+************************************************************************/
+void api_utilities_error_log(const char *msg)
 {
-  log_base(level, "%s", message);
+  freelog(LOG_ERROR, "%s", msg);
 }
 
-/**************************************************************************
-  Return the value for the fcdb setting 'type'.
-**************************************************************************/
-void api_utilities_cmd_reply(int cmdid, struct connection *caller,
-                             int rfc_status, const char *msg)
+/************************************************************************
+  Debug message from script to log
+************************************************************************/
+void api_utilities_debug_log(const char *msg)
 {
-  if (cmdid != CMD_FCDB) {
-    log_error("Use of forbitten command id from lua script: %s (%d).",
-              command_name_by_number(cmdid), cmdid);
-    return;
-  }
-
-  cmd_reply(cmdid, caller, rfc_status, "%s", msg);
+  freelog(LOG_DEBUG, "%s", msg);
 }

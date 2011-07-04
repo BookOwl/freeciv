@@ -14,34 +14,23 @@
 #ifndef FC__REQUIREMENTS_H
 #define FC__REQUIREMENTS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 
 #include "tech.h"
 #include "terrain.h"
 #include "unittype.h"
 
-/* Range of requirements. */
-#define SPECENUM_NAME req_range
-#define SPECENUM_VALUE0 REQ_RANGE_LOCAL
-#define SPECENUM_VALUE0NAME "Local"
-#define SPECENUM_VALUE1 REQ_RANGE_CADJACENT
-#define SPECENUM_VALUE1NAME "CAdjacent"
-#define SPECENUM_VALUE2 REQ_RANGE_ADJACENT
-#define SPECENUM_VALUE2NAME "Adjacent"
-#define SPECENUM_VALUE3 REQ_RANGE_CITY
-#define SPECENUM_VALUE3NAME "City"
-#define SPECENUM_VALUE4 REQ_RANGE_CONTINENT
-#define SPECENUM_VALUE4NAME "Continent"
-#define SPECENUM_VALUE5 REQ_RANGE_PLAYER
-#define SPECENUM_VALUE5NAME "Player"
-#define SPECENUM_VALUE6 REQ_RANGE_WORLD
-#define SPECENUM_VALUE6NAME "World"
-#define SPECENUM_COUNT REQ_RANGE_COUNT /* keep this last */
-#include "specenum_gen.h"
+/* Range of requirements.  This must correspond to req_range_names[]
+ * in requirements.c. */
+enum req_range {
+  REQ_RANGE_LOCAL,
+  REQ_RANGE_ADJACENT,
+  REQ_RANGE_CITY,
+  REQ_RANGE_CONTINENT,
+  REQ_RANGE_PLAYER,
+  REQ_RANGE_WORLD,
+  REQ_RANGE_LAST   /* keep this last */
+};
 
 /* A requirement. This requirement is basically a conditional; it may or
  * may not be active on a target.  If it is active then something happens.
@@ -70,6 +59,7 @@ struct requirement {
 #define requirement_vector_iterate_end VECTOR_ITERATE_END
 
 /* General requirement functions. */
+enum req_range req_range_from_str(const char *str);
 struct requirement req_from_str(const char *type, const char *range,
 				bool survives, bool negated,
 				const char *value);
@@ -117,15 +107,12 @@ void universal_extraction(const struct universal *source,
 bool are_universals_equal(const struct universal *psource1,
 			  const struct universal *psource2);
 
+const char *universal_kind_name(const enum universals_n kind);
 const char *universal_rule_name(const struct universal *psource);
 const char *universal_name_translation(const struct universal *psource,
 				       char *buf, size_t bufsz);
 const char *universal_type_rule_name(const struct universal *psource);
 
 int universal_build_shield_cost(const struct universal *target);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__REQUIREMENTS_H */

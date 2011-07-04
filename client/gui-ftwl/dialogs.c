@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common & utility */
@@ -99,7 +99,7 @@ static void select_random_nation(void)
 {
   /* try to find a free nation */
   while (1) {
-    int index = fc_rand(game.control.playable_nation_count);
+    int index = myrand(game.control.playable_nation_count);
 
     if (sw_list_is_row_enabled(nations_list, index)) {
       sw_list_set_selected_row(nations_list, index, TRUE);
@@ -117,7 +117,7 @@ static void select_random_leader(void)
   
   get_nation_leaders(selected_nation, &leader_count);
 
-  i = fc_rand(leader_count);
+  i = myrand(leader_count);
   sw_list_set_selected_row(leaders_list, i, TRUE);
 }
 
@@ -134,7 +134,7 @@ static void nations_list_selection_changed(struct sw_widget *widget,
 
   selected_nation = row;
 
-  log_debug("selected %s", nation_rule_name(nation));
+  freelog(LOG_DEBUG, "selected %s\n", nation_rule_name(nation));
   sw_list_clear(leaders_list);
 
   for (i = 0; i < leader_count; i++) {
@@ -265,7 +265,7 @@ void popdown_races_dialog(void)
 /**************************************************************************
   Popup a dialog window to select units on a particular tile.
 **************************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   /* PORTME */
 }

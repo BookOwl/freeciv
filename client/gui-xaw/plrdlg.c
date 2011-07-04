@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -190,8 +190,8 @@ void create_players_dialog(bool raise)
 
   XtAddCallback(players_sship_command, XtNcallback, players_sship_callback, 
 		NULL);
-
-  players_dialog_update();
+  
+  update_players_dialog();
 
   XtRealizeWidget(players_dialog_shell);
   
@@ -207,9 +207,9 @@ void create_players_dialog(bool raise)
 
   FIXME: use plrdlg_common.c
 **************************************************************************/
-void real_players_dialog_update(void)
+void update_players_dialog(void)
 {
-  if (players_dialog_shell) {
+   if(players_dialog_shell && !is_plrdlg_frozen()) {
     int j = 0;
     Dimension width;
     static char *namelist_ptrs[MAX_NUM_PLAYERS];
@@ -228,7 +228,7 @@ void real_players_dialog_update(void)
 
       /* text for idleness */
       if(pplayer->nturns_idle>3) {
-	fc_snprintf(idlebuf, sizeof(idlebuf),
+	my_snprintf(idlebuf, sizeof(idlebuf),
 		    PL_("(idle %d turn)",
 			"(idle %d turns)",
 			pplayer->nturns_idle - 1),
@@ -238,10 +238,10 @@ void real_players_dialog_update(void)
       }
 
       /* text for name, plus AI marker */       
-      if (pplayer->ai_controlled) {
-        fc_snprintf(namebuf, sizeof(namebuf), "*%-15s",player_name(pplayer));
+      if (pplayer->ai_data.control) {
+        my_snprintf(namebuf, sizeof(namebuf), "*%-15s",player_name(pplayer));
       } else {
-        fc_snprintf(namebuf, sizeof(namebuf), "%-16s",player_name(pplayer));
+        my_snprintf(namebuf, sizeof(namebuf), "%-16s",player_name(pplayer));
       }
       namebuf[16] = '\0';
 
@@ -250,18 +250,18 @@ void real_players_dialog_update(void)
           || pplayer == client.conn.playing) {
 	strcpy(dsbuf, "-");
       } else {
-	pds = player_diplstate_get(client.conn.playing, pplayer);
+	pds = pplayer_get_diplstate(client.conn.playing, pplayer);
 	if (pds->type == DS_CEASEFIRE) {
-	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
+	  my_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
 		      diplstate_text(pds->type), pds->turns_left);
 	} else {
-	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s",
+	  my_snprintf(dsbuf, sizeof(dsbuf), "%s",
 		      diplstate_text(pds->type));
 	}
       }
 
       /* assemble the whole lot */
-      fc_snprintf(namelist_text[j], sizeof(namelist_text[j]),
+      my_snprintf(namelist_text[j], sizeof(namelist_text[j]),
 	      "%-16s %-12s %-8s %-15s %-8s %-6s   %-15s%s", 
 	      namebuf,
 	      nation_adjective_for_player(pplayer), 

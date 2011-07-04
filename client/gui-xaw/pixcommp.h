@@ -47,7 +47,7 @@ in this Software without prior written authorization from the X Consortium.
 #define _PixcommP_h
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <X11/IntrinsicP.h>

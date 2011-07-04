@@ -42,8 +42,6 @@ libgui_stub_la_SOURCES = \
 	messagedlg.h	\
 	messagewin.c	\
 	messagewin.h	\
-	optiondlg.c	\
-	optiondlg.h	\
 	pages.c		\
 	pages.h		\
 	plrdlg.c	\

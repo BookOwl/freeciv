@@ -13,7 +13,15 @@
 #ifndef FC__STARTPOS_H
 #define FC__STARTPOS_H
 
-bool create_start_positions(enum map_startpos mode,
-                            struct unit_type *initial_unit);
+enum start_mode {
+  MT_DEFAULT,
+  MT_SINGLE,
+  MT_2or3,
+  MT_ALL,
+  MT_VARIABLE
+};
+
+bool create_start_positions(enum start_mode mode,
+			    struct unit_type *initial_unit);
 
 #endif

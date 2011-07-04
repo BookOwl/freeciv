@@ -12,7 +12,7 @@
 ***********************************************************************/   
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -156,7 +156,7 @@ void handle_authentication_req(enum authentication_type type, char *message)
 /**************************************************************************
   this regenerates the player information from a loaded game on the server.
 **************************************************************************/
-void handle_game_load(bool load_successful, char *filename)
+void handle_game_load(struct packet_game_load *packet)
 { 
   char *row[3];
   int i;
@@ -168,14 +168,14 @@ void handle_game_load(bool load_successful, char *filename)
   }
 
   /* we couldn't load the savegame, we could have gotten the name wrong, etc */
-  if (!load_successful) {
+  if (!packet->load_successful) {
     SetWindowText(connect_dlg, _("Couldn't load the savegame"));
     return;
   } else {
-    char *buf = strrchr(load_filename, '/');
+    char *buf = strrchr(packet->load_filename, '/');
 
     if (buf == NULL) {
-      buf = load_filename;
+      buf = packet->load_filename;
     } else {
       buf++;
     }
@@ -188,9 +188,9 @@ void handle_game_load(bool load_successful, char *filename)
   set_player_count(packet->nplayers);
   ListView_DeleteAllItems(players_listview);
 
-  players_iterate(pplayer) {
+  for (i = 0; i < packet->nplayers; i++) {
     const char *nation_name;
-    struct nation_type *pnation = nation_of_player(pplayer);
+    struct nation_type *pnation = nation_by_number(packet->nations[i]);
 
     if (pnation == NO_NATION_SELECTED) {
       nation_name = "";
@@ -198,15 +198,23 @@ void handle_game_load(bool load_successful, char *filename)
       nation_name = nation_adjective_translation(pnation);
     }
 
-    row[0] = (char *) player_name(pplayer);
-    row[1] = (char *) nation_name;
-    row[2] = (char *) pplayer->is_alive ? _("Alive") : _("Dead");
-    row[3] = (char *) pplayer->ai_controlled ? _("AI") : _("Human");
+    row[0] = packet->name[i];
+    row[1] = (char *)nation_name;
+    row[2] = packet->is_alive[i] ? _("Alive") : _("Dead");
+    row[3] = packet->is_ai[i] ? _("AI") : _("Human");
     fcwin_listview_add_row(players_listview, 0, 4, row);
-  } players_iterate_end;
+  }
 
-  if (game.info.is_new_game) {
+  /* if nplayers is zero, we suppose it's a scenario */
+  if (packet->load_successful && packet->nplayers == 0) {
     send_chat("/take -");
+
+    /* create a false entry */
+    row[0] = user_name;
+    row[1] = "";
+    row[2] = _("Alive");
+    row[3] = _("Human");
+    fcwin_listview_add_row(players_listview, 0, 4, row);
   }
 
   ListView_SetColumnWidth(players_listview, 0, LVSCW_AUTOSIZE);
@@ -501,7 +509,7 @@ static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
   output_window_append(ftc_client, message);
-  log_normal("%s", message);
+  freelog(LOG_NORMAL, "%s", message);
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
     server_scan_finish(lan);
@@ -736,7 +744,7 @@ void handle_save_load(const char *title, bool is_save)
       GetCurrentDirectory(MAX_PATH, saved_games_dirname);
       SetCurrentDirectory(dirname);
 
-      fc_current_filename = fc_strdup(ofn.lpstrFile);
+      fc_current_filename = mystrdup(ofn.lpstrFile);
 
       send_save_game(fc_current_filename);
     } else {
@@ -751,7 +759,7 @@ void handle_save_load(const char *title, bool is_save)
       GetCurrentDirectory(MAX_PATH, saved_games_dirname);
       SetCurrentDirectory(dirname);
 
-      fc_current_filename = fc_strdup(ofn.lpstrFile);
+      fc_current_filename = mystrdup(ofn.lpstrFile);
 
       send_chat_printf("/load %s", ofn.lpstrFile);
     } else {
@@ -1058,7 +1066,7 @@ void gui_server_connect()
 		     TRUE, TRUE, 10);
   fcwin_box_add_edit(vbox, server_host, 40, ID_CONNECTDLG_HOST, 0,
 		     TRUE, TRUE, 10);
-  fc_snprintf(buf, sizeof(buf), "%d", server_port);
+  my_snprintf(buf, sizeof(buf), "%d", server_port);
   fcwin_box_add_edit(vbox, buf, 8, ID_CONNECTDLG_PORT, 0, TRUE, TRUE, 15);
 
   fcwin_box_add_box(hbox, vbox, TRUE, TRUE, 5);

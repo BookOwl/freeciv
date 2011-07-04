@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -140,7 +140,7 @@ void popup_spaceship_dialog(struct player *pPlayer)
   
     pSpaceShp = fc_calloc(1, sizeof(struct SMALL_DLG));
     
-    fc_snprintf(cBuf, sizeof(cBuf), _("The %s Spaceship"),
+    my_snprintf(cBuf, sizeof(cBuf), _("The %s Spaceship"),
 				    nation_adjective_for_player(pPlayer));
     pStr = create_str16_from_char(cBuf, adj_font(12));
     pStr->style |= TTF_STYLE_BOLD;
@@ -159,10 +159,8 @@ void popup_spaceship_dialog(struct player *pPlayer)
     /* ---------- */
     /* create exit button */
     pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                            WF_WIDGET_HAS_INFO_LABEL
-                            | WF_RESTORE_BACKGROUND);
-    pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                              adj_font(12));
+  			    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pBuf->data.player = pPlayer;
     pBuf->action = exit_space_dialog_callback;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -238,7 +236,7 @@ void popdown_spaceship_dialog(struct player *pPlayer)
   if((pSpaceShp = get_spaceship_dialog(pPlayer))) {
     popdown_window_group_dialog(pSpaceShp->pBeginWidgetList,
 					    pSpaceShp->pEndWidgetList);
-    dialog_list_remove(dialog_list, pSpaceShp);
+    dialog_list_unlink(dialog_list, pSpaceShp);
     FC_FREE(pSpaceShp);
   }
   

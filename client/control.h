@@ -13,10 +13,6 @@
 #ifndef FC__CONTROL_H
 #define FC__CONTROL_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "packets.h"
 #include "unitlist.h"
 
@@ -90,7 +86,6 @@ struct unit *request_unit_unload_all(struct unit *punit);
 void request_unit_airlift(struct unit *punit, struct city *pcity);
 void request_unit_return(struct unit *punit);
 void request_unit_upgrade(struct unit *punit);
-void request_unit_convert(struct unit *punit);
 void request_units_wait(struct unit_list *punits);
 void request_unit_wakeup(struct unit *punit);
 
@@ -150,16 +145,14 @@ struct unit *head_of_units_in_focus(void);
 struct unit_list *get_units_in_focus(void);
 int get_num_units_in_focus(void);
 
-void unit_focus_set(struct unit *punit);
-void unit_focus_set_and_select(struct unit *punit);
-void unit_focus_add(struct unit *punit);
-void unit_focus_remove(struct unit *punit);
-void unit_focus_urgent(struct unit *punit);
+void set_unit_focus(struct unit *punit);
+void set_unit_focus_and_select(struct unit *punit);
+void add_unit_focus(struct unit *punit);
+void urgent_unit_focus(struct unit *punit);
 
-void unit_focus_advance(void);
-void unit_focus_update(void);
-
+void advance_unit_focus(void);
 void auto_center_on_focus_unit(void);
+void update_unit_focus(void);
 void update_unit_pix_label(struct unit_list *punitlist);
 
 struct unit *find_visible_unit(struct tile *ptile);
@@ -207,7 +200,6 @@ void key_unit_build_wonder(void);
 void key_unit_connect(enum unit_activity activity);
 void key_unit_diplomat_actions(void);
 void key_unit_disband(void);
-void key_unit_convert(void);
 void key_unit_done(void);
 void key_unit_fallout(void);
 void key_unit_fortify(void);
@@ -243,8 +235,5 @@ void cancel_city(struct tile *ptile);
 
 extern int num_units_below;
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__CONTROL_H */
