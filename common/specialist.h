@@ -14,16 +14,9 @@
 #ifndef FC__SPECIALIST_H
 #define FC__SPECIALIST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-/* utility */
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
 #include "requirements.h"
 
 struct specialist {
@@ -32,8 +25,6 @@ struct specialist {
   struct name_translation abbreviation;
 
   struct requirement_vector reqs;
-
-  struct strvec *helptext;
 };
 
 #define DEFAULT_SPECIALIST default_specialist
@@ -47,16 +38,14 @@ Specialist_type_id specialist_index(const struct specialist *sp);
 Specialist_type_id specialist_number(const struct specialist *sp);
 
 struct specialist *specialist_by_number(const Specialist_type_id id);
-struct specialist *specialist_by_rule_name(const char *name);
-struct specialist *specialist_by_translated_name(const char *name);
+struct specialist *find_specialist_by_rule_name(const char *name);
 
 const char *specialist_rule_name(const struct specialist *sp);
-const char *specialist_plural_translation(const struct specialist *sp);
-const char *specialist_abbreviation_translation(const struct specialist *sp);
+const char *specialist_name_translation(struct specialist *sp);
+const char *specialist_abbreviation_translation(struct specialist *sp);
 
 /* Ancillary routines */
-const char *specialists_abbreviation_string(void);
-const char *specialists_string(const citizens *specialists);
+const char *specialists_string(const int *specialists);
 
 int get_specialist_output(const struct city *pcity,
 			  Specialist_type_id sp, Output_type_id otype);
@@ -75,9 +64,5 @@ void specialists_free(void);
 #define specialist_type_iterate_end                                         \
   }                                                                         \
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__SPECIALIST_H */

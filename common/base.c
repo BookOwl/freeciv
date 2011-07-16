@@ -12,13 +12,14 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
+
+#include <assert.h>
 
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "string_vector.h"
 
 /* common */
 #include "game.h"
@@ -28,6 +29,16 @@
 #include "base.h"
 
 static struct base_type base_types[MAX_BASE_TYPES];
+
+static const char *base_type_flag_names[] = {
+  "NoAggressive", "NoStackDeath",
+  "DiplomatDefense", "ParadropFrom", "NativeTile"
+};
+
+/* This must correspond to enum base_gui_type in base.h */
+static const char *base_gui_type_names[] = {
+  "Fortress", "Airbase", "Other"
+};
 
 /****************************************************************************
   Check if base provides effect
@@ -83,9 +94,15 @@ bool base_has_flag_for_utype(const struct base_type *pbase,
   Return the (translated) name of the base type.
   You don't have to free the return pointer.
 **************************************************************************/
-const char *base_name_translation(const struct base_type *pbase)
+const char *base_name_translation(struct base_type *pbase)
 {
-  return name_translation(&pbase->name);
+  if (NULL == pbase->name.translated) {
+    /* delayed (unified) translation */
+    pbase->name.translated = ('\0' == pbase->name.vernacular[0])
+			      ? pbase->name.vernacular
+			      : Q_(pbase->name.vernacular);
+  }
+  return pbase->name.translated;
 }
 
 /**************************************************************************
@@ -94,53 +111,24 @@ const char *base_name_translation(const struct base_type *pbase)
 **************************************************************************/
 const char *base_rule_name(const struct base_type *pbase)
 {
-  return rule_name(&pbase->name);
+  return Qn_(pbase->name.vernacular);
 }
 
 /**************************************************************************
   Returns base type matching rule name or NULL if there is no base type
   with such name.
 **************************************************************************/
-struct base_type *base_type_by_rule_name(const char *name)
+struct base_type *find_base_type_by_rule_name(const char *name)
 {
   const char *qs = Qn_(name);
 
   base_type_iterate(pbase) {
-    if (!fc_strcasecmp(base_rule_name(pbase), qs)) {
+    if (!mystrcasecmp(base_rule_name(pbase), qs)) {
       return pbase;
     }
   } base_type_iterate_end;
 
   return NULL;
-}
-
-/**************************************************************************
-  Returns base type matching the translated name, or NULL if there is no
-  base type with that name.
-**************************************************************************/
-struct base_type *base_type_by_translated_name(const char *name)
-{
-  base_type_iterate(pbase) {
-    if (0 == strcmp(base_name_translation(pbase), name)) {
-      return pbase;
-    }
-  } base_type_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************************
-  Is there base of the given type cardinally near tile?
-****************************************************************************/
-bool is_base_card_near(const struct tile *ptile, const struct base_type *pbase)
-{
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    if (tile_has_base(adjc_tile, pbase)) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return FALSE;
 }
 
 /****************************************************************************
@@ -183,6 +171,24 @@ bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                          RPT_CERTAIN);
 }
 
+/**************************************************************************
+  Convert base flag names to enum; case insensitive;
+  returns BF_LAST if can't match.
+**************************************************************************/
+enum base_flag_id base_flag_from_str(const char *s)
+{
+  enum base_flag_id i;
+  
+  assert(ARRAY_SIZE(base_type_flag_names) == BF_LAST);
+  
+  for(i = 0; i < BF_LAST; i++) {
+    if (mystrcasecmp(base_type_flag_names[i], s)==0) {
+      return i;
+    }
+  }
+  return BF_LAST;
+}
+  
 /****************************************************************************
   Returns base_type entry for an ID value.
 ****************************************************************************/
@@ -199,7 +205,7 @@ struct base_type *base_by_number(const Base_type_id id)
 **************************************************************************/
 Base_type_id base_number(const struct base_type *pbase)
 {
-  fc_assert_ret_val(NULL != pbase, -1);
+  assert(pbase);
   return pbase->item_number;
 }
 
@@ -211,7 +217,7 @@ Base_type_id base_number(const struct base_type *pbase)
 **************************************************************************/
 Base_type_id base_index(const struct base_type *pbase)
 {
-  fc_assert_ret_val(NULL != pbase, -1);
+  assert(pbase);
   return pbase - base_types;
 }
 
@@ -265,11 +271,25 @@ void base_types_free(void)
 {
   base_type_iterate(pbase) {
     requirement_vector_free(&pbase->reqs);
-    if (NULL != pbase->helptext) {
-      strvec_destroy(pbase->helptext);
-      pbase->helptext = NULL;
-    }
   } base_type_iterate_end;
+}
+
+/**************************************************************************
+  Convert base gui type names to enum; case insensitive;
+  returns BASE_GUI_LAST if can't match.
+**************************************************************************/
+enum base_gui_type base_gui_type_from_str(const char *s)
+{
+  enum base_gui_type i;
+  
+  assert(ARRAY_SIZE(base_gui_type_names) == BASE_GUI_LAST);
+  
+  for(i = 0; i < BASE_GUI_LAST; i++) {
+    if (mystrcasecmp(base_gui_type_names[i], s)==0) {
+      return i;
+    }
+  }
+  return BASE_GUI_LAST;
 }
 
 /**************************************************************************

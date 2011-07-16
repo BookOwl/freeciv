@@ -28,8 +28,6 @@ libgui_gtk2_la_SOURCES = \
 	chatline.c	\
 	choice_dialog.c	\
 	choice_dialog.h \
-	citizensinfo.c	\
-	citizensinfo.h	\
 	citydlg.c	\
 	citydlg.h	\
 	cityrep.c	\
@@ -81,7 +79,6 @@ libgui_gtk2_la_SOURCES = \
 	messagedlg.h	\
 	messagewin.c	\
 	messagewin.h	\
-	optiondlg.c	\
 	optiondlg.h	\
 	pages.c		\
 	pages.h		\
@@ -99,8 +96,6 @@ libgui_gtk2_la_SOURCES = \
 	theme_dlg.c	\
 	themes.c	\
 	tileset_dlg.c	\
-	unitselect.h	\
-	unitselect.c	\
 	voteinfo_bar.c	\
 	voteinfo_bar.h	\
 	wldlg.c		\

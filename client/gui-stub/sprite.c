@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -74,15 +74,6 @@ struct sprite *crop_sprite(struct sprite *source,
 			   int x, int y, int width, int height,
 			   struct sprite *mask,
 			   int mask_offset_x, int mask_offset_y)
-{
-  /* PORTME */
-  return NULL;
-}
-
-/****************************************************************************
-  Create a new sprite with the given height, width and color.
-****************************************************************************/
-struct sprite *create_sprite(int width, int height, struct color *pcolor)
 {
   /* PORTME */
   return NULL;

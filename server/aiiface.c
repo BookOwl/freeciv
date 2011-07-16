@@ -12,168 +12,59 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-
-#ifdef AI_MODULES
-#include <ltdl.h>
-#endif
-
-/* utility */
-#include "support.h"
 
 /* common */
 #include "ai.h"
 #include "player.h"
 
-/* server/advisors */
-#include "autosettlers.h"
-
-/* ai/default */
-#include "defaultai.h"
-
+/* server */
 #include "aiiface.h"
+#include "settlers.h"
+
+/* ai */
+#include "aicity.h"
+#include "aiexplorer.h"
+#include "aihand.h"
+#include "aisettler.h"
+#include "aitools.h"
 
 /**************************************************************************
-  Return string describing module loading error. Never returns NULL.
-**************************************************************************/
-#ifdef AI_MODULES
-static const char *fc_module_error(void)
-{
-  static char def_err[] = "Unknown error";
-  const char *errtxt = lt_dlerror();
-
-  if (errtxt == NULL) {
-    return def_err;
-  }
-
-  return errtxt;
-}
-#endif /* AI_MODULES */
-
-/**************************************************************************
-  Load ai module from file.
-**************************************************************************/
-bool load_ai_module(const char *modname)
-{
-  struct ai_type *ai = ai_type_alloc();
-  bool setup_success;
-
-#ifdef AI_MODULES
-  lt_dlhandle handle;
-  bool (*setup_func)(struct ai_type *ai);
-  const char *(*capstr_func)(void);
-  const char *capstr;
-  char buffer[2048];
-  char filename[1024];
-#endif /* AI_MODULES */
-
-  if (ai == NULL) {
-    return FALSE;
-  }
-
-  init_ai(ai);
-
-#ifdef AI_MODULES
-  fc_snprintf(filename, sizeof(filename), "fc_ai_%s", modname);
-  fc_snprintf(buffer, sizeof(buffer), "%s", filename);
-  handle = lt_dlopenext(buffer);
-  if (handle == NULL) {
-    log_error(_("Cannot open AI module %s (%s)"), filename, fc_module_error());
-    return FALSE;
-  }
-
-  fc_snprintf(buffer, sizeof(buffer), "%s_capstr", filename);
-  capstr_func = lt_dlsym(handle, buffer);
-  if (capstr_func == NULL) {
-    log_error(_("Cannot find capstr function from ai module %s (%s)"),
-              filename, fc_module_error());
-    return FALSE;
-  }
-
-  capstr = capstr_func();
-  if (strcmp(FC_AI_MOD_CAPSTR, capstr)) {
-    log_error(_("Incompatible ai module %s:"), filename);
-    log_error(_("  Module options:    %s"), capstr);
-    log_error(_("  Supported options: %s"), FC_AI_MOD_CAPSTR);
-
-    return FALSE;
-  }
-
-  fc_snprintf(buffer, sizeof(buffer), "%s_setup", filename);
-  setup_func = lt_dlsym(handle, buffer);
-  if (setup_func == NULL) {
-    log_error(_("Cannot find setup function from ai module %s (%s)"),
-              filename, fc_module_error());
-    return FALSE;
-  }
-  setup_success = setup_func(ai);
-
-  if (!setup_success) {
-    log_error(_("Setup of ai module %s failed."), filename);
-    return FALSE;
-  }
-#else  /* AI_MODULES */
-
-  setup_success = fc_ai_default_setup(ai);
-
-  if (!setup_success) {
-    return FALSE;
-  }
-
-#endif /* AI_MODULES */
-
-  return TRUE;
-}
-
-/**************************************************************************
-  Initialize ai stuff
+  Initialize player ai_funcs function pointers.
 **************************************************************************/
 void ai_init(void)
 {
-  bool failure = FALSE;
+  struct ai_type *ai = get_ai_type(FC_AI_DEFAULT);
 
-#ifdef AI_MODULES
-  if (lt_dlinit()) {
-    failure = TRUE;
-  }
-  if (!failure) {
+  init_ai(ai);
 
-#ifdef DEBUG
-    /* First search ai modules under directory ai/<module> under
-       current directory. This allows us to run freeciv without
-       installing it. */
-    const char *moduledirs[] = { "default", "threaded", "stub", NULL };
-    int i;
-
-    for (i = 0; moduledirs[i] != NULL ; i++) {
-      char buf[2048];
-
-      fc_snprintf(buf, sizeof(buf), "ai/%s", moduledirs[i]);
-      lt_dladdsearchdir(buf);
-    }
-#endif /* DEBUG */
-
-    /* Then search ai modules from their installation directory. */
-    lt_dladdsearchdir(AI_MODULEDIR);
-  }
-#endif /* AI_MODULES */
-
-  if (!failure && !load_ai_module("default")) {
-    failure = TRUE;
-  }
-
-  if (failure) {
-    log_fatal(_("Failed to load default ai module, cannot continue."));
-    exit(EXIT_FAILURE);
-  }
+  ai->funcs.init_city = ai_init_city;
+  ai->funcs.close_city = ai_close_city;
+  ai->funcs.auto_settlers = auto_settlers_player;
+  ai->funcs.building_advisor_init = ai_manage_buildings;
+  ai->funcs.building_advisor = ai_advisor_choose_building;
+  ai->funcs.auto_explorer = ai_manage_explorer;
+  ai->funcs.first_activities = ai_do_first_activities;
+  ai->funcs.diplomacy_actions = ai_diplomacy_actions;
+  ai->funcs.last_activities = ai_do_last_activities;
+  ai->funcs.before_auto_settlers = ai_settler_init;
+  ai->funcs.treaty_evaluate = ai_treaty_evaluate;
+  ai->funcs.treaty_accepted = ai_treaty_accepted;
+  ai->funcs.first_contact = ai_diplomacy_first_contact;
+  ai->funcs.incident = ai_incident;
 }
 
 /**************************************************************************
-  Call incident function of victim.
+  Call incident function of victim, or failing that, incident function
+  of violator.
 **************************************************************************/
 void call_incident(enum incident_type type, struct player *violator,
                    struct player *victim)
 {
-  CALL_PLR_AI_FUNC(incident, victim, type, violator, victim);
+  if (victim && victim->ai->funcs.incident) {
+    victim->ai->funcs.incident(type, violator, victim);
+  } else if (violator && violator->ai->funcs.incident) {
+    violator->ai->funcs.incident(type, violator, victim);
+  }
 }

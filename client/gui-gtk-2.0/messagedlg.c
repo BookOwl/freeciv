@@ -12,24 +12,18 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
 
-/* utility */
+#include "events.h"
 #include "fcintl.h"
 
-/* common */
-#include "events.h"
-
-/* client */
-#include "options.h"
-
-/* client/gui-gtk-2.0 */
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
+#include "options.h"
 
 #include "messagedlg.h"
 
@@ -46,7 +40,7 @@ static void item_toggled(GtkCellRendererToggle *cell,
 			 gchar *spath, gpointer data);
 
 /**************************************************************************
-  Open messageoptions dialog
+... 
 **************************************************************************/
 void popup_messageopt_dialog(void)
 {
@@ -57,7 +51,7 @@ void popup_messageopt_dialog(void)
 }
 
 /**************************************************************************
-  Create messageoptions dialog
+...
 **************************************************************************/
 static void create_messageopt_dialog(void)
 {
@@ -163,7 +157,7 @@ static void create_messageopt_dialog(void)
 }
 
 /**************************************************************************
-  Use responded to messageoptions dialog
+...
 **************************************************************************/
 static void messageopt_response(struct gui_dialog *dlg, int response,
                                 gpointer data)
@@ -173,8 +167,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
     gint n, j, i;
     gboolean toggle;
 
-    for (i = 0; i <= event_type_max(); i++) {
-      /* Include possible undefined messages. */
+    for (i=0; i<E_LAST; i++) {
       messages_where[i] = 0;
     }
 
@@ -195,7 +188,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
 }
 
 /**************************************************************************
-  User toggled item
+...
 **************************************************************************/
 static void item_toggled(GtkCellRendererToggle *cell,
 			 gchar *spath, gpointer data)

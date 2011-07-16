@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -144,10 +144,8 @@ void popup_find_dialog(void)
   /* ---------- */
   /* exit button */
   pBuf = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                          WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND
-                          | WF_FREE_DATA);
-  pBuf->info_label = create_str16_from_char(_("Close Dialog (Esc)"),
-                                            adj_font(12));
+  			  (WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND | WF_FREE_DATA));
+  pBuf->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
   area.w = MAX(area.w, pBuf->size.w + adj_size(10));
   pBuf->action = exit_find_city_dlg_callback;
   set_wstate(pBuf, FC_WS_NORMAL);
@@ -161,10 +159,9 @@ void popup_find_dialog(void)
   
   players_iterate(pPlayer) {
     city_list_iterate(pPlayer->cities, pCity) {
-
-      fc_snprintf(cBuf , sizeof(cBuf), "%s (%d)", city_name(pCity),
-                  city_size_get(pCity));
-
+    
+      my_snprintf(cBuf , sizeof(cBuf), "%s (%d)", city_name(pCity), pCity->size);
+      
       pStr = create_str16_from_char(cBuf , adj_font(10));
       pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
    

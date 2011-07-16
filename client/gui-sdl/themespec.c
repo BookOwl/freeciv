@@ -18,9 +18,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>		/* exit */
 #include <string.h>
@@ -28,9 +29,9 @@
 /* utility */
 #include "capability.h"
 #include "fcintl.h"
+#include "hash.h"
 #include "log.h"
 #include "registry.h"
-#include "string_vector.h"
 
 /* common */
 #include "game.h"
@@ -47,22 +48,21 @@
 
 #include "themespec.h"
 
-#define THEMESPEC_CAPSTR "+Freeciv-2.3-themespec duplicates_ok"
+#define THEMESPEC_CAPSTR "+themespec3 duplicates_ok"
 /*
  * Themespec capabilities acceptable to this program:
  *
- * +Freeciv-2.3-themespec  -  basic format for Freeciv versions 2.3.x;
- *                            required
+ * +themespec3     -  basic format; required
  *
  * duplicates_ok  -  we can handle existence of duplicate tags
  *                   (lattermost tag which appears is used; themes which
- *                   have duplicates should specify "+duplicates_ok")
+ *		     have duplicates should specify "+duplicates_ok")
  */
 
-#define SPEC_CAPSTR "+Freeciv-2.3-spec"
+#define SPEC_CAPSTR "+spec3"
 /*
  * Individual spec file capabilities acceptable to this program:
- * +Freeciv-2.3-spec  -  basic format for Freeciv versions 2.3.x; required
+ * +spec3          -  basic format, required
  */
 
 #define THEMESPEC_SUFFIX ".themespec"
@@ -112,22 +112,9 @@ struct small_sprite {
 #define SPECLIST_TYPE struct small_sprite
 #include "speclist.h"
 
-#define small_sprite_list_iterate(list, pitem)                              \
-  TYPED_LIST_ITERATE(struct small_sprite, list, pitem)
-#define small_sprite_list_iterate_end LIST_ITERATE_END
-
-#define SPECHASH_TAG small_sprite
-#define SPECHASH_KEY_TYPE char *
-#define SPECHASH_DATA_TYPE struct small_sprite *
-#define SPECHASH_KEY_VAL genhash_str_val_func
-#define SPECHASH_KEY_COMP genhash_str_comp_func
-#define SPECHASH_KEY_COPY genhash_str_copy_func
-#define SPECHASH_KEY_FREE genhash_str_free_func
-#include "spechash.h"
-#define small_sprite_hash_iterate(hash, tag_name, pitem)                    \
-  TYPED_HASH_ITERATE(const char *, struct small_sprite *, hash,             \
-                     tag_name, pitem)
-#define small_sprite_hash_iterate_end HASH_ITERATE_END
+#define small_sprite_list_iterate(list, pitem) \
+    TYPED_LIST_ITERATE(struct small_sprite, list, pitem)
+#define small_sprite_list_iterate_end  LIST_ITERATE_END
 
 struct theme {
   char name[512];
@@ -142,7 +129,7 @@ struct theme {
   /*
    * This hash table maps themespec tags to struct small_sprites.
    */
-  struct small_sprite_hash *sprite_hash;
+  struct hash_table *sprite_hash;
 
 /*  struct named_sprites sprites;*/
 
@@ -200,20 +187,24 @@ const char **get_theme_list(void)
   if (!themes) {
     /* Note: this means you must restart the client after installing a new
        theme. */
-    struct strvec *list = fileinfolist(get_data_dirs(), THEMESPEC_SUFFIX);
-    int count = 0;
+    char **list = datafilelist(THEMESPEC_SUFFIX);
+    int i, count = 0;
 
-    themes = fc_malloc((1 + strvec_size(list)) * sizeof(*themes));
-    strvec_iterate(list, file) {
-      struct theme *t = theme_read_toplevel(file);
+    for (i = 0; list[i]; i++) {
+      struct theme *t = theme_read_toplevel(list[i]);
 
       if (t) {
-        themes[count++] = fc_strdup(file);
-        theme_free(t);
+ 	themes = fc_realloc(themes, (count + 1) * sizeof(*themes));
+ 	themes[count] = list[i];
+ 	count++;
+ 	theme_free(t);
+      } else {
+	FC_FREE(list[i]);
       }
-    } strvec_iterate_end;
+    }
+
+    themes = fc_realloc(themes, (count + 1) * sizeof(*themes));
     themes[count] = NULL;
-    strvec_destroy(list);
   }
 
   return themes;
@@ -231,14 +222,14 @@ static char *themespec_fullname(const char *theme_name)
   if (theme_name) {
     char fname[strlen(theme_name) + strlen(THEMESPEC_SUFFIX) + 1], *dname;
 
-    fc_snprintf(fname, sizeof(fname),
+    my_snprintf(fname, sizeof(fname),
 		"%s%s", theme_name, THEMESPEC_SUFFIX);
 
-/*    dname = fileinfoname(get_data_dirs(), fname);*/
+/*    dname = datafilename(fname);*/
     dname = fname;
 
     if (dname) {
-      return fc_strdup(dname);
+      return mystrdup(dname);
     }
   }
 
@@ -255,24 +246,23 @@ static bool check_themespec_capabilities(struct section_file *file,
 					const char *us_capstr,
 					const char *filename)
 {
-  const char *file_capstr = secfile_lookup_str(file, "%s.options", which);
+  int log_level = LOG_DEBUG;
 
-  if (NULL == file_capstr) {
-    log_debug("\"%s\": %s file doesn't have capability string",
-              filename, which);
-    return FALSE;
-  }
+  char *file_capstr = secfile_lookup_str(file, "%s.options", which);
+  
   if (!has_capabilities(us_capstr, file_capstr)) {
-    log_debug("\"%s\": %s file appears incompatible:", filename, which);
-    log_debug("  datafile options: %s", file_capstr);
-    log_debug("  supported options: %s", us_capstr);
+    freelog(log_level, "\"%s\": %s file appears incompatible:",
+	    filename, which);
+    freelog(log_level, "  datafile options: %s", file_capstr);
+    freelog(log_level, "  supported options: %s", us_capstr);
     return FALSE;
   }
   if (!has_capabilities(file_capstr, us_capstr)) {
-    log_debug("\"%s\": %s file requires option(s)"
-              " that client doesn't support:", filename, which);
-    log_debug("  datafile options: %s", file_capstr);
-    log_debug("  supported options: %s", us_capstr);
+    freelog(log_level, "\"%s\": %s file requires option(s)"
+			 " that client doesn't support:",
+	    filename, which);
+    freelog(log_level, "  datafile options: %s", file_capstr);
+    freelog(log_level, "  supported options: %s", us_capstr);
     return FALSE;
   }
 
@@ -311,8 +301,8 @@ void theme_free(struct theme *t)
   if (t) {
     theme_free_sprites(t);
     theme_free_toplevel(t);
-    specfile_list_destroy(t->specfiles);
-    small_sprite_list_destroy(t->small_sprites);
+    specfile_list_free(t->specfiles);
+    small_sprite_list_free(t->small_sprites);
     FC_FREE(t);
   }
 }
@@ -326,27 +316,29 @@ void theme_free(struct theme *t)
 void themespec_try_read(const char *theme_name)
 {
   if (!(theme = theme_read_toplevel(theme_name))) {
-    struct strvec *list = fileinfolist(get_data_dirs(), THEMESPEC_SUFFIX);
+    char **list = datafilelist(THEMESPEC_SUFFIX);
+    int i;
 
-    strvec_iterate(list, file) {
-      struct theme *t = theme_read_toplevel(file);
+    for (i = 0; list[i]; i++) {
+      struct theme *t = theme_read_toplevel(list[i]);
 
       if (t) {
-        if (!theme || t->priority > theme->priority) {
-          theme = t;
-        } else {
-          theme_free(t);
-        }
+	if (!theme || t->priority > theme->priority) {
+	  theme = t;
+	} else {
+	  theme_free(t);
+	}
       }
-    } strvec_iterate_end;
-    strvec_destroy(list);
+      FC_FREE(list[i]);
+    }
+    FC_FREE(list);
 
     if (!theme) {
-      log_fatal(_("No usable default theme found, aborting!"));
+      freelog(LOG_FATAL, _("No usable default theme found, aborting!"));
       exit(EXIT_FAILURE);
     }
 
-    log_verbose("Trying theme \"%s\".", theme->name);
+    freelog(LOG_VERBOSE, "Trying theme \"%s\".", theme->name);
   }
 /*  sz_strlcpy(gui_sdl_default_theme_name, theme_get_name(theme));*/
 }
@@ -373,7 +365,7 @@ void themespec_reread(const char *new_theme_name)
   sz_strlcpy(theme_name, name);
   sz_strlcpy(old_name, theme->name);
 
-  log_normal(_("Loading theme \"%s\"."), theme_name);
+  freelog(LOG_NORMAL, _("Loading theme \"%s\"."), theme_name);
 
   /* Step 0:  Record old data.
    *
@@ -394,9 +386,7 @@ void themespec_reread(const char *new_theme_name)
    */
   if (!(theme = theme_read_toplevel(theme_name))) {
     if (!(theme = theme_read_toplevel(old_name))) {
-      /* Always fails. */
-      fc_assert_exit_msg(NULL != theme,
-                         "Failed to re-read the currently loaded theme.");
+      die("Failed to re-read the currently loaded theme.");
     }
   }
 /*  sz_strlcpy(gui_sdl_default_theme_name, theme->name);*/
@@ -448,20 +438,20 @@ static struct sprite *load_gfx_file(const char *gfx_filename)
 
   /* Try out all supported file extensions to find one that works. */
   while ((gfx_fileext = *gfx_fileexts++)) {
-    const char *real_full_name;
+    char *real_full_name;
     char full_name[strlen(gfx_filename) + strlen(gfx_fileext) + 2];
 
     sprintf(full_name, "%s.%s", gfx_filename, gfx_fileext);
-    if ((real_full_name = fileinfoname(get_data_dirs(), full_name))) {
-      log_debug("trying to load gfx file \"%s\".", real_full_name);
+    if ((real_full_name = datafilename(full_name))) {
+      freelog(LOG_DEBUG, "trying to load gfx file \"%s\".", real_full_name);
       s = load_gfxfile(real_full_name);
       if (s) {
-        return s;
+	return s;
       }
     }
   }
 
-  log_error("Could not load gfx file \"%s\".", gfx_filename);
+  freelog(LOG_ERROR, "Could not load gfx file \"%s\".", gfx_filename);
   return NULL;
 }
 
@@ -470,7 +460,7 @@ static struct sprite *load_gfx_file(const char *gfx_filename)
 **************************************************************************/
 static void ensure_big_sprite(struct specfile *sf)
 {
-  struct section_file *file;
+  struct section_file the_file, *file = &the_file;
   const char *gfx_filename;
 
   if (sf->big_sprite) {
@@ -481,8 +471,8 @@ static void ensure_big_sprite(struct specfile *sf)
   /* Otherwise load it.  The big sprite will sometimes be freed and will have
    * to be reloaded, but most of the time it's just loaded once, the small
    * sprites are extracted, and then it's freed. */
-  if (!(file = secfile_load(sf->file_name, TRUE))) {
-    log_fatal(_("Could not open '%s':\n%s"), sf->file_name, secfile_error());
+  if (!section_file_load(file, sf->file_name)) {
+    freelog(LOG_FATAL, _("Could not open \"%s\"."), sf->file_name);
     exit(EXIT_FAILURE);
   }
 
@@ -496,11 +486,11 @@ static void ensure_big_sprite(struct specfile *sf)
   sf->big_sprite = load_gfx_file(gfx_filename);
 
   if (!sf->big_sprite) {
-    log_fatal("Could not load gfx file for the spec file \"%s\".",
-              sf->file_name);
+    freelog(LOG_FATAL, "Could not load gfx file for the spec file \"%s\".",
+	    sf->file_name);
     exit(EXIT_FAILURE);
   }
-  secfile_destroy(file);
+  section_file_free(file);
 }
 
 /**************************************************************************
@@ -511,12 +501,12 @@ static void ensure_big_sprite(struct specfile *sf)
 static void scan_specfile(struct theme *t, struct specfile *sf,
 			  bool duplicates_ok)
 {
-  struct section_file *file;
-  struct section_list *sections;
-  int i;
+  struct section_file the_file, *file = &the_file;
+  char **gridnames;
+  int num_grids, i;
 
-  if (!(file = secfile_load(sf->file_name, TRUE))) {
-    log_fatal(_("Could not open '%s':\n%s"), sf->file_name, secfile_error());
+  if (!section_file_load(file, sf->file_name)) {
+    freelog(LOG_FATAL, _("Could not open \"%s\"."), sf->file_name);
     exit(EXIT_FAILURE);
   }
   if (!check_themespec_capabilities(file, "spec",
@@ -525,117 +515,95 @@ static void scan_specfile(struct theme *t, struct specfile *sf,
   }
 
   /* currently unused */
-  (void) secfile_entry_by_path(file, "info.artists");
+  (void) section_file_lookup(file, "info.artists");
 
-  sections = secfile_sections_by_name_prefix(file, "grid_");
+  gridnames = secfile_get_secnames_prefix(file, "grid_", &num_grids);
 
-  if (NULL != sections) {
-    section_list_iterate(sections, psection) {
-      int j, k;
-      int x_top_left, y_top_left, dx, dy;
-      int pixel_border;
-      const char *gridname = section_name(psection);
+  for (i = 0; i < num_grids; i++) {
+    int j, k;
+    int x_top_left, y_top_left, dx, dy;
+    int pixel_border;
 
-      pixel_border = secfile_lookup_int_default(file, 0, "%s.pixel_border",
-                                                gridname);
+    pixel_border = secfile_lookup_int_default(file, 0, "%s.pixel_border",
+					      gridnames[i]);
 
-      if (!secfile_lookup_int(file, &x_top_left, "%s.x_top_left", gridname)
-          || !secfile_lookup_int(file, &y_top_left,
-                                 "%s.y_top_left", gridname)
-          || !secfile_lookup_int(file, &dx, "%s.dx", gridname)
-          || !secfile_lookup_int(file, &dy, "%s.dy", gridname)) {
-        log_error("Grid \"%s\" invalid: %s", gridname, secfile_error());
-        continue;
-      }
+    x_top_left = secfile_lookup_int(file, "%s.x_top_left", gridnames[i]);
+    y_top_left = secfile_lookup_int(file, "%s.y_top_left", gridnames[i]);
+    dx = secfile_lookup_int(file, "%s.dx", gridnames[i]);
+    dy = secfile_lookup_int(file, "%s.dy", gridnames[i]);
 
-      j = -1;
-      while (NULL != secfile_entry_lookup(file, "%s.tiles%d.tag",
-                                          gridname, ++j)) {
-        struct small_sprite *ss;
-        int row, column;
-        int x1, y1;
-        const char **tags;
-        size_t num_tags;
-        int hot_x, hot_y;
+    j = -1;
+    while (section_file_lookup(file, "%s.tiles%d.tag", gridnames[i], ++j)) {
+      struct small_sprite *ss = fc_malloc(sizeof(*ss));
+      int row, column;
+      int x1, y1;
+      char **tags;
+      int num_tags;
+      int hot_x, hot_y;
 
-        if (!secfile_lookup_int(file, &row, "%s.tiles%d.row", gridname, j)
-            || !secfile_lookup_int(file, &column,
-                                   "%s.tiles%d.column", gridname, j)
-            || !(tags = secfile_lookup_str_vec(file, &num_tags,
-                                               "%s.tiles%d.tag",
-                                               gridname, j))) {
-          log_error("Small sprite \"%s.tiles%d\" invalid: %s",
-                    gridname, j, secfile_error());
-          continue;
-        }
-        hot_x = secfile_lookup_int_default(file, 0, "%s.tiles%d.hot_x",
-                                           gridname, j);
-        hot_y = secfile_lookup_int_default(file, 0, "%s.tiles%d.hot_y",
-                                           gridname, j);
+      row = secfile_lookup_int(file, "%s.tiles%d.row", gridnames[i], j);
+      column = secfile_lookup_int(file, "%s.tiles%d.column", gridnames[i], j);
+      tags = secfile_lookup_str_vec(file, &num_tags, "%s.tiles%d.tag",
+				    gridnames[i], j);
+      hot_x = secfile_lookup_int_default(file, 0, "%s.tiles%d.hot_x",
+					 gridnames[i], j);
+      hot_y = secfile_lookup_int_default(file, 0, "%s.tiles%d.hot_y",
+					 gridnames[i], j);
 
-        /* there must be at least 1 because of the while(): */
-        fc_assert_action(num_tags > 0, continue);
+      /* there must be at least 1 because of the while(): */
+      assert(num_tags > 0);
 
-        x1 = x_top_left + (dx + pixel_border) * column;
-        y1 = y_top_left + (dy + pixel_border) * row;
+      x1 = x_top_left + (dx + pixel_border) * column;
+      y1 = y_top_left + (dy + pixel_border) * row;
 
-        ss = fc_malloc(sizeof(*ss));
-        ss->ref_count = 0;
-        ss->file = NULL;
-        ss->x = x1;
-        ss->y = y1;
-        ss->width = dx;
-        ss->height = dy;
-        ss->sf = sf;
-        ss->sprite = NULL;
-        ss->hot_x = hot_x;
-        ss->hot_y = hot_y;
+      ss->ref_count = 0;
+      ss->file = NULL;
+      ss->x = x1;
+      ss->y = y1;
+      ss->width = dx;
+      ss->height = dy;
+      ss->sf = sf;
+      ss->sprite = NULL;
+      ss->hot_x = hot_x;
+      ss->hot_y = hot_y;
 
-        small_sprite_list_prepend(t->small_sprites, ss);
+      small_sprite_list_prepend(t->small_sprites, ss);
 
-        if (!duplicates_ok) {
-          for (k = 0; k < num_tags; k++) {
-            if (!small_sprite_hash_insert(t->sprite_hash, tags[k], ss)) {
-              log_error("warning: already have a sprite for \"%s\".",
-                        tags[k]);
-            }
-          }
-        } else {
-          for (k = 0; k < num_tags; k++) {
-            (void) small_sprite_hash_replace(t->sprite_hash, tags[k], ss);
+      if (!duplicates_ok) {
+        for (k = 0; k < num_tags; k++) {
+          if (!hash_insert(t->sprite_hash, mystrdup(tags[k]), ss)) {
+	    freelog(LOG_ERROR, "warning: already have a sprite for \"%s\".", tags[k]);
           }
         }
-
-        FC_FREE(tags);
+      } else {
+        for (k = 0; k < num_tags; k++) {
+	  (void) hash_replace(t->sprite_hash, mystrdup(tags[k]), ss);
+        }
       }
-    } section_list_iterate_end;
-    section_list_destroy(sections);
+
+      FC_FREE(tags);
+    }
   }
+  FC_FREE(gridnames);
 
   /* Load "extra" sprites.  Each sprite is one file. */
   i = -1;
-  while (NULL != secfile_lookup_str(file, "extra.sprites%d.tag", ++i)) {
-    struct small_sprite *ss;
-    const char **tags;
-    const char *filename;
-    size_t num_tags, k;
+  while (secfile_lookup_str_default(file, NULL, "extra.sprites%d.tag", ++i)) {
+    struct small_sprite *ss = fc_malloc(sizeof(*ss));
+    char **tags;
+    char *filename;
+    int num_tags, k;
     int hot_x, hot_y;
 
-    if (!(tags = secfile_lookup_str_vec(file, &num_tags,
-                                        "extra.sprites%d.tag", i))
-        || !(filename = secfile_lookup_str(file,
-                                           "extra.sprites%d.file", i))) {
-      log_error("Small sprite \"extra.sprites%d\" invalid: %s",
-                i, secfile_error());
-      continue;
-    }
+    tags
+      = secfile_lookup_str_vec(file, &num_tags, "extra.sprites%d.tag", i);
+    filename = secfile_lookup_str(file, "extra.sprites%d.file", i);
 
     hot_x = secfile_lookup_int_default(file, 0, "extra.sprites%d.hot_x", i);
     hot_y = secfile_lookup_int_default(file, 0, "extra.sprites%d.hot_y", i);
 
-    ss = fc_malloc(sizeof(*ss));
     ss->ref_count = 0;
-    ss->file = fc_strdup(filename);
+    ss->file = mystrdup(filename);
     ss->sf = NULL;
     ss->sprite = NULL;
     ss->hot_x = hot_x;
@@ -645,20 +613,20 @@ static void scan_specfile(struct theme *t, struct specfile *sf,
 
     if (!duplicates_ok) {
       for (k = 0; k < num_tags; k++) {
-        if (!small_sprite_hash_insert(t->sprite_hash, tags[k], ss)) {
-          log_error("warning: already have a sprite for \"%s\".", tags[k]);
-        }
+	if (!hash_insert(t->sprite_hash, mystrdup(tags[k]), ss)) {
+	  freelog(LOG_ERROR, "warning: already have a sprite for \"%s\".", tags[k]);
+	}
       }
     } else {
       for (k = 0; k < num_tags; k++) {
-        (void) small_sprite_hash_replace(t->sprite_hash, tags[k], ss);
+	(void) hash_replace(t->sprite_hash, mystrdup(tags[k]), ss);
       }
     }
     FC_FREE(tags);
   }
 
-  secfile_check_unused(file);
-  secfile_destroy(file);
+  section_file_check_unused(file, sf->file_name);
+  section_file_free(file);
 }
 
 /**********************************************************************
@@ -674,19 +642,19 @@ char *themespec_gfx_filename(const char *gfx_filename)
   {
     char *full_name =
        fc_malloc(strlen(gfx_filename) + strlen(gfx_current_fileext) + 2);
-    const char *real_full_name;
+    char *real_full_name;
 
     sprintf(full_name,"%s.%s",gfx_filename,gfx_current_fileext);
 
-    real_full_name = fileinfoname(get_data_dirs(), full_name);
+    real_full_name = datafilename(full_name);
     FC_FREE(full_name);
     if (real_full_name) {
-      return fc_strdup(real_full_name);
+      return mystrdup(real_full_name);
     }
   }
 
-  log_fatal("Couldn't find a supported gfx file extension for \"%s\".",
-            gfx_filename);
+  freelog(LOG_FATAL, "Couldn't find a supported gfx file extension for \"%s\".",
+         gfx_filename);
   exit(EXIT_FAILURE);
   return NULL;
 }
@@ -698,47 +666,47 @@ char *themespec_gfx_filename(const char *gfx_filename)
 ***********************************************************************/
 struct theme *theme_read_toplevel(const char *theme_name)
 {
-  struct section_file *file;
-  char *fname;
+  struct section_file the_file, *file = &the_file;
+  char *fname, *c;
   int i;
-  size_t num_spec_files;
-  const char **spec_filenames;
-  const char *file_capstr;
+  int num_spec_files;
+  char **spec_filenames;
+  char *file_capstr;
   bool duplicates_ok;
   struct theme *t = theme_new();
-  const char *langname;
-  const char *filename, *c;
+  char *langname;
 
   fname = themespec_fullname(theme_name);
   if (!fname) {
-    log_error("Can't find theme \"%s\".", theme_name); 
+    freelog(LOG_ERROR, "Can't find theme \"%s\".", theme_name); 
     theme_free(t);
     return NULL;
   }
-  log_verbose("themespec file is \"%s\".", fname);
+  freelog(LOG_VERBOSE, "themespec file is \"%s\".", fname);
 
-  if (!(file = secfile_load(fname, TRUE))) {
-    log_error("Could not open '%s':\n%s", fname, secfile_error());
+  if (!section_file_load(file, fname)) {
+    freelog(LOG_ERROR, "Could not open \"%s\".", fname);
+    section_file_free(file);
     FC_FREE(fname);
     theme_free(t);
     return NULL;
   }
 
   if (!check_themespec_capabilities(file, "themespec",
-                                    THEMESPEC_CAPSTR, fname)) {
-    secfile_destroy(file);
+				   THEMESPEC_CAPSTR, fname)) {
+    section_file_free(file);
     FC_FREE(fname);
     theme_free(t);
     return NULL;
   }
   
-  file_capstr = secfile_lookup_str(file, "themespec.options");
+  file_capstr = secfile_lookup_str(file, "%s.options", "themespec");
   duplicates_ok = has_capabilities("+duplicates_ok", file_capstr);
 
-  (void) secfile_entry_by_path(file, "themespec.name"); /* currently unused */
+  (void) section_file_lookup(file, "themespec.name"); /* currently unused */
 
   sz_strlcpy(t->name, theme_name);
-  t->priority = secfile_lookup_int_default(file, 0, "themespec.priority");
+  t->priority = secfile_lookup_int(file, "themespec.priority");
   
   langname = get_langname();
   if (langname) {
@@ -754,47 +722,49 @@ struct theme *theme_read_toplevel(const char *theme_name)
   } else {
     c = secfile_lookup_str(file, "themespec.font_file");
   }
-  if ((filename = fileinfoname(get_data_dirs(), c))) {
-    t->font_filename = fc_strdup(filename);
+  t->font_filename = datafilename(c);
+  if (t->font_filename) {
+    t->font_filename = mystrdup(t->font_filename);
   } else {
-    log_fatal("Could not open font: %s", c);
-    secfile_destroy(file);
+    freelog(LOG_FATAL, "Could not open font: %s", c);
+    section_file_free(file);
     FC_FREE(fname);
     theme_free(t);
     return NULL;
   }
-  log_debug("theme font file %s", t->font_filename);
+  freelog(LOG_DEBUG, "theme font file %s", t->font_filename);
 
-  t->default_font_size = secfile_lookup_int_default(file, 10, "themespec.default_font_size");
-  log_debug("theme default font size %d", t->default_font_size);
+  t->default_font_size = secfile_lookup_int (file, "themespec.default_font_size");
+  freelog(LOG_DEBUG, "theme default font size %d", t->default_font_size);
 
   spec_filenames = secfile_lookup_str_vec(file, &num_spec_files,
-                                          "themespec.files");
-  if (NULL == spec_filenames || 0 == num_spec_files) {
-    log_error("No theme graphics files specified in \"%s\"", fname);
-    secfile_destroy(file);
+					  "themespec.files");
+  if (num_spec_files == 0) {
+    freelog(LOG_ERROR, "No theme graphics files specified in \"%s\"", fname);
+    section_file_free(file);
     FC_FREE(fname);
     theme_free(t);
     return NULL;
   }
 
-  fc_assert(t->sprite_hash == NULL);
-  t->sprite_hash = small_sprite_hash_new();
+  assert(t->sprite_hash == NULL);
+  t->sprite_hash = hash_new(hash_fval_string, hash_fcmp_string);
   for (i = 0; i < num_spec_files; i++) {
     struct specfile *sf = fc_malloc(sizeof(*sf));
+    char *dname;
 
-    log_debug("spec file %s", spec_filenames[i]);
-
+    freelog(LOG_DEBUG, "spec file %s", spec_filenames[i]);
+    
     sf->big_sprite = NULL;
-    filename = fileinfoname(get_data_dirs(), spec_filenames[i]);
-    if (!filename) {
-      log_error("Can't find spec file \"%s\".", spec_filenames[i]);
-      secfile_destroy(file);
+    dname = datafilename(spec_filenames[i]);
+    if (!dname) {
+      freelog(LOG_ERROR, "Can't find spec file \"%s\".", spec_filenames[i]);
+      section_file_free(file);
       FC_FREE(fname);
       theme_free(t);
       return NULL;
     }
-    sf->file_name = fc_strdup(filename);
+    sf->file_name = mystrdup(dname);
     scan_specfile(t, sf, duplicates_ok);
 
     specfile_list_prepend(t->specfiles, sf);
@@ -804,10 +774,10 @@ struct theme *theme_read_toplevel(const char *theme_name)
   t->background_system = theme_background_system_read(file);
   t->color_system = theme_color_system_read(file);  
   
-  secfile_check_unused(file);
+  section_file_check_unused(file, fname);
   
-  secfile_destroy(file);
-  log_verbose("finished reading \"%s\".", fname);
+  section_file_free(file);
+  freelog(LOG_VERBOSE, "finished reading \"%s\".", fname);
   FC_FREE(fname);
 
   return t;
@@ -822,24 +792,24 @@ struct theme *theme_read_toplevel(const char *theme_name)
 static struct sprite *load_sprite(struct theme *t, const char *tag_name)
 {
   /* Lookup information about where the sprite is found. */
-  struct small_sprite *ss;
+  struct small_sprite *ss = hash_lookup_data(t->sprite_hash, tag_name);
 
-  log_debug("load_sprite(tag='%s')", tag_name);
-  if (!small_sprite_hash_lookup(t->sprite_hash, tag_name, &ss)) {
+  freelog(LOG_DEBUG, "load_sprite(tag='%s')", tag_name);
+  if (!ss) {
     return NULL;
   }
 
-  fc_assert_ret_val(ss->ref_count >= 0, NULL);
+  assert(ss->ref_count >= 0);
 
   if (!ss->sprite) {
     /* If the sprite hasn't been loaded already, then load it. */
-    fc_assert_ret_val(ss->ref_count == 0, NULL);
+    assert(ss->ref_count == 0);
     if (ss->file) {
       ss->sprite = load_gfx_file(ss->file);
       if (!ss->sprite) {
-        log_fatal("Couldn't load gfx file \"%s\" for sprite '%s'.",
-                  ss->file, tag_name);
-        exit(EXIT_FAILURE);
+	freelog(LOG_FATAL, "Couldn't load gfx file \"%s\" for sprite '%s'.",
+		ss->file, tag_name);
+	exit(EXIT_FAILURE);
       }
     } else {
       int sf_w, sf_h;
@@ -847,10 +817,11 @@ static struct sprite *load_sprite(struct theme *t, const char *tag_name)
       ensure_big_sprite(ss->sf);
       get_sprite_dimensions(ss->sf->big_sprite, &sf_w, &sf_h);
       if (ss->x < 0 || ss->x + ss->width > sf_w
-          || ss->y < 0 || ss->y + ss->height > sf_h) {
-        log_error("Sprite '%s' in file \"%s\" isn't within the image!",
-                  tag_name, ss->sf->file_name);
-        return NULL;
+	  || ss->y < 0 || ss->y + ss->height > sf_h) {
+	freelog(LOG_ERROR,
+		"Sprite '%s' in file \"%s\" isn't within the image!",
+		tag_name, ss->sf->file_name);
+	return NULL;
       }
       ss->sprite =
 	crop_sprite(ss->sf->big_sprite, ss->x, ss->y, ss->width, ss->height,
@@ -870,19 +841,18 @@ static struct sprite *load_sprite(struct theme *t, const char *tag_name)
 **************************************************************************/
 static void unload_sprite(struct theme *t, const char *tag_name)
 {
-  struct small_sprite *ss;
+  struct small_sprite *ss = hash_lookup_data(t->sprite_hash, tag_name);
 
-  small_sprite_hash_lookup(t->sprite_hash, tag_name, &ss);
-  fc_assert_ret(ss);
-  fc_assert_ret(ss->ref_count >= 1);
-  fc_assert_ret(ss->sprite);
+  assert(ss);
+  assert(ss->ref_count >= 1);
+  assert(ss->sprite);
 
   ss->ref_count--;
 
   if (ss->ref_count == 0) {
     /* Nobody's using the sprite anymore, so we should free it.  We know
      * where to find it if we need it again. */
-    log_debug("freeing sprite '%s'.", tag_name);
+    freelog(LOG_DEBUG, "freeing sprite '%s'.", tag_name);
     free_sprite(ss->sprite);
     ss->sprite = NULL;
   }
@@ -892,8 +862,9 @@ static void unload_sprite(struct theme *t, const char *tag_name)
 #define SET_SPRITE(field, tag)					  \
   do {								  \
     t->sprites.field = load_sprite(t, tag);			  \
-    fc_assert_exit_msg(NULL != t->sprites.field,                  \
-                       "Sprite tag '%s' missing.", tag);          \
+    if (!t->sprites.field) {					  \
+      die("Sprite tag '%s' missing.", tag);			  \
+    }								  \
   } while(FALSE)
 
 /* Sets sprites.field to tag or (if tag isn't available) to alt */
@@ -903,9 +874,9 @@ static void unload_sprite(struct theme *t, const char *tag_name)
     if (!t->sprites.field) {						    \
       t->sprites.field = load_sprite(t, alt);				    \
     }									    \
-    fc_assert_exit_msg(NULL != t->sprites.field,                            \
-                       "Sprite tag '%s' and alternate '%s' are "            \
-                       "both missing.", tag, alt);                          \
+    if (!t->sprites.field) {						    \
+      die("Sprite tag '%s' and alternate '%s' are both missing.", tag, alt);\
+    }									    \
   } while(FALSE)
 
 /* Sets sprites.field to tag, or NULL if not available */
@@ -963,32 +934,32 @@ void theme_load_sprites(struct theme *t)
   Lookup sprite to match tag, or else to match alt if don't find,
   or else return NULL, and emit log message.
 ***********************************************************************/
-struct sprite *theme_lookup_sprite_tag_alt(struct theme *t,
-                                           enum log_level level,
-                                           const char *tag, const char *alt,
-                                           const char *what,
-                                           const char *name)
+struct sprite* theme_lookup_sprite_tag_alt(struct theme *t, int loglevel,
+					   const char *tag, const char *alt,
+					   const char *what, const char *name)
 {
   struct sprite *sp;
   
   /* (should get sprite_hash before connection) */
-  fc_assert_ret_val_msg(NULL != t->sprite_hash, NULL,
-                        "attempt to lookup for %s \"%s\" before "
-                        "sprite_hash setup", what, name);
+  if (!t->sprite_hash) {
+    die("attempt to lookup for %s \"%s\" before sprite_hash setup", what, name);
+  }
 
   sp = load_sprite(t, tag);
   if (sp) return sp;
 
   sp = load_sprite(t, alt);
   if (sp) {
-    log_verbose("Using alternate graphic \"%s\" (instead of \"%s\") "
-                "for %s \"%s\".", alt, tag, what, name);
+    freelog(LOG_VERBOSE,
+	    "Using alternate graphic \"%s\" (instead of \"%s\") for %s \"%s\".",
+	    alt, tag, what, name);
     return sp;
   }
 
-  log_base(level, "Don't have graphics tags \"%s\" or \"%s\" for %s \"%s\".",
-           tag, alt, what, name);
-  if (LOG_FATAL >= level) {
+  freelog(loglevel,
+	  "Don't have graphics tags \"%s\" or \"%s\" for %s \"%s\".",
+	  tag, alt, what, name);
+  if (LOG_FATAL >= loglevel) {
     exit(EXIT_FAILURE);
   }
   return NULL;
@@ -998,7 +969,7 @@ struct sprite *theme_lookup_sprite_tag_alt(struct theme *t,
 #define FULL_TILE_Y_OFFSET (t->normal_tile_height - t->full_tile_height)
 
 #define ADD_SPRITE(s, draw_fog, x_offset, y_offset)			    \
-  (fc_assert(s != NULL),						    \
+  (assert(s != NULL),							    \
    sprs->sprite = s,							    \
    sprs->foggable = (draw_fog && t->fogstyle == FOG_AUTO),		    \
    sprs->offset_x = x_offset,						    \
@@ -1015,11 +986,16 @@ struct sprite *theme_lookup_sprite_tag_alt(struct theme *t,
 static void unload_all_sprites(struct theme *t)
 {
   if (t->sprite_hash) {
-    small_sprite_hash_iterate(t->sprite_hash, tag_name, ss) {
+    int i, entries = hash_num_entries(t->sprite_hash);
+
+    for (i = 0; i < entries; i++) {
+      const char *tag_name = hash_key_by_number(t->sprite_hash, i);
+      struct small_sprite *ss = hash_lookup_data(t->sprite_hash, tag_name);
+
       while (ss->ref_count > 0) {
-        unload_sprite(t, tag_name);
+	unload_sprite(t, tag_name);
       }
-    } small_sprite_hash_iterate_end;
+    }
   }
 }
 
@@ -1028,26 +1004,37 @@ static void unload_all_sprites(struct theme *t)
 ***********************************************************************/
 void theme_free_sprites(struct theme *t)
 {
-  log_debug("theme_free_sprites()");
+  int i;
+
+  freelog(LOG_DEBUG, "theme_free_sprites()");
 
   unload_all_sprites(t);
 
   if (t->sprite_hash) {
-    small_sprite_hash_destroy(t->sprite_hash);
+    const int entries = hash_num_entries(t->sprite_hash);
+
+    for (i = 0; i < entries; i++) {
+      const char *key = hash_key_by_number(t->sprite_hash, 0);
+
+      hash_delete_entry(t->sprite_hash, key);
+      free((void *) key);
+    }
+
+    hash_free(t->sprite_hash);
     t->sprite_hash = NULL;
   }
 
   small_sprite_list_iterate(t->small_sprites, ss) {
-    small_sprite_list_remove(t->small_sprites, ss);
+    small_sprite_list_unlink(t->small_sprites, ss);
     if (ss->file) {
       FC_FREE(ss->file);
     }
-    fc_assert(ss->sprite == NULL);
+    assert(ss->sprite == NULL);
     FC_FREE(ss);
   } small_sprite_list_iterate_end;
 
   specfile_list_iterate(t->specfiles, sf) {
-    specfile_list_remove(t->specfiles, sf);
+    specfile_list_unlink(t->specfiles, sf);
     FC_FREE(sf->file_name);
     if (sf->big_sprite) {
       free_sprite(sf->big_sprite);

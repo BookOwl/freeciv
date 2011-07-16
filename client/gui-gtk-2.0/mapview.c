@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 
 #ifdef HAVE_UNISTD_H
@@ -92,7 +93,7 @@ void update_turn_done_button(bool do_restore)
 }
 
 /**************************************************************************
-  Timeout label requires refreshing
+...
 **************************************************************************/
 void update_timeout_label(void)
 {
@@ -100,7 +101,7 @@ void update_timeout_label(void)
 }
 
 /**************************************************************************
-  Refresh info label
+...
 **************************************************************************/
 void update_info_label(void)
 {
@@ -172,20 +173,23 @@ void update_info_label(void)
   update_timeout_label();
 
   /* update tooltips. */
-  gtk_widget_set_tooltip_text(econ_ebox,
+  gtk_tooltips_set_tip(main_tips, econ_ebox,
 		       _("Shows your current luxury/science/tax rates;"
-			 "click to toggle them."));
+			 "click to toggle them."), "");
 
-  gtk_widget_set_tooltip_text(bulb_ebox, get_bulb_tooltip());
-  gtk_widget_set_tooltip_text(sun_ebox, get_global_warming_tooltip());
-  gtk_widget_set_tooltip_text(flake_ebox, get_nuclear_winter_tooltip());
-  gtk_widget_set_tooltip_text(government_ebox, get_government_tooltip());
+  gtk_tooltips_set_tip(main_tips, bulb_ebox, get_bulb_tooltip(), "");
+  gtk_tooltips_set_tip(main_tips, sun_ebox, get_global_warming_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, flake_ebox, get_nuclear_winter_tooltip(),
+		       "");
+  gtk_tooltips_set_tip(main_tips, government_ebox, get_government_tooltip(),
+		       "");
 }
 
 /**************************************************************************
   This function is used to animate the mouse cursor. 
 **************************************************************************/
-static gboolean anim_cursor_cb(gpointer data)
+static gint anim_cursor_cb(gpointer data)
 {
   if (!cursor_timer_id) {
     return FALSE;
@@ -215,7 +219,7 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
 {
   cursor_type = new_cursor_type;
   if (!cursor_timer_id) {
-    cursor_timer_id = g_timeout_add(CURSOR_INTERVAL, anim_cursor_cb, NULL);
+    cursor_timer_id = gtk_timeout_add(CURSOR_INTERVAL, anim_cursor_cb, NULL);
   }
 }
 
@@ -245,7 +249,7 @@ void update_unit_info_label(struct unit_list *punits)
 
 
 /**************************************************************************
-  Get sprite for treaty acceptance or rejection.
+...
 **************************************************************************/
 GdkPixbuf *get_thumb_pixbuf(int onoff)
 {
@@ -271,19 +275,16 @@ void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
 }
 
 /****************************************************************************
-  Return the maximum dimensions of the area (container widget) for the
-  overview. Due to the fact that the scaling factor is at least 1, the real
-  size could be larger. The calculation in calculate_overview_dimensions()
-  limit it to the smallest possible size.
+  Return the dimensions of the area (container widget; maximum size) for
+  the overview.
 ****************************************************************************/
 void get_overview_area_dimensions(int *width, int *height)
 {
-  *width = GUI_GTK_OVERVIEW_MIN_XSIZE;
-  *height = GUI_GTK_OVERVIEW_MIN_YSIZE;
+  gdk_drawable_get_size(overview_canvas->window, width, height);
 }
 
 /**************************************************************************
-  Size of overview changed
+...
 **************************************************************************/
 void overview_size_changed(void)
 {
@@ -305,7 +306,7 @@ struct canvas *get_overview_window(void)
 }
 
 /**************************************************************************
-  Overview canvas exposed
+...
 **************************************************************************/
 gboolean overview_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data)
 {
@@ -339,7 +340,7 @@ void mapview_thaw(void)
   if (1 < mapview_frozen_level) {
     mapview_frozen_level--;
   } else {
-    fc_assert(0 < mapview_frozen_level);
+    assert(0 < mapview_frozen_level);
     mapview_frozen_level = 0;
     dirty_all();
   }
@@ -364,7 +365,7 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
 }
 
 /**************************************************************************
-  Map canvas exposed
+...
 **************************************************************************/
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data)
 {
@@ -401,15 +402,14 @@ static GdkRectangle dirty_rects[MAX_DIRTY_RECTS];
 static bool is_flush_queued = FALSE;
 
 /**************************************************************************
-  A callback invoked as a result of g_idle_add, this function simply
+  A callback invoked as a result of gtk_idle_add, this function simply
   flushes the mapview canvas.
 **************************************************************************/
-static gboolean unqueue_flush(gpointer data)
+static gint unqueue_flush(gpointer data)
 {
   flush_dirty();
   is_flush_queued = FALSE;
-
-  return FALSE;
+  return 0;
 }
 
 /**************************************************************************
@@ -420,7 +420,7 @@ static gboolean unqueue_flush(gpointer data)
 static void queue_flush(void)
 {
   if (!is_flush_queued) {
-    g_idle_add(unqueue_flush, NULL);
+    gtk_idle_add(unqueue_flush, NULL);
     is_flush_queued = TRUE;
   }
 }
@@ -500,7 +500,7 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
-  Fill pixcomm with unit gfx
+...
 **************************************************************************/
 void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
 {
@@ -541,7 +541,7 @@ void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
 }
 
 /**************************************************************************
-  Put overlay tile to pixmap
+...
 **************************************************************************/
 void pixmap_put_overlay_tile(GdkDrawable *pixmap,
 			     int canvas_x, int canvas_y,
@@ -610,10 +610,10 @@ static void pixmap_put_sprite(GdkDrawable *pixmap,
 #ifdef DEBUG
   sprites++;
   if (sprites % 1000 == 0) {
-    log_debug("%5d / %5d pixbufs = %d%%",
-              pixbufs, sprites, 100 * pixbufs / sprites);
+    freelog(LOG_DEBUG, "%5d / %5d pixbufs = %d%%",
+	    pixbufs, sprites, 100 * pixbufs / sprites);
   }
-#endif /* DEBUG */
+#endif
 }
 
 /**************************************************************************
@@ -675,8 +675,9 @@ void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
 	  || (!ssprite->pixmap && !ssprite->pixbuf_fogged))) {
     fog_sprite(ssprite);
     if ((ssprite->pixmap && !ssprite->pixmap_fogged)
-        || (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
-      log_normal(_("Better fog will only work in truecolor. Disabling it"));
+	|| (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
+      freelog(LOG_NORMAL,
+	      _("Better fog will only work in truecolor.  Disabling it"));
       gui_gtk2_better_fog = FALSE;
     }
   }
@@ -736,30 +737,8 @@ void put_cross_overlay_tile(struct tile *ptile)
   }
 }
 
-/*****************************************************************************
- Sets the position of the overview scroll window based on mapview position.
-*****************************************************************************/
-void update_overview_scroll_window_pos(int x, int y)
-{
-  gdouble ov_scroll_x, ov_scroll_y;
-  GtkAdjustment *ov_hadj, *ov_vadj;
-
-  ov_hadj = gtk_scrolled_window_get_hadjustment(
-    GTK_SCROLLED_WINDOW(overview_scrolled_window));
-  ov_vadj = gtk_scrolled_window_get_vadjustment(
-    GTK_SCROLLED_WINDOW(overview_scrolled_window));
-
-  ov_scroll_x = MIN(x - (overview_canvas_store_width / 2),
-                    ov_hadj->upper -ov_hadj->page_size);
-  ov_scroll_y = MIN(y - (overview_canvas_store_height / 2),
-                    ov_vadj->upper -ov_vadj->page_size);
-
-  gtk_adjustment_set_value(GTK_ADJUSTMENT(ov_hadj), ov_scroll_x);
-  gtk_adjustment_set_value(GTK_ADJUSTMENT(ov_vadj), ov_scroll_y);
-}
-
 /**************************************************************************
-  Refresh map canvas scrollbars
+...
 **************************************************************************/
 void update_map_canvas_scrollbars(void)
 {
@@ -771,7 +750,7 @@ void update_map_canvas_scrollbars(void)
 }
 
 /**************************************************************************
-  Refresh map canvas scrollbar as canvas size changes
+...
 **************************************************************************/
 void update_map_canvas_scrollbars_size(void)
 {
@@ -797,7 +776,7 @@ void update_map_canvas_scrollbars_size(void)
 }
 
 /**************************************************************************
-  Scrollbar has moved
+...
 **************************************************************************/
 void scrollbar_jump_callback(GtkAdjustment *adj, gpointer hscrollbar)
 {
@@ -867,7 +846,7 @@ void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
 **************************************************************************/
 void tileset_changed(void)
 {
-  science_report_dialog_redraw();
+  science_dialog_redraw();
   reset_city_dialogs();
   reset_unit_table();
   blank_max_unit_size();

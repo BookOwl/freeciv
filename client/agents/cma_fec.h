@@ -14,10 +14,6 @@
 #ifndef FC__CMAFEC_H
 #define FC__CMAFEC_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "cma_core.h"
 
 void cmafec_init(void);
@@ -32,9 +28,9 @@ const char *cmafec_get_short_descr(const struct cm_parameter *const
 				   parameter);
 const char *cmafec_get_short_descr_of_city(const struct city *pcity);
 const char *cmafec_get_result_descr(struct city *pcity,
-                                    const struct cm_result *result,
-                                    const struct cm_parameter *const
-                                    parameter);
+				    const struct cm_result *const result,
+				    const struct cm_parameter *const
+				    parameter);
 
 /*
  * Preset handling
@@ -49,8 +45,4 @@ int cmafec_preset_num(void);
 
 void create_default_cma_presets(void);
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* FC__CMAFEC_H */
+#endif

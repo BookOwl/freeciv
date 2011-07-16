@@ -12,18 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "inteldlg.h"
-
-/**************************************************************************
-  Close an intelligence dialog for the given player.
-**************************************************************************/
-void close_intel_dialog(struct player *p)
-{
-  /* PORTME */
-}
 
 /**************************************************************************
   Popup an intelligence dialog for the given player.

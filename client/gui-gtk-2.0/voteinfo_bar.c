@@ -12,14 +12,13 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
 
 /* utility */
 #include "fcintl.h"
-#include "mem.h"
 #include "support.h"
 
 /* client */
@@ -250,22 +249,22 @@ void voteinfo_gui_update(void)
 
   if (vi != NULL && vi->resolved && vi->passed) {
     /* TRANS: Describing a vote that passed. */
-    fc_snprintf(status, sizeof(status), _("[passed]"));
+    my_snprintf(status, sizeof(status), _("[passed]"));
     sz_strlcpy(color, "green");
   } else if (vi != NULL && vi->resolved && !vi->passed) {
     /* TRANS: Describing a vote that failed. */
-    fc_snprintf(status, sizeof(status), _("[failed]"));
+    my_snprintf(status, sizeof(status), _("[failed]"));
     sz_strlcpy(color, "red");
   } else if (vi != NULL && vi->remove_time > 0) {
     /* TRANS: Describing a vote that was removed. */
-    fc_snprintf(status, sizeof(status), _("[removed]"));
+    my_snprintf(status, sizeof(status), _("[removed]"));
     sz_strlcpy(color, "grey");
   } else {
     status[0] = '\0';
   }
 
   if (vote_count > 1) {
-    fc_snprintf(ordstr, sizeof(ordstr),
+    my_snprintf(ordstr, sizeof(ordstr),
                 "<span weight=\"bold\">(%d/%d)</span> ",
                 index + 1, vote_count);
   } else {
@@ -273,7 +272,7 @@ void voteinfo_gui_update(void)
   }
 
   if (status[0] != '\0') {
-    fc_snprintf(buf, sizeof(buf),
+    my_snprintf(buf, sizeof(buf),
         "<span weight=\"bold\" background=\"%s\">%s</span> ",
         color, status);
     sz_strlcpy(status, buf);
@@ -283,7 +282,7 @@ void voteinfo_gui_update(void)
     escaped_desc = g_markup_escape_text(vi->desc, -1);
     escaped_user = g_markup_escape_text(vi->user, -1);
     /* TRANS: "Vote" as a process */
-    fc_snprintf(buf, sizeof(buf), _("%sVote %d by %s: %s%s"),
+    my_snprintf(buf, sizeof(buf), _("%sVote %d by %s: %s%s"),
                 ordstr, vi->vote_no, escaped_user, status,
                 escaped_desc);
     g_free(escaped_desc);
@@ -294,13 +293,13 @@ void voteinfo_gui_update(void)
   gtk_label_set_markup(GTK_LABEL(vib->label), buf);
 
   if (vi != NULL)  {
-    fc_snprintf(buf, sizeof(buf), "%d", vi->yes);
+    my_snprintf(buf, sizeof(buf), "%d", vi->yes);
     gtk_label_set_text(GTK_LABEL(vib->yes_count_label), buf);
-    fc_snprintf(buf, sizeof(buf), "%d", vi->no);
+    my_snprintf(buf, sizeof(buf), "%d", vi->no);
     gtk_label_set_text(GTK_LABEL(vib->no_count_label), buf);
-    fc_snprintf(buf, sizeof(buf), "%d", vi->abstain);
+    my_snprintf(buf, sizeof(buf), "%d", vi->abstain);
     gtk_label_set_text(GTK_LABEL(vib->abstain_count_label), buf);
-    fc_snprintf(buf, sizeof(buf), "/%d", vi->num_voters);
+    my_snprintf(buf, sizeof(buf), "/%d", vi->num_voters);
     gtk_label_set_text(GTK_LABEL(vib->voter_count_label), buf);
   } else {
     gtk_label_set_text(GTK_LABEL(vib->yes_count_label), "-");

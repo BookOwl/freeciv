@@ -12,25 +12,22 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-#include <string.h>             /* strlen */
+#include <assert.h>
+#include <string.h>		/* strlen */
 
-/* utility */
+#include "city.h"
 #include "fcintl.h"
-#include "iterator.h"
+#include "game.h"
+#include "hash.h"
 #include "log.h"
 #include "mem.h"
+#include "movement.h"
+#include "packets.h"
 #include "rand.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "city.h"
-#include "game.h"
-#include "movement.h"
-#include "nation.h"
-#include "packets.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -39,32 +36,11 @@
 /* the very map */
 struct civ_map map;
 
-struct startpos {
-  struct tile *location;
-  bool exclude;
-  struct nation_hash *nations;
+/* An entry in the start position table. */
+struct startpos_entry {
+  int key;
+  const struct nation_type *nation;
 };
-
-static struct startpos *startpos_new(struct tile *ptile);
-static void startpos_destroy(struct startpos *psp);
-
-/* struct startpos_hash and related functions. */
-#define SPECHASH_TAG startpos
-#define SPECHASH_KEY_TYPE const struct tile *
-#define SPECHASH_DATA_TYPE struct startpos *
-#define SPECHASH_DATA_FREE startpos_destroy
-#include "spechash.h"
-
-/* Srart position iterator. */
-struct startpos_iter {
-  struct iterator vtable;
-  const struct startpos *psp;
-  /* 'struct nation_iter' really. See startpos_iter_sizeof(). */
-  struct iterator nation_iter;
-};
-
-#define STARTPOS_ITER(p) ((struct startpos_iter *) (p))
-
 
 /* these are initialized from the terrain ruleset */
 struct terrain_misc terrain_control;
@@ -86,9 +62,6 @@ struct terrain_misc terrain_control;
  */
 const int DIR_DX[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
 const int DIR_DY[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
-
-static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
-                           const struct tile *t2);
 
 /****************************************************************************
   Return a bitfield of the specials on the tile that are infrastructure.
@@ -161,13 +134,11 @@ void map_init(void)
   /* The [xy]size values are set in map_init_topology.  It is initialized
    * to a non-zero value because some places erronously use these values
    * before they're initialized. */
-  map.xsize = MAP_DEFAULT_LINEAR_SIZE;
-  map.ysize = MAP_DEFAULT_LINEAR_SIZE;
+  map.xsize = MAP_MIN_LINEAR_SIZE;  
+  map.ysize = MAP_MIN_LINEAR_SIZE;
 
   if (is_server()) {
-    map.server.mapsize = MAP_DEFAULT_MAPSIZE;
     map.server.size = MAP_DEFAULT_SIZE;
-    map.server.tilesperplayer = MAP_DEFAULT_TILESPERPLAYER;
     map.server.seed = MAP_DEFAULT_SEED;
     map.server.riches = MAP_DEFAULT_RICHES;
     map.server.huts = MAP_DEFAULT_HUTS;
@@ -180,6 +151,7 @@ void map_init(void)
     map.server.separatepoles = MAP_DEFAULT_SEPARATE_POLES;
     map.server.alltemperate = MAP_DEFAULT_ALLTEMPERATE;
     map.server.temperature = MAP_DEFAULT_TEMPERATURE;
+    map.server.num_start_positions = 0;
     map.server.have_resources = FALSE;
     map.server.have_rivers_overlay = FALSE;
     map.server.have_huts = FALSE;
@@ -241,7 +213,7 @@ static void generate_map_indices(void)
 	       : (nat_center_y + map.ysize - 1));
   tiles = (nat_max_x - nat_min_x + 1) * (nat_max_y - nat_min_y + 1);
 
-  fc_assert(NULL == map.iterate_outwards_indices);
+  assert(map.iterate_outwards_indices == NULL);
   map.iterate_outwards_indices =
       fc_malloc(tiles * sizeof(*map.iterate_outwards_indices));
 
@@ -265,17 +237,17 @@ static void generate_map_indices(void)
       i++;
     }
   }
-  fc_assert(i == tiles);
+  assert(i == tiles);
 
   qsort(map.iterate_outwards_indices, tiles,
         sizeof(*map.iterate_outwards_indices), compare_iter_index);
 
 #if 0
   for (i = 0; i < tiles; i++) {
-    log_debug("%5d : (%3d,%3d) : %d", i,
-              map.iterate_outwards_indices[i].dx,
-              map.iterate_outwards_indices[i].dy,
-              map.iterate_outwards_indices[i].dist);
+    freelog(LOG_DEBUG, "%5d : (%3d,%3d) : %d", i,
+            map.iterate_outwards_indices[i].dx,
+            map.iterate_outwards_indices[i].dy,
+            map.iterate_outwards_indices[i].dist);
   }
 #endif
 
@@ -303,14 +275,14 @@ void map_init_topology(bool set_sizes)
   }
   
   /* sanity check for iso topologies*/
-  fc_assert(!MAP_IS_ISOMETRIC || (map.ysize % 2) == 0);
+  assert(!MAP_IS_ISOMETRIC || (map.ysize % 2) == 0);
 
   /* The size and ratio must satisfy the minimum and maximum *linear*
    * restrictions on width */
-  fc_assert(MAP_WIDTH >= MAP_MIN_LINEAR_SIZE);
-  fc_assert(MAP_HEIGHT >= MAP_MIN_LINEAR_SIZE);
-  fc_assert(MAP_WIDTH <= MAP_MAX_LINEAR_SIZE);
-  fc_assert(MAP_HEIGHT <= MAP_MAX_LINEAR_SIZE);
+  assert(MAP_WIDTH >= MAP_MIN_LINEAR_SIZE);
+  assert(MAP_HEIGHT >= MAP_MIN_LINEAR_SIZE);
+  assert(MAP_WIDTH <= MAP_MAX_LINEAR_SIZE);
+  assert(MAP_HEIGHT <= MAP_MAX_LINEAR_SIZE);
 
   map.num_valid_dirs = map.num_cardinal_dirs = 0;
   for (dir = 0; dir < 8; dir++) {
@@ -323,17 +295,22 @@ void map_init_topology(bool set_sizes)
       map.num_cardinal_dirs++;
     }
   }
-  fc_assert(map.num_valid_dirs > 0 && map.num_valid_dirs <= 8);
-  fc_assert(map.num_cardinal_dirs > 0
-            && map.num_cardinal_dirs <= map.num_valid_dirs);
+  assert(map.num_valid_dirs > 0 && map.num_valid_dirs <= 8);
+  assert(map.num_cardinal_dirs > 0
+	 && map.num_cardinal_dirs <= map.num_valid_dirs);
 }
 
 /***************************************************************
-  Initialize tile structure
+...
 ***************************************************************/
 static void tile_init(struct tile *ptile)
 {
   ptile->continent = 0;
+
+  BV_CLR_ALL(ptile->tile_known);
+  vision_layer_iterate(v) {
+    BV_CLR_ALL(ptile->tile_seen[v]);
+  } vision_layer_iterate_end;
 
   tile_clear_all_specials (ptile);
   ptile->resource = NULL;
@@ -437,20 +414,14 @@ struct tile *index_to_tile(int index)
 }
 
 /***************************************************************
-  Free memory associated with one tile.
+...
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
-  unit_list_destroy(ptile->units);
-
+  unit_list_free(ptile->units);
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
-  }
-
-  if (ptile->label) {
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
   }
 }
 
@@ -460,10 +431,10 @@ static void tile_free(struct tile *ptile)
 **************************************************************************/
 void map_allocate(void)
 {
-  log_debug("map_allocate (was %p) (%d,%d)",
-            (void *) map.tiles, map.xsize, map.ysize);
+  freelog(LOG_DEBUG, "map_allocate (was %p) (%d,%d)",
+	  (void *)map.tiles, map.xsize, map.ysize);
 
-  fc_assert_ret(NULL == map.tiles);
+  assert(map.tiles == NULL);
   map.tiles = fc_calloc(MAP_INDEX_SIZE, sizeof(*map.tiles));
 
   /* Note this use of whole_map_iterate may be a bit sketchy, since the
@@ -484,9 +455,10 @@ void map_allocate(void)
   generate_map_indices();
 
   if (map.startpos_table != NULL) {
-    startpos_hash_destroy(map.startpos_table);
+    hash_free(map.startpos_table);
   }
-  map.startpos_table = startpos_hash_new();
+  map.startpos_table = hash_new_full(hash_fval_keyval, hash_fcmp_keyval,
+                                     NULL, free);
 }
 
 /***************************************************************
@@ -505,7 +477,7 @@ void map_free(void)
     map.tiles = NULL;
 
     if (map.startpos_table) {
-      startpos_hash_destroy(map.startpos_table);
+      hash_free(map.startpos_table);
       map.startpos_table = NULL;
     }
 
@@ -582,7 +554,7 @@ int map_vector_to_sq_distance(int dx, int dy)
 }
 
 /***************************************************************
-  Return real distance between two tiles.
+...
 ***************************************************************/
 int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -593,7 +565,7 @@ int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return squared distance between two tiles.
+...
 ***************************************************************/
 int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -606,7 +578,7 @@ int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return Manhattan distance between two tiles.
+...
 ***************************************************************/
 int map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -643,11 +615,9 @@ bool is_safe_ocean(const struct tile *ptile)
 }
 
 /***************************************************************
-  Can tile be irrigated by given unit? Unit can be NULL to check if
-  any settler type unit of any player can irrigate.
+...
 ***************************************************************/
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit)
+bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
   struct terrain* pterrain = tile_terrain(ptile);
 
@@ -655,7 +625,27 @@ bool can_be_irrigated(const struct tile *ptile,
     return FALSE;
   }
 
-  return get_tile_bonus(ptile, punit, EFT_IRRIG_POSSIBLE) > 0;
+  if (tile_has_special(ptile, S_RIVER)
+   || tile_has_special(ptile, S_IRRIGATION)
+   || terrain_has_flag(pterrain, TER_OCEANIC)) {
+    return TRUE;
+  }
+
+  cardinal_adjc_iterate(ptile, tile1) {
+    struct terrain* pterrain1 = tile_terrain(tile1);
+
+    if (T_UNKNOWN == pterrain1) {
+      continue;
+    }
+
+    if (tile_has_special(tile1, S_RIVER)
+     || tile_has_special(tile1, S_IRRIGATION)
+     || terrain_has_flag(pterrain1, TER_OCEANIC)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
@@ -691,8 +681,7 @@ bool can_channel_land(const struct tile *ptile)
   May also be used with punit==NULL, in which case punit
   tests are not done (for unit-independent results).
 ***************************************************************/
-static int tile_move_cost_ptrs(const struct unit *punit,
-                               const struct player *pplayer,
+static int tile_move_cost_ptrs(struct unit *punit,
 			       const struct tile *t1, const struct tile *t2)
 {
   bool cardinal_move;
@@ -725,7 +714,7 @@ static int tile_move_cost_ptrs(const struct unit *punit,
    * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
   if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
-      && native && !restrict_infra(pplayer, t1, t2)) {
+      && native) {
     return MOVE_COST_RAIL;
   }
   if (punit && unit_has_type_flag(punit, F_IGTER)) {
@@ -735,8 +724,7 @@ static int tile_move_cost_ptrs(const struct unit *punit,
     /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
-  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
-      && !restrict_infra(pplayer, t1, t2)) {
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)) {
     return MOVE_COST_ROAD;
   }
 
@@ -765,29 +753,6 @@ static int tile_move_cost_ptrs(const struct unit *punit,
 }
 
 /****************************************************************************
-  Returns TRUE if there is a restriction with regard to the infrastructure,
-  i.e. at least one of the tiles t1 and t2 is claimed by a unfriendly
-  nation. This means that one can not use of the infrastructure (road,
-  railroad) on this tile.
-****************************************************************************/
-static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
-                           const struct tile *t2)
-{
-  struct player *plr1 = tile_owner(t1), *plr2 = tile_owner(t2);
-
-  if (!pplayer || !game.info.restrictinfra) {
-    return FALSE;
-  }
-
-  if ((plr1 && pplayers_at_war(plr1, pplayer))
-      || (plr2 && pplayers_at_war(plr2, pplayer))) {
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/****************************************************************************
   map_move_cost_ai returns the move cost as
   calculated by tile_move_cost_ptrs (with no unit pointer to get
   unit-independent results) EXCEPT if either of the source or
@@ -800,14 +765,13 @@ static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
   FIXME: this function can't be used for air units because it returns
   sea<->land moves as impossible.
 ****************************************************************************/
-int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
-                     const struct tile *tile1)
+int map_move_cost_ai(const struct tile *tile0, const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
 
-  fc_assert_ret_val(!is_server()
-                    || (tile_terrain(tile0) != T_UNKNOWN
-                        && tile_terrain(tile1) != T_UNKNOWN), FC_INFINITY);
+  assert(!is_server()
+	 || (tile_terrain(tile0) != T_UNKNOWN 
+	  && tile_terrain(tile1) != T_UNKNOWN));
 
   /* A ship can take the step if:
    * - both tiles are ocean or
@@ -835,7 +799,7 @@ int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
     return maxcost;
   }
 
-  return tile_move_cost_ptrs(NULL, pplayer, tile0, tile1);
+  return tile_move_cost_ptrs(NULL, tile0, tile1);
 }
 
 /***************************************************************
@@ -844,21 +808,19 @@ int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
 ***************************************************************/
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
 {
-  return tile_move_cost_ptrs(punit, unit_owner(punit),
-                             unit_tile(punit), ptile);
+  return tile_move_cost_ptrs(punit, punit->tile, ptile);
 }
 
 /***************************************************************
   Move cost between two tiles
 ***************************************************************/
-int map_move_cost(const struct player *pplayer,
-                  const struct tile *src_tile, const struct tile *dst_tile)
+int map_move_cost(const struct tile *src_tile, const struct tile *dst_tile)
 {
-  return tile_move_cost_ptrs(NULL, pplayer, src_tile, dst_tile);
+  return tile_move_cost_ptrs(NULL, src_tile, dst_tile);
 }
 
 /***************************************************************
-  Are two tiles adjacent to each other.
+...
 ***************************************************************/
 bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 {
@@ -871,13 +833,10 @@ bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 ***************************************************************/
 bool same_pos(const struct tile *tile1, const struct tile *tile2)
 {
-  fc_assert_ret_val(tile1 != NULL && tile2 != NULL, FALSE);
+  assert(tile1 != NULL && tile2 != NULL);
   return (tile1 == tile2);
 }
 
-/***************************************************************
-  Is given position real position
-***************************************************************/
 bool is_real_map_pos(int x, int y)
 {
   return normalize_map_pos(&x, &y);
@@ -1027,7 +986,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
   /* This clever loop by Trent Piepho will take no more than
    * 8 tries to find a valid direction. */
   for (n = 8; n > 0; n--) {
-    enum direction8 choice = (enum direction8) fc_rand(n);
+    enum direction8 choice = (enum direction8) myrand(n);
 
     /* this neighbour's OK */
     tile1 = mapstep(ptile, dirs[choice]);
@@ -1040,7 +999,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
     dirs[choice] = dirs[n - 1];
   }
 
-  fc_assert(FALSE);     /* Are we on a 1x1 map with no wrapping??? */
+  assert(0);			/* Are we on a 1x1 map with no wrapping??? */
   return NULL;
 }
 
@@ -1050,7 +1009,7 @@ struct tile *rand_neighbour(const struct tile *ptile)
 **************************************************************************/
 struct tile *rand_map_pos(void)
 {
-  int nat_x = fc_rand(map.xsize), nat_y = fc_rand(map.ysize);
+  int nat_x = myrand(map.xsize), nat_y = myrand(map.ysize);
 
   return native_pos_to_tile(nat_x, nat_y);
 }
@@ -1072,15 +1031,13 @@ struct tile *rand_map_pos_filtered(void *data,
   /* First do a few quick checks to find a spot.  The limit on number of
    * tries could use some tweaking. */
   do {
-    ptile = map.tiles + fc_rand(MAP_INDEX_SIZE);
+    ptile = map.tiles + myrand(MAP_INDEX_SIZE);
   } while (filter && !filter(ptile, data) && ++tries < max_tries);
 
   /* If that fails, count all available spots and pick one.
    * Slow but reliable. */
   if (tries == max_tries) {
-    int count = 0, *positions;
-
-    positions = fc_calloc(MAP_INDEX_SIZE, sizeof(*positions));
+    int count = 0, positions[MAP_INDEX_SIZE];
 
     whole_map_iterate(ptile) {
       if (filter(ptile, data)) {
@@ -1090,14 +1047,13 @@ struct tile *rand_map_pos_filtered(void *data,
     } whole_map_iterate_end;
 
     if (count == 0) {
-      ptile = NULL;
-    } else {
-      ptile = map.tiles + positions[fc_rand(count)];
+      return NULL;
     }
 
-    FC_FREE(positions);
+    return map.tiles + positions[myrand(count)];
+  } else {
+    return ptile;
   }
-  return ptile;
 }
 
 /**************************************************************************
@@ -1152,7 +1108,7 @@ enum direction8 dir_cw(enum direction8 dir)
   case DIR8_NORTHWEST:
     return DIR8_NORTH;
   default:
-    fc_assert(FALSE);
+    assert(0);
     return -1;
   }
 }
@@ -1181,7 +1137,7 @@ enum direction8 dir_ccw(enum direction8 dir)
   case DIR8_NORTHWEST:
     return DIR8_WEST;
   default:
-    fc_assert(FALSE);
+    assert(0);
     return -1;
   }
 }
@@ -1268,7 +1224,7 @@ int get_direction_for_step(const struct tile *start_tile,
     return dir;
   }
 
-  fc_assert(FALSE);
+  assert(0);
   return -1;
 }
 
@@ -1303,339 +1259,90 @@ bool is_singular_tile(const struct tile *ptile, int dist)
   } do_in_natural_pos_end;
 }
 
-
-/****************************************************************************
-  Create a new, empty start position.
-****************************************************************************/
-static struct startpos *startpos_new(struct tile *ptile)
-{
-  struct startpos *psp = fc_malloc(sizeof(*psp));
-
-  psp->location = ptile;
-  psp->exclude = FALSE;
-  psp->nations = nation_hash_new();
-
-  return psp;
-}
-
-/****************************************************************************
-  Free all memory allocated by the start position.
-****************************************************************************/
-static void startpos_destroy(struct startpos *psp)
-{
-  fc_assert_ret(NULL != psp);
-  nation_hash_destroy(psp->nations);
-  free(psp);
-}
-
-/****************************************************************************
-  Returns the start position associated to the given ID.
-****************************************************************************/
-struct startpos *map_startpos_by_number(int id)
-{
-  return map_startpos_get(index_to_tile(id));
-}
-
-/****************************************************************************
-  Returns the unique ID number for this start position. This is just the
-  tile index of the tile where this start position is located.
-****************************************************************************/
-int startpos_number(const struct startpos *psp)
-{
-  fc_assert_ret_val(NULL != psp, -1);
-  return tile_index(psp->location);
-}
-
-/****************************************************************************
-  Allow the nation to start at the start position.
-  NB: in "excluding" mode, this remove the nation from the excluded list.
-****************************************************************************/
-bool startpos_allow(struct startpos *psp, struct nation_type *pnation)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  fc_assert_ret_val(NULL != pnation, FALSE);
-
-  if (0 == nation_hash_size(psp->nations) || !psp->exclude) {
-    psp->exclude = FALSE; /* Disable "excluding" mode. */
-    return nation_hash_insert(psp->nations, pnation, NULL);
-  } else {
-    return nation_hash_remove(psp->nations, pnation);
-  }
-}
-
-/****************************************************************************
-  Disallow the nation to start at the start position.
-  NB: in "excluding" mode, this add the nation to the excluded list.
-****************************************************************************/
-bool startpos_disallow(struct startpos *psp, struct nation_type *pnation)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  fc_assert_ret_val(NULL != pnation, FALSE);
-
-  if (0 == nation_hash_size(psp->nations) || psp->exclude) {
-    psp->exclude = TRUE; /* Enable "excluding" mode. */
-    return nation_hash_remove(psp->nations, pnation);
-  } else {
-    return nation_hash_insert(psp->nations, pnation, NULL);
-  }
-}
-
-/****************************************************************************
-  Returns the tile where this start position is located.
-****************************************************************************/
-struct tile *startpos_tile(const struct startpos *psp)
-{
-  fc_assert_ret_val(NULL != psp, NULL);
-  return psp->location;
-}
-
-/****************************************************************************
-  Returns TRUE if the given nation can start here.
-****************************************************************************/
-bool startpos_nation_allowed(const struct startpos *psp,
-                             const struct nation_type *pnation)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  fc_assert_ret_val(NULL != pnation, FALSE);
-  return XOR(psp->exclude, nation_hash_lookup(psp->nations, pnation, NULL));
-}
-
-/****************************************************************************
-  Returns TRUE if any nation can start here.
-****************************************************************************/
-bool startpos_allows_all(const struct startpos *psp)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  return (0 == nation_hash_size(psp->nations));
-}
-
-/****************************************************************************
-  Fills the packet with all of the information at this start position.
-  Returns TRUE if the packet can be sent.
-****************************************************************************/
-bool startpos_pack(const struct startpos *psp,
-                   struct packet_edit_startpos_full *packet)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  fc_assert_ret_val(NULL != packet, FALSE);
-
-  packet->id = startpos_number(psp);
-  packet->exclude = psp->exclude;
-  BV_CLR_ALL(packet->nations);
-
-  nation_hash_iterate(psp->nations, pnation) {
-    BV_SET(packet->nations, nation_number(pnation));
-  } nation_hash_iterate_end;
-  return TRUE;
-}
-
-/****************************************************************************
-  Fills the start position with the nation information in the packet.
-  Returns TRUE if the start position was changed.
-****************************************************************************/
-bool startpos_unpack(struct startpos *psp,
-                     const struct packet_edit_startpos_full *packet)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  fc_assert_ret_val(NULL != packet, FALSE);
-
-  psp->exclude = packet->exclude;
-
-  nation_hash_clear(psp->nations);
-  if (!BV_ISSET_ANY(packet->nations)) {
-    return TRUE;
-  }
-  nations_iterate(pnation) {
-    if (BV_ISSET(packet->nations, nation_number(pnation))) {
-      nation_hash_insert(psp->nations, pnation, NULL);
-    }
-  } nations_iterate_end;
-  return TRUE;
-}
-
-/****************************************************************************
-  Returns TRUE if the nations returned by startpos_raw_nations()
-  are actually excluded from the nations allowed to start at this position.
-
-  FIXME: This function exposes the internal implementation and should be
-  removed when no longer needed by the property editor system.
-****************************************************************************/
-bool startpos_is_excluding(const struct startpos *psp)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  return psp->exclude;
-}
-
-/****************************************************************************
-  Return a the nations hash, used for the property editor.
-
-  FIXME: This function exposes the internal implementation and should be
-  removed when no longer needed by the property editor system.
-****************************************************************************/
-const struct nation_hash *startpos_raw_nations(const struct startpos *psp)
-{
-  fc_assert_ret_val(NULL != psp, FALSE);
-  return psp->nations;
-}
-
-/****************************************************************************
-  Implementation of iterator 'sizeof' function.
-
-  struct startpos_iter can be either a 'struct nation_hash_iter', a 'struct
-  nation_iter' or 'struct startpos_iter'.
-****************************************************************************/
-size_t startpos_iter_sizeof(void)
-{
-  return MAX(sizeof(struct startpos_iter) + nation_iter_sizeof()
-             - sizeof(struct iterator), nation_hash_iter_sizeof());
-}
-
-/****************************************************************************
-  Implementation of iterator 'next' function.
-
-  NB: This is only used for the case where 'exclude' is set in the start
-  position.
-****************************************************************************/
-static void startpos_exclude_iter_next(struct iterator *startpos_iter)
-{
-  struct startpos_iter *iter = STARTPOS_ITER(startpos_iter);
-
-  do {
-    iterator_next(&iter->nation_iter);
-  } while (iterator_valid(&iter->nation_iter)
-           || !nation_hash_lookup(iter->psp->nations,
-                                  iterator_get(&iter->nation_iter), NULL));
-}
-
-/****************************************************************************
-  Implementation of iterator 'get' function. Returns a struct nation_type
-  pointer.
-
-  NB: This is only used for the case where 'exclude' is set in the start
-  position.
-****************************************************************************/
-static void *startpos_exclude_iter_get(const struct iterator *startpos_iter)
-{
-  struct startpos_iter *iter = STARTPOS_ITER(startpos_iter);
-  return iterator_get(&iter->nation_iter);
-}
-
-/****************************************************************************
-  Implementation of iterator 'valid' function.
-****************************************************************************/
-static bool startpos_exclude_iter_valid(const struct iterator *startpos_iter)
-{
-  struct startpos_iter *iter = STARTPOS_ITER(startpos_iter);
-  return iterator_valid(&iter->nation_iter);
-}
-
-/****************************************************************************
-  Initialize and return an iterator for the nations at this start position.
-****************************************************************************/
-struct iterator *startpos_iter_init(struct startpos_iter *iter,
-                                    const struct startpos *psp)
-{
-  if (!psp) {
-    return invalid_iter_init(ITERATOR(iter));
-  }
-
-  if (startpos_allows_all(psp)) {
-    return nation_iter_init((struct nation_iter *) iter);
-  }
-
-  if (!psp->exclude) {
-    return nation_hash_key_iter_init((struct nation_hash_iter *) iter,
-                                     psp->nations);
-  }
-
-  iter->vtable.next = startpos_exclude_iter_next;
-  iter->vtable.get = startpos_exclude_iter_get;
-  iter->vtable.valid = startpos_exclude_iter_valid;
-  iter->psp = psp;
-  (void) nation_iter_init((struct nation_iter *) &iter->nation_iter);
-
-  return ITERATOR(iter);
-}
-
-
 /****************************************************************************
   Is there start positions set for map
 ****************************************************************************/
-int map_startpos_count(void)
+bool map_startpositions_set(void)
 {
-  if (NULL != map.startpos_table) {
-    return startpos_hash_size(map.startpos_table);
-  } else {
-    return 0;
+  if (!map.startpos_table) {
+    return FALSE;
   }
+
+  return hash_num_entries(map.startpos_table) != 0;
 }
 
 /****************************************************************************
-  Create a new start position at the given tile and return it. If a start
-  position already exists there, it is first removed.
+  Set a start position at the given tile for the given nation. Clears any
+  existing start position at the tile.
 ****************************************************************************/
-struct startpos *map_startpos_new(struct tile *ptile)
+void map_set_startpos(const struct tile *ptile,
+                      const struct nation_type *pnation)
 {
-  struct startpos *psp;
+  struct startpos_entry *spe;
 
-  fc_assert_ret_val(NULL != ptile, NULL);
-  fc_assert_ret_val(NULL != map.startpos_table, NULL);
+  if (!map.startpos_table || !ptile) {
+    return;
+  }
+  map_clear_startpos(ptile);
 
-  psp = startpos_new(ptile);
-  startpos_hash_replace(map.startpos_table, tile_hash_key(ptile), psp);
-  return psp;
+  spe = fc_calloc(1, sizeof(*spe));
+  spe->key = tile_index(ptile);
+  spe->nation = pnation;
+
+  hash_insert(map.startpos_table, FC_INT_TO_PTR(spe->key), spe);
 }
 
 /****************************************************************************
-  Returns the start position at the given tile, or NULL if none exists
-  there.
+  Returns the nation of the start position at the given tile, or NULL if
+  none exists there.
 ****************************************************************************/
-struct startpos *map_startpos_get(const struct tile *ptile)
+bool map_has_startpos(const struct tile *ptile)
 {
-  struct startpos *psp;
+  struct startpos_entry *spe;
 
-  fc_assert_ret_val(NULL != ptile, NULL);
-  fc_assert_ret_val(NULL != map.startpos_table, NULL);
+  if (!map.startpos_table || !ptile) {
+    return FALSE;
+  }
 
-  startpos_hash_lookup(map.startpos_table, tile_hash_key(ptile), &psp);
-  return psp;
+  spe = hash_lookup_data(map.startpos_table,
+                         FC_INT_TO_PTR(tile_index(ptile)));
+  if (!spe) {
+    return FALSE;
+  }
+
+  return TRUE;
 }
 
 /****************************************************************************
-  Remove the start position at the given tile. Returns TRUE if the start
-  position was removed.
+  Returns the nation of the start position at the given tile, or NULL if
+  none exists there.
 ****************************************************************************/
-bool map_startpos_remove(struct tile *ptile)
+const struct nation_type *map_get_startpos(const struct tile *ptile)
 {
-  fc_assert_ret_val(NULL != ptile, FALSE);
-  fc_assert_ret_val(NULL != map.startpos_table, FALSE);
+  struct startpos_entry *spe;
 
-  return startpos_hash_remove(map.startpos_table, tile_hash_key(ptile));
+  if (!map.startpos_table || !ptile) {
+    return NULL;
+  }
+
+  spe = hash_lookup_data(map.startpos_table,
+                         FC_INT_TO_PTR(tile_index(ptile)));
+  if (!spe) {
+    return NULL;
+  }
+
+  return spe->nation;
 }
 
 /****************************************************************************
-  Implementation of iterator sizeof function.
-  NB: map_sp_iter just wraps startpos_hash_iter.
+  Remove a start position at the given tile.
 ****************************************************************************/
-size_t map_startpos_iter_sizeof(void)
+void map_clear_startpos(const struct tile *ptile)
 {
-  return startpos_hash_iter_sizeof();
-}
+  if (!map.startpos_table || !ptile) {
+    return;
+  }
 
-/****************************************************************************
-  Implementation of iterator init function.
-  NB: map_sp_iter just wraps startpos_hash_iter.
-****************************************************************************/
-struct iterator *map_startpos_iter_init(struct map_startpos_iter *iter)
-{
-  return startpos_hash_value_iter_init((struct startpos_hash_iter *) iter,
-                                       map.startpos_table);
-}
-
-/****************************************************************************
-  Return random direction that is valid in current map.
-****************************************************************************/
-enum direction8 rand_direction(void)
-{
-  return map.valid_dirs[fc_rand(map.num_valid_dirs)];
+  hash_delete_entry(map.startpos_table,
+                    FC_INT_TO_PTR(tile_index(ptile)));
 }

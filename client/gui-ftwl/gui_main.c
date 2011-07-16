@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
@@ -197,8 +197,8 @@ int main(int argc, char **argv)
 void ui_main(int argc, char *argv[])
 {
   int i = 1;
-  char *theme = fc_strdup(DEFAULT_THEME);
-  char *resolution = fc_strdup(DEFAULT_RESOLUTION);
+  char *theme = mystrdup(DEFAULT_THEME);
+  char *resolution = mystrdup(DEFAULT_RESOLUTION);
   bool fullscreen = FALSE;
   char *option = NULL;
   struct ct_size res;
@@ -225,32 +225,32 @@ void ui_main(int argc, char *argv[])
 		 DEFAULT_THEME);
       exit(EXIT_SUCCESS);
     } else if (is_option("--dump", argv[i])) {
-      log_verbose("Enable screen dumper");
+      freelog(LOG_VERBOSE, "Enable screen dumper");
       sw_set_dump_screen(TRUE);
     } else if (is_option("--fullscreen", argv[i])) {
       fullscreen = TRUE;
     } else if ((option = get_option_malloc("--res", argv, &i, argc))) {
       free(resolution);
-      resolution = fc_strdup(option);
+      resolution = mystrdup(option);
       free(option);
     } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
       free(theme);
-      theme = fc_strdup(option);
+      theme = mystrdup(option);
       free(option);
     } else {
-      log_error(_("Unknown option \"%s\""), argv[i]);
+      freelog(LOG_ERROR, _("Unknown option \"%s\""), argv[i]);
     }
     i++;
   }
 
   if (sscanf(resolution, "%dx%d", &res.width, &res.height) != 2) {
-    log_error(_("Resolution \"%s\" doesn't parse"), resolution);
+    freelog(LOG_ERROR, _("Resolution \"%s\" doesn't parse"), resolution);
   }
   free(resolution);
 
   if (!auto_connect) {
-    log_error("Connection dialog not yet implemented. Start client "
-              "using the -a option.");
+    freelog(LOG_ERROR, "Connection dialog not yet implemented. Start client "
+                       "using the -a option.");
   }
 
   sw_init();
@@ -360,7 +360,7 @@ void set_unit_icons_more_arrow(bool onoff)
   /* PORTME */
 }
 
-void real_update_conn_list_dialog(void)
+void update_conn_list_dialog(void)
 {
   /* PORTME */
 }

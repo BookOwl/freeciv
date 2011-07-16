@@ -13,12 +13,14 @@
 #ifndef FC__EVENTS_H
 #define FC__EVENTS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+#include "shared.h"          /* bool type */
 
-#include "support.h"            /* bool type */
-
+/* Add new event types to the end. Old clients (< 2.2) saves message
+ * settings by type number and installing new event type in
+ * between would cause erronous loading of existing rc file.
+ * When adding events to stable branch, there is risk that TRUNK
+ * already has allocated next slot for something else (and has
+ * new event in upper slot) */
 #define SPECENUM_NAME event_type
 #define SPECENUM_VALUE0   E_CITY_CANTBUILD
 #define SPECENUM_VALUE1   E_CITY_LOST
@@ -139,21 +141,17 @@ extern "C" {
 #define SPECENUM_VALUE105 E_VOTE_NEW
 #define SPECENUM_VALUE106 E_VOTE_RESOLVED
 #define SPECENUM_VALUE107 E_VOTE_ABORTED
-/* Change of the city radius */
-#define SPECENUM_VALUE108 E_CITY_RADIUS_SQ
-/* A unit with population cost was build; the city shrinks. */
-#define SPECENUM_VALUE109 E_UNIT_BUILT_POP_COST
 /*
  * Note: If you add a new event, make sure you make a similar change
- * to the events array in "common/events.c" using GEN_EV and
- * "data/stdsounds.soundspec"
+ * to the events array in common/events.c using GEN_EV,
+ * data/stdsoundes and to server/scripting/api.pkg
  */
-#define SPECENUM_COUNT E_COUNT
+#define SPECENUM_VALUE108 E_LAST
 #include "specenum_gen.h"
 /* the maximum number of enumerators is set in generate_specnum.py */
 
-extern enum event_type sorted_events[]; /* [E_COUNT], sorted by the
-                                           translated message text */
+extern enum event_type sorted_events[]; /* [E_LAST], sorted by the
+					   translated message text */
 
 const char *get_event_message_text(enum event_type event);
 const char *get_event_sound_tag(enum event_type event);
@@ -165,23 +163,19 @@ void events_free(void);
 
 
 /* Iterates over all events, sorted by the message text string. */
-#define sorted_event_iterate(event)                                          \
-{                                                                            \
-  enum event_type event;                                                     \
-  enum event_type event##_index;                                             \
-  for (event##_index = event_type_begin();                                   \
-       event##_index != event_type_end();                                    \
-       event##_index = event_type_next(event##_index)) {                     \
-    event = sorted_events[event##_index];                                    \
+#define sorted_event_iterate(event)                                           \
+{                                                                             \
+  enum event_type event;                                                      \
+  enum event_type event##_index;                                              \
+  for (event##_index = 0;                                                     \
+       event##_index < E_LAST;                                                \
+       event##_index++) {                                                     \
+    event = sorted_events[event##_index];                                     \
     {
 
-#define sorted_event_iterate_end                                             \
-    }                                                                        \
-  }                                                                          \
+#define sorted_event_iterate_end                                              \
+    }                                                                         \
+  }                                                                           \
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__EVENTS_H */

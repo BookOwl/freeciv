@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -50,8 +50,8 @@ bool popup_theme_suggestion_dialog(const char *theme_name)
   if (current_name == NULL) {
     /* gui_gtk2_default_theme_name is not yet set.
      * This can happen when we load tileset requested at command line and
-     * user has not saved theme information to .freeciv-client-rc-A.B. */
-    current_name = FC_GTK2_DEFAULT_THEME_NAME;
+     * user has not saved theme information to .civclientrc. */
+    current_name = FC_GTK_DEFAULT_THEME_NAME;
   }
 
   dialog = gtk_dialog_new_with_buttons(_("Theme suggested"),
@@ -65,7 +65,7 @@ bool popup_theme_suggestion_dialog(const char *theme_name)
   gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_YES);
   gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog), TRUE);
 
-  fc_snprintf(buf, sizeof(buf),
+  my_snprintf(buf, sizeof(buf),
               _("Tileset suggests using %s theme.\n"
               "You are currently using %s."),
               theme_name, current_name);

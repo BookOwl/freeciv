@@ -6,61 +6,55 @@ groups="Modern", "Asian"
 legend=_("Iraq was founded after the fall of the Ottoman\
  empire. It is encompassing the ancient region of Mesopotamia at the\
  confluence of the Tigris and Euphrates rivers.")
-
-leaders = {
- "name",                        "sex"
- "Faisal I",                    "Male"
- "Saddam Hussein",              "Male"
- "Mohammed Baqir al-Hakim",     "Male"
- "Abdul Salam Arif",            "Male"
- "Bakr Sidqi",                  "Male"
-}
-
-ruler_titles = {
- "government",      "male_title",           "female_title"
- "Communism",       _("Chairman %s"),       _("Chairwoman %s")
- "Fundamentalism",  _("Caliph %s"),         _("Calipha %s")
-}
-
+leader=
+ "Faisal I",
+ "Saddam Hussein",
+ "Mohammed Baqir al-Hakim",
+ "Abdul Salam Arif",
+ "Bakr Sidqi"
+leader_sex="Male", "Male", "Male", "Male", "Male"
 flag = "iraq"
 flag_alt = "iraq_old"
 city_style = "Babylonian"
+
+ruler_titles = { "government",  "male_title",      "female_title"
+	         "Communism",   _("Dictator"),     _("Dictatress")
+}
 
 init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
 
-conflicts_with="Sumerian", "Babylonian"
-civilwar_nations="Assyrian", "Kurdish", "Kuwaiti"
+civilwar_nations="libyan", "iranian"
 
 cities =
  "Baghdad",
- "Al-Basra",
+ "Basra",
  "Mosul",
- "An-Najaf",
+ "Najaf",
  "Kirkuk",
  "Tikrit",
  "Umm Qasr",
  "Nassiriya",
- "Ar-Rutba",
+ "Ar Rutbah",
  "Karbala",
- "As-Sulaymaniya",
+ "As Sulaymaniyah",
  "Samarra",
- "Al-Kut",
- "Ar-Ramadi",
+ "Kut",
+ "Ar Ramadi",
  "Arbil",
  "Kazimain",
- "Madinat as-Sadr",
+ "Sadr City",
  "Baiji",
  "Baquba",
  "Dahuk",
- "Al-Diwaniya",
- "Falluja",
+ "Al Diwaniyah",
+ "Fallujah",
  "Halabja",
- "Al-Hillah",
+ "Al Hillah",
  "Iskandariya",
- "Muqdadiya",
+ "Muqdadiyah",
  "Osiraq",
- "Samawa",
+ "Samawah",
  "Tadji"

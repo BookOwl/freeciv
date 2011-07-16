@@ -2,26 +2,15 @@
 
 name=_("Saxon")
 plural=_("?plural:Saxons")
-groups="Medieval", "Early Modern", "European"
+groups="Medieval", "European"
 legend=_("The Electorate of Saxony was an independent hereditary electorate\
  of the Holy Roman Empire from 1356-1806.")
-
-leaders = {
- "name",                        "sex"
- "Rudolf I",                    "Male"
- "Johann Georg I",		"Male"
- "Friedrich August I",          "Male"
- "Friedrich August II",         "Male"
- "Friedrich August III",        "Male"
-}
-
-ruler_titles = {
- "government",       "male_title",       "female_title"
- "Democracy", _("Minister-President %s"), _("?female:Minister-President %s")
- "Despotism",        _("Duke %s"),       _("Duchess %s")
- "Fundamentalism",   _("Bishop %s"),     _("?female:Bishop %s")
-}
-
+leader =
+ "Rudolf I",
+ "Frederick Augustus I",
+ "Frederick Augustus II",
+ "Frederick Augustus III"
+leader_sex = "Male", "Male", "Male", "Male"
 flag="saxony"
 flag_alt = "-"
 city_style = "European"
@@ -30,10 +19,9 @@ init_techs=""
 init_buildings=""
 init_government="Despotism"
 init_units=""
-civilwar_nations = "sorbian", "hanoverian", "thuringian", "anhaltian"
+civilwar_nations = "german"
 
 cities =
-; Electoral/Royal Saxony
   "Wittenberg",
   "Dresden",
   "Leipzig",
@@ -45,56 +33,15 @@ cities =
   "Merseburg",
   "Königstein",
   "Pirna",
-  "Johanngeorgenstadt",
+  "Johann-Georgenstadt",
   "Zwickau",
   "Freiberg",
   "Grimma",
   "Oschatz",
-  "Meißen",
+  "Meissen",
   "Naumburg",
   "Torgau",
   "Lübben",
   "Guben",
   "Eilenburg",
-  "Düben",
-  "Schwarzenberg",
-  "Marienberg",
-  "Kamenz",
-  "Annaberg",
-  "Flöha",
-  "Dippoldiswalde",
-  "Großenhain",
-  "Borna",
-  "Döbeln",
-  "Rochlitz",
-  "Auerbach",
-  "Oelsnitz",
-
-; Prussian Province of Saxony
-  "Magdeburg",
-  "Halle/Saale",
-  "Mühlhausen",
-  "Halberstadt",
-  "Stendal",
-  "Nordhausen",
-  "Quedlinburg",
-  "Bad Langensalza",
-
-; Saxon duchies
-  "Weimar",
-  "Gotha",
-  "Coburg",
-  "Altenburg",
-  "Meinigen",
-  "Hildburghausen",
-  "Saalfeld",
-  "Lauenburg/Elbe",
-
-; Lower Saxony
-  "Hannover",
-  "Oldenburg",
-  "Osnabrück",
-  "Braunschweig",
-  "Lüneburg",
-  "Göttingen",
-  "Salzgitter"
+  "Düben"

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -57,10 +57,11 @@
 
 /* utility */
 #include "fcintl.h"
+#include "hash.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "rand.h" /* fc_rand() */
+#include "rand.h" /* myrand() */
 #include "registry.h"
 #include "support.h"
 
@@ -72,7 +73,6 @@
 #include "version.h"
 
 /* client */
-#include "chatline_common.h"
 #include "client_main.h"
 #include "servers.h"
 
@@ -108,90 +108,71 @@ extern enum announce_type announce;
 static struct server_list *parse_metaserver_data(fz_FILE *f)
 {
   struct server_list *server_list;
-  struct section_file *file;
+  struct section_file the_file, *file = &the_file;
   int nservers, i, j;
-  const char *latest_ver;
 
   /* This call closes f. */
-  if (!(file = secfile_from_stream(f, TRUE))) {
+  if (!section_file_load_from_stream(file, f)) {
     return NULL;
-  }
-
-  latest_ver = secfile_lookup_str_default(file, NULL, "versions.latest_stable");
-
-  if (latest_ver != NULL) {
-    if (strcmp(latest_ver, VERSION_STRING)) {
-      char vertext[2048];
-
-      fc_snprintf(vertext, sizeof(vertext), _("Latest stable release of freeciv is %s, this is %s."),
-                  latest_ver, VERSION_STRING);
-      output_window_append(ftc_client, vertext);
-    } else {
-      output_window_append(ftc_client, _("You are running latest stable version of freeciv."));
-    }
   }
 
   server_list = server_list_new();
   nservers = secfile_lookup_int_default(file, 0, "main.nservers");
 
   for (i = 0; i < nservers; i++) {
-    const char *host, *port, *version, *state, *message, *nplayers, *nhumans;
+    char *host, *port, *version, *state, *message, *nplayers;
     int n;
     struct server *pserver = (struct server*)fc_malloc(sizeof(struct server));
 
     host = secfile_lookup_str_default(file, "", "server%d.host", i);
-    pserver->host = fc_strdup(host);
+    pserver->host = mystrdup(host);
 
     port = secfile_lookup_str_default(file, "", "server%d.port", i);
     pserver->port = atoi(port);
 
     version = secfile_lookup_str_default(file, "", "server%d.version", i);
-    pserver->version = fc_strdup(version);
+    pserver->version = mystrdup(version);
 
     state = secfile_lookup_str_default(file, "", "server%d.state", i);
-    pserver->state = fc_strdup(state);
+    pserver->state = mystrdup(state);
 
     message = secfile_lookup_str_default(file, "", "server%d.message", i);
-    pserver->message = fc_strdup(message);
+    pserver->message = mystrdup(message);
 
     nplayers = secfile_lookup_str_default(file, "0", "server%d.nplayers", i);
     n = atoi(nplayers);
     pserver->nplayers = n;
 
-    nhumans = secfile_lookup_str_default(file, "-1", "server%d.humans", i);
-    n = atoi(nhumans);
-    pserver->humans = n;
-
-    if (pserver->nplayers > 0) {
-      pserver->players = fc_malloc(pserver->nplayers * sizeof(*pserver->players));
+    if (n > 0) {
+      pserver->players = fc_malloc(n * sizeof(*pserver->players));
     } else {
       pserver->players = NULL;
     }
-
-    for (j = 0; j < pserver->nplayers ; j++) {
-      const char *name, *nation, *type, *host;
+      
+    for (j = 0; j < n; j++) {
+      char *name, *nation, *type, *host;
 
       name = secfile_lookup_str_default(file, "", 
                                         "server%d.player%d.name", i, j);
-      pserver->players[j].name = fc_strdup(name);
+      pserver->players[j].name = mystrdup(name);
 
       type = secfile_lookup_str_default(file, "",
                                         "server%d.player%d.type", i, j);
-      pserver->players[j].type = fc_strdup(type);
+      pserver->players[j].type = mystrdup(type);
 
       host = secfile_lookup_str_default(file, "", 
                                         "server%d.player%d.host", i, j);
-      pserver->players[j].host = fc_strdup(host);
+      pserver->players[j].host = mystrdup(host);
 
       nation = secfile_lookup_str_default(file, "",
                                           "server%d.player%d.nation", i, j);
-      pserver->players[j].nation = fc_strdup(nation);
+      pserver->players[j].nation = mystrdup(nation);
     }
 
     server_list_append(server_list, pserver);
   }
 
-  secfile_destroy(file);
+  section_file_free(file);
   return server_list;
 }
 
@@ -205,7 +186,11 @@ static void my_uname(char *buf, size_t len)
     struct utsname un;
 
     uname(&un);
-    fc_snprintf(buf, len, "%s %s [%s]", un.sysname, un.release, un.machine);
+    my_snprintf(buf, len,
+		"%s %s [%s]",
+		un.sysname,
+		un.release,
+		un.machine);
   }
 #else /* ! HAVE_UNAME */
   /* Fill in here if you are making a binary without sys/utsname.h and know
@@ -266,8 +251,8 @@ static void my_uname(char *buf, size_t len)
 	    ptype = 6;
 	  else
 	    ptype = sysinfo.wProcessorLevel;
-
-          fc_snprintf(cpuname, sizeof(cpuname), "i%d86", ptype);
+	  
+	  my_snprintf(cpuname, sizeof(cpuname), "i%d86", ptype);
 	}
 	break;
 
@@ -291,12 +276,15 @@ static void my_uname(char *buf, size_t len)
 	sz_strlcpy(cpuname, "unknown");
 	break;
     }
-    fc_snprintf(buf, len, "%s %ld.%ld [%s]",
-                osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
+    my_snprintf(buf, len,
+		"%s %ld.%ld [%s]",
+		osname, osvi.dwMajorVersion, osvi.dwMinorVersion,
+		cpuname);
   }
-#else  /* WIN32_NATIVE */
-  fc_snprintf(buf, len, "unknown unknown [unknown]");
-#endif /* WIN32_NATIVE */
+#else
+  my_snprintf(buf, len,
+              "unknown unknown [unknown]");
+#endif
 #endif /* HAVE_UNAME */
 }
 
@@ -313,7 +301,7 @@ static void meta_send_request(struct server_scan *scan)
 
   capstr = fc_url_encode(our_capability);
 
-  fc_snprintf(str, sizeof(str),
+  my_snprintf(str, sizeof(str),
     "POST %s HTTP/1.1\r\n"
     "Host: %s:%d\r\n"
     "User-Agent: Freeciv/%s %s %s\r\n"
@@ -350,12 +338,12 @@ static void meta_read_response(struct server_scan *scan)
     char filename[MAX_PATH];
 
     GetTempPath(sizeof(filename), filename);
-    cat_snprintf(filename, sizeof(filename), "fctmp%d", fc_rand(1000));
+    cat_snprintf(filename, sizeof(filename), "fctmp%d", myrand(1000));
 
     scan->meta.fp = fc_fopen(filename, "w+b");
 #else
     scan->meta.fp = tmpfile();
-#endif /* WIN32_NATIVE */
+#endif
 
     if (!scan->meta.fp) {
       scan->error_func(scan, _("Could not open temp file."));
@@ -380,13 +368,7 @@ static void meta_read_response(struct server_scan *scan)
       rewind(scan->meta.fp);
 
       f = fz_from_stream(scan->meta.fp);
-      if (NULL == f) {
-        fc_snprintf(str, sizeof(str),
-                    _("Failed to read the metaserver data from http://%s."),
-                    scan->meta.name);
-        scan->error_func(scan, str);
-        return;
-      }
+      assert(f != NULL);
 
       /* skip HTTP headers */
       /* XXX: TODO check for magic Content-Type: text/x-ini -vasc */
@@ -404,10 +386,9 @@ static void meta_read_response(struct server_scan *scan)
       scan->meta.fp = NULL;
 
       if (NULL == scan->servers) {
-        fc_snprintf(str, sizeof(str),
-                    _("Failed to parse the metaserver data from http://%s:\n"
-                      "%s."),
-                    scan->meta.name, secfile_error());
+        my_snprintf(str, sizeof(str),
+                    _("Failed to parse the metaserver data from http://%s."),
+                    scan->meta.name);
         scan->error_func(scan, str);
       }
 
@@ -459,7 +440,7 @@ static bool begin_metaserver_scan(struct server_scan *scan)
       name_count = 2;
     }
   }
-#endif /* IPv6 support */
+#endif
 
   /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */  
   for (i = 0; i < name_count; i++) {
@@ -539,9 +520,11 @@ get_metaserver_list(struct server_scan *scan)
   case META_DONE:
     return SCAN_STATUS_DONE;
     break;
+  default:
+    break;
   }
 
-  log_error("Unsupported metaserver state: %d.", scan->meta.state);
+  assert(0);
   return SCAN_STATUS_ERROR;
 }
 
@@ -578,7 +561,7 @@ static void delete_server_list(struct server_list *server_list)
     free(ptmp);
   } server_list_iterate_end;
 
-  server_list_destroy(server_list);
+  server_list_free(server_list);
 }
 
 /**************************************************************************
@@ -618,20 +601,20 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   if (announce == ANNOUNCE_IPV6) {
     family = AF_INET6;
   } else
-#endif /* IPv6 support */
+#endif
   {
     family = AF_INET;
   }
 
   /* Create a socket for broadcasting to servers. */
   if ((sock = socket(family, SOCK_DGRAM, 0)) < 0) {
-    log_error("socket failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "socket failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
                  (char *)&opt, sizeof(opt)) == -1) {
-    log_error("SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
   }
 
   /* Set the UDP Multicast group IP address. */
@@ -639,7 +622,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   memset(&addr, 0, sizeof(addr));
 
 #ifndef IPV6_SUPPORT
-  if (family == AF_INET) {
+  {
 #ifdef HAVE_INET_ATON
     inet_aton(group, &addr.saddr_in4.sin_addr);
 #else  /* HAVE_INET_ATON */
@@ -650,17 +633,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr.sa_family = AF_INET6;
     inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else if (family == AF_INET) {
+  } else {
     inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
 #endif /* IPv6 support */
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
-  } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family in begin_lanserver_scan()");
-
-    return FALSE;
   }
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
@@ -670,14 +647,14 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   ttl = SERVER_LAN_TTL;
   if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, 
                  sizeof(ttl))) {
-    log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 #endif /* HAVE_WINSOCK */
 
   if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, 
                  sizeof(opt))) {
-    log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
@@ -690,11 +667,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
              sockaddr_size(&addr)) < 0) {
     /* This can happen when there's no network connection - it should
      * give an in-game message. */
-    log_error("lanserver scan sendto failed: %s",
-              fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "lanserver scan sendto failed: %s",
+	    fc_strerror(fc_get_errno()));
     return FALSE;
   } else {
-    log_debug("Sending request for server announcement on LAN.");
+    freelog(LOG_DEBUG, ("Sending request for server announcement on LAN."));
   }
 
   fc_closesocket(sock);
@@ -709,9 +686,9 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
   if (setsockopt(scan->sock, SOL_SOCKET, SO_REUSEADDR,
                  (char *)&opt, sizeof(opt)) == -1) {
-    log_error("SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, "SO_REUSEADDR failed: %s", fc_strerror(fc_get_errno()));
   }
-
+                                                                               
   memset(&addr, 0, sizeof(addr));
 
 #ifdef IPV6_SUPPORT
@@ -721,17 +698,10 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr_in6.sin6_addr = in6addr_any;
   } else
 #endif /* IPv6 support */
-  if (family == AF_INET) {
+  {
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT + 1);
     addr.saddr_in4.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    /* This is not only error situation worth assert() This
-     * is error situation that has check (with assert) against
-     * earlier already. */
-    fc_assert(FALSE);
-
-    return FALSE;
   }
 
   if (bind(scan->sock, &addr.saddr, sockaddr_size(&addr)) < 0) {
@@ -790,7 +760,6 @@ get_lan_server_list(struct server_scan *scan)
   char version[256];
   char status[256];
   char players[256];
-  char humans[256];
   char message[1024];
   bool found_new = FALSE;
 
@@ -818,10 +787,9 @@ get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, version, sizeof(version));
     dio_get_string(&din, status, sizeof(status));
     dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, humans, sizeof(humans));
     dio_get_string(&din, message, sizeof(message));
 
-    if (!fc_strcasecmp("none", servername)) {
+    if (!mystrcasecmp("none", servername)) {
       bool nameinfo = FALSE;
 #ifdef IPV6_SUPPORT
       char dst[INET6_ADDRSTRLEN];
@@ -835,15 +803,9 @@ get_lan_server_list(struct server_scan *scan)
         if (fromend.saddr.sa_family == AF_INET6) {
           inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
                     dst, sizeof(dst));
-        } else if (fromend.saddr.sa_family == AF_INET) {
-          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
         } else {
-	  fc_assert(FALSE);
-
-	  log_error("Unsupported address family in get_lan_server_list()");
-
-	  fc_snprintf(dst, sizeof(dst), "Unknown");
-	}
+          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
+        }
       }
 #else  /* IPv6 support */
       const char *dst = NULL;
@@ -866,26 +828,26 @@ get_lan_server_list(struct server_scan *scan)
 
     /* UDP can send duplicate or delayed packets. */
     server_list_iterate(scan->servers, aserver) {
-      if (0 == fc_strcasecmp(aserver->host, servername)
+      if (0 == mystrcasecmp(aserver->host, servername)
           && aserver->port == port) {
 	duplicate = TRUE;
 	break;
-      }
+      } 
     } server_list_iterate_end;
     if (duplicate) {
       continue;
     }
 
-    log_debug("Received a valid announcement from a server on the LAN.");
-
+    freelog(LOG_DEBUG,
+            ("Received a valid announcement from a server on the LAN."));
+    
     pserver = fc_malloc(sizeof(*pserver));
-    pserver->host = fc_strdup(servername);
+    pserver->host = mystrdup(servername);
     pserver->port = port;
-    pserver->version = fc_strdup(version);
-    pserver->state = fc_strdup(status);
+    pserver->version = mystrdup(version);
+    pserver->state = mystrdup(status);
     pserver->nplayers = atoi(players);
-    pserver->humans = atoi(humans);
-    pserver->message = fc_strdup(message);
+    pserver->message = mystrdup(message);
     pserver->players = NULL;
     found_new = TRUE;
 

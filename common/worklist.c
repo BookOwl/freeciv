@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -56,12 +56,12 @@ void worklist_init(struct worklist *pwl)
 ****************************************************************************/
 int worklist_length(const struct worklist *pwl)
 {
-  fc_assert_ret_val(pwl->length >= 0 && pwl->length <= MAX_LEN_WORKLIST, -1);
+  assert(pwl->length >= 0 && pwl->length <= MAX_LEN_WORKLIST);
   return pwl->length;
 }
 
 /****************************************************************
-  Returns whether worklist has no elements.
+...
 ****************************************************************/
 bool worklist_is_empty(const struct worklist *pwl)
 {
@@ -99,7 +99,7 @@ bool worklist_peek_ith(const struct worklist *pwl,
 }
 
 /****************************************************************
-  Remove first element from worklist.
+...
 ****************************************************************/
 void worklist_advance(struct worklist *pwl)
 {
@@ -107,16 +107,16 @@ void worklist_advance(struct worklist *pwl)
 }  
 
 /****************************************************************
-  Copy contents from worklist src to worklist dst.
+...
 ****************************************************************/
 void worklist_copy(struct worklist *dst, const struct worklist *src)
 {
-  fc_assert_ret(sizeof(*dst) == sizeof(*src));
+  assert(sizeof(*dst) == sizeof(*src));
   memcpy(dst, src, sizeof(*dst));
 }
 
 /****************************************************************
-  Remove element from position idx.
+...
 ****************************************************************/
 void worklist_remove(struct worklist *pwl, int idx)
 {

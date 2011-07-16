@@ -14,10 +14,6 @@
 #ifndef FC__TEXT_H
 #define FC__TEXT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "unitlist.h"
 
@@ -31,8 +27,6 @@ const char *popup_info_text(struct tile *ptile);
 const char *concat_tile_activity_text(struct tile *ptile);
 const char *get_nearest_city_text(struct city *pcity, int sq_dist);
 const char *unit_description(struct unit *punit);
-const char *get_airlift_text(const struct unit_list *punits,
-                             const struct city *pdest);
 const char *science_dialog_text(void);
 const char *get_science_target_text(double *percent);
 const char *get_science_goal_text(Tech_type_id goal);
@@ -58,9 +52,5 @@ const char *text_happiness_cities(const struct city *pcity);
 const char *text_happiness_luxuries(const struct city *pcity);
 const char *text_happiness_units(const struct city *pcity);
 const char *text_happiness_wonders(const struct city *pcity);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__TEXT_H */

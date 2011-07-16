@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>		/* getenv() */
@@ -50,9 +50,9 @@ const char * const our_capability = our_capability_internal;
  * capability of the executable at the other end of the connection.
  * So for the client, the capability of the server is in
  * client.conn.capability, and for the server, the capabilities of
- * connected clients are in player_by_number(i)->conn.capability
+ * connected clients are in valid_player_by_number(i)->conn.capability
  * The client now also knows the capabilities of other clients,
- * via player_by_number(i)->conn.capability.
+ * via valid_player_by_number(i)->conn.capability.
  *
  * Note the connection struct is a parameter to the functions to send and
  * receive packets, which may be convenient for adjusting how a packet is
@@ -75,9 +75,6 @@ const char * const our_capability = our_capability_internal;
  * The actual capability string is now defined in version.in.
  */
 
-/**************************************************************************
-  Setup our internal network capability string.
-**************************************************************************/
 void init_our_capability(void)
 {
   const char *s;

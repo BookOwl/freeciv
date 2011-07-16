@@ -23,53 +23,45 @@
 
    Note id values should probably be unsigned int: here leave as plain int
    so can use pointers to pcity->id etc.
+
+   On probable errors, print LOG_ERROR messages and persevere,
+   unless IDEX_DIE set.
 ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
-#include "log.h"
+#include <assert.h>
 
-/* common */
 #include "city.h"
+#include "hash.h"
+#include "log.h"
 #include "unit.h"
 
 #include "idex.h"
 
 
-/* struct city_hash. */
-#define SPECHASH_TAG city
-#define SPECHASH_KEY_TYPE int
-#define SPECHASH_DATA_TYPE struct city *
-#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
-#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
-#include "spechash.h"
-
-/* struct unit_hash. */
-#define SPECHASH_TAG unit
-#define SPECHASH_KEY_TYPE int
-#define SPECHASH_DATA_TYPE struct unit *
-#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
-#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
-#include "spechash.h"
+#ifndef IDEX_DIE
+#define IDEX_DIE FALSE
+#endif
+#define LOG_IDEX_ERR (IDEX_DIE ? LOG_FATAL : LOG_ERROR)
 
 
 /* "Global" data: */
-static struct city_hash *idex_city_hash = NULL;
-static struct unit_hash *idex_unit_hash = NULL;
+static struct hash_table *idex_city_hash = NULL;
+static struct hash_table *idex_unit_hash = NULL;
 
 /**************************************************************************
    Initialize.  Should call this at the start before use.
 ***************************************************************************/
 void idex_init(void)
 {
-  fc_assert_ret(idex_city_hash == NULL);
-  fc_assert_ret(idex_unit_hash == NULL);
+  assert(idex_city_hash == NULL);
+  assert(idex_unit_hash == NULL);
 
-  idex_city_hash = city_hash_new();
-  idex_unit_hash = unit_hash_new();
+  idex_city_hash = hash_new(hash_fval_keyval, hash_fcmp_keyval);
+  idex_unit_hash = hash_new(hash_fval_keyval, hash_fcmp_keyval);
 }
 
 /**************************************************************************
@@ -77,10 +69,10 @@ void idex_init(void)
 ***************************************************************************/
 void idex_free(void)
 {
-  city_hash_destroy(idex_city_hash);
+  hash_free(idex_city_hash);
   idex_city_hash = NULL;
 
-  unit_hash_destroy(idex_unit_hash);
+  hash_free(idex_unit_hash);
   idex_unit_hash = NULL;
 }
 
@@ -90,13 +82,17 @@ void idex_free(void)
 ***************************************************************************/
 void idex_register_city(struct city *pcity)
 {
-  struct city *old;
-
-  city_hash_replace_full(idex_city_hash, pcity->id, pcity, NULL, &old);
-  fc_assert_ret_msg(NULL == old,
-                    "IDEX: city collision: new %d %p %s, old %d %p %s",
-                    pcity->id, (void *) pcity, city_name(pcity),
-                    old->id, (void *) old, city_name(old));
+  struct city *old = (struct city *)
+    hash_replace(idex_city_hash, FC_INT_TO_PTR(pcity->id), pcity);
+  if (old) {
+    /* error */
+    freelog(LOG_IDEX_ERR, "IDEX: city collision: new %d %p %s, old %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity),
+	    old->id, (void*)old, city_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  }
 }
 
 /**************************************************************************
@@ -105,13 +101,19 @@ void idex_register_city(struct city *pcity)
 ***************************************************************************/
 void idex_register_unit(struct unit *punit)
 {
-  struct unit *old;
-
-  unit_hash_replace_full(idex_unit_hash, punit->id, punit, NULL, &old);
-  fc_assert_ret_msg(NULL == old,
-                    "IDEX: unit collision: new %d %p %s, old %d %p %s",
-                    punit->id, (void *) punit, unit_rule_name(punit),
-                    old->id, (void *) old, unit_rule_name(old));
+  struct unit *old = (struct unit *)
+    hash_replace(idex_unit_hash, FC_INT_TO_PTR(punit->id), punit);
+  if (old) {
+    /* error */
+    freelog(LOG_IDEX_ERR, "IDEX: unit collision: new %d %p %s, old %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit),
+	    old->id, (void*)old,
+	    unit_rule_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  }
 }
 
 /**************************************************************************
@@ -120,16 +122,25 @@ void idex_register_unit(struct unit *punit)
 ***************************************************************************/
 void idex_unregister_city(struct city *pcity)
 {
-  struct city *old;
-
-  city_hash_remove_full(idex_city_hash, pcity->id, NULL, &old);
-  fc_assert_ret_msg(NULL != old,
-                    "IDEX: city unreg missing: %d %p %s",
-                    pcity->id, (void *) pcity, city_name(pcity));
-  fc_assert_ret_msg(old == pcity, "IDEX: city unreg mismatch: "
-                    "unreg %d %p %s, old %d %p %s",
-                    pcity->id, (void *) pcity, city_name(pcity),
-                    old->id, (void *) old, city_name(old));
+  struct city *old = (struct city *)
+    hash_delete_entry(idex_city_hash, FC_INT_TO_PTR(pcity->id));
+  if (!old) {
+    /* error */
+    freelog(LOG_IDEX_ERR, "IDEX: city unreg missing: %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  } else if (old != pcity) {
+    /* error */
+    freelog(LOG_IDEX_ERR,
+	    "IDEX: city unreg mismatch: unreg %d %p %s, old %d %p %s",
+	    pcity->id, (void*)pcity, city_name(pcity),
+	    old->id, (void*)old, city_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  }
 }
 
 /**************************************************************************
@@ -138,16 +149,28 @@ void idex_unregister_city(struct city *pcity)
 ***************************************************************************/
 void idex_unregister_unit(struct unit *punit)
 {
-  struct unit *old;
-
-  unit_hash_remove_full(idex_unit_hash, punit->id, NULL, &old);
-  fc_assert_ret_msg(NULL != old,
-                    "IDEX: unit unreg missing: %d %p %s",
-                    punit->id, (void *) punit, unit_rule_name(punit));
-  fc_assert_ret_msg(old == punit, "IDEX: unit unreg mismatch: "
-                    "unreg %d %p %s, old %d %p %s",
-                    punit->id, (void *) punit, unit_rule_name(punit),
-                    old->id, (void*) old, unit_rule_name(old));
+  struct unit *old = (struct unit *)
+    hash_delete_entry(idex_unit_hash, FC_INT_TO_PTR(punit->id));
+  if (!old) {
+    /* error */
+    freelog(LOG_IDEX_ERR, "IDEX: unit unreg missing: %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  } else if (old != punit) {
+    /* error */
+    freelog(LOG_IDEX_ERR,
+	    "IDEX: unit unreg mismatch: unreg %d %p %s, old %d %p %s",
+	    punit->id, (void*)punit,
+	    unit_rule_name(punit),
+	    old->id, (void*)old,
+	    unit_rule_name(old));
+    if (IDEX_DIE) {
+      die("byebye");
+    }
+  }
 }
 
 /**************************************************************************
@@ -156,10 +179,7 @@ void idex_unregister_unit(struct unit *punit)
 ***************************************************************************/
 struct city *idex_lookup_city(int id)
 {
-  struct city *pcity;
-
-  city_hash_lookup(idex_city_hash, id, &pcity);
-  return pcity;
+  return (struct city *) hash_lookup_data(idex_city_hash, FC_INT_TO_PTR(id));
 }
 
 /**************************************************************************
@@ -168,8 +188,5 @@ struct city *idex_lookup_city(int id)
 ***************************************************************************/
 struct unit *idex_lookup_unit(int id)
 {
-  struct unit *punit;
-
-  unit_hash_lookup(idex_unit_hash, id, &punit);
-  return punit;
+  return (struct unit *) hash_lookup_data(idex_unit_hash, FC_INT_TO_PTR(id));
 }

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -24,9 +24,22 @@
 #include "repodlgs.h"
 
 /**************************************************************************
+  Update all report dialogs.
+**************************************************************************/
+void update_report_dialogs(void)
+{
+  if (!is_report_dialogs_frozen()) {
+    activeunits_report_dialog_update();
+    economy_report_dialog_update();
+    city_report_dialog_update(); 
+    science_dialog_update();
+  }
+}
+
+/**************************************************************************
   Update the science report.
 **************************************************************************/
-void real_science_report_dialog_update(void)
+void science_dialog_update(void)
 {
   /* PORTME */
 }
@@ -35,7 +48,7 @@ void real_science_report_dialog_update(void)
   Display the science report.  Optionally raise it.
   Typically triggered by F6.
 **************************************************************************/
-void science_report_dialog_popup(bool raise)
+void popup_science_dialog(bool raise)
 {
   /* PORTME */
 }
@@ -43,7 +56,7 @@ void science_report_dialog_popup(bool raise)
 /**************************************************************************
   Update the economy report.
 **************************************************************************/
-void real_economy_report_dialog_update(void)
+void economy_report_dialog_update(void)
 {
   /* PORTME */
 }
@@ -52,7 +65,7 @@ void real_economy_report_dialog_update(void)
   Display the economy report.  Optionally raise it.
   Typically triggered by F5.
 **************************************************************************/
-void economy_report_dialog_popup(bool raise)
+void popup_economy_report_dialog(bool raise)
 {
   /* PORTME */
 }
@@ -60,7 +73,7 @@ void economy_report_dialog_popup(bool raise)
 /**************************************************************************
   Update the units report.
 **************************************************************************/
-void real_units_report_dialog_update(void)
+void activeunits_report_dialog_update(void)
 {
   /* PORTME */
 }
@@ -69,7 +82,7 @@ void real_units_report_dialog_update(void)
   Display the units report.  Optionally raise it.
   Typically triggered by F2.
 **************************************************************************/
-void units_report_dialog_popup(bool raise)
+void popup_activeunits_report_dialog(bool raise)
 {
   /* PORTME */
 }
@@ -77,7 +90,15 @@ void units_report_dialog_popup(bool raise)
 /****************************************************************
   Show a dialog with player statistics at endgame.
 *****************************************************************/
-void endgame_report_dialog_popup(const struct packet_endgame_report *packet)
+void popup_endgame_report_dialog(struct packet_endgame_report *packet)
+{
+  /* PORTME */
+}
+
+/*************************************************************************
+  Show a dialog with the server options.
+*************************************************************************/
+void popup_settable_options_dialog(void)
 {
   /* PORTME */
 }
@@ -85,7 +106,7 @@ void endgame_report_dialog_popup(const struct packet_endgame_report *packet)
 /****************************************************************************
   Resize and redraw the requirement tree.
 ****************************************************************************/
-void science_report_dialog_redraw(void)
+void science_dialog_redraw(void)
 {
   /* PORTME */
 }

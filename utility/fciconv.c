@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -32,7 +33,6 @@
 #include <libcharset.h>
 #endif
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
@@ -42,15 +42,28 @@
 static bool is_init = FALSE;
 static char convert_buffer[4096];
 
+/*
+  See PR#40028 for additional explanation.
+
+  The data_encoding is used in all data files and network transactions.
+  This is UTF-8.  Currently, the rulesets are in latin1 (ISO-8859-1).
+
+  The internal_encoding is used internally within freeciv.  This is always
+  UTF-8 at the server, but can be configured by the GUI client.  (When your
+  charset is the same as your GUI library, GUI writing is easier.)
+
+  The local_encoding is the one supported on the command line.  This is not
+  under our control, and all output to the command line must be converted.
+*/
 #ifdef HAVE_ICONV
 static const char *local_encoding, *data_encoding, *internal_encoding;
 static const char *transliteration_string;
-#else  /* HAVE_ICONV */
+#else
 /* Hack to confuse the compiler into working. */
 #  define local_encoding get_local_encoding()
 #  define data_encoding get_local_encoding()
 #  define internal_encoding get_local_encoding()
-#endif /* HAVE_ICONV */
+#endif
 
 /***************************************************************************
   Must be called during the initialization phase of server and client to
@@ -82,22 +95,22 @@ void init_character_encodings(const char *my_internal_encoding,
   if (!local_encoding) {
 #ifdef HAVE_LIBCHARSET
     local_encoding = locale_charset();
-#else  /* HAVE_LIBCHARSET */
+#else
 #ifdef HAVE_LANGINFO_CODESET
     local_encoding = nl_langinfo(CODESET);
-#else  /* HAVE_LANGINFO_CODESET */
+#else
     local_encoding = "";
-#endif /* HAVE_LANGINFO_CODESET */
-#endif /* HAVE_LIBCHARSET */
-    if (fc_strcasecmp(local_encoding, "ANSI_X3.4-1968") == 0
-        || fc_strcasecmp(local_encoding, "ASCII") == 0
-        || fc_strcasecmp(local_encoding, "US-ASCII") == 0) {
+#endif
+#endif
+    if (mystrcasecmp(local_encoding, "ANSI_X3.4-1968") == 0
+	|| mystrcasecmp(local_encoding, "ASCII") == 0
+	|| mystrcasecmp(local_encoding, "US-ASCII") == 0) {
       /* HACK: use latin1 instead of ascii in typical cases when the
        * encoding is unconfigured. */
       local_encoding = "ISO-8859-1";
     }
 
-    if (fc_strcasecmp(local_encoding, "646") == 0) {
+    if (mystrcasecmp(local_encoding, "646") == 0) {
       /* HACK: On Solaris the encoding always comes up as "646" (ascii),
        * which iconv doesn't understand.  Work around it by using UTF-8
        * instead. */
@@ -122,18 +135,19 @@ void init_character_encodings(const char *my_internal_encoding,
 #endif
 
 #ifdef DEBUG
+  /* FIXME: Remove this output when this code has stabilized. */
   fprintf(stderr, "Encodings: Data=%s, Local=%s, Internal=%s\n",
-          data_encoding, local_encoding, internal_encoding);
-#endif /* DEBUG */
+	     data_encoding, local_encoding, internal_encoding);
+#endif
 
-#else  /* HAVE_ICONV */
-   /* log_* may not work at this point. */
+#else
+   /* freelog may not work at this point. */
   fprintf(stderr,
-          _("You are running Freeciv without using iconv. Unless\n"
-            "you are using the latin1 character set, some characters\n"
-            "may not be displayed properly. You can download iconv\n"
-            "at http://gnu.org/.\n"));
-#endif /* HAVE_ICONV */
+	     _("You are running Freeciv without using iconv.  Unless\n"
+	       "you are using the latin1 character set, some characters\n"
+	       "may not be displayed properly.  You can download iconv\n"
+	       "at http://gnu.org/.\n"));
+#endif
 
   is_init = TRUE;
 }
@@ -143,7 +157,7 @@ void init_character_encodings(const char *my_internal_encoding,
 ***************************************************************************/
 const char *get_data_encoding(void)
 {
-  fc_assert_ret_val(is_init, NULL);
+  assert(is_init);
   return data_encoding;
 }
 
@@ -153,19 +167,19 @@ const char *get_data_encoding(void)
 const char *get_local_encoding(void)
 {
 #ifdef HAVE_ICONV
-  fc_assert_ret_val(is_init, NULL);
+  assert(is_init);
   return local_encoding;
-#else  /* HAVE_ICONV */
+#else
 #  ifdef HAVE_LIBCHARSET
   return locale_charset();
-#  else  /* HAVE_LIBCHARSET */
+#  else
 #    ifdef HAVE_LANGINFO_CODESET
   return nl_langinfo(CODESET);
-#    else  /* HAVE_LANGINFO_CODESET */
+#    else
   return "";
-#    endif /* HAVE_LANGINFO_CODESET */
-#  endif /* HAVE_LIBCHARSET */
-#endif /* HAVE_ICONV */
+#    endif
+#  endif
+#endif
 }
 
 /***************************************************************************
@@ -174,7 +188,7 @@ const char *get_local_encoding(void)
 ***************************************************************************/
 const char *get_internal_encoding(void)
 {
-  fc_assert_ret_val(is_init, NULL);
+  assert(is_init);
   return internal_encoding;
 }
 
@@ -196,19 +210,19 @@ char *convert_string(const char *text,
   size_t from_len = strlen(text) + 1, to_len;
   bool alloc = (buf == NULL);
 
-  fc_assert_ret_val(is_init && NULL != from && NULL != to, NULL);
-  fc_assert_ret_val(NULL != text, NULL);
+  assert(is_init && from != NULL && to != NULL);
+  assert(text != NULL);
 
   if (cd == (iconv_t) (-1)) {
     /* TRANS: "Could not convert text from <encoding a> to <encoding b>:" 
      *        <externally translated error string>."*/
-    log_error(_("Could not convert text from %s to %s: %s"),
-              from, to, fc_strerror(fc_get_errno()));
+    freelog(LOG_ERROR, _("Could not convert text from %s to %s: %s"), from,
+	    to, fc_strerror(fc_get_errno()));
     /* The best we can do? */
     if (alloc) {
-      return fc_strdup(text);
+      return mystrdup(text);
     } else {
-      fc_snprintf(buf, bufsz, "%s", text);
+      my_snprintf(buf, bufsz, "%s", text);
       return buf;
     }
   }
@@ -237,16 +251,17 @@ char *convert_string(const char *text,
     res = iconv(cd, (ICONV_CONST char **)&mytext, &flen, &myresult, &tlen);
     if (res == (size_t) (-1)) {
       if (errno != E2BIG) {
-        /* Invalid input. */
-        log_error("Invalid string conversion from %s to %s.", from, to);
-        iconv_close(cd);
-        if (alloc) {
-          free(buf);
-          return fc_strdup(text); /* The best we can do? */
-        } else {
-          fc_snprintf(buf, bufsz, "%s", text);
-          return buf;
-        }
+	/* Invalid input. */
+	freelog(LOG_ERROR, "Invalid string conversion from %s to %s.",
+		from, to);
+	iconv_close(cd);
+	if (alloc) {
+	  free(buf);
+	  return mystrdup(text); /* The best we can do? */
+	} else {
+	  my_snprintf(buf, bufsz, "%s", text);
+	  return buf;
+	}
       }
     } else {
       /* Success. */
@@ -260,7 +275,7 @@ char *convert_string(const char *text,
     if (alloc) {
       /* Not enough space; try again. */
       buf[to_len - 1] = 0;
-      log_verbose("   Result was '%s'.", buf);
+      freelog(LOG_VERBOSE, "   Result was '%s'.", buf);
 
       free(buf);
       to_len *= 2;
@@ -274,7 +289,7 @@ char *convert_string(const char *text,
     buf[bufsz - 1] = '\0';
     return buf;
   } else {
-    return fc_strdup(text);
+    return mystrdup(text);
   }
 #endif /* HAVE_ICONV */
 }
@@ -285,7 +300,7 @@ char *src ## _to_ ## dst ## _string_malloc(const char *text)                \
   const char *encoding1 = (dst ## _encoding);				    \
   char encoding[strlen(encoding1) + strlen(transliteration_string) + 1];    \
 									    \
-  fc_snprintf(encoding, sizeof(encoding),				    \
+  my_snprintf(encoding, sizeof(encoding),				    \
 	      "%s%s", encoding1, transliteration_string);		    \
   return convert_string(text, (src ## _encoding),			    \
 			(encoding), NULL, 0);				    \
@@ -298,7 +313,7 @@ char *src ## _to_ ## dst ## _string_buffer(const char *text,                \
   const char *encoding1 = (dst ## _encoding);				    \
   char encoding[strlen(encoding1) + strlen(transliteration_string) + 1];    \
 									    \
-  fc_snprintf(encoding, sizeof(encoding),				    \
+  my_snprintf(encoding, sizeof(encoding),				    \
 	      "%s%s", encoding1, transliteration_string);		    \
   return convert_string(text, (src ## _encoding),			    \
                         encoding, buf, bufsz);				    \
@@ -334,7 +349,7 @@ void fc_fprintf(FILE *stream, const char *format, ...)
   static bool recursion = FALSE;
 
   /* The recursion variable is used to prevent a recursive loop.  If
-   * an iconv conversion fails, then log_* will be called and an
+   * an iconv conversion fails, then freelog will be called and an
    * fc_fprintf will be done.  But below we do another iconv conversion
    * on the error messages, which is of course likely to fail also. */
   if (recursion) {
@@ -342,7 +357,7 @@ void fc_fprintf(FILE *stream, const char *format, ...)
   }
 
   va_start(ap, format);
-  fc_vsnprintf(string, sizeof(string), format, ap);
+  my_vsnprintf(string, sizeof(string), format, ap);
   va_end(ap);
 
   recursion = TRUE;
@@ -373,9 +388,8 @@ size_t get_internal_string_length(const char *text)
   int i = 0;
 
   convert_string(text, internal_encoding, "UCS-4",
-                 (char *)text2, sizeof(text2));
-  /* Check BOM */
-  fc_assert_ret_val(0x0000FEFF != text2[0]&& 0xFFFE0000!= text2[0], -1);
+		 (char *)text2, sizeof(text2));
+  assert(text2[0] != 0x0000FEFF && text2[0] != 0xFFFE0000); /* No BOM */
   for (i = 0; ; i++) {
     if (text2[i] == 0) {
       return i;

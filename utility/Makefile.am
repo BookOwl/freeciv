@@ -1,31 +1,25 @@
 ## Process this file with automake to produce Makefile.in
 
+SUBDIRS = ftwl
+
 noinst_LTLIBRARIES = libcivutility.la
 
 libcivutility_la_SOURCES = \
 		astring.c       \
 		astring.h       \
-		bitvector.c     \
-		bitvector.h     \
 		capability.c	\
 		capability.h	\
-		distribute.c	\
-		distribute.h	\
-		fc_utf8.c	\
-		fc_utf8.h	\
-		fcbacktrace.c	\
-		fcbacktrace.h	\
 		fciconv.c	\
 		fciconv.h	\
+		distribute.c	\
+		distribute.h	\
 		fcintl.c	\
 		fcintl.h	\
-		fcthread.c	\
-		fcthread.h	\
 		generate_specenum.py	\
-		genhash.c	\
-		genhash.h	\
 		genlist.c	\
 		genlist.h	\
+		hash.c		\
+		hash.h		\
 		inputfile.c	\
 		inputfile.h	\
 		ioz.c		\
@@ -34,8 +28,6 @@ libcivutility_la_SOURCES = \
 		iterator.h	\
 		log.c		\
 		log.h		\
-		netfile.c	\
-		netfile.h	\
 		netintf.c	\
 		netintf.h	\
 		pqueue.c	\
@@ -46,10 +38,11 @@ libcivutility_la_SOURCES = \
 		rand.h		\
 		registry.c	\
 		registry.h	\
+		sbuffer.c	\
+		sbuffer.h	\
 		shared.c	\
 		shared.h	\
 		specenum_gen.h	\
-		spechash.h	\
 		speclist.h	\
 		specvec.h	\
 		string_vector.c	\

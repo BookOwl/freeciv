@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -36,18 +36,15 @@
 /* common */
 #include "dataio.h"
 #include "game.h"
-#include "mapimg.h"
 #include "version.h"
 
 /* client */
 #include "client_main.h"
-#include "climisc.h"
 #include "clinet.h"
+#include "climisc.h"
 #include "connectdlg_common.h"
-#include "ggzclient.h"
 #include "packhand.h"
 #include "servers.h"
-#include "update_queue.h"
 
 /* client/gui-gtk-2.0 */
 #include "chatline.h"
@@ -57,13 +54,16 @@
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
-#include "optiondlg.h"
 #include "plrdlg.h"             /* get_flag() */
 #include "repodlgs.h"
 #include "voteinfo_bar.h"
 
 #include "pages.h"
 
+GtkWidget *start_message_area;
+
+static GtkWidget *start_options_table;
+GtkWidget *take_button, *ready_button, *nation_button;
 
 static GtkWidget *scenario_description;
 static GtkWidget *scenario_filename;
@@ -76,9 +76,9 @@ static GtkWidget *server_playerlist_view;
 static GtkTreeSelection *load_selection, *scenario_selection;
 static GtkTreeSelection *meta_selection, *lan_selection;
 
-/* This is the current page. Invalid value at start, to be sure that it won't
- * be catch throught a switch() statement. */
-static enum client_pages current_page = -1;
+/* This is the current page, or the next we will switch to when the idle
+ * callback will be called. */
+static enum client_pages next_page = -1;
 
 static guint meta_scan_timer, lan_scan_timer;
 static struct server_scan *meta_scan, *lan_scan;
@@ -88,6 +88,8 @@ static GQueue *statusbar_queue;
 static guint statusbar_timer = 0;
 
 static GtkWidget *ruleset_combo;
+
+static bool save_scenario = FALSE;
 
 static void connection_state_reset(void);
 
@@ -158,7 +160,7 @@ static gboolean intro_expose(GtkWidget *w, GdkEventExpose *ev)
     pango_layout_set_font_description(layout,
          pango_font_description_from_string("Sans Bold 10"));
 
-    fc_snprintf(msgbuf, sizeof(msgbuf), "%s%s",
+    my_snprintf(msgbuf, sizeof(msgbuf), "%s%s",
                 word_version(), VERSION_STRING);
     pango_layout_set_text(layout, msgbuf, -1);
 
@@ -183,7 +185,7 @@ static void ggz_login(void)
 {
   set_client_page(PAGE_GGZ);
 }
-#endif /* GGZ_GTK */
+#endif
 
 /**************************************************************************
   create the main page.
@@ -221,7 +223,7 @@ GtkWidget *create_main_page(void)
     gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
     gtk_box_pack_start(GTK_BOX(vbox), label, FALSE, FALSE, 0);
   }
-#endif /* IS_BETA_VERSION */
+#endif
 
   table = gtk_table_new(3, 2, TRUE);
   align = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
@@ -260,7 +262,7 @@ GtkWidget *create_main_page(void)
   gtk_size_group_add_widget(size, button);
   gtk_table_attach_defaults(GTK_TABLE(table), button, 1, 2, 1, 2);
   g_signal_connect(button, "clicked", ggz_login, NULL);
-#endif /* GGZ_GTK */
+#endif
 
   button = gtk_button_new_from_stock(GTK_STOCK_QUIT);
   gtk_size_group_add_widget(size, button);
@@ -272,320 +274,9 @@ GtkWidget *create_main_page(void)
 }
 
 
-/****************************************************************************
-                            GENERIC SAVE DIALOG
-****************************************************************************/
-typedef void (*save_dialog_action_fn_t) (const char *filename);
-typedef struct fileinfo_list * (*save_dialog_files_fn_t) (void);
-
-struct save_dialog {
-  GtkDialog *shell;
-  GtkTreeView *tree_view;
-  GtkEntry *entry;
-  save_dialog_action_fn_t action;
-  save_dialog_files_fn_t files;
-};
-
-enum save_dialog_columns {
-  SD_COL_PRETTY_NAME = 0,
-  SD_COL_FULL_PATH,
-
-  SD_COL_NUM
-};
-
-enum save_dialog_response {
-  SD_RES_BROWSE,
-  SD_RES_DELETE,
-  SD_RES_SAVE
-};
-
-/****************************************************************************
-  Create a new file list store.
-****************************************************************************/
-static inline GtkListStore *save_dialog_store_new(void)
-{
-  return gtk_list_store_new(SD_COL_NUM,
-                            G_TYPE_STRING,      /* SD_COL_PRETTY_NAME */
-                            G_TYPE_STRING);     /* SD_COL_FULL_PATH */
-}
-
-/****************************************************************************
-  Fill a file list store with 'files'.
-****************************************************************************/
-static void save_dialog_store_update(GtkListStore *store,
-                                     const struct fileinfo_list *files)
-{
-  GtkTreeIter iter;
-
-  gtk_list_store_clear(store);
-  fileinfo_list_iterate(files, pfile) {
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       SD_COL_PRETTY_NAME, pfile->name,
-                       SD_COL_FULL_PATH, pfile->fullname,
-                       -1);
-  } fileinfo_list_iterate_end;
-}
-
-/****************************************************************************
-  Update a save dialog.
-****************************************************************************/
-static void save_dialog_update(struct save_dialog *pdialog)
-{
-  struct fileinfo_list *files;
-
-  fc_assert_ret(NULL != pdialog);
-
-  /* Update the store. */
-  files = pdialog->files();
-  save_dialog_store_update(GTK_LIST_STORE
-                           (gtk_tree_view_get_model(pdialog->tree_view)),
-                           files);
-  fileinfo_list_destroy(files);
-}
-
 /**************************************************************************
-  Callback for save_dialog_file_chooser_new().
-**************************************************************************/
-static void save_dialog_file_chooser_callback(GtkWidget *widget,
-                                              gint response, gpointer data)
-{
-  if (response == GTK_RESPONSE_OK) {
-    save_dialog_action_fn_t action = data;
-    gchar *filename = g_filename_to_utf8(gtk_file_chooser_get_filename
-                                         (GTK_FILE_CHOOSER(widget)),
-                                         -1, NULL, NULL, NULL);
-
-    if (NULL != filename) {
-      action(filename);
-      g_free(filename);
-    }
-  }
-  gtk_widget_destroy(widget);
-}
-
-/****************************************************************************
-  Create a file chooser for both the load and save commands.
-****************************************************************************/
-static void save_dialog_file_chooser_popup(const char *title,
-                                           GtkFileChooserAction action,
-                                           save_dialog_action_fn_t cb)
-{
-  GtkWidget *filechoose;
-
-  /* Create the chooser */
-  filechoose = gtk_file_chooser_dialog_new(title, GTK_WINDOW(toplevel), action,
-      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-      action == GTK_FILE_CHOOSER_ACTION_SAVE ? GTK_STOCK_SAVE : GTK_STOCK_OPEN,
-      GTK_RESPONSE_OK, NULL);
-  setup_dialog(filechoose, toplevel);
-  gtk_window_set_position(GTK_WINDOW(filechoose), GTK_WIN_POS_MOUSE);
-
-  g_signal_connect(filechoose, "response",
-                   G_CALLBACK(save_dialog_file_chooser_callback), cb);
-
-  /* Display that dialog */
-  gtk_window_present(GTK_WINDOW(filechoose));
-}
-
-/****************************************************************************
-  Handle save dialog response.
-****************************************************************************/
-static void save_dialog_response_callback(GtkWidget *w, gint response,
-                                          gpointer data)
-{
-  struct save_dialog *pdialog = data;
-
-  switch (response) {
-  case SD_RES_BROWSE:
-    save_dialog_file_chooser_popup(_("Select Location to Save"),
-                                   GTK_FILE_CHOOSER_ACTION_SAVE,
-                                   pdialog->action);
-    break;
-  case SD_RES_DELETE:
-    {
-      GtkTreeSelection *selection;
-      GtkTreeModel *model;
-      GtkTreeIter iter;
-      const gchar *full_path;
-
-      selection = gtk_tree_view_get_selection(pdialog->tree_view);
-      if (!gtk_tree_selection_get_selected(selection, &model, &iter)) {
-        return;
-      }
-
-      gtk_tree_model_get(model, &iter, SD_COL_FULL_PATH, &full_path, -1);
-      fc_remove(full_path);
-      save_dialog_update(pdialog);
-    }
-    return;
-  case SD_RES_SAVE:
-    {
-      const char *text = gtk_entry_get_text(pdialog->entry);
-      gchar *filename = g_filename_from_utf8(text, -1, NULL, NULL, NULL);
-
-      if (NULL == filename) {
-        return;
-      }
-      pdialog->action(filename);
-      g_free(filename);
-    }
-    break;
-  default:
-    break;
-  }
-  gtk_widget_destroy(GTK_WIDGET(pdialog->shell));
-}
-
-/****************************************************************************
-  Handle save list double click.
-****************************************************************************/
-static void save_dialog_row_callback(GtkTreeView *tree_view,
-                                     GtkTreePath *path,
-                                     GtkTreeViewColumn *column,
-                                     gpointer data)
-{
-  save_dialog_response_callback(NULL, SD_RES_SAVE, data);
-}
-
-/**************************************************************************
-  Handle save filename entry activation.
-**************************************************************************/
-static void save_dialog_entry_callback(GtkEntry *entry, gpointer data)
-{
-  save_dialog_response_callback(NULL, SD_RES_SAVE, data);
-}
-
-/**************************************************************************
-  Handle the save list selection changes.
-**************************************************************************/
-static void save_dialog_list_callback(GtkTreeSelection *selection,
-                                      gpointer data)
-{
-  struct save_dialog *pdialog = data;
-  GtkTreeModel *model;
-  GtkTreeIter iter;
-  const gchar *filename;
-
-  if (!gtk_tree_selection_get_selected(selection, &model, &iter)) {
-    gtk_dialog_set_response_sensitive(pdialog->shell, SD_RES_DELETE, FALSE);
-    return;
-  }
-
-  gtk_dialog_set_response_sensitive(pdialog->shell, SD_RES_DELETE, TRUE);
-  gtk_tree_model_get(model, &iter, SD_COL_PRETTY_NAME, &filename, -1);
-  gtk_entry_set_text(pdialog->entry, filename);
-}
-
-/****************************************************************************
-  Create a new save dialog.
-****************************************************************************/
-static GtkWidget *save_dialog_new(const char *title, const char *savelabel,
-                                  const char *savefilelabel,
-                                  save_dialog_action_fn_t action,
-                                  save_dialog_files_fn_t files)
-{
-  GtkWidget *shell, *sbox, *sw, *label, *view, *entry;
-  GtkBox *vbox;
-  GtkListStore *store;
-  GtkCellRenderer *rend;
-  GtkTreeSelection *selection;
-  struct save_dialog *pdialog;
-
-  fc_assert_ret_val(NULL != action, NULL);
-  fc_assert_ret_val(NULL != files, NULL);
-
-  /* Save dialog structure. */
-  pdialog = fc_malloc(sizeof(*pdialog));
-  pdialog->action = action;
-  pdialog->files = files;
-
-  /* Shell. */
-  shell = gtk_dialog_new_with_buttons(title, NULL, 0,
-                                      _("_Browse..."), SD_RES_BROWSE,
-                                      GTK_STOCK_DELETE, SD_RES_DELETE,
-                                      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-                                      GTK_STOCK_SAVE, SD_RES_SAVE,
-                                      NULL);
-  g_object_set_data_full(G_OBJECT(shell), "save_dialog", pdialog,
-                         (GDestroyNotify) free);
-  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CANCEL);
-  gtk_dialog_set_response_sensitive(GTK_DIALOG(shell), SD_RES_DELETE, FALSE);
-  setup_dialog(shell, toplevel);
-  g_signal_connect(shell, "response",
-                   G_CALLBACK(save_dialog_response_callback), pdialog);
-  pdialog->shell = GTK_DIALOG(shell);
-  vbox = GTK_BOX(GTK_DIALOG(shell)->vbox);
-
-  /* Tree view. */
-  store = save_dialog_store_new();
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
-  g_object_unref(store);
-  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
-  g_signal_connect(view, "row-activated",
-                   G_CALLBACK(save_dialog_row_callback), pdialog);
-  pdialog->tree_view = GTK_TREE_VIEW(view);
-
-  sbox = gtk_vbox_new(FALSE, 2);
-  gtk_box_pack_start(vbox, sbox, TRUE, TRUE, 0);
-
-  label = g_object_new(GTK_TYPE_LABEL,
-                       "use-underline", TRUE,
-                       "mnemonic-widget", view,
-                       "label", savelabel,
-                       "xalign", 0.0,
-                       "yalign", 0.5,
-                       NULL);
-  gtk_box_pack_start(GTK_BOX(sbox), label, FALSE, FALSE, 0);
-
-  sw = gtk_scrolled_window_new(NULL, NULL);
-  gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
-                                      GTK_SHADOW_ETCHED_IN);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_size_request(sw, 300, 300);
-  gtk_container_add(GTK_CONTAINER(sw), view);
-  gtk_box_pack_start(GTK_BOX(sbox), sw, TRUE, TRUE, 0);
-
-  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
-  gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
-  g_signal_connect(selection, "changed",
-                   G_CALLBACK(save_dialog_list_callback), pdialog);
-
-  rend = gtk_cell_renderer_text_new();
-  gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
-                                              -1, NULL, rend, "text",
-                                              SD_COL_PRETTY_NAME, NULL);
-
-  /* Entry. */
-  entry = gtk_entry_new();
-  g_signal_connect(entry, "activate",
-                   G_CALLBACK(save_dialog_entry_callback), pdialog);
-  pdialog->entry = GTK_ENTRY(entry);
-
-  sbox = gtk_vbox_new(FALSE, 2);
-
-  label = g_object_new(GTK_TYPE_LABEL,
-                       "use-underline", TRUE,
-                       "mnemonic-widget", entry,
-                       "label", savefilelabel,
-                       "xalign", 0.0,
-                       "yalign", 0.5,
-                       NULL);
-  gtk_box_pack_start(GTK_BOX(sbox), label, FALSE, FALSE, 0);
-
-  gtk_box_pack_start(GTK_BOX(sbox), entry, FALSE, FALSE, 0);
-  gtk_box_pack_start(vbox, sbox, FALSE, FALSE, 12);
-
-  save_dialog_update(pdialog);
-  gtk_window_set_focus(GTK_WINDOW(shell), entry);
-  gtk_widget_show_all(GTK_WIDGET(vbox));
-  return shell;
-}
-
-/****************************************************************************
                                  NETWORK PAGE
-****************************************************************************/
+**************************************************************************/
 static GtkWidget *network_login_label, *network_login;
 static GtkWidget *network_host_label, *network_host;
 static GtkWidget *network_port_label, *network_port;
@@ -633,13 +324,6 @@ static void update_server_list(enum server_scan_type sstype,
   port = atoi(portstr);
 
   server_list_iterate(list, pserver) {
-    char buf[20];
-
-    if (pserver->humans >= 0) {
-      fc_snprintf(buf, sizeof(buf), "%d", pserver->humans);
-    } else {
-      strncpy(buf, _("Unknown"), sizeof(buf));
-    }
     gtk_list_store_append(store, &it);
     gtk_list_store_set(store, &it,
                        0, pserver->host,
@@ -647,8 +331,7 @@ static void update_server_list(enum server_scan_type sstype,
                        2, pserver->version,
                        3, _(pserver->state),
                        4, pserver->nplayers,
-                       5, buf,
-                       6, pserver->message,
+                       5, pserver->message,
                        -1);
     if (strcmp(host, pserver->host) == 0 && port == pserver->port) {
       gtk_tree_selection_select_iter(sel, &it);
@@ -713,7 +396,7 @@ static void server_scan_error(struct server_scan *scan,
 			      const char *message)
 {
   output_window_append(ftc_client, message);
-  log_error("%s", message);
+  freelog(LOG_ERROR, "%s", message);
 
   switch (server_scan_get_type(scan)) {
   case SERVER_SCAN_LOCAL:
@@ -795,7 +478,7 @@ void append_network_statusbar(const char *text, bool force)
       clear_network_statusbar();
       gtk_label_set_text(GTK_LABEL(statusbar), text);
     } else {
-      g_queue_push_tail(statusbar_queue, fc_strdup(text));
+      g_queue_push_tail(statusbar_queue, mystrdup(text));
     }
   }
 }
@@ -894,8 +577,7 @@ static void connection_state_reset(void)
  configure the dialog depending on what type of authentication request the
  server is making.
 **************************************************************************/
-void handle_authentication_req(enum authentication_type type,
-                               const char *message)
+void handle_authentication_req(enum authentication_type type, char *message)
 {
   append_network_statusbar(message, TRUE);
 
@@ -903,7 +585,7 @@ void handle_authentication_req(enum authentication_type type,
   case AUTH_NEWUSER_FIRST:
   case AUTH_NEWUSER_RETRY:
     set_connection_state(NEW_PASSWORD_TYPE);
-    return;
+    break;
   case AUTH_LOGIN_FIRST:
     /* if we magically have a password already present in 'password'
      * then, use that and skip the password entry dialog */
@@ -916,13 +598,13 @@ void handle_authentication_req(enum authentication_type type,
     } else {
       set_connection_state(ENTER_PASSWORD_TYPE);
     }
-    return;
+    break;
   case AUTH_LOGIN_RETRY:
     set_connection_state(ENTER_PASSWORD_TYPE);
-    return;
+    break;
+  default:
+    assert(0);
   }
-
-  log_error("Unsupported authentication type %d: %s.", type, message);
 }
 
 /**************************************************************************
@@ -948,7 +630,7 @@ static void connect_callback(GtkWidget *w, gpointer data)
 
       output_window_append(ftc_client, errbuf);
     }
-    return; 
+    break; 
   case NEW_PASSWORD_TYPE:
     if (w != network_password) {
       sz_strlcpy(password,
@@ -967,19 +649,19 @@ static void connect_callback(GtkWidget *w, gpointer data)
 	set_connection_state(NEW_PASSWORD_TYPE);
       }
     }
-    return;
+    break;
   case ENTER_PASSWORD_TYPE:
     sz_strlcpy(reply.password,
 	gtk_entry_get_text(GTK_ENTRY(network_password)));
     send_packet_authentication_reply(&client.conn, &reply);
 
     set_connection_state(WAITING_TYPE);
-    return;
+    break;
   case WAITING_TYPE:
-    return;
+    break;
+  default:
+    assert(0);
   }
-
-  log_error("Unsupported connection status: %d", connection_status);
 }
 
 /**************************************************************************
@@ -1004,7 +686,7 @@ static void update_server_playerlist(const struct server *pserver)
   int n, i;
 
   store = server_playerlist_store;
-  fc_assert_ret(store != NULL);
+  g_return_if_fail(store != NULL);
 
   gtk_list_store_clear(store);
   if (!pserver || !pserver->players) {
@@ -1056,7 +738,7 @@ static void network_list_callback(GtkTreeSelection *select, gpointer data)
   gtk_tree_model_get(model, &it, 0, &host, 1, &port, -1);
 
   gtk_entry_set_text(GTK_ENTRY(network_host), host);
-  fc_snprintf(portstr, sizeof(portstr), "%d", port);
+  my_snprintf(portstr, sizeof(portstr), "%d", port);
   gtk_entry_set_text(GTK_ENTRY(network_port), portstr);
 }
 
@@ -1072,7 +754,7 @@ static void update_network_page(void)
 
   gtk_entry_set_text(GTK_ENTRY(network_login), user_name);
   gtk_entry_set_text(GTK_ENTRY(network_host), server_host);
-  fc_snprintf(buf, sizeof(buf), "%d", server_port);
+  my_snprintf(buf, sizeof(buf), "%d", server_port);
   gtk_entry_set_text(GTK_ENTRY(network_port), buf);
 }
 
@@ -1093,12 +775,11 @@ GtkWidget *create_network_page(void)
   gtk_container_add(GTK_CONTAINER(box), notebook);
 
   /* LAN pane. */
-  lan_store = gtk_list_store_new(7, G_TYPE_STRING, /* host */
+  lan_store = gtk_list_store_new(6, G_TYPE_STRING, /* host */
                                  G_TYPE_INT,       /* port */
                                  G_TYPE_STRING,    /* version */
                                  G_TYPE_STRING,    /* state */
                                  G_TYPE_INT,       /* nplayers */
-                                 G_TYPE_STRING,    /* humans */
                                  G_TYPE_STRING);   /* message */
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(lan_store));
@@ -1110,8 +791,8 @@ GtkWidget *create_network_page(void)
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
   g_signal_connect(view, "focus",
       		   G_CALLBACK(gtk_true), NULL);
-  g_signal_connect(view, "row-activated",
-                   G_CALLBACK(network_activate_callback), NULL);
+  g_signal_connect(view, "row_activated",
+		   G_CALLBACK(network_activate_callback), NULL);
   g_signal_connect(selection, "changed",
                    G_CALLBACK(network_list_callback), NULL);
 
@@ -1120,8 +801,7 @@ GtkWidget *create_network_page(void)
   add_treeview_column(view, _("Version"), G_TYPE_STRING, 2);
   add_treeview_column(view, _("Status"), G_TYPE_STRING, 3);
   add_treeview_column(view, _("Players"), G_TYPE_INT, 4);
-  add_treeview_column(view, _("Humans"), G_TYPE_STRING, 5);
-  add_treeview_column(view, _("Comment"), G_TYPE_STRING, 6);
+  add_treeview_column(view, _("Comment"), G_TYPE_STRING, 5);
 
   label = gtk_label_new_with_mnemonic(_("Local _Area Network"));
 
@@ -1136,12 +816,11 @@ GtkWidget *create_network_page(void)
 
 
   /* Metaserver pane. */
-  meta_store = gtk_list_store_new(7, G_TYPE_STRING, /* host */
+  meta_store = gtk_list_store_new(6, G_TYPE_STRING, /* host */
                                   G_TYPE_INT,       /* port */
                                   G_TYPE_STRING,    /* version */
                                   G_TYPE_STRING,    /* state */
                                   G_TYPE_INT,       /* nplayers */
-                                  G_TYPE_STRING,    /* humans */
                                   G_TYPE_STRING);   /* message */
 
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(meta_store));
@@ -1153,8 +832,8 @@ GtkWidget *create_network_page(void)
   gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
   g_signal_connect(view, "focus",
       		   G_CALLBACK(gtk_true), NULL);
-  g_signal_connect(view, "row-activated",
-                   G_CALLBACK(network_activate_callback), NULL);
+  g_signal_connect(view, "row_activated",
+		   G_CALLBACK(network_activate_callback), NULL);
   g_signal_connect(selection, "changed",
                    G_CALLBACK(network_list_callback), NULL);
 
@@ -1163,8 +842,7 @@ GtkWidget *create_network_page(void)
   add_treeview_column(view, _("Version"), G_TYPE_STRING, 2);
   add_treeview_column(view, _("Status"), G_TYPE_STRING, 3);
   add_treeview_column(view, _("Players"), G_TYPE_INT, 4);
-  add_treeview_column(view, _("Humans"), G_TYPE_STRING, 5);
-  add_treeview_column(view, _("Comment"), G_TYPE_STRING, 6);
+  add_treeview_column(view, _("Comment"), G_TYPE_STRING, 5);
 
   label = gtk_label_new_with_mnemonic(_("Internet _Metaserver"));
 
@@ -1329,137 +1007,17 @@ GtkWidget *create_network_page(void)
 }
 
 
-/****************************************************************************
+/**************************************************************************
                                   START PAGE
-****************************************************************************/
-GtkWidget *start_message_area;
-
-static GtkWidget *start_options_table;
-static GtkWidget *observe_button, *ready_button, *nation_button;
-static GtkTreeStore *connection_list_store;
-static GtkTreeView *connection_list_view;
+**************************************************************************/
 static GtkWidget *start_aifill_spin;
-
-
-/* NB: Must match creation arugments in connection_list_store_new(). */
-enum connection_list_columns {
-  CL_COL_PLAYER_NUMBER = 0,
-  CL_COL_USER_NAME,
-  CL_COL_READY_STATE,
-  CL_COL_PLAYER_NAME,
-  CL_COL_FLAG,
-  CL_COL_NATION,
-  CL_COL_TEAM,
-  CL_COL_GGZ_RECORD,
-  CL_COL_GGZ_RATING,
-  CL_COL_CONN_ID,
-  CL_COL_STYLE,
-  CL_COL_WEIGHT,
-  CL_COL_COLLAPSED,
-
-  CL_NUM_COLUMNS
-};
-
-/****************************************************************************
-  Create a new tree store for connection list.
-****************************************************************************/
-static inline GtkTreeStore *connection_list_store_new(void)
-{
-  return gtk_tree_store_new(CL_NUM_COLUMNS,
-                            G_TYPE_INT,         /* CL_COL_PLAYER_NUMBER */
-                            G_TYPE_STRING,      /* CL_COL_USER_NAME */
-                            G_TYPE_BOOLEAN,     /* CL_COL_READY_STATE */
-                            G_TYPE_STRING,      /* CL_COL_PLAYER_NAME */
-                            GDK_TYPE_PIXBUF,    /* CL_COL_FLAG */
-                            G_TYPE_STRING,      /* CL_COL_NATION */
-                            G_TYPE_STRING,      /* CL_COL_TEAM */
-                            G_TYPE_STRING,      /* CL_COL_GGZ_RECORD */
-                            G_TYPE_STRING,      /* CL_COL_GGZ_RATING */
-                            G_TYPE_INT,         /* CL_COL_CONN_ID */
-                            G_TYPE_INT,         /* CL_COL_STYLE */
-                            G_TYPE_INT,         /* CL_COL_WEIGHT */
-                            G_TYPE_BOOLEAN);    /* CL_COL_COLLAPSED */
-}
-
-/****************************************************************************
-  Maybe toggle AI of the player if the client could take the player. This
-  function shouldn't be used directly, see in client_take_player().
-****************************************************************************/
-static void client_aitoggle_player(void *data)
-{
-  struct player *pplayer = player_by_number(FC_PTR_TO_INT(data));
-
-  if (NULL != pplayer
-      && pplayer == client_player()
-      && pplayer->ai_controlled) {
-    send_chat("/away");
-  }
-}
-
-/****************************************************************************
-  Send the /take command by chat and toggle AI if needed (after that).
-****************************************************************************/
-static void client_take_player(struct player *pplayer)
-{
-  int request_id = send_chat_printf("/take \"%s\"", player_name(pplayer));
-  void *data = FC_INT_TO_PTR(player_number(pplayer));
-
-  update_queue_connect_processing_finished(request_id,
-                                           client_aitoggle_player, data);
-}
-
-/****************************************************************************
-  Connect the object to the player and the connection.
-****************************************************************************/
-static void object_put(GObject *object, struct player *pplayer,
-                       struct connection *pconn)
-{
-  /* Note that passing -1 to GINT_TO_POINTER() is buggy with some versions
-   * of gcc. player_slot_count() is not a valid player number. 0 is not
-   * a valid connection id (see comment in server/sernet.c:
-   * makeup_connection_name()). */
-  g_object_set_data(object, "player_id",
-                    GINT_TO_POINTER(NULL != pplayer
-                                    ? player_number(pplayer)
-                                    : player_slot_count()));
-  g_object_set_data(object, "connection_id",
-                    GINT_TO_POINTER(NULL != pconn ? pconn->id : 0));
-}
-
-/****************************************************************************
-  Extract the player and the connection set with object_put(). Returns TRUE
-  if at least one of them isn't NULL.
-****************************************************************************/
-static bool object_extract(GObject *object, struct player **ppplayer,
-                           struct connection **ppconn)
-{
-  bool ret = FALSE;
-  int id;
-
-  if (NULL != ppplayer) {
-    id = GPOINTER_TO_INT(g_object_get_data(object, "player_id"));
-    *ppplayer = player_by_number(id);
-    if (NULL != *ppplayer) {
-      ret = TRUE;
-    }
-  }
-  if (NULL != ppconn) {
-    id = GPOINTER_TO_INT(g_object_get_data(object, "connection_id"));
-    *ppconn = conn_by_number(id);
-    if (NULL != *ppconn) {
-      ret = TRUE;
-    }
-  }
-
-  return ret;
-}
 
 /**************************************************************************
   request the game options dialog.
 **************************************************************************/
 static void game_options_callback(GtkWidget *w, gpointer data)
 {
-  option_dialog_popup(_("Game Settings"), server_optset);
+  popup_settable_options_dialog();
 }
 
 /**************************************************************************
@@ -1467,17 +1025,11 @@ static void game_options_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void ai_skill_callback(GtkWidget *w, gpointer data)
 {
-  enum ai_level level;
-  enum ai_level *levels = (enum ai_level *)data;
   const char *name;
-  int i;
+  enum ai_level level = GPOINTER_TO_UINT(data);
 
-  i = gtk_combo_box_get_active(GTK_COMBO_BOX(w));
-
-  if (i == -1) {
+  if (level == AI_LEVEL_LAST) {
     level = AI_LEVEL_DEFAULT;
-  } else {
-    level = levels[i];
   }
 
   name = ai_level_cmd(level);
@@ -1490,43 +1042,17 @@ static void ai_skill_callback(GtkWidget *w, gpointer data)
 static bool no_ruleset_callback = FALSE;
 
 /**************************************************************************
-  Ruleset name has been given
+  Ruleset setting callback
 **************************************************************************/
-static void ruleset_selected(const char *name)
+static void ruleset_callback(GtkWidget *w, gpointer data)
 {
+  const char *name;
+
+  name = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(ruleset_combo)->entry));
+
   if (name && name[0] != '\0' && !no_ruleset_callback) {
     set_ruleset(name);
   }
-}
-
-/**************************************************************************
-  Ruleset selection callback. Note that this gets also called when ever
-  user types to entry box. In that case we don't want to set_ruleset()
-  after each letter.
-**************************************************************************/
-static void ruleset_entry_changed(GtkWidget *w, gpointer data)
-{
-  const char *name = NULL;
-
-  if (gtk_combo_box_get_active(GTK_COMBO_BOX(ruleset_combo)) != -1) {
-    name = 
-      gtk_entry_get_text(GTK_ENTRY(gtk_bin_get_child(GTK_BIN(ruleset_combo))));
-  }
-
-  ruleset_selected(name);
-}
-
-/**************************************************************************
-  Ruleset name has been typed in completely
-**************************************************************************/
-static void ruleset_enter(GtkWidget *w, gpointer data)
-{
-  const char *name = NULL;
-
-  name =
-      gtk_entry_get_text(GTK_ENTRY(gtk_bin_get_child(GTK_BIN(ruleset_combo))));
-
-  ruleset_selected(name);
 }
 
 /**************************************************************************
@@ -1542,6 +1068,62 @@ static void ai_fill_callback(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
+  start game callback.
+**************************************************************************/
+static void start_start_callback(GtkWidget *w, gpointer data)
+{
+  if (can_client_control()) {
+    dsend_packet_player_ready(&client.conn,
+                              player_number(client.conn.playing),
+                              !client.conn.playing->is_ready);
+  }
+}
+
+/**************************************************************************
+  Called when "pick nation" is clicked.
+**************************************************************************/
+static void pick_nation_callback(GtkWidget *w, gpointer data)
+{
+  if (can_client_control()) {
+    popup_races_dialog(client_player());
+  } else if (game.info.is_new_game) {
+    send_chat("/take -");
+  }
+}
+
+/**************************************************************************
+  Called when "observe" is clicked.
+**************************************************************************/
+static void take_callback(GtkWidget *w, gpointer data)
+{
+  struct player *plr = client_player();
+
+  if (NULL != plr) {
+    const char *name = player_name(plr);
+  
+    if (client_is_observer()) {
+      if (plr->ai_data.control) {
+        send_chat_printf("/aitoggle \"%s\"", name);
+      }
+      send_chat_printf("/take \"%s\"", name);
+    } else {
+      if (!plr->ai_data.control) {
+        /* Make sure player reverts to AI control. This is much more neat,
+         * and hides the ugly double username in the name list because
+         * the player username equals the connection username. */
+        send_chat_printf("/aitoggle \"%s\"", name);
+      }
+      send_chat("/detach");
+      send_chat("/observe");
+    }
+  } else if (!client.conn.observer) {
+    send_chat("/observe");
+  } else {
+    send_chat("/detach");
+  }
+}
+
+/**************************************************************************
   Update the start page.
 **************************************************************************/
 void update_start_page(void)
@@ -1552,91 +1134,83 @@ void update_start_page(void)
   gtk_spin_button_set_value(GTK_SPIN_BUTTON(start_aifill_spin),
                             game.info.aifill);
   send_new_aifill_to_server = old;
-  conn_list_dialog_update();
+  update_conn_list_dialog();
 }
+
+static struct player *conn_menu_player;
+static struct connection *conn_menu_conn;
 
 /****************************************************************************
   Callback for when a team is chosen from the conn menu.
 ****************************************************************************/
-static void conn_menu_team_chosen(GObject *object, gpointer data)
+static void conn_menu_team_chosen(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
-  struct team_slot *tslot = data;
+  struct team *pteam = data;
 
-  if (object_extract(object, &pplayer, NULL)
-      && NULL != tslot
-      && team_slot_index(tslot) != team_number(pplayer->team)) {
+  if (pteam != conn_menu_player->team) {
     send_chat_printf("/team \"%s\" \"%s\"",
-                     player_name(pplayer),
-                     team_slot_rule_name(tslot));
+                     player_name(conn_menu_player),
+                     team_rule_name(pteam));
   }
 }
 
 /****************************************************************************
   Callback for when the "ready" entry is chosen from the conn menu.
 ****************************************************************************/
-static void conn_menu_ready_chosen(GObject *object, gpointer data)
+static void conn_menu_ready_chosen(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
+  struct player *pplayer = conn_menu_player;
 
-  if (object_extract(object, &pplayer, NULL)) {
-    dsend_packet_player_ready(&client.conn,
-                              player_number(pplayer), !pplayer->is_ready);
-  }
+  dsend_packet_player_ready(&client.conn,
+			    player_number(pplayer), !pplayer->is_ready);
 }
 
 /****************************************************************************
   Callback for when the pick-nation entry is chosen from the conn menu.
 ****************************************************************************/
-static void conn_menu_nation_chosen(GObject *object, gpointer data)
+static void conn_menu_nation_chosen(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
-
-  if (object_extract(object, &pplayer, NULL)) {
-    popup_races_dialog(pplayer);
-  }
+  popup_races_dialog(conn_menu_player);
 }
 
 /****************************************************************************
   Miscellaneous callback for the conn menu that allows an arbitrary command
-  (/observe, /remove, /hard, etc.) to be run on the player.
+  (/observe, /remove, /hard) to be run on the player.
 ****************************************************************************/
-static void conn_menu_player_command(GObject *object, gpointer data)
+static void conn_menu_player_command(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
+  char *command = data;
 
-  if (object_extract(object, &pplayer, NULL)) {
-    send_chat_printf("/%s \"%s\"",
-                     (char *) g_object_get_data(G_OBJECT(data), "command"),
-                     player_name(pplayer));
-  }
+  assert(command != NULL);
+  assert(conn_menu_player != NULL);
+
+  send_chat_printf("/%s \"%s\"", command, player_name(conn_menu_player));
 }
 
 /****************************************************************************
   Take command in the conn menu.
 ****************************************************************************/
-static void conn_menu_player_take(GObject *object, gpointer data)
+static void conn_menu_player_take(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
-
-  if (object_extract(object, &pplayer, NULL)) {
-    client_take_player(pplayer);
+  if (conn_menu_player->ai_data.control) {
+    /* See comment on detach command for why */
+    send_chat_printf("/aitoggle \"%s\"", player_name(conn_menu_player));
   }
+  send_chat_printf("/take \"%s\"", player_name(conn_menu_player));
 }
 
 /****************************************************************************
   Miscellaneous callback for the conn menu that allows an arbitrary command
-  (/cmdlevel, /cut, etc.) to be run on the connection.
+  (/cmdlevel, /cut) to be run on the connection.
 ****************************************************************************/
-static void conn_menu_connection_command(GObject *object, gpointer data)
+static void conn_menu_connection_command(GtkMenuItem *menuitem, gpointer data)
 {
-  struct connection *pconn;
+  const char *command = data;
 
-  if (object_extract(object, NULL, &pconn)) {
-    send_chat_printf("/%s \"%s\"",
-                     (char *) g_object_get_data(G_OBJECT(data), "command"),
-                     pconn->username);
-  }
+  assert(conn_menu_conn != NULL);
+  assert(command != NULL);
+
+  send_chat_printf("/%s \"%s\"", command, conn_menu_conn->username);
 }
 
 /**************************************************************************
@@ -1673,14 +1247,9 @@ static void show_conn_popup(struct player *pplayer, struct connection *pconn)
 /****************************************************************************
   Callback for when the "info" entry is chosen from the conn menu.
 ****************************************************************************/
-static void conn_menu_info_chosen(GObject *object, gpointer data)
+static void conn_menu_info_chosen(GtkMenuItem *menuitem, gpointer data)
 {
-  struct player *pplayer;
-  struct connection *pconn;
-
-  if (object_extract(object, &pplayer, &pconn)) {
-    show_conn_popup(pplayer, pconn);
-  }
+  show_conn_popup(conn_menu_player, conn_menu_conn);
 }
 
 /****************************************************************************
@@ -1688,778 +1257,229 @@ static void conn_menu_info_chosen(GObject *object, gpointer data)
   to allow changing the team.
 ****************************************************************************/
 static GtkWidget *create_conn_menu(struct player *pplayer,
-                                   struct connection *pconn)
+				   struct connection *pconn)
 {
   GtkWidget *menu;
-  GtkWidget *item;
+  GtkWidget *entry;
   char buf[128];
 
   menu = gtk_menu_new();
-  object_put(G_OBJECT(menu), pplayer, pconn);
 
-  fc_snprintf(buf, sizeof(buf), _("%s info"),
-              pconn ? pconn->username : player_name(pplayer));
-  item = gtk_menu_item_new_with_label(buf);
-  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-  g_signal_connect_swapped(item, "activate",
-                           G_CALLBACK(conn_menu_info_chosen), menu);
+  my_snprintf(buf, sizeof(buf), _("%s info"),
+	      pconn ? pconn->username : player_name(pplayer));
+  entry = gtk_menu_item_new_with_label(buf);
+  g_object_set_data_full(G_OBJECT(menu),
+			 "info", entry,
+			 (GtkDestroyNotify) gtk_widget_unref);
+  gtk_container_add(GTK_CONTAINER(menu), entry);
+  g_signal_connect(GTK_OBJECT(entry), "activate",
+		   GTK_SIGNAL_FUNC(conn_menu_info_chosen), NULL);
 
-  if (NULL != pplayer) {
-    item = gtk_menu_item_new_with_label(_("Toggle player ready"));
-    gtk_widget_set_sensitive(item, !pplayer->ai_controlled);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    g_signal_connect_swapped(item, "activate",
-                             G_CALLBACK(conn_menu_ready_chosen), menu);
+  if (pplayer) {
+    entry = gtk_menu_item_new_with_label(_("Toggle player ready"));
+    gtk_widget_set_sensitive(entry, pplayer && !pplayer->ai_data.control);
+    g_object_set_data_full(G_OBJECT(menu), "ready", entry,
+                           (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+                     GTK_SIGNAL_FUNC(conn_menu_ready_chosen), NULL);
 
-    item = gtk_menu_item_new_with_label(_("Pick nation"));
-    gtk_widget_set_sensitive(item,
+    entry = gtk_menu_item_new_with_label(_("Pick nation"));
+    gtk_widget_set_sensitive(entry,
                              can_conn_edit_players_nation(&client.conn,
                                                           pplayer));
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    g_signal_connect_swapped(item, "activate",
-                             G_CALLBACK(conn_menu_nation_chosen), menu);
+    g_object_set_data_full(G_OBJECT(menu), "nation", entry,
+                           (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+                     GTK_SIGNAL_FUNC(conn_menu_nation_chosen), NULL);
 
-    item = gtk_menu_item_new_with_label(_("Observe this player"));
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    g_object_set_data_full(G_OBJECT(item), "command", g_strdup("observe"),
-                           (GDestroyNotify) g_free);
-    g_signal_connect_swapped(item, "activate",
-                             G_CALLBACK(conn_menu_player_command), menu);
+    entry = gtk_menu_item_new_with_label(_("Observe this player"));
+    g_object_set_data_full(G_OBJECT(menu), "observe", entry,
+                           (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+                     GTK_SIGNAL_FUNC(conn_menu_player_command), "observe");
 
-    item = gtk_menu_item_new_with_label(_("Take this player"));
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    g_signal_connect_swapped(item, "activate",
-                             G_CALLBACK(conn_menu_player_take), menu);
+    entry = gtk_menu_item_new_with_label(_("Take this player"));
+    g_object_set_data_full(G_OBJECT(menu), "take", entry,
+                           (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+                     GTK_SIGNAL_FUNC(conn_menu_player_take), "take");
   }
 
   if (ALLOW_CTRL <= client.conn.access_level && NULL != pconn
       && (pconn->id != client.conn.id || NULL != pplayer)) {
-    item = gtk_separator_menu_item_new();
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    entry = gtk_separator_menu_item_new();
+    g_object_set_data_full(G_OBJECT(menu),
+			   "ctrl", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
 
     if (pconn->id != client.conn.id) {
-      item = gtk_menu_item_new_with_label(_("Cut connection"));
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      g_object_set_data_full(G_OBJECT(item), "command", g_strdup("cut"),
-                             (GDestroyNotify) g_free);
-      g_signal_connect_swapped(item, "activate",
-                               G_CALLBACK(conn_menu_connection_command),
-                               menu);
+      entry = gtk_menu_item_new_with_label(_("Cut connection"));
+      g_object_set_data_full(G_OBJECT(menu), "cut", entry,
+			     (GtkDestroyNotify) gtk_widget_unref);
+      gtk_container_add(GTK_CONTAINER(menu), entry);
+      g_signal_connect(GTK_OBJECT(entry), "activate",
+		       GTK_SIGNAL_FUNC(conn_menu_connection_command), "cut");
     }
   }
 
   if (ALLOW_CTRL <= client.conn.access_level && NULL != pplayer) {
-    item = gtk_menu_item_new_with_label(_("Aitoggle player"));
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-    g_object_set_data_full(G_OBJECT(item), "command", g_strdup("aitoggle"),
-                           (GDestroyNotify) g_free);
-    g_signal_connect_swapped(item, "activate",
-                             G_CALLBACK(conn_menu_player_command), menu);
+    entry = gtk_menu_item_new_with_label(_("Aitoggle player"));
+    g_object_set_data_full(G_OBJECT(menu), "aitoggle", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+		     GTK_SIGNAL_FUNC(conn_menu_player_command), "aitoggle");
 
-    if (pplayer != client.conn.playing && game.info.is_new_game) {
-      item = gtk_menu_item_new_with_label(_("Remove player"));
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      g_object_set_data_full(G_OBJECT(item), "command", g_strdup("remove"),
-                             (GDestroyNotify) g_free);
-      g_signal_connect_swapped(item, "activate",
-                               G_CALLBACK(conn_menu_player_command), menu);
+    if (pplayer != client.conn.playing
+        && game.info.is_new_game) {
+      entry = gtk_menu_item_new_with_label(_("Remove player"));
+      g_object_set_data_full(G_OBJECT(menu), "remove", entry,
+			     (GtkDestroyNotify) gtk_widget_unref);
+      gtk_container_add(GTK_CONTAINER(menu), entry);
+      g_signal_connect(GTK_OBJECT(entry), "activate",
+		       GTK_SIGNAL_FUNC(conn_menu_player_command), "remove");
     }
   }
 
-  if (ALLOW_ADMIN <= client.conn.access_level && NULL != pconn
+  if (ALLOW_HACK == client.conn.access_level && NULL != pconn
       && pconn->id != client.conn.id) {
-    enum cmdlevel level;
+    entry = gtk_menu_item_new_with_label(_("Give info access"));
+    g_object_set_data_full(G_OBJECT(menu), "cmdlevel-info", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+		     GTK_SIGNAL_FUNC(conn_menu_connection_command),
+		     "cmdlevel info");
 
-    /* No item for hack access; that would be a serious security hole. */
-    for (level = cmdlevel_min(); level < client.conn.access_level; level++) {
-      /* TRANS: Give access level to a connection. */
-      fc_snprintf(buf, sizeof(buf), _("Give %s access"),
-                  cmdlevel_name(level));
-      item = gtk_menu_item_new_with_label(buf);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      g_object_set_data_full(G_OBJECT(item), "command",
-                             g_strdup_printf("cmdlevel %s",
-                                             cmdlevel_name(level)),
-                             (GDestroyNotify) g_free);
-      g_signal_connect_swapped(item, "activate",
-                               G_CALLBACK(conn_menu_connection_command),
-                               menu);
-    }
+    entry = gtk_menu_item_new_with_label(_("Give ctrl access"));
+    g_object_set_data_full(G_OBJECT(menu), "cmdlevel-ctrl", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
+    g_signal_connect(GTK_OBJECT(entry), "activate",
+		     GTK_SIGNAL_FUNC(conn_menu_connection_command),
+                     "cmdlevel ctrl");
+
+    /* No entry for hack access; that would be a serious security hole. */
   }
 
   if (ALLOW_CTRL <= client.conn.access_level
-      && NULL != pplayer && pplayer->ai_controlled) {
+      && NULL != pplayer && pplayer->ai_data.control) {
     enum ai_level level;
 
-    item = gtk_separator_menu_item_new();
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    entry = gtk_separator_menu_item_new();
+    g_object_set_data_full(G_OBJECT(menu),
+			   "sep-ai-skill", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
 
     for (level = 0; level < AI_LEVEL_LAST; level++) {
       if (is_settable_ai_level(level)) {
         const char *level_name = ai_level_name(level);
         const char *level_cmd = ai_level_cmd(level);
+        static char lvl_cmd_tmp[AI_LEVEL_LAST][50];
 
-        item = gtk_menu_item_new_with_label(level_name);
-        gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-        g_object_set_data_full(G_OBJECT(item), "command",
-                               g_strdup(level_cmd), (GDestroyNotify) g_free);
-        g_signal_connect_swapped(item, "activate",
-                                 G_CALLBACK(conn_menu_player_command), menu);
+        /* Copy to non-const string */
+        mystrlcpy(lvl_cmd_tmp[level], level_cmd, sizeof(lvl_cmd_tmp[level]));
+
+        entry = gtk_menu_item_new_with_label(level_name);
+        g_object_set_data_full(G_OBJECT(menu),
+                               lvl_cmd_tmp[level], entry,
+                               (GtkDestroyNotify) gtk_widget_unref);
+        gtk_container_add(GTK_CONTAINER(menu), entry);
+        g_signal_connect(GTK_OBJECT(entry), "activate",
+                         GTK_SIGNAL_FUNC(conn_menu_player_command),
+                         lvl_cmd_tmp[level]);
       }
     }
   }
 
   if (pplayer && game.info.is_new_game) {
-    const int count = pplayer->team
-                      ? player_list_size(team_members(pplayer->team)) : 0;
+    const int count = pplayer->team ? pplayer->team->players : 0;
     bool need_empty_team = (count != 1);
+    int index;
 
-    item = gtk_separator_menu_item_new();
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    entry = gtk_separator_menu_item_new();
+    g_object_set_data_full(G_OBJECT(menu),
+			   "sep-team", entry,
+			   (GtkDestroyNotify) gtk_widget_unref);
+    gtk_container_add(GTK_CONTAINER(menu), entry);
 
     /* Can't use team_iterate here since it skips empty teams. */
-    team_slots_iterate(tslot) {
-      if (!team_slot_is_used(tslot)) {
-        if (!need_empty_team) {
-          continue;
-        }
-        need_empty_team = FALSE;
+    for (index = 0; index < MAX_NUM_TEAMS; index++) {
+      struct team *pteam = team_by_number(index);
+      char text[128];
+
+      if (pteam->players == 0) {
+	if (!need_empty_team) {
+	  continue;
+	}
+	need_empty_team = FALSE;
       }
 
       /* TRANS: e.g., "Put on Team 5" */
-      fc_snprintf(buf, sizeof(buf), _("Put on %s"),
-                  team_slot_name_translation(tslot));
-      item = gtk_menu_item_new_with_label(buf);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      object_put(G_OBJECT(item), pplayer, NULL);
-      g_signal_connect(item, "activate", G_CALLBACK(conn_menu_team_chosen),
-                       tslot);
-    } team_slots_iterate_end;
+      my_snprintf(text, sizeof(text), _("Put on %s"), team_name_translation(pteam));
+      entry = gtk_menu_item_new_with_label(text);
+      g_object_set_data_full(G_OBJECT(menu),
+			     team_rule_name(pteam), entry,
+			     (GtkDestroyNotify) gtk_widget_unref);
+      gtk_container_add(GTK_CONTAINER(menu), entry);
+      g_signal_connect(GTK_OBJECT(entry), "activate",
+		       GTK_SIGNAL_FUNC(conn_menu_team_chosen),
+		       pteam);
+    }
   }
+
+  conn_menu_player = pplayer;
+  conn_menu_conn = pconn;
 
   gtk_widget_show_all(menu);
 
   return menu;
 }
 
-/****************************************************************************
-  Unselect a tree path.
-****************************************************************************/
-static gboolean delayed_unselect_path(gpointer data)
-{
-  if (NULL != connection_list_view) {
-    GtkTreeSelection *selection =
-        gtk_tree_view_get_selection(connection_list_view);
-    GtkTreePath *path = data;
-
-    gtk_tree_selection_unselect_path(selection, path);
-    gtk_tree_path_free(path);
-  }
-  return FALSE;
-}
-
-/****************************************************************************
+/**************************************************************************
   Called on a button event on the pregame player list.
-****************************************************************************/
-static gboolean connection_list_event(GtkWidget *widget,
-                                      GdkEventButton *event,
-                                      gpointer data)
+**************************************************************************/
+static gboolean playerlist_event(GtkWidget *widget, GdkEventButton *event,
+				 gpointer data)
 {
   GtkTreeView *tree = GTK_TREE_VIEW(widget);
+  GtkTreeModel *model = gtk_tree_view_get_model(tree);
+  GtkTreeIter iter;
   GtkTreePath *path = NULL;
-  GtkTreeSelection *selection = gtk_tree_view_get_selection(tree);
-  gboolean ret = FALSE;
+  GtkTreeViewColumn *column = NULL;
+  GtkWidget *menu;
+  int player_no, conn_id;
+  struct player *pplayer;
+  struct connection *pconn;
 
-  if ((1 != event->button && 3 != event->button)
-      || GDK_BUTTON_PRESS != event->type
+  if (event->type != GDK_BUTTON_PRESS
+      || event->button != 3
       || !gtk_tree_view_get_path_at_pos(tree,
-                                        event->x, event->y,
-                                        &path, NULL, NULL, NULL)) {
+					event->x, event->y,
+					&path, &column, NULL, NULL)) {
     return FALSE;
   }
 
-  if (1 == event->button) {
-    if (gtk_tree_selection_path_is_selected(selection, path)) {
-      /* Need to delay to avoid problem with the expander. */
-      g_idle_add(delayed_unselect_path, path);
-      return FALSE;     /* Return now, don't free the path. */
-    }
-  } else if (3 == event->button) {
-    GtkTreeModel *model = gtk_tree_view_get_model(tree);
-    GtkTreeIter iter;
-    GtkWidget *menu;
-    int player_no, conn_id;
-    struct player *pplayer;
-    struct connection *pconn;
+  gtk_tree_model_get_iter(model, &iter, path);
 
-    if (!gtk_tree_selection_path_is_selected(selection, path)) {
-      gtk_tree_selection_select_path(selection, path);
-    }
-    gtk_tree_model_get_iter(model, &iter, path);
+  gtk_tree_model_get(model, &iter, CL_COL_PLAYER_NUMBER, &player_no, -1);
+  pplayer = valid_player_by_number(player_no);
 
-    gtk_tree_model_get(model, &iter, CL_COL_PLAYER_NUMBER, &player_no, -1);
-    pplayer = player_by_number(player_no);
+  gtk_tree_model_get(model, &iter, CL_COL_CONN_ID, &conn_id, -1);
+  pconn = find_conn_by_id(conn_id);
 
-    gtk_tree_model_get(model, &iter, CL_COL_CONN_ID, &conn_id, -1);
-    pconn = conn_by_number(conn_id);
-
-    menu = create_conn_menu(pplayer, pconn);
-    gtk_menu_popup(GTK_MENU(menu), NULL, NULL,
-                   NULL, NULL, event->button, event->time);
-    ret = TRUE;
-  }
+  menu = create_conn_menu(pplayer, pconn);
+  gtk_menu_popup(GTK_MENU(menu), NULL, NULL,
+                 NULL, NULL, event->button, event->time);
 
   gtk_tree_path_free(path);
-  return ret;
-}
-
-/****************************************************************************
-  Mark a row as collapsed or expanded.
-****************************************************************************/
-static void connection_list_row_callback(GtkTreeView *tree_view,
-                                         GtkTreeIter *iter,
-                                         GtkTreePath *path,
-                                         gpointer data)
-{
-  GtkTreeStore *store = GTK_TREE_STORE(gtk_tree_view_get_model(tree_view));
-
-  gtk_tree_store_set(store, iter,
-                     CL_COL_COLLAPSED, GPOINTER_TO_INT(data), -1);
-}
-
-/****************************************************************************
-  Returns TRUE if a row is selected in the connection/player list. Fills
-  the not null data.
-****************************************************************************/
-static bool conn_list_selection(struct player **ppplayer,
-                                struct connection **ppconn)
-{
-  if (NULL != connection_list_view) {
-    GtkTreeIter iter;
-    GtkTreeModel *model;
-    GtkTreeSelection *selection =
-        gtk_tree_view_get_selection(connection_list_view);
-
-    if (gtk_tree_selection_get_selected(selection, &model, &iter)) {
-      int id;
-
-      if (NULL != ppplayer) {
-        gtk_tree_model_get(model, &iter, CL_COL_PLAYER_NUMBER, &id, -1);
-        *ppplayer = player_by_number(id);
-      }
-      if (NULL != ppconn) {
-        gtk_tree_model_get(model, &iter, CL_COL_CONN_ID, &id, -1);
-        *ppconn = conn_by_number(id);
-      }
-      return TRUE;
-    }
-  }
-
-  if (NULL != ppplayer) {
-    *ppplayer = NULL;
-  }
-  if (NULL != ppconn) {
-    *ppconn = NULL;
-  }
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns TRUE if a row is selected in the connection/player list. Fills
-  the not null data.
-****************************************************************************/
-static void conn_list_select_conn(struct connection *pconn)
-{
-  GtkTreeModel *model;
-  GtkTreeIter parent, child, *iter = NULL;
-  GtkTreeSelection *selection;
-  gboolean valid;
-  const int search_id = pconn->id;
-  int id;
-
-  if (NULL == connection_list_view) {
-    return;
-  }
-
-  model = gtk_tree_view_get_model(connection_list_view);
-  selection = gtk_tree_view_get_selection(connection_list_view);
-
-  /* Main iteration. */
-  valid = gtk_tree_model_get_iter_first(model, &parent);
-  while (valid && NULL == iter) {
-    gtk_tree_model_get(model, &parent, CL_COL_CONN_ID, &id, -1);
-    if (search_id == id) {
-      iter = &parent;
-      break;
-    }
-
-    /* Node children iteration. */
-    valid = gtk_tree_model_iter_children(model, &child, &parent);
-    while (valid && NULL == iter) {
-      gtk_tree_model_get(model, &child, CL_COL_CONN_ID, &id, -1);
-      if (search_id == id) {
-        iter = &child;
-        break;
-      }
-      valid = gtk_tree_model_iter_next(model, &child);
-    }
-
-    valid = gtk_tree_model_iter_next(model, &parent);
-  }
-
-  /* Select iterator. */
-  if (NULL != iter) {
-    gtk_tree_selection_select_iter(selection, iter);
-  } else {
-    log_error("%s(): connection %s not found.",
-              __FUNCTION__, conn_description(pconn));
-  }
-}
-
-/**************************************************************************
-  'ready_button' clicked callback.
-**************************************************************************/
-static void ready_button_callback(GtkWidget *w, gpointer data)
-{
-  if (can_client_control()) {
-    dsend_packet_player_ready(&client.conn,
-                              player_number(client_player()),
-                              !client_player()->is_ready);
-  }
-}
-
-/**************************************************************************
-  'nation_button' clicked callback.
-**************************************************************************/
-static void nation_button_callback(GtkWidget *w, gpointer data)
-{
-  struct player *selected_plr;
-  bool row_selected = conn_list_selection(&selected_plr, NULL);
-
-  if (row_selected && NULL != selected_plr) {
-    /* "Take <player_name>" */
-    client_take_player(selected_plr);
-  } else if (can_client_control()) {
-    /* "Pick Nation" */
-    popup_races_dialog(client_player());
-  } else {
-    /* "Take a Player" */
-    send_chat("/take -");
-  }
-}
-
-/**************************************************************************
-  'observe_button' clicked callback.
-**************************************************************************/
-static void observe_button_callback(GtkWidget *w, gpointer data)
-{
-  struct player *selected_plr;
-  bool row_selected = conn_list_selection(&selected_plr, NULL);
-
-  if (row_selected && NULL != selected_plr) {
-    /* "Observe <player_name>" */
-    send_chat_printf("/observe \"%s\"", player_name(selected_plr));
-  } else if (!client_is_global_observer()) {
-    /* "Observe" */
-    send_chat("/observe");
-  } else {
-    /* "Do not observe" */
-    send_chat("/detach");
-  }
-}
-
-/****************************************************************************
-  Update the buttons of the start page.
-****************************************************************************/
-static void update_start_page_buttons(void)
-{
-  char buf[2 * MAX_LEN_NAME];
-  const char *text;
-  struct player *selected_plr;
-  bool row_selected = conn_list_selection(&selected_plr, NULL);
-  bool sensitive;
-
-  /*** Ready button. ***/
-  if (can_client_control()) {
-    sensitive = TRUE;
-    if (client_player()->is_ready) {
-      text = _("Not _ready");
-    } else {
-      int num_unready = 0;
-
-      players_iterate(pplayer) {
-        if (!pplayer->ai_controlled && !pplayer->is_ready) {
-          num_unready++;
-        }
-      } players_iterate_end;
-
-      if (num_unready > 1) {
-        text = _("_Ready");
-      } else {
-        /* We are the last unready player so clicking here will
-         * immediately start the game. */
-        text = _("_Start");
-      }
-    }
-  } else {
-    text = _("_Start");
-    sensitive = FALSE;
-  }
-  gtk_stockbutton_set_label(ready_button, text);
-  gtk_widget_set_sensitive(ready_button, sensitive);
-
-  /*** Nation button. ***/
-  if (row_selected && NULL != selected_plr) {
-    fc_snprintf(buf, sizeof(buf), _("_Take %s"), player_name(selected_plr));
-    text = buf;
-    sensitive = (client_is_observer() || selected_plr != client_player());
-  } else if (can_client_control()) {
-    text = _("Pick _Nation");
-    sensitive = game.info.is_new_game;
-  } else {
-    text = _("_Take a Player");
-    sensitive = game.info.is_new_game;
-  }
-  gtk_stockbutton_set_label(nation_button, text);
-  gtk_widget_set_sensitive(nation_button, sensitive);
-
-  /*** Observe button. ***/
-  if (row_selected && NULL != selected_plr) {
-    fc_snprintf(buf, sizeof(buf), _("_Observe %s"),
-                player_name(selected_plr));
-    text = buf;
-    sensitive = (!client_is_observer() || selected_plr != client_player());
-  } else if (!client_is_global_observer()) {
-    text = _("_Observe");
-    sensitive = TRUE;
-  } else {
-    text = _("Do not _observe");
-    sensitive = TRUE;
-  }
-  gtk_stockbutton_set_label(observe_button, text);
-  gtk_widget_set_sensitive(observe_button, sensitive);
-}
-
-/****************************************************************************
-  Search a player iterator in the model. Begin the iteration at 'start' or
-  at the start of the model if 'start' is set to NULL.
-****************************************************************************/
-static bool model_get_player_iter(GtkTreeModel *model,
-                                  GtkTreeIter *iter,
-                                  GtkTreeIter *start,
-                                  const struct player *pplayer)
-{
-  const int search_id = player_number(pplayer);
-  int id;
-
-  if (NULL != start) {
-    *iter = *start;
-    if (!gtk_tree_model_iter_next(model, iter)) {
-      return FALSE;
-    }
-  } else if (!gtk_tree_model_get_iter_first(model, iter)) {
-    return FALSE;
-  }
-
-  do {
-    gtk_tree_model_get(model, iter, CL_COL_PLAYER_NUMBER, &id, -1);
-    if (id == search_id) {
-      return TRUE;
-    }
-  } while (gtk_tree_model_iter_next(model, iter));
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Search a connection iterator in the model. Begin the iteration at 'start'
-  or at the start of the model if 'start' is set to NULL.
-****************************************************************************/
-static bool model_get_conn_iter(GtkTreeModel *model, GtkTreeIter *iter,
-                                GtkTreeIter *parent, GtkTreeIter *start,
-                                const struct connection *pconn)
-{
-  const int search_id = pconn->id;
-  int id;
-
-  if (NULL != start) {
-    *iter = *start;
-    if (!gtk_tree_model_iter_next(model, iter)) {
-      return FALSE;
-    }
-  } else if (!gtk_tree_model_iter_children(model, iter, parent)) {
-    return FALSE;
-  }
-
-  do {
-    gtk_tree_model_get(model, iter, CL_COL_CONN_ID, &id, -1);
-    if (id == search_id) {
-      return TRUE;
-    }
-  } while (gtk_tree_model_iter_next(model, iter));
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Update the connected users list at pregame state.
-****************************************************************************/
-void real_conn_list_dialog_update(void)
-{
-  if (connection_list_view != NULL) {
-    GObject *view;
-    GtkTreeViewColumn *col;
-    bool visible;
-
-    view = G_OBJECT(connection_list_view);
-    visible = (with_ggz || in_ggz);
-
-    col = g_object_get_data(view, "record_col");
-    if (col != NULL) {
-      gtk_tree_view_column_set_visible(col, visible);
-    }
-    col = g_object_get_data(view, "rating_col");
-    if (col != NULL) {
-      gtk_tree_view_column_set_visible(col, visible);
-    }
-  }
-
-  if (client_state() == C_S_PREPARING
-      && get_client_page() == PAGE_START
-      && connection_list_store != NULL) {
-    GtkTreeStore *store = connection_list_store;
-    GtkTreeModel *model = GTK_TREE_MODEL(store);
-    GtkTreePath *path;
-    GtkTreeIter child, prev_child, *pprev_child;
-    GtkTreeIter parent, prev_parent, *pprev_parent = NULL;
-    GdkPixbuf *pixbuf;
-    gboolean collapsed;
-    struct player *pselected_player;
-    struct connection *pselected_conn;
-    bool is_ready;
-    const char *nation, *plr_name, *team;
-    char user_name[MAX_LEN_NAME + 8], rating_text[128], record_text[128];
-    int rating, wins, losses, ties, forfeits;
-    enum cmdlevel access_level;
-    int conn_id;
-
-    /* Save the selected connection. */
-    (void) conn_list_selection(&pselected_player, &pselected_conn);
-
-    /* Insert players into the connection list. */
-    players_iterate(pplayer) {
-      conn_id = -1;
-      access_level = ALLOW_NONE;
-      pixbuf = pplayer->nation ? get_flag(pplayer->nation) : NULL;
-
-      conn_list_iterate(pplayer->connections, pconn) {
-        if (pconn->playing == pplayer && !pconn->observer) {
-          conn_id = pconn->id;
-          access_level = pconn->access_level;
-          break;
-        }
-      } conn_list_iterate_end;
-
-      if (pplayer->ai_controlled && !pplayer->was_created
-          && !pplayer->is_connected) {
-        /* TRANS: "<Novice AI>" */
-        fc_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
-                    ai_level_name(pplayer->ai_common.skill_level));
-      } else {
-        sz_strlcpy(user_name, pplayer->username);
-        if (access_level > ALLOW_BASIC) {
-          sz_strlcat(user_name, "*");
-        }
-      }
-
-      is_ready = pplayer->ai_controlled ? TRUE : pplayer->is_ready;
-
-      if (pplayer->nation == NO_NATION_SELECTED) {
-        nation = _("Random");
-        if (pplayer->was_created) {
-          plr_name = player_name(pplayer);
-        } else {
-          plr_name = "";
-        }
-      } else {
-        nation = nation_adjective_for_player(pplayer);
-        plr_name = player_name(pplayer);
-      }
-
-      team = pplayer->team ? team_name_translation(pplayer->team) : "";
-
-      rating_text[0] = '\0';
-      if ((in_ggz || with_ggz)
-          && !pplayer->ai_controlled
-          && user_get_rating(pplayer->username, &rating)) {
-        fc_snprintf(rating_text, sizeof(rating_text), "%d", rating);
-      }
-
-      record_text[0] = '\0';
-      if ((in_ggz || with_ggz)
-          && !pplayer->ai_controlled
-          && user_get_record(pplayer->username,
-                             &wins, &losses, &ties, &forfeits)) {
-        if (forfeits == 0 && ties == 0) {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d",
-                      wins, losses);
-        } else if (forfeits == 0) {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
-                      wins, losses, ties);
-        } else {
-          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
-                      wins, losses, ties, forfeits);
-        }
-      }
-
-      if (model_get_player_iter(model, &parent, pprev_parent, pplayer)) {
-        gtk_tree_store_move_after(store, &parent, pprev_parent);
-      } else {
-        gtk_tree_store_insert_after(store, &parent, NULL, pprev_parent);
-      }
-
-      gtk_tree_store_set(store, &parent,
-                         CL_COL_PLAYER_NUMBER, player_number(pplayer),
-                         CL_COL_USER_NAME, user_name,
-                         CL_COL_READY_STATE, is_ready,
-                         CL_COL_PLAYER_NAME, plr_name,
-                         CL_COL_FLAG, pixbuf,
-                         CL_COL_NATION, nation,
-                         CL_COL_TEAM, team,
-                         CL_COL_GGZ_RECORD, record_text,
-                         CL_COL_GGZ_RATING, rating_text,
-                         CL_COL_CONN_ID, conn_id,
-                         CL_COL_STYLE, PANGO_STYLE_NORMAL,
-                         CL_COL_WEIGHT, PANGO_WEIGHT_BOLD,
-                         -1);
-
-      /* Insert observers of this player as child nodes. */
-      pprev_child = NULL;
-      conn_list_iterate(pplayer->connections, pconn) {
-        if (pconn->id == conn_id) {
-          continue;
-        }
-        if (model_get_conn_iter(model, &child, &parent,
-                                pprev_child, pconn)) {
-          gtk_tree_store_move_after(store, &child, pprev_child);
-        } else {
-          gtk_tree_store_insert_after(store, &child, &parent, pprev_child);
-        }
-
-        gtk_tree_store_set(store, &child,
-                           CL_COL_PLAYER_NUMBER, -1,
-                           CL_COL_USER_NAME, pconn->username,
-                           CL_COL_TEAM, _("Observer"),
-                           CL_COL_CONN_ID, pconn->id,
-                           CL_COL_STYLE, PANGO_STYLE_NORMAL,
-                           CL_COL_WEIGHT, PANGO_WEIGHT_NORMAL,
-                           -1);
-
-        prev_child = child;
-        pprev_child = &prev_child;
-      } conn_list_iterate_end;
-
-      /* Expand node? */
-      if (NULL != pprev_child) {
-        gtk_tree_model_get(model, &parent, CL_COL_COLLAPSED, &collapsed, -1);
-        if (!collapsed) {
-          path = gtk_tree_model_get_path(model, &parent);
-          gtk_tree_view_expand_row(GTK_TREE_VIEW(connection_list_view),
-                                   path, FALSE);
-          gtk_tree_path_free(path);
-        }
-      }
-
-      /* Remove trailing rows. */
-      if (NULL != pprev_child) {
-        child = prev_child;
-        if (gtk_tree_model_iter_next(model, &child)) {
-          while (gtk_tree_store_remove(store, &child)) {
-            /* Do nothing more. */
-          }
-        }
-      } else if (gtk_tree_model_iter_children(model, &child, &parent)) {
-        while (gtk_tree_store_remove(store, &child)) {
-          /* Do nothing more. */
-        }
-      }
-
-      prev_parent = parent;
-      pprev_parent = &prev_parent;
-      if (pixbuf) {
-        g_object_unref(pixbuf);
-      }
-    } players_iterate_end;
-
-    /* Finally, insert global observers... */
-    conn_list_iterate(game.est_connections, pconn) {
-      if (NULL != pconn->playing || !pconn->observer) {
-        continue;
-      }
-
-      if (model_get_conn_iter(model, &parent, NULL, pprev_parent, pconn)) {
-        gtk_tree_store_move_after(store, &parent, pprev_parent);
-      } else {
-        gtk_tree_store_insert_after(store, &parent, NULL, pprev_parent);
-      }
-
-      gtk_tree_store_set(store, &parent,
-                         CL_COL_PLAYER_NUMBER, -1,
-                         CL_COL_USER_NAME, pconn->username,
-                         CL_COL_TEAM, _("Observer"),
-                         CL_COL_CONN_ID, pconn->id,
-                         CL_COL_STYLE, PANGO_STYLE_NORMAL,
-                         CL_COL_WEIGHT, PANGO_WEIGHT_NORMAL,
-                         -1);
-
-      prev_parent = parent;
-      pprev_parent = &prev_parent;
-    } conn_list_iterate_end;
-
-    /* ...and detached connections. */
-    conn_list_iterate(game.est_connections, pconn) {
-      if (NULL != pconn->playing || pconn->observer) {
-        continue;
-      }
-
-      if (model_get_conn_iter(model, &parent, NULL, pprev_parent, pconn)) {
-        gtk_tree_store_move_after(store, &parent, pprev_parent);
-      } else {
-        gtk_tree_store_insert_after(store, &parent, NULL, pprev_parent);
-      }
-
-      gtk_tree_store_set(store, &parent,
-                         CL_COL_PLAYER_NUMBER, -1,
-                         CL_COL_USER_NAME, pconn->username,
-                         CL_COL_TEAM, _("Detached"),
-                         CL_COL_CONN_ID, pconn->id,
-                         CL_COL_STYLE, PANGO_STYLE_ITALIC,
-                         CL_COL_WEIGHT, PANGO_WEIGHT_NORMAL,
-                         -1);
-
-      prev_parent = parent;
-      pprev_parent = &prev_parent;
-    } conn_list_iterate_end;
-
-    /* Remove trailing rows. */
-    if (NULL != pprev_parent) {
-      parent = prev_parent;
-      if (gtk_tree_model_iter_next(model, &parent)) {
-        while (gtk_tree_store_remove(store, &parent)) {
-          /* Do nothing more. */
-        }
-      }
-    } else {
-      gtk_tree_store_clear(store);
-    }
-
-    /* If we were selecting a single connection, let's try to reselect it. */
-    if (NULL == pselected_player && NULL != pselected_conn) {
-      conn_list_select_conn(pselected_conn);
-    }
-  }
-
-  update_start_page_buttons();
+  return TRUE;
 }
 
 /**************************************************************************
@@ -2470,26 +1490,23 @@ void real_conn_list_dialog_update(void)
 static void add_tree_col(GtkWidget *treeview, GType gtype,
                          const char *title, int colnum, const char *key)
 {
-  GtkCellRenderer *rend;
   GtkTreeViewColumn *col;
+  GtkCellRenderer *rend;
+  const char *attr;
 
   if (gtype == G_TYPE_BOOLEAN) {
     rend = gtk_cell_renderer_toggle_new();
-    col = gtk_tree_view_column_new_with_attributes(title, rend,
-                                                   "active", colnum, NULL);
+    attr = "active";
   } else if (gtype == GDK_TYPE_PIXBUF) {
     rend = gtk_cell_renderer_pixbuf_new();
-    col = gtk_tree_view_column_new_with_attributes(title, rend,
-                                                   "pixbuf", colnum, NULL);
+    attr = "pixbuf";
   } else {
     rend = gtk_cell_renderer_text_new();
-    col = gtk_tree_view_column_new_with_attributes(title, rend,
-                                                   "text", colnum,
-                                                   "style", CL_COL_STYLE,
-                                                   "weight", CL_COL_WEIGHT,
-                                                   NULL);
+    attr = "text";
   }
 
+  col = gtk_tree_view_column_new_with_attributes(title, rend, attr,
+                                                 colnum, NULL);
   gtk_tree_view_column_set_sizing(col, GTK_TREE_VIEW_COLUMN_AUTOSIZE);
   gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), col);
 
@@ -2504,16 +1521,10 @@ static void add_tree_col(GtkWidget *treeview, GType gtype,
 GtkWidget *create_start_page(void)
 {
   GtkWidget *box, *sbox, *table, *align, *vbox;
-  GtkWidget *view, *sw, *text, *toolkit_view, *button, *spin, *ai_lvl_combobox;
-  GtkWidget *label;
-  GtkWidget *rs_entry;
-  GtkTreeSelection *selection;
+  GtkWidget *view, *sw, *text, *toolkit_view, *button, *spin, *option;
+  GtkWidget *label, *menu, *item;
+  GtkTreeStore *store;
   enum ai_level level;
-  /* There's less than AI_LEVEL_LAST entries as not all levels have
-     entries (that's the whole point of this array: index != value),
-     but this is set safely to the max */
-  static enum ai_level levels[AI_LEVEL_LAST];
-  int i = 0;
 
   box = gtk_vbox_new(FALSE, 8);
   gtk_container_set_border_width(GTK_CONTAINER(box), 4);
@@ -2553,51 +1564,44 @@ GtkWidget *create_start_page(void)
                        NULL);
   gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 0, 1);
 
-  ai_lvl_combobox = gtk_combo_box_new_text();
+  option = gtk_option_menu_new();
 
+  menu = gtk_menu_new();
   for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
       const char *level_name = ai_level_name(level);
 
-      gtk_combo_box_insert_text(GTK_COMBO_BOX(ai_lvl_combobox), i, level_name);
-      levels[i] = level;
-      i++;
+      item = gtk_menu_item_new_with_label(level_name);
+      g_signal_connect(item, "activate",
+                       G_CALLBACK(ai_skill_callback), GUINT_TO_POINTER(level));
+
+      gtk_widget_show(item);
+      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     }
   }
-  g_signal_connect(ai_lvl_combobox, "changed",
-                   G_CALLBACK(ai_skill_callback), levels);
-
-  gtk_table_attach_defaults(GTK_TABLE(table), ai_lvl_combobox, 1, 2, 1, 2);
+  gtk_option_menu_set_menu(GTK_OPTION_MENU(option), menu);
+  gtk_table_attach_defaults(GTK_TABLE(table), option, 1, 2, 1, 2);
 
   label = g_object_new(GTK_TYPE_LABEL,
 		       "use-underline", TRUE,
-		       "mnemonic-widget", ai_lvl_combobox,
+		       "mnemonic-widget", option,
                        "label", _("AI Skill _Level:"),
                        "xalign", 0.0,
                        "yalign", 0.5,
                        NULL);
   gtk_table_attach_defaults(GTK_TABLE(table), label, 0, 1, 1, 2);
 
-  {
-    GtkListStore *model = gtk_list_store_new(1, G_TYPE_STRING);
-    ruleset_combo = gtk_combo_box_entry_new_with_model(GTK_TREE_MODEL(model),
-                                                       0);
-    g_object_unref(G_OBJECT(model));
-  }
-
-  g_signal_connect(GTK_COMBO_BOX_ENTRY(ruleset_combo), "changed",
-                   G_CALLBACK(ruleset_entry_changed), NULL);
-  
-  rs_entry = gtk_bin_get_child(GTK_BIN(ruleset_combo));
-  g_signal_connect(GTK_ENTRY(rs_entry), "activate",
-                   G_CALLBACK(ruleset_enter),
-                   NULL);
+  ruleset_combo = gtk_combo_new();
+  gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(ruleset_combo)->entry), "default");
+  g_signal_connect(GTK_COMBO(ruleset_combo)->entry, "changed",
+                   G_CALLBACK(ruleset_callback),
+                   GUINT_TO_POINTER(AI_LEVEL_LAST));
 
   gtk_table_attach_defaults(GTK_TABLE(table), ruleset_combo, 1, 2, 2, 3);
 
   label = g_object_new(GTK_TYPE_LABEL,
 		       "use-underline", TRUE,
-		       "mnemonic-widget", GTK_COMBO_BOX(ruleset_combo),
+		       "mnemonic-widget", GTK_COMBO(ruleset_combo)->entry,
                        "label", _("Ruleset _Version:"),
                        "xalign", 0.0,
                        "yalign", 0.5,
@@ -2612,16 +1616,19 @@ GtkWidget *create_start_page(void)
   gtk_container_add(GTK_CONTAINER(align), button);
   gtk_box_pack_start(GTK_BOX(vbox), align, FALSE, FALSE, 8);
 
-  connection_list_store = connection_list_store_new();
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(connection_list_store));
-  g_object_unref(G_OBJECT(connection_list_store));
+  /* NB: Must match order and type of enum
+   * connection_list_columns in gui_main.h. */
+  store = gtk_tree_store_new(CL_NUM_COLUMNS, G_TYPE_INT,
+                             G_TYPE_STRING, G_TYPE_BOOLEAN,
+                             G_TYPE_STRING, GDK_TYPE_PIXBUF,
+			     G_TYPE_STRING, G_TYPE_STRING,
+			     G_TYPE_STRING, G_TYPE_STRING,
+			     G_TYPE_INT);
+  connection_list_store = store;
+
+  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), TRUE);
   connection_list_view = GTK_TREE_VIEW(view);
-
-  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
-  gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
-  g_signal_connect(selection, "changed",
-                   G_CALLBACK(update_start_page_buttons), NULL);
 
   add_tree_col(view, G_TYPE_STRING, _("Name"),
                CL_COL_USER_NAME, NULL);
@@ -2641,13 +1648,7 @@ GtkWidget *create_start_page(void)
                CL_COL_TEAM, NULL);
 
   g_signal_connect(view, "button-press-event",
-                   G_CALLBACK(connection_list_event), NULL);
-  g_signal_connect(view, "row-collapsed",
-                   G_CALLBACK(connection_list_row_callback),
-                   GINT_TO_POINTER(TRUE));
-  g_signal_connect(view, "row-expanded",
-                   G_CALLBACK(connection_list_row_callback),
-                   GINT_TO_POINTER(FALSE));
+		   G_CALLBACK(playerlist_event), NULL);
 
   sw = gtk_scrolled_window_new(NULL, NULL);
   gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
@@ -2695,17 +1696,17 @@ GtkWidget *create_start_page(void)
                                       _("Pick _Nation"));
   inputline_toolkit_view_append_button(toolkit_view, nation_button);
   g_signal_connect(nation_button, "clicked",
-                   G_CALLBACK(nation_button_callback), NULL);
+                   G_CALLBACK(pick_nation_callback), NULL);
 
-  observe_button = gtk_stockbutton_new(GTK_STOCK_ZOOM_IN, _("_Observe"));
-  inputline_toolkit_view_append_button(toolkit_view, observe_button);
-  g_signal_connect(observe_button, "clicked",
-                   G_CALLBACK(observe_button_callback), NULL);
+  take_button = gtk_stockbutton_new(GTK_STOCK_ZOOM_IN, _("_Observe"));
+  inputline_toolkit_view_append_button(toolkit_view, take_button);
+  g_signal_connect(take_button, "clicked",
+                   G_CALLBACK(take_callback), NULL);
 
   ready_button = gtk_stockbutton_new(GTK_STOCK_EXECUTE, _("_Ready"));
   inputline_toolkit_view_append_button(toolkit_view, ready_button);
   g_signal_connect(ready_button, "clicked",
-                   G_CALLBACK(ready_button_callback), NULL);
+                   G_CALLBACK(start_start_callback), NULL);
 
   return box;
 }
@@ -2714,9 +1715,10 @@ GtkWidget *create_start_page(void)
 /**************************************************************************
   this regenerates the player information from a loaded game on the server.
 **************************************************************************/
-void handle_game_load(bool load_successful, const char *filename)
+void handle_game_load(struct packet_game_load *packet)
 {
-  if (load_successful) {
+  if (!packet->load_successful) {
+  } else {
     set_client_page(PAGE_START);
 
     if (game.info.is_new_game) {
@@ -2727,28 +1729,22 @@ void handle_game_load(bool load_successful, const char *filename)
 }
 
 /**************************************************************************
-  Load a savegame/scenario.
-**************************************************************************/
-static void load_filename(const char *filename)
-{
-  send_chat_printf("/load %s", filename);
-}
-
-/**************************************************************************
   loads the currently selected game.
 **************************************************************************/
 static void load_callback(void)
 {
   GtkTreeIter it;
-  const gchar *filename;
+  char *filename;
 
   if (!gtk_tree_selection_get_selected(load_selection, NULL, &it)) {
     return;
   }
 
-  gtk_tree_model_get(GTK_TREE_MODEL(load_store), &it,
-                     SD_COL_FULL_PATH, &filename, -1);
-  load_filename(filename);
+  gtk_tree_model_get(GTK_TREE_MODEL(load_store), &it, 1, &filename, -1);
+
+  if (is_server_running()) {
+    send_chat_printf("/load %s", filename);
+  }
 }
 
 /**************************************************************************
@@ -2756,9 +1752,48 @@ static void load_callback(void)
 **************************************************************************/
 static void load_browse_callback(GtkWidget *w, gpointer data)
 {
-  save_dialog_file_chooser_popup(_("Choose Saved Game to Load"),
-                                 GTK_FILE_CHOOSER_ACTION_OPEN,
-                                 load_filename);
+  create_file_selection(_("Choose Saved Game to Load"), FALSE);
+}
+
+/**************************************************************************
+  update the saved games list store.
+**************************************************************************/
+static void update_saves_store(GtkListStore *store, const char *dir)
+{
+  struct datafile_list *files;
+
+  gtk_list_store_clear(store);
+
+  /* search for user saved games. */
+  files = datafilelist_infix(dir, ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    GtkTreeIter it;
+
+    gtk_list_store_append(store, &it);
+    gtk_list_store_set(store, &it,
+	0, pfile->name, 1, pfile->fullname, -1);
+
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
+
+  files = datafilelist_infix(NULL, ".sav", FALSE);
+  datafile_list_iterate(files, pfile) {
+    GtkTreeIter it;
+
+    gtk_list_store_append(store, &it);
+    gtk_list_store_set(store, &it,
+	0, pfile->name, 1, pfile->fullname, -1);
+
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
+
+  datafile_list_free(files);
 }
 
 /**************************************************************************
@@ -2766,12 +1801,7 @@ static void load_browse_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void update_load_page(void)
 {
-  /* Search for user saved games. */
-  struct fileinfo_list *files = fileinfolist_infix(get_save_dirs(),
-                                                   ".sav", FALSE);
-
-  save_dialog_store_update(load_store, files);
-  fileinfo_list_destroy(files);
+  update_saves_store(load_store, "saves");
 }
 
 /**************************************************************************
@@ -2790,7 +1820,7 @@ GtkWidget *create_load_page(void)
   align = gtk_alignment_new(0.5, 0.5, 0.0, 1.0);
   gtk_box_pack_start(GTK_BOX(box), align, TRUE, TRUE, 0);
 
-  load_store = save_dialog_store_new();
+  load_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(load_store));
   g_object_unref(load_store);
 
@@ -2803,7 +1833,7 @@ GtkWidget *create_load_page(void)
 
   gtk_tree_selection_set_mode(load_selection, GTK_SELECTION_SINGLE);
 
-  g_signal_connect(view, "row-activated",
+  g_signal_connect(view, "row_activated",
                    G_CALLBACK(load_callback), NULL);
   
   sbox = gtk_vbox_new(FALSE, 2);
@@ -2891,7 +1921,10 @@ static void scenario_callback(void)
   }
 
   gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it, 1, &filename, -1);
-  load_filename(filename);
+
+  if (is_server_running()) {
+    send_chat_printf("/load %s", filename);
+  }
 }
 
 /**************************************************************************
@@ -2899,9 +1932,44 @@ static void scenario_callback(void)
 **************************************************************************/
 static void scenario_browse_callback(GtkWidget *w, gpointer data)
 {
-  save_dialog_file_chooser_popup(_("Choose a Scenario"),
-                                 GTK_FILE_CHOOSER_ACTION_OPEN,
-                                 load_filename);
+  create_file_selection(_("Choose a Scenario"), FALSE);
+}
+
+/**************************************************************************
+  insert files from list into the scenario page list
+**************************************************************************/
+static void scenario_insert_files(struct datafile_list *files)
+{
+  datafile_list_iterate(files, pfile) {
+    GtkTreeIter it;
+    struct section_file sf;
+
+    gtk_list_store_append(scenario_store, &it);
+
+    if (section_file_load_section(&sf, pfile->fullname, "scenario")) {
+      char *sname = secfile_lookup_str_default(&sf, NULL, "scenario.name");
+      char *sdescription = secfile_lookup_str_default(&sf,
+					       NULL, "scenario.description");
+
+      gtk_list_store_set(scenario_store, &it,
+                         0, sname && strlen(sname) ? Q_(sname) : pfile->name,
+                         1, pfile->fullname,
+                         2, (NULL != sdescription && '\0' != sdescription[0]
+                             ? Q_(sdescription) : ""),
+                         -1);
+      section_file_free(&sf);
+    } else {
+      gtk_list_store_set(scenario_store, &it,
+			 0, pfile->name,
+			 1, pfile->fullname,
+			 2, "",
+			-1);
+    }
+
+    free(pfile->name);
+    free(pfile->fullname);
+    free(pfile);
+  } datafile_list_iterate_end;
 }
 
 /**************************************************************************
@@ -2909,42 +1977,17 @@ static void scenario_browse_callback(GtkWidget *w, gpointer data)
 **************************************************************************/
 static void update_scenario_page(void)
 {
-  struct fileinfo_list *files;
+  struct datafile_list *files;
 
   gtk_list_store_clear(scenario_store);
 
   /* search for scenario files. */
-  files = fileinfolist_infix(get_scenario_dirs(), ".sav", TRUE);
-  fileinfo_list_iterate(files, pfile) {
-    GtkTreeIter it;
-    struct section_file *sf;
-
-    gtk_list_store_append(scenario_store, &it);
-
-    if ((sf = secfile_load_section(pfile->fullname, "scenario", TRUE))) {
-      const char *sname, *sdescription;
-
-      sname = secfile_lookup_str_default(sf, NULL, "scenario.name");
-      sdescription = secfile_lookup_str_default(sf, NULL,
-                                                "scenario.description");
-      gtk_list_store_set(scenario_store, &it,
-                         0, sname && strlen(sname) ? Q_(sname) : pfile->name,
-                         1, pfile->fullname,
-                         2, (NULL != sdescription && '\0' != sdescription[0]
-                             ? Q_(sdescription) : ""),
-                         -1);
-      secfile_destroy(sf);
-    } else {
-      log_error("Error loading '%s':\n%s", pfile->fullname, secfile_error());
-      gtk_list_store_set(scenario_store, &it,
-			 0, pfile->name,
-			 1, pfile->fullname,
-			 2, "",
-			-1);
-    }
-  } fileinfo_list_iterate_end;
-
-  fileinfo_list_destroy(files);
+  files = datafilelist_infix("scenario", ".sav", TRUE);
+  scenario_insert_files(files);
+  datafile_list_free(files);
+  files = datafilelist_infix("scenarios", ".sav", TRUE);
+  scenario_insert_files(files);
+  datafile_list_free(files);
 }
 
 /**************************************************************************
@@ -2977,9 +2020,9 @@ GtkWidget *create_scenario_page(void)
 
   gtk_tree_selection_set_mode(scenario_selection, GTK_SELECTION_SINGLE);
 
-  g_signal_connect(view, "row-activated",
+  g_signal_connect(view, "row_activated",
                    G_CALLBACK(scenario_callback), NULL);
-
+  
   sbox = gtk_vbox_new(FALSE, 2);
   gtk_box_pack_start(GTK_BOX(vbox), sbox, TRUE, TRUE, 0);
 
@@ -3025,7 +2068,6 @@ GtkWidget *create_scenario_page(void)
   gtk_label_set_selectable(GTK_LABEL(scenario_filename), TRUE);
 
   filenamebox = gtk_hbox_new(FALSE, 12);
-
   gtk_box_pack_start(GTK_BOX(filenamebox), text, FALSE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(filenamebox), scenario_filename, FALSE, TRUE, 0);
 
@@ -3062,30 +2104,35 @@ GtkWidget *create_scenario_page(void)
 /**************************************************************************
   Returns current client page
 **************************************************************************/
-enum client_pages get_current_client_page(void)
+enum client_pages get_client_page(void)
 {
-  return current_page;
+  return next_page;
 }
 
 /**************************************************************************
-  Changes the current page.  The action is delayed.
+  changes the current page.
+  this is basically a state machine. jumps actions are hardcoded.
 **************************************************************************/
-void real_set_client_page(enum client_pages new_page)
+static gboolean set_client_page_callback(gpointer data)
 {
-  /* Don't use current_page directly here because maybe it could be modified
+  /* Invalid value at start, to be sure that it won't be catch throught a
+   * switch(). */
+  static enum client_pages old_page = -1;
+  /* Don't use next_page directly here because maybe it could be modified
    * before we reach the end of this function. */
-  enum client_pages old_page = current_page;
+  enum client_pages new_page = next_page;
+
+  freelog(LOG_DEBUG, "Switching client page from %s to %s.",
+          -1 == old_page ? "(no page)" : client_pages_name(old_page),
+          client_pages_name(new_page));
+
+  /* Remove GSource id. */
+  *((guint *) data) = 0;
 
   /* If the page remains the same, don't do anything. */
   if (old_page == new_page) {
-    return;
+    return FALSE;
   }
-
-  log_debug("Switching client page from %s to %s.",
-            -1 == old_page ? "(no page)" : client_pages_name(old_page),
-            client_pages_name(new_page));
-
-  current_page = new_page;
 
   switch (old_page) {
   case PAGE_SCENARIO:
@@ -3118,8 +2165,6 @@ void real_set_client_page(enum client_pages new_page)
       gtk_widget_hide(start_options_table);
     }
     voteinfo_gui_update();
-    overview_size_changed();
-    conn_list_dialog_update();
     break;
   case PAGE_GAME:
     reset_unit_table();
@@ -3182,116 +2227,248 @@ void real_set_client_page(enum client_pages new_page)
     set_connection_state(connection_status);
     break;
   }
+
+  old_page = new_page;
+
+  return FALSE;
 }
 
-/****************************************************************************
-                            SAVE GAME DIALOGs
-****************************************************************************/
-
-/****************************************************************************
-  Save game 'save_dialog_files_fn_t' implementation.
-****************************************************************************/
-static struct fileinfo_list *save_dialog_savegame_list(void)
+/**************************************************************************
+  Changes the current page.  The action is delayed.
+**************************************************************************/
+void set_client_page(enum client_pages page)
 {
-  return fileinfolist_infix(get_save_dirs(), ".sav", FALSE);
+  static guint callback_id = 0;
+
+  freelog(LOG_DEBUG, "Requested %s client page.", client_pages_name(page));
+  next_page = page;
+  if (0 == callback_id) {
+    callback_id = g_idle_add(set_client_page_callback, &callback_id);
+  }
 }
 
-/****************************************************************************
-  Save game dialog.
-****************************************************************************/
-void save_game_dialog_popup(void)
-{
-  static GtkWidget *shell = NULL;
+/**************************************************************************
+                                SAVE GAME DIALOG
+**************************************************************************/
+static GtkWidget *save_dialog_shell, *save_entry;
+static GtkListStore *save_store;
+static GtkTreeSelection *save_selection;
 
-  if (NULL != shell) {
+enum {
+  SAVE_BROWSE,
+  SAVE_DELETE,
+  SAVE_SAVE
+};
+
+/**************************************************************************
+  update save dialog.
+**************************************************************************/
+static void update_save_dialog(void)
+{
+  update_saves_store(save_store, save_scenario ? "scenario" : "saves");
+}
+
+/**************************************************************************
+  handle save dialog response.
+**************************************************************************/
+static void save_response_callback(GtkWidget *w, gint arg)
+{
+  switch (arg) {
+  case SAVE_BROWSE:
+    create_file_selection(_("Select Location to Save"), TRUE);
+    break;
+  case SAVE_DELETE:
+    {
+      char *filename;
+      GtkTreeIter it;
+
+      if (!gtk_tree_selection_get_selected(save_selection, NULL, &it)) {
+	return;
+      }
+
+      gtk_tree_model_get(GTK_TREE_MODEL(save_store), &it, 1, &filename, -1);
+      fc_remove(filename);
+      update_save_dialog();
+    }
+    return;
+  case SAVE_SAVE:
+    {
+      const char *text;
+      char *filename;
+
+      text = gtk_entry_get_text(GTK_ENTRY(save_entry));
+      filename = g_filename_from_utf8(text, -1, NULL, NULL, NULL);
+      if (!filename) {
+        break;
+      }
+      if (save_scenario) {
+        dsend_packet_save_scenario(&client.conn, filename);
+      } else {
+        send_save_game(filename);
+      }
+      g_free(filename);
+    }
+    break;
+  default:
+    break;
+  }
+  gtk_widget_destroy(save_dialog_shell);
+}
+
+/**************************************************************************
+  handle save list double click.
+**************************************************************************/
+static void save_row_callback(void)
+{
+  save_response_callback(NULL, SAVE_SAVE);
+}
+
+/**************************************************************************
+  handle save filename entry activation.
+**************************************************************************/
+static void save_entry_callback(GtkEntry *w, gpointer data)
+{
+  save_response_callback(NULL, SAVE_SAVE);
+}
+
+/**************************************************************************
+  handle save list selection change.
+**************************************************************************/
+static void save_list_callback(GtkTreeSelection *select, gpointer data)
+{
+  GtkTreeModel *model;
+  GtkTreeIter it;
+  char *name;
+
+  if (!gtk_tree_selection_get_selected(select, &model, &it)) {
+    gtk_dialog_set_response_sensitive(GTK_DIALOG(save_dialog_shell),
+	SAVE_DELETE, FALSE);
     return;
   }
 
-  shell = save_dialog_new(_("Save Game"), _("Saved _Games:"),
-                          _("Save _Filename:"), send_save_game,
-                          save_dialog_savegame_list);
-  g_signal_connect(shell, "destroy", G_CALLBACK(gtk_widget_destroyed),
-                   &shell);
-  gtk_window_present(GTK_WINDOW(shell));
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(save_dialog_shell),
+      SAVE_DELETE, TRUE);
+
+  gtk_tree_model_get(model, &it, 0, &name, -1);
+  gtk_entry_set_text(GTK_ENTRY(save_entry), name);
 }
 
-/****************************************************************************
-  Save scenario 'save_dialog_action_fn_t' implementation.
-****************************************************************************/
-static void save_dialog_save_scenario(const char *filename)
+/**************************************************************************
+  create save dialog.
+**************************************************************************/
+static void create_save_dialog(bool scenario)
 {
-  dsend_packet_save_scenario(&client.conn, filename);
+  GtkWidget *shell;
+
+  GtkWidget *sbox, *sw;
+
+  GtkWidget *label, *view, *entry;
+  GtkCellRenderer *rend;
+  GtkTreeSelection *selection;
+
+  save_scenario = scenario;
+
+  shell = gtk_dialog_new_with_buttons(scenario ? _("Save Scenario") : _("Save Game"),
+      NULL,
+      0,
+      _("_Browse..."),
+      SAVE_BROWSE,
+      GTK_STOCK_DELETE,
+      SAVE_DELETE,
+      GTK_STOCK_CANCEL,
+      GTK_RESPONSE_CANCEL,
+      GTK_STOCK_SAVE,
+      SAVE_SAVE,
+      NULL);
+  gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CANCEL);
+  save_dialog_shell = shell;
+  setup_dialog(shell, toplevel);
+
+  save_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(save_store));
+  g_object_unref(save_store);
+
+  rend = gtk_cell_renderer_text_new();
+  gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
+      -1, NULL, rend, "text", 0, NULL);
+
+  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
+  save_selection = selection;
+  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), FALSE);
+
+  gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
+
+  g_signal_connect(view, "row_activated",
+                   G_CALLBACK(save_row_callback), NULL);
+  g_signal_connect(selection, "changed",
+                   G_CALLBACK(save_list_callback), NULL);
+
+  sbox = gtk_vbox_new(FALSE, 2);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), sbox, TRUE, TRUE, 0);
+
+  label = g_object_new(GTK_TYPE_LABEL,
+    "use-underline", TRUE,
+    "mnemonic-widget", view,
+    "label", _("Saved _Games:"),
+    "xalign", 0.0,
+    "yalign", 0.5,
+    NULL);
+  gtk_box_pack_start(GTK_BOX(sbox), label, FALSE, FALSE, 0);
+
+  sw = gtk_scrolled_window_new(NULL, NULL);
+  gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
+				      GTK_SHADOW_ETCHED_IN);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_AUTOMATIC,
+  				 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_size_request(sw, 300, 300);
+  gtk_container_add(GTK_CONTAINER(sw), view);
+  gtk_box_pack_start(GTK_BOX(sbox), sw, TRUE, TRUE, 0);
+
+
+  sbox = gtk_vbox_new(FALSE, 2);
+  gtk_box_pack_start(GTK_BOX(GTK_DIALOG(shell)->vbox), sbox, FALSE, FALSE, 12);
+
+  entry = gtk_entry_new();
+  save_entry = entry;
+  g_signal_connect(entry, "activate",
+      G_CALLBACK(save_entry_callback), NULL);
+
+  label = g_object_new(GTK_TYPE_LABEL,
+    "use-underline", TRUE,
+    "mnemonic-widget", entry,
+    "label", _("Save _Filename:"),
+    "xalign", 0.0,
+    "yalign", 0.5,
+    NULL);
+  gtk_box_pack_start(GTK_BOX(sbox), label, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(sbox), entry, FALSE, FALSE, 0);
+
+
+  g_signal_connect(shell, "response",
+      G_CALLBACK(save_response_callback), NULL);
+  g_signal_connect(shell, "destroy",
+      G_CALLBACK(gtk_widget_destroyed), &save_dialog_shell);
+
+  gtk_dialog_set_response_sensitive(GTK_DIALOG(save_dialog_shell),
+      SAVE_DELETE, FALSE);
+
+  gtk_window_set_focus(GTK_WINDOW(shell), entry);
+
+  gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
 }
 
-/****************************************************************************
-  Save scenario 'save_dialog_files_fn_t' implementation.
-****************************************************************************/
-static struct fileinfo_list *save_dialog_scenario_list(void)
+/**************************************************************************
+  popup save dialog.
+**************************************************************************/
+void popup_save_dialog(bool scenario)
 {
-  return fileinfolist_infix(get_scenario_dirs(), ".sav", FALSE);
-}
-
-/****************************************************************************
-  Save scenario dialog.
-****************************************************************************/
-void save_scenario_dialog_popup(void)
-{
-  static GtkWidget *shell = NULL;
-
-  if (NULL != shell) {
-    return;
+  if (!save_dialog_shell) {
+    create_save_dialog(scenario);
   }
-
-  shell = save_dialog_new(_("Save Scenario"), _("Saved Sce_narios:"),
-                          _("Save Sc_enario:"), save_dialog_save_scenario,
-                          save_dialog_scenario_list);
-  g_signal_connect(shell, "destroy", G_CALLBACK(gtk_widget_destroyed),
-                   &shell);
-  gtk_window_present(GTK_WINDOW(shell));
+  update_save_dialog();
+ 
+  gtk_window_present(GTK_WINDOW(save_dialog_shell));
 }
-
-/****************************************************************************
-  Save mapimg 'save_dialog_files_fn_t' implementation. If possible, only the
-  current direcory is used. As fallback, the files in the save directories
-  are listed.
-****************************************************************************/
-static struct fileinfo_list *save_dialog_mapimg_list(void)
-{
-  return fileinfolist_infix(get_save_dirs(), ".map", FALSE);
-}
-
-/****************************************************************************
-  Save scenario dialog.
-****************************************************************************/
-void save_mapimg_dialog_popup(void)
-{
-  static GtkWidget *shell = NULL;
-
-  if (NULL != shell) {
-    return;
-  }
-
-  shell = save_dialog_new(_("Save Map Image"), _("Saved Map _Images:"),
-                          _("Save _Map Images:"), mapimg_client_save,
-                          save_dialog_mapimg_list);
-  g_signal_connect(shell, "destroy", G_CALLBACK(gtk_widget_destroyed),
-                   &shell);
-  gtk_window_present(GTK_WINDOW(shell));
-}
-
-/****************************************************************************
-  Save map image. On error popup a message window for the user.
-****************************************************************************/
-void mapimg_client_save(const char *filename)
-{
-  if (!mapimg_client_createmap(filename)) {
-    char msg[512];
-
-    fc_snprintf(msg, sizeof(msg), "(%s)", mapimg_error());
-    popup_notify_dialog("Error", "Error Creating the Map Image!", msg);
-  }
-}
-
 
 /****************************************************************************
   Set the list of available rulesets.  The default ruleset should be
@@ -3301,23 +2478,19 @@ void mapimg_client_save(const char *filename)
 void gui_set_rulesets(int num_rulesets, char **rulesets)
 {
   int i;
-  int def_idx = -1;
-  GtkListStore *model =
-      GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(ruleset_combo)));
+  GList *opts = NULL;
 
-  gtk_list_store_clear(model);
   for (i = 0; i < num_rulesets; i++){
-    GtkTreeIter iter; /* unused */
-    gtk_list_store_insert_with_values(model, &iter, i, 0, rulesets[i], -1);
-    if (!strcmp("default", rulesets[i])) {
-      def_idx = i;
-    }
+    opts = g_list_append(opts, rulesets[i]);
   }
 
   no_ruleset_callback = TRUE;
+  gtk_combo_set_popdown_strings(GTK_COMBO(ruleset_combo), opts);
 
   /* HACK: server should tell us the current ruleset. */
-  gtk_combo_box_set_active(GTK_COMBO_BOX(ruleset_combo), def_idx);
-
+  gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(ruleset_combo)->entry),
+		     "default");
   no_ruleset_callback = FALSE;
+
+  g_list_free(opts);
 }

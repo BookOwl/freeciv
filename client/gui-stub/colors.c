@@ -12,11 +12,8 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-
-/* utility */
-#include "mem.h"
 
 #include "colors.h"
 

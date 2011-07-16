@@ -12,10 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-#include <string.h>
+#include <assert.h>
 
 /* utility */
 #include "fcintl.h"
@@ -31,11 +31,48 @@
 #include "climisc.h"
 #include "text.h"
 
-/* client/include */
 #include "plrdlg_g.h"
 
 #include "plrdlg_common.h"
 
+static int frozen_level = 0;
+
+/******************************************************************
+ Turn off updating of player dialog
+*******************************************************************/
+void plrdlg_freeze(void)
+{
+  frozen_level++;
+}
+
+/******************************************************************
+ Turn on updating of player dialog
+*******************************************************************/
+void plrdlg_thaw(void)
+{
+  frozen_level--;
+  assert(frozen_level >= 0);
+  if (frozen_level == 0) {
+    update_players_dialog();
+  }
+}
+
+/******************************************************************
+ Turn on updating of player dialog
+*******************************************************************/
+void plrdlg_force_thaw(void)
+{
+  frozen_level = 1;
+  plrdlg_thaw();
+}
+
+/******************************************************************
+ ...
+*******************************************************************/
+bool is_plrdlg_frozen(void)
+{
+  return frozen_level > 0;
+}
 
 /******************************************************************
   The player-name (aka nation leader) column of the plrdlg.
@@ -43,15 +80,6 @@
 static const char *col_name(const struct player *player)
 {
   return player_name(player);
-}
-
-/****************************************************************************
-  Compares the names of two players in players dialog.
-****************************************************************************/
-static int cmp_name(const struct player *pplayer1,
-                     const struct player *pplayer2)
-{
-  return fc_stricoll(player_name(pplayer1), player_name(pplayer2));
 }
 
 /******************************************************************
@@ -83,7 +111,7 @@ static const char *col_team(const struct player *player)
 *******************************************************************/
 static bool col_ai(const struct player *plr)
 {
-  return plr->ai_controlled;
+  return plr->ai_data.control;
 }
 
 /******************************************************************
@@ -107,10 +135,10 @@ static const char *col_diplstate(const struct player *player)
   if (NULL == client.conn.playing || player == client.conn.playing) {
     return "-";
   } else {
-    pds = player_diplstate_get(client.conn.playing, player);
+    pds = pplayer_get_diplstate(client.conn.playing, player);
     if (pds->type == DS_CEASEFIRE || pds->type == DS_ARMISTICE) {
-      fc_snprintf(buf, sizeof(buf), "%s (%d)",
-                  diplstate_text(pds->type), pds->turns_left);
+      my_snprintf(buf, sizeof(buf), "%s (%d)",
+		  diplstate_text(pds->type), pds->turns_left);
       return buf;
     } else {
       return diplstate_text(pds->type);
@@ -124,10 +152,10 @@ static const char *col_diplstate(const struct player *player)
 static const char *col_love(const struct player *player)
 {
   if (NULL == client.conn.playing || player == client.conn.playing
-      || !player->ai_controlled) {
+      || !player->ai_data.control) {
     return "-";
   } else {
-    return love_text(player->ai_common.love[player_index(client.conn.playing)]);
+    return love_text(player->ai_data.love[player_index(client.conn.playing)]);
   }
 }
 
@@ -143,16 +171,16 @@ static int cmp_love(const struct player *player1,
     return player_number(player1) - player_number(player2);
   }
 
-  if (player1 == client.conn.playing || !player1->ai_controlled) {
+  if (player1 == client.conn.playing || !player1->ai_data.control) {
     love1 = MAX_AI_LOVE + 999;
   } else {
-    love1 = player1->ai_common.love[player_index(client.conn.playing)];
+    love1 = player1->ai_data.love[player_index(client.conn.playing)];
   }
 
-  if (player2 == client.conn.playing || !player2->ai_controlled) {
+  if (player2 == client.conn.playing || !player2->ai_data.control) {
     love2 = MAX_AI_LOVE + 999;
   } else {
-    love2 = player2->ai_common.love[player_index(client.conn.playing)];
+    love2 = player2->ai_data.love[player_index(client.conn.playing)];
   }
   
   return love1 - love2;
@@ -209,7 +237,7 @@ static const char *col_idle(const struct player *plr)
   } else {
     idle = 0;
   }
-  fc_snprintf(buf, sizeof(buf), "%d", idle);
+  my_snprintf(buf, sizeof(buf), "%d", idle);
   return buf;
 }
 
@@ -226,7 +254,7 @@ static int cmp_score(const struct player* player1,
  ...
 *******************************************************************/
 struct player_dlg_column player_dlg_columns[] = {
-  {TRUE, COL_TEXT, N_("?Player:Name"), col_name, NULL, cmp_name, "name"},
+  {TRUE, COL_TEXT, N_("?Player:Name"), col_name, NULL, NULL, "name"},
   {FALSE, COL_TEXT, N_("Username"), col_username, NULL, NULL, "username"},
   {TRUE, COL_FLAG, N_("Flag"), NULL, NULL, NULL,  "flag"},
   {TRUE, COL_TEXT, N_("Nation"), col_nation, NULL, NULL,  "nation"},
@@ -247,7 +275,7 @@ struct player_dlg_column player_dlg_columns[] = {
 const int num_player_dlg_columns = ARRAY_SIZE(player_dlg_columns);
 
 /******************************************************************
-  Return default player dlg sorting column.
+ ...
 *******************************************************************/
 int player_dlg_default_sort_column(void)
 {

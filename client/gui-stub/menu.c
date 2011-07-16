@@ -12,25 +12,16 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "menu.h"
 
 /**************************************************************************
-  Initialize menus (sensitivity, name, etc.) based on the
-  current state and current ruleset, etc.  Call menus_update().
-**************************************************************************/
-void real_menus_init(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
   Update all of the menus (sensitivity, name, etc.) based on the
   current state.
 **************************************************************************/
-void real_menus_update(void)
+void update_menus(void)
 {
   /* PORTME */
 }

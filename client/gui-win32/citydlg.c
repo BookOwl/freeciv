@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <windows.h>
@@ -21,7 +21,6 @@
 #include <assert.h>
 
 /* utility */
-#include "bitvector.h"
 #include "fcintl.h"
 #include "genlist.h"
 #include "log.h"
@@ -283,7 +282,7 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
     /* This takes effects (like Adam Smith's) into account. */
     upkeep = city_improvement_upkeep(pdialog->pcity, target.value.building);
 
-    fc_snprintf(buf, sizeof(buf), "%d", upkeep);
+    my_snprintf(buf, sizeof(buf), "%d", upkeep);
    
     row=fcwin_listview_add_row(pdialog->buildings_list,
 			   item, 2, strings);
@@ -292,7 +291,7 @@ void city_dialog_update_improvement_list(struct city_dialog *pdialog)
   }
   lvc.mask=LVCF_TEXT;
   lvc.pszText=buf;
-  fc_snprintf(buf, sizeof(buf), _("Upkeep (Total: %d)"), total);
+  my_snprintf(buf, sizeof(buf), _("Upkeep (Total: %d)"), total);
   ListView_SetColumn(pdialog->buildings_list,1,&lvc);
   ListView_SetColumnWidth(pdialog->buildings_list,0,LVSCW_AUTOSIZE);
   ListView_SetColumnWidth(pdialog->buildings_list,1,LVSCW_AUTOSIZE_USEHEADER);
@@ -316,7 +315,7 @@ void city_dialog_update_present_units(HDC hdc,struct city_dialog *pdialog)
   store.tmp = NULL;
  
   if (city_owner(pdialog->pcity) != client.conn.playing) {
-    plist = pdialog->pcity->client.info_units_present;
+    plist = pdialog->pcity->info_units_present;
   } else {
     plist = pdialog->pcity->tile->units;
   }
@@ -366,7 +365,7 @@ void city_dialog_update_supported_units(HDC hdc, struct city_dialog *pdialog)
   free_unhappy = get_city_bonus(pdialog->pcity, EFT_MAKE_CONTENT_MIL);
 
   if (city_owner(pdialog->pcity) != client.conn.playing) {
-    plist = pdialog->pcity->client.info_units_supported;
+    plist = pdialog->pcity->info_units_supported;
   } else {
     plist = pdialog->pcity->units_supported;
   }
@@ -415,16 +414,11 @@ void city_dialog_update_building(struct city_dialog *pdialog)
   const char *descr = city_production_name_translation(pcity);
   
   EnableWindow(pdialog->buy_but, city_can_buy(pcity));
-
- /* FIXME: Should not pass NULL as improvement
-  * to test_player_sell_building_now(). It skips many tests. */
-  EnableWindow(pdialog->sell_but,
-               test_player_sell_building_now(client.conn.playing,
-                                             pcity, NULL) == TR_SUCCESS);
+  EnableWindow(pdialog->sell_but, !pcity->did_sell);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
   
-  fc_snprintf(buf2, sizeof(buf2), "%s\r\n%s", descr, buf);
+  my_snprintf(buf2, sizeof(buf2), "%s\r\n%s", descr, buf);
   SetWindowText(pdialog->build_area, buf2);
   SetWindowText(pdialog->build_area, buf2);
   resize_city_dialog(pdialog);
@@ -448,48 +442,48 @@ static void city_dialog_update_information(HWND *info_label,
 
   /* fill the buffers with the necessary info */
 
-  fc_snprintf(buf[FOOD], sizeof(buf[FOOD]), "%2d (%+2d)",
+  my_snprintf(buf[FOOD], sizeof(buf[FOOD]), "%2d (%+2d)",
 	      pcity->prod[O_FOOD], pcity->surplus[O_FOOD]);
-  fc_snprintf(buf[SHIELD], sizeof(buf[SHIELD]), "%2d (%+2d)",
+  my_snprintf(buf[SHIELD], sizeof(buf[SHIELD]), "%2d (%+2d)",
 	      pcity->prod[O_SHIELD] + pcity->waste[O_SHIELD],
 	      pcity->surplus[O_SHIELD]);
-  fc_snprintf(buf[TRADE], sizeof(buf[TRADE]), "%2d (%+2d)",
+  my_snprintf(buf[TRADE], sizeof(buf[TRADE]), "%2d (%+2d)",
 	      pcity->surplus[O_TRADE] + pcity->waste[O_TRADE],
 	      pcity->surplus[O_TRADE]);
-  fc_snprintf(buf[GOLD], sizeof(buf[GOLD]), "%2d (%+2d)",
+  my_snprintf(buf[GOLD], sizeof(buf[GOLD]), "%2d (%+2d)",
 	      pcity->prod[O_GOLD], pcity->surplus[O_GOLD]);
-  fc_snprintf(buf[LUXURY], sizeof(buf[LUXURY]), "%2d      ",
+  my_snprintf(buf[LUXURY], sizeof(buf[LUXURY]), "%2d      ",
 	      pcity->prod[O_LUXURY]);
 
-  fc_snprintf(buf[SCIENCE], sizeof(buf[SCIENCE]), "%2d",
+  my_snprintf(buf[SCIENCE], sizeof(buf[SCIENCE]), "%2d",
 	      pcity->prod[O_SCIENCE]);
 
-  fc_snprintf(buf[GRANARY], sizeof(buf[GRANARY]), "%d/%-d",
+  my_snprintf(buf[GRANARY], sizeof(buf[GRANARY]), "%d/%-d",
 	      pcity->food_stock, city_granary_size(pcity->size));
 	
   granaryturns = city_turns_to_grow(pcity);
   if (granaryturns == 0) {
-    fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("blocked"));
+    my_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("blocked"));
   } else if (granaryturns == FC_INFINITY) {
-    fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("never"));
+    my_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("never"));
   } else {
     /* A negative value means we'll have famine in that many turns.
        But that's handled down below. */
-    fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]),
+    my_snprintf(buf[GROWTH], sizeof(buf[GROWTH]),
 		PL_("%d turn", "%d turns", abs(granaryturns)),
 		abs(granaryturns));
   }
-  fc_snprintf(buf[CORRUPTION], sizeof(buf[CORRUPTION]), "%4d",
+  my_snprintf(buf[CORRUPTION], sizeof(buf[CORRUPTION]), "%4d",
               pcity->waste[O_TRADE]);
-  fc_snprintf(buf[WASTE], sizeof(buf[WASTE]), "%4d",
+  my_snprintf(buf[WASTE], sizeof(buf[WASTE]), "%4d",
               pcity->waste[O_SHIELD]);
-  fc_snprintf(buf[POLLUTION], sizeof(buf[POLLUTION]), "%4d",
+  my_snprintf(buf[POLLUTION], sizeof(buf[POLLUTION]), "%4d",
               pcity->pollution);
   if (!game.info.illness_on) {
-    fc_snprintf(buf[ILLNESS], sizeof(buf[ILLNESS]), " -.-");
+    my_snprintf(buf[ILLNESS], sizeof(buf[ILLNESS]), " -.-");
   } else {
     /* illness is in tenth of percent */
-    fc_snprintf(buf[ILLNESS], sizeof(buf[ILLNESS]), "%4.1f",
+    my_snprintf(buf[ILLNESS], sizeof(buf[ILLNESS]), "%4.1f",
                 (float)city_illness_calc(pcity, NULL, NULL, NULL, NULL)
                 / 10.0);
   }
@@ -918,34 +912,25 @@ static void buy_callback_no(HWND w, void * data)
 **************************************************************************/
 static void buy_callback(struct city_dialog *pdialog)
 {
-  char tbuf[512], buf[512];
+  char buf[512];
   struct city *pcity = pdialog->pcity;
   const char *name = city_production_name_translation(pcity);
   int value = city_production_buy_gold_cost(pcity);
-
-  fc_snprintf(tbuf, ARRAY_SIZE(tbuf), PL_("Treasury contains %d gold.",
-                                          "Treasury contains %d gold.",
-                                          client_player()->economic.gold),
-              client_player()->economic.gold);
-
-  if (value <= client_player()->economic.gold) {
-    fc_snprintf(buf, sizeof(buf),
-            /* TRANS: Last %s is pre-pluralised "Treasury contains %d gold." */
-            PL_("Buy %s for %d gold?\n%s",
-                "Buy %s for %d gold?\n%s", value),
-            name, value, tbuf);
+ 
+  if (value <= client.conn.playing->economic.gold) {
+    my_snprintf(buf, sizeof(buf),
+            _("Buy %s for %d gold?\nTreasury contains %d gold."),
+            name, value, client.conn.playing->economic.gold);
  
     popup_message_dialog(pdialog->mainwindow, /*"buydialog"*/ _("Buy It!"), buf,
                          _("_Yes"), buy_callback_yes, pdialog,
                          _("_No"), buy_callback_no, 0, 0);
   }
   else {
-    fc_snprintf(buf, sizeof(buf),
-            /* TRANS: Last %s is pre-pluralised "Treasury contains %d gold." */
-            PL_("%s costs %d gold.\n%s",
-                "%s costs %d gold.\n%s", value),
-            name, value, tbuf);
-
+    my_snprintf(buf, sizeof(buf),
+            _("%s costs %d gold.\nTreasury contains %d gold."),
+            name, value, client.conn.playing->economic.gold);
+ 
     popup_message_dialog(NULL, /*"buynodialog"*/ _("Buy It!"), buf,
                          _("Darn"), buy_callback_no, 0, 0);
   }      
@@ -979,7 +964,6 @@ static void sell_callback_no(HWND w, void * data)
 static void sell_callback(struct city_dialog *pdialog)
 {
   char buf[100];
-  int price;
   if (pdialog->id_selected<0) {
     return;
   }
@@ -989,12 +973,10 @@ static void sell_callback(struct city_dialog *pdialog)
   }
   
   pdialog->sell_id = pdialog->id_selected;
-  price = impr_sell_gold(improvement_by_number(pdialog->id_selected));
-  fc_snprintf(buf, sizeof(buf), PL_("Sell %s for %d gold?",
-                                    "Sell %s for %d gold?", price),
-              city_improvement_name_translation(pdialog->pcity, improvement_by_number(pdialog->id_selected)),
-              price);
-
+  my_snprintf(buf, sizeof(buf), _("Sell %s for %d gold?"),
+	      city_improvement_name_translation(pdialog->pcity, improvement_by_number(pdialog->id_selected)),
+	      impr_sell_gold(improvement_by_number(pdialog->id_selected)));
+  
   popup_message_dialog(pdialog->mainwindow, /*"selldialog" */
 		       _("Sell It!"), buf, _("_Yes"),
 		       sell_callback_yes, pdialog, _("_No"),
@@ -1275,7 +1257,7 @@ static void supported_units_activate_close_callback(HWND w, void * data)
     struct city *pcity =
       player_find_city_by_id(client.conn.playing, punit->homecity);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1302,7 +1284,7 @@ static void show_units_callback(struct city_dialog *pdialog)
   struct tile *ptile = pdialog->pcity->tile;
  
   if(unit_list_size(ptile->units))
-    unit_select_dialog_popup(ptile);
+    popup_unit_select_dialog(ptile);
 }
 
 /**************************************************************************
@@ -1352,7 +1334,7 @@ static void present_units_activate_callback(HWND w, void * data)
     player_find_unit_by_id(client.conn.playing, (size_t)data);
 
   if (NULL != punit) {
-    unit_focus_set(punit);
+    set_unit_focus(punit);
   }
 
   destroy_message_dialog(w);
@@ -1369,9 +1351,9 @@ static void present_units_activate_close_callback(HWND w, void * data)
   destroy_message_dialog(w);
 
   if (NULL != punit) {
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1504,7 +1486,7 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
     player_find_unit_by_id(client.conn.playing, pdialog->present_unit_ids[n]);
 
   if (NULL != punit
-      && (pcity=tile_city(unit_tile(punit)))
+      && (pcity=tile_city(punit->tile))
       && (pdialog=get_city_dialog(pcity))) { /* ??? */
      HWND wd = popup_message_dialog(NULL,
                            /*"presentunitsdialog"*/_("Unit Commands"),
@@ -1593,9 +1575,7 @@ static void city_dlg_mouse(struct city_dialog *pdialog, int x, int y,
 	  xr = x - pdialog->map.x;
 	  yr = y - pdialog->map.y;
 
-          if (canvas_to_city_pos(&tile_x, &tile_y,
-                                 city_map_radius_sq_get(pdialog->pcity),
-                                 xr, yr)) {
+	  if (canvas_to_city_pos(&tile_x, &tile_y, xr, yr)) {
 	    city_toggle_worker(pdialog->pcity, tile_x, tile_y);
 	  }
 	}
@@ -1941,7 +1921,7 @@ void citydlg_tileset_change(void)
 void refresh_unit_city_dialogs(struct unit *punit)
 {
   struct city_dialog *pdialog;
-  struct city *pcity_pre = tile_city(unit_tile(punit));
+  struct city *pcity_pre = tile_city(punit->tile);
   struct city *pcity_sup =
     player_find_city_by_id(client.conn.playing, punit->homecity);
   
@@ -2096,11 +2076,10 @@ static  LONG CALLBACK happiness_proc(HWND win, UINT message,
 	  (y>=pdialog->maph.y)&&(y<(pdialog->maph.y+pdialog->map_h))) {
 	int tile_x,tile_y;
 
-        if (canvas_to_city_pos(&tile_x, &tile_y,
-                               city_map_radius_sq_get(pdialog->pcity)
-                               x-pdialog->maph.x, y-pdialog->maph.y)) {
-          city_toggle_worker(pdialog->pcity, tile_x, tile_y);
-        }
+	if (canvas_to_city_pos(&tile_x, &tile_y,
+			       x-pdialog->maph.x, y-pdialog->maph.y)) {
+	  city_toggle_worker(pdialog->pcity, tile_x, tile_y);
+	}
       }
       break;
     case WM_PAINT:

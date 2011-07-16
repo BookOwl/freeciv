@@ -13,7 +13,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -152,7 +152,7 @@ static void xaw_key_end_turn(Widget w, XEvent *event, String *argv, Cardinal *ar
 
 static void xaw_key_focus_to_next_unit(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  unit_focus_advance();
+  advance_unit_focus();
 }
 
 static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -211,10 +211,9 @@ static void xaw_key_move_north_west(Widget w, XEvent *event, String *argv, Cardi
 
 static void xaw_key_open_city_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_CITIES)) {
-    city_report_dialog_popup(FALSE);
-  }
+  if (can_client_change_view() &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_CITIES))
+    popup_city_report_dialog(0);
 }
 
 static void xaw_key_open_demographics(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -226,10 +225,9 @@ static void xaw_key_open_demographics(Widget w, XEvent *event, String *argv, Car
 
 static void xaw_key_open_economy_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_ECONOMY)) {
-    economy_report_dialog_popup(FALSE);
-  }
+  if (can_client_change_view() &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_ECONOMY))
+    popup_economy_report_dialog(0);
 }
 
 /****************************************************************************
@@ -253,10 +251,9 @@ static void xaw_key_open_goto_airlift(Widget w, XEvent *event, String *argv, Car
 
 static void xaw_key_open_messages(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES)) {
-    meswin_dialog_popup(FALSE);
-  }
+  if (can_client_change_view() &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_MESSAGES))
+    popup_meswin_dialog(FALSE);
 }
 
 static void xaw_key_open_players(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -292,10 +289,9 @@ static void xaw_key_open_revolution(Widget w, XEvent *event,
 
 static void xaw_key_open_science_report(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  if (can_client_change_view()
-      && is_menu_item_active(MENU_REPORT, MENU_REPORT_SCIENCE)) {
-    science_report_dialog_popup(FALSE);
-  }
+  if (can_client_change_view() &&
+     is_menu_item_active(MENU_REPORT, MENU_REPORT_SCIENCE))
+    popup_science_dialog(0);
 }
 
 static void xaw_key_open_spaceship(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -325,7 +321,7 @@ static void xaw_key_open_units_report(Widget w, XEvent *event,
 {
   if (can_client_change_view()
       && is_menu_item_active(MENU_REPORT, MENU_REPORT_UNITS)) {
-    units_report_dialog_popup(FALSE);
+    popup_activeunits_report_dialog(0);
   }
 }
 
@@ -405,7 +401,7 @@ static void xaw_key_unit_build_city(Widget w, XEvent *event, String *argv, Cardi
 static void xaw_key_unit_build_city_or_wonder(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    if (unit_can_add_or_build_city(punit)) {
+    if (can_unit_add_or_build_city(punit)) {
       request_unit_build_city(punit);
     } else {
       request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
@@ -443,12 +439,6 @@ static void xaw_key_unit_diplomat_spy_action(Widget w, XEvent *event, String *ar
     key_unit_diplomat_actions();
 }
 
-static void xaw_key_unit_convert(Widget w, XEvent *event, String *argv, Cardinal *argc)
-{
-  if(is_menu_item_active(MENU_ORDER, MENU_ORDER_CONVERT))
-    key_unit_convert();
-}
-
 static void xaw_key_unit_disband(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   if(is_menu_item_active(MENU_ORDER, MENU_ORDER_DISBAND))
@@ -477,7 +467,7 @@ static void xaw_key_unit_fortify_or_fortress(Widget w, XEvent *event, String *ar
 {
   unit_list_iterate(get_units_in_focus(), punit) {
     struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, unit_tile(punit));
+                                                   punit, punit->tile);
     if (pbase != NULL) {
       key_unit_fortress();
     } else {
@@ -820,6 +810,15 @@ static void xaw_msg_close_science_report(Widget w, XEvent *event, String *argv, 
   sciencereport_msg_close(w);
 }
 
+/****************************************************************************
+  Action for msg-close-settable-options
+****************************************************************************/
+static void xaw_msg_close_settable_options(Widget w, XEvent *event,
+					   String *argv, Cardinal *argc)
+{
+  settable_options_msg_close(w);
+}
+
 static void xaw_msg_close_spaceship(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
   spaceshipdlg_msg_close(w);
@@ -899,7 +898,6 @@ static XtActionsRec Actions[] = {
   { "key-unit-connect-road", xaw_key_unit_connect_road },
   { "key-unit-connect-rail", xaw_key_unit_connect_rail },
   { "key-unit-connect-irrigate", xaw_key_unit_connect_irrigate },
-  { "key-unit-convert", xaw_key_unit_convert },
   { "key-unit-diplomat-spy-action", xaw_key_unit_diplomat_spy_action },
   { "key-unit-disband", xaw_key_unit_disband },
   { "key-unit-done", xaw_key_unit_done },
@@ -948,6 +946,7 @@ static XtActionsRec Actions[] = {
   { "msg-close-intel", xaw_msg_close_intel },
   { "msg-close-intel-diplo", xaw_msg_close_intel_diplo },
   { "msg-close-science-report", xaw_msg_close_science_report },
+  { "msg-close-settable-options", xaw_msg_close_settable_options },
   { "msg-close-spaceship", xaw_msg_close_spaceship },
   { "msg-close-units-report", xaw_msg_close_units_report },
   { "msg-close-start-page", xaw_msg_close_start_page },

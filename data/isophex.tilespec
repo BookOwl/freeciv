@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2011.Jun.18"
+options = "+tilespec4+2007.Oct.26"
 
 ; A simple name for the tileset specified by this file:
 name = "isophex"
@@ -41,11 +41,8 @@ city_flag_offset_y = 11
 unit_offset_x = 21
 unit_offset_y = 13
 
-; offset the city bar text by this amount (from the city tile origin)
+; offset the citybar text by this amount (from the city tile origin)
 citybar_offset_y = 20
-
-; offset the tile label text by this amount
-tilelabel_offset_y = 10
 
 ; Font to use to draw city names:
 city_names_font = "9x15bold"
@@ -69,13 +66,15 @@ minimap_intro_file = "misc/radar"
 ; the data path. Order may be important for color allocation on 
 ; low-color systems, and if there are any duplicate tags (lattermost
 ; tag is used).
-files =
+files = 
+  "misc/colors.spec",
   "misc/overlays.spec",
   "misc/citybar.spec",
   "isophex/terrain1.spec",
   "isophex/terrain2.spec",
+  "isophex/water.spec",
   "isophex/darkness.spec",
-  "isotrident/tiles.spec",
+  "isophex/tiles.spec",
   "isophex/grid.spec",
   "isophex/rivers.spec",
   "misc/small.spec",
@@ -92,6 +91,7 @@ files =
   "misc/editor.spec",
   "isotrident/nuke.spec",
   "isotrident/cities.spec",
+  "isophex/gold.spec",
   "isotrident/morecities.spec"
 
 

@@ -1,7 +1,7 @@
 [themespec]
 
 ; Format and options of this themespec file:
-options = "+Freeciv-2.3-themespec"
+options = "+themespec3"
 
 ; A simple name for the themespec specified by this file:
 name = "human"
@@ -9,9 +9,6 @@ priority = 20
 
 ; The font to be used:
 font_file         = "themes/gui-sdl/human/DejaVuSans.ttf"
-; To use CJK fonts, provide the path to the font below.
-; Fonts recommended for Freeciv can be fetched from svn trunk, e.g.:
-; http://svn.gna.org/viewcvs/freeciv/trunk/data/themes/gui-sdl/human/
 font_file_zh_CN   = "themes/gui-sdl/human/fireflysung.ttf"
 font_file_ja      = "themes/gui-sdl/human/sazanami-gothic.ttf"
 font_file_ko      = "themes/gui-sdl/human/UnDotum.ttf"

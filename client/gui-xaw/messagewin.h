@@ -17,7 +17,7 @@
 
 #include "messagewin_g.h"
 
-void meswin_dialog_popdown(void);
+void popdown_meswin_dialog(void);
 
 void meswin_msg_close(Widget w);
 

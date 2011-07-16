@@ -19,7 +19,7 @@ struct connection;
 
 #define SERVER_LAN_PORT 4555
 #define SERVER_LAN_TTL 1
-#define SERVER_LAN_VERSION 2
+#define SERVER_LAN_VERSION 1
 
 enum server_events {
   S_E_END_OF_TURN_TIMEOUT,
@@ -34,7 +34,8 @@ void flush_packets(void);
 void close_connections_and_socket(void);
 void init_connections(void);
 int server_make_connection(int new_sock,
-                           const char *client_addr, const char *client_ip);
+			   const char *client_addr, const char *client_ip);
+void close_connection(struct connection *pconn);
 void handle_conn_pong(struct connection *pconn);
 
 #endif  /* FC__SERNET_H */

@@ -30,8 +30,7 @@ taking effect.
 Value is integral amount parameter for many effects (must be in the range 
 -32767 to 32767).
 
-Requirement range may be one of: "None", "Local",
-"CAdjacent" (Cardinally Adjacent), "Adjacent", "City", 
+Requirement range may be one of: "None", "Local", "Adjacent", "City", 
 "Continent", "Player", "World". Some requirement types may only work at 
 certain ranges; this is not yet documented. In particular, at present, 
 "Continent" effects can affect only cities and units in cities.
@@ -44,10 +43,10 @@ is negated.
 
 A requirement type is the type of the requirement and can be one of "None" 
 (default), "Tech", "Gov", "Building", "Special", "Terrain", "UnitType", 
-"UnitFlag", "UnitClass", "UnitClassFlag", "Nation", "OutputType", "MinYear",
-"MinSize", "AI", "TerrainClass", "TerrainAlter", or "CityTile". MinSize is the
-minimum size of a city required. AI is ai player difficulty level. TerrainClass
-is either "Land" or "Oceanic". Only "Center" is supported as CityTile type.
+"UnitFlag", "UnitClass", "Nation", "OutputType", "MinYear", "MinSize", "AI",
+"TerrainClass", "TerrainAlter", or "CityTile". MinSize is the minimum size
+of a city required. AI is ai player difficulty level. TerrainClass is either
+"Land" or "Oceanic". Only "Center" is supported as CityTile type.
 
 Effect types 
 ============
@@ -182,9 +181,6 @@ Upkeep_Free
     Improvements with amount or less upkeep cost become free to upkeep (others 
 are unaffected).
 
-Tech_Upkeep_Free
-    If this value is greater than 0, the tech upkeep is reduced by this value.
-
 No_Unhappy
     No citizens in the city are ever unhappy.
 
@@ -233,15 +229,14 @@ Civil_War_Chance
     Chance of player splitting due to civil war when capital captured is 
 increased by amount.
 
-Empire_Size_Base
-    Once your civilization has more cities than the value of this effect,
-each city gets one more unhappy citizen. If the sum of this effect and
-Empire_Size_Step is zero, there is no such penalty.
+Empire_Size_Mod
+    Once your civilization has more cities than amount + the server setting 
+'cityfactor', each city gets one more unhappy citizen.
 
 Empire_Size_Step
     After your civilization reaches Empire_Size_Base size, it gets one more 
 unhappy citizen for each amount of cities it gets above that. Set to zero to 
-disable. You can use Empire_Size_Step even if Empire_Size_Base is zero.
+disable. You can use Empire_Size_Step even though Empire_Size_Base is zero.
 
 Max_Rates
     The maximum setting for each tax rate is amount.
@@ -289,7 +284,7 @@ Upkeep_Factor
     Multiply unit upkeep by amount.
 
 Unit_Upkeep_Free_Per_City
-    In each city unit upkeep is deducted by this amount. As usual, you can use 
+    In each city amount of units are free from upkeep. As usual, you can use 
 with OutputType requirement to specify which kind of upkeep this should be.
 
 Output_Waste
@@ -318,29 +313,14 @@ Tech_Cost_Factor
     Factor for research costs.
 
 Shield2Gold_Factor
-    Factor in percent for the conversion of unit shield upkeep to gold upkeep.
-    A value of 200 would transfer 1 shield upkeep to 2 gold upkeep. The range
+    Factor in percent for the conversion of unit gold upkeep to shield upkeep.
+    A value of 200 would transfor 1 shield upkeep to 2 gold upkeep. The range
     of this effect must be player or world. Note that only units with the
     "Shield2Gold" flag will be affected by this.
 
 Tile_Workable
     If value != 0, city can work target tile.
 
-Irrig_Possible
-    If value > 0, unit can irrigate target tile. In addition to requirements given
-    to this effect, unit must also have Settlers flag.
-
 Migration_Pct
     Increase the calculated migration score for the a city by amount in
     percent.
-
-City_Radius_Sq
-    Increase the squared city radius by amount. Currently, this can only
-    usefully have "MinSize", "Building", or "Tech" requirements.
-
-City_Build_Slots
-    Increase the number of units with no population cost a city can build in
-    a turn if there are enough shields.
-
-City_Image
-    The index for the city image of the given city style.

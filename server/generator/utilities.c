@@ -11,14 +11,14 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
 #include "fcintl.h"
 #include "log.h"
 #include "rand.h"
-#include "support.h"            /* bool type */
+#include "shared.h"             /* bool type */
 
 /* common */
 #include "map.h"
@@ -47,7 +47,7 @@ bool placed_map_is_initialized(void)
 ****************************************************************************/
 void create_placed_map(void)                               
 {                                                          
-  fc_assert_ret(!placed_map_is_initialized());
+  assert(!placed_map_is_initialized());                              
   placed_map = fc_malloc (sizeof(bool) * MAP_INDEX_SIZE);   
   INITIALIZE_ARRAY(placed_map, MAP_INDEX_SIZE, FALSE );     
 }
@@ -57,7 +57,7 @@ void create_placed_map(void)
 ****************************************************************************/
 void destroy_placed_map(void)   
 {                              
-  fc_assert_ret(placed_map_is_initialized());
+  assert(placed_map_is_initialized()); 
   free(placed_map);            
   placed_map = NULL;           
 }
@@ -171,52 +171,50 @@ void adjust_int_map_filtered(int *int_map, int int_map_max, void *data,
   }
 }
 
-/****************************************************************************
-  Is given native position normal position
-****************************************************************************/
 bool is_normal_nat_pos(int x, int y)
 {
   NATIVE_TO_MAP_POS(&x, &y, x, y);
   return is_normal_map_pos(x, y);
 }
 
-/*******************************************************************************
-  Apply a Gaussian diffusion filter on the map. The size of the map is
-  MAP_INDEX_SIZE and the map is indexed by native_pos_to_index function.
-  If zeroes_at_edges is set, any unreal position on diffusion has 0 value
-  if zeroes_at_edges in unset the unreal position are not counted.
-*******************************************************************************/
-void smooth_int_map(int *int_map, bool zeroes_at_edges)
+/****************************************************************************
+ * Apply a Gaussian difusion filtre on the map
+ * the size of the map is MAP_INDEX_SIZE and the map is indexed by 
+ * native_pos_to_index function
+ * if zeroes_at_edges is set, any unreal position on difusion has 0 value
+ * if zeroes_at_edges in unset the unreal position are not counted.
+ ****************************************************************************/
+ void smooth_int_map(int *int_map, bool zeroes_at_edges)
 {
-  static const float weight_standard[5] = { 0.13, 0.19, 0.37, 0.19, 0.13 };
-  static const float weight_isometric[5] = { 0.15, 0.21, 0.29, 0.21, 0.15 };
-  const float *weight;
+  float weight[5] =  {0.35,  0.5 ,1 , 0.5, 0.35};
+  float total_weight = 2.70;
   bool axe = TRUE;
+  int alt_int_map[MAP_INDEX_SIZE];
   int *target_map, *source_map;
-  int *alt_int_map = fc_calloc(MAP_INDEX_SIZE, sizeof(*alt_int_map));
 
-  fc_assert_ret(NULL != int_map);
+  assert(int_map != NULL);
 
-  weight = weight_standard;
   target_map = alt_int_map;
   source_map = int_map;
 
   do {
     whole_map_iterate(ptile) {
-      float N = 0, D = 0;
+      int  N = 0, D = 0;
 
       axis_iterate(ptile, pnear, i, 2, axe) {
-        D += weight[i + 2];
-        N += weight[i + 2] * source_map[tile_index(pnear)];
+	D += weight[i + 2];
+	N += weight[i + 2] * source_map[tile_index(pnear)];
       } axis_iterate_end;
-      if (zeroes_at_edges) {
-        D = 1;
+      if(zeroes_at_edges) {
+	D = total_weight;
       }
-      target_map[tile_index(ptile)] = (float)N / D;
+      target_map[tile_index(ptile)] = N / D;
     } whole_map_iterate_end;
 
     if (MAP_IS_ISOMETRIC) {
-      weight = weight_isometric;
+      weight[0] = weight[4] = 0.5;
+      weight[1] = weight[3] = 0.7;
+      total_weight = 3.4;  
     }
 
     axe = !axe;
@@ -225,8 +223,6 @@ void smooth_int_map(int *int_map, bool zeroes_at_edges)
     target_map = int_map;
 
   } while (!axe);
-
-  FC_FREE(alt_int_map);
 }
 
 /* These arrays are indexed by continent number (or negative of the
@@ -275,64 +271,41 @@ static void recalculate_lake_surrounders(void)
   } whole_map_iterate_end;
 }
 
-/*******************************************************************************
-  Number this tile and nearby tiles with the specified continent number 'nr'.
-  Due to the number of recursion for large maps a non-recursive algorithm is
-  utilised.
+/**************************************************************************
+  Number this tile and nearby tiles (recursively) with the specified
+  continent number nr, using a flood-fill algorithm.
 
   is_land tells us whether we are assigning continent numbers or ocean 
   numbers.
-*******************************************************************************/
+**************************************************************************/
 static void assign_continent_flood(struct tile *ptile, bool is_land, int nr)
 {
-  struct tile_list *tlist = NULL;
-  const struct terrain *pterrain = NULL;
+  const struct terrain *pterrain = tile_terrain(ptile);
 
-  fc_assert_ret(ptile != NULL);
-
-  pterrain = tile_terrain(ptile);
-  /* Check if the initial tile is a valid tile for continent / ocean. */
-  fc_assert_ret(tile_continent(ptile) == 0
-                && T_UNKNOWN != pterrain
-                && XOR(is_land, terrain_has_flag(pterrain, TER_OCEANIC)));
-
-  /* Create tile list and insert the initial tile. */
-  tlist = tile_list_new();
-  tile_list_append(tlist, ptile);
-
-  while (tile_list_size(tlist) > 0) {
-    /* Iterate over all unchecked tiles. */
-    tile_list_iterate(tlist, ptile2) {
-      /* Iterate over the adjacent tiles. */
-      adjc_iterate(ptile2, ptile3) {
-        pterrain = tile_terrain(ptile3);
-
-        /* Check if it is a valid tile for continent / ocean. */
-        if (tile_continent(ptile3) != 0
-            || T_UNKNOWN == pterrain
-            || !XOR(is_land, terrain_has_flag(pterrain, TER_OCEANIC))) {
-          continue;
-        }
-
-        /* Add the tile to the list of tiles to check. */
-        if (!tile_list_search(tlist, ptile3)) {
-          tile_list_append(tlist, ptile3);
-        }
-      } adjc_iterate_end;
-
-      /* Set the continent data and remove the tile from the list. */
-      tile_set_continent(ptile2, nr);
-      tile_list_remove(tlist, ptile2);
-      /* count the tile */
-      if (nr < 0) {
-        ocean_sizes[-nr]++;
-      } else {
-        continent_sizes[nr]++;
-      }
-    } tile_list_iterate_end;
+  if (tile_continent(ptile) != 0) {
+    return;
   }
 
-  tile_list_destroy(tlist);
+  if (T_UNKNOWN == pterrain) {
+    return;
+  }
+
+  if (!XOR(is_land, terrain_has_flag(pterrain, TER_OCEANIC))) {
+    return;
+  }
+
+  tile_set_continent(ptile, nr);
+  
+  /* count the tile */
+  if (nr < 0) {
+    ocean_sizes[-nr]++;
+  } else {
+    continent_sizes[nr]++;
+  }
+
+  adjc_iterate(ptile, tile1) {
+    assign_continent_flood(tile1, is_land, nr);
+  } adjc_iterate_end;
 }
 
 /**************************************************************************
@@ -352,8 +325,8 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
 
   num_laketypes = terrains_by_flag(TER_FRESHWATER, lakes, sizeof(lakes));
   if (num_laketypes > MAX_ALT_TER_TYPES) {
-    log_verbose("Number of lake types in ruleset %d, considering "
-                "only %d ones.", num_laketypes, MAX_ALT_TER_TYPES);
+    freelog(LOG_NORMAL, "Number of lake types in ruleset %d, considering only %d ones.",
+            num_laketypes, MAX_ALT_TER_TYPES);
     num_laketypes = MAX_ALT_TER_TYPES;
   }
 
@@ -373,7 +346,7 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
       }
       if (0 < lake_surrounders[-here]) {
         if (terrain_control.lake_max_size >= ocean_sizes[-here]) {
-          tile_change_terrain(ptile, lakes[fc_rand(num_laketypes)]);
+          tile_change_terrain(ptile, lakes[myrand(num_laketypes)]);
         }
         if (knowledge_cb) {
           knowledge_cb(ptile);
@@ -397,7 +370,7 @@ int get_lake_surrounders(Continent_id cont)
 *************************************************************************/
 int get_continent_size(Continent_id id)
 {
-  fc_assert_ret_val(id > 0, -1);
+  assert(id > 0);
   return continent_sizes[id];
 }
 
@@ -407,7 +380,7 @@ int get_continent_size(Continent_id id)
 *************************************************************************/
 int get_ocean_size(Continent_id id) 
 {
-  fc_assert_ret_val(id > 0, -1);
+  assert(id > 0);
   return ocean_sizes[id];
 }
 
@@ -459,8 +432,8 @@ void assign_continent_numbers(void)
 
   recalculate_lake_surrounders();
 
-  log_verbose("Map has %d continents and %d oceans", 
-              map.num_continents, map.num_oceans);
+  freelog(LOG_VERBOSE, "Map has %d continents and %d oceans", 
+	  map.num_continents, map.num_oceans);
 }
 
 /**************************************************************************
@@ -572,19 +545,18 @@ void smooth_water_depth(void)
     dist = real_distance_to_land(ptile, OCEAN_DIST_MAX);
     if (dist <= OCEAN_DIST_MAX) {
       /* Overwrite the terrain. */
-      ocean = pick_ocean(dist * OCEAN_DEPTH_STEP
-                         + fc_rand(OCEAN_DEPTH_RAND));
+      ocean = pick_ocean(dist * OCEAN_DEPTH_STEP + myrand(OCEAN_DEPTH_RAND));
       if (NULL != ocean && ocean != tile_terrain(ptile)) {
-        log_debug("Replacing %s by %s at (%d, %d) "
-                  "to have shallow ocean on coast.",
-                  terrain_rule_name(tile_terrain(ptile)),
-                  terrain_rule_name(ocean), TILE_XY(ptile));
+        freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+                "to have shallow ocean on coast.",
+                terrain_rule_name(tile_terrain(ptile)),
+                terrain_rule_name(ocean), TILE_XY(ptile));
         tile_set_terrain(ptile, ocean);
       }
     }
   } whole_map_iterate_end;
 
-  /* Now, try to have something more continuous. */
+  /* Now, try to have something more continous. */
   whole_map_iterate(ptile) {
     if (!terrain_has_flag(tile_terrain(ptile), TER_OCEANIC)) {
       continue;
@@ -592,10 +564,10 @@ void smooth_water_depth(void)
 
     ocean = most_adjacent_ocean_type(ptile);
     if (NULL != ocean && ocean != tile_terrain(ptile)) {
-      log_debug("Replacing %s by %s at (%d, %d) "
-                "to smooth the ocean types.",
-                terrain_rule_name(tile_terrain(ptile)),
-                terrain_rule_name(ocean), TILE_XY(ptile));
+      freelog(LOG_DEBUG, "Replacing %s by %s at (%d, %d) "
+              "to smooth the ocean types.",
+              terrain_rule_name(tile_terrain(ptile)),
+              terrain_rule_name(ocean), TILE_XY(ptile));
       tile_set_terrain(ptile, ocean);
     }
   } whole_map_iterate_end;

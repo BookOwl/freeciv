@@ -13,19 +13,9 @@
 #ifndef FC__TECH_H
 #define FC__TECH_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-/* utility */
-#include "bitvector.h"
 #include "shared.h"
 
-/* common */
 #include "fc_types.h"
-#include "name_translation.h"
-
-struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
 /*
   [kept for amusement and posterity]
@@ -70,42 +60,24 @@ typedef int Tech_type_id;
 */
 
 /* Changing these breaks network compatibility. */
-/* If a new flag is added techtools.c:player_tech_lost() should be checked */
-#define SPECENUM_NAME tech_flag_id
-/* player gets extra tech if rearched first */
-#define SPECENUM_VALUE0 TF_BONUS_TECH
-#define SPECENUM_VALUE0NAME "Bonus_Tech"
-/* "Settler" unit types can build bridges over rivers */
-#define SPECENUM_VALUE1 TF_BRIDGE
-#define SPECENUM_VALUE1NAME "Bridge"
-/* "Settler" unit types can build rail roads */
-#define SPECENUM_VALUE2 TF_RAILROAD
-#define SPECENUM_VALUE2NAME "Railroad"
-/* Increase the pollution factor created by population by one */
-#define SPECENUM_VALUE3 TF_POPULATION_POLLUTION_INC
-#define SPECENUM_VALUE3NAME "Population_Pollution_Inc"
-/* "Settler" unit types can build farmland */
-#define SPECENUM_VALUE4 TF_FARMLAND
-#define SPECENUM_VALUE4NAME "Farmland"
-/* Player can build air units */
-#define SPECENUM_VALUE5 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE5NAME "Build_Airborne"
-/* Keep this last. */
-#define SPECENUM_COUNT TF_COUNT
-#include "specenum_gen.h"
-
-BV_DEFINE(bv_tech_flags, TF_COUNT);
+enum tech_flag_id {
+  TF_BONUS_TECH, /* player gets extra tech if rearched first */
+  TF_BRIDGE,    /* "Settler" unit types can build bridges over rivers */
+  TF_RAILROAD,  /* "Settler" unit types can build rail roads */
+  TF_POPULATION_POLLUTION_INC,  /* Increase the pollution factor created by population by one */
+  TF_FARMLAND,  /* "Settler" unit types can build farmland */
+  TF_BUILD_AIRBORNE, /* Player can build air units */
+  TF_LAST
+};
 
 /* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
  * requirements are fulfilled; all others (including those which can never 
  * be reached) are TECH_UNKNOWN */
-#define SPECENUM_NAME tech_state
-/* TECH_UNKNOWN must be 0 as the code does no special initialisation after
- * memset(0), See player_researches_init(). */
-#define SPECENUM_VALUE0 TECH_UNKNOWN
-#define SPECENUM_VALUE1 TECH_PREREQS_KNOWN
-#define SPECENUM_VALUE2 TECH_KNOWN
-#include "specenum_gen.h"
+enum tech_state {
+  TECH_UNKNOWN = 0,
+  TECH_PREREQS_KNOWN = 1,
+  TECH_KNOWN = 2,
+};
 
 enum tech_req {
   AR_ONE = 0,
@@ -121,8 +93,8 @@ struct advance {
   char graphic_alt[MAX_LEN_NAME];	/* alternate icon name */
 
   struct advance *require[AR_SIZE];
-  bv_tech_flags flags;
-  struct strvec *helptext;
+  unsigned int flags;
+  char *helptext;
 
   /* 
    * Message displayed to the first player to get a bonus tech 
@@ -142,7 +114,60 @@ struct advance {
   int num_reqs;
 };
 
-BV_DEFINE(bv_techs, A_LAST);
+BV_DEFINE(tech_vector, A_LAST);
+
+struct player_research {
+  /* The number of techs and future techs the player has
+   * researched/acquired. */
+  int techs_researched, future_tech;
+
+  /* Invention being researched in. Valid values for researching are:
+   *  - any existing tech (not A_NONE)
+   *  - A_FUTURE
+   *  - A_UNSET (indicates need for choosing new research)
+   * For enemies, A_UNKNOWN is sent to the client, but not on server.
+   *
+   * bulbs_researched tracks how many bulbs have been accumulated toward
+   * this research target. */
+  Tech_type_id researching;
+  int bulbs_researched;
+
+  /* If the player changes his research target in a turn, he loses some or
+   * all of the bulbs he's accumulated toward that target.  We save the
+   * original info from the start of the turn so that if he changes back
+   * he will get the bulbs back.
+   *
+   * Has the same values as researching, plus A_UNKNOWN used between turns
+   * (not -1 anymore) for savegames. */
+  Tech_type_id researching_saved;
+  int bulbs_researching_saved;
+
+  /* If the player completed a research this turn, this value is turned on
+   * and changing targets may be done without penalty. */
+  bool got_tech;
+
+  struct {
+    /* One of TECH_UNKNOWN, TECH_KNOWN or TECH_PREREQS_KNOWN. */
+    enum tech_state state;
+
+    /* 
+     * required_techs, num_required_techs and bulbs_required are
+     * cached values. Updated from build_required_techs (which is
+     * called by player_research_update).
+     */
+    tech_vector required_techs;
+    int num_required_techs, bulbs_required;
+  } inventions[A_LAST];
+
+  /* Tech goal (similar to worklists; when one tech is researched the next
+   * tech toward the goal will be chosen).  May be A_NONE. */
+  Tech_type_id tech_goal;
+
+  /*
+   * Cached values. Updated by player_research_update.
+   */
+  int num_known_tech_with_flag[TF_LAST];
+};
 
 /* General advance/technology accessor functions. */
 Tech_type_id advance_count(void);
@@ -154,8 +179,8 @@ struct advance *advance_by_number(const Tech_type_id atype);
 struct advance *valid_advance(struct advance *padvance);
 struct advance *valid_advance_by_number(const Tech_type_id atype);
 
-struct advance *advance_by_rule_name(const char *name);
-struct advance *advance_by_translated_name(const char *name);
+struct advance *find_advance_by_rule_name(const char *name);
+struct advance *find_advance_by_translated_name(const char *name);
 
 const char *advance_name_by_player(const struct player *pplayer,
 				   Tech_type_id tech);
@@ -164,13 +189,14 @@ const char *advance_name_for_player(const struct player *pplayer,
 const char *advance_name_researching(const struct player *pplayer);
 
 const char *advance_rule_name(const struct advance *padvance);
-const char *advance_name_translation(const struct advance *padvance);
+const char *advance_name_translation(struct advance *padvance);
 
 /* General advance/technology flag accessor routines */
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag);
+enum tech_flag_id find_advance_flag_by_rule_name(const char *s);
 
 /* FIXME: oddball function used in one place */
-Tech_type_id advance_by_flag(Tech_type_id index, enum tech_flag_id flag);
+Tech_type_id find_advance_by_flag(Tech_type_id index, enum tech_flag_id flag);
 
 /* Ancillary routines */
 enum tech_state player_invention_state(const struct player *pplayer,
@@ -179,8 +205,7 @@ enum tech_state player_invention_set(struct player *pplayer,
 				     Tech_type_id tech,
 				     enum tech_state value);
 bool player_invention_reachable(const struct player *pplayer,
-                                const Tech_type_id tech,
-                                bool allow_prereqs);
+                                const Tech_type_id tech);
 
 Tech_type_id player_research_step(const struct player *pplayer,
 				  Tech_type_id goal);
@@ -208,6 +233,8 @@ bool is_future_tech(Tech_type_id tech);
 void precalc_tech_data(void);
 
 /* Initialization and iteration */
+void player_research_init(struct player_research* research);
+
 void techs_init(void);
 void techs_free(void);
 
@@ -234,9 +261,4 @@ const struct advance *advance_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__TECH_H */

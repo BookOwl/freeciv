@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
@@ -45,7 +45,7 @@ const bool gui_use_transliteration = FALSE;
 void set_city_names_font_sizes(int my_city_names_font_size,
 			       int my_city_productions_font_size)
 {
-  log_error("Unimplemented set_city_names_font_sizes.");
+  freelog(LOG_ERROR, "Unimplemented set_city_names_font_sizes.");
   /* PORTME */
 }
 
@@ -102,7 +102,7 @@ enum gui_type get_gui_type(void)
 /**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
-void real_conn_list_dialog_update(void)
+void update_conn_list_dialog(void)
 {
   /* PORTME */
 }
@@ -184,16 +184,6 @@ void set_unit_icons_more_arrow(bool onoff)
 }
 
 /****************************************************************************
-  Called when the set of units in focus (get_units_in_focus()) changes.
-  Standard updates like update_unit_info_label() are handled in the platform-
-  independent code, so some clients will not need to do anything here.
-****************************************************************************/
-void real_focus_units_changed(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************************
   Enqueue a callback to be called during an idle moment.  The 'callback'
   function should be called sometimes soon, and passed the 'data' pointer
   as its data.
@@ -203,7 +193,7 @@ void add_idle_callback(void (callback)(void *), void *data)
   /* PORTME */
 
   /* This is a reasonable fallback if it's not ported. */
-  log_error("Unimplemented add_idle_callback.");
+  freelog(LOG_ERROR, "Unimplemented add_idle_callback.");
   (callback)(data);
 }
 

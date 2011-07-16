@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -207,7 +207,6 @@ static struct MenuEntry order_menu_entries[]={
     { { N_("Go to/Airlift to City..."), 0 }, "t", MENU_ORDER_GOTO_CITY, 0 },
     { { N_("Return to Nearest City"), 0 },   "G", MENU_ORDER_RETURN, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
-    { { N_("Convert Unit"), 0         },     "O", MENU_ORDER_CONVERT, 0 },
     { { N_("Disband Unit"), 0         },     "D", MENU_ORDER_DISBAND, 0 },
     { { N_("Help Build Wonder"), 0    },     "b", MENU_ORDER_BUILD_WONDER, 0 },
     { { N_("Establish Trade Route"), 0 },    "r", MENU_ORDER_TRADE_ROUTE, 0 },
@@ -260,7 +259,6 @@ static struct MenuEntry help_menu_entries[]={
     { { N_("Technology"), 0           },      "", MENU_HELP_TECH, 0 },
     { { N_("Space Race"), 0           },      "", MENU_HELP_SPACE_RACE, 0 },
     { { N_("About Ruleset"), 0        },      "", MENU_HELP_RULESET, 0 },
-    { { N_("About Nations"), 0        },      "", MENU_HELP_NATIONS, 0 },
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Connecting"), 0           },      "", MENU_HELP_CONNECTING, 0 },
     { { N_("Controls"), 0             },      "", MENU_HELP_CONTROLS, 0 },
@@ -287,19 +285,10 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
 static void revolution_menu_callback(Widget w, XtPointer client_data,
 				     XtPointer garbage);
 
-/**************************************************************************
-  Initialize menus (sensitivity, name, etc.) based on the
-  current state and current ruleset, etc.  Call menus_update().
-**************************************************************************/
-void real_menus_init(void)
-{
-  /* PORTME */
-}
-
 /****************************************************************
 ...
 *****************************************************************/
-void real_menus_update(void)
+void update_menus(void)
 {
   if (!can_client_change_view()) {
     XtSetSensitive(menus[MENU_REPORT]->button, False);
@@ -342,7 +331,7 @@ void real_menus_update(void)
       XtDestroyWidget(government_widgets[i]);
     }
     i = 0;
-    governments_iterate(pgovernment) {
+    government_iterate(pgovernment) {
       Widget w;
 
       if (pgovernment == game.government_during_revolution) {
@@ -358,7 +347,7 @@ void real_menus_update(void)
 
       government_widgets[i] = w;
       i++;
-    } governments_iterate_end;
+    } government_iterate_end;
     num_government_entries = i;
 
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
@@ -402,7 +391,7 @@ void real_menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_SELECT_SAME_TYPE, True);
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
-                           can_units_do(punits, unit_can_add_or_build_city));
+			   can_units_do(punits, can_unit_add_or_build_city));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD, 
 			   can_units_do_activity(punits, ACTIVITY_ROAD)
 			   || can_units_do_activity(punits,
@@ -442,8 +431,6 @@ void real_menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_SETTLER,
 			   can_units_do(punits, can_unit_do_autosettlers));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_ATTACK, false);
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONVERT,
-			   units_can_convert(punits));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
 			   units_have_flag(punits, F_UNDISBANDABLE, FALSE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
@@ -470,7 +457,7 @@ void real_menus_update(void)
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
-	ptile = unit_tile(punit);
+	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
@@ -551,7 +538,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
 
   switch(pane_num) {
   case MENU_GAME_OPTIONS:
-    option_dialog_popup(_("Local Options"), client_optset);
+    popup_option_dialog();
     break;
   case MENU_GAME_MSG_OPTIONS:
     popup_messageopt_dialog();
@@ -560,7 +547,7 @@ static void game_menu_callback(Widget w, XtPointer client_data,
     options_save();
     break;
   case MENU_GAME_SERVER_OPTIONS:
-    option_dialog_popup(_("Game Settings"), server_optset);
+    popup_settable_options_dialog();
     break;
   case MENU_GAME_OUTPUT_LOG:
     log_output_window();
@@ -790,9 +777,6 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
       request_unit_return(punit);
     } unit_list_iterate_end;
     break;
-  case MENU_ORDER_CONVERT:
-    key_unit_convert();
-    break;
   case MENU_ORDER_DISBAND:
     key_unit_disband();
     break;
@@ -830,19 +814,19 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
 
   switch(pane_num) {
    case MENU_REPORT_CITIES:
-    city_report_dialog_popup(FALSE);
+    popup_city_report_dialog(0);
     break;
    case MENU_REPORT_UNITS:
-    units_report_dialog_popup(FALSE);
+    popup_activeunits_report_dialog(0);
     break;
   case MENU_REPORT_PLAYERS:
     popup_players_dialog(FALSE);
     break;
    case MENU_REPORT_ECONOMY:
-    economy_report_dialog_popup(FALSE);
+    popup_economy_report_dialog(0);
     break;
    case MENU_REPORT_SCIENCE:
-    science_report_dialog_popup(FALSE);
+    popup_science_dialog(0);
     break;
    case MENU_REPORT_WOW:
     send_report_request(REPORT_WONDERS_OF_THE_WORLD);
@@ -851,7 +835,7 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
-    meswin_dialog_popup(FALSE);
+    popup_meswin_dialog(FALSE);
     break;
    case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);
@@ -952,9 +936,6 @@ static void help_menu_callback(Widget w, XtPointer client_data,
     break;
   case MENU_HELP_RULESET:
     popup_help_dialog_string(HELP_RULESET_ITEM);
-    break;
-  case MENU_HELP_NATIONS:
-    popup_help_dialog_string(HELP_NATIONS_ITEM);
     break;
   case MENU_HELP_COPYING:
     popup_help_dialog_string(HELP_COPYING_ITEM);
@@ -1129,11 +1110,11 @@ static char *menu_entry_text(enum MenuIndex menu, int ent, int var,
   xlt=Q_(pmenu->entries[ent].text[var]);
 
   if (strstr(xlt, "%s")) {
-    fc_snprintf(tmp, sizeof(tmp), xlt, terr);
+    my_snprintf(tmp, sizeof(tmp), xlt, terr);
     xlt=tmp;
   }
 
-  fc_snprintf(retbuf, sizeof(retbuf), "%*.*s%*.*s",
+  my_snprintf(retbuf, sizeof(retbuf), "%*.*s%*.*s",
 	  -pmenu->maxitemlen, pmenu->maxitemlen, xlt,
 	  pmenu->maxacellen, pmenu->maxacellen, pmenu->entries[ent].acel);
 

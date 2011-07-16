@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -27,7 +27,7 @@
 #include "log.h"
 #include "mem.h"
 #include "packets.h"
-#include "shared.h"
+#include "shared.h"		/* wordwrap_string() */
 #include "support.h"
 
 #include "climisc.h"
@@ -79,7 +79,7 @@ void real_output_window_append(const char *astring,
    * Now uses window's font size and width.  Assumes fixed-width font.  --jjm
    */
   String theoutput;
-  char *newout, *rmcr, *astring2 = fc_strdup(astring);
+  char *newout, *rmcr, *astring2 = mystrdup(astring);
 
   XtVaGetValues(outputwindow_text, XtNstring, &theoutput, NULL);
   newout=fc_malloc(strlen(astring2)+strlen(theoutput)+2);

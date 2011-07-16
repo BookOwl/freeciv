@@ -12,9 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -209,7 +210,7 @@ void update_unit_info_label(struct unit_list *punitlist)
 {
   char buffer[512];
 
-  fc_snprintf(buffer, sizeof(buffer), "%s\n%s",
+  my_snprintf(buffer, sizeof(buffer), "%s\n%s",
               get_unit_info_label_text1(punitlist),
               get_unit_info_label_text2(punitlist, 0));
   xaw_set_label(unit_info_label, buffer);
@@ -860,12 +861,4 @@ void tileset_changed(void)
   reset_econ_label_pixmaps();
   update_info_label();
   reset_unit_below_pixmaps();
-}
-
-/**************************************************************************
- Sets the position of the overview scroll window based on mapview position.
-**************************************************************************/
-void update_overview_scroll_window_pos(int x, int y)
-{
-  /* TODO: PORTME. */
 }

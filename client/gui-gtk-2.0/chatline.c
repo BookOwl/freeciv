@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -119,7 +119,7 @@ static bool is_plain_public_message(const char *s)
    * a private message (or explicit public message if the
    * first character is :). */
   while (p != NULL && *p != '\0') {
-    if (fc_isspace(*p)) {
+    if (my_isspace(*p)) {
       return TRUE;
     } else if (*p == MESSAGE_PREFIX) {
       return FALSE;
@@ -143,7 +143,7 @@ static void inputline_return(GtkEntry *w, gpointer data)
     if (client_state() == C_S_RUNNING && gui_gtk2_allied_chat_only
         && is_plain_public_message(theinput)) {
       char buf[MAX_LEN_MSG];
-      fc_snprintf(buf, sizeof(buf), ". %s", theinput);
+      my_snprintf(buf, sizeof(buf), ". %s", theinput);
       send_chat(buf);
     } else {
       send_chat(theinput);
@@ -153,172 +153,15 @@ static void inputline_return(GtkEntry *w, gpointer data)
       void *data;
 
       data = genlist_get(history_list, -1);
-      genlist_remove(history_list, data);
+      genlist_unlink(history_list, data);
       free(data);
     }
 
-    genlist_prepend(history_list, fc_strdup(theinput));
+    genlist_prepend(history_list, mystrdup(theinput));
     history_pos=-1;
   }
 
   gtk_entry_set_text(w, "");
-}
-
-/**************************************************************************
-  Returns the name of player or user, set in the same list.
-**************************************************************************/
-static const char *get_player_or_user_name(int id)
-{
-  size_t size = conn_list_size(game.all_connections);
-
-  return (id >= size ? player_by_number(id - size)->name
-          : conn_list_get(game.all_connections, id)->username);
-}
-
-/**************************************************************************
-  Find a player or a user by prefix.
-
-  prefix - The prefix.
-  matches - A string array to set the matches result.
-  max_matches - The maximum of matches.
-  match_len - The length of the string used to returns matches.
-
-  Returns the number of the matches names.
-**************************************************************************/
-static int check_player_or_user_name(const char *prefix,
-                                     const char **matches,
-                                     const int max_matches)
-{
-  int matches_id[max_matches * 2], ind, num;
-
-  switch (match_prefix_full(get_player_or_user_name,
-                            player_count()
-                            + conn_list_size(game.all_connections),
-                            MAX_LEN_NAME, fc_strncasecmp, strlen,
-                            prefix, &ind, matches_id,
-                            max_matches * 2, &num)) {
-  case M_PRE_EXACT:
-  case M_PRE_ONLY:
-    matches[0] = get_player_or_user_name(ind);
-    return 1;
-  case M_PRE_AMBIGUOUS:
-    {
-      /* Remove duplications playername/username. */
-      const char *name;
-      int i, j, c = 0;
-
-      for (i = 0; i < num && c < max_matches; i++) {
-        name = get_player_or_user_name(matches_id[i]);
-        for (j = 0; j < c; j++) {
-          if (0 == fc_strncasecmp(name, matches[j], MAX_LEN_NAME)) {
-            break;
-          }
-        }
-        if (j >= c) {
-          matches[c++] = name;
-        }
-      }
-      return c;
-    }
-  case M_PRE_EMPTY:
-  case M_PRE_LONG:
-  case M_PRE_FAIL:
-  case M_PRE_LAST:
-    break;
-  }
-
-  return 0;
-}
-
-/**************************************************************************
-  Find the larger common prefix.
-
-  prefixes - A list of prefixes.
-  num_prefixes - The number of prefixes.
-  buf - The buffer to set.
-  buf_len - The maximal size of the buffer.
-
-  Returns the lenght of the common prefix (in bytes).
-**************************************************************************/
-static size_t get_common_prefix(const char *const *prefixes,
-                                size_t num_prefixes,
-                                char *buf, size_t buf_len)
-{
-  const char *p;
-  char *q;
-  size_t i;
-
-  fc_strlcpy(buf, prefixes[0], buf_len);
-  for (i = 1; i < num_prefixes; i++) {
-    for (p = prefixes[i], q = buf; *p != '\0' && *q != '\0';
-         p = g_utf8_next_char(p), q = g_utf8_next_char(q)) {
-      if (g_unichar_toupper(g_utf8_get_char(p))
-          != g_unichar_toupper(g_utf8_get_char(q))) {
-        *q = '\0';
-        break;
-      }
-    }
-  }
-
- return strlen(buf);
-}
-
-/**************************************************************************
-  Autocompletes the input line with a player or user name.
-  Returns FALSE if there is not string to complete.
-**************************************************************************/
-static bool chatline_autocomplete(GtkEditable *editable)
-{
-#define MAX_MATCHES 10
-  const char *name[MAX_MATCHES];
-  char buf[MAX_LEN_NAME * MAX_MATCHES];
-  gint pos;
-  gchar *chars, *p;
-  int num, i;
-  size_t prefix_len;
-
-  /* Part 1: get the string to complete. */
-  pos = gtk_editable_get_position(editable);
-  chars = gtk_editable_get_chars(editable, 0, pos);
-  for (p = chars + strlen(chars) - 1; p >= chars; p = g_utf8_prev_char(p)) {
-    if (!g_unichar_isalnum(g_utf8_get_char(p))) {
-      break;
-    }
-  }
-  p = g_utf8_next_char(p);
-
-  prefix_len = strlen(p);
-  if (0 == prefix_len) {
-    /* Empty: nothing to complete, propagate the event. */
-    g_free(chars);
-    return FALSE;
-  }
-
-  /* Part 2: compare with player and user names. */
-  num = check_player_or_user_name(p, name, MAX_MATCHES);
-  if (1 == num) {
-    gtk_editable_delete_text(editable, pos - prefix_len, pos);
-    pos -= prefix_len;
-    gtk_editable_insert_text(editable, name[0], strlen(name[0]), &pos);
-    gtk_editable_set_position(editable, pos);
-    g_free(chars);
-    return TRUE;
-  } else if (num > 1) {
-    if (get_common_prefix(name, num, buf, sizeof(buf)) > prefix_len) {
-      gtk_editable_delete_text(editable, pos - prefix_len, pos);
-      pos -= prefix_len;
-      gtk_editable_insert_text(editable, buf, strlen(buf), &pos);
-      gtk_editable_set_position(editable, pos);
-    }
-    sz_strlcpy(buf, name[0]);
-    for (i = 1; i < num; i++) {
-      cat_snprintf(buf, sizeof(buf), ", %s", name[i]);
-    }
-    output_window_printf(ftc_client, _("Suggestions: %s."), buf);
-  }
-
-  g_free(chars);
-  return TRUE;
 }
 
 /**************************************************************************
@@ -377,11 +220,6 @@ static gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
       }
       gtk_editable_set_position(GTK_EDITABLE(w), -1);
       return TRUE;
-
-    case GDK_Tab:
-      if (gui_gtk2_chatline_autocompletion) {
-        return chatline_autocomplete(GTK_EDITABLE(w));
-      }
 
     default:
       break;
@@ -536,12 +374,12 @@ static void scroll_if_necessary(GtkTextView *textview,
   GtkAdjustment *vadj;
   gdouble val, max, upper, page_size;
 
-  fc_assert_ret(textview != NULL);
-  fc_assert_ret(scroll_target != NULL);
+  g_return_if_fail(textview != NULL);
+  g_return_if_fail(scroll_target != NULL);
 
   sw = gtk_widget_get_parent(GTK_WIDGET(textview));
-  fc_assert_ret(sw != NULL);
-  fc_assert_ret(GTK_IS_SCROLLED_WINDOW(sw));
+  g_return_if_fail(sw != NULL);
+  g_return_if_fail(GTK_IS_SCROLLED_WINDOW(sw));
 
   vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(sw));
   val = gtk_adjustment_get_value(GTK_ADJUSTMENT(vadj));
@@ -601,7 +439,7 @@ static gboolean event_after(GtkWidget *text_view, GdkEventButton *event)
         switch (type) {
         case TLT_CITY:
           {
-            struct city *pcity = game_city_by_number(id);
+            struct city *pcity = game_find_city_by_number(id);
 
             if (pcity) {
               ptile = client_city_tile(pcity);
@@ -620,7 +458,7 @@ static gboolean event_after(GtkWidget *text_view, GdkEventButton *event)
           break;
         case TLT_UNIT:
           {
-            struct unit *punit = game_unit_by_number(id);
+            struct unit *punit = game_find_unit_by_number(id);
 
             if (punit) {
               ptile = unit_tile(punit);
@@ -932,7 +770,7 @@ void log_output_window(void)
 }
 
 /**************************************************************************
-  Clear output window. This does *not* destroy it, or free its resources
+...
 **************************************************************************/
 void clear_output_window(void)
 {
@@ -940,7 +778,7 @@ void clear_output_window(void)
 }
 
 /**************************************************************************
-  Set given text to output window
+...
 **************************************************************************/
 void set_output_window_text(const char *text)
 {
@@ -1071,7 +909,7 @@ static void color_set(GObject *object, const gchar *color_target,
       pixmap = gdk_pixmap_new(root_window, 16, 16, -1);
       gdk_gc_set_foreground(fill_bg_gc, current_color);
       gdk_draw_rectangle(pixmap, fill_bg_gc, TRUE, 0, 0, 16, 16);
-      image = gtk_image_new_from_pixmap(pixmap, NULL);
+      image = gtk_pixmap_new(pixmap, NULL);
       gtk_tool_button_set_icon_widget(button, image);
       gtk_widget_show(image);
       g_object_unref(G_OBJECT(pixmap));
@@ -1118,7 +956,7 @@ static void select_color_callback(GtkToolButton *button, gpointer data)
   GdkColor *current_color = g_object_get_data(G_OBJECT(data), color_target);
 
   /* TRANS: "text" or "background". */
-  fc_snprintf(buf, sizeof(buf), _("Select the %s color"),
+  my_snprintf(buf, sizeof(buf), _("Select the %s color"),
               (const char *) g_object_get_data(G_OBJECT(button),
                                                "color_info"));
   dialog = gtk_dialog_new_with_buttons(buf, NULL, GTK_DIALOG_MODAL,
@@ -1289,6 +1127,7 @@ void chatline_init(void)
 {
   GtkWidget *vbox, *toolbar, *hbox, *button, *entry, *bbox;
   GtkToolItem *item;
+  GtkTooltips *tooltips;
   GdkColor color;
 
   /* Chatline history. */
@@ -1299,6 +1138,9 @@ void chatline_init(void)
 
   /* Inputline toolkit. */
   memset(&toolkit, 0, sizeof(toolkit));
+
+  tooltips = gtk_tooltips_new();
+  gtk_tooltips_enable(tooltips);
 
   vbox = gtk_vbox_new(FALSE, 2);
   toolkit.main_widget = vbox;
@@ -1324,7 +1166,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_BOLD));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Bold (Ctrl-B)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Bold (Ctrl-B)"), NULL);
 
   /* Italic button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_ITALIC);
@@ -1332,7 +1175,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_ITALIC));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Italic (Ctrl-I)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Italic (Ctrl-I)"), NULL);
 
   /* Strike button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_STRIKETHROUGH);
@@ -1340,7 +1184,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_STRIKE));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Strikethrough (Ctrl-S)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Strikethrough (Ctrl-S)"), NULL);
 
   /* Underline button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_UNDERLINE);
@@ -1348,7 +1193,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_UNDERLINE));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Underline (Ctrl-U)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Underline (Ctrl-U)"), NULL);
 
   /* Color button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_SELECT_COLOR);
@@ -1356,7 +1202,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_COLOR));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Color (Ctrl-C)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Color (Ctrl-C)"), NULL);
 
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar),
                      gtk_separator_tool_item_new(), -1);
@@ -1364,34 +1211,33 @@ void chatline_init(void)
   /* Foreground selector. */
   item = gtk_tool_button_new(NULL, "");
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
-  g_object_set_data(G_OBJECT(item), "color_target", fc_strdup("fg_color"));
-  g_object_set_data(G_OBJECT(item), "color_info",
-                    fc_strdup(_("foreground")));
+  g_object_set_data(G_OBJECT(item), "color_target", mystrdup("fg_color"));
+  g_object_set_data(G_OBJECT(item), "color_info", mystrdup(_("foreground")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Select the text color"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Select the text color"), NULL);
   if (gdk_color_parse("#000000", &color)) {
     /* Set default foreground color. */
     color_set(G_OBJECT(entry), "fg_color", &color, GTK_TOOL_BUTTON(item));
   } else {
-    log_error("Failed to set the default foreground color.");
+    freelog(LOG_ERROR, "Failed to set the default foreground color.");
   }
 
   /* Background selector. */
   item = gtk_tool_button_new(NULL, "");
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
-  g_object_set_data(G_OBJECT(item), "color_target", fc_strdup("bg_color"));
-  g_object_set_data(G_OBJECT(item), "color_info",
-                    fc_strdup(_("background")));
+  g_object_set_data(G_OBJECT(item), "color_target", mystrdup("bg_color"));
+  g_object_set_data(G_OBJECT(item), "color_info", mystrdup(_("background")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item),
-                              _("Select the background color"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Select the background color"), NULL);
   if (gdk_color_parse("#ffffff", &color)) {
     /* Set default background color. */
     color_set(G_OBJECT(entry), "bg_color", &color, GTK_TOOL_BUTTON(item));
   } else {
-    log_error("Failed to set the default background color.");
+    freelog(LOG_ERROR, "Failed to set the default background color.");
   }
 
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar),
@@ -1402,9 +1248,9 @@ void chatline_init(void)
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
   g_signal_connect_swapped(item, "clicked",
                            G_CALLBACK(inputline_return), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item),
-                              /* TRANS: "Return" means the return key. */
-                              _("Send the chat (Return)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       /* TRANS: "Return" means the return key. */
+                       _("Send the chat (Return)"), NULL);
 
   /* Second line */
   hbox = gtk_hbox_new(FALSE, 4);
@@ -1421,7 +1267,7 @@ void chatline_init(void)
 #endif
                                              GTK_ICON_SIZE_MENU));
   g_signal_connect(button, "toggled", G_CALLBACK(button_toggled), &toolkit);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(button), _("Chat tools"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(button), _("Chat tools"), NULL);
   toolkit.toggle_button = button;
 
   /* Entry. */

@@ -13,10 +13,6 @@
 #ifndef FC__VERSION_H
 #define FC__VERSION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #ifdef HAVE_CONFIG_H
 #ifndef FC_CONFIG_H		/* this should be defined in config.h */
 #error Files including versions.h should also include config.h directly
@@ -38,9 +34,5 @@ const char *freeciv_motto(void);
 
 /* If returns NULL, not a beta version. */
 const char *beta_message(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__VERSION_H */

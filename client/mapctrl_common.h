@@ -14,17 +14,9 @@
 #ifndef FC__MAPCTRL_COMMON_H
 #define FC__MAPCTRL_COMMON_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+#include "map.h"		/* enum direction8 */
+#include "shared.h"		/* bool type */
 
-/* utility */
-#include "support.h"            /* bool type */
-
-/* common */
-#include "map.h"                /* enum direction8 */
-
-/* client */
 #include "control.h"            /* quickselect_type */
 
 extern bool rbutton_down;
@@ -35,7 +27,7 @@ extern bool keyboardless_goto_button_down;
 extern bool keyboardless_goto_active;
 extern struct tile *keyboardless_goto_start_tile;
 
-void anchor_selection_rectangle(int canvas_x, int canvas_y);
+void anchor_selection_rectangle(int canvas_x, int canvas_y, bool append);
 void update_selection_rectangle(int canvas_x, int canvas_y);
 void redraw_selection_rectangle(void);
 void cancel_selection_rectangle(void);
@@ -47,11 +39,11 @@ void toggle_tile_hilite(struct tile *ptile);
 
 void key_city_overlay(int canvas_x, int canvas_y);
 
-bool clipboard_copy_production(struct tile *ptile);
+void clipboard_copy_production(struct tile *ptile);
 void clipboard_paste_production(struct city *pcity);
 void upgrade_canvas_clipboard(void);
 
-void release_right_button(int canvas_x, int canvas_y, bool shift);
+void release_right_button(int canvas_x, int canvas_y);
 
 void release_goto_button(int canvas_x, int canvas_y);
 void maybe_activate_keyboardless_goto(int canvas_x, int canvas_y);
@@ -70,9 +62,5 @@ void overview_update_line(int overview_x, int overview_y);
 void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list);
 
 extern struct city *city_workers_display;
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__MAPCTRL_COMMON_H */

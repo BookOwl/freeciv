@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -471,7 +471,7 @@ static void help_update_improvement(const struct help_item *pitem,
                                     char *title)
 {
   char buf[64000];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
 
   create_help_page(HELP_IMPROVEMENT);
 
@@ -515,7 +515,7 @@ static void help_update_wonder(const struct help_item *pitem,
                                char *title)
 {
   char buf[64000];
-  struct impr_type *imp = improvement_by_translated_name(title);
+  struct impr_type *imp = find_improvement_by_translated_name(title);
 
   create_help_page(HELP_WONDER);
 
@@ -567,7 +567,7 @@ static void help_update_terrain(const struct help_item *pitem,
 				char *title)
 {
   char buf[64000];
-  struct terrain *pterrain = terrain_by_translated_name(title);
+  struct terrain *pterrain = find_terrain_by_translated_name(title);
 
   create_help_page(HELP_TERRAIN);
 
@@ -707,7 +707,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 				  char *title)
 {
   char buf[64000];
-  struct unit_type *utype = unit_type_by_translated_name(title);
+  struct unit_type *utype = find_unit_type_by_translated_name(title);
 
   create_help_page(HELP_UNIT);
 
@@ -772,7 +772,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
   struct fcwin_box *hbox;
   char buf[64000];
   int i;
-  struct advance *padvance = advance_by_translated_name(title);
+  struct advance *padvance = find_advance_by_translated_name(title);
 
   create_help_page(HELP_TECH);
 
@@ -782,7 +782,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 	  TECH_TREE_EXPANDED_DEPTH, NULL);
     */
     helptext_advance(buf, sizeof(buf), client.conn.playing, pitem->text, i);
-    fc_break_lines(buf, 68);
+    wordwrap_string(buf, 68);
     fcwin_box_add_static(helpdlg_page_vbox,buf,0,SS_LEFT,FALSE,FALSE,5);
 
     improvement_iterate(pimprove) {
@@ -876,7 +876,7 @@ static void help_update_government(const struct help_item *pitem,
                                    char *title)
 {
   char buf[64000];
-  struct government *gov = government_by_translated_name(title);
+  struct government *gov = find_government_by_translated_name(title);
 
   if (!gov) {
     strcat(buf, pitem->text);

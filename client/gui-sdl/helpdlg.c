@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -86,7 +86,7 @@ void popup_help_dialog_string(const char *item)
 **************************************************************************/
 void popup_help_dialog_typed(const char *item, enum help_page_type eHPT)
 {
-  log_debug("popup_help_dialog_typed : PORT ME");
+  freelog(LOG_DEBUG, "popup_help_dialog_typed : PORT ME");
 }
 
 /**************************************************************************
@@ -159,7 +159,7 @@ static void redraw_impr_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /*------------------------------------- */
   redraw_group(pHelpDlg->pBeginWidgetList, pWindow->prev->prev, FALSE);
@@ -228,10 +228,8 @@ void popup_impr_info(Impr_type_id impr)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;
@@ -249,7 +247,7 @@ void popup_impr_info(Impr_type_id impr)
     SDL_FillRect(pBackgroundTmpl, NULL, map_rgba(pBackgroundTmpl->format, bg_color));
     putframe(pBackgroundTmpl,
              0, 0, pBackgroundTmpl->w - 1, pBackgroundTmpl->h - 1,
-             get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
     impr_type_count = 0;
     improvement_iterate(pImprove) {
@@ -310,7 +308,7 @@ void popup_impr_info(Impr_type_id impr)
 #endif
 
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 
@@ -551,7 +549,7 @@ static void redraw_unit_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /*------------------------------------- */
   redraw_group(pHelpDlg->pBeginWidgetList, pWindow->prev->prev, FALSE);
@@ -621,10 +619,8 @@ void popup_unit_info(Unit_type_id type_id)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;
@@ -644,7 +640,7 @@ void popup_unit_info(Unit_type_id type_id)
     SDL_FillRect(pBackgroundTmpl, NULL, map_rgba(pBackgroundTmpl->format, bg_color));
     putframe(pBackgroundTmpl,
              0, 0, pBackgroundTmpl->w - 1, pBackgroundTmpl->h - 1,
-             get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
     utype_count = 0;
     unit_type_iterate(ut) {
@@ -703,7 +699,7 @@ void popup_unit_info(Unit_type_id type_id)
 #endif
 
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 
@@ -740,7 +736,7 @@ void popup_unit_info(Unit_type_id type_id)
   {
     char buf[2048];
 
-    fc_snprintf(buf, sizeof(buf), "%s %d %s",
+    my_snprintf(buf, sizeof(buf), "%s %d %s",
               _("Cost:"), utype_build_shield_cost(pUnitType),
               PL_("shield", "shields", utype_build_shield_cost(pUnitType)));
 
@@ -984,7 +980,7 @@ static void redraw_tech_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /* -------------------------- */
   pStr = create_str16_from_char(_("Allows"), adj_font(14));
@@ -1136,7 +1132,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
 
   /* target governments */
   gov_count = 0;
-  governments_iterate(gov) {
+  government_iterate(gov) {
     requirement_vector_iterate(&(gov->reqs), preq) {
       if (VUT_ADVANCE == preq->source.kind
        && advance_number(preq->source.value.advance) == tech) {
@@ -1154,7 +1150,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
         gov_count++;
       }
     } requirement_vector_iterate_end;
-  } governments_iterate_end;
+  } government_iterate_end;
 
   /* target improvements */
   imp_count = 0;
@@ -1175,7 +1171,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
         set_wstate(pWidget, FC_WS_NORMAL);
         if (is_wonder(pImprove))
         {
-               pWidget->string16->fgcol = *get_theme_color(COLOR_THEME_CITYDLG_LUX);
+               pWidget->string16->fgcol = *get_game_colorRGB(COLOR_THEME_CITYDLG_LUX);
         }
         pWidget->action = change_impr_callback;
         pWidget->ID = MAX_ID - improvement_number(pImprove);
@@ -1331,7 +1327,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
 
 static void redraw_tech_tree_dlg(void)
 {
-  SDL_Color *line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE);
+  SDL_Color *line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE);
   SDL_Color bg_color = {255, 255, 255, 64};
 
   struct widget *pWindow = pHelpDlg->pEndWidgetList;
@@ -1352,7 +1348,7 @@ static void redraw_tech_tree_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /* Draw Req arrows */
   i = 0;
@@ -1486,13 +1482,13 @@ static void redraw_tech_tree_dlg(void)
     switch((i % mod))
     {
       case 2:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE2);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE2);
       break;
       case 1:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE3);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE3);
       break;
       default:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE);
       break;
     }
 
@@ -1929,10 +1925,8 @@ void popup_tech_info(Tech_type_id tech)
 
     /* close button */
     pCloseButton = create_themeicon(pTheme->Small_CANCEL_Icon, pWindow->dst,
-                                    WF_WIDGET_HAS_INFO_LABEL
-                                    | WF_RESTORE_BACKGROUND);
-    pCloseButton->info_label =
-        create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
+                                    WF_WIDGET_HAS_INFO_LABEL | WF_RESTORE_BACKGROUND);
+    pCloseButton->string16 = create_str16_from_char(_("Close Dialog (Esc)"), adj_font(12));
     pCloseButton->action = exit_help_dlg_callback;
     set_wstate(pCloseButton, FC_WS_NORMAL);
     pCloseButton->key = SDLK_ESCAPE;
@@ -1986,7 +1980,7 @@ void popup_tech_info(Tech_type_id tech)
       set_wstate(pListToggleButton, FC_WS_NORMAL);
     }
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 

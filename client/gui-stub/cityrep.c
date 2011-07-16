@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -22,7 +22,7 @@
 /**************************************************************************
   Display the city report dialog.  Optionally raise it.
 **************************************************************************/
-void city_report_dialog_popup(bool raise)
+void popup_city_report_dialog(bool raise)
 {
   /* PORTME */
 }
@@ -30,7 +30,7 @@ void city_report_dialog_popup(bool raise)
 /**************************************************************************
   Update (refresh) the entire city report dialog.
 **************************************************************************/
-void real_city_report_dialog_update(void)
+void city_report_dialog_update(void)
 {
   /* PORTME */
 }
@@ -38,7 +38,7 @@ void real_city_report_dialog_update(void)
 /**************************************************************************
   Update the information for a single city in the city report.
 **************************************************************************/
-void real_city_report_update_city(struct city *pcity)
+void city_report_dialog_update_city(struct city *pcity)
 {
   /* PORTME */
 }

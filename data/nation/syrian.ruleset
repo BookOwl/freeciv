@@ -5,23 +5,13 @@ plural=_("?plural:Syrians")
 groups="Modern", "Asian"
 legend=_("The modern Syrian Arab Republic was formed from a French mandate\
  and gradually gained independence during the 1940s.")
-
-leaders = {
- "name",                        "sex"
- "Taj al-Din al-Hasani",        "Male"
- "Hashim al-Atassi",            "Male"
- "Khalid al-Azm",               "Male"
- "Shukri al-Kuwatli",           "Male"
- "Hafez al-Assad",              "Male"
-}
-
-ruler_titles = {
- "government",     "male_title",              "female_title"
- "Despotism",      _("Sheikh %s"),            _("?female:Shaykha %s")
- "Fundamentalism", _("Caliph %s"),            _("Calipha %s")
- "Monarchy",       _("Emir %s"),              _("Emira %s")
-}
-
+leader=
+ "Taj al-Din al-Hasani",
+ "Hashim al-Atassi",
+ "Khalid al-Azm",
+ "Shukri al-Kuwatli",
+ "Hafez al-Assad"
+leader_sex="Male", "Male", "Male", "Male", "Male"
 flag="syria"
 flag_alt = "-"
 city_style = "Classical"
@@ -33,7 +23,7 @@ init_units=""
 
 ; Similar flags:
 conflicts_with="iraqi"
-civilwar_nations="turkish", "israeli", "lebanese"
+civilwar_nations="turkish", "israeli"
 
 ; http://pl.wikipedia.org/wiki/Miasta_Syrii
 cities =
@@ -41,17 +31,17 @@ cities =
  "Halab",		; Aleppo
  "Hims",		; Homs
  "Hama",
- "Al-Ladhiqiya",	; Latakia
+ "Al-Ladhiqiyah",	; Latakia
  "Dayr as-Zawr",
- "Ar-Raqqa",
+ "Ar-Raqqah",
  "Al-Bab",
  "Duma",
  "Safita",
- "Salamiya",
+ "Salamiyah",
  "Tartous",
  "Ath-Thawra",
  "Al-Qamishli",
- "Al-Hasaka",
+ "Al-Hasakah",
  "Dar'a",
  "Darayya",
  "Manbij",

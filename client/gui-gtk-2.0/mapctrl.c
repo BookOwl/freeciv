@@ -12,20 +12,19 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
+#include <assert.h>
 #include <gtk/gtk.h>
 
-/* utility */
-#include "fcintl.h"
-#include "support.h"
-
-/* common */
+/* common & utility */
 #include "combat.h"
+#include "fcintl.h"
 #include "game.h"
 #include "map.h"
 #include "player.h"
+#include "support.h"
 #include "unit.h"
 
 #include "overview_common.h"
@@ -56,7 +55,7 @@ struct tmousepos { int x, y; };
 extern gint cur_x, cur_y;
 
 /**************************************************************************
-  Button released when showing info label
+...
 **************************************************************************/
 static gboolean popit_button_release(GtkWidget *w, GdkEventButton *event)
 {
@@ -154,7 +153,7 @@ static void popit(GdkEventButton *event, struct tile *ptile)
 }
 
 /**************************************************************************
-  Information label destruction requested
+...
 **************************************************************************/
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
 {
@@ -186,7 +185,7 @@ static void name_new_city_popup_callback(gpointer data, gint response,
  punit = (settler) unit which builds the city
  suggestname = suggetion of the new city's name
 **************************************************************************/
-void popup_newcity_dialog(struct unit *punit, const char *suggestname)
+void popup_newcity_dialog(struct unit *punit, char *suggestname)
 {
   input_dialog_create(GTK_WINDOW(toplevel), /*"shellnewcityname" */
                       _("Build New City"),
@@ -218,8 +217,7 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     release_goto_button(ev->x, ev->y);
   }
   if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
-    release_right_button(ev->x, ev->y,
-                         (ev->state & GDK_SHIFT_MASK) != 0);
+    release_right_button(ev->x, ev->y);
   }
 
   return TRUE;
@@ -258,7 +256,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     else if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_SEA);
     }
-    /* <SHIFT> + LMB: Append focus unit. */
+    /* <SHIFT> + LMB: Append focus unit Production. */
     else if (ptile && (ev->state & GDK_SHIFT_MASK)) {
       action_button_pressed(ev->x, ev->y, SELECT_APPEND);
     }
@@ -310,29 +308,28 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
       clipboard_paste_production(pcity);
       cancel_tile_hiliting();
     }
-    /* <SHIFT> + RMB on city/unit: Copy Production. */
-    /* If nothing to copy, fall through to rectangle selection. */
-    else if (ev->state & GDK_SHIFT_MASK
-             && clipboard_copy_production(ptile)) {
-      /* Already done the copy */
+    /* <SHIFT> + RMB: Copy Production. */
+    else if (ev->state & GDK_SHIFT_MASK) {
+      clipboard_copy_production(ptile);
     }
     /* <CONTROL> + RMB : Quickselect a land unit. */
     else if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_LAND);
     }
-    /* Plain RMB click. Area selection. */
+    /* Plain RMB click. */
     else {
       /*  A foolproof user will depress button on canvas,
        *  release it on another widget, and return to canvas
        *  to find rectangle still active.
        */
       if (rectangle_active) {
-        release_right_button(ev->x, ev->y,
-                             (ev->state & GDK_SHIFT_MASK) != 0);
+        release_right_button(ev->x, ev->y);
         return TRUE;
       }
+      cancel_tile_hiliting();
       if (hover_state == HOVER_NONE) {
-        anchor_selection_rectangle(ev->x, ev->y);
+        anchor_selection_rectangle(ev->x, ev->y,
+				   (ev->state & GDK_SHIFT_MASK) != 0);
         rbutton_down = TRUE; /* causes rectangle updates */
       }
     }
@@ -347,7 +344,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 }
 
 /**************************************************************************
-  Update goto line so that destination is at current mouse pointer location.
+...
 **************************************************************************/
 void create_line_at_mouse_pos(void)
 {
@@ -441,7 +438,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 }
 
 /**************************************************************************
-  Overview canvas moved
+...
 **************************************************************************/
 gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
@@ -450,7 +447,7 @@ gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 }
 
 /**************************************************************************
-  Button pressed at overview
+...
 **************************************************************************/
 gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 {
@@ -465,7 +462,7 @@ gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer dat
     center_tile_mapcanvas(map_pos_to_tile(xtile, ytile));
   } else if (can_client_issue_orders() && (ev->button == 1)) {
     do_map_click(map_pos_to_tile(xtile, ytile),
-		 (ev->state & GDK_SHIFT_MASK) ? SELECT_APPEND : SELECT_POPUP);
+		 (ev->state & GDK_SHIFT_MASK) ? SELECT_POPUP : SELECT_APPEND);
   }
 
   return TRUE;

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -286,7 +286,7 @@ void spaceship_dialog_update_image(struct spaceship_dialog *pdialog)
 void close_spaceship_dialog(struct spaceship_dialog *pdialog)
 {
   XtDestroyWidget(pdialog->shell);
-  dialog_list_remove(dialog_list, pdialog);
+  dialog_list_unlink(dialog_list, pdialog);
 
   free(pdialog);
 }

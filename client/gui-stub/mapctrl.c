@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -23,7 +23,7 @@
   Popup a dialog to ask for the name of a new city.  The given string
   should be used as a suggestion.
 **************************************************************************/
-void popup_newcity_dialog(struct unit *punit, const char *suggestname)
+void popup_newcity_dialog(struct unit *punit, char *suggestname)
 {
   /* PORTME */
 }

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -38,8 +38,6 @@
 #include "mapview.h"
 #include "packhand.h"
 
-/* client/gui-gtk-2.0 */
-#include "citydlg.h"
 #include "dialogs.h"
 #include "wldlg.h"
 
@@ -54,7 +52,7 @@ static GtkWidget  *spy_sabotage_shell;
 static int         sabotage_improvement;
 
 /****************************************************************
-  User responded to bribe dialog
+...
 *****************************************************************/
 static void bribe_response(GtkWidget *w, gint response)
 {
@@ -66,30 +64,24 @@ static void bribe_response(GtkWidget *w, gint response)
 }
 
 /****************************************************************
-  Ask the server how much the bribe is
+...  Ask the server how much the bribe is
 *****************************************************************/
 static void diplomat_bribe_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_unit_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_unit_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_BRIBE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  Popup unit bribe dialog
+...
 *****************************************************************/
 void popup_bribe_dialog(struct unit *punit, int cost)
 {
   GtkWidget *shell;
-  char buf[1024];
-
-  fc_snprintf(buf, ARRAY_SIZE(buf), PL_("Treasury contains %d gold.",
-                                        "Treasury contains %d gold.",
-                                        client_player()->economic.gold),
-              client_player()->economic.gold);
 
   if (unit_has_type_flag(punit, F_UNBRIBABLE)) {
     shell = popup_choice_dialog(GTK_WINDOW(toplevel), _("Ooops..."),
@@ -97,20 +89,19 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                                  GTK_STOCK_OK, NULL, NULL, NULL);
     gtk_window_present(GTK_WINDOW(shell));
     return;
-  } else if (cost <= client_player()->economic.gold) {
+  } else if (cost <= client.conn.playing->economic.gold) {
     shell = gtk_message_dialog_new(NULL, 0,
       GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-      /* TRANS: %s is pre-pluralised "Treasury contains %d gold." */
-      PL_("Bribe unit for %d gold?\n%s",
-          "Bribe unit for %d gold?\n%s", cost), cost, buf);
+      _("Bribe unit for %d gold?\nTreasury contains %d gold."),
+      cost, client.conn.playing->economic.gold);
     gtk_window_set_title(GTK_WINDOW(shell), _("Bribe Enemy Unit"));
     setup_dialog(shell, toplevel);
   } else {
-    shell = gtk_message_dialog_new(NULL, 0,
+    shell = gtk_message_dialog_new(NULL,
+      0,
       GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-      /* TRANS: %s is pre-pluralised "Treasury contains %d gold." */
-      PL_("Bribing the unit costs %d gold.\n%s",
-          "Bribing the unit costs %d gold.\n%s", cost), cost, buf);
+      _("Bribing the unit costs %d gold.\nTreasury contains %d gold."),
+      cost, client.conn.playing->economic.gold);
     gtk_window_set_title(GTK_WINDOW(shell), _("Traitors Demand Too Much!"));
     setup_dialog(shell, toplevel);
   }
@@ -120,33 +111,33 @@ void popup_bribe_dialog(struct unit *punit, int cost)
 }
 
 /****************************************************************
-  User selected sabotaging from choice dialog
+...
 *****************************************************************/
 static void diplomat_sabotage_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-                            diplomat_target_id, B_LAST + 1);
+			    diplomat_target_id, -1);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User selected investigating from choice dialog
+...
 *****************************************************************/
 static void diplomat_investigate_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_city_by_number(diplomat_target_id)
-      && NULL != game_unit_by_number(diplomat_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_INVESTIGATE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User selected unit sabotaging from choice dialog
+...
 *****************************************************************/
 static void spy_sabotage_unit_callback(GtkWidget *w, gpointer data)
 {
@@ -156,53 +147,53 @@ static void spy_sabotage_unit_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  User selected embassy establishing from choice dialog
+...
 *****************************************************************/
 static void diplomat_embassy_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     (game_find_city_by_number(diplomat_target_id))) { 
     request_diplomat_action(DIPLOMAT_EMBASSY, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User selected poisoning from choice dialog
+...
 *****************************************************************/
 static void spy_poison_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) &&
+     (game_find_city_by_number(diplomat_target_id))) {
     request_diplomat_action(SPY_POISON, diplomat_id, diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User selected stealing from choice dialog
+...
 *****************************************************************/
 static void diplomat_steal_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if(game_find_unit_by_number(diplomat_id) && 
+     game_find_city_by_number(diplomat_target_id)) { 
     request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-                            diplomat_target_id, A_UNSET);
+			    diplomat_target_id, A_UNSET);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User responded to steal advances dialog
+...
 *****************************************************************/
 static void spy_advances_response(GtkWidget *w, gint response, gpointer data)
 {
   if (response == GTK_RESPONSE_ACCEPT && steal_advance > 0) {
-    if (NULL != game_unit_by_number(diplomat_id)
-        && NULL != game_city_by_number(diplomat_target_id)) {
+    if (game_find_unit_by_number(diplomat_id) && 
+        game_find_city_by_number(diplomat_target_id)) { 
       request_diplomat_action(DIPLOMAT_STEAL, diplomat_id,
-                              diplomat_target_id, steal_advance);
+			      diplomat_target_id, steal_advance);
     }
   }
   gtk_widget_destroy(spy_tech_shell);
@@ -210,7 +201,7 @@ static void spy_advances_response(GtkWidget *w, gint response, gpointer data)
 }
 
 /****************************************************************
-  User selected entry in steal advances dialog
+...
 *****************************************************************/
 static void spy_advances_callback(GtkTreeSelection *select, gpointer data)
 {
@@ -231,7 +222,7 @@ static void spy_advances_callback(GtkTreeSelection *select, gpointer data)
 }
 
 /****************************************************************
-  Create spy's tech stealing dialog
+...
 *****************************************************************/
 static void create_advances_list(struct player *pplayer,
 				 struct player *pvictim)
@@ -337,15 +328,15 @@ static void create_advances_list(struct player *pplayer,
 }
 
 /****************************************************************
-  User has responded to spy's sabotage building dialog
+...
 *****************************************************************/
 static void spy_improvements_response(GtkWidget *w, gint response, gpointer data)
 {
   if (response == GTK_RESPONSE_ACCEPT && sabotage_improvement > -2) {
-    if (NULL != game_unit_by_number(diplomat_id)
-        && NULL != game_city_by_number(diplomat_target_id)) {
+    if (game_find_unit_by_number(diplomat_id) && 
+        game_find_city_by_number(diplomat_target_id)) { 
       request_diplomat_action(DIPLOMAT_SABOTAGE, diplomat_id,
-                              diplomat_target_id, sabotage_improvement + 1);
+			      diplomat_target_id, sabotage_improvement + 1);
     }
   }
   gtk_widget_destroy(spy_sabotage_shell);
@@ -353,7 +344,7 @@ static void spy_improvements_response(GtkWidget *w, gint response, gpointer data
 }
 
 /****************************************************************
-  User has selected new building from spy's sabotage dialog
+...
 *****************************************************************/
 static void spy_improvements_callback(GtkTreeSelection *select, gpointer data)
 {
@@ -374,7 +365,7 @@ static void spy_improvements_callback(GtkTreeSelection *select, gpointer data)
 }
 
 /****************************************************************
-  Creates spy's building sabotaging dialog
+...
 *****************************************************************/
 static void create_improvements_list(struct player *pplayer,
 				     struct city *pcity)
@@ -469,11 +460,11 @@ static void create_improvements_list(struct player *pplayer,
 }
 
 /****************************************************************
-  Popup tech stealing dialog with list of possible techs
+...
 *****************************************************************/
 static void spy_steal_popup(GtkWidget *w, gpointer data)
 {
-  struct city *pvcity = game_city_by_number(diplomat_target_id);
+  struct city *pvcity = game_find_city_by_number(diplomat_target_id);
   struct player *pvictim = NULL;
 
   if(pvcity)
@@ -496,10 +487,10 @@ pvictim to NULL and account for !pvictim in create_advances_list. -- Syela */
 *****************************************************************/
 static void spy_request_sabotage_list(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_city_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_SABOTAGE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
@@ -521,16 +512,16 @@ void popup_sabotage_dialog(struct city *pcity)
 *****************************************************************/
 static void diplomat_incite_callback(GtkWidget *w, gpointer data)
 {
-  if (NULL != game_unit_by_number(diplomat_id)
-      && NULL != game_city_by_number(diplomat_target_id)) {
+  if (game_find_unit_by_number(diplomat_id)
+   && game_find_city_by_number(diplomat_target_id)) {
     request_diplomat_answer(DIPLOMAT_INCITE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  User has responded to incite dialog
+...
 *****************************************************************/
 static void incite_response(GtkWidget *w, gint response)
 {
@@ -547,13 +538,7 @@ Popup the yes/no dialog for inciting, since we know the cost now
 void popup_incite_dialog(struct city *pcity, int cost)
 {
   GtkWidget *shell;
-  char buf[1024];
-
-  fc_snprintf(buf, ARRAY_SIZE(buf), PL_("Treasury contains %d gold.",
-                                        "Treasury contains %d gold.",
-                                        client_player()->economic.gold),
-              client_player()->economic.gold);
-
+  
   if (INCITE_IMPOSSIBLE_COST == cost) {
     shell = gtk_message_dialog_new(NULL,
       0,
@@ -562,21 +547,20 @@ void popup_incite_dialog(struct city *pcity, int cost)
       city_name(pcity));
     gtk_window_set_title(GTK_WINDOW(shell), _("City can't be incited!"));
   setup_dialog(shell, toplevel);
-  } else if (cost <= client_player()->economic.gold) {
-    shell = gtk_message_dialog_new(NULL, 0,
+  } else if (cost <= client.conn.playing->economic.gold) {
+    shell = gtk_message_dialog_new(NULL,
+      0,
       GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
-      /* TRANS: %s is pre-pluralised "Treasury contains %d gold." */
-      PL_("Incite a revolt for %d gold?\n%s",
-          "Incite a revolt for %d gold?\n%s", cost), cost, buf);
+      _("Incite a revolt for %d gold?\nTreasury contains %d gold."),
+      cost, client.conn.playing->economic.gold);
     gtk_window_set_title(GTK_WINDOW(shell), _("Incite a Revolt!"));
     setup_dialog(shell, toplevel);
   } else {
     shell = gtk_message_dialog_new(NULL,
       0,
       GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE,
-      /* TRANS: %s is pre-pluralised "Treasury contains %d gold." */
-      PL_("Inciting a revolt costs %d gold.\n%s",
-          "Inciting a revolt costs %d gold.\n%s", cost), cost, buf);
+      _("Inciting a revolt costs %d gold.\nTreasury contains %d gold."),
+      cost, client.conn.playing->economic.gold);
     gtk_window_set_title(GTK_WINDOW(shell), _("Traitors Demand Too Much!"));
     setup_dialog(shell, toplevel);
   }
@@ -594,18 +578,18 @@ static void diplomat_keep_moving_callback(GtkWidget *w, gpointer data)
 {
   struct unit *punit;
   struct city *pcity;
-
-  if ((punit = game_unit_by_number(diplomat_id))
-      && (pcity = game_city_by_number(diplomat_target_id))
-      && !same_pos(unit_tile(punit), city_tile(pcity))) {
+  
+  if( (punit=game_find_unit_by_number(diplomat_id))
+      && (pcity=game_find_city_by_number(diplomat_target_id))
+      && !same_pos(punit->tile, pcity->tile)) {
     request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
-                            diplomat_target_id, 0);
+			    diplomat_target_id, 0);
   }
   gtk_widget_destroy(diplomat_dialog);
 }
 
 /****************************************************************
-  Diplomat dialog has been destoryed
+...
 *****************************************************************/
 static void diplomat_destroy_callback(GtkWidget *w, gpointer data)
 {
@@ -614,7 +598,7 @@ static void diplomat_destroy_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Diplomat dialog has been canceled
+...
 *****************************************************************/
 static void diplomat_cancel_callback(GtkWidget *w, gpointer data)
 {
@@ -622,7 +606,7 @@ static void diplomat_cancel_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
- Popup new diplomat dialog.
+...
 *****************************************************************/
 void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 {
@@ -637,10 +621,10 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
     /* Spy/Diplomat acting against a city */
 
     diplomat_target_id = pcity->id;
-    fc_snprintf(buf, sizeof(buf),
-                _("Your %s has arrived at %s.\nWhat is your command?"),
-                unit_name_translation(punit),
-                city_name(pcity));
+    my_snprintf(buf, sizeof(buf),
+		_("Your %s has arrived at %s.\nWhat is your command?"),
+		unit_name_translation(punit),
+		city_name(pcity));
 
     if (!unit_has_type_flag(punit, F_SPY)){
       shl = popup_choice_dialog(GTK_WINDOW(toplevel),

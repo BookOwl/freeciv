@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <time.h>
@@ -23,7 +23,7 @@
 /* common */
 #include "packets.h"
 
-/* client/include */
+/* include */
 #include "voteinfo_bar_g.h"
 
 /* client */
@@ -54,9 +54,11 @@ void voteinfo_queue_delayed_remove(int vote_no)
 {
   struct voteinfo *vi;
 
-  fc_assert_ret_msg(NULL != voteinfo_queue,
-                    "%s() called before votinfo_queue_init()!",
-                    __FUNCTION__);
+  if (voteinfo_queue == NULL) {
+    freelog(LOG_ERROR, "voteinfo_queue_delayed_remove called before "
+            "votinfo_queue_init!");
+    return;
+  }
 
   vi = voteinfo_queue_find(vote_no);
   if (vi == NULL) {
@@ -94,7 +96,7 @@ void voteinfo_queue_check_removed(void)
     voteinfo_gui_update();
   }
 
-  voteinfo_list_destroy(removed);
+  voteinfo_list_free(removed);
 }
 
 /**************************************************************************
@@ -104,16 +106,18 @@ void voteinfo_queue_remove(int vote_no)
 {
   struct voteinfo *vi;
 
-  fc_assert_ret_msg(NULL != voteinfo_queue,
-                    "%s() called before votinfo_queue_init()!",
-                    __FUNCTION__);
+  if (voteinfo_queue == NULL) {
+    freelog(LOG_ERROR, "voteinfo_queue_prepare_remove called before "
+            "votinfo_queue_init!");
+    return;
+  }
 
   vi = voteinfo_queue_find(vote_no);
   if (vi == NULL) {
     return;
   }
 
-  voteinfo_list_remove(voteinfo_queue, vi);
+  voteinfo_list_unlink(voteinfo_queue, vi);
   free(vi);
 }
 
@@ -125,9 +129,11 @@ void voteinfo_queue_add(int vote_no, const char *user, const char *desc,
 {
   struct voteinfo *vi;
 
-  fc_assert_ret_msg(NULL != voteinfo_queue,
-                    "%s() called before votinfo_queue_init()!",
-                    __FUNCTION__);
+  if (voteinfo_queue == NULL) {
+    freelog(LOG_ERROR, "voteinfo_queue_add called before "
+            "votinfo_queue_init!");
+    return;
+  }
 
   vi = fc_calloc(1, sizeof(struct voteinfo));
   vi->vote_no = vote_no;
@@ -149,9 +155,11 @@ void voteinfo_queue_add(int vote_no, const char *user, const char *desc,
 **************************************************************************/
 struct voteinfo *voteinfo_queue_find(int vote_no)
 {
-  fc_assert_ret_val_msg(NULL != voteinfo_queue, NULL,
-                        "%s() called before votinfo_queue_init()!",
-                        __FUNCTION__);
+  if (voteinfo_queue == NULL) {
+    freelog(LOG_ERROR, "voteinfo_queue_find called before "
+            "votinfo_queue_init!");
+    return NULL;
+  }
 
   voteinfo_list_iterate(voteinfo_queue, vi) {
     if (vi->vote_no == vote_no) {
@@ -188,7 +196,7 @@ void voteinfo_queue_free(void)
     }
   } voteinfo_list_iterate_end;
 
-  voteinfo_list_destroy(voteinfo_queue);
+  voteinfo_list_free(voteinfo_queue);
   voteinfo_queue = NULL;
   voteinfo_queue_current_index = 0;
 }
@@ -307,3 +315,4 @@ bool voteinfo_bar_can_be_shown(void)
               || (client_has_player()
                   && !client_is_observer())));
 }
+

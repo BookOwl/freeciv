@@ -14,11 +14,6 @@
 #ifndef FC__FC_TYPES_H
 #define FC__FC_TYPES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#include "bitvector.h"
 #include "shared.h"
 
 /* This file serves to reduce the cross-inclusion of header files which
@@ -28,39 +23,55 @@ extern "C" {
  * Nothing in this file should require anything else from the common/
  * directory! */
 
-#define MAX_NUM_PLAYER_SLOTS 128
+/* MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS <= 32 !!!! */
+#define MAX_NUM_PLAYERS  30
 #define MAX_NUM_BARBARIANS   2
-#define MAX_NUM_PLAYERS      MAX_NUM_PLAYER_SLOTS - MAX_NUM_BARBARIANS
-#define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYER_SLOTS))
+#define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYERS + MAX_NUM_BARBARIANS))
 #define MAX_NUM_ITEMS   200     /* eg, unit_types */
 #define MAX_NUM_TECH_LIST 10
 #define MAX_NUM_UNIT_LIST 10
 #define MAX_NUM_BUILDING_LIST 10
 #define MAX_LEN_VET_SHORT_NAME 8
-#define MAX_VET_LEVELS 20 /* see diplomat_success_vs_defender() */
+#define MAX_VET_LEVELS 10
 #define MAX_BASE_TYPES 32
 #define MAX_NUM_USER_UNIT_FLAGS 4
-#define MAX_NUM_LEADERS MAX_NUM_ITEMS
-#define MAX_NUM_NATION_GROUPS 128
-#define MAX_NUM_STARTPOS_NATIONS 1024
 
 /* Changing these will probably break network compatability. */
-#define MAX_LEN_NAME     48
+#define MAX_LEN_NAME     32
 #define MAX_LEN_DEMOGRAPHY 16
 #define MAX_LEN_ALLOW_TAKE 16
 #define MAX_LEN_GAME_IDENTIFIER 33
 #define MAX_GRANARY_INIS 24
 #define MAX_LEN_STARTUNIT (20+1)
-#define MAX_LEN_ENUM     64
-
-/* Line breaks after this number of characters; be carefull and use only 70 */
-#define LINE_BREAK 70
 
 /* symbol to flag missing numbers for better debugging */
 #define IDENTITY_NUMBER_ZERO (0)
 
-/* A bitvector for all player slots. */
-BV_DEFINE(bv_player, MAX_NUM_PLAYER_SLOTS);
+/* Server setting types.  Changing these will break network compatability. */
+enum sset_type {
+  SSET_BOOL, SSET_INT, SSET_STRING
+};
+
+/* The following classes determine what can be changed when.
+ * Actually, some of them have the same "changeability", but
+ * different types are separated here in case they have
+ * other uses.
+ * Also, SSET_GAME_INIT/SSET_RULES separate the two sections
+ * of server settings sent to the client.
+ * See the settings[] array for what these correspond to and
+ * explanations.
+ */
+enum sset_class {
+  SSET_MAP_SIZE,
+  SSET_MAP_GEN,
+  SSET_MAP_ADD,
+  SSET_PLAYERS,
+  SSET_GAME_INIT,
+  SSET_RULES,
+  SSET_RULES_FLEXIBLE,
+  SSET_META,
+  SSET_LAST
+};
 
 /* Changing this breaks network compatibility. */
 enum output_type_id {
@@ -91,8 +102,6 @@ enum unit_activity {
   ACTIVITY_LAST   /* leave this one last */
 };
 
-enum adv_unit_task { AUT_NONE, AUT_AUTO_SETTLER, AUT_BUILD_CITY };
-
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
 typedef int Resource_type_id;
@@ -102,9 +111,9 @@ typedef int Tech_type_id;
 typedef enum output_type_id Output_type_id;
 typedef enum unit_activity Activity_type_id;
 typedef int Nation_type_id;
+typedef int Team_type_id;
 typedef int Unit_type_id;
 typedef int Base_type_id;
-typedef unsigned char citizens;
 
 struct advance;
 struct city;
@@ -133,15 +142,14 @@ struct unit;
 typedef int Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
- * would have a recursive dependency. */
-#define SPECENUM_NAME unit_move_type
-#define SPECENUM_VALUE0 UMT_LAND
-#define SPECENUM_VALUE0NAME "Land"
-#define SPECENUM_VALUE1 UMT_SEA
-#define SPECENUM_VALUE1NAME "Sea"
-#define SPECENUM_VALUE2 UMT_BOTH
-#define SPECENUM_VALUE2NAME "Both"
-#include "specenum_gen.h"
+ * would have a recursive dependency.
+ * Order must mach order in move_type_names array. */
+enum unit_move_type {
+  LAND_MOVING = 0,
+  SEA_MOVING,
+  BOTH_MOVING,
+  MOVETYPE_LAST
+};
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
@@ -211,6 +219,15 @@ enum req_problem_type {
 #define REVERSED_RPT(x) \
   (x == RPT_CERTAIN ? RPT_POSSIBLE : RPT_CERTAIN)
 
+/* ruleset strings (such as names) are kept in their original vernacular, 
+ * translated upon first use.  The translation is cached for future use.
+ */
+struct name_translation
+{
+  const char *translated;		/* string doesn't need freeing */
+  char vernacular[MAX_LEN_NAME];	/* original string for comparisons */
+};
+
 /* Originally in requirements.h, bumped up and revised to unify with
  * city_production and worklists.  Functions remain in requirements.c
  */
@@ -237,56 +254,32 @@ typedef union {
   int unitflag;				/* enum unit_flag_id */
 } universals_u;
 
-/* The kind of universals_u (value_union_type was req_source_type). */
-#define SPECENUM_NAME universals_n
-#define SPECENUM_VALUE0 VUT_NONE
-#define SPECENUM_VALUE0NAME "None"
-#define SPECENUM_VALUE1 VUT_ADVANCE
-#define SPECENUM_VALUE1NAME "Tech"
-#define SPECENUM_VALUE2 VUT_GOVERNMENT
-#define SPECENUM_VALUE2NAME "Gov"
-#define SPECENUM_VALUE3 VUT_IMPROVEMENT
-#define SPECENUM_VALUE3NAME "Building"
-#define SPECENUM_VALUE4 VUT_SPECIAL
-#define SPECENUM_VALUE4NAME "Special"
-#define SPECENUM_VALUE5 VUT_TERRAIN
-#define SPECENUM_VALUE5NAME "Terrain"
-#define SPECENUM_VALUE6 VUT_NATION
-#define SPECENUM_VALUE6NAME "Nation"
-#define SPECENUM_VALUE7 VUT_UTYPE
-#define SPECENUM_VALUE7NAME "UnitType"
-#define SPECENUM_VALUE8 VUT_UTFLAG
-#define SPECENUM_VALUE8NAME "UnitFlag"
-#define SPECENUM_VALUE9 VUT_UCLASS
-#define SPECENUM_VALUE9NAME "UnitClass"
-#define SPECENUM_VALUE10 VUT_UCFLAG
-#define SPECENUM_VALUE10NAME "UnitClassFlag"
-#define SPECENUM_VALUE11 VUT_OTYPE
-#define SPECENUM_VALUE11NAME "OutputType"
-#define SPECENUM_VALUE12 VUT_SPECIALIST
-#define SPECENUM_VALUE12NAME "Specialist"
-/* Minimum size: at city range means city size */
-#define SPECENUM_VALUE13 VUT_MINSIZE
-#define SPECENUM_VALUE13NAME "MinSize"
-/* AI level of the player */
-#define SPECENUM_VALUE14 VUT_AI_LEVEL
-#define SPECENUM_VALUE14NAME "AI"
-/* More generic terrain type currently "Land" or "Ocean" */
-#define SPECENUM_VALUE15 VUT_TERRAINCLASS
-#define SPECENUM_VALUE15NAME "TerrainClass"
-#define SPECENUM_VALUE16 VUT_BASE
-#define SPECENUM_VALUE16NAME "Base"
-#define SPECENUM_VALUE17 VUT_MINYEAR
-#define SPECENUM_VALUE17NAME "MinYear"
-/* Terrain alterations that are possible */
-#define SPECENUM_VALUE18 VUT_TERRAINALTER
-#define SPECENUM_VALUE18NAME "TerrainAlter"
-/* Target tile is used by city. */
-#define SPECENUM_VALUE19 VUT_CITYTILE
-#define SPECENUM_VALUE19NAME "CityTile"
-/* Keep this last. */
-#define SPECENUM_COUNT VUT_COUNT
-#include "specenum_gen.h"
+/* The kind of universals_u (value_union_type was req_source_type).
+ * Note: order must correspond to universal_names[] in requirements.c.
+ */
+enum universals_n {
+  VUT_NONE,
+  VUT_ADVANCE,
+  VUT_GOVERNMENT,
+  VUT_IMPROVEMENT,
+  VUT_SPECIAL,
+  VUT_TERRAIN,
+  VUT_NATION,
+  VUT_UTYPE,
+  VUT_UTFLAG,
+  VUT_UCLASS,
+  VUT_UCFLAG,
+  VUT_OTYPE,
+  VUT_SPECIALIST,
+  VUT_MINSIZE,		/* Minimum size: at city range means city size */
+  VUT_AI_LEVEL,		/* AI level of the player */
+  VUT_TERRAINCLASS,	/* More generic terrain type, currently "Land" or "Ocean" */
+  VUT_BASE,
+  VUT_MINYEAR,
+  VUT_TERRAINALTER,     /* Terrain alterations that are possible */
+  VUT_CITYTILE,         /* Target tile is used by city */
+  VUT_LAST
+};
 
 struct universal {
   universals_u value;
@@ -296,101 +289,15 @@ struct universal {
 struct ai_choice;			/* incorporates universals_u */
 
 BV_DEFINE(bv_bases, MAX_BASE_TYPES);
-BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 
-#define SPECENUM_NAME gui_type
-/* Used for options which do not belong to any gui. */
-#define SPECENUM_VALUE0 GUI_STUB
-#define SPECENUM_VALUE0NAME "stub"
-#define SPECENUM_VALUE1 GUI_GTK2
-#define SPECENUM_VALUE1NAME "gtk2"
-#define SPECENUM_VALUE2 GUI_GTK3
-#define SPECENUM_VALUE2NAME "gtk3"
-#define SPECENUM_VALUE3 GUI_SDL
-#define SPECENUM_VALUE3NAME "sdl"
-#define SPECENUM_VALUE4 GUI_XAW
-#define SPECENUM_VALUE4NAME "xaw"
-#define SPECENUM_VALUE5 GUI_QT
-#define SPECENUM_VALUE5NAME "qt"
-#define SPECENUM_VALUE6 GUI_WIN32
-#define SPECENUM_VALUE6NAME "win32"
-#define SPECENUM_VALUE7 GUI_FTWL
-#define SPECENUM_VALUE7NAME "ftwl"
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME airlifting_style
-#define SPECENUM_BITWISE
-/* Like classical Freeciv.  One unit per turn. */
-#define SPECENUM_ZERO   AIRLIFTING_CLASSICAL
-/* Allow airlifting from allied cities. */
-#define SPECENUM_VALUE0 AIRLIFTING_ALLIED_SRC
-/* Allow airlifting to allied cities. */
-#define SPECENUM_VALUE1 AIRLIFTING_ALLIED_DEST
-/* Unlimited units to airlift from the source (but always needs an Airport
- * or equivalent). */
-#define SPECENUM_VALUE2 AIRLIFTING_UNLIMITED_SRC
-/* Unlimited units to airlift to the destination (doesn't require any
- * Airport or equivalent). */
-#define SPECENUM_VALUE3 AIRLIFTING_UNLIMITED_DEST
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME reval_map
-#define SPECENUM_BITWISE
-/* Reveal only the area around the first units at the beginning. */
-#define SPECENUM_ZERO   REVEAL_MAP_NONE
-/* Reveal the (fogged) map at the beginning of the game. */
-#define SPECENUM_VALUE0 REVEAL_MAP_START
-/* Reveal (and unfog) the map for dead players. */
-#define SPECENUM_VALUE1 REVEAL_MAP_DEAD
-#include "specenum_gen.h"
-
-enum phase_mode_types {
-  PMT_CONCURRENT = 0,
-  PMT_PLAYERS_ALTERNATE,
-  PMT_TEAMS_ALTERNATE
-};
-
-enum borders_mode {
-  BORDERS_DISABLED = 0,
-  BORDERS_ENABLED,
-  BORDERS_SEE_INSIDE,
-  BORDERS_EXPAND,
-};
-
-enum diplomacy_mode {
-  DIPLO_FOR_ALL,
-  DIPLO_FOR_HUMANS,
-  DIPLO_FOR_AIS,
-  DIPLO_FOR_TEAMS,
-  DIPLO_DISABLED,
-};
-
-enum tile_special_type {
-  S_ROAD,
-  S_IRRIGATION,
-  S_RAILROAD,
-  S_MINE,
-  S_POLLUTION,
-  S_HUT,
-  S_OLD_FORTRESS,
-  S_RIVER,
-  S_FARMLAND,
-  S_OLD_AIRBASE,
-  S_FALLOUT,
-
-  /* internal values not saved */
-  S_LAST,
-  S_RESOURCE_VALID = S_LAST,
-};
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-enum test_result {
-  TR_SUCCESS,
-  TR_OTHER_FAILURE,
-  TR_ALREADY_SOLD
+enum gui_type {
+  GUI_STUB,
+  GUI_GTK2,
+  GUI_SDL,
+  GUI_XAW,
+  GUI_WIN32,
+  GUI_FTWL,
+  GUI_LAST
 };
 
 #endif /* FC__FC_TYPES_H */

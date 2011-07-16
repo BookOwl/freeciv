@@ -14,10 +14,6 @@
 #ifndef FC__UNITLIST_H
 #define FC__UNITLIST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "unit.h"		/* for diplomat_actions */
 #include "unittype.h"		/* for unit_flag_id */
@@ -47,7 +43,7 @@ extern "C" {
 	 _unit##_index < _unit##_size;					\
 	 _unit##_index++) {						\
       struct unit *_unit =						\
-	game_unit_by_number(_unit##_numbers[_unit##_index]);		\
+	game_find_unit_by_number(_unit##_numbers[_unit##_index]);	\
 									\
       if (NULL != _unit) {
 
@@ -79,12 +75,5 @@ bool units_can_load(const struct unit_list *punits);
 bool units_can_unload(const struct unit_list *punits);
 bool units_have_activity_on_tile(const struct unit_list *punits,
 				 enum unit_activity activity);
-
-bool units_can_upgrade(const struct unit_list *punits);
-bool units_can_convert(const struct unit_list *punits);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__UNITLIST_H */

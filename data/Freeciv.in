@@ -1272,7 +1272,7 @@ Freeciv*messageoptscroll.useRight:  True
 Freeciv*messageoptscroll.allowVert:  True
 
 Freeciv*messageoptspacehead.label: \ 
-! /* TRANS: the space prepending "Out" is necessary */
+! TRANS: the space prepending "Out" is necessary
 Freeciv*messageoptcolhead.label: _(" Out Mes Pop")
 
 Freeciv*messageoptokcommand.label:     _("Ok")
@@ -1873,17 +1873,17 @@ Freeciv*reporteconomyclosecommand.bottom:	chainBottom
 Freeciv*reporteconomyclosecommand.left:		chainLeft
 Freeciv*reporteconomyclosecommand.right:	chainLeft
 
-Freeciv*reporteconomysellredundantcommand.label:	_("Sell Redundant")
-Freeciv*reporteconomysellredundantcommand.fromVert:	reporteconomylabel2
-Freeciv*reporteconomysellredundantcommand.fromHoriz:	reporteconomyclosecommand
-Freeciv*reporteconomysellredundantcommand.top:		chainBottom
-Freeciv*reporteconomysellredundantcommand.bottom:	chainBottom
-Freeciv*reporteconomysellredundantcommand.left:		chainLeft
-Freeciv*reporteconomysellredundantcommand.right:	chainLeft
+Freeciv*reporteconomysellobsoletecommand.label:		_("Sell Obsolete")
+Freeciv*reporteconomysellobsoletecommand.fromVert:	reporteconomylabel2
+Freeciv*reporteconomysellobsoletecommand.fromHoriz:	reporteconomyclosecommand
+Freeciv*reporteconomysellobsoletecommand.top:		chainBottom
+Freeciv*reporteconomysellobsoletecommand.bottom:	chainBottom
+Freeciv*reporteconomysellobsoletecommand.left:		chainLeft
+Freeciv*reporteconomysellobsoletecommand.right:		chainLeft
 
 Freeciv*reporteconomysellallcommand.label:	_("Sell All")
 Freeciv*reporteconomysellallcommand.fromVert:	reporteconomylabel2
-Freeciv*reporteconomysellallcommand.fromHoriz:	reporteconomysellredundantcommand
+Freeciv*reporteconomysellallcommand.fromHoriz:	reporteconomysellobsoletecommand
 Freeciv*reporteconomysellallcommand.top:	chainBottom
 Freeciv*reporteconomysellallcommand.bottom:	chainBottom
 Freeciv*reporteconomysellallcommand.left:	chainLeft
@@ -2263,8 +2263,7 @@ Freeciv*buynodialog.*.button0.fromVert:  dlabel
 !
 ! caravan dialog
 !
-! /* TRANS: Title for caravan popup */
-Freeciv*caravandialog.title: _("Your Unit Has Arrived")
+Freeciv*caravandialog.title: _("Your Caravan Has Arrived")
 Freeciv*caravandialog.*.dlabel.borderWidth:  0
 Freeciv*caravandialog.*.button0.label:     _("Establish trade route")
 Freeciv*caravandialog.*.button0.fromVert:  dlabel
@@ -2858,7 +2857,6 @@ Freeciv*mapcanvas.translations:\
    Shift<Key>f:       key-open-find-city()             \n\
    Shift<Key>l:       key-open-goto-airlift()          \n\
    Shift<Key>n:       key-unit-nuke()                  \n\
-   Shift<Key>o:       key-unit-convert()               \n\
    Shift<Key>p:       key-unit-pillage()               \n\
    Shift<Key>r:       key-open-revolution()            \n\
    Shift<Key>t:       key-open-rates()                 \n\
@@ -2946,7 +2944,6 @@ Freeciv*overviewcanvas.translations:\
    Shift<Key>f:       key-open-find-city()             \n\
    Shift<Key>l:       key-open-goto-airlift()          \n\
    Shift<Key>n:       key-unit-nuke()                  \n\
-   Shift<Key>o:       key-unit-convert()               \n\
    Shift<Key>p:       key-unit-pillage()               \n\
    Shift<Key>r:       key-open-revolution()            \n\
    Shift<Key>t:       key-open-rates()                 \n\
@@ -3358,7 +3355,7 @@ Freeciv*startpagelabel.bottom:             chainTop
 Freeciv*startpagelabel.left:               chainLeft
 Freeciv*startpagelabel.right:              chainRight
 Freeciv*startpagelabel.label: _("\
-  Name             Ready  Leader           Nation          Team ")
+Name              Ready Leader          Nation          ")
 
 Freeciv*startpageviewport.resizable:       true
 Freeciv*startpageviewport.allowVert:       true
@@ -3395,16 +3392,8 @@ Freeciv*startpagenationcommand.bottom:        chainBottom
 Freeciv*startpagenationcommand.left:          chainLeft
 Freeciv*startpagenationcommand.right:         chainLeft
 
-Freeciv*startpagetakecommand.label:           _("Take Player")
-Freeciv*startpagetakecommand.fromHoriz:       startpagenationcommand
-Freeciv*startpagetakecommand.fromVert:        startpageviewport
-Freeciv*startpagetakecommand.top:             chainBottom
-Freeciv*startpagetakecommand.bottom:          chainBottom
-Freeciv*startpagetakecommand.left:            chainLeft
-Freeciv*startpagetakecommand.right:           chainLeft
-
 Freeciv*startpagestartcommand.label:          _("Start")
-Freeciv*startpagestartcommand.fromHoriz:      startpagetakecommand
+Freeciv*startpagestartcommand.fromHoriz:      startpagenationcommand
 Freeciv*startpagestartcommand.fromVert:       startpageviewport
 Freeciv*startpagestartcommand.top:            chainBottom
 Freeciv*startpagestartcommand.bottom:         chainBottom
