@@ -14,17 +14,11 @@
 #ifndef FC__API_ACTIONS_H
 #define FC__API_ACTIONS_H
 
-#include "script_types.h"
+#include "api_types.h"
 
 bool api_actions_unleash_barbarians(Tile *ptile);
 void api_actions_place_partisans(Tile *ptile, Player *pplayer,
                                  int count, int sq_radius);
-enum climate_change_type {
-  CLIMATE_CHANGE_GLOBAL_WARMING,
-  CLIMATE_CHANGE_NUCLEAR_WINTER
-};
-void api_actions_climate_change(enum climate_change_type type, int effect);
-Player *api_actions_civil_war(Player *pplayer, int probability);
 Unit *api_actions_create_unit(Player *pplayer, Tile *ptile, Unit_Type *ptype,
                               int veteran_level, City *homecity,
                               int moves_left);

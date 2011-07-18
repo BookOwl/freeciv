@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <ctype.h>
@@ -36,8 +36,136 @@
 
 #include "effects.h"
 
+/* Names of effect types.
+ * (These must correspond to enum effect_type_id in effects.h.) */
+static const char *effect_type_names[EFT_LAST] = {
+  "Tech_Parasite",
+  "Airlift",
+  "Any_Government",
+  "Capital_City",
+  "Enable_Nuke",
+  "Enable_Space",
+  "Specialist_Output",
+  "Output_Bonus",
+  "Output_Bonus_2",
+  "Output_Add_Tile",
+  "Output_Inc_Tile",
+  "Output_Per_Tile",
+  "Output_Waste_Pct",
+  "Force_Content",
+  /* TODO: "Force_Content_Pct", */
+  "Give_Imm_Tech",
+  "Growth_Food",
+  "Health_Pct",
+  "Have_Embassies",
+  "Make_Content",
+  "Make_Content_Mil",
+  "Make_Content_Mil_Per",
+  /* TODO: "Make_Content_Pct", */
+  "Make_Happy",
+  "No_Anarchy",
+  "Nuke_Proof",
+  /* TODO: "Pollu_Adj", */
+  /* TODO: "Pollu_Pct", */
+  /* TODO: "Pollu_Pop_Adj", */
+  "Pollu_Pop_Pct",
+  /* TODO: "Pollu_Prod_Adj", */
+  "Pollu_Prod_Pct",
+  "Reveal_Cities",
+  "Reveal_Map",
+  /* TODO: "Incite_Dist_Adj", */
+  "Incite_Cost_Pct",
+  "Size_Adj",
+  "Size_Unlimit",
+  "SS_Structural",
+  "SS_Component",
+  "SS_Module",
+  "Spy_Resistant",
+  "Move_Bonus",
+  "Unit_No_Lose_Pop",
+  "Unit_Recover",
+  "Upgrade_Unit",
+  "Upkeep_Free",
+  "Tech_Upkeep_Free",
+  "No_Unhappy",
+  "Veteran_Build",
+  "Veteran_Combat",
+  "HP_Regen",
+  "City_Vision_Radius_Sq",
+  "Unit_Vision_Radius_Sq",
+  "Defend_Bonus",
+  "No_Incite",
+  "Gain_AI_Love",
+  "Turn_Years",
+  "Slow_Down_Timeline",
+  "Civil_War_Chance",
+  "Migration_Pct",
+  "Empire_Size_Base",
+  "Empire_Size_Step",
+  "Max_Rates",
+  "Martial_Law_Each",
+  "Martial_Law_Max",
+  "Rapture_Grow",
+  "Unbribable_Units",
+  "Revolution_When_Unhappy",
+  "Has_Senate",
+  "Inspire_Partisans",
+  "Happiness_To_Gold",
+  "Fanatics",
+  "No_Diplomacy",
+  "Trade_Revenue_Bonus",
+  "Unhappy_Factor",
+  "Upkeep_Factor",
+  "Unit_Upkeep_Free_Per_City",
+  "Output_Waste",
+  "Output_Waste_By_Distance",
+  "Output_Penalty_Tile",
+  "Output_Inc_Tile_Celebrate",
+  "City_Unhappy_Size",
+  "City_Radius_Sq",
+  "City_Build_Slots",
+  "Upgrade_Price_Pct",
+  "Visible_Walls",
+  "Tech_Cost_Factor",
+  "Shield2Gold_Factor",
+  "Tile_Workable"
+};
 
 static bool initialized = FALSE;
+
+/**************************************************************************
+  Convert effect type names to enum; case insensitive;
+  returns EFT_LAST if can't match.
+**************************************************************************/
+enum effect_type effect_type_from_str(const char *str)
+{
+  enum effect_type effect_type;
+
+  fc_assert_ret_val(ARRAY_SIZE(effect_type_names) == EFT_LAST, EFT_LAST);
+
+  for (effect_type = 0; effect_type < EFT_LAST; effect_type++) {
+    if (0 == fc_strcasecmp(effect_type_names[effect_type], str)) {
+      return effect_type;
+    }
+  }
+
+  return EFT_LAST;
+}
+
+/**************************************************************************
+  Return the name for an effect type enumeration.  Returns NULL if the
+  effect_type is invalid.  This is the inverse of effect_type_from_str.
+**************************************************************************/
+const char *effect_type_name(enum effect_type effect_type)
+{
+  fc_assert_ret_val(ARRAY_SIZE(effect_type_names) == EFT_LAST, NULL);
+  if (effect_type >= 0 && effect_type < EFT_LAST) {
+    return effect_type_names[effect_type];
+  } else {
+    fc_assert(FALSE);
+    return NULL;
+  }
+}
 
 /**************************************************************************
   The code creates a ruleset cache on ruleset load. This constant cache
@@ -391,8 +519,7 @@ Impr_type_id ai_find_source_building(struct city *pcity,
 
   /* There's no point in defining both of these as uclass is more restrictive
    * than move_type */
-  fc_assert_ret_val(uclass == NULL || move == unit_move_type_invalid(),
-                    B_LAST);
+  fc_assert_ret_val(uclass == NULL || move == MOVETYPE_LAST, B_LAST);
 
   effect_list_iterate(get_effects(effect_type), peffect) {
     if (peffect->value > greatest_value) {
@@ -411,7 +538,7 @@ Impr_type_id ai_find_source_building(struct city *pcity,
         }
         if (VUT_UCLASS == preq->source.kind) {
           if ((uclass != NULL && preq->source.value.uclass != uclass)
-              || (move != unit_move_type_invalid()
+              || (move != MOVETYPE_LAST
                   && uclass_move_type(preq->source.value.uclass) != move)) {
             /* Effect requires other kind of unit than what we are interested about */
             wrong_unit = TRUE;
@@ -833,7 +960,7 @@ int get_unittype_bonus(const struct player *pplayer,
 }
 
 /**************************************************************************
-  Returns the effect bonus at an unit
+  Returns the effect bonus at a building.
 **************************************************************************/
 int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
 {
@@ -843,42 +970,11 @@ int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
 
   fc_assert_ret_val(punit != NULL, 0);
   return get_target_bonus_effects(NULL,
-                                  unit_owner(punit),
-                                  unit_tile(punit)
-                                    ? tile_city(unit_tile(punit)) : NULL,
-                                  NULL, unit_tile(punit),
-                                  unit_type(punit), NULL, NULL,
-                                  effect_type);
-}
-
-/**************************************************************************
-  Returns the effect bonus at an tile
-**************************************************************************/
-int get_tile_bonus(const struct tile *ptile, const struct unit *punit,
-                   enum effect_type etype)
-{
-  struct player *pplayer = NULL;
-  struct unit_type *utype = NULL;
-
-  if (!initialized) {
-    return 0;
-  }
-
-  fc_assert_ret_val(ptile != NULL, 0);
-
-  if (punit != NULL) {
-    pplayer = unit_owner(punit);
-    utype = unit_type(punit);
-  }
-
-  return get_target_bonus_effects(NULL,
-                                  pplayer,
-                                  tile_city(ptile),
-                                  NULL,
-                                  ptile,
-                                  utype,
-                                  NULL, NULL,
-                                  etype);
+				  unit_owner(punit),
+				  punit->tile ? tile_city(punit->tile) : NULL,
+				  NULL, punit->tile,
+				  unit_type(punit), NULL, NULL,
+				  effect_type);
 }
 
 /**************************************************************************

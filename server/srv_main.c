@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <ctype.h>
@@ -58,9 +58,6 @@
 #include "support.h"
 #include "timing.h"
 
-/* common/aicore */
-#include "citymap.h"
-
 /* common */
 #include "capstr.h"
 #include "city.h"
@@ -71,7 +68,6 @@
 #include "game.h"
 #include "government.h"
 #include "map.h"
-#include "mapimg.h"
 #include "nation.h"
 #include "packets.h"
 #include "player.h"
@@ -80,12 +76,16 @@
 #include "unitlist.h"
 #include "version.h"
 
+/* ai */
+#include "advdiplomacy.h"
+#include "advmilitary.h"
+#include "aicity.h"
+#include "aihand.h"
+#include "aisettler.h"
+#include "citymap.h"
+
 /* generator */
 #include "mapgen.h"
-
-/* server/scripting */
-#include "script_signal.h"
-#include "script_types.h"
 
 /* server */
 #include "aiiface.h"
@@ -96,7 +96,6 @@
 #include "cityturn.h"
 #include "connecthand.h"
 #include "console.h"
-#include "fcdb.h"
 #include "diplhand.h"
 #include "edithand.h"
 #include "gamehand.h"
@@ -111,6 +110,7 @@
 #include "sanitycheck.h"
 #include "savegame2.h"
 #include "score.h"
+#include "script_signal.h"
 #include "sernet.h"
 #include "settings.h"
 #include "spacerace.h"
@@ -126,30 +126,14 @@
 #include "advbuilding.h"
 #include "infracache.h"
 
+/* server/scripting */
+#include "script.h"
+
 #include "srv_main.h"
 
 static void end_turn(void);
 static void announce_player(struct player *pplayer);
 static void fc_interface_init_server(void);
-
-static enum known_type mapimg_server_tile_known(const struct tile *ptile,
-                                                const struct player *pplayer,
-                                                bool knowledge);
-static struct terrain
-  *mapimg_server_tile_terrain(const struct tile *ptile,
-                              const struct player *pplayer, bool knowledge);
-static struct player *mapimg_server_tile_owner(const struct tile *ptile,
-                                               const struct player *pplayer,
-                                               bool knowledge);
-static struct player *mapimg_server_tile_city(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge);
-static struct player *mapimg_server_tile_unit(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge);
-
-static int mapimg_server_plrcolor_count(void);
-static struct rgbcolor *mapimg_server_plrcolor_get(int i);
 
 /* command-line arguments to server */
 struct server_arguments srvarg;
@@ -190,19 +174,14 @@ void init_game_seed(void)
 }
 
 /**************************************************************************
-  Initialize freeciv server.
+...
 **************************************************************************/
 void srv_init(void)
 {
-  i_am_server(); /* Tell to libfreeciv that we are server */
+  i_am_server(); /* Tell to libcivcommon that we are server */
 
   /* NLS init */
   init_nls();
-
-  /* This must be before command line argument parsing.
-     This allocates default ai, and we want that to take place before
-     loading additional ai modules from command line. */
-  ai_init();
 
   /* init server arguments... */
 
@@ -213,8 +192,6 @@ void srv_init(void)
 
   srvarg.bind_addr = NULL;
   srvarg.port = DEFAULT_SOCK_PORT;
-
-  srvarg.bind_meta_addr = NULL;
 
   srvarg.loglevel = LOG_NORMAL;
 
@@ -228,11 +205,12 @@ void srv_init(void)
 
   srvarg.quitidle = 0;
 
-  srvarg.fcdb_enabled = FALSE;
-  srvarg.fcdb_conf = NULL;
   srvarg.auth_enabled = FALSE;
+  srvarg.auth_conf = NULL;
   srvarg.auth_allow_guests = FALSE;
   srvarg.auth_allow_newusers = FALSE;
+
+  srvarg.save_ppm = FALSE;
 
   /* mark as initialized */
   has_been_srv_init = TRUE;
@@ -252,11 +230,11 @@ void srv_init(void)
 **************************************************************************/
 void handle_client_info(struct connection *pc, enum gui_type gui)
 {
-  log_debug("%s's client has %s gui.", pc->username, gui_type_name(gui));
+  log_debug("%s's client has %s gui.", pc->username, gui_name(gui));
 }
 
 /**************************************************************************
-  Return current server state.
+...
 **************************************************************************/
 enum server_states server_state(void)
 {
@@ -264,7 +242,7 @@ enum server_states server_state(void)
 }
 
 /**************************************************************************
-  Set current server state.
+...
 **************************************************************************/
 void set_server_state(enum server_states newstate)
 {
@@ -618,7 +596,7 @@ static void do_have_embassies_effect(void)
 }
 
 /**************************************************************************
-  Handle environmental upsets, meaning currently pollution or fallout.
+...
 **************************************************************************/
 static void update_environmental_upset(enum tile_special_type cause,
 				       int *current, int *accum, int *level,
@@ -658,25 +636,25 @@ static void remove_illegal_armistice_units(struct player *plr1,
 {
   /* Remove illegal units */
   unit_list_iterate_safe(plr1->units, punit) {
-    if (tile_owner(unit_tile(punit)) == plr2
+    if (tile_owner(punit->tile) == plr2
         && is_military_unit(punit)) {
-      notify_player(plr1, unit_tile(punit), E_DIPLOMACY, ftc_server,
+      notify_player(plr1, punit->tile, E_DIPLOMACY, ftc_server,
                     _("Your %s was disbanded in accordance with "
                       "your peace treaty with the %s."),
                     unit_tile_link(punit),
                     nation_plural_for_player(plr2));
-      wipe_unit(punit, ULR_ARMISTICE);
+      wipe_unit(punit);
     }
   } unit_list_iterate_safe_end;
   unit_list_iterate_safe(plr2->units, punit) {
-    if (tile_owner(unit_tile(punit)) == plr1
+    if (tile_owner(punit->tile) == plr1
         && is_military_unit(punit)) {
-      notify_player(plr2, unit_tile(punit), E_DIPLOMACY, ftc_server,
+      notify_player(plr2, punit->tile, E_DIPLOMACY, ftc_server,
                     _("Your %s was disbanded in accordance with "
                       "your peace treaty with the %s."),
                     unit_tile_link(punit),
                     nation_plural_for_player(plr1));
-      wipe_unit(punit, ULR_ARMISTICE);
+      wipe_unit(punit);
     }
   } unit_list_iterate_safe_end;
 }
@@ -920,8 +898,7 @@ static void begin_phase(bool is_new_phase)
     log_debug("beginning player turn for #%d (%s)",
               player_number(pplayer), player_name(pplayer));
     /* human players also need this for building advice */
-    adv_data_phase_init(pplayer, is_new_phase);
-    CALL_PLR_AI_FUNC(phase_begin, pplayer, pplayer, is_new_phase);
+    ai_data_phase_init(pplayer, is_new_phase);
     if (!pplayer->ai_controlled) {
       building_advisor(pplayer);
     }
@@ -952,11 +929,7 @@ static void begin_phase(bool is_new_phase)
 
   sanity_check();
 
-  if (game.info.turn == 0 && game.server.first_timeout != -1) {
-    game.info.seconds_to_phasedone = (double)game.server.first_timeout;
-  } else {
-    game.info.seconds_to_phasedone = (double)game.info.timeout;
-  }
+  game.info.seconds_to_phasedone = (double)game.info.timeout;
   game.server.phase_timer = renew_timer_start(game.server.phase_timer,
                                               TIMER_USER, TIMER_ACTIVE);
   send_game_info(NULL);
@@ -1016,6 +989,9 @@ static void end_phase(void)
     } unit_list_iterate_end;
   } players_iterate_end;
   phase_players_iterate(pplayer) {
+    if (pplayer->ai_controlled) {
+      CALL_PLR_AI_FUNC(before_auto_settlers, pplayer, pplayer);
+    }
     auto_settlers_player(pplayer);
     if (pplayer->ai_controlled) {
       CALL_PLR_AI_FUNC(last_activities, pplayer, pplayer);
@@ -1052,11 +1028,10 @@ static void end_phase(void)
   do_have_embassies_effect();
 
   phase_players_iterate(pplayer) {
-    CALL_PLR_AI_FUNC(phase_finished, pplayer, pplayer);
     /* This has to be after all access to advisor data. */
     /* We used to run this for ai players only, but data phase
        is initialized for human players also. */
-    adv_data_phase_done(pplayer);
+    ai_data_phase_done(pplayer);
   } phase_players_iterate_end;
 }
 
@@ -1218,12 +1193,6 @@ void save_game(const char *orig_filename, const char *save_reason,
       sz_strlcat(filepath, ".bz2");
       break;
 #endif
-#ifdef HAVE_LIBLZMA
-   case FZ_XZ:
-      /* Append ".xz" to filename. */
-      sz_strlcat(filepath, ".xz");
-      break;
-#endif
     case FZ_PLAIN:
       break;
     default:
@@ -1267,11 +1236,8 @@ void save_game(const char *orig_filename, const char *save_reason,
 
   secfile_destroy(file);
 
-#ifdef LOG_TIMERS
   log_verbose("Save time: %g seconds (%g apparent)",
               read_timer_seconds(timer_cpu), read_timer_seconds(timer_user));
-#endif
-
   free_timer(timer_cpu);
   free_timer(timer_user);
 
@@ -1281,39 +1247,20 @@ void save_game(const char *orig_filename, const char *save_reason,
 /**************************************************************************
 Save game with autosave filename
 **************************************************************************/
-void save_game_auto(const char *save_reason, enum autosave_type type)
+void save_game_auto(const char *save_reason, const char *reason_filename)
 {
   char filename[512];
-  const char *reason_filename = NULL;
-
-  if (!(game.server.autosaves & (1 << type))) {
-    return;
-  }
-
-  switch (type) {
-   case AS_TURN:
-     reason_filename = NULL;
-     break;
-   case AS_GAME_OVER:
-     reason_filename = "final";
-     break;
-   case AS_QUITIDLE:
-     reason_filename = "quitidle";
-     break;
-   case AS_INTERRUPT:
-     reason_filename = "interrupted";
-     break;
-  }
 
   fc_assert(256 > strlen(game.server.save_name));
 
   generate_save_name(game.server.save_name, filename, sizeof(filename),
                      reason_filename);
   save_game(filename, save_reason, FALSE);
+  save_ppm();
 }
 
 /**************************************************************************
-  Start actual game. Everything has been set up already.
+...
 **************************************************************************/
 void start_game(void)
 {
@@ -1348,17 +1295,16 @@ void start_game(void)
 void server_quit(void)
 {
   set_server_state(S_S_OVER);
-  mapimg_free();
   server_game_free();
   diplhand_free();
   voting_free();
 
-#ifdef HAVE_FCDB
-  if (srvarg.fcdb_enabled) {
-    /* If freeciv database has been initialized */
-    fcdb_free();
+#ifdef HAVE_AUTH
+  if (srvarg.auth_enabled) {
+    /* If auth has been initialized */
+    auth_free();
   }
-#endif /* HAVE_FCDB */
+#endif /* HAVE_AUTH */
 
   settings_free();
   stdinhand_free();
@@ -1366,12 +1312,11 @@ void server_quit(void)
   voting_free();
   close_connections_and_socket();
   free_nls();
-  con_log_close();
   exit(EXIT_SUCCESS);
 }
 
 /**************************************************************************
-  Handle request asking report to be sent to client.
+...
 **************************************************************************/
 void handle_report_req(struct connection *pconn, enum report_type type)
 {
@@ -1404,7 +1349,7 @@ void handle_report_req(struct connection *pconn, enum report_type type)
 }
 
 /**************************************************************************
-  Mark identity number free.
+...
 **************************************************************************/
 void identity_number_release(int id)
 {
@@ -1412,7 +1357,7 @@ void identity_number_release(int id)
 }
 
 /**************************************************************************
-  Marko identity number allocated.
+...
 **************************************************************************/
 void identity_number_reserve(int id)
 {
@@ -1420,7 +1365,7 @@ void identity_number_reserve(int id)
 }
 
 /**************************************************************************
-  Check whether identity number is currently allocated.
+...
 **************************************************************************/
 static bool identity_number_is_used(int id)
 {
@@ -1517,7 +1462,7 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
 
   /* May be received on a non-established connection. */
   if (type == PACKET_AUTHENTICATION_REPLY) {
-    return auth_handle_reply(pconn,
+    return handle_authentication_reply(pconn,
 				((struct packet_authentication_reply *)
 				 packet)->password);
   }
@@ -1614,8 +1559,7 @@ bool server_packet_input(struct connection *pconn, void *packet, int type)
 }
 
 /**************************************************************************
-  Check if turn is really done. Returns nothing, but as a side effect sets
-  force_end_of_sniff if no more input is expected this turn (i.e. turn done)
+...
 **************************************************************************/
 void check_for_full_turn_done(void)
 {
@@ -1862,12 +1806,12 @@ void aifill(int amount)
     int filled = 1;
     struct player *pplayer;
 
-    pplayer = server_create_player(-1, FC_AI_DEFAULT_NAME, NULL);
+    pplayer = server_create_player(-1);
     if (!pplayer) {
       break;
     }
-    server_player_init(pplayer, FALSE, TRUE);
 
+    server_player_init(pplayer, FALSE, TRUE);
     player_set_nation(pplayer, NULL);
 
     do {
@@ -1879,8 +1823,6 @@ void aifill(int amount)
     pplayer->ai_common.skill_level = game.info.skill_level;
     pplayer->ai_controlled = TRUE;
     set_ai_level_directer(pplayer, game.info.skill_level);
-
-    CALL_PLR_AI_FUNC(gained_control, pplayer, pplayer);
 
     log_normal(_("%s has been added as %s level AI-controlled player."),
                player_name(pplayer),
@@ -2123,7 +2065,7 @@ const char *pick_random_player_name(const struct nation_type *pnation)
 }
 
 /*************************************************************************
-  Announce what nation player rules to everyone.
+...
 *************************************************************************/
 static void announce_player(struct player *pplayer)
 {
@@ -2141,7 +2083,7 @@ static void announce_player(struct player *pplayer)
 static void srv_running(void)
 {
   struct timer *eot_timer;	/* time server processing at end-of-turn */
-  int save_counter = 0, i;
+  int save_counter = 0;
   bool is_new_turn = game.info.is_new_game;
   bool need_send_pending_events = !game.info.is_new_game;
 
@@ -2200,34 +2142,21 @@ static void srv_running(void)
        */
       lsend_packet_thaw_client(game.est_connections);
 
-#ifdef LOG_TIMERS
       /* Before sniff (human player activites), report time to now: */
       log_verbose("End/start-turn server/ai activities: %g seconds",
                   read_timer_seconds(eot_timer));
-#endif
 
       /* Do auto-saves just before starting server_sniff_all_input(), so that
        * autosave happens effectively "at the same time" as manual
        * saves, from the point of view of restarting and AI players.
-       * Post-increment so we don't count the first loop. */
+       * Post-increment so we don't count the first loop.
+       */
       if (game.info.phase == 0) {
-        /* Create autosaves if requested. */
-        if (save_counter >= game.server.save_nturns
-            && game.server.save_nturns > 0) {
+	if (save_counter >= game.server.save_nturns && game.server.save_nturns > 0) {
 	  save_counter = 0;
-	  save_game_auto("Autosave", AS_TURN);
+	  save_game_auto("Autosave", NULL);
 	}
 	save_counter++;
-
-        /* Save map image(s). */
-        for (i = 0; i < mapimg_count(); i++) {
-          struct mapdef *pmapdef = mapimg_isvalid(i);
-          if (pmapdef != NULL) {
-            mapimg_create(pmapdef, FALSE, game.server.save_name);
-          } else {
-            log_error("%s", mapimg_error());
-          }
-        }
       }
 
       log_debug("sniffingpackets");
@@ -2278,13 +2207,11 @@ static void srv_running(void)
 **************************************************************************/
 static void srv_prepare(void)
 {
-#ifdef HAVE_FCDB
+#ifdef HAVE_AUTH
   if (!srvarg.auth_enabled) {
-    con_write(C_COMMENT, _("This freeciv-server program has player "
-                           "authentication support, but it's currently not "
-                           "in use."));
+    con_write(C_COMMENT, _("This freeciv-server program has player authentication support, but it's currently not in use."));
   }
-#endif /* HAVE_FCDB */
+#endif /* HAVE_AUTH */
 
   /* make sure it's initialized */
   if (!has_been_srv_init) {
@@ -2317,25 +2244,22 @@ static void srv_prepare(void)
   voting_init();
   diplhand_init();
   voting_init();
+  ai_init();
 
   server_game_init();
-  mapimg_init(mapimg_server_tile_known, mapimg_server_tile_terrain,
-              mapimg_server_tile_owner, mapimg_server_tile_city,
-              mapimg_server_tile_unit, mapimg_server_plrcolor_count,
-              mapimg_server_plrcolor_get);
 
-#ifdef HAVE_FCDB
-  if (srvarg.fcdb_enabled) {
+#ifdef HAVE_AUTH
+  if (srvarg.auth_enabled) {
     bool success;
 
-    success = fcdb_init(srvarg.fcdb_conf);
-    free(srvarg.fcdb_conf); /* Never needed again */
-    srvarg.fcdb_conf = NULL;
+    success = auth_init(srvarg.auth_conf);
+    free(srvarg.auth_conf); /* Never needed again */
+    srvarg.auth_conf = NULL;
     if (!success) {
       exit(EXIT_FAILURE);
     }
   }
-#endif /* HAVE_FCDB */
+#endif /* HAVE_AUTH */
 
   /* load a saved game */
   if ('\0' == srvarg.load_filename[0]
@@ -2380,7 +2304,7 @@ static void srv_scores(void)
       && conn_list_size(game.est_connections) > 0) {
     /* Save game on game_over, but not when the gameover was caused by
      * the -q parameter. */
-    save_game_auto("Game over", AS_GAME_OVER);
+    save_game_auto("Game over", "final");
   }
 }
 
@@ -2441,32 +2365,9 @@ static void srv_ready(void)
   if (map_is_empty()
       || (MAPGEN_SCENARIO == map.server.generator
           && game.info.is_new_game)) {
-    int i;
-    bool random_seed = map.server.seed == 0 ? TRUE : FALSE;
-    int max = random_seed ? 2 : 1;
-    bool created = FALSE;
     struct unit_type *utype = crole_to_unit_type(game.server.start_units[0], NULL);
-    for (i = 0; !created && i < max ; i++) {
-      created = map_fractal_generate(TRUE, utype);
-      if (!created) {
-        if (i == 0 && random_seed) {
-          log_error(_("Failed to create suitable map, retrying with another mapseed"));
-        }
-        /* Reset mapseed so generator knows to use new one */
-        map.server.seed = 0;
 
-        /* Remove starting positions already placed to old map */
-        whole_map_iterate(ptile) {
-          map_startpos_remove(ptile);
-        } whole_map_iterate_end;
-      }
-    }
-    if (!created) {
-      log_error(_("Cannot create suitable map with given settings."));
-       /* TRANS: No full stop after the URL, could cause confusion. */
-      log_error(_("Please report this message at %s"), BUG_URL);
-      exit(EXIT_FAILURE);
-    }
+    map_fractal_generate(TRUE, utype);
     game_map_init();
   }
 
@@ -2530,12 +2431,6 @@ static void srv_ready(void)
       } players_iterate_end;
     } players_iterate_end;
 
-    /* (Re-)Assign each player a color using the color definitions
-     * from the current ruleset. */
-    players_iterate(pplayer) {
-      server_player_set_color(pplayer, NULL);
-    } players_iterate_end;
-
     /* Save all settings for the 'reset game' command. */
     settings_game_start();
   }
@@ -2554,7 +2449,7 @@ static void srv_ready(void)
   } else {
     players_iterate(pplayer) {
       /* Initialize this again to be sure */
-      adv_data_default(pplayer);
+      ai_data_default(pplayer);
     } players_iterate_end;
   }
 
@@ -2564,12 +2459,6 @@ static void srv_ready(void)
 
   if (game.info.is_new_game) {
     init_new_game();
-  }
-
-  if (game.server.revealmap & REVEAL_MAP_START) {
-    players_iterate(pplayer) {
-      map_show_all(pplayer);
-    } players_iterate_end;
   }
 }
 
@@ -2587,7 +2476,6 @@ void server_game_init(void)
   identity_number_reserve(IDENTITY_NUMBER_ZERO);
 
   event_cache_init();
-  playercolor_init();
   game_init();
 }
 
@@ -2633,7 +2521,7 @@ void server_game_free(void)
 
   event_cache_free();
   log_civ_score_free();
-  playercolor_free();
+  script_free();
   citymap_free();
   game_free();
 }
@@ -2690,7 +2578,6 @@ void srv_main(void)
     /* Reset server */
     server_game_free();
     server_game_init();
-    mapimg_reset();
     load_rulesets();
     game.info.is_new_game = TRUE;
   } while (TRUE);
@@ -2698,16 +2585,6 @@ void srv_main(void)
   /* Technically, we won't ever get here. We exit via server_quit. */
 }
 
-/***************************************************************
-  Initialize client specific functions.
-***************************************************************/
-struct color;
-static inline void server_gui_color_free(struct color *pcolor)
-{
-  fc_assert_ret(pcolor == NULL);
-
-  return;
-}
 
 /***************************************************************
   Initialize client specific functions.
@@ -2717,117 +2594,8 @@ static void fc_interface_init_server(void)
   struct functions *funcs = fc_interface_funcs();
 
   funcs->player_tile_vision_get = map_is_known_and_seen;
-  funcs->gui_color_free = server_gui_color_free;
 
   /* Keep this function call at the end. It checks if all required functions
      are defined. */
   fc_interface_init();
-}
-
-/***************************************************************************
-  Helper function for the mapimg module - tile knowledge.
-****************************************************************************/
-static enum known_type mapimg_server_tile_known(const struct tile *ptile,
-                                                const struct player *pplayer,
-                                                bool knowledge)
-{
-  if (knowledge && pplayer) {
-    return tile_get_known(ptile, pplayer);
-  }
-
-  return TILE_KNOWN_SEEN;
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - tile terrain.
-****************************************************************************/
-static struct terrain
-  *mapimg_server_tile_terrain(const struct tile *ptile,
-                              const struct player *pplayer, bool knowledge)
-{
-  if (knowledge && pplayer) {
-    struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
-    return plrtile->terrain;
-  }
-
-  return tile_terrain(ptile);
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - tile owner.
-****************************************************************************/
-static struct player *mapimg_server_tile_owner(const struct tile *ptile,
-                                               const struct player *pplayer,
-                                               bool knowledge)
-{
-  if (knowledge && pplayer
-      && tile_get_known(ptile, pplayer) != TILE_KNOWN_SEEN) {
-    struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
-    return plrtile->owner;
-  }
-
-  return tile_owner(ptile);
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - city owner.
-****************************************************************************/
-static struct player *mapimg_server_tile_city(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge)
-{
-  struct city *pcity = tile_city(ptile);
-
-  if (!pcity) {
-    return NULL;
-  }
-
-  if (knowledge && pplayer) {
-    struct vision_site *pdcity = map_get_player_city(ptile, pplayer);
-
-    if (pdcity) {
-      return pdcity->owner;
-    } else {
-      return NULL;
-    }
-  }
-
-  return city_owner(tile_city(ptile));
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - unit owner.
-****************************************************************************/
-static struct player *mapimg_server_tile_unit(const struct tile *ptile,
-                                              const struct player *pplayer,
-                                              bool knowledge)
-{
-  int unit_count = unit_list_size(ptile->units);
-
-  if (unit_count == 0) {
-    return NULL;
-  }
-
-  if (knowledge && pplayer
-      && tile_get_known(ptile, pplayer) != TILE_KNOWN_SEEN) {
-    return NULL;
-  }
-
-  return unit_owner(unit_list_get(ptile->units, 0));
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - number of player colors.
-****************************************************************************/
-static int mapimg_server_plrcolor_count(void)
-{
-  return playercolor_count();
-}
-
-/****************************************************************************
-  Helper function for the mapimg module - one player color.
-****************************************************************************/
-static struct rgbcolor *mapimg_server_plrcolor_get(int i)
-{
-  return playercolor_get(i);
 }

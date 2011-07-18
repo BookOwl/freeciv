@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -398,15 +398,11 @@ static bool manual_command(void)
 
     fprintf(doc, TAIL);
     fclose(doc);
-    log_normal(_("Manual file %s successful written."), filename);
   } /* manuals */
 
   return TRUE;
 }
 
-/**************************************************************************
-  Entry point of whole freeciv-manual program
-**************************************************************************/
 int main(int argc, char **argv)
 {
   int inx;
@@ -445,7 +441,7 @@ int main(int argc, char **argv)
         inx++;
         showhelp = TRUE;
       }
-#endif /* NDEBUG */
+#endif
     } else if ((option = get_option_malloc("--debug", argv, &inx, argc))) {
       if (!log_parse_level_str(option, &srvarg.loglevel)) {
         showhelp = TRUE;
@@ -482,11 +478,11 @@ int main(int argc, char **argv)
 #else
     fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
                          "%d)\n"), LOG_FATAL, LOG_VERBOSE);
-#endif /* DEBUG */
+#endif
 #ifndef NDEBUG
     fc_fprintf(stderr, _("  -F, --Fatal [SIGNAL]\t"
                          "Raise a signal on failed assertion\n"));
-#endif /* NDEBUG */
+#endif
     fc_fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
     fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
     fc_fprintf(stderr, _("  -r, --ruleset RULESET\tMake manual for "
@@ -498,7 +494,6 @@ int main(int argc, char **argv)
   }
 
   manual_command();
-  con_log_close();
 
-  return EXIT_SUCCESS;
+  return 0;
 }

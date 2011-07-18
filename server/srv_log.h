@@ -93,6 +93,22 @@ void real_tech_log(const char *file, const char *function, int line,
   }                                                                         \
 }
 
+void real_diplo_log(const char *file, const char *function, int line,
+                    enum log_level level, bool notify,
+                    const struct player *pplayer,
+                    const struct player *aplayer, const char *msg, ...)
+                   fc__attribute((__format__ (__printf__, 8, 9)));
+#define DIPLO_LOG(loglevel, pplayer, aplayer, msg, ...)                     \
+{                                                                           \
+  bool notify = BV_ISSET(pplayer->server.debug, PLAYER_DEBUG_DIPLOMACY);    \
+  enum log_level level = (notify ? LOG_AI_TEST                              \
+                          : MIN(loglevel, LOGLEVEL_PLAYER));                \
+  if (log_do_output_for_level(level)) {                                     \
+    real_diplo_log(__FILE__, __FUNCTION__, __LINE__, level, notify,         \
+                   pplayer, aplayer, msg, ## __VA_ARGS__);                  \
+  }                                                                         \
+}
+
 void real_city_log(const char *file, const char *function, int line,
                    enum log_level level, bool notify,
                    const struct city *pcity, const char *msg, ...)
@@ -126,6 +142,21 @@ void real_unit_log(const char *file, const char *function, int line,
   if (log_do_output_for_level(level)) {                                     \
     real_unit_log(__FILE__, __FUNCTION__, __LINE__, level, notify,          \
                   punit, msg, ## __VA_ARGS__);                              \
+  }                                                                         \
+}
+
+void real_bodyguard_log(const char *file, const char *function, int line,
+                        enum log_level level,  bool notify,
+                        const struct unit *punit, const char *msg, ...)
+                        fc__attribute((__format__ (__printf__, 7, 8)));
+#define BODYGUARD_LOG(loglevel, punit, msg, ...)                            \
+{                                                                           \
+  bool notify = punit->server.debug;                                        \
+  enum log_level level = (notify ? LOG_AI_TEST                              \
+                          : MIN(loglevel, LOGLEVEL_BODYGUARD));             \
+  if (log_do_output_for_level(level)) {                                     \
+    real_bodyguard_log(__FILE__, __FUNCTION__, __LINE__, level, notify,     \
+                       punit, msg, ## __VA_ARGS__);                         \
   }                                                                         \
 }
 

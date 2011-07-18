@@ -13,10 +13,6 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <math.h> /* sqrt */
 
 /* utility */
@@ -348,8 +344,7 @@ struct tile *rand_map_pos_filtered(void *data,
 				   bool (*filter)(const struct tile *ptile,
 						  const void *data));
 
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit);
+bool is_water_adjacent_to_tile(const struct tile *ptile);
 bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
@@ -653,11 +648,5 @@ static inline bool is_border_tile(const struct tile *ptile, int dist)
 	  || ptile->nat_x >= map.xsize - xdist
 	  || ptile->nat_y >= map.ysize - ydist);
 }
-
-enum direction8 rand_direction(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__MAP_H */

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -72,7 +72,6 @@
 #include "version.h"
 
 /* client */
-#include "chatline_common.h"
 #include "client_main.h"
 #include "servers.h"
 
@@ -110,25 +109,10 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   struct server_list *server_list;
   struct section_file *file;
   int nservers, i, j;
-  const char *latest_ver;
 
   /* This call closes f. */
   if (!(file = secfile_from_stream(f, TRUE))) {
     return NULL;
-  }
-
-  latest_ver = secfile_lookup_str_default(file, NULL, "versions.latest_stable");
-
-  if (latest_ver != NULL) {
-    if (strcmp(latest_ver, VERSION_STRING)) {
-      char vertext[2048];
-
-      fc_snprintf(vertext, sizeof(vertext), _("Latest stable release of freeciv is %s, this is %s."),
-                  latest_ver, VERSION_STRING);
-      output_window_append(ftc_client, vertext);
-    } else {
-      output_window_append(ftc_client, _("You are running latest stable version of freeciv."));
-    }
   }
 
   server_list = server_list_new();
@@ -294,9 +278,9 @@ static void my_uname(char *buf, size_t len)
     fc_snprintf(buf, len, "%s %ld.%ld [%s]",
                 osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
   }
-#else  /* WIN32_NATIVE */
+#else
   fc_snprintf(buf, len, "unknown unknown [unknown]");
-#endif /* WIN32_NATIVE */
+#endif
 #endif /* HAVE_UNAME */
 }
 
@@ -355,7 +339,7 @@ static void meta_read_response(struct server_scan *scan)
     scan->meta.fp = fc_fopen(filename, "w+b");
 #else
     scan->meta.fp = tmpfile();
-#endif /* WIN32_NATIVE */
+#endif
 
     if (!scan->meta.fp) {
       scan->error_func(scan, _("Could not open temp file."));
@@ -459,7 +443,7 @@ static bool begin_metaserver_scan(struct server_scan *scan)
       name_count = 2;
     }
   }
-#endif /* IPv6 support */
+#endif
 
   /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */  
   for (i = 0; i < name_count; i++) {
@@ -618,7 +602,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   if (announce == ANNOUNCE_IPV6) {
     family = AF_INET6;
   } else
-#endif /* IPv6 support */
+#endif
   {
     family = AF_INET;
   }
@@ -639,7 +623,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   memset(&addr, 0, sizeof(addr));
 
 #ifndef IPV6_SUPPORT
-  if (family == AF_INET) {
+  {
 #ifdef HAVE_INET_ATON
     inet_aton(group, &addr.saddr_in4.sin_addr);
 #else  /* HAVE_INET_ATON */
@@ -650,17 +634,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr.sa_family = AF_INET6;
     inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else if (family == AF_INET) {
+  } else {
     inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
 #endif /* IPv6 support */
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
-  } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family in begin_lanserver_scan()");
-
-    return FALSE;
   }
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
@@ -721,17 +699,10 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr_in6.sin6_addr = in6addr_any;
   } else
 #endif /* IPv6 support */
-  if (family == AF_INET) {
+  {
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT + 1);
     addr.saddr_in4.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    /* This is not only error situation worth assert() This
-     * is error situation that has check (with assert) against
-     * earlier already. */
-    fc_assert(FALSE);
-
-    return FALSE;
   }
 
   if (bind(scan->sock, &addr.saddr, sockaddr_size(&addr)) < 0) {
@@ -790,7 +761,6 @@ get_lan_server_list(struct server_scan *scan)
   char version[256];
   char status[256];
   char players[256];
-  char humans[256];
   char message[1024];
   bool found_new = FALSE;
 
@@ -818,7 +788,6 @@ get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, version, sizeof(version));
     dio_get_string(&din, status, sizeof(status));
     dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, humans, sizeof(humans));
     dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
@@ -835,15 +804,9 @@ get_lan_server_list(struct server_scan *scan)
         if (fromend.saddr.sa_family == AF_INET6) {
           inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
                     dst, sizeof(dst));
-        } else if (fromend.saddr.sa_family == AF_INET) {
-          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
         } else {
-	  fc_assert(FALSE);
-
-	  log_error("Unsupported address family in get_lan_server_list()");
-
-	  fc_snprintf(dst, sizeof(dst), "Unknown");
-	}
+          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
+        }
       }
 #else  /* IPv6 support */
       const char *dst = NULL;
@@ -884,7 +847,7 @@ get_lan_server_list(struct server_scan *scan)
     pserver->version = fc_strdup(version);
     pserver->state = fc_strdup(status);
     pserver->nplayers = atoi(players);
-    pserver->humans = atoi(humans);
+    pserver->humans = -1;
     pserver->message = fc_strdup(message);
     pserver->players = NULL;
     found_new = TRUE;

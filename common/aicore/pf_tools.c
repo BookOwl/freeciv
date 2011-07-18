@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -53,7 +53,7 @@ static inline int single_move_cost(const struct pf_parameter *param,
 /* ===================== Move Cost Callbacks ========================= */
 
 /*************************************************************
-  A cost function for UMT_SEA.  Allows shore bombardment.
+  A cost function for SEA_MOVING.  Allows shore bombardment.
   Should be used in conjunction with a TB callback which 
   prohibits going through an enemy city/tile.
 *************************************************************/
@@ -90,7 +90,7 @@ static int airmove(const struct tile *ptile, enum direction8 dir,
 }
 
 /**************************************************************************
-  A cost function for UMT_SEA.  Does not allow shore bombardment.
+  A cost function for SEA_MOVING.  Does not allow shore bombardment.
 ***************************************************************************/
 static int seamove_no_bombard(const struct tile *ptile, enum direction8 dir,
                               const struct tile *ptile1,
@@ -296,7 +296,7 @@ static int reverse_move_unit(const struct tile *tile0,
 
   return move_cost;
 }
-#endif /* UNUSED */
+#endif
 
 /************************************************************ 
   IGTER_MOVE cost function for a unit 
@@ -361,7 +361,7 @@ static int reverse_igter_move_unit(const struct tile *tile0,
   }
   return move_cost;
 }
-#endif /* UNUSED */
+#endif
 
 
 /****************************************************************************
@@ -430,7 +430,7 @@ static int afraid_of_dark_forest(const struct tile *ptile,
 
   return 0;
 }
-#endif /* UNUSED */
+#endif
 
 /****************************************************************************
   Extra cost call back for amphibious movement
@@ -698,7 +698,7 @@ static void pft_fill_default_parameter(struct pf_parameter *parameter,
       }
     } terrain_type_iterate_end;
   }
-  if (uclass_move_type(punitclass) == UMT_SEA) {
+  if (uclass_move_type(punitclass) == SEA_MOVING) {
     /* Sailing units explore less */
     parameter->unknown_MC *= 2;
   }
@@ -782,21 +782,21 @@ static void pft_fill_parameter(struct pf_parameter *parameter,
                                const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     if (utype_has_flag(punittype, F_IGTER)) {
       parameter->get_MC = igter_move_unit;
     } else {
       parameter->get_MC = normal_move_unit;
     }
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     if (can_attack_non_native(punittype)) {
       parameter->get_MC = seamove;
     } else {
       parameter->get_MC = seamove_no_bombard;
     }
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove;
     break;
   default:
@@ -849,14 +849,14 @@ static void pft_fill_overlap_param(struct pf_parameter *parameter,
                                    const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     parameter->get_MC = land_overlap_move;
     parameter->get_TB = dont_cross_ocean;
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     parameter->get_MC = sea_overlap_move;
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove; /* very crude */
     break;
   default:
@@ -906,13 +906,13 @@ static void pft_fill_attack_param(struct pf_parameter *parameter,
                                   const struct unit_type *punittype)
 {
   switch (utype_move_type(punittype)) {
-  case UMT_LAND:
+  case LAND_MOVING:
     parameter->get_MC = land_attack_move;
     break;
-  case UMT_SEA:
+  case SEA_MOVING:
     parameter->get_MC = sea_attack_move;
     break;
-  case UMT_BOTH:
+  case BOTH_MOVING:
     parameter->get_MC = airmove; /* very crude */
     break;
   default:

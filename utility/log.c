@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <signal.h>
@@ -20,10 +20,8 @@
 #include <stdio.h>
 #include <string.h>
 
-/* utility */
 #include "fciconv.h"
 #include "fcintl.h"
-#include "fcthread.h"
 #include "mem.h"
 #include "shared.h"
 #include "support.h"
@@ -35,8 +33,6 @@
 static char *log_filename = NULL;
 static log_callback_fn log_callback = NULL;
 static log_prefix_fn log_prefix = NULL;
-
-static fc_mutex logfile_mutex;
 
 #ifdef DEBUG
 static const enum log_level max_level = LOG_DEBUG;
@@ -187,7 +183,7 @@ bool log_parse_level_str(const char *level_str, enum log_level *ret_level)
 out:
   free(dup);
   return ret;
-#else  /* DEBUG */
+#else
   fc_fprintf(stderr, _("Freeciv must be compiled with the DEBUG flag "
                        "to use advanced log levels based on files.\n"));
   return FALSE;
@@ -217,17 +213,8 @@ void log_init(const char *filename, enum log_level initial_level,
   log_callback = callback;
   log_prefix = prefix;
   fc_fatal_assertions = fatal_assertions;
-  fc_init_mutex(&logfile_mutex);
   log_verbose("log started");
   log_debug("LOG_DEBUG test");
-}
-
-/**************************************************************************
-   Deinitialize logging module.
-**************************************************************************/
-void log_close(void)
-{
-  fc_destroy_mutex(&logfile_mutex);
 }
 
 /**************************************************************************
@@ -362,7 +349,6 @@ void vdo_log(const char *file, const char *function, int line,
   recursive = TRUE;
 
   if (log_filename) {
-    fc_allocate_mutex(&logfile_mutex);
     if (!(fs = fc_fopen(log_filename, "a"))) {
       fc_fprintf(stderr,
                  _("Couldn't open logfile: %s for appending \"%s\".\n"), 
@@ -426,7 +412,6 @@ void vdo_log(const char *file, const char *function, int line,
   fflush(fs);
   if (log_filename) {
     fclose(fs);
-    fc_release_mutex(&logfile_mutex);
   }
   recursive = FALSE;
 }

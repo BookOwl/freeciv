@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -1123,3 +1123,4 @@ const char *unit_tile_link(const struct unit *punit)
               SEQ_START, SEQ_END, tag_name, SEQ_STOP);
   return buf;
 }
+

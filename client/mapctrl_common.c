@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>		/* qsort */
@@ -173,11 +173,11 @@ static void define_tiles_within_rectangle(bool append)
       && unit_list_size(units) > 0) {
     if (!append) {
       struct unit *punit = unit_list_get(units, 0);
-      unit_focus_set(punit);
+      set_unit_focus(punit);
       unit_list_remove(units, punit);
     }
     unit_list_iterate(units, punit) {
-      unit_focus_add(punit);
+      add_unit_focus(punit);
     } unit_list_iterate_end;
   }
   unit_list_destroy(units);
@@ -292,7 +292,7 @@ void cancel_selection_rectangle(void)
 }
 
 /**************************************************************************
-  Is city highlighted
+...
 **************************************************************************/
 bool is_city_hilited(struct city *pcity)
 {
@@ -441,7 +441,7 @@ void clipboard_paste_production(struct city *pcity)
 }
 
 /**************************************************************************
-  Send request to build production in clipboard to server.
+...
 **************************************************************************/
 static void clipboard_send_production_packet(struct city *pcity)
 {
@@ -475,7 +475,7 @@ void upgrade_canvas_clipboard(void)
 }
 
 /**************************************************************************
-  Goto button has been released. Finish goto.
+...
 **************************************************************************/
 void release_goto_button(int canvas_x, int canvas_y)
 {
@@ -725,3 +725,4 @@ void fill_tile_unit_list(const struct tile *ptile, struct unit **unit_list)
   /* Then sort it. */
   qsort(unit_list, i, sizeof(*unit_list), unit_list_compare);
 }
+

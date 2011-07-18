@@ -11,14 +11,11 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
-#include "rand.h"
-
-/* common */
 #include "map.h"
+#include "rand.h"
 
 #include "height_map.h"
 #include "mapgen_topology.h"

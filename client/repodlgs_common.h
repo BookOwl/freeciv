@@ -14,10 +14,6 @@
 #ifndef FC__REPODLGS_COMMON_H
 #define FC__REPODLGS_COMMON_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "improvement.h"
 #include "unittype.h"
@@ -52,9 +48,5 @@ void sell_all_improvements(struct impr_type *pimprove, bool redundant_only,
 			   char *message, size_t message_sz);
 void disband_all_units(struct unit_type *punittype, bool in_cities_only,
 		       char *message, size_t message_sz);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__REPODLGS_COMMON_H */

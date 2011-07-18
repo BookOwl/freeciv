@@ -13,7 +13,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
@@ -550,7 +550,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   if (punit) { /* should always be true at this point */
     if (unit_owner(punit) == client.conn.playing) {
       /* may be non-true if alliance */
-      unit_focus_set(punit);
+      set_unit_focus(punit);
     }
   }
 }
@@ -1080,7 +1080,7 @@ void add_unit_to_battlegroup(int battlegroup)
     if (punit && punit->battlegroup == battlegroup) {
       /* If top unit already in the same battlegroup, detach it */
       unit_change_battlegroup(punit, BATTLEGROUP_NONE);
-      refresh_unit_mapcanvas(punit, unit_tile(punit), TRUE, FALSE);
+      refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
     } else {
       key_unit_assign_battlegroup(battlegroup, TRUE);
     }

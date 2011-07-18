@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -31,12 +31,10 @@
 #include "support.h"
 
 /* common */
-#include "ai.h"
 #include "base.h"
 #include "capability.h"
 #include "city.h"
 #include "effects.h"
-#include "fc_types.h"
 #include "game.h"
 #include "government.h"
 #include "map.h"
@@ -44,34 +42,26 @@
 #include "name_translation.h"
 #include "nation.h"
 #include "packets.h"
-#include "player.h"
 #include "requirements.h"
-#include "rgbcolor.h"
 #include "specialist.h"
 #include "tech.h"
 #include "unit.h"
-#include "unittype.h"
+
+/* ai */
+#include "aiunit.h"     /* update_simple_ai_types */
 
 /* server */
 #include "citytools.h"
 #include "plrhand.h"
-#include "script_game.h"
+#include "script.h"
 #include "settings.h"
 #include "srv_main.h"
 
 #include "ruleset.h"
 
 
-#define RULESET_CAPABILITIES "+Freeciv-ruleset-Devel-2011.Feb.21"
-/*
- * Ruleset capabilities acceptable to this program:
- *
- * +Freeciv-2.3-ruleset
- *    - basic ruleset format for Freeciv versions 2.3.x; required
- *
- * +Freeciv-tilespec-Devel-YYYY.MMM.DD
- *    - ruleset of the development version at the given data
- */
+/* Basic format for the ruleset files for Freeciv versions 2.3.x. */
+#define RULESET_CAPABILITIES "+Freeciv-2.3-ruleset"
 
 /* RULESET_SUFFIX already used, no leading dot here */
 #define RULES_SUFFIX "ruleset"
@@ -140,11 +130,6 @@ static void send_ruleset_governments(struct conn_list *dest);
 static void send_ruleset_cities(struct conn_list *dest);
 static void send_ruleset_game(struct conn_list *dest);
 static void send_ruleset_team_names(struct conn_list *dest);
-
-static bool load_ruleset_veteran(struct section_file *file,
-                                 const char *path,
-                                 struct veteran_system **vsystem, char *err,
-                                 size_t err_len);
 
 static bool nation_has_initial_tech(struct nation_type *pnation,
                                     struct advance *tech);
@@ -678,8 +663,8 @@ static enum unit_move_type lookup_move_type(struct section_file *file,
   enum unit_move_type mt;
   
   sval = secfile_lookup_str(file, "%s", entry);
-  mt = unit_move_type_by_name(sval, fc_strcasecmp);
-  if (!unit_move_type_is_valid(mt)) {
+  mt = move_type_from_str(sval);
+  if (mt == MOVETYPE_LAST) {
     ruleset_error(LOG_FATAL,
                   "\"%s\" %s: couldn't match \"%s\".",
                   filename, entry, sval);
@@ -804,8 +789,7 @@ static void ruleset_load_names(struct name_translation *pname,
 }
 
 /**************************************************************************
-  Load names of technologies so other rulesets can refer to techs with
-  their name.
+  ...
 **************************************************************************/
 static void load_tech_names(struct section_file *file)
 {
@@ -840,7 +824,7 @@ static void load_tech_names(struct section_file *file)
 }
 
 /**************************************************************************
-  Load technologies related ruleset data
+  ...
 **************************************************************************/
 static void load_ruleset_techs(struct section_file *file)
 {
@@ -987,8 +971,7 @@ restart:
 }
 
 /**************************************************************************
-  Load names of units so other rulesets can refer to units with
-  their name.
+  ...  
 **************************************************************************/
 static void load_unit_names(struct section_file *file)
 {
@@ -1061,149 +1044,146 @@ static void load_unit_names(struct section_file *file)
 }
 
 /**************************************************************************
-  Load veteran levels.
-**************************************************************************/
-static bool load_ruleset_veteran(struct section_file *file,
-                                 const char *path,
-                                 struct veteran_system **vsystem, char *err,
-                                 size_t err_len)
-{
-  const char **vlist_name;
-  int *vlist_power, *vlist_raise, *vlist_wraise, *vlist_move;
-  size_t count_name, count_power, count_raise, count_wraise, count_move;
-  int i;
-  bool ret = TRUE;
-
-  /* The pointer should be uninitialised. */
-  if (*vsystem != NULL) {
-    fc_snprintf(err, err_len, "Veteran system is defined?!");
-    return FALSE;
-  }
-
-  /* Load data. */
-  vlist_name = secfile_lookup_str_vec(file, &count_name,
-                                      "%s.veteran_names", path);
-  vlist_power = secfile_lookup_int_vec(file, &count_power,
-                                      "%s.veteran_power_fact", path);
-  vlist_raise = secfile_lookup_int_vec(file, &count_raise,
-                                       "%s.veteran_raise_chance", path);
-  vlist_wraise = secfile_lookup_int_vec(file, &count_wraise,
-                                        "%s.veteran_work_raise_chance",
-                                        path);
-  vlist_move = secfile_lookup_int_vec(file, &count_move,
-                                      "%s.veteran_move_bonus", path);
-
-  if (count_name > MAX_VET_LEVELS) {
-    ret = FALSE;
-    fc_snprintf(err, err_len, "\"%s\": Too many veteran levels (section "
-                              "'%s': %lu, max %d)", secfile_name(file), path,
-                (long unsigned)count_name, MAX_VET_LEVELS);
-  } else if (count_name != count_power
-             || count_name != count_raise
-             || count_name != count_wraise
-             || count_name != count_move) {
-    ret = FALSE;
-    fc_snprintf(err, err_len, "\"%s\": Different lengths for the veteran "
-                              "settings in section '%s'", secfile_name(file),
-                path);
-  } else if (count_name == 0) {
-    /* Nothing defined. */
-    *vsystem = NULL;
-  } else {
-    /* Generate the veteran system. */
-    *vsystem = veteran_system_new((int)count_name);
-
-#define rs_sanity_veteran(_path, _entry, _i, _condition, _action)            \
-  if (_condition) {                                                          \
-    log_error("Invalid veteran definition '%s.%s[%d]'!",                     \
-              _path, _entry, _i);                                            \
-    log_debug("Failed check: '%s'. Update value: '%s'.",                     \
-              #_condition, #_action);                                        \
-    _action;                                                                 \
-  }
-    for (i = 0; i < count_name; i++) {
-      /* Some sanity checks. */
-      rs_sanity_veteran(path, "veteran_power_fact", i,
-                        (vlist_power[i] < 0), vlist_power[i] = 0);
-      rs_sanity_veteran(path, "veteran_raise_chance", i,
-                        (vlist_raise[i] < 0), vlist_raise[i] = 0);
-      rs_sanity_veteran(path, "veteran_work_raise_chance", i,
-                        (vlist_raise[i] < 0), vlist_wraise[i] = 0);
-      rs_sanity_veteran(path, "veteran_move_bonus", i,
-                        (vlist_move[i] < 0), vlist_move[i] = 0);
-      if (i == 0) {
-        /* First element.*/
-        rs_sanity_veteran(path, "veteran_power_fact", i,
-                          (vlist_power[i] != 100), vlist_power[i] = 100);
-      } else if (i == count_name - 1) {
-        /* Last element. */
-        rs_sanity_veteran(path, "veteran_power_fact", i,
-                          (vlist_power[i] < vlist_power[i - 1]),
-                          vlist_power[i] = vlist_power[i - 1]);
-        rs_sanity_veteran(path, "veteran_raise_chance", i,
-                          (vlist_raise[i] != 0), vlist_raise[i] = 0);
-        rs_sanity_veteran(path, "veteran_work_raise_chance", i,
-                          (vlist_raise[i] != 0), vlist_wraise[i] = 0);
-      } else {
-        /* All elements inbetween. */
-        rs_sanity_veteran(path, "veteran_power_fact", i,
-                          (vlist_power[i] < vlist_power[i - 1]),
-                          vlist_power[i] = vlist_power[i - 1]);
-        rs_sanity_veteran(path, "veteran_raise_chance", i,
-                          (vlist_raise[i] > 100), vlist_raise[i] = 100);
-        rs_sanity_veteran(path, "veteran_work_raise_chance", i,
-                          (vlist_raise[i] > 100), vlist_wraise[i] = 100);
-      }
-
-      veteran_system_definition(*vsystem, i, vlist_name[i], vlist_power[i],
-                                vlist_move[i], vlist_raise[i],
-                                vlist_wraise[i]);
-    }
-#undef rs_sanity_veteran
-  }
-
-  if (vlist_name) {
-    free(vlist_name);
-  }
-  if (vlist_power) {
-    free(vlist_power);
-  }
-  if (vlist_raise) {
-    free(vlist_raise);
-  }
-  if (vlist_wraise) {
-    free(vlist_wraise);
-  }
-  if (vlist_move) {
-    free(vlist_move);
-  }
-
-  return ret;
-}
-
-/**************************************************************************
-  Load units related ruleset data.
+...  
 **************************************************************************/
 static void load_ruleset_units(struct section_file *file)
 {
   struct unit_type *u;
-  int j, ival;
-  size_t nval;
+  int i, j, ival;
+  size_t vet_levels, vet_levels_default, nval;
   struct section_list *sec, *csec;
   const char *sval, **slist;
   const char *filename = secfile_name(file);
-  char msg[MAX_LEN_MSG];
+  const char **vnlist, **def_vnlist;
+  int *vblist, *def_vblist;
 
   (void) check_ruleset_capabilities(file, RULESET_CAPABILITIES, filename);
 
-  if (!load_ruleset_veteran(file, "veteran_system", &game.veteran, msg,
-                            sizeof(msg)) || game.veteran == NULL) {
-    ruleset_error(LOG_FATAL, "Error loading the default veteran system: %s",
-                  msg);
-  }
-
+  /*
+   * Load up expanded veteran system values.
+   */
   sec = secfile_sections_by_name_prefix(file, UNIT_SECTION_PREFIX);
   nval = (NULL != sec ? section_list_size(sec) : 0);
+
+#define CHECK_VETERAN_LIMIT(_count, _string)				\
+if (_count > MAX_VET_LEVELS) {						\
+  ruleset_error(LOG_FATAL, "\"%s\": Too many " _string " entries (%d, max %d)", \
+                filename, (int) _count, MAX_VET_LEVELS);                \
+}
+
+  /* level names */
+  def_vnlist = secfile_lookup_str_vec(file, &vet_levels_default,
+		  		"veteran_system.veteran_names");
+  CHECK_VETERAN_LIMIT(vet_levels_default, "veteran_names");
+
+  unit_type_iterate(u) {
+    const int i = utype_index(u);
+
+    vnlist = secfile_lookup_str_vec(file, &vet_levels,
+                                    "%s.veteran_names",
+                                    section_name(section_list_get(sec, i)));
+    CHECK_VETERAN_LIMIT(vet_levels, "veteran_names");
+    if (vnlist) {
+      /* unit has own veterancy settings */
+      for (j = 0; j < vet_levels; j++) {
+        names_set(&u->veteran[j].name, vnlist[j], NULL);
+      }
+      u->veteran_levels = vet_levels;
+      free(vnlist);
+    } else {
+      /* apply defaults */  
+      for (j = 0; j < vet_levels_default; j++) {
+        names_set(&u->veteran[j].name, def_vnlist[j], NULL);
+      }
+      u->veteran_levels = vet_levels_default;
+    }
+    /* We check for this value to determine how many veteran levels
+     * a unit type has */
+    for (; j < MAX_VET_LEVELS; j++) {
+      names_set(&u->veteran[j].name, "", NULL);
+    }
+  } unit_type_iterate_end;
+  free(def_vnlist);
+
+  /* power factor */
+  def_vblist = secfile_lookup_int_vec(file, &vet_levels_default,
+                                      "veteran_system.veteran_power_fact");
+  CHECK_VETERAN_LIMIT(vet_levels_default, "veteran_power_fact");
+  unit_type_iterate(u) {
+    const int i = utype_index(u);
+
+    vblist = secfile_lookup_int_vec(file, &vet_levels,
+                                    "%s.veteran_power_fact",
+                                    section_name(section_list_get(sec, i)));
+    CHECK_VETERAN_LIMIT(vet_levels, "veteran_power_fact");
+    if (vblist) {
+      for (j = 0; j < vet_levels; j++) {
+        u->veteran[j].power_fact = ((double)vblist[j]) / 100;
+      }
+      free(vblist);
+    } else {
+      for (j = 0; j < vet_levels_default; j++) {
+        u->veteran[j].power_fact = ((double)def_vblist[j]) / 100;
+      }
+    }
+  } unit_type_iterate_end;
+  if (def_vblist) {
+    free(def_vblist);
+  }
+
+  /* raise chance */
+  def_vblist = secfile_lookup_int_vec(file, &vet_levels_default,
+                                      "veteran_system.veteran_raise_chance");
+  CHECK_VETERAN_LIMIT(vet_levels_default, "veteran_raise_chance");
+  for (i = 0; i < vet_levels_default; i++) {
+    game.veteran_chance[i] = def_vblist[i];
+  }
+  for (; i < MAX_VET_LEVELS; i++) {
+    game.veteran_chance[i] = 0;
+  }
+  if (def_vblist) {
+    free(def_vblist);
+  }
+
+  /* work raise chance */
+  def_vblist = secfile_lookup_int_vec(file, &vet_levels_default,
+                                    "veteran_system.veteran_work_raise_chance");
+  CHECK_VETERAN_LIMIT(vet_levels_default, "veteran_work_raise_chance");
+  for (i = 0; i < vet_levels_default; i++) {
+    game.work_veteran_chance[i] = def_vblist[i];
+  }
+  for (; i < MAX_VET_LEVELS; i++) {
+    game.work_veteran_chance[i] = 0;
+  }
+  if (def_vblist) {
+    free(def_vblist);
+  }
+
+  /* move bonus */
+  def_vblist = secfile_lookup_int_vec(file, &vet_levels_default,
+                                      "veteran_system.veteran_move_bonus");
+  CHECK_VETERAN_LIMIT(vet_levels_default, "veteran_move_bonus");
+  unit_type_iterate(u) {
+    const int i = utype_index(u);
+
+    vblist = secfile_lookup_int_vec(file, &vet_levels,
+                                    "%s.veteran_move_bonus",
+                                    section_name(section_list_get(sec, i)));
+    CHECK_VETERAN_LIMIT(vet_levels, "veteran_move_bonus");
+    if (vblist) {
+      for (j = 0; j < vet_levels; j++) {
+        u->veteran[j].move_bonus = vblist[j];
+      }
+      free(vblist);
+    } else {
+      for (j = 0; j < vet_levels_default; j++) {
+        u->veteran[j].move_bonus = def_vblist[j];
+      }
+    }
+  } unit_type_iterate_end;
+  if (def_vblist) {
+    free(def_vblist);
+  }
 
   csec = secfile_sections_by_name_prefix(file, UNIT_CLASS_SECTION_PREFIX);
   nval = (NULL != csec ? section_list_size(csec) : 0);
@@ -1259,7 +1239,7 @@ static void load_ruleset_units(struct section_file *file)
           log_error("\"%s\" unit_class \"%s\": unit_type flag!",
                     filename, uclass_rule_name(ut));
         }
-      } else if (ut->move_type == UMT_SEA
+      } else if (ut->move_type == SEA_MOVING
                  && ( ival == UCF_ROAD_NATIVE || ival == UCF_RIVER_NATIVE)) {
         log_error("\"%s\" unit_class \"%s\": cannot give \"%s\" flag "
                   "to sea moving unit",
@@ -1272,13 +1252,12 @@ static void load_ruleset_units(struct section_file *file)
 
   } unit_class_iterate_end;
 
-  /* Tech and Gov requirements; per unit veteran system */
+  /* Tech and Gov requirements */  
   unit_type_iterate(u) {
     const int i = utype_index(u);
     const struct section *psection = section_list_get(sec, i);
-    const char *sec_name = section_name(psection);
 
-    u->require_advance = lookup_tech(file, sec_name,
+    u->require_advance = lookup_tech(file, section_name(psection),
                                      "tech_req", LOG_FATAL, filename,
                                      rule_name(&u->name));
     if (NULL != section_entry_by_name(psection, "gov_req")) {
@@ -1289,12 +1268,11 @@ static void load_ruleset_units(struct section_file *file)
     } else {
       u->need_government = NULL; /* no requirement */
     }
-
-    if (!load_ruleset_veteran(file, sec_name, &u->veteran,
-                              msg, sizeof(msg))) {
-      ruleset_error(LOG_NORMAL, "Error loading the veteran system: %s",
-                    msg);
-    }
+  } unit_type_iterate_end;
+  
+  unit_type_iterate(u) {
+    const int i = utype_index(u);
+    const char *sec_name = section_name(section_list_get(sec, i));
 
     u->obsoleted_by = lookup_unit_type(file, sec_name, "obsolete_by",
                                        LOG_ERROR, filename,
@@ -1499,7 +1477,7 @@ static void load_ruleset_units(struct section_file *file)
         log_error("\"%s\" unit_type \"%s\": bad role name \"%s\".",
                   filename, utype_rule_name(u), sval);
       } else if ((ival == L_FERRYBOAT || ival == L_BARBARIAN_BOAT)
-                 && u->uclass->move_type == UMT_LAND) {
+                 && u->uclass->move_type == LAND_MOVING) {
         log_error( "\"%s\" unit_type \"%s\": role \"%s\" "
                   "for land moving unit.",
                   filename, utype_rule_name(u), sval);
@@ -1564,7 +1542,7 @@ static void load_ruleset_units(struct section_file *file)
     ruleset_error(LOG_FATAL, "\"%s\": No role=barbarian ship units?", filename);
   } else if (num_role_units(L_BARBARIAN_BOAT) > 0) {
     u = get_role_unit(L_BARBARIAN_BOAT,0);
-    if(utype_move_type(u) != UMT_SEA) {
+    if(utype_move_type(u) != SEA_MOVING) {
       ruleset_error(LOG_FATAL,
                     "\"%s\": Barbarian boat (%s) needs to be a sea unit.",
                     filename,
@@ -1577,6 +1555,8 @@ static void load_ruleset_units(struct section_file *file)
                   filename);
   }
 
+  update_simple_ai_types();
+
   section_list_destroy(csec);
   section_list_destroy(sec);
   secfile_check_unused(file);
@@ -1584,8 +1564,7 @@ static void load_ruleset_units(struct section_file *file)
 }
 
 /**************************************************************************
-  Load names of buildings so other rulesets can refer to buildings with
-  their name.
+  ...  
 **************************************************************************/
 static void load_building_names(struct section_file *file)
 {
@@ -1617,7 +1596,7 @@ static void load_building_names(struct section_file *file)
 }
 
 /**************************************************************************
-  Load buildings related ruleset data
+...  
 **************************************************************************/
 static void load_ruleset_buildings(struct section_file *file)
 {
@@ -1739,8 +1718,7 @@ static void load_ruleset_buildings(struct section_file *file)
 }
 
 /**************************************************************************
-  Load names of terrain types so other rulesets can refer to terrains with
-  their name.
+  ...  
 **************************************************************************/
 static void load_terrain_names(struct section_file *file)
 {
@@ -1843,7 +1821,7 @@ static void load_terrain_names(struct section_file *file)
 }
 
 /**************************************************************************
-  Load terrain types related ruleset data
+...  
 **************************************************************************/
 static void load_ruleset_terrain(struct section_file *file)
 {
@@ -2047,11 +2025,11 @@ static void load_ruleset_terrain(struct section_file *file)
         ruleset_error(LOG_FATAL,
                       "\"%s\" [%s] is native to unknown unit class \"%s\".",
                       filename, tsection, slist[j]);
-      } else if (is_ocean(pterrain) && class->move_type == UMT_LAND) {
+      } else if (is_ocean(pterrain) && class->move_type == LAND_MOVING) {
         ruleset_error(LOG_FATAL,
                       "\"%s\" oceanic [%s] is native to land units.",
                       filename, tsection);
-      } else if (!is_ocean(pterrain) && class->move_type == UMT_SEA) {
+      } else if (!is_ocean(pterrain) && class->move_type == SEA_MOVING) {
         ruleset_error(LOG_FATAL,
                       "\"%s\" non-oceanic [%s] is native to sea units.",
                       filename, tsection);
@@ -2060,15 +2038,6 @@ static void load_ruleset_terrain(struct section_file *file)
       }
     }
     free(slist);
-
-    /* get terrain color */
-    {
-      fc_assert_ret(pterrain->rgb == NULL);
-      if (!rgbcolor_load(file, &pterrain->rgb, "%s.color", tsection)) {
-        ruleset_error(LOG_FATAL, "Missing terrain color definition: %s",
-                      secfile_error());
-      }
-    }
 
     pterrain->helptext = lookup_strvec(file, tsection, "helptext");
   } terrain_type_iterate_end;
@@ -2162,8 +2131,8 @@ static void load_ruleset_terrain(struct section_file *file)
     free(slist);
 
     gui_str = secfile_lookup_str(file,"%s.gui_type", section);
-    pbase->gui_type = base_gui_type_by_name(gui_str, fc_strcasecmp);
-    if (!base_gui_type_is_valid(pbase->gui_type)) {
+    pbase->gui_type = base_gui_type_from_str(gui_str);
+    if (pbase->gui_type == BASE_GUI_LAST) {
       ruleset_error(LOG_FATAL, "\"%s\" base \"%s\": unknown gui_type \"%s\".",
                     filename,
                     base_rule_name(pbase),
@@ -2190,9 +2159,9 @@ static void load_ruleset_terrain(struct section_file *file)
     BV_CLR_ALL(pbase->flags);
     for (j = 0; j < nval; j++) {
       const char *sval = slist[j];
-      enum base_flag_id flag = base_flag_id_by_name(sval, fc_strcasecmp);
+      enum base_flag_id flag = base_flag_from_str(sval);
 
-      if (!base_flag_id_is_valid(flag)) {
+      if (flag == BF_LAST) {
         ruleset_error(LOG_FATAL, "\"%s\" base \"%s\": unknown flag \"%s\".",
                       filename,
                       base_rule_name(pbase),
@@ -2243,8 +2212,7 @@ static void load_ruleset_terrain(struct section_file *file)
 }
 
 /**************************************************************************
-  Load names of governments so other rulesets can refer to governments with
-  their name.
+  ...  
 **************************************************************************/
 static void load_government_names(struct section_file *file)
 {
@@ -2410,8 +2378,7 @@ static const char *check_leader_names(struct nation_type *pnation,
 }
 
 /**************************************************************************
-  Load names of nations so other rulesets can refer to nations with
-  their name.
+  ...
 **************************************************************************/
 static void load_nation_names(struct section_file *file)
 {
@@ -2909,8 +2876,7 @@ static void load_ruleset_nations(struct section_file *file)
 }
 
 /**************************************************************************
-  Load names of city styles so other rulesets can refer to city styles with
-  their name.
+  ...
 **************************************************************************/
 static void load_citystyle_names(struct section_file *file)
 {
@@ -3013,10 +2979,6 @@ static void load_ruleset_cities(struct section_file *file)
   game.server.vision_reveal_tiles =
     secfile_lookup_bool_default(file, FALSE, "parameters.vision_reveal_tiles");
 
-  /* Citizens configuration. */
-  game.info.citizen_nationality =
-    secfile_lookup_bool_default(file, FALSE,
-                                "citizen.nationality");
   /* City Styles ... */
 
   sec = secfile_sections_by_name_prefix(file, CITYSTYLE_SECTION_PREFIX);
@@ -3086,13 +3048,8 @@ static void load_ruleset_effects(struct section_file *file)
     const char *sec_name = section_name(psection);
 
     type = secfile_lookup_str(file, "%s.name", sec_name);
-    if (!type) {
-      log_error("\"%s\" [%s] missing effect name.", filename, sec_name);
-      continue;
-    }
 
-    eff = effect_type_by_name(type, fc_strcasecmp);
-    if (!effect_type_is_valid(eff)) {
+    if ((eff = effect_type_from_str(type)) == EFT_LAST) {
       log_error("\"%s\" [%s] lists unknown effect type \"%s\".",
                 filename, sec_name, type);
       continue;
@@ -3231,7 +3188,7 @@ static void load_ruleset_game(void)
                                          RS_MAX_FOOD_COST,
                                          "civstyle.food_cost");
   /* TODO: move to global_unit_options */
-  game.info.base_bribe_cost
+  game.server.base_bribe_cost
     = secfile_lookup_int_default_min_max(file,
                                          RS_DEFAULT_BASE_BRIBE_COST,
                                          RS_MIN_BASE_BRIBE_COST,
@@ -3330,6 +3287,13 @@ static void load_ruleset_game(void)
     game.server.nuke_contamination = CONTAMINATION_POLLUTION;
   }
 
+  /* This only takes effect if citymindist is set to 0. */
+  game.info.min_dist_bw_cities
+    = secfile_lookup_int_default_min_max(file,
+                                         RS_DEFAULT_CITIES_MIN_DIST,
+                                         RS_MIN_CITIES_MIN_DIST,
+                                         RS_MAX_CITIES_MIN_DIST,
+                                         "civstyle.min_dist_bw_cities");
   game.server.init_vis_radius_sq
     = secfile_lookup_int_default_min_max(file,
                                          RS_DEFAULT_VIS_RADIUS_SQ,
@@ -3483,39 +3447,6 @@ static void load_ruleset_game(void)
                                           RS_DEFAULT_NEG_YEAR_LABEL,
                                           "calendar.negative_label")));
 
-  /* section playercolors */
-  {
-    struct rgbcolor *prgbcolor = NULL;
-    bool read = TRUE;
-
-    /* Check if the player list is defined and empty. */
-    fc_assert_ret(playercolor_count() == 0);
-    i = 0;
-    while (read) {
-      prgbcolor = NULL;
-
-      read = rgbcolor_load(file, &prgbcolor, "playercolors.colorlist%d", i);
-      if (read) {
-        playercolor_add(prgbcolor);
-      }
-
-      i++;
-    }
-
-    if (playercolor_count() == 0) {
-      ruleset_error(LOG_FATAL, "No player colors defined!");
-    }
-
-    if (game.plr_bg_color != NULL) {
-      rgbcolor_destroy(game.plr_bg_color);
-      game.plr_bg_color = NULL;
-    }
-    if (!rgbcolor_load(file, &game.plr_bg_color, "playercolors.background")) {
-      ruleset_error(LOG_FATAL, "No background player color defined! (%s)",
-                    secfile_error());
-    }
-  }
-
   /* section: teams */
   svec = secfile_lookup_str_vec(file, &teams, "teams.names");
   if (team_slot_count() < teams) {
@@ -3607,21 +3538,10 @@ static void send_ruleset_units(struct conn_list *dest)
     packet.city_size = u->city_size;
     packet.cargo = u->cargo;
     packet.targets = u->targets;
-
-    if (u->veteran == NULL) {
-      /* Use the default veteran system. */
-      packet.veteran_levels = 0;
-    } else {
-      /* Per unit veteran system definition. */
-      packet.veteran_levels = utype_veteran_levels(u);
-
-      for (i = 0; i < packet.veteran_levels; i++) {
-        const struct veteran_level *vlevel = utype_veteran_level(u, i);
-
-        sz_strlcpy(packet.veteran_name[i], untranslated_name(&vlevel->name));
-        packet.power_fact[i] = vlevel->power_fact;
-        packet.move_bonus[i] = vlevel->move_bonus;
-      }
+    for (i = 0; i < MAX_VET_LEVELS; i++) {
+      sz_strlcpy(packet.veteran_name[i], untranslated_name(&u->veteran[i].name));
+      packet.power_fact[i] = u->veteran[i].power_fact;
+      packet.move_bonus[i] = u->veteran[i].move_bonus;
     }
     PACKET_STRVEC_COMPUTE(packet.helptext, u->helptext);
 
@@ -3782,11 +3702,6 @@ static void send_ruleset_terrain(struct conn_list *dest)
     packet.clean_fallout_time = pterrain->clean_fallout_time;
 
     packet.flags = pterrain->flags;
-
-    packet.color_red = pterrain->rgb->r;
-    packet.color_green = pterrain->rgb->g;
-    packet.color_blue = pterrain->rgb->b;
-
     PACKET_STRVEC_COMPUTE(packet.helptext, pterrain->helptext);
 
     lsend_packet_ruleset_terrain(dest, &packet);
@@ -3993,20 +3908,11 @@ static void send_ruleset_cities(struct conn_list *dest)
 static void send_ruleset_game(struct conn_list *dest)
 {
   struct packet_ruleset_game misc_p;
-  int i;
 
-  fc_assert_ret(game.veteran != NULL);
-
-  /* Per unit veteran system definition. */
-  misc_p.veteran_levels = game.veteran->levels;
-
-  for (i = 0; i < misc_p.veteran_levels; i++) {
-    const struct veteran_level *vlevel = game.veteran->definitions + i;
-
-    sz_strlcpy(misc_p.veteran_name[i], untranslated_name(&vlevel->name));
-    misc_p.power_fact[i] = vlevel->power_fact;
-    misc_p.move_bonus[i] = vlevel->move_bonus;
-  }
+  memcpy(misc_p.work_veteran_chance, game.work_veteran_chance, 
+         sizeof(game.work_veteran_chance));
+  memcpy(misc_p.veteran_chance, game.veteran_chance, 
+         sizeof(game.veteran_chance));
 
   fc_assert(sizeof(misc_p.global_init_techs)
             == sizeof(game.server.rgame.global_init_techs));
@@ -4016,12 +3922,6 @@ static void send_ruleset_game(struct conn_list *dest)
          sizeof(misc_p.global_init_techs));
 
   misc_p.default_specialist = DEFAULT_SPECIALIST;
-
-  fc_assert_ret(game.plr_bg_color != NULL);
-
-  misc_p.background_red = game.plr_bg_color->r;
-  misc_p.background_green = game.plr_bg_color->g;
-  misc_p.background_blue = game.plr_bg_color->b;
 
   lsend_packet_ruleset_game(dest, &misc_p);
 }
@@ -4080,9 +3980,6 @@ void load_rulesets(void)
   log_normal(_("Loading rulesets."));
 
   game_ruleset_free();
-  /* Reset the list of available player colors. */
-  playercolor_free();
-  playercolor_init();
   game_ruleset_init();
 
   reset_player_nations();
@@ -4148,7 +4045,7 @@ void load_rulesets(void)
   openload_script_file("script");
 
   /* Build AI unit class cache corresponding to loaded rulesets */
-  CALL_FUNC_EACH_AI(units_ruleset_init);
+  unit_class_ai_init();
 
   /* We may need to adjust the number of AI players
    * if the number of available nations changed. */

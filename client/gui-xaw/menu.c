@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -470,7 +470,7 @@ void real_menus_update(void)
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
-	ptile = unit_tile(punit);
+	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 

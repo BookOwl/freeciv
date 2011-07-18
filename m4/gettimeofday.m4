@@ -8,7 +8,7 @@ AC_DEFUN([FC_CHECK_GETTIMEOFDAY_RUNTIME],
 [
 templibs="$LIBS"
 LIBS="$1 $LIBS"
-AC_RUN_IFELSE([AC_LANG_SOURCE([[
+AC_TRY_RUN([
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -101,9 +101,12 @@ int main(int argc, char **argv)
 #endif
   return 0;
 }
-]])],[AC_MSG_RESULT(yes)
-  [$2]],[AC_MSG_RESULT(no)
-  [$3]],[AC_MSG_RESULT(unknown: cross-compiling)
+],
+[AC_MSG_RESULT(yes)
+  [$2]],
+[AC_MSG_RESULT(no)
+  [$3]],
+[AC_MSG_RESULT(unknown: cross-compiling)
   [$3]])
 LIBS="$templibs"
 ])

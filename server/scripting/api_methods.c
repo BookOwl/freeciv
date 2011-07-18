@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -30,10 +30,9 @@
 /* server */
 #include "score.h"
 #include "plrhand.h"
-#include "unittools.h"
 
 /* server/scripting */
-#include "script_game.h"
+#include "script.h"
 
 #include "api_methods.h"
 
@@ -113,23 +112,6 @@ int api_methods_city_map_sq_radius(City *pcity)
   return city_map_radius_sq_get(pcity);
 }
 
-/**************************************************************************
-  Return the size of the city.
-**************************************************************************/
-int api_methods_city_size_get(City *pcity)
-{
-  SCRIPT_CHECK_SELF(pcity, 0);
-  return city_size_get(pcity);
-}
-
-/**************************************************************************
-  Return the tile of the city.
-**************************************************************************/
-Tile *api_methods_city_tile_get(City *pcity)
-{
-  SCRIPT_CHECK_SELF(pcity, NULL);
-  return pcity->tile;
-}
 
 /**************************************************************************
   Return rule name for Government
@@ -329,21 +311,6 @@ bool api_methods_tile_city_exists_within_max_city_map(Tile *ptile,
 }
 
 /**************************************************************************
-  Return TRUE if there is a base with rule name name on ptile.
-  If no name is specified return true if there is a base on ptile.
-**************************************************************************/
-bool api_methods_tile_has_base(Tile *ptile, const char *name)
-{
-  struct base_type *base;
-  if (!name) {
-    return tile_has_any_bases(ptile);
-  } else {
-    base = base_type_by_rule_name(name);
-    return tile_has_base(ptile, base);
-  }
-}
-
-/**************************************************************************
   Return number of units on tile
 **************************************************************************/
 int api_methods_tile_num_units(Tile *ptile)
@@ -433,44 +400,9 @@ int api_methods_tile_sq_distance(Tile *ptile1, Tile *ptile2)
 bool api_methods_unit_city_can_be_built_here(Unit *punit)
 {
   SCRIPT_CHECK_SELF(punit, FALSE);
-  return city_can_be_built_here(unit_tile(punit), punit);
+  return city_can_be_built_here(punit->tile, punit);
 }
 
-/**************************************************************************
-  Return the tile of the unit.
-**************************************************************************/
-Tile *api_methods_unit_tile_get(Unit *punit)
-{
-  SCRIPT_CHECK_SELF(punit, NULL);
-  return unit_tile(punit);
-}
-
-/**************************************************************************
-  Teleport unit to destination tile
-**************************************************************************/
-bool api_methods_unit_teleport(Unit *punit, Tile *dest)
-{
-  bool alive;
-
-  /* Teleport first so destination is revealed even if unit dies */
-  alive = unit_move(punit, dest, 0);
-  if (alive) {
-    struct player *owner = unit_owner(punit);
-    struct city *pcity = tile_city(dest);
-
-    if (!can_unit_exist_at_tile(punit, dest)) {
-      wipe_unit(punit, ULR_NONNATIVE_TERR);
-      return FALSE;
-    }
-    if (is_non_allied_unit_tile(dest, owner)
-        || (pcity && !pplayers_allied(city_owner(pcity), owner))) {
-      wipe_unit(punit, ULR_STACK_CONFLICT);
-      return FALSE;
-    }
-  }
-
-  return alive;
-}
 
 /**************************************************************************
   Return TRUE if punit_type has flag.

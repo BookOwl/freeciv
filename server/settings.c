@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -257,25 +257,12 @@ static const struct sset_val_name *startpos_name(int startpos)
 static const struct sset_val_name *killcitizen_name(int killcitizen_bit)
 {
   switch (killcitizen_bit) {
-  NAME_CASE(UMT_LAND, "LAND", N_("Land moving units"));
-  NAME_CASE(UMT_SEA, "SEA", N_("Sea moving units"));
-  NAME_CASE(UMT_BOTH, "BOTH",
+  NAME_CASE(LAND_MOVING, "LAND", N_("Land moving units"));
+  NAME_CASE(SEA_MOVING, "SEA", N_("Sea moving units"));
+  NAME_CASE(BOTH_MOVING, "BOTH",
             N_("Units able to move both on land and sea"));
-  };
-
-  return NULL;
-}
-
-/****************************************************************************
-  Autosaves setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *autosaves_name(int autosaves_bit)
-{
-  switch (autosaves_bit) {
-  NAME_CASE(AS_TURN, "TURN", N_("New turn"));
-  NAME_CASE(AS_GAME_OVER, "GAMEOVER", N_("Game over"));
-  NAME_CASE(AS_QUITIDLE, "QUITIDLE", N_("No player connections"));
-  NAME_CASE(AS_INTERRUPT, "INTERRUPT", N_("Server interrupted"));
+  case MOVETYPE_LAST:
+    break;
   };
 
   return NULL;
@@ -293,20 +280,6 @@ static const struct sset_val_name *borders_name(int borders)
             N_("See everything inside borders"));
   NAME_CASE(BORDERS_EXPAND, "EXPAND",
             N_("Borders expand to unknown, revealing tiles"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
-  Player colors configuration setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *plrcol_name(int plrcol)
-{
-  switch (plrcol) {
-  NAME_CASE(PLRCOL_PLR_ORDER, "PLR_ORDER",  N_("player color (ordered)"));
-  NAME_CASE(PLRCOL_PLR_RANDOM, "PLR_RANDOM", N_("player color (random)"));
-  NAME_CASE(PLRCOL_PLR_SET, "PLR_SET",    N_("player color (set/random)"));
-  NAME_CASE(PLRCOL_TEAM_ORDER, "TEAM_ORDER", N_("team color (ordered)"));
   }
   return NULL;
 }
@@ -357,18 +330,6 @@ static const struct sset_val_name *barbarians_name(int barbarians)
 }
 
 /****************************************************************************
-  Revealmap setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *revealmap_name(int bit)
-{
-  switch (1 << bit) {
-  NAME_CASE(REVEAL_MAP_START, "MAP_START", N_("Reveal map at game start"));
-  NAME_CASE(REVEAL_MAP_DEAD, "MAP_DEAD", N_("Unfog map for dead players"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
   Airlifting style setting names accessor.
 ****************************************************************************/
 static const struct sset_val_name *airliftingstyle_name(int bit)
@@ -413,9 +374,6 @@ compresstype_name(enum fz_method compresstype)
 #endif
 #ifdef HAVE_LIBBZ2
   NAME_CASE(FZ_BZIP2, "BZIP2", N_("Using bzip2"));
-#endif
-#ifdef HAVE_LIBLZMA
-  NAME_CASE(FZ_XZ, "XZ", N_("Using xz"));
 #endif
   }
   return NULL;
@@ -696,7 +654,7 @@ static bool maxplayers_callback(int value, struct connection *caller,
                       _("Cannot change maxplayers in GGZ mode."));
     return FALSE;
   }
-#endif /* GGZ_SERVER */
+#endif
   if (value < player_count()) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("Number of players (%d) is higher than requested "
@@ -781,7 +739,7 @@ static bool unitwaittime_callback(int value, struct connection *caller,
 }
 
 /*************************************************************************
-  xsize setting validation callback.
+ ...
 *************************************************************************/
 static bool xsize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
@@ -806,7 +764,7 @@ static bool xsize_callback(int value, struct connection *caller,
 }
 
 /*************************************************************************
-  ysize setting validation callback.
+  ...
 *************************************************************************/
 static bool ysize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
@@ -1429,7 +1387,8 @@ static struct setting settings[] = {
 	  N_("When a player attempts to found a new city, there may be "
 	     "no other city in this distance. For example, when "
 	     "this value is 3, there have to be at least two empty "
-	     "fields between two cities in every direction."),
+	     "fields between two cities in every direction. If set "
+	     "to 0 (default), the ruleset value will be used."),
           NULL, NULL,
 	  GAME_MIN_CITYMINDIST, GAME_MAX_CITYMINDIST,
 	  GAME_DEFAULT_CITYMINDIST)
@@ -1560,25 +1519,6 @@ static struct setting settings[] = {
               "default city name of another nation unless it is a default "
               "for their nation also."),
            NULL, NULL, citynames_name, GAME_DEFAULT_ALLOWED_CITY_NAMES)
-
-  GEN_ENUM("plrcolormode", game.server.plrcolormode,
-           SSET_RULES, SSET_INTERNAL, SSET_RARE, SSET_TO_CLIENT,
-           N_("How to pick the player color"),
-           /* TRANS: The strings between double quotes are also translated
-            * separately (they must match!). The strings between paranthesis
-            * and in uppercase must not to be translated. */
-           N_("- \"player color (ordered)\" (PLR_ORDER): select the color "
-              "for each player according to the order of the color "
-              "definition.\n"
-              "- \"player color (random)\" (PLR_RANDOM): select a random "
-              "color for each player.\n"
-              "- \"player color (set/random)\" (PLR_SET): use the color set "
-              "via the playercolor command. For players without a color a "
-              "random value will be selected.\n"
-              "- \"team color (ordered)\" (TEAM_ORDER): select the color "
-              "for one team depending on the order of the color "
-              "definition."),
-           NULL, NULL, plrcol_name, GAME_DEFAULT_PLRCOLORMODE)
 
   /* Flexible rules: these can be changed after the game has started.
    *
@@ -1901,22 +1841,6 @@ static struct setting settings[] = {
           endturn_callback, NULL,
           GAME_MIN_END_TURN, GAME_MAX_END_TURN, GAME_DEFAULT_END_TURN)
 
-  GEN_BITWISE("revealmap", game.server.revealmap, SSET_GAME_INIT,
-              SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-              N_("Reveal the map"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parentheses and in uppercase must not be
-               * translated. */
-              N_("If this option is set to \"Reveal map at game start\" "
-                 "(MAP_SEEN), the entire map will be known to all players "
-                 "from the start of the game, though it will still be fogged "
-                 "(depending on the 'fogofwar' setting). If this option is set "
-                 "to \"Unfog map for dead players\" (MAP_DEAD) dead players "
-                 "can see the entire map if they are alone in their team."),
-             NULL, NULL, revealmap_name, GAME_DEFAULT_REVEALMAP)
-
   GEN_INT("timeout", game.info.timeout,
           SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
           N_("Maximum seconds per turn"),
@@ -1930,23 +1854,9 @@ static struct setting settings[] = {
              "debugging, a timeout of -1 sets the autogame test mode. "
              "Only connections with hack level access may set the "
              "timeout to lower than 30 seconds. Use this with the "
-             "command \"timeoutincrease\" to have a dynamic timer. "
-             "The first turn is treated as a special case and is controlled "
-             "by the 'first_timeout' setting."),
+             "command \"timeoutincrease\" to have a dynamic timer."),
           timeout_callback, timeout_action,
           GAME_MIN_TIMEOUT, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUT)
-
-  GEN_INT("first_timeout", game.server.first_timeout,
-          SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-          N_("First turn timeout"),
-          /* TRANS: The strings between single quotes are setting names and
-           * should not be translated. */
-          N_("If greater than 0, T0 will last for 'first_timeout' seconds.\n"
-             "If set to 0, T0 will not have a timeout.\n"
-             "If set to -1, the special treatment of T0 will be disabled.\n"
-             "See also 'timeout'."),
-          NULL, NULL, GAME_MIN_FIRST_TIMEOUT, GAME_MAX_FIRST_TIMEOUT,
-          GAME_DEFAULT_FIRST_TIMEOUT)
 
   GEN_INT("timeaddenemymove", game.server.timeoutaddenemymove,
 	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
@@ -2066,26 +1976,8 @@ static struct setting settings[] = {
           /* TRANS: The string between single quotes is a setting name and
            * should not be translated. */
 	  N_("The game will be automatically saved per this number of "
-             "turns. See also setting 'autosaves'."), NULL, NULL,
+             "turns. Zero means never auto-save."), NULL, NULL,
           GAME_MIN_SAVETURNS, GAME_MAX_SAVETURNS, GAME_DEFAULT_SAVETURNS)
-
-  GEN_BITWISE("autosaves", game.server.autosaves,
-              SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
-              N_("Which savegames are generated automatically"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parantheses and in uppercase must stay as
-               * untranslated. */
-              N_("This setting controls which autosave types get generated:\n"
-                 "- \"New turn\" (TURN): Save when turn begins, once every "
-                 "'saveturns' turns.\n"
-                 "- \"Game over\" (GAMEOVER): Final save when game ends.\n"
-                 "- \"No player connections\" (QUITIDLE): "
-                 "Save before server restarts due to lack of players.\n"
-                 "- \"Server interrupted\" (INTERRUPT): Save when server "
-                 "quits due to interrupt."),
-              NULL, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
 
   GEN_INT("compress", game.server.save_compress_level,
           SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,

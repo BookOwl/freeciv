@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -26,7 +26,6 @@
 #include "specialist.h"
 #include "unitlist.h"
 
-/* client/include */
 #include "citydlg_g.h"
 #include "mapview_g.h"
 
@@ -650,10 +649,10 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
     }
   } specialist_type_iterate_end;
 
-  if (city_size_get(pcity) != i) {
+  if (pcity->size != i) {
     log_error("get_city_citizen_types() %d citizens "
               "not equal %d city size in \"%s\".",
-              i, city_size_get(pcity), city_name(pcity));
+              i, pcity->size, city_name(pcity));
   }
   return i;
 }
@@ -703,7 +702,7 @@ void activate_all_units(struct tile *ptile)
   } unit_list_iterate_end;
   if (pmyunit) {
     /* Put the focus on one of the activated units. */
-    unit_focus_set(pmyunit);
+    set_unit_focus(pmyunit);
   }
 }
 

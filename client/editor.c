@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -38,7 +38,6 @@
 #include "mapview_common.h"
 #include "tilespec.h"
 
-/* client/include */
 #include "editgui_g.h"
 #include "mapview_g.h"
 
@@ -1298,7 +1297,7 @@ int editor_selection_count(void)
 }
 
 /****************************************************************************
-  Creates a virtual unit (like unit_virtual_create) based on the current
+  Creates a virtual unit (like create_unit_virtual) based on the current
   editor state. You should free() the unit when it is no longer needed.
   If creation is not possible, then NULL is returned.
 
@@ -1306,7 +1305,7 @@ int editor_selection_count(void)
   corresponding to the current 'applied player' parameter and has unit type
   given by the sub-value of the unit tool (ETT_UNIT).
 ****************************************************************************/
-struct unit *editor_unit_virtual_create(void)
+struct unit *editor_create_unit_virtual(void)
 {
   struct unit *vunit;
   struct player *pplayer;
@@ -1326,7 +1325,7 @@ struct unit *editor_unit_virtual_create(void)
     return NULL;
   }
 
-  vunit = unit_virtual_create(pplayer, NULL, putype, 0);
+  vunit = create_unit_virtual(pplayer, NULL, putype, 0);
 
   return vunit;
 }
@@ -1460,7 +1459,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
         if (!punit) {
           continue;
         }
-        vunit = unit_virtual_create(unit_owner(punit), NULL,
+        vunit = create_unit_virtual(unit_owner(punit), NULL,
                                     unit_type(punit), punit->veteran);
         vunit->homecity = punit->homecity;
         vunit->hp = punit->hp;
@@ -1477,7 +1476,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
         fc_snprintf(name, sizeof(name), "Copy of %s",
                     city_name(pcity));
         vcity = create_city_virtual(city_owner(pcity), NULL, name);
-        city_size_set(vcity, city_size_get(pcity));
+        vcity->size = pcity->size;
         improvement_iterate(pimprove) {
           if (!is_improvement(pimprove)
               || !city_has_building(pcity, pimprove)) {
@@ -1583,7 +1582,7 @@ static void paste_tile(struct edit_buffer *ebuf,
         continue;
       }
       owner = player_number(city_owner(vcity));
-      value = city_size_get(vcity);
+      value = vcity->size;
       dsend_packet_edit_city_create(my_conn, owner, tile, value, 0);
       break;
     default:

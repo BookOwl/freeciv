@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <windows.h>
@@ -415,12 +415,7 @@ void city_dialog_update_building(struct city_dialog *pdialog)
   const char *descr = city_production_name_translation(pcity);
   
   EnableWindow(pdialog->buy_but, city_can_buy(pcity));
-
- /* FIXME: Should not pass NULL as improvement
-  * to test_player_sell_building_now(). It skips many tests. */
-  EnableWindow(pdialog->sell_but,
-               test_player_sell_building_now(client.conn.playing,
-                                             pcity, NULL) == TR_SUCCESS);
+  EnableWindow(pdialog->sell_but, !pcity->did_sell);
 
   get_city_dialog_production(pcity, buf, sizeof(buf));
   
@@ -1275,7 +1270,7 @@ static void supported_units_activate_close_callback(HWND w, void * data)
     struct city *pcity =
       player_find_city_by_id(client.conn.playing, punit->homecity);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1302,7 +1297,7 @@ static void show_units_callback(struct city_dialog *pdialog)
   struct tile *ptile = pdialog->pcity->tile;
  
   if(unit_list_size(ptile->units))
-    unit_select_dialog_popup(ptile);
+    popup_unit_select_dialog(ptile);
 }
 
 /**************************************************************************
@@ -1352,7 +1347,7 @@ static void present_units_activate_callback(HWND w, void * data)
     player_find_unit_by_id(client.conn.playing, (size_t)data);
 
   if (NULL != punit) {
-    unit_focus_set(punit);
+    set_unit_focus(punit);
   }
 
   destroy_message_dialog(w);
@@ -1369,9 +1364,9 @@ static void present_units_activate_close_callback(HWND w, void * data)
   destroy_message_dialog(w);
 
   if (NULL != punit) {
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1504,7 +1499,7 @@ static void city_dlg_click_present(struct city_dialog *pdialog, int n)
     player_find_unit_by_id(client.conn.playing, pdialog->present_unit_ids[n]);
 
   if (NULL != punit
-      && (pcity=tile_city(unit_tile(punit)))
+      && (pcity=tile_city(punit->tile))
       && (pdialog=get_city_dialog(pcity))) { /* ??? */
      HWND wd = popup_message_dialog(NULL,
                            /*"presentunitsdialog"*/_("Unit Commands"),
@@ -1941,7 +1936,7 @@ void citydlg_tileset_change(void)
 void refresh_unit_city_dialogs(struct unit *punit)
 {
   struct city_dialog *pdialog;
-  struct city *pcity_pre = tile_city(unit_tile(punit));
+  struct city *pcity_pre = tile_city(punit->tile);
   struct city *pcity_sup =
     player_find_city_by_id(client.conn.playing, punit->homecity);
   
