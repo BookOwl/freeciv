@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -860,7 +860,7 @@ void tile_virtual_destroy(struct tile *vtile)
   if (vtile->units) {
     unit_list_iterate(vtile->units, vunit) {
       if (unit_is_virtual(vunit)) {
-        unit_virtual_destroy(vunit);
+        destroy_unit_virtual(vunit);
       }
     } unit_list_iterate_end;
     unit_list_destroy(vtile->units);
@@ -876,46 +876,4 @@ void tile_virtual_destroy(struct tile *vtile)
   }
 
   free(vtile);
-}
-
-/****************************************************************************
-  Returns key that should be used when storing tile to hash or when
-  retrieving it from there.
-****************************************************************************/
-void *tile_hash_key(const struct tile *ptile)
-{
-  void *key = 0; /* Initialize whole sizeof(void *) */
-
-  key = FC_INT_TO_PTR(ptile->index);
-
-  return key;
-}
-
-/****************************************************************************
-  Sets label for tile. Returns whether label changed.
-****************************************************************************/
-bool tile_set_label(struct tile *ptile, const char *label)
-{
-  bool changed = FALSE;
-
-  /* Handle empty label as NULL label */
-  if (label != NULL && label[0] == '\0') {
-    label = NULL;
-  }
-
-  if (ptile->label != NULL) {
-    if (label == NULL) {
-      changed = TRUE;
-    }
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
-  } else if (label != NULL) {
-    changed = TRUE;
-  }
-
-  if (label != NULL) {
-    ptile->label = fc_strdup(label);
-  }
-
-  return changed;
 }

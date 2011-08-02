@@ -11,12 +11,8 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-#ifndef FC__CMA_CORE_H
-#define FC__CMA_CORE_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+#ifndef FC__CLIENT_AGENTS_CITY_MANAGEMENT_H
+#define FC__CLIENT_AGENTS_CITY_MANAGEMENT_H
 
 /*
  * CM stands for citizen management.
@@ -65,8 +61,4 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
 void cma_set_parameter(enum attr_city attr, int city_id,
 		       const struct cm_parameter *parameter);
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif /* FC__CMA_CORE_H */
+#endif

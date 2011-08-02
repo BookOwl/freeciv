@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -85,7 +85,7 @@ struct genlist *genlist_new_full(genlist_free_fn_t free_data_func)
   pgenlist->nelements = 0;
   pgenlist->head_link = NULL;
   pgenlist->tail_link = NULL;
-#endif /* ZERO_VARIABLES_FOR_SEARCHING */
+#endif
   pgenlist->free_data_func = (free_data_func ? free_data_func
                               : genlist_default_free_data_func);
 

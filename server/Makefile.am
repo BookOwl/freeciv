@@ -5,14 +5,11 @@ SUBDIRS = advisors generator scripting
 bin_PROGRAMS = freeciv-server
 lib_LTLIBRARIES = libfreeciv-srv.la
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility -I$(srcdir)/../common \
-	-I$(top_srcdir)/ai/default \
+	-I$(top_srcdir)/utility -I$(srcdir)/../common -I$(srcdir)/../ai \
 	-I$(top_srcdir)/common/aicore \
 	-I$(srcdir)/generator -I$(srcdir)/scripting \
 	-I$(srcdir)/advisors \
-	$(MAPIMG_WAND_CFLAGS) \
-	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) \
-	$(FCDB_MYSQL_CFLAGS) $(FCDB_POSTGRES_CFLAGS) $(FCDB_SQLITE3_CFLAGS)
+	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) @AUTH_CFLAGS@
 
 if MINGW32
 SERVERICON=../win32/servericon.o
@@ -29,8 +26,6 @@ libfreeciv_srv_la_SOURCES = \
 		auth.h		\
 		barbarian.c	\
 		barbarian.h	\
-		citizenshand.c	\
-		citizenshand.h	\
 		cityhand.c	\
 		cityhand.h	\
 		citytools.c	\
@@ -49,8 +44,6 @@ libfreeciv_srv_la_SOURCES = \
 		diplomats.h	\
 		edithand.c	\
 		edithand.h	\
-		fcdb.c		\
-		fcdb.h		\
 		gamehand.c	\
 		gamehand.h	\
 		ggzserver.c	\
@@ -104,24 +97,16 @@ libfreeciv_srv_la_SOURCES = \
 # outside this directory (when building common) there's no point in
 # setting them to BUILT_SOURCES.
 
-if AI_MODULES
-da_libs =
-else
-da_libs = $(top_builddir)/ai/default/libdefaultai.la
-endif
-
 # These files are not generated to builddir, but to srcdir */
 MAINTAINERCLEANFILES = $(srcdir)/hand_gen.c $(srcdir)/hand_gen.h
 
 # FIXME: Server library is calling AI functions.
 #        We should get rid of this dependency.
 srvlibs = \
- $(da_libs) \
+ $(top_builddir)/ai/libcivai.la \
  $(top_builddir)/server/advisors/libadvisors.la \
  $(top_builddir)/server/generator/libgenerator.la \
- $(top_builddir)/server/scripting/libscripting_common.la \
- $(top_builddir)/server/scripting/libscripting_fcdb.la \
- $(top_builddir)/server/scripting/libscripting_game.la
+ $(top_builddir)/server/scripting/libscripting.la
 
 libfreeciv_srv_la_DEPENDENCIES = \
  $(srvlibs)
@@ -132,7 +117,7 @@ libfreeciv_srv_la_LIBADD = \
 freeciv_server_DEPENDENCIES = \
  $(top_builddir)/common/libfreeciv.la \
  ./libfreeciv-srv.la \
- $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY) $(LUASQL_AS_DEPENDENCY)
+ $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY)
 
 freeciv_server_LDFLAGS = $(GGZDMOD_LDFLAGS)
 
@@ -143,10 +128,8 @@ freeciv_server_LDADD = \
  ./libfreeciv-srv.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) \
- $(MAPIMG_WAND_LIBS) \
- $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS) \
- $(FCDB_MYSQL_LIBS) $(FCDB_POSTGRES_LIBS) $(FCDB_SQLITE3_LIBS) \
- $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
+ $(LUA_LIBS) $(TOLUA_LIBS) \
+ $(AUTH_LIBS) $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
 
 desktopfiledir = $(prefix)/share/applications
 desktopfile_DATA = \

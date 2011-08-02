@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -33,7 +33,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "player.h"
-#include "road.h"
 #include "tech.h"
 #include "unitlist.h"
 
@@ -60,8 +59,8 @@ bool diplomat_can_do_action(const struct unit *pdiplomat,
     return FALSE;
   }
 
-  if (!is_tiles_adjacent(unit_tile(pdiplomat), ptile)
-      && !same_pos(unit_tile(pdiplomat), ptile)) {
+  if (!is_tiles_adjacent(pdiplomat->tile, ptile)
+      && !same_pos(pdiplomat->tile, ptile)) {
     return FALSE;
   }
 
@@ -84,13 +83,13 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
   struct city *pcity=tile_city(ptile);
 
   if (action != DIPLOMAT_MOVE
-      && !can_unit_exist_at_tile(pdiplomat, unit_tile(pdiplomat))) {
+      && !can_unit_exist_at_tile(pdiplomat, pdiplomat->tile)) {
     return FALSE;
   }
 
   if (pcity) {
     if (city_owner(pcity) != unit_owner(pdiplomat)
-       && real_map_distance(unit_tile(pdiplomat), pcity->tile) <= 1) {
+       && real_map_distance(pdiplomat->tile, pcity->tile) <= 1) {
       if(action==DIPLOMAT_SABOTAGE)
 	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_MOVE)
@@ -101,11 +100,10 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
                                       city_owner(pcity))) {
         return TRUE;
       }
-      if(action == SPY_POISON
-         && city_size_get(pcity) > 1
-         && unit_has_type_flag(pdiplomat, F_SPY)) {
-        return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
-      }
+      if(action==SPY_POISON &&
+	 pcity->size>1 &&
+	 unit_has_type_flag(pdiplomat, F_SPY))
+	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_INVESTIGATE)
         return TRUE;
       if (action == DIPLOMAT_STEAL && !is_barbarian(city_owner(pcity))) {
@@ -157,7 +155,7 @@ enum unit_airlift_result
                              const struct unit *punit,
                              const struct city *pdest_city)
 {
-  const struct city *psrc_city = tile_city(unit_tile(punit));
+  const struct city *psrc_city = tile_city(punit->tile);
   const struct player *punit_owner;
   enum unit_airlift_result ok_result = AR_OK;
 
@@ -288,8 +286,8 @@ bool unit_has_orders(const struct unit *punit)
 bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity)
 {
-  if (!is_tiles_adjacent(unit_tile(punit), pcity->tile)
-      && !same_pos(unit_tile(punit), pcity->tile)) {
+  if (!is_tiles_adjacent(punit->tile, pcity->tile)
+      && !same_pos(punit->tile, pcity->tile)) {
     return FALSE;
   }
 
@@ -308,7 +306,7 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 **************************************************************************/
 bool unit_can_help_build_wonder_here(const struct unit *punit)
 {
-  struct city *pcity = tile_city(unit_tile(punit));
+  struct city *pcity = tile_city(punit->tile);
 
   return pcity && unit_can_help_build_wonder(punit, pcity);
 }
@@ -323,7 +321,7 @@ bool unit_can_est_trade_route_here(const struct unit *punit)
   struct city *phomecity, *pdestcity;
 
   return (unit_has_type_flag(punit, F_TRADE_ROUTE)
-          && (pdestcity = tile_city(unit_tile(punit)))
+          && (pdestcity = tile_city(punit->tile))
           && (phomecity = game_city_by_number(punit->homecity))
           && can_cities_trade(phomecity, pdestcity));
 }
@@ -502,7 +500,7 @@ unit_add_or_build_city_test(const struct unit *punit)
   }
 
   fc_assert(unit_pop_value(punit) > 0);
-  new_pop = city_size_get(pcity) + unit_pop_value(punit);
+  new_pop = pcity->size + unit_pop_value(punit);
 
   if (new_pop > game.info.add_to_size_limit) {
     return UAB_TOO_BIG;
@@ -522,7 +520,7 @@ unit_add_or_build_city_test(const struct unit *punit)
 bool can_unit_change_homecity_to(const struct unit *punit,
 				 const struct city *pcity)
 {
-  struct city *acity = tile_city(unit_tile(punit));
+  struct city *acity = tile_city(punit->tile);
 
   /* Requirements to change homecity:
    *
@@ -543,7 +541,7 @@ bool can_unit_change_homecity_to(const struct unit *punit,
 **************************************************************************/
 bool can_unit_change_homecity(const struct unit *punit)
 {
-  return can_unit_change_homecity_to(punit, tile_city(unit_tile(punit)));
+  return can_unit_change_homecity_to(punit, tile_city(punit->tile));
 }
 
 /**************************************************************************
@@ -556,12 +554,7 @@ bool can_unit_change_homecity(const struct unit *punit)
 **************************************************************************/
 int get_activity_rate(const struct unit *punit)
 {
-  const struct veteran_level *vlevel;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
+  double fact = unit_type(punit)->veteran[punit->veteran].power_fact;
 
   /* The speed of the settler depends on its base move_rate, not on
    * the number of moves actually remaining or the adjusted move rate.
@@ -571,9 +564,7 @@ int get_activity_rate(const struct unit *punit)
   int move_rate = unit_type(punit)->move_rate;
 
   /* All settler actions are multiplied by ACTIVITY_COUNT. */
-  return ACTIVITY_FACTOR
-         * (float)vlevel->power_fact / 100
-         * move_rate / SINGLE_MOVE;
+  return ACTIVITY_FACTOR * fact * move_rate / SINGLE_MOVE;
 }
 
 /**************************************************************************
@@ -667,11 +658,10 @@ bool can_unit_do_autosettlers(const struct unit *punit)
 bool is_real_activity(enum unit_activity activity)
 {
   /* ACTIVITY_FORTRESS and ACTIVITY_AIRBASE are deprecated */
-  return (0 <= activity && activity < ACTIVITY_LAST)
-          && activity != ACTIVITY_FORTRESS
-          && activity != ACTIVITY_AIRBASE
-          && activity != ACTIVITY_UNKNOWN
-          && activity != ACTIVITY_PATROL_UNUSED;
+  return activity != ACTIVITY_FORTRESS
+    && activity != ACTIVITY_AIRBASE
+    && activity != ACTIVITY_UNKNOWN
+    && activity != ACTIVITY_PATROL_UNUSED;
 }
 
 /**************************************************************************
@@ -688,8 +678,7 @@ const char *get_activity_text(enum unit_activity activity)
   case ACTIVITY_POLLUTION:
     return _("Pollution");
   case ACTIVITY_ROAD:
-  case ACTIVITY_RAILROAD:
-    return road_activity_text(road_by_activity(activity));
+    return _("Road");
   case ACTIVITY_MINE:
     return _("Mine");
   case ACTIVITY_IRRIGATE:
@@ -702,6 +691,8 @@ const char *get_activity_text(enum unit_activity activity)
     return _("Fortress");
   case ACTIVITY_SENTRY:
     return _("Sentry");
+  case ACTIVITY_RAILROAD:
+    return _("Railroad");
   case ACTIVITY_PILLAGE:
     return _("Pillage");
   case ACTIVITY_GOTO:
@@ -758,7 +749,7 @@ bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
   }
 
   /* Transporter must be native to the tile it is on. */
-  if (!can_unit_exist_at_tile(ptrans, unit_tile(ptrans))) {
+  if (!can_unit_exist_at_tile(ptrans, ptrans->tile)) {
     return FALSE;
   }
 
@@ -776,7 +767,7 @@ bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
 
   /* Check positions of the units.  Of course you can't load a unit onto
    * a transporter on a different tile... */
-  if (!same_pos(unit_tile(pcargo), unit_tile(ptrans))) {
+  if (!same_pos(pcargo->tile, ptrans->tile)) {
     return FALSE;
   }
 
@@ -833,13 +824,13 @@ bool can_unit_paradrop(const struct unit *punit)
   if(punit->moves_left < utype->paratroopers_mr_req)
     return FALSE;
 
-  if (tile_has_base_flag(unit_tile(punit), BF_PARADROP_FROM)) {
+  if (tile_has_base_flag(punit->tile, BF_PARADROP_FROM)) {
     /* Paradrop has to be possible from non-native base.
      * Paratroopers are "Land" units, but they can paradrom from Airbase. */
     return TRUE;
   }
 
-  if (!tile_city(unit_tile(punit))) {
+  if (!tile_city(punit->tile)) {
     return FALSE;
   }
 
@@ -922,7 +913,7 @@ bool can_unit_do_activity_targeted(const struct unit *punit,
                                    Base_type_id base)
 {
   return can_unit_do_activity_targeted_at(punit, activity, target,
-					  unit_tile(punit), base);
+					  punit->tile, base);
 }
 
 /**************************************************************************
@@ -1001,7 +992,7 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
 	    || (!tile_has_special(ptile, S_FARMLAND)
 		&& player_knows_techs_with_flag(pplayer, TF_FARMLAND)))
 	&& ((pterrain == pterrain->irrigation_result
-             && can_be_irrigated(ptile, punit))
+	     && is_water_adjacent_to_tile(ptile))
 	    || (pterrain != pterrain->irrigation_result
 		&& pterrain->irrigation_result != T_NONE
 		&& (!is_ocean(pterrain)
@@ -1035,7 +1026,7 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     return can_build_base(punit, pbase, ptile);
 
   case ACTIVITY_SENTRY:
-    if (!can_unit_survive_at_tile(punit, unit_tile(punit))
+    if (!can_unit_survive_at_tile(punit, punit->tile)
 	&& punit->transported_by == -1) {
       /* Don't let units sentry on tiles they will die on. */
       return FALSE;
@@ -1437,15 +1428,6 @@ struct tile *unit_tile(const struct unit *punit)
   return punit->tile;
 }
 
-/*****************************************************************************
-  Set the tile location of the unit. Tile can be NULL (for transported units.
-*****************************************************************************/
-void unit_tile_set(struct unit *punit, struct tile *ptile)
-{
-  fc_assert_ret(NULL != punit);
-  punit->tile = ptile;
-}
-
 /**************************************************************************
 Returns true if the tile contains an allied unit and only allied units.
 (ie, if your nation A is allied with B, and B is allied with C, a tile
@@ -1603,15 +1585,15 @@ bool unit_being_aggressive(const struct unit *punit)
   if (!is_attack_unit(punit)) {
     return FALSE;
   }
-  if (tile_city(unit_tile(punit))) {
+  if (tile_city(punit->tile)) {
     return FALSE;
   }
   if (BORDERS_DISABLED != game.info.borders
       && game.info.happyborders
-      && tile_owner(unit_tile(punit)) == unit_owner(punit)) {
+      && tile_owner(punit->tile) == unit_owner(punit)) {
     return FALSE;
   }
-  if (tile_has_base_flag_for_unit(unit_tile(punit),
+  if (tile_has_base_flag_for_unit(punit->tile,
                                   unit_type(punit),
                                   BF_NOT_AGGRESSIVE)) {
     return !is_unit_near_a_friendly_city (punit);
@@ -1646,7 +1628,7 @@ bool is_build_or_clean_activity(enum unit_activity activity)
   Create a virtual unit skeleton. pcity can be NULL, but then you need
   to set tile and homecity yourself.
 **************************************************************************/
-struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
+struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
                                  struct unit_type *punittype,
                                  int veteran_level)
 {
@@ -1663,13 +1645,11 @@ struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
   fc_assert_ret_val(NULL != pplayer, NULL);     /* No unowned units! */
   punit->owner = pplayer;
 
-  punit->facing = rand_direction();
-
   if (pcity) {
-    unit_tile_set(punit, pcity->tile);
+    punit->tile = pcity->tile;
     punit->homecity = pcity->id;
   } else {
-    unit_tile_set(punit, NULL);
+    punit->tile = NULL;
     punit->homecity = IDENTITY_NUMBER_ZERO;
   }
 
@@ -1719,7 +1699,7 @@ struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
   Free the memory used by virtual unit. By the time this function is
   called, you should already have unregistered it everywhere.
 **************************************************************************/
-void unit_virtual_destroy(struct unit *punit)
+void destroy_unit_virtual(struct unit *punit)
 {
   free_unit_orders(punit);
 
@@ -1754,7 +1734,7 @@ int get_transporter_occupancy(const struct unit *ptrans)
 {
   int occupied = 0;
 
-  unit_list_iterate(unit_tile(ptrans)->units, pcargo) {
+  unit_list_iterate(ptrans->tile->units, pcargo) {
     if (pcargo->transported_by == ptrans->id) {
       occupied++;
     }
@@ -1768,7 +1748,7 @@ int get_transporter_occupancy(const struct unit *ptrans)
 ****************************************************************************/
 struct unit *transporter_for_unit(const struct unit *pcargo)
 {
-  struct tile *ptile = unit_tile(pcargo);
+  struct tile *ptile = pcargo->tile;
 
   unit_list_iterate(ptile->units, ptrans) {
     if (can_unit_load(pcargo, ptrans)) {
@@ -1806,7 +1786,7 @@ enum unit_upgrade_result unit_upgrade_test(const struct unit *punit,
       return UU_NO_MONEY;
     }
 
-    pcity = tile_city(unit_tile(punit));
+    pcity = tile_city(punit->tile);
     if (!pcity) {
       return UU_NOT_IN_CITY;
     }
@@ -1972,49 +1952,4 @@ void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data)
 {
   punit->server.ais[ai_type_number(ai)] = data;
-}
-
-/*****************************************************************************
-  Calculate how expensive it is to bribe the unit. The cost depends on the
-  distance to the capital and government form. For a damaged unit the price is
-  reduced.
-
-  The bribe cost for settlers are halved.
-**************************************************************************/
-int unit_bribe_cost(struct unit *punit)
-{
-  int cost, default_hp, dist = 0;
-  struct city *capital;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  default_hp = unit_type(punit)->hp;
-  cost = unit_owner(punit)->economic.gold + game.info.base_bribe_cost;
-  capital = player_capital(unit_owner(punit));
-
-  /* Consider the distance to the capital. */
-  if (capital != NULL) {
-    dist = MIN(GAME_UNIT_BRIBE_DIST_MAX,
-               map_distance(capital->tile, unit_tile(punit)));
-  } else {
-    dist = GAME_UNIT_BRIBE_DIST_MAX;
-  }
-  cost /= dist + 2;
-
-  /* Consider the build cost. */
-  cost *= unit_build_shield_cost(punit) / 10;
-
-  /* FIXME: This is a weird one - should be replaced. */
-  if (unit_has_type_flag(punit, F_CITIES)) {
-    cost /= 2;
-  }
-
-  /* Veterans are not cheap. */
-  /* FIXME: Should this depend on the veteran level? */
-  cost += cost * punit->veteran / 3;
-
-  /* Cost now contains the basic bribe cost.  We now reduce it by:
-   *    bribecost = cost/2 + cost/2 * damage/hp
-   *              = cost/2 * (1 + damage/hp) */
-  return ((float)cost / 2 * (1.0 + punit->hp / default_hp));
 }

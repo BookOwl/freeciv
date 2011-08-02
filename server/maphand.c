@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -79,6 +79,7 @@ static inline int map_get_seen(const struct player *pplayer,
 static inline int map_get_own_seen(const struct player *pplayer,
                                    const struct tile *ptile,
                                    enum vision_layer vlayer);
+static void climate_change(bool warming, int effect);
 
 /**************************************************************************
 Used only in global_warming() and nuclear_winter() below.
@@ -95,11 +96,6 @@ static bool is_terrain_ecologically_wet(struct tile *ptile)
 void global_warming(int effect)
 {
   climate_change(TRUE, effect);
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Global warming has occurred!"));
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Coastlines have been flooded and vast "
-                  "ranges of grassland have become deserts."));
 }
 
 /**************************************************************************
@@ -108,25 +104,21 @@ void global_warming(int effect)
 void nuclear_winter(int effect)
 {
   climate_change(FALSE, effect);
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Nuclear winter has occurred!"));
-  notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
-                _("Wetlands have dried up and vast "
-                  "ranges of grassland have become tundra."));
 }
 
 /*****************************************************************************
-  Do a climate change. Global warming occurred if 'warming' is TRUE, else
-  there is a nuclear winter.
+  Do a climate change. Global warming occured if 'warming' is TRUE else there is
+  a nuclear winter.
 *****************************************************************************/
-void climate_change(bool warming, int effect)
+static void climate_change(bool warming, int effect)
 {
   int k = map_num_tiles();
   bool used[k];
   memset(used, 0, sizeof(used));
 
   log_verbose("Climate change: %s (%d)",
-              warming ? "Global warming" : "Nuclear winter", effect);
+              warming ? "Global warming" : "Nuclear winter",
+              warming ? game.info.heating : game.info.cooling);
 
   while (effect > 0 && (k--) > 0) {
     struct terrain *old, *candidates[2], *new;
@@ -209,6 +201,20 @@ void climate_change(bool warming, int effect)
       effect--;
     }
   }
+
+  if (warming) {
+    notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
+                  _("Global warming has occurred!"));
+    notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
+                  _("Coastlines have been flooded and vast "
+                    "ranges of grassland have become deserts."));
+  } else {
+    notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
+                  _("Nuclear winter has occurred!"));
+    notify_player(NULL, NULL, E_GLOBAL_ECO, ftc_server,
+                  _("Wetlands have dried up and vast "
+                    "ranges of grassland have become tundra."));
+  }
 }
 
 /***************************************************************
@@ -258,7 +264,7 @@ bool really_gives_vision(struct player *me, struct player *them)
 }
 
 /**************************************************************************
-  Start buffering shared vision
+...
 **************************************************************************/
 static void buffer_shared_vision(struct player *pplayer)
 {
@@ -270,7 +276,7 @@ static void buffer_shared_vision(struct player *pplayer)
 }
 
 /**************************************************************************
-  Stop buffering shared vision
+...
 **************************************************************************/
 static void unbuffer_shared_vision(struct player *pplayer)
 {
@@ -282,7 +288,7 @@ static void unbuffer_shared_vision(struct player *pplayer)
 }
 
 /**************************************************************************
-  Give information about whole map (all tiles) from player to player.
+...
 **************************************************************************/
 void give_map_from_player_to_player(struct player *pfrom, struct player *pdest)
 {
@@ -298,7 +304,7 @@ void give_map_from_player_to_player(struct player *pfrom, struct player *pdest)
 }
 
 /**************************************************************************
-  Give information about all oceanic tiles from player to player
+...
 **************************************************************************/
 void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdest)
 {
@@ -316,7 +322,7 @@ void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdes
 }
 
 /**************************************************************************
-  Give information about tiles within city radius from player to player
+...
 **************************************************************************/
 void give_citymap_from_player_to_player(struct city *pcity,
 					struct player *pfrom, struct player *pdest)
@@ -443,12 +449,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
       } tile_special_type_iterate_end;
       info.bases = ptile->bases;
 
-      if (ptile->label != NULL) {
-        strncpy(info.label, ptile->label, sizeof(info.label));
-      } else {
-        info.label[0] = '\0';
-      }
-
       send_packet_tile_info(pconn, &info);
     } else if (pplayer && map_is_known(ptile, pplayer)) {
       struct player_tile *plrtile = map_get_player_tile(ptile, pplayer);
@@ -476,13 +476,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
       } tile_special_type_iterate_end;
       info.bases = plrtile->bases;
 
-      /* Labels never change, so they are not subject to fog of war */
-      if (ptile->label != NULL) {
-        strncpy(info.label, ptile->label, sizeof(info.label));
-      } else {
-        info.label[0] = '\0';
-      }
-
       send_packet_tile_info(pconn, &info);
     } else if (send_unknown) {
       info.known = TILE_UNKNOWN;
@@ -497,8 +490,6 @@ void send_tile_info(struct conn_list *dest, struct tile *ptile,
         info.special[spe] = FALSE;
       } tile_special_type_iterate_end;
       BV_CLR_ALL(info.bases);
-
-      info.label[0] = '\0';
 
       send_packet_tile_info(pconn, &info);
     }
@@ -938,14 +929,14 @@ void change_playertile_site(struct player_tile *ptile,
 
   if (ptile->site != NULL) {
     /* Releasing old site from tile */
-    vision_site_destroy(ptile->site);
+    free_vision_site(ptile->site);
   }
 
   ptile->site = new_site;
 }
 
 /***************************************************************
-  Set known status of the tile.
+...
 ***************************************************************/
 void map_set_known(struct tile *ptile, struct player *pplayer)
 {
@@ -953,7 +944,7 @@ void map_set_known(struct tile *ptile, struct player *pplayer)
 }
 
 /***************************************************************
-  Clear known status of the tile.
+...
 ***************************************************************/
 void map_clear_known(struct tile *ptile, struct player *pplayer)
 {
@@ -1017,7 +1008,7 @@ void player_map_free(struct player *pplayer)
     struct vision_site *psite = map_get_player_site(ptile, pplayer);
 
     if (NULL != psite) {
-      vision_site_destroy(psite);
+      free_vision_site(psite);
     }
 
     /* clear players knowledge */
@@ -1148,11 +1139,7 @@ void update_tile_knowledge(struct tile *ptile)
 }
 
 /***************************************************************
-  Remember that tile was last seen this year.
-
-  FIXME: Should last_updated be turn rather than year? Turn is
-         guaranteed to go forward when game proceeds, but year
-         is not (it can remain same or even go backwards)
+...
 ***************************************************************/
 void update_player_tile_last_seen(struct player *pplayer, struct tile *ptile)
 {
@@ -1160,7 +1147,7 @@ void update_player_tile_last_seen(struct player *pplayer, struct tile *ptile)
 }
 
 /***************************************************************
-  Give tile information from one player to one player.
+...
 ***************************************************************/
 static void really_give_tile_info_from_player_to_player(struct player *pfrom,
 							struct player *pdest,
@@ -1212,7 +1199,7 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
 	if (!dest_tile->site) {
           /* We cannot assign new vision site with change_playertile_site(),
            * since location is not yet set up for new site */
-          dest_tile->site = vision_site_new(0, ptile, NULL);
+          dest_tile->site = create_vision_site(0, ptile, NULL);
           *dest_tile->site = *from_tile->site;
 	}
         /* Note that we don't care if receiver knows vision source city
@@ -1226,8 +1213,7 @@ static void really_give_tile_info_from_player_to_player(struct player *pfrom,
 }
 
 /***************************************************************
-  Give tile information from player to player. Handles chains of
-  shared vision so that receiver may give information forward.
+...
 ***************************************************************/
 static void give_tile_info_from_player_to_player(struct player *pfrom,
 						 struct player *pdest,
@@ -1279,7 +1265,7 @@ static void create_vision_dependencies(void)
 }
 
 /***************************************************************
-  Starts shared vision between two players.
+...
 ***************************************************************/
 void give_shared_vision(struct player *pfrom, struct player *pto)
 {
@@ -1334,7 +1320,7 @@ void give_shared_vision(struct player *pfrom, struct player *pto)
 }
 
 /***************************************************************
-  Removes shared vision from between two players.
+...
 ***************************************************************/
 void remove_shared_vision(struct player *pfrom, struct player *pto)
 {
@@ -1386,7 +1372,7 @@ void remove_shared_vision(struct player *pfrom, struct player *pto)
 }
 
 /*************************************************************************
-  Turns FoW on for player
+...
 *************************************************************************/
 void enable_fog_of_war_player(struct player *pplayer)
 {
@@ -1400,7 +1386,7 @@ void enable_fog_of_war_player(struct player *pplayer)
 }
 
 /*************************************************************************
-  Turns FoW on for everyone.
+...
 *************************************************************************/
 void enable_fog_of_war(void)
 {
@@ -1410,7 +1396,7 @@ void enable_fog_of_war(void)
 }
 
 /*************************************************************************
-  Turns FoW off for player
+...
 *************************************************************************/
 void disable_fog_of_war_player(struct player *pplayer)
 {
@@ -1424,7 +1410,7 @@ void disable_fog_of_war_player(struct player *pplayer)
 }
 
 /*************************************************************************
-  Turns FoW off for everyone
+...
 *************************************************************************/
 void disable_fog_of_war(void)
 {
@@ -1470,7 +1456,7 @@ void bounce_units_on_terrain_change(struct tile *ptile)
   unit_list_iterate_safe(ptile->units, punit) {
     bool unit_alive = TRUE;
 
-    if (unit_tile(punit) == ptile
+    if (punit->tile == ptile
 	&& punit->transported_by == -1
 	&& !can_unit_exist_at_tile(punit, ptile)) {
       /* look for a nearby safe tile */
@@ -1480,19 +1466,19 @@ void bounce_units_on_terrain_change(struct tile *ptile)
             && !is_non_allied_city_tile(ptile2, unit_owner(punit))) {
           log_verbose("Moved %s %s due to changing terrain at (%d,%d).",
                       nation_rule_name(nation_of_unit(punit)),
-                      unit_rule_name(punit), TILE_XY(unit_tile(punit)));
+                      unit_rule_name(punit), TILE_XY(punit->tile));
           notify_player(unit_owner(punit), unit_tile(punit),
                         E_UNIT_RELOCATED, ftc_server,
                         _("Moved your %s due to changing terrain."),
                         unit_link(punit));
-	  unit_alive = unit_move(punit, ptile2, 0);
+	  unit_alive = move_unit(punit, ptile2, 0);
 	  if (unit_alive && punit->activity == ACTIVITY_SENTRY) {
 	    unit_activity_handling(punit, ACTIVITY_IDLE);
 	  }
 	  break;
 	}
       } adjc_iterate_end;
-      if (unit_alive && unit_tile(punit) == ptile) {
+      if (unit_alive && punit->tile == ptile) {
         /* If we get here we could not move punit. */
         log_verbose("Disbanded %s %s due to changing land "
                     " to sea at (%d, %d).",
@@ -1502,7 +1488,7 @@ void bounce_units_on_terrain_change(struct tile *ptile)
                       E_UNIT_LOST_MISC, ftc_server,
                       _("Disbanded your %s due to changing terrain."),
                       unit_tile_link(punit));
-        wipe_unit(punit, ULR_NONNATIVE_TERR);
+        wipe_unit(punit);
       }
     }
   } unit_list_iterate_safe_end;

@@ -11,7 +11,7 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
    GNU General Public License for more details.
 ***********************************************************************/ 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <fcntl.h>
@@ -36,7 +36,7 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 #include <sys/wait.h>
 #endif
 
-/* utility */
+/* common & utility */
 #include "capability.h"
 #include "fciconv.h"
 #include "fcintl.h"
@@ -165,7 +165,7 @@ void client_kill_server(bool force)
       kill(server_pid, SIGTERM);
       waitpid(server_pid, NULL, WUNTRACED);
       server_pid = -1;
-#endif /* WIN32_NATIVE || HAVE_WORKING_FORK */
+#endif
     }
   }
   client_has_hack = FALSE;
@@ -537,7 +537,7 @@ void handle_single_want_hack_reply(bool you_have_hack)
 /**************************************************************** 
 send server command to save game.
 *****************************************************************/ 
-void send_save_game(const char *filename)
+void send_save_game(char *filename)
 {   
   if (filename) {
     send_chat_printf("/save %s", filename);

@@ -18,10 +18,9 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
 #include "log.h"                /* fc_assert. */
 #include "mem.h"
 

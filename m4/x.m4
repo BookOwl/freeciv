@@ -33,16 +33,18 @@ AC_DEFUN([FC_CHECK_X_LIB], [
  AC_CACHE_VAL(ac_cv_lib_$ac_lib_var,
   [ac_save_LIBS="$LIBS"
    LIBS="$X_LIBS -l$1 $X_EXTRA_LIBS $LIBS"
-   AC_LINK_IFELSE([AC_LANG_PROGRAM([
-    ifelse($2, main, ,
-     #ifdef __cplusplus
+   AC_TRY_LINK(dnl
+    ifelse([$2], [main], ,
+     [#ifdef __cplusplus
        extern "C"
-      #endif
-     /* We use char because int might match the return type of a gcc2
+      #endif]
+     [/* We use char because int might match the return type of a gcc2
       builtin and then its argument prototype would still apply.  */
-      char $2();
+      char $2();]
     )
-   ], [[$2()]])],[eval "ac_cv_lib_$ac_lib_var=yes"],[eval "ac_cv_lib_$ac_lib_var=no"])
+   , [$2()],
+   eval "ac_cv_lib_$ac_lib_var=yes",
+   eval "ac_cv_lib_$ac_lib_var=no")
    LIBS="$ac_save_LIBS"
   ])dnl
  if eval "test \"`echo '$ac_cv_lib_'$ac_lib_var`\" = yes"; then
@@ -315,7 +317,8 @@ dnl   fi
 dnl
 AC_DEFUN([FC_CHECK_X_PROTO_FUNCPROTO_COMPILE],
 [AC_REQUIRE([AC_PATH_XTRA])dnl
-AC_LANG_PUSH([C])
+AC_LANG_SAVE
+AC_LANG_C
 fc_x_proto_FUNCPROTO=no
 if test "x$1" = "x"; then
   fc_x_compile="#undef FUNCPROTO"
@@ -324,14 +327,15 @@ else
 fi
 fc_x_save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS $X_CFLAGS"
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+AC_TRY_COMPILE([
 $fc_x_compile
 #include <X11/Xfuncproto.h>
-  ]], [[
+  ],[
 exit (0)
-  ]])],[fc_x_proto_FUNCPROTO=$1],[])
+  ],
+  [fc_x_proto_FUNCPROTO=$1])
 CFLAGS="$fc_x_save_CFLAGS"
-AC_LANG_POP([C])
+AC_LANG_RESTORE
 ])
 
 dnl FC_CHECK_X_PROTO_NARROWPROTO_WORKS(NARROWPROTO-VALUE)
@@ -358,7 +362,8 @@ dnl   fi
 dnl
 AC_DEFUN([FC_CHECK_X_PROTO_NARROWPROTO_WORKS],
 [AC_REQUIRE([AC_PATH_XTRA])dnl
-AC_LANG_PUSH([C])
+AC_LANG_SAVE
+AC_LANG_C
 fc_x_proto_NARROWPROTO=no
 if test "x$1" = "x"; then
   fc_x_works="#undef NARROWPROTO"
@@ -372,7 +377,7 @@ else
 fi
 fc_x_save_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS $X_CFLAGS $X_LIBS $X_PRE_LIBS -lXaw -lXt -lX11 $X_EXTRA_LIBS"
-AC_RUN_IFELSE([AC_LANG_SOURCE([[
+AC_TRY_RUN([
 $fc_x_works
 $fc_x_compile
 #include <X11/Xfuncproto.h>
@@ -426,7 +431,9 @@ int main (int argc, char ** argv)
     }
   return (0);
 }
-  ]])],[fc_x_proto_NARROWPROTO=$1],[],[:])
+  ],
+  [fc_x_proto_NARROWPROTO=$1], [], [:])
 CFLAGS="$fc_x_save_CFLAGS"
-AC_LANG_POP([C])
+AC_LANG_RESTORE
 ])
+

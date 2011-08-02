@@ -28,8 +28,9 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",            "female_title"
- "Despotism",       _("Prince %s"),            _("Princess %s")
- "Fundamentalism",  _("Director-President %s"),_("?female:Director-President %s")
+ ; /* TRANS: Voievod = Prince */
+ "Republic",        _("Voivode %s"),         _("?female:Voivode %s")
+ "Fundamentalism",_("Director-President %s"),_("?female:Director-President %s")
 }
 
 flag="romania"

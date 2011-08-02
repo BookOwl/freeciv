@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -27,7 +27,7 @@
 #include "colors.h"
 
 /*************************************************************
-  Get display color type of default visual
+...
 *************************************************************/
 enum Display_color_type get_visual(void)
 {

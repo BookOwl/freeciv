@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -754,7 +754,7 @@ void popup_diplomat_dialog(struct unit *pUnit, struct tile *ptile)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
+                           pUnit->tile);
  
   /* setup widget size and start position */
     
@@ -969,7 +969,7 @@ void popup_sabotage_dialog(struct city *pCity)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
+                           pUnit->tile);        
   
   w = area.w;
   
@@ -1021,7 +1021,7 @@ void popup_sabotage_dialog(struct city *pCity)
       area2.y = pBuf->size.h / 2 - 1;
       area2.w = pBuf->size.w - adj_size(20);
       
-      SDL_FillRect(pBuf->theme , &area2, map_rgba(pBuf->theme->format, *get_theme_color(COLOR_THEME_SABOTAGEDLG_SEPARATOR)));
+      SDL_FillRect(pBuf->theme , &area2, map_rgba(pBuf->theme->format, *get_game_colorRGB(COLOR_THEME_SABOTAGEDLG_SEPARATOR)));
     }
     
     if (pBuf == pLast) {
@@ -1494,8 +1494,8 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pDiplomatUnit));
-
+                           pDiplomatUnit->tile);      
+  
   /* setup widget size and start position */
   pBuf = pWindow;
   

@@ -118,10 +118,6 @@
  * should be included _once_, inside a .h file which _is_ itself protected
  * against multiple inclusions. */
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "genhash.h"
 #include "iterator.h"
@@ -417,10 +413,10 @@ SPECHASH_FOO(_hash_replace_full) (SPECHASH_HASH *tthis,
                                   &key_ptr, &data_ptr);
 
   if (NULL != old_pkey) {
-    *old_pkey = (SPECHASH_KEY_TYPE) SPECHASH_PTR_TO_KEY(key_ptr);
+    *old_pkey = SPECHASH_PTR_TO_KEY(key_ptr);
   }
   if (NULL != old_pdata) {
-    *old_pdata = (SPECHASH_DATA_TYPE) SPECHASH_PTR_TO_DATA(data_ptr);
+    *old_pdata = SPECHASH_PTR_TO_DATA(data_ptr);
   }
   return ret;
 }
@@ -437,7 +433,7 @@ static inline bool SPECHASH_FOO(_hash_lookup) (const SPECHASH_HASH *tthis,
                             SPECHASH_KEY_TO_PTR(key), &data_ptr);
 
   if (NULL != pdata) {
-    *pdata = (SPECHASH_DATA_TYPE) SPECHASH_PTR_TO_DATA(data_ptr);
+    *pdata = SPECHASH_PTR_TO_DATA(data_ptr);
   }
   return ret;
 }
@@ -466,10 +462,10 @@ SPECHASH_FOO(_hash_remove_full) (SPECHASH_HASH *tthis,
                                  &key_ptr, &data_ptr);
 
   if (NULL != deleted_pkey) {
-    *deleted_pkey = (SPECHASH_KEY_TYPE) SPECHASH_PTR_TO_KEY(key_ptr);
+    *deleted_pkey = SPECHASH_PTR_TO_KEY(key_ptr);
   }
   if (NULL != deleted_pdata) {
-    *deleted_pdata = (SPECHASH_DATA_TYPE) SPECHASH_PTR_TO_DATA(data_ptr);
+    *deleted_pdata = SPECHASH_PTR_TO_DATA(data_ptr);
   }
   return ret;
 }
@@ -613,10 +609,3 @@ SPECHASH_FOO(_hash_value_iter_init) (SPECHASH_ITER *iter,
   } genhash_iterate_end;
 
 #endif /* FC__SPECHASH_H */
-
-/* This is after #endif FC__SPECHASH_H on purpose.
-   extern "C" portion begins well before latter part of the header
-   is guarded against multiple inclusions. */
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */

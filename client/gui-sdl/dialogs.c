@@ -20,7 +20,7 @@
 ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -88,7 +88,7 @@ int exit_advanced_terrain_dlg_callback(struct widget *pWidget);
 
 static char *pLeaderName = NULL;
 
-static void unit_select_dialog_popdown(void);
+static void popdown_unit_select_dialog(void);
 static void popdown_terrain_info_dialog(void);
 static void popdown_pillage_dialog(void);
 static void popdown_connect_dialog(void);
@@ -144,7 +144,7 @@ void put_window_near_map_tile(struct widget *pWindow,
 void popdown_all_game_dialogs(void)
 {
   popdown_caravan_dialog();  
-  unit_select_dialog_popdown();
+  popdown_unit_select_dialog();
   popdown_advanced_terrain_dialog();
   popdown_terrain_info_dialog();
   popdown_newcity_dialog();
@@ -565,7 +565,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
     area.h += pLines->h + adj_size(10);
   }
   
-  resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+  resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                 (pWindow->size.w - pWindow->area.w) + area.w,
                 (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -691,7 +691,7 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   /* create text label */
   pStr = create_str16_from_char(cBuf, adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
-  pStr->fgcol = *get_theme_color(COLOR_THEME_UNITUPGRADE_TEXT);
+  pStr->fgcol = *get_game_colorRGB(COLOR_THEME_UNITUPGRADE_TEXT);
   
   pText = create_text_surf_from_str16(pStr);
   FREESTRING16(pStr);
@@ -728,7 +728,7 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
   
   pUnit_Upgrade_Dlg->pBeginWidgetList = pBuf;
   
-  resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+  resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                 (pWindow->size.w - pWindow->area.w) + area.w,
                 (pWindow->size.h - pWindow->area.h) + area.h);
   
@@ -739,7 +739,7 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city)
     window_y = Main.event.motion.y;
   } else {
     put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                             unit_tile(pUnit));
+                             pUnit->tile);
   }
   
   widget_set_position(pWindow, window_x, window_y);
@@ -812,7 +812,7 @@ static int unit_select_window_callback(struct widget *pWindow)
 static int exit_unit_select_callback( struct widget *pWidget )
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    unit_select_dialog_popdown();
+    popdown_unit_select_dialog();
     is_unit_move_blocked = FALSE;
   }
   return -1;
@@ -827,10 +827,10 @@ static int unit_select_callback( struct widget *pWidget )
     struct unit *pUnit =
       player_unit_by_number(client_player(), MAX_ID - pWidget->ID);
   
-    unit_select_dialog_popdown();
+    popdown_unit_select_dialog();
     if (pUnit) {
       request_new_unit_activity(pUnit, ACTIVITY_IDLE);
-      unit_focus_set(pUnit);
+      set_unit_focus(pUnit);
     }
   }
   return -1;
@@ -839,7 +839,7 @@ static int unit_select_callback( struct widget *pWidget )
 /**************************************************************************
   Popdown a dialog window to select units on a particular tile.
 **************************************************************************/
-static void unit_select_dialog_popdown(void)
+static void popdown_unit_select_dialog(void)
 {
   if (pUnit_Select_Dlg) {
     is_unit_move_blocked = FALSE;
@@ -855,7 +855,7 @@ static void unit_select_dialog_popdown(void)
 /**************************************************************************
   Popup a dialog window to select units on a particular tile.
 **************************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   struct widget *pBuf = NULL, *pWindow;
   SDL_String16 *pStr;
@@ -978,8 +978,8 @@ void unit_select_dialog_popup(struct tile *ptile)
   area = pWindow->area;
   
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
-
+                           pUnit->tile);
+  
   w = area.w;
   
   if(pUnit_Select_Dlg->pScroll) {
@@ -1113,7 +1113,7 @@ static void popup_terrain_info_dialog(SDL_Surface *pDest, struct tile *ptile)
   area.w = MAX(area.w, pBuf->size.w + adj_size(20));
   area.h = MAX(area.h, pBuf->size.h);
 
-  resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+  resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                 (pWindow->size.w - pWindow->area.w) + area.w,
                 (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -1274,7 +1274,7 @@ static int adv_unit_select_callback(struct widget *pWidget)
     
     if (pUnit) {
       request_new_unit_activity(pUnit, ACTIVITY_IDLE);
-      unit_focus_set(pUnit);
+      set_unit_focus(pUnit);
     }
   }
   return -1;
@@ -1291,7 +1291,7 @@ static int adv_unit_select_all_callback(struct widget *pWidget)
     popdown_advanced_terrain_dialog();
     
     if (pUnit) {
-      activate_all_units(unit_tile(pUnit));
+      activate_all_units(pUnit->tile);
     }
   }
   return -1;
@@ -1308,7 +1308,7 @@ static int adv_unit_sentry_idle_callback(struct widget *pWidget)
     popdown_advanced_terrain_dialog();
     
     if (pUnit) {
-      struct tile *ptile = unit_tile(pUnit);
+      struct tile *ptile = pUnit->tile;
       unit_list_iterate(ptile->units, punit) {
         if (unit_owner(punit) == client.conn.playing
          && ACTIVITY_IDLE == punit->activity
@@ -1548,9 +1548,8 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
     
   }
   /* ---------- */
-
-  if(pFocus_Unit && (unit_tile(pFocus_Unit)->x != ptile->x
-                     || unit_tile(pFocus_Unit)->y != ptile->y)) {
+  
+  if(pFocus_Unit && (pFocus_Unit->tile->x != ptile->x || pFocus_Unit->tile->y != ptile->y)) {
     /* separator */
     pBuf = create_iconlabel(NULL, pWindow->dst, NULL, WF_FREE_THEME);
     
@@ -1601,8 +1600,8 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
       !(((pCity && pplayers_non_attack(client.conn.playing, city_owner(pCity)))
       || is_non_attack_unit_tile(ptile, client.conn.playing))) &&
       (unit_type(pFocus_Unit)->paratroopers_range >=
-            real_map_distance(unit_tile(pFocus_Unit), ptile))) {
-
+	    real_map_distance(pFocus_Unit->tile, ptile))) {
+	      
       create_active_iconlabel(pBuf, pWindow->dst, pStr, _("Paradrop here"),
 						    paradrop_here_callback);
       pBuf->data.cont = pCont;
@@ -1684,21 +1683,21 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
             cat_snprintf(cBuf, sizeof(cBuf), _(" CtW: Att:%d%% Def:%d%%"),
                att_chance, def_chance);
 	  }
-
-          if (pAttacker && pAttacker == pUnit) {
-            pStr->fgcol = *(get_game_color(COLOR_OVERVIEW_ENEMY_UNIT));
-            reset = TRUE;
-          } else {
-            if (pDefender && pDefender == pUnit) {
-              pStr->fgcol = *(get_game_color(COLOR_OVERVIEW_MY_UNIT));
-              reset = TRUE;
-            }
-          }
-
+	  
+	  if (pAttacker && pAttacker == pUnit) {
+	    pStr->fgcol = *(get_game_colorRGB(COLOR_OVERVIEW_ENEMY_UNIT));		  
+	    reset = TRUE;
+	  } else {
+	    if (pDefender && pDefender == pUnit) {
+	      pStr->fgcol = *(get_game_colorRGB(COLOR_OVERVIEW_MY_UNIT));			
+	      reset = TRUE;
+	    }
+	  }
+	  
 	  create_active_iconlabel(pBuf, pWindow->dst, pStr, cBuf, NULL);
           
 	  if (reset) {
-	    pStr->fgcol = *get_theme_color(COLOR_THEME_ADVANCEDTERRAINDLG_TEXT);
+	    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_ADVANCEDTERRAINDLG_TEXT);
 	    reset = FALSE;
 	  }
 	  
@@ -1900,7 +1899,7 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
       area2.w = pBuf->size.w - adj_size(20);
       
       SDL_FillRect(pBuf->theme, &area2, map_rgba(pBuf->theme->format,
-                    *get_theme_color(COLOR_THEME_ADVANCEDTERRAINDLG_TEXT)));
+                    *get_game_colorRGB(COLOR_THEME_ADVANCEDTERRAINDLG_TEXT)));
     }
     
     if(pBuf == pAdvanced_Terrain_Dlg->pBeginWidgetList || 
@@ -2074,7 +2073,7 @@ void popup_pillage_dialog(struct unit *pUnit,
   area = pWindow->area;
   
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
+                           pUnit->tile);
   
   /* setup widget size and start position */
 
@@ -2355,7 +2354,7 @@ void popup_revolution_dialog(void)
   /* create text label */
   pStr = create_str16_from_char(_("You say you wanna revolution?"), adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
-  pStr->fgcol = *get_theme_color(COLOR_THEME_REVOLUTIONDLG_TEXT);
+  pStr->fgcol = *get_game_colorRGB(COLOR_THEME_REVOLUTIONDLG_TEXT);
   pLabel = create_iconlabel(NULL, pWindow->dst, pStr, 0);
   add_to_gui_list(ID_REVOLUTION_DLG_LABEL, pLabel);
 
@@ -2768,7 +2767,7 @@ static int nation_button_callback(struct widget *pNationButton)
       pStr = create_str16_from_char(_("SORRY... NO INFO"), adj_font(12));
     }
     
-    pStr->fgcol = *get_theme_color(COLOR_THEME_NATIONDLG_LEGEND);
+    pStr->fgcol = *get_game_colorRGB(COLOR_THEME_NATIONDLG_LEGEND);
     pText = create_text_surf_smaller_that_w(pStr, Main.screen->w - adj_size(20));
   
     copy_chars_to_string16(pStr, nation_plural_translation(pNation));
@@ -2783,7 +2782,7 @@ static int nation_button_callback(struct widget *pNationButton)
     area.h = MAX(area.h, adj_size(9) + pText2->h + adj_size(10) + pText->h
                          + adj_size(10) + pOK_Button->size.h + adj_size(10));
 
-    resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+    resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                   (pWindow->size.w - pWindow->area.w) + area.w,
                   (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -2975,7 +2974,7 @@ void popup_races_dialog(struct player *pplayer)
   SDL_FillRect(pMain_Bg, NULL, map_rgba(pMain_Bg->format, bg_color));
   putframe(pMain_Bg,
            0, 0, pMain_Bg->w - 1, pMain_Bg->h - 1,
-           get_theme_color(COLOR_THEME_NATIONDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_NATIONDLG_FRAME));
   
   pStr = create_string16(NULL, 0, adj_font(12));
   pStr->style |= (SF_CENTER|TTF_STYLE_BOLD);
@@ -3064,7 +3063,7 @@ void popup_races_dialog(struct player *pplayer)
   copy_chars_to_string16(pStr, nation_plural_translation(nation_by_number(pSetup->nation)));
   change_ptsize16(pStr, adj_font(24));
   pStr->render = 2;
-  pStr->fgcol = *get_theme_color(COLOR_THEME_NATIONDLG_TEXT);
+  pStr->fgcol = *get_game_colorRGB(COLOR_THEME_NATIONDLG_TEXT);
   
   pTmp_Surf_zoomed = adj_surf(get_nation_flag_surface(nation_by_number(pSetup->nation)));
   
@@ -3220,7 +3219,7 @@ void popup_races_dialog(struct player *pplayer)
     SDL_FillRectAlpha(pWindow->theme, &area2, &bg_color);
     putframe(pWindow->theme,
              area2.x, area2.y - 1, area2.x + area2.w, area2.y + area2.h,
-             get_theme_color(COLOR_THEME_NATIONDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_NATIONDLG_FRAME));
   }
    
   /* Sellected Nation Name */
@@ -3266,7 +3265,7 @@ void popup_races_dialog(struct player *pplayer)
           area.y + area.h - adj_size(7) - pBuf->prev->size.h - adj_size(10),
           area.w - 1, 
           area.y + area.h - adj_size(7) - pBuf->prev->size.h - adj_size(10),
-          get_theme_color(COLOR_THEME_NATIONDLG_FRAME));
+          get_game_colorRGB(COLOR_THEME_NATIONDLG_FRAME));
   
   /* Disconnect Button */
   pBuf = pBuf->prev;

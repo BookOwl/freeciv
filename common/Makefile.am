@@ -4,9 +4,7 @@ SUBDIRS = aicore
 
 lib_LTLIBRARIES = libfreeciv.la
 
-AM_CPPFLAGS = \
-	$(MAPIMG_WAND_CFLAGS) \
-	-I$(top_srcdir)/utility -I$(srcdir)/aicore
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/aicore
 
 libfreeciv_la_SOURCES = \
 		ai.c		\
@@ -17,8 +15,6 @@ libfreeciv_la_SOURCES = \
 		borders.h	\
 		capstr.c	\
 		capstr.h	\
-		citizens.c	\
-		citizens.h	\
 		city.c		\
 		city.h		\
 		combat.c	\
@@ -49,8 +45,6 @@ libfreeciv_la_SOURCES = \
 		improvement.h	\
 		map.c		\
 		map.h		\
-		mapimg.c	\
-		mapimg.h	\
 		movement.c	\
 		movement.h	\
 		name_translation.h \
@@ -67,10 +61,6 @@ libfreeciv_la_SOURCES = \
 		requirements.h	\
 		research.c	\
 		research.h	\
-		rgbcolor.c	\
-		rgbcolor.h	\
-		road.c		\
-		road.h		\
 		spaceship.c	\
 		spaceship.h	\
 		specialist.c	\
