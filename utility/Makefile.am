@@ -1,5 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
+SUBDIRS = ftwl
+
 noinst_LTLIBRARIES = libcivutility.la
 
 libcivutility_la_SOURCES = \
@@ -13,14 +15,10 @@ libcivutility_la_SOURCES = \
 		distribute.h	\
 		fc_utf8.c	\
 		fc_utf8.h	\
-		fcbacktrace.c	\
-		fcbacktrace.h	\
 		fciconv.c	\
 		fciconv.h	\
 		fcintl.c	\
 		fcintl.h	\
-		fcthread.c	\
-		fcthread.h	\
 		generate_specenum.py	\
 		genhash.c	\
 		genhash.h	\
@@ -34,8 +32,6 @@ libcivutility_la_SOURCES = \
 		iterator.h	\
 		log.c		\
 		log.h		\
-		netfile.c	\
-		netfile.h	\
 		netintf.c	\
 		netintf.h	\
 		pqueue.c	\

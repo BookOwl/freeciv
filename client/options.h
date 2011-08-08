@@ -13,10 +13,6 @@
 #ifndef FC__OPTIONS_H
 #define FC__OPTIONS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "support.h"            /* bool type */
 
@@ -24,7 +20,6 @@ extern "C" {
 #include "events.h"
 #include "fc_types.h"           /* enum gui_type */
 #include "featured_text.h"      /* struct ft_color */
-#include "mapimg.h"
 
 #define DEFAULT_METASERVER_OPTION "default"
 
@@ -33,7 +28,7 @@ struct video_mode {
   int height;
 };
 #define VIDEO_MODE(ARG_width, ARG_height) \
-    { ARG_width, ARG_height }
+    { .width = ARG_width, .height = ARG_height }
 /****************************************************************************
   Constructor.
 ****************************************************************************/
@@ -116,14 +111,8 @@ extern bool player_dlg_show_dead_players;
 extern bool reqtree_show_icons;
 extern bool reqtree_curved_lines;
 
-/* options for map images */
-extern char mapimg_format[64];
-extern int mapimg_zoom;
-extern bool mapimg_layer[MAPIMG_LAYER_COUNT];
-extern char mapimg_filename[512];
-
 /* gui-gtk-2.0 client specific options. */
-#define FC_GTK2_DEFAULT_THEME_NAME "Freeciv"
+#define FC_GTK_DEFAULT_THEME_NAME "Freeciv"
 extern char gui_gtk2_default_theme_name[512];
 extern bool gui_gtk2_map_scrollbars;
 extern bool gui_gtk2_dialogs_on_top;
@@ -161,46 +150,6 @@ extern char gui_gtk2_font_comment_label[512];
 extern char gui_gtk2_font_city_names[512];
 extern char gui_gtk2_font_city_productions[512];
 extern char gui_gtk2_font_reqtree_text[512];
-
-/* gui-gtk-3.0 client specific options. */
-#define FC_GTK3_DEFAULT_THEME_NAME "Freeciv"
-extern char gui_gtk3_default_theme_name[512];
-extern bool gui_gtk3_map_scrollbars;
-extern bool gui_gtk3_dialogs_on_top;
-extern bool gui_gtk3_show_task_icons;
-extern bool gui_gtk3_enable_tabs;
-extern bool gui_gtk3_better_fog;
-extern bool gui_gtk3_show_chat_message_time;
-extern bool gui_gtk3_new_messages_go_to_top;
-extern bool gui_gtk3_show_message_window_buttons;
-extern bool gui_gtk3_metaserver_tab_first;
-extern bool gui_gtk3_allied_chat_only;
-enum {
-  /* Order must match strings in
-   * options.c:gui_gtk3_message_chat_location_name() */
-  GUI_GTK3_MSGCHAT_SPLIT,
-  GUI_GTK3_MSGCHAT_SEPARATE,
-  GUI_GTK3_MSGCHAT_MERGED
-};
-extern int gui_gtk3_message_chat_location; /* enum GUI_GTK2_MSGCHAT_* */
-extern bool gui_gtk3_small_display_layout;
-extern bool gui_gtk3_mouse_over_map_focus;
-extern bool gui_gtk3_chatline_autocompletion;
-extern int gui_gtk3_citydlg_xsize;
-extern int gui_gtk3_citydlg_ysize;
-extern char gui_gtk3_font_city_label[512];
-extern char gui_gtk3_font_notify_label[512];
-extern char gui_gtk3_font_spaceship_label[512];
-extern char gui_gtk3_font_help_label[512];
-extern char gui_gtk3_font_help_link[512];
-extern char gui_gtk3_font_help_text[512];
-extern char gui_gtk3_font_chatline[512];
-extern char gui_gtk3_font_beta_label[512];
-extern char gui_gtk3_font_small[512];
-extern char gui_gtk3_font_comment_label[512];
-extern char gui_gtk3_font_city_names[512];
-extern char gui_gtk3_font_city_productions[512];
-extern char gui_gtk3_font_reqtree_text[512];
 
 /* gui-sdl client specific options. */
 #define FC_SDL_DEFAULT_THEME_NAME "human"
@@ -241,8 +190,8 @@ void options_save(void);
 
 
 /* Option sets. */
-extern const struct option_set *client_optset;
-extern const struct option_set *server_optset;
+extern const struct option_set const *client_optset;
+extern const struct option_set const *server_optset;
 
 struct option *optset_option_by_number(const struct option_set *poptset,
                                        int id);
@@ -361,7 +310,7 @@ void options_dialogs_set(void);
 #define MW_MESSAGES  2		/* add to the messages window */
 #define MW_POPUP     4		/* popup an individual window */
 
-extern int messages_where[];	/* OR-ed MW_ values [E_COUNT] */
+extern int messages_where[];	/* OR-ed MW_ values [E_LAST] */
 
 
 /** Client options **/
@@ -377,22 +326,7 @@ extern int messages_where[];	/* OR-ed MW_ values [E_COUNT] */
 #define GUI_GTK2_CITYDLG_MIN_YSIZE      128
 #define GUI_GTK2_CITYDLG_MAX_YSIZE      4096
 
+
 #define GUI_GTK_OVERVIEW_MIN_XSIZE      160
 #define GUI_GTK_OVERVIEW_MIN_YSIZE      100
-
-/* gui-gtk3: [xy]size of the city dialog */
-#define GUI_GTK3_CITYDLG_DEFAULT_XSIZE  770
-#define GUI_GTK3_CITYDLG_MIN_XSIZE      256
-#define GUI_GTK3_CITYDLG_MAX_XSIZE      4096
-
-#define GUI_GTK3_CITYDLG_DEFAULT_YSIZE  512
-#define GUI_GTK3_CITYDLG_MIN_YSIZE      128
-#define GUI_GTK3_CITYDLG_MAX_YSIZE      4096
-
-#define GUI_DEFAULT_MAPIMG_FILENAME     "freeciv"
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__OPTIONS_H */

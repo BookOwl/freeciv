@@ -14,10 +14,6 @@
 #ifndef FC__SPECIALIST_H
 #define FC__SPECIALIST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "shared.h"
 
@@ -56,7 +52,7 @@ const char *specialist_abbreviation_translation(const struct specialist *sp);
 
 /* Ancillary routines */
 const char *specialists_abbreviation_string(void);
-const char *specialists_string(const citizens *specialists);
+const char *specialists_string(const int *specialists);
 
 int get_specialist_output(const struct city *pcity,
 			  Specialist_type_id sp, Output_type_id otype);
@@ -75,9 +71,5 @@ void specialists_free(void);
 #define specialist_type_iterate_end                                         \
   }                                                                         \
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__SPECIALIST_H */

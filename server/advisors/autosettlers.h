@@ -13,13 +13,13 @@
 #ifndef FC__AUTOSETTLERS_H
 #define FC__AUTOSETTLERS_H
 
-/* common */
 #include "fc_types.h"
 #include "map.h"
 
 struct settlermap;
 struct pf_path;
 
+void auto_settlers_init(void);
 void auto_settlers_player(struct player *pplayer);
 
 void auto_settler_findwork(struct player *pplayer, 
@@ -40,7 +40,13 @@ int settler_evaluate_improvements(struct unit *punit,
                                   struct pf_path **path,
                                   struct settlermap *state);
 
-void adv_unit_new_task(struct unit *punit, enum adv_unit_task task,
-                       struct tile *ptile);
+void ai_manage_settler(struct player *pplayer, struct unit *punit);
+
+void init_settlers(void);
+
+void initialize_infrastructure_cache(struct player *pplayer);
+
+extern signed int *minimap;
+#define MINIMAP(_tile) minimap[tile_index(_tile)]
 
 #endif   /* FC__AUTOSETTLERS_H */

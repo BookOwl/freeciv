@@ -14,7 +14,7 @@
 #ifndef FC__API_METHODS_H
 #define FC__API_METHODS_H
 
-#include "script_types.h"
+#include "api_types.h"
 
 /* Building Type */
 bool api_methods_building_type_is_wonder(Building_Type *pbuilding);
@@ -28,8 +28,6 @@ const char *api_methods_building_type_name_translation(Building_Type
 /* City */
 bool api_methods_city_has_building(City *pcity, Building_Type *building);
 int api_methods_city_map_sq_radius(City *pcity);
-int api_methods_city_size_get(City *pcity);
-Tile *api_methods_city_tile_get(City *pcity);
 
 /* Government */
 const char *api_methods_government_rule_name(Government *pgovernment);
@@ -65,7 +63,6 @@ const char *api_methods_terrain_name_translation(Terrain *pterrain);
 City *api_methods_tile_city(Tile *ptile);
 bool api_methods_tile_city_exists_within_max_city_map(Tile *ptile,
                                                       bool may_be_on_center);
-bool api_methods_tile_has_base(Tile *ptile, const char *name);
 int api_methods_tile_num_units(Tile *ptile);
 int api_methods_tile_sq_distance(Tile *ptile1, Tile *ptile2);
 int api_methods_private_tile_next_outward_index(Tile *pstart, int index,
@@ -75,10 +72,6 @@ Unit_List_Link *api_methods_private_tile_unit_list_head(Tile *ptile);
 
 /* Unit */
 bool api_methods_unit_city_can_be_built_here(Unit *punit);
-Tile *api_methods_unit_tile_get(Unit * punit);
-bool api_methods_unit_teleport(Unit *punit, Tile *dest);
-void api_methods_unit_turn(Unit *punit, Direction dir);
-Direction api_methods_unit_orientation_get(Unit *self);
 
 /* Unit Type */
 bool api_methods_unit_type_has_flag(Unit_Type *punit_type, const char *flag);

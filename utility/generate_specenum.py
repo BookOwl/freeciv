@@ -134,10 +134,6 @@ def make_documentation(file):
 
 def make_macros(file):
     file.write('''
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "log.h"        /* fc_assert. */
 #include "support.h"    /* bool type. */
 
@@ -154,7 +150,7 @@ extern "C" {
 #define SPECENUM_FOO(suffix) SPECENUM_PASTE(SPECENUM_NAME, suffix)
 
 #ifndef SPECENUM_INVALID
-#define SPECENUM_INVALID ((enum SPECENUM_NAME) -1)
+#define SPECENUM_INVALID (-1)
 #endif
 
 #ifdef SPECENUM_BITWISE
@@ -331,9 +327,9 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 {
   do {
 #ifdef SPECENUM_BITWISE
-    e = (enum SPECENUM_NAME)(e << 1);
+    e <<= 1;
 #else
-    e = (enum SPECENUM_NAME)(e + 1);
+    e++;
 #endif
 
     if (e > SPECENUM_FOO(_max)()) {
@@ -447,12 +443,6 @@ def main():
     make_name(output)
     make_by_name(output)
     make_undef(output)
-
-    output.write('''
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-''')
 
     output.close()
 

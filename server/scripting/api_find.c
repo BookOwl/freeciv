@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -21,7 +21,7 @@
 
 /* server/scripting */
 #include "api_find.h"
-#include "script_game.h"
+#include "script.h"
 
 
 /**************************************************************************
@@ -68,11 +68,11 @@ Unit *api_find_transport_unit(Player *pplayer, Unit_Type *ptype,
 
   {
     struct unit *ptransport;
-    struct unit *pvirt = unit_virtual_create(pplayer, NULL, ptype, 0);
-    unit_tile_set(pvirt, ptile);
+    struct unit *pvirt = create_unit_virtual(pplayer, NULL, ptype, 0);
+    pvirt->tile = ptile;
     pvirt->homecity = 0;
     ptransport = transport_from_tile(pvirt, ptile);
-    unit_virtual_destroy(pvirt);
+    destroy_unit_virtual(pvirt);
     return ptransport;
   }
 }

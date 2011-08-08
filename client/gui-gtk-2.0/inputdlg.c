@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -24,7 +24,7 @@
 #include "log.h"
 #include "mem.h"
 
-/* client/gui-gtk-2.0 */
+/* gui-gtk-2.0 */
 #include "gui_main.h"
 #include "gui_stuff.h"
 

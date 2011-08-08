@@ -12,18 +12,14 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-
-/* utility */
-#include "rand.h"
 
 /* common */
 #include "research.h"
 #include "unittype.h"
 
 /* server */
-#include "aiiface.h"
 #include "barbarian.h"
 #include "citytools.h"
 #include "console.h" /* enum rfc_status */
@@ -37,9 +33,8 @@
 
 /* server/scripting */
 #include "api_find.h"
-#include "script_game.h"
+#include "script.h"
 #include "script_signal.h"
-#include "script_types.h"
 
 #include "api_actions.h"
 
@@ -64,46 +59,6 @@ void api_actions_place_partisans(Tile *ptile, Player *pplayer,
   SCRIPT_CHECK_ARG(0 <= sq_radius, 4, "radius must be positive");
   SCRIPT_CHECK(0 < num_role_units(L_PARTISAN), "no partisans in ruleset");
   return place_partisans(ptile, pplayer, count, sq_radius);
-}
-
-/**************************************************************************
-  Global climate change.
-**************************************************************************/
-void api_actions_climate_change(enum climate_change_type type, int effect)
-{
-  SCRIPT_CHECK_ARG(type == CLIMATE_CHANGE_GLOBAL_WARMING
-                   || type == CLIMATE_CHANGE_NUCLEAR_WINTER,
-                   1, "invalid climate change type");
-  SCRIPT_CHECK_ARG(effect > 0, 3, "effect must be greater than zero");
-  climate_change(type == CLIMATE_CHANGE_GLOBAL_WARMING, effect);
-}
-
-/**************************************************************************
-  Provoke a civil war.
-**************************************************************************/
-Player *api_actions_civil_war(Player *pplayer, int probability)
-{
-  SCRIPT_CHECK_ARG_NIL(pplayer, 1, Player, NULL);
-  SCRIPT_CHECK_ARG(probability >= 0 && probability <= 100,
-                   2, "must be a percentage", NULL);
-
-  if (!civil_war_possible(pplayer, FALSE, FALSE)) {
-    return NULL;
-  }
-
-  if (probability == 0) {
-    /* Calculate chance with normal rules */
-    if (!civil_war_triggered(pplayer)) {
-      return NULL;
-    }
-  } else {
-    /* Fixed chance specified by script */
-    if (fc_rand(100) >= probability) {
-      return NULL;
-    }
-  }
-
-  return civil_war(pplayer);
 }
 
 /**************************************************************************
@@ -137,12 +92,12 @@ Unit *api_actions_create_unit_full(Player *pplayer, Tile *ptile,
   if (ptransport) {
     /* Extensive check to see if transport and unit are compatible */
     int ret;
-    struct unit *pvirt = unit_virtual_create(pplayer, NULL, ptype,
+    struct unit *pvirt = create_unit_virtual(pplayer, NULL, ptype,
                                              veteran_level);
-    unit_tile_set(pvirt, ptile);
+    pvirt->tile = ptile;
     pvirt->homecity = homecity ? homecity->id : 0;
     ret = can_unit_load(pvirt, ptransport);
-    unit_virtual_destroy(pvirt);
+    destroy_unit_virtual(pvirt);
     if (!ret) {
       log_error("create_unit_full: '%s' cannot transport '%s' here",
                 utype_rule_name(unit_type(ptransport)),
@@ -187,12 +142,10 @@ Player *api_actions_create_player(const char *username,
   SCRIPT_CHECK_ARG_NIL(username, 1, string, NULL);
 
   if (game_was_started()) {
-    status = create_command_newcomer(username, FC_AI_DEFAULT_NAME,
-                                     FALSE, pnation, &pplayer,
+    status = create_command_newcomer(username, FALSE, pnation, &pplayer,
                                      buf, sizeof(buf));
   } else {
-    status = create_command_pregame(username, FC_AI_DEFAULT_NAME,
-                                    FALSE, &pplayer,
+    status = create_command_pregame(username, FALSE, &pplayer,
                                     buf, sizeof(buf));
   }
 

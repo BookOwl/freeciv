@@ -13,10 +13,6 @@
 #ifndef FC__CLIMISC_H
 #define FC__CLIMISC_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* common */
 #include "fc_types.h"
 #include "featured_text.h"      /* struct ft_color */
@@ -127,18 +123,11 @@ enum unit_bg_color_type unit_color_type(const struct unit_type *punittype);
 
 void buy_production_in_selected_cities(void);
 
-void unit_focus_set_status(struct player *pplayer);
+void set_unit_focus_status(struct player *pplayer);
 
 void client_player_init(struct player *pplayer);
 void client_player_destroy(struct player *pplayer);
 
 void client_player_maps_reset(void);
-
-bool mapimg_client_define(void);
-bool mapimg_client_createmap(const char *filename);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__CLIMISC_H */

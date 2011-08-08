@@ -12,16 +12,13 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
 #include "fcintl.h"
 
-/* server/scripting */
-#include "script_game.h"
-
 #include "api_intl.h"
+#include "script.h"
 
 const char *api_intl__(const char *untranslated) {
   SCRIPT_CHECK_ARG_NIL(untranslated, 1, string, "");

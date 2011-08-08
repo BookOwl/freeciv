@@ -13,7 +13,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -152,7 +152,7 @@ static void xaw_key_end_turn(Widget w, XEvent *event, String *argv, Cardinal *ar
 
 static void xaw_key_focus_to_next_unit(Widget w, XEvent *event, String *argv, Cardinal *argc)
 {
-  unit_focus_advance();
+  advance_unit_focus();
 }
 
 static void xaw_key_map_grid_toggle(Widget w, XEvent *event, String *argv, Cardinal *argc)
@@ -477,7 +477,7 @@ static void xaw_key_unit_fortify_or_fortress(Widget w, XEvent *event, String *ar
 {
   unit_list_iterate(get_units_in_focus(), punit) {
     struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, unit_tile(punit));
+                                                   punit, punit->tile);
     if (pbase != NULL) {
       key_unit_fortress();
     } else {

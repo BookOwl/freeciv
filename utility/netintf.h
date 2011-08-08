@@ -14,10 +14,6 @@
 #ifndef FC__NETINTF_H
 #define FC__NETINTF_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /********************************************************************** 
   Common network interface.
 ***********************************************************************/
@@ -119,9 +115,5 @@ const char *fc_url_encode(const char *txt);
 void sockaddr_debug(union fc_sockaddr *addr);
 int sockaddr_size(union fc_sockaddr *addr);
 bool sockaddr_ipv6(union fc_sockaddr *addr);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__NETINTF_H */

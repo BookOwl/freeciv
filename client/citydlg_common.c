@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -26,7 +26,6 @@
 #include "specialist.h"
 #include "unitlist.h"
 
-/* client/include */
 #include "citydlg_g.h"
 #include "mapview_g.h"
 
@@ -65,7 +64,7 @@ void generate_citydlg_dimensions(void)
   int min_x = 0, max_x = 0, min_y = 0, max_y = 0;
 
   /* use maximum possible squared city radius. */
-  city_map_iterate_without_index(CITY_MAP_MAX_RADIUS_SQ, city_x, city_y) {
+  city_map_iterate(CITY_MAP_MAX_RADIUS_SQ, city_index, city_x, city_y) {
     int canvas_x, canvas_y;
 
     map_to_gui_vector(tileset, &canvas_x, &canvas_y, CITY_ABS2REL(city_x),
@@ -75,7 +74,7 @@ void generate_citydlg_dimensions(void)
     max_x = MAX(canvas_x, max_x);
     min_y = MIN(canvas_y, min_y);
     max_y = MAX(canvas_y, max_y);
-  } city_map_iterate_without_index_end;
+  } city_map_iterate_end;
 
   citydlg_map_width = max_x - min_x + tileset_tile_width(tileset);
   citydlg_map_height = max_y - min_y + tileset_tile_height(tileset);
@@ -650,10 +649,10 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
     }
   } specialist_type_iterate_end;
 
-  if (city_size_get(pcity) != i) {
+  if (pcity->size != i) {
     log_error("get_city_citizen_types() %d citizens "
               "not equal %d city size in \"%s\".",
-              i, city_size_get(pcity), city_name(pcity));
+              i, pcity->size, city_name(pcity));
   }
   return i;
 }
@@ -703,7 +702,7 @@ void activate_all_units(struct tile *ptile)
   } unit_list_iterate_end;
   if (pmyunit) {
     /* Put the focus on one of the activated units. */
-    unit_focus_set(pmyunit);
+    set_unit_focus(pmyunit);
   }
 }
 
