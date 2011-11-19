@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -27,8 +27,6 @@
 /* common */
 #include "game.h"
 #include "map.h"
-#include "rgbcolor.h"
-#include "road.h"
 
 #include "terrain.h"
 
@@ -56,7 +54,6 @@ void terrains_init(void)
   for (i = 0; i < ARRAY_SIZE(civ_terrains); i++) {
     /* Can't use terrain_by_number here because it does a bounds check. */
     civ_terrains[i].item_number = i;
-    civ_terrains[i].rgb = NULL;
   }
   for (i = 0; i < ARRAY_SIZE(civ_resources); i++) {
     civ_resources[i].item_number = i;
@@ -78,12 +75,6 @@ void terrains_free(void)
        * ruleset packet is received. */
       free(pterrain->resources);
       pterrain->resources = NULL;
-    }
-    if (pterrain->rgb != NULL) {
-      /* Server allocates this on ruleset loading, client when
-       * ruleset packet is received. */
-      rgbcolor_destroy(pterrain->rgb);
-      pterrain->rgb = NULL;
     }
   } terrain_type_iterate_end;
 }
@@ -418,25 +409,6 @@ const char *resource_rule_name(const struct resource *presource)
   } adjc_dirlist_iterate_end;						\
 }
 
-/****************************************************************************
-  Returns TRUE iff any cardinally adjacent tile contains the given terrain.
-****************************************************************************/
-bool is_terrain_card_near(const struct tile *ptile,
-			  const struct terrain *pterrain,
-                          bool check_self)
-{
-  if (!pterrain) {
-    return FALSE;
-  }
-
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    if (tile_terrain(adjc_tile) == pterrain) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return check_self && ptile->terrain == pterrain;
-}
 
 /****************************************************************************
   Returns TRUE iff any adjacent tile contains the given terrain.
@@ -508,9 +480,9 @@ int count_terrain_property_near_tile(const struct tile *ptile,
  */
 static const char *tile_special_type_names[] =
 {
-  NULL,
+  N_("Road"),
   N_("Irrigation"),
-  NULL,
+  N_("Railroad"),
   N_("Mine"),
   N_("Pollution"),
   N_("Hut"),
@@ -529,17 +501,10 @@ enum tile_special_type special_by_rule_name(const char *name)
   fc_assert_ret_val(ARRAY_SIZE(tile_special_type_names) == S_LAST, S_LAST);
 
   tile_special_type_iterate(i) {
-    if (tile_special_type_names[i] != NULL
-        && 0 == strcmp(tile_special_type_names[i], name)) {
+    if (0 == strcmp(tile_special_type_names[i], name)) {
       return i;
     }
   } tile_special_type_iterate_end;
-
-  road_type_iterate(road) {
-    if (0 == strcmp(road_rule_name(road), name)) {
-      return road_special(road);
-    }
-  } road_type_iterate_end;
 
   return S_LAST;
 }
@@ -549,16 +514,8 @@ enum tile_special_type special_by_rule_name(const char *name)
 ****************************************************************************/
 const char *special_name_translation(enum tile_special_type type)
 {
-  struct road_type *road;
-
   fc_assert_ret_val(ARRAY_SIZE(tile_special_type_names) == S_LAST, NULL);
   fc_assert_ret_val(type >= 0 && type < S_LAST, NULL);
-
-  road = road_by_special(type);
-  if (road != NULL) {
-    return road_name_translation(road);
-  }
-
   return _(tile_special_type_names[type]);
 }
 
@@ -567,16 +524,8 @@ const char *special_name_translation(enum tile_special_type type)
 ****************************************************************************/
 const char *special_rule_name(enum tile_special_type type)
 {
-  struct road_type *road;
-
   fc_assert_ret_val(ARRAY_SIZE(tile_special_type_names) == S_LAST, NULL);
   fc_assert_ret_val(type >= 0 && type < S_LAST, NULL);
-
-  road = road_by_special(type);
-  if (road != NULL) {
-    return road_rule_name(road);
-  }
-
   return tile_special_type_names[type];
 }
 
@@ -675,22 +624,6 @@ bool is_native_tile_to_special(enum tile_special_type special,
 }
 
 /****************************************************************************
-  Returns TRUE iff any cardinally tile adjacent to (map_x,map_y) has the
-  given special.
-****************************************************************************/
-bool is_special_card_near(const struct tile *ptile, enum tile_special_type spe,
-                          bool check_self)
-{
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    if (tile_has_special(adjc_tile, spe)) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return check_self && tile_has_special(ptile, spe);
-}
-
-/****************************************************************************
   Returns TRUE iff any tile adjacent to (map_x,map_y) has the given special.
 ****************************************************************************/
 bool is_special_near_tile(const struct tile *ptile, enum tile_special_type spe,
@@ -725,24 +658,6 @@ int count_special_near_tile(const struct tile *ptile,
     count = count * 100 / total;
   }
   return count;
-}
-
-/****************************************************************************
-  Returns TRUE iff any cardinally adjacent tile contains terrain with the
-  given flag.
-****************************************************************************/
-bool is_terrain_flag_card_near(const struct tile *ptile,
-			       enum terrain_flag_id flag)
-{
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    struct terrain* pterrain = tile_terrain(adjc_tile);
-    if (T_UNKNOWN != pterrain
-	&& terrain_has_flag(pterrain, flag)) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return FALSE;
 }
 
 /****************************************************************************
@@ -796,20 +711,14 @@ const char *get_infrastructure_text(bv_special spe, bv_bases bases)
 {
   static char s[256];
   char *p;
-  enum eroad road = ROAD_LAST;
 
   s[0] = '\0';
 
   /* Since railroad requires road, Road/Railroad is redundant */
   if (contains_special(spe, S_RAILROAD)) {
-    road = ROAD_RAILROAD;
+    cat_snprintf(s, sizeof(s), "%s/", _("Railroad"));
   } else if (contains_special(spe, S_ROAD)) {
-    road = ROAD_ROAD;
-  }
-
-  if (road != ROAD_LAST) {
-    cat_snprintf(s, sizeof(s), "%s/",
-                 road_name_translation(road_by_number(road)));
+    cat_snprintf(s, sizeof(s), "%s/", _("Road"));
   }
 
   /* Likewise for farmland on irrigation */
@@ -894,29 +803,6 @@ bool terrain_belongs_to_class(const struct terrain *pterrain,
      return !is_ocean(pterrain);
    case TC_OCEAN:
      return is_ocean(pterrain);
-  }
-
-  fc_assert(FALSE);
-  return FALSE;
-}
-
-/****************************************************************************
-  Is there terrain of the given class cardinally near tile?
-****************************************************************************/
-bool is_terrain_class_card_near(const struct tile *ptile, enum terrain_class class)
-{
-  switch(class) {
-   case TC_LAND:
-     cardinal_adjc_iterate(ptile, adjc_tile) {
-       struct terrain* pterrain = tile_terrain(adjc_tile);
-       if (T_UNKNOWN != pterrain
-           && !terrain_has_flag(pterrain, TER_OCEANIC)) {
-         return TRUE;
-       }
-     } cardinal_adjc_iterate_end;
-     return FALSE;
-   case TC_OCEAN:
-     return is_ocean_card_near(ptile);
   }
 
   fc_assert(FALSE);

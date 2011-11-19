@@ -10,8 +10,5 @@ esac], [enable_gprof=no])
 dnl -g is added by AC_PROG_CC if the compiler understands it
 if test "x$enable_gprof" = "xyes"; then
   FC_C_FLAGS([-pg], [], [EXTRA_DEBUG_CFLAGS])
-  if test "x$cxx_works" = "xyes" ; then
-    FC_CXX_FLAGS([-pg], [], [EXTRA_DEBUG_CXXFLAGS])
-  fi
 fi
 ])

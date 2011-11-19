@@ -73,7 +73,6 @@ enum command_id {
   CMD_CANCELVOTE,
   CMD_IGNORE,
   CMD_UNIGNORE,
-  CMD_PLAYERCOLOR,
 
   /* potentially harmful: */
   CMD_END_GAME,
@@ -86,12 +85,6 @@ enum command_id {
   CMD_RESET,
   CMD_LUA,
   CMD_KICK,
-#ifdef DEBUG
-  CMD_OLDSAVE,
-#endif /* DEBUG */
-  CMD_DELEGATE,
-  CMD_FCDB,
-  CMD_MAPIMG,
 
   /* undocumented */
   CMD_RFCSTYLE,
@@ -109,7 +102,7 @@ const char *command_name_by_number(int i);
 const char *command_name(const struct command *pcommand);
 const char *command_synopsis(const struct command *pcommand);
 const char *command_short_help(const struct command *pcommand);
-char *command_extra_help(const struct command *pcommand);
+const char *command_extra_help(const struct command *pcommand);
 
 enum cmdlevel command_level(const struct command *pcommand);
 enum cmd_echo command_echo(const struct command *pcommand);

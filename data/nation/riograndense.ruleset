@@ -16,16 +16,13 @@ leaders = {
  "Davi Canabarro",              "Male"
 }
 
-ruler_titles = {
- "government",      "male_title",   "female_title"
- "Fundamentalism",  _("Bishop %s"), _("Mother Superior %s")
-}
 flag = "piratini"
 flag_alt = "-"
 city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "Brazilian", "Argentine", "Uruguayan", "Tupi"
 

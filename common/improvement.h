@@ -13,10 +13,6 @@
 #ifndef FC__IMPROVEMENT_H
 #define FC__IMPROVEMENT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* City Improvements, including Wonders.  (Alternatively "Buildings".) */
 
 /* utility */
@@ -127,26 +123,20 @@ bool is_special_improvement(const struct impr_type *pimprove);
 bool can_sell_building(struct impr_type *pimprove);
 bool can_city_sell_building(const struct city *pcity,
 			    struct impr_type *pimprove);
-enum test_result test_player_sell_building_now(struct player *pplayer,
-                                               struct city *pcity,
-                                               struct impr_type *pimprove);
 
 /* Macros for struct packet_game_info::great_wonder_owners[]. */
-#define WONDER_DESTROYED (-2)     /* Used as player id. */
-#define WONDER_NOT_OWNED (-1)     /* User as player id. */
+#define WONDER_DESTROYED -2     /* Used as player id. */
+#define WONDER_NOT_OWNED -1     /* User as player id. */
 #define WONDER_OWNED(player_id) ((player_id) >= 0)
 
 /* Macros for struct player::wonders[]. */
-#define WONDER_LOST (-1)        /* Used as city id. */
-#define WONDER_NOT_BUILT 0      /* Used as city id. */
-#define WONDER_BUILT(city_id) ((city_id) > 0)
+#define WONDER_NOT_BUILT 0      /* User as city id. */
+#define WONDER_BUILT(city_id) ((city_id) != WONDER_NOT_BUILT)
 
 void wonder_built(const struct city *pcity, const struct impr_type *pimprove);
 void wonder_destroyed(const struct city *pcity,
                       const struct impr_type *pimprove);
 
-bool wonder_is_lost(const struct player *pplayer,
-                    const struct impr_type *pimprove);
 bool wonder_is_built(const struct player *pplayer,
                      const struct impr_type *pimprove);
 struct city *city_from_wonder(const struct player *pplayer,
@@ -195,9 +185,4 @@ const struct impr_type *improvement_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__IMPROVEMENT_H */

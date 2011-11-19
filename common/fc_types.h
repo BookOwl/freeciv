@@ -14,10 +14,6 @@
 #ifndef FC__FC_TYPES_H
 #define FC__FC_TYPES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "bitvector.h"
 #include "shared.h"
 
@@ -28,8 +24,6 @@ extern "C" {
  * Nothing in this file should require anything else from the common/
  * directory! */
 
-enum eroad { ROAD_ROAD = 0, ROAD_RAILROAD, ROAD_LAST };
-
 #define MAX_NUM_PLAYER_SLOTS 128
 #define MAX_NUM_BARBARIANS   2
 #define MAX_NUM_PLAYERS      MAX_NUM_PLAYER_SLOTS - MAX_NUM_BARBARIANS
@@ -39,9 +33,8 @@ enum eroad { ROAD_ROAD = 0, ROAD_RAILROAD, ROAD_LAST };
 #define MAX_NUM_UNIT_LIST 10
 #define MAX_NUM_BUILDING_LIST 10
 #define MAX_LEN_VET_SHORT_NAME 8
-#define MAX_VET_LEVELS 20 /* see diplomat_success_vs_defender() */
+#define MAX_VET_LEVELS 10
 #define MAX_BASE_TYPES 32
-#define MAX_ROAD_TYPES ROAD_LAST /* Cannot be changed without major code changes */
 #define MAX_NUM_USER_UNIT_FLAGS 4
 #define MAX_NUM_LEADERS MAX_NUM_ITEMS
 #define MAX_NUM_NATION_GROUPS 128
@@ -94,8 +87,6 @@ enum unit_activity {
   ACTIVITY_LAST   /* leave this one last */
 };
 
-enum adv_unit_task { AUT_NONE, AUT_AUTO_SETTLER, AUT_BUILD_CITY };
-
 typedef signed short Continent_id;
 typedef int Terrain_type_id;
 typedef int Resource_type_id;
@@ -107,8 +98,6 @@ typedef enum unit_activity Activity_type_id;
 typedef int Nation_type_id;
 typedef int Unit_type_id;
 typedef int Base_type_id;
-typedef int Road_type_id;
-typedef unsigned char citizens;
 
 struct advance;
 struct city;
@@ -137,53 +126,38 @@ struct unit;
 typedef int Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
- * would have a recursive dependency. */
-#define SPECENUM_NAME unit_move_type
-#define SPECENUM_VALUE0 UMT_LAND
-#define SPECENUM_VALUE0NAME "Land"
-#define SPECENUM_VALUE1 UMT_SEA
-#define SPECENUM_VALUE1NAME "Sea"
-#define SPECENUM_VALUE2 UMT_BOTH
-#define SPECENUM_VALUE2NAME "Both"
-#include "specenum_gen.h"
-
+ * would have a recursive dependency.
+ * Order must mach order in move_type_names array. */
+enum unit_move_type {
+  LAND_MOVING = 0,
+  SEA_MOVING,
+  BOTH_MOVING,
+  MOVETYPE_LAST
+};
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
  * arrays.  Not all directions may be valid; see is_valid_dir and
  * is_cardinal_dir. */
-
-/* The DIR8/direction8 naming system is used to avoid conflict with
- * DIR4/direction4 in client/tilespec.h
- *
- * Changing the order of the directions will break network compatability.
- *
- * Some code assumes that the first 4 directions are the reverses of the
- * last 4 (in no particular order).  See client/goto.c and
- * map.c:opposite_direction(). */
-
-#define SPECENUM_NAME direction8
-#define SPECENUM_VALUE0 DIR8_NORTHWEST
-#define SPECENUM_VALUE0NAME "Northwest"
-#define SPECENUM_VALUE1 DIR8_NORTH
-#define SPECENUM_VALUE1NAME "North"
-#define SPECENUM_VALUE2 DIR8_NORTHEAST
-#define SPECENUM_VALUE2NAME "Northeast"
-#define SPECENUM_VALUE3 DIR8_WEST
-#define SPECENUM_VALUE3NAME "West"
-#define SPECENUM_VALUE4 DIR8_EAST
-#define SPECENUM_VALUE4NAME "East"
-#define SPECENUM_VALUE5 DIR8_SOUTHWEST
-#define SPECENUM_VALUE5NAME "Southwest"
-#define SPECENUM_VALUE6 DIR8_SOUTH
-#define SPECENUM_VALUE6NAME "South"
-#define SPECENUM_VALUE7 DIR8_SOUTHEAST
-#define SPECENUM_VALUE7NAME "Southeast"
-#include "specenum_gen.h"
-
-/* Some code requires compile time value for number of directions, and
- * cannot use specenum function call direction8_max(). */
-#define DIR8_MAGIC_MAX 8
+enum direction8 {
+  /* The DIR8/direction8 naming system is used to avoid conflict with
+   * DIR4/direction4 in client/tilespec.h
+   *
+   * Changing the order of the directions will break network compatability.
+   *
+   * Some code assumes that the first 4 directions are the reverses of the
+   * last 4 (in no particular order).  See client/goto.c. */
+  DIR8_NORTHWEST = 0,
+  DIR8_NORTH = 1,
+  DIR8_NORTHEAST = 2,
+  DIR8_WEST = 3,
+  DIR8_EAST = 4,
+  DIR8_SOUTHWEST = 5,
+  DIR8_SOUTH = 6,
+  DIR8_SOUTHEAST = 7
+};
+#define DIR8_LAST 8
+#define DIR8_COUNT DIR8_LAST
 
 /* AI levels. This must correspond to ai_level_names[] in player.c */
 enum ai_level {
@@ -242,7 +216,6 @@ typedef union {
   struct unit_class *uclass;
   struct unit_type *utype;
   struct base_type *base;
-  struct road_type *road;
 
   enum ai_level ai_level;
   enum citytile_type citytile;
@@ -304,8 +277,6 @@ typedef union {
 #define SPECENUM_VALUE19 VUT_CITYTILE
 #define SPECENUM_VALUE19NAME "CityTile"
 /* Keep this last. */
-#define SPECENUM_VALUE20 VUT_ROAD
-#define SPECENUM_VALUE20NAME "Road"
 #define SPECENUM_COUNT VUT_COUNT
 #include "specenum_gen.h"
 
@@ -317,28 +288,17 @@ struct universal {
 struct ai_choice;			/* incorporates universals_u */
 
 BV_DEFINE(bv_bases, MAX_BASE_TYPES);
-BV_DEFINE(bv_roads, MAX_ROAD_TYPES);
 BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 
-#define SPECENUM_NAME gui_type
-/* Used for options which do not belong to any gui. */
-#define SPECENUM_VALUE0 GUI_STUB
-#define SPECENUM_VALUE0NAME "stub"
-#define SPECENUM_VALUE1 GUI_GTK2
-#define SPECENUM_VALUE1NAME "gtk2"
-#define SPECENUM_VALUE2 GUI_GTK3
-#define SPECENUM_VALUE2NAME "gtk3"
-#define SPECENUM_VALUE3 GUI_SDL
-#define SPECENUM_VALUE3NAME "sdl"
-#define SPECENUM_VALUE4 GUI_XAW
-#define SPECENUM_VALUE4NAME "xaw"
-#define SPECENUM_VALUE5 GUI_QT
-#define SPECENUM_VALUE5NAME "qt"
-#define SPECENUM_VALUE6 GUI_WIN32
-#define SPECENUM_VALUE6NAME "win32"
-#define SPECENUM_VALUE7 GUI_FTWL
-#define SPECENUM_VALUE7NAME "ftwl"
-#include "specenum_gen.h"
+enum gui_type {
+  GUI_STUB,
+  GUI_GTK2,
+  GUI_SDL,
+  GUI_XAW,
+  GUI_WIN32,
+  GUI_FTWL,
+  GUI_LAST
+};
 
 #define SPECENUM_NAME airlifting_style
 #define SPECENUM_BITWISE
@@ -354,16 +314,6 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 /* Unlimited units to airlift to the destination (doesn't require any
  * Airport or equivalent). */
 #define SPECENUM_VALUE3 AIRLIFTING_UNLIMITED_DEST
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME reval_map
-#define SPECENUM_BITWISE
-/* Reveal only the area around the first units at the beginning. */
-#define SPECENUM_ZERO   REVEAL_MAP_NONE
-/* Reveal the (fogged) map at the beginning of the game. */
-#define SPECENUM_VALUE0 REVEAL_MAP_START
-/* Reveal (and unfog) the map for dead players. */
-#define SPECENUM_VALUE1 REVEAL_MAP_DEAD
 #include "specenum_gen.h"
 
 enum phase_mode_types {
@@ -385,34 +335,6 @@ enum diplomacy_mode {
   DIPLO_FOR_AIS,
   DIPLO_FOR_TEAMS,
   DIPLO_DISABLED,
-};
-
-enum tile_special_type {
-  S_ROAD,
-  S_IRRIGATION,
-  S_RAILROAD,
-  S_MINE,
-  S_POLLUTION,
-  S_HUT,
-  S_OLD_FORTRESS,
-  S_RIVER,
-  S_FARMLAND,
-  S_OLD_AIRBASE,
-  S_FALLOUT,
-
-  /* internal values not saved */
-  S_LAST,
-  S_RESOURCE_VALID = S_LAST,
-};
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-enum test_result {
-  TR_SUCCESS,
-  TR_OTHER_FAILURE,
-  TR_ALREADY_SOLD
 };
 
 #endif /* FC__FC_TYPES_H */

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -218,7 +218,7 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
     /* Only supported units are disbanded.  Units with no homecity have no
      * cost and are not disbanded. */
     unit_list_iterate(pcity->units_supported, punit) {
-      struct city *incity = tile_city(unit_tile(punit));
+      struct city *incity = tile_city(punit->tile);
 
       if (unit_type(punit) == punittype
 	  && (!in_cities_only

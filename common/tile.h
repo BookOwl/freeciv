@@ -14,10 +14,6 @@
 #ifndef FC__TILE_H
 #define FC__TILE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
@@ -25,7 +21,6 @@ extern "C" {
 #include "base.h"
 #include "fc_types.h"
 #include "player.h"
-#include "road.h"
 #include "terrain.h"
 #include "unitlist.h"
 
@@ -38,15 +33,13 @@ enum known_type {
 
 /* Convenience macro for accessing tile coordinates.  This should only be
  * used for debugging. */
-#define TILE_XY(ptile) ((ptile) ? index_to_map_pos_x(tile_index(ptile))      \
-                                : -1),                                       \
-                       ((ptile) ? index_to_map_pos_y(tile_index(ptile))      \
-                                : -1)
+#define TILE_XY(ptile) ((ptile) ? (ptile)->x : -1), \
+                       ((ptile) ? (ptile)->y : -1)
 
 struct tile {
-  int index; /* Index coordinate of the tile. Used to calculate (x, y) pairs
-              * (index_to_map_pos()) and (nat_x, nat_y) pairs
-              * (index_to_native_pos()). */
+  int x, y; /* Cartesian (map) coordinates of the tile. */
+  int nat_x, nat_y; /* Native coordinates of the tile. */
+  int index; /* Index coordinate of the tile. */
   Continent_id continent;
   bv_special special;
   bv_bases bases;
@@ -56,7 +49,6 @@ struct tile {
   struct city *worked;			/* NULL for not worked */
   struct player *owner;			/* NULL for not owned */
   struct tile *claimer;
-  char *label;                          /* NULL for no label */
   char *spec_sprite;
 };
 
@@ -133,10 +125,6 @@ bool tile_has_claimable_base(const struct tile *ptile,
 int tile_bases_defense_bonus(const struct tile *ptile,
                              const struct unit_type *punittype);
 
-bool tile_has_road(const struct tile *ptile, const struct road_type *proad);
-void tile_add_road(struct tile *ptile, const struct road_type *proad);
-void tile_remove_road(struct tile *ptile, const struct road_type *proad);
-
 /* Vision related */
 enum known_type tile_get_known(const struct tile *ptile,
 			      const struct player *pplayer);
@@ -167,11 +155,5 @@ void tile_virtual_destroy(struct tile *vtile);
 bool tile_virtual_check(struct tile *vtile);
 
 void *tile_hash_key(const struct tile *ptile);
-
-bool tile_set_label(struct tile *ptile, const char *label);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__TILE_H */

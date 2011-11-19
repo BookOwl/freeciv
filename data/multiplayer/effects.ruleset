@@ -11,7 +11,7 @@
 
 [datafile]
 description="Multiplayer effects data for Freeciv"
-options="+Freeciv-ruleset-Devel-2011.Nov.02"
+options="+Freeciv-2.3-ruleset"
 
 ; /* <-- avoid gettext warnings
 ; */ <-- avoid gettext warnings
@@ -1654,7 +1654,7 @@ name	= "Output_Per_Tile"
 value	= 50
 reqs	=
     { "type", "name", "range"
-      "Road", "Road", "Local"
+      "Special", "Road", "Local"
       "Building", "Super Highways", "City"
       "OutputType", "Trade", "Local"
     }
@@ -1715,8 +1715,10 @@ reqs	=
 name	= "Enable_Space"
 value	= 1
 reqs	=
-    { "type", "name", "range", "survives"
-      "Building", "Apollo Program", "Player", 1
+; Ideally we'd want this to be a "surviving" effect, but these aren't
+; currently supported for small wonders. Instead we use SaveSmallWonder.
+    { "type", "name", "range"
+      "Building", "Apollo Program", "Player"
     }
 
 [effect_asmiths_trading_co]
@@ -2268,59 +2270,3 @@ value   = 1
 [effect_city_build_slots_basic]
 name    = "City_Build_Slots"
 value   = 1
-
-[effect_city_image_1]
-name    = "City_Image"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "MinSize", "4", "City"
-    }
-
-[effect_city_image_2]
-name    = "City_Image"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "MinSize", "8", "City"
-    }
-
-[effect_city_image_3]
-name    = "City_Image"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "MinSize", "12", "City"
-    }
-
-[effect_city_image_4]
-name    = "City_Image"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "MinSize", "16", "City"
-    }
-
-[effect_irrigate_src_ocean]
-name    = "Irrig_Possible"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "TerrainClass", "Oceanic", "CAdjacent"
-    }
-
-[effect_irrigate_src_river]
-name    = "Irrig_Possible"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "Special", "River", "CAdjacent"
-    }
-
-[effect_irrigate_src_irrigation]
-name    = "Irrig_Possible"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "Special", "Irrigation", "CAdjacent"
-    }

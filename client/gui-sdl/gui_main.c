@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -230,7 +230,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
               struct unit *pUnit;
               struct city *pCity;
               if (NULL != (pUnit = head_of_units_in_focus()) && 
-                (pCity = tile_city(unit_tile(pUnit))) != NULL &&
+                (pCity = tile_city(pUnit->tile)) != NULL &&
                 city_owner(pCity) == client.conn.playing) {
                 popup_city_dialog(pCity);
               }
@@ -358,7 +358,8 @@ static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void
    * hold state or above */
   if (button_behavior.counting && (button_behavior.hold_state >= MB_HOLD_MEDIUM)) {
     ptile = canvas_pos_to_tile(pMotionEvent->x, pMotionEvent->y);
-    if (tile_index(ptile) != tile_index(button_behavior.ptile)) {
+    if ((ptile->x != button_behavior.ptile->x)
+        || (ptile->y != button_behavior.ptile->y)) {
       button_behavior.counting = FALSE;
     }
   }
@@ -914,8 +915,9 @@ static void clear_double_messages_call(void)
 {
   int i;
   /* clear double call */
-  for(i = 0; i <= event_type_max(); i++) {
-    if (messages_where[i] & MW_MESSAGES) {
+  for(i=0; i<E_LAST; i++) {
+    if (messages_where[i] & MW_MESSAGES)
+    {
       messages_where[i] &= ~MW_OUTPUT;
     }
   }

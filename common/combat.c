@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -30,7 +30,6 @@
 #include "packets.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "unittype.h"
 
 #include "combat.h"
 
@@ -133,7 +132,7 @@ bool can_unit_attack_unit_at_tile(const struct unit *punit,
   }
 
   /* 3. Can't attack with ground unit from ocean, except for marines */
-  if (!is_native_tile(unit_type(punit), unit_tile(punit))
+  if (!is_native_tile(unit_type(punit), punit->tile)
       && !can_attack_from_non_native(unit_type(punit))) {
     return FALSE;
   }
@@ -162,8 +161,8 @@ static bool can_unit_attack_all_at_tile(const struct unit *punit,
      * to other sea units.  However from a gameplay perspective it's a hack,
      * since players can load and unload their units manually to protect
      * their transporters. */
-    if (!unit_transported(aunit)
-        && !can_unit_attack_unit_at_tile(punit, aunit, ptile)) {
+    if (aunit->transported_by == -1
+	&& !can_unit_attack_unit_at_tile(punit, aunit, ptile)) {
       return FALSE;
     }
   } unit_list_iterate_end;
@@ -182,8 +181,8 @@ static bool can_unit_attack_any_at_tile(const struct unit *punit,
   unit_list_iterate(ptile->units, aunit) {
     /* HACK: we don't count transported units here.  This prevents some
      * bugs like a cargoplane carrying a land unit being vulnerable. */
-    if (!unit_transported(aunit)
-        && can_unit_attack_unit_at_tile(punit, aunit, ptile)) {
+    if (aunit->transported_by == -1
+	&& can_unit_attack_unit_at_tile(punit, aunit, ptile)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -308,7 +307,7 @@ void get_modified_firepower(const struct unit *attacker,
 			    const struct unit *defender,
 			    int *att_fp, int *def_fp)
 {
-  struct city *pcity = tile_city(unit_tile(defender));
+  struct city *pcity = tile_city(defender->tile);
 
   *att_fp = unit_type(attacker)->firepower;
   *def_fp = unit_type(defender)->firepower;
@@ -324,15 +323,15 @@ void get_modified_firepower(const struct unit *attacker,
    * city walls).
    */
   if (unit_has_type_flag(attacker, F_BADWALLATTACKER)
-      && get_unittype_bonus(unit_owner(defender), unit_tile(defender),
-                            unit_type(attacker), EFT_DEFEND_BONUS) > 0) {
+      && get_unittype_bonus(unit_owner(defender), defender->tile, unit_type(attacker),
+			    EFT_DEFEND_BONUS) > 0) {
     *att_fp = 1;
   }
 
   /* pearl harbour - defender's firepower is reduced to one, 
    *                 attacker's is multiplied by two         */
   if (unit_has_type_flag(defender, F_BADCITYDEFENDER)
-      && tile_city(unit_tile(defender))) {
+      && tile_city(defender->tile)) {
     *att_fp *= 2;
     *def_fp = 1;
   }
@@ -341,14 +340,13 @@ void get_modified_firepower(const struct unit *attacker,
    * When attacked by fighters, helicopters have their firepower
    * reduced to 1.
    */
-  if (unit_has_type_flag(defender, F_HELICOPTER)
-      && unit_has_type_flag(attacker, F_FIGHTER)) {
+  if (unit_has_type_flag(defender, F_HELICOPTER) && unit_has_type_flag(attacker, F_FIGHTER)) {
     *def_fp = 1;
   }
 
   /* In land bombardment both units have their firepower reduced to 1 */
   if (is_sailing_unit(attacker)
-      && !is_ocean_tile(unit_tile(defender))
+      && !is_ocean_tile(defender->tile)
       && is_ground_unit(defender)) {
     *att_fp = 1;
     *def_fp = 1;
@@ -411,18 +409,12 @@ int get_attack_power(const struct unit *punit)
  status.
 **************************************************************************/
 int base_get_attack_power(const struct unit_type *punittype,
-                          int veteran, int moves_left)
+			  int veteran, int moves_left)
 {
   int power;
-  const struct veteran_level *vlevel;
 
-  fc_assert_ret_val(punittype != NULL, 0);
-
-  vlevel = utype_veteran_level(punittype, veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
-
-  power = punittype->attack_strength * POWER_FACTOR
-          * vlevel->power_fact / 100;
+  power = punittype->attack_strength * POWER_FACTOR;
+  power *= punittype->veteran[veteran].power_fact;
 
   if (game.info.tired_attack && moves_left < SINGLE_MOVE) {
     power = (power * moves_left) / SINGLE_MOVE;
@@ -436,15 +428,8 @@ int base_get_attack_power(const struct unit_type *punittype,
 **************************************************************************/
 int base_get_defense_power(const struct unit *punit)
 {
-  const struct veteran_level *vlevel;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
-
   return unit_type(punit)->defense_strength * POWER_FACTOR
-         * vlevel->power_fact / 100;
+  	* unit_type(punit)->veteran[punit->veteran].power_fact;
 }
 
 /**************************************************************************
@@ -455,8 +440,8 @@ int get_defense_power(const struct unit *punit)
   int db, power = base_get_defense_power(punit);
 
   if (uclass_has_flag(unit_class(punit), UCF_TERRAIN_DEFENSE)) {
-    db = 10 + tile_terrain(unit_tile(punit))->defense_bonus / 10;
-    if (tile_has_special(unit_tile(punit), S_RIVER)) {
+    db = 10 + tile_terrain(punit->tile)->defense_bonus / 10;
+    if (tile_has_special(punit->tile, S_RIVER)) {
       db += (db * terrain_control.river_defense_bonus) / 100;
     }
     power = (power * db) / 10;
@@ -546,29 +531,23 @@ int get_virtual_defense_power(const struct unit_type *att_type,
 {
   int defensepower = def_type->defense_strength;
   int db;
-  const struct veteran_level *vlevel;
 
-  fc_assert_ret_val(def_type != NULL, 0);
-
-  if (utype_move_type(def_type) == UMT_LAND
+  if (utype_move_type(def_type) == LAND_MOVING
       && is_ocean_tile(ptile)) {
     /* Ground units on ship doesn't defend. */
     return 0;
   }
-
-  vlevel = utype_veteran_level(def_type, veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
 
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
   if (tile_has_special(ptile, S_RIVER)) {
     db += (db * terrain_control.river_defense_bonus) / 100;
   }
   defensepower *= db;
-  defensepower *= vlevel->power_fact / 100;
+  defensepower *= def_type->veteran[veteran].power_fact;
 
   return defense_multiplication(att_type, def_type, def_player,
-                                ptile, defensepower,
-                                fortified);
+				ptile, defensepower,
+				fortified);
 }
 
 /***************************************************************************
@@ -580,9 +559,10 @@ int get_total_defense_power(const struct unit *attacker,
 			    const struct unit *defender)
 {
   return defense_multiplication(unit_type(attacker), unit_type(defender),
-                                unit_owner(defender), unit_tile(defender),
-                                get_defense_power(defender),
-                                defender->activity == ACTIVITY_FORTIFIED);
+				unit_owner(defender),
+				defender->tile,
+				get_defense_power(defender),
+				defender->activity == ACTIVITY_FORTIFIED);
 }
 
 /**************************************************************************
@@ -641,7 +621,7 @@ struct unit *get_defender(const struct unit *attacker,
       fc_assert_action(0 <= unit_def, continue);
 
       if (unit_has_type_flag(defender, F_GAMELOSS)
-          && !is_stack_vulnerable(unit_tile(defender))) {
+          && !is_stack_vulnerable(defender->tile)) {
         unit_def = -1; /* then always use leader as last defender. */
         /* FIXME: multiple gameloss units with varying defense value
          * not handled. */

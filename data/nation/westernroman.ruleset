@@ -25,12 +25,10 @@ leaders = {
 }
 
 ruler_titles = {
- "government",      "male_title",      "female_title"
- "Anarchy",         _("Usurper %s"),   _("?female:Usurper %s")
- "Despotism",       _("General %s"),   _("?female:General %s")
- "Fundamentalism",  _("Pope %s"),      _("Popess %s")
- "Monarchy",        _("%s Augustus"),  _("%s Augusta")
- "Republic",        _("Consul %s"),    _("?female:Consul %s")
+ "government",      "male_title",              "female_title"
+ "Despotism",       _("Magister Militium %s"), _("Magistra Militium %s")
+ "Fundamentalism",  _("Pope %s"),              _("Popess %s")
+ "Monarchy",        _("%s Augustus"),          _("%s Augusta")
 }
 
 flag = "labarum"
@@ -39,6 +37,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with = "holy roman", "italian"
 civilwar_nations = "visigothic", "vandalic", "ostrogothic"

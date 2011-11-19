@@ -4,7 +4,6 @@ if CLIENT
 CLIENT_FILES =				\
 	hex2t.tilespec			\
 	amplio2.tilespec		\
-	cimpletoon.tilespec		\
 	isophex.tilespec		\
 	isotrident.tilespec		\
 	trident.tilespec		\
@@ -24,7 +23,6 @@ endif
 
 if SERVER
 SERVER_FILES = \
-	database.lua \
 	civ1.serv \
 	civ2.serv \
 	default.serv \
@@ -46,10 +44,8 @@ EXTRA_DIST = \
 	civserver.dsc.in	\
 	civclient.dsc.in	\
 	civserver.room.in	\
-	database.lua	\
 	hex2t.tilespec	\
 	amplio2.tilespec \
-	cimpletoon.tilespec \
 	isophex.tilespec	\
 	isotrident.tilespec \
 	trident.tilespec	\
@@ -62,14 +58,14 @@ EXTRA_DIST = \
 	multiplayer.serv
 
 if CLIENT
-CLIENTDATADIRS = amplio2 misc flags buildings cimpletoon isotrident trident\
+CLIENTDATADIRS = amplio2 misc flags buildings isotrident trident\
  isophex hex2t stdsounds themes wonders
 else
 CLIENTDATADIRS = 
 endif
 
 if SERVER
-SERVERDATADIRS = default civ1 civ2 experimental multiplayer scenarios nation
+SERVERDATADIRS = default civ1 civ2 experimental multiplayer scenario nation
 else
 SERVERDATADIRS = 
 endif

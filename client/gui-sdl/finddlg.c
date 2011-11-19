@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -153,18 +153,17 @@ void popup_find_dialog(void)
   set_wstate(pBuf, FC_WS_NORMAL);
   pBuf->key = SDLK_ESCAPE;
   pBuf->data.cont = fc_calloc(1, sizeof(struct CONTAINER));
-  pBuf->data.cont->id0 = index_to_map_pos_x(tile_index(original));
-  pBuf->data.cont->id1 = index_to_map_pos_y(tile_index(original));
+  pBuf->data.cont->id0 = original->x;
+  pBuf->data.cont->id1 = original->y;
 
   add_to_gui_list(ID_TERRAIN_ADV_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
   
   players_iterate(pPlayer) {
     city_list_iterate(pPlayer->cities, pCity) {
-
-      fc_snprintf(cBuf , sizeof(cBuf), "%s (%d)", city_name(pCity),
-                  city_size_get(pCity));
-
+    
+      fc_snprintf(cBuf , sizeof(cBuf), "%s (%d)", city_name(pCity), pCity->size);
+      
       pStr = create_str16_from_char(cBuf , adj_font(10));
       pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
    

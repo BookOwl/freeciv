@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -190,7 +190,7 @@ const char *specialists_abbreviation_string(void)
 
   and you'll get "0/3/1".
 ****************************************************************************/
-const char *specialists_string(const citizens *specialists)
+const char *specialists_string(const int *specialists)
 {
   static char buf[5 * SP_MAX];
 

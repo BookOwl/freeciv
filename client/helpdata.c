@@ -17,7 +17,7 @@
 *****************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -43,7 +43,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "requirements.h"
-#include "road.h"
 #include "specialist.h"
 #include "unit.h"
 #include "version.h"
@@ -287,7 +286,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                                            (preq->source.value.advance)));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -344,7 +342,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    improvement_name_translation
                    (preq->source.value.building));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -357,12 +354,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz,
                    _("Requires the %s terrain special on the tile.\n"),
-                   special_name_translation(preq->source.value.special));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s terrain special on the tile or "
-                     "an cardinally adjacent tile.\n"),
                    special_name_translation(preq->source.value.special));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -385,11 +376,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz, _("Requires the %s terrain on the tile.\n"),
-                   terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s terrain on the tile or "
-                                "an cardinally adjacent tile.\n"),
                    terrain_name_translation(preq->source.value.terrain));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -418,7 +404,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    nation_adjective_translation(preq->source.value.nation));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -435,7 +420,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires %s.\n"),
                    utype_name_translation(preq->source.value.utype));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -464,7 +448,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
         }
       }
       break;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -483,7 +466,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires %s units.\n"),
                    uclass_name_translation(preq->source.value.uclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -515,7 +497,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
         cat_snprintf(buf, bufsz, _("Requires %s units.\n"), astr_str(&list));
         done = TRUE;
         break;
-      case REQ_RANGE_CADJACENT:
       case REQ_RANGE_ADJACENT:
       case REQ_RANGE_CITY:
       case REQ_RANGE_CONTINENT:
@@ -559,12 +540,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_class_name_translation
                    (preq->source.value.terrainclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires %s terrain class on an cardinally adjacent tile.\n"),
-                   terrain_class_name_translation
-                   (preq->source.value.terrainclass));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz,
                    _("Requires %s terrain class on an adjacent tile.\n"),
@@ -587,37 +562,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
                    base_name_translation(preq->source.value.base));
       return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on an cardinally adjacent tile.\n"),
-                   base_name_translation(preq->source.value.base));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
                    base_name_translation(preq->source.value.base));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_ROAD:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on an cardinally adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
       return TRUE;
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -642,7 +589,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_alteration_name_translation
                    (preq->source.value.terrainalter));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -729,7 +675,7 @@ static void insert_allows(struct universal *psource,
 }
 
 /****************************************************************
-  Allocate and initialize new help item
+...
 *****************************************************************/
 static struct help_item *new_help_item(int type)
 {
@@ -1620,7 +1566,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
          || uclass_has_flag(utype_class(utype), UCF_MISSILE))
         && utype->defense_strength == 0);
     switch(utype_move_type(utype)) {
-      case UMT_BOTH:
+      case BOTH_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"
@@ -1629,7 +1575,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
           CATLSTR(buf, bufsz,
                   _("* May be promoted after defeating an enemy unit.\n"));
         break;
-      case UMT_LAND:
+      case LAND_MOVING:
         if (utype_has_flag(utype, F_DIPLOMAT)||utype_has_flag(utype, F_SPY)) {
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran under communist governments.\n"));
@@ -1646,7 +1592,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                     _("* May be promoted after defeating an enemy unit.\n"));
         }
         break;
-      case UMT_SEA:
+      case SEA_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"

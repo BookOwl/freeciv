@@ -16,9 +16,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Anarchy",         _("Usurper %s"),   _("Usurper %s")
- "Despotism",       _("Dictator %s"),  _("Dictatrix %s")
- "Republic",        _("Consul %s"),    _("Consul %s")
+ "Despotism",       _("Corrector %s"),    _("Correctrix %s")
+ "Monarchy",        _("%s Augustus"),     _("%s Augusta")
 }
 
 flag="palmyra"
@@ -27,10 +26,11 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with = "byzantine", "syrian", "aramean"
-civilwar_nations = "roman", "aramean", "israelite"
+civilwar_nations = "roman", "aramean", "israeli"
 
 cities =
  "Palmyra",

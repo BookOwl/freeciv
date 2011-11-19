@@ -12,24 +12,18 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
 
-/* utility */
+#include "events.h"
 #include "fcintl.h"
 
-/* common */
-#include "events.h"
-
-/* client */
-#include "options.h"
-
-/* client/gui-gtk-2.0 */
 #include "colors.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
+#include "options.h"
 
 #include "messagedlg.h"
 
@@ -46,7 +40,7 @@ static void item_toggled(GtkCellRendererToggle *cell,
 			 gchar *spath, gpointer data);
 
 /**************************************************************************
-  Open messageoptions dialog
+... 
 **************************************************************************/
 void popup_messageopt_dialog(void)
 {
@@ -57,7 +51,7 @@ void popup_messageopt_dialog(void)
 }
 
 /**************************************************************************
-  Create messageoptions dialog
+...
 **************************************************************************/
 static void create_messageopt_dialog(void)
 {
@@ -113,6 +107,7 @@ static void create_messageopt_dialog(void)
   for (n=0; n<NUM_LISTS; n++) {
     GtkWidget *view, *sw;
     GtkCellRenderer *renderer;
+    gint col;
     GtkTreeViewColumn *column;
 
     view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(model[n]));
@@ -128,25 +123,22 @@ static void create_messageopt_dialog(void)
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(0));
     g_signal_connect(renderer, "toggled", G_CALLBACK(item_toggled), model[n]);
 
-    gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
-                                                -1, _("Out"), renderer,
-                                                "active", 0, NULL);
+    col = gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
+	-1, _("Out"), renderer, "active", 0, NULL);
 
     renderer = gtk_cell_renderer_toggle_new();
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(1));
     g_signal_connect(renderer, "toggled", G_CALLBACK(item_toggled), model[n]);
 
-    gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
-                                                -1, _("Mes"), renderer,
-                                                "active", 1, NULL);
+    col = gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
+  	-1, _("Mes"), renderer, "active", 1, NULL);
 
     renderer = gtk_cell_renderer_toggle_new();
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(2));
     g_signal_connect(renderer, "toggled", G_CALLBACK(item_toggled), model[n]);
 
-    gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
-                                                -1, _("Pop"), renderer,
-                                                "active", 2, NULL);
+    col = gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(view),
+  	-1, _("Pop"), renderer, "active", 2, NULL);
 
     sw = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
@@ -165,7 +157,7 @@ static void create_messageopt_dialog(void)
 }
 
 /**************************************************************************
-  Use responded to messageoptions dialog
+...
 **************************************************************************/
 static void messageopt_response(struct gui_dialog *dlg, int response,
                                 gpointer data)
@@ -175,8 +167,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
     gint n, j, i;
     gboolean toggle;
 
-    for (i = 0; i <= event_type_max(); i++) {
-      /* Include possible undefined messages. */
+    for (i=0; i<E_LAST; i++) {
       messages_where[i] = 0;
     }
 
@@ -197,7 +188,7 @@ static void messageopt_response(struct gui_dialog *dlg, int response,
 }
 
 /**************************************************************************
-  User toggled item
+...
 **************************************************************************/
 static void item_toggled(GtkCellRendererToggle *cell,
 			 gchar *spath, gpointer data)

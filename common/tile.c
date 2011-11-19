@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -24,7 +24,6 @@
 #include "fc_interface.h"
 #include "game.h"
 #include "movement.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -453,6 +452,7 @@ int tile_activity_base_time(const struct tile *ptile,
 static void tile_clear_unsupported_infrastructure(struct tile *ptile)
 {
   int i;
+  bool city_present = tile_city(ptile) != NULL;
   struct terrain *pterr = tile_terrain(ptile);
   bool ocean = is_ocean(pterr);
 
@@ -460,7 +460,7 @@ static void tile_clear_unsupported_infrastructure(struct tile *ptile)
     switch (infrastructure_specials[i]) {
     case S_ROAD:
     case S_RAILROAD:
-      if (pterr->road_time == 0) {
+      if (!city_present && pterr->road_time == 0) {
 	tile_clear_special(ptile, infrastructure_specials[i]);
       }
       break;
@@ -817,30 +817,6 @@ bool tile_has_any_bases(const struct tile *ptile)
 }
 
 /****************************************************************************
-  Returns TRUE if the given tile has a road of given type on it.
-****************************************************************************/
-bool tile_has_road(const struct tile *ptile, const struct road_type *proad)
-{
-  return tile_has_special(ptile, road_special(proad));
-}
-
-/****************************************************************************
-  Adds road to tile
-****************************************************************************/
-void tile_add_road(struct tile *ptile, const struct road_type *proad)
-{
-  BV_SET(ptile->special, road_special(proad));
-}
-
-/****************************************************************************
-  Removes road from tile if such exist
-****************************************************************************/
-void tile_remove_road(struct tile *ptile, const struct road_type *proad)
-{
-  BV_CLR(ptile->special, road_special(proad));
-}
-
-/****************************************************************************
   Returns a virtual tile. If ptile is given, the properties of this tile are
   copied, else it is completely blank (except for the unit list
   vtile->units, which is created for you). Be sure to call tile_virtual_free
@@ -853,6 +829,10 @@ struct tile *tile_virtual_new(const struct tile *ptile)
   vtile = fc_calloc(1, sizeof(*vtile));
 
   /* initialise some values */
+  vtile->x = -1;
+  vtile->y = -1;
+  vtile->nat_x = -1;
+  vtile->nat_y = -1;
   vtile->index = -1;
   vtile->continent = -1;
 
@@ -868,8 +848,9 @@ struct tile *tile_virtual_new(const struct tile *ptile)
 
   if (ptile) {
     /* Used by is_city_center to give virtual tiles the output bonuses
-     * they deserve. */
-    vtile->index = tile_index(ptile);
+     * they deserve */
+    vtile->x = ptile->x;
+    vtile->y = ptile->y;
 
     /* Copy all but the unit list. */
     tile_special_type_iterate(spe) {
@@ -917,7 +898,7 @@ void tile_virtual_destroy(struct tile *vtile)
   if (vtile->units) {
     unit_list_iterate(vtile->units, vunit) {
       if (unit_is_virtual(vunit)) {
-        unit_virtual_destroy(vunit);
+        destroy_unit_virtual(vunit);
       }
     } unit_list_iterate_end;
     unit_list_destroy(vtile->units);
@@ -947,6 +928,12 @@ bool tile_virtual_check(struct tile *vtile)
   }
 
   tindex = tile_index(vtile);
+
+  if (tindex == -1) {
+    /* This is a virtual tile. */
+    return TRUE;
+  }
+
   fc_assert_ret_val(0 <= tindex && tindex < map_num_tiles(), FALSE);
 
   return (vtile != map.tiles + tindex);
@@ -963,33 +950,4 @@ void *tile_hash_key(const struct tile *ptile)
   key = FC_INT_TO_PTR(ptile->index);
 
   return key;
-}
-
-/****************************************************************************
-  Sets label for tile. Returns whether label changed.
-****************************************************************************/
-bool tile_set_label(struct tile *ptile, const char *label)
-{
-  bool changed = FALSE;
-
-  /* Handle empty label as NULL label */
-  if (label != NULL && label[0] == '\0') {
-    label = NULL;
-  }
-
-  if (ptile->label != NULL) {
-    if (label == NULL) {
-      changed = TRUE;
-    }
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
-  } else if (label != NULL) {
-    changed = TRUE;
-  }
-
-  if (label != NULL) {
-    ptile->label = fc_strdup(label);
-  }
-
-  return changed;
 }

@@ -30,8 +30,8 @@ void city_refresh_queue_processing(void);
 void auto_arrange_workers(struct city *pcity); /* will arrange the workers */
 void apply_cmresult_to_city(struct city *pcity, const struct cm_result *cmr);
 
-bool city_change_size(struct city *pcity, citizens new_size);
-bool city_reduce_size(struct city *pcity, citizens pop_loss,
+bool city_change_size(struct city *pcity, int new_size);
+bool city_reduce_size(struct city *pcity, int pop_loss,
                       struct player *destroyer);
 void city_repair_size(struct city *pcity, int change);
 
@@ -42,6 +42,7 @@ void remove_obsolete_buildings_city(struct city *pcity, bool refresh);
 void remove_obsolete_buildings(struct player *pplayer);
 
 void choose_build_target(struct player *pplayer, struct city *pcity);
+void advisor_choose_build(struct player *pplayer, struct city *pcity);
 
 void nullify_prechange_production(struct city *pcity);
 

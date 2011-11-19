@@ -1,17 +1,5 @@
 /*
 
-Max used id:
-============
-
-Max id: 220
-
-Packets are not ordered by their id, but by their category. New packet
-with higher id may get added to existing category, and not to the end of file.
-For this reason it's important to keep information about max id currently
-in use updated here. So we know what ids are safe to use when adding new
-packets.
-
-
 Syntax:
 
  Comments:
@@ -61,9 +49,7 @@ Syntax:
     PACKET_PROCESSING_FINISHED, PACKET_SERVER_JOIN_REQ and
     PACKET_SERVER_JOIN_REPLY are excluded here. These packets should
     never change their number. The packet number can be freely chosen
-    as long as it is below 65536 and unique. For backward compatibility  
-    reasons using values from range 1024-1279 ((4x256)-(5*256-1))        
-    should be avoided. 
+    as long as it is below 255 and unique.
 
    Packet flags:
    -------------
@@ -269,7 +255,6 @@ type PHASE              = SINT16
 type TURN               = SINT16
 type XYSIZE             = UINT16
 type YEAR               = SINT16
-type CITIZENS           = UINT8
 
 /****************************************************
 The remaining lines are the definition of the packets. These are
@@ -381,11 +366,10 @@ PACKET_TILE_INFO = 15; sc, lsend, is-game-info
   BOOL special[S_LAST];
   BV_BASES bases;
   STRING spec_sprite[MAX_LEN_NAME];
-  STRING label[MAX_LEN_NAME];
 end
 
 # This packet used to have is_info set but that doesn't work with the
-# seconds_to_phasedone field: sending the same value a second time after a
+# seconds_to_phasedone fields: sending the same value a second time after a
 # while has passed means a completely reset timeout.
 #
 # The variables in the packet are listed in alphabetical order.
@@ -399,12 +383,10 @@ PACKET_GAME_INFO = 16; sc
   UINT8 border_city_radius_sq;
   UINT8 border_size_effect;
   BORDERS_MODE borders;
-  UINT32 base_bribe_cost;
   BOOL calendar_skip_0;
   /* size limit for cities before they can celebrate */
   UINT8 celebratesize;
   BOOL changable_tax;
-  BOOL citizen_nationality;
   UINT8 citymindist;
   UINT32 cooling;
   UINT32 coolinglevel;
@@ -443,6 +425,7 @@ PACKET_GAME_INFO = 16; sc
   UINT8 killcitizen;
   BOOL killstack;
   UINT8 min_city_center_output[O_LAST];
+  UINT8 min_dist_bw_cities;
   STRING negative_year_label[MAX_LEN_NAME];
   UINT8 notradesize;
   BOOL nuclear_winter;
@@ -455,7 +438,8 @@ PACKET_GAME_INFO = 16; sc
   BOOL restrictinfra;
   BOOL unreachable_protects;
   UINT32 sciencebox;
-  FLOAT10x3 seconds_to_phasedone;
+  FLOAT seconds_to_phasedone; remove-cap(timeout_extended_range)
+  FLOAT10x3 seconds_to_phasedone2; add-cap(timeout_extended_range)
   UINT32 shieldbox;
   UINT32 skill_level;
   BOOL slow_invasions;
@@ -521,20 +505,13 @@ PACKET_CITY_INFO = 31; sc, lsend, is-game-info, force, cancel(PACKET_CITY_SHORT_
   TILE tile;
 
   PLAYER owner;
-  CITIZENS size;
+  UINT8 size;
   UINT8 city_radius_sq;
 
-  CITIZENS ppl_happy[FEELING_LAST];
-  CITIZENS ppl_content[FEELING_LAST];
-  CITIZENS ppl_unhappy[FEELING_LAST];
-  CITIZENS ppl_angry[FEELING_LAST];
+  UINT8 ppl_happy[5], ppl_content[5], ppl_unhappy[5], ppl_angry[5];
 
   UINT8 specialists_size;
-  CITIZENS specialists[SP_MAX:specialists_size];
-
-  UINT8 nationalities_count;
-  PLAYER nation_id[MAX_NUM_PLAYER_SLOTS:nationalities_count];
-  CITIZENS nation_citizens[MAX_NUM_PLAYER_SLOTS:nationalities_count];
+  UINT8 specialists[SP_MAX:specialists_size];
 
   SINT16 surplus[O_LAST];
   UINT16 waste[O_LAST];
@@ -707,10 +684,6 @@ PACKET_PLAYER_INFO = 51; sc, is-info
   STRING inventions[A_LAST+1];
   SINT16 love[MAX_NUM_PLAYER_SLOTS];
 
-  UINT8 color_red;
-  UINT8 color_green;
-  UINT8 color_blue;
-
   CITY wonders[B_LAST]; diff
 end
 
@@ -764,18 +737,18 @@ PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
   UNIT id; key
   PLAYER owner;
   TILE tile;
-  DIRECTION facing;
   CITY homecity;
 
   UINT8 upkeep[O_LAST];
 
   UINT8 veteran;
   BOOL ai, paradropped;
-  BOOL occupied, transported, done_moving;
+  BOOL transported, done_moving;
 
   UNIT_TYPE type;
   UNIT transported_by; /* Only valid if transported is set. */
   UINT8 movesleft, hp, fuel, activity_count, changed_from_count;
+  UINT8 occupy;
   TILE goto_tile;
   ACTIVITY activity;
   SPECIAL activity_target;
@@ -799,7 +772,6 @@ PACKET_UNIT_SHORT_INFO = 64; sc, lsend, is-game-info, cancel(PACKET_UNIT_INFO)
   UNIT id; key
   PLAYER owner;
   TILE tile;
-  DIRECTION facing;
   UNIT_TYPE type;
 
   UINT8 veteran;
@@ -1048,7 +1020,6 @@ end
 
 PACKET_CLIENT_INFO = 119; cs, handle-per-conn
   GUI_TYPE gui;
-  STRING distribution[MAX_LEN_NAME];
 end
 
 /************** New turn packets **********************/
@@ -1159,10 +1130,9 @@ PACKET_RULESET_UNIT = 140; sc, lsend
   UINT8 paratroopers_mr_req;
   UINT8 paratroopers_mr_sub;
 
-  UINT8 veteran_levels;
-  STRING veteran_name[MAX_VET_LEVELS:veteran_levels][MAX_LEN_NAME];
-  UINT16 power_fact[MAX_VET_LEVELS:veteran_levels];
-  UINT8 move_bonus[MAX_VET_LEVELS:veteran_levels];
+  STRING veteran_name[MAX_VET_LEVELS][MAX_LEN_NAME];
+  FLOAT power_fact[MAX_VET_LEVELS];
+  UINT8 move_bonus[MAX_VET_LEVELS];
 
   UINT8 bombard_rate;
   UINT8 city_size;
@@ -1180,15 +1150,8 @@ PACKET_RULESET_GAME = 141; sc, lsend
   UINT8 default_specialist;
 
   TECH_LIST global_init_techs[MAX_NUM_TECH_LIST];
-
-  UINT8 veteran_levels;
-  STRING veteran_name[MAX_VET_LEVELS:veteran_levels][MAX_LEN_NAME];
-  UINT16 power_fact[MAX_VET_LEVELS:veteran_levels];
-  UINT8 move_bonus[MAX_VET_LEVELS:veteran_levels];
-
-  UINT8 background_red;
-  UINT8 background_green;
-  UINT8 background_blue;
+  UINT8 work_veteran_chance[MAX_VET_LEVELS];
+  UINT8 veteran_chance[MAX_VET_LEVELS];
 end
 
 PACKET_RULESET_SPECIALIST = 142; sc, lsend
@@ -1352,11 +1315,7 @@ PACKET_RULESET_TERRAIN = 151; sc, lsend
   UINT8 rail_time;
   UINT8 clean_pollution_time;
   UINT8 clean_fallout_time;
-
-  UINT8 color_red;
-  UINT8 color_green;
-  UINT8 color_blue;
-
+  
   STRING helptext[MAX_LEN_PACKET];
 end
 
@@ -1394,13 +1353,6 @@ PACKET_RULESET_BASE = 153; sc, lsend
   STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_ROAD = 220; sc, lsend
-  UINT8 id;
-  STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
-  BV_UNIT_CLASSES native_to;
-end
-
 /**************************************************************************
   Ruleset control values: single values, all of which are needed before
   sending other ruleset data.  After sending this packet, resend every
@@ -1413,7 +1365,6 @@ PACKET_RULESET_CONTROL = 155; sc, lsend
   UINT16 num_impr_types;
   UINT16 num_tech_types;
   UINT16 num_base_types;
-  UINT16 num_road_types;
   UINT16 government_count;
   UINT16 nation_count;
   UINT16 styles_count;
@@ -1664,7 +1615,6 @@ PACKET_EDIT_TILE = 206; cs, handle-per-conn, handle-via-packet
   RESOURCE resource;
   TERRAIN terrain;
   NATION startpos_nation;
-  STRING label[MAX_LEN_NAME];
 end
 
 PACKET_EDIT_UNIT_CREATE = 207; cs, handle-per-conn, dsend

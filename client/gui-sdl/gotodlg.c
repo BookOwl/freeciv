@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -139,10 +139,9 @@ static void update_goto_dialog(void)
       if (!GOTO && !pCity->airlift) {
 	continue;
       }
-
-      fc_snprintf(cBuf, sizeof(cBuf), "%s (%d)", city_name(pCity),
-                  city_size_get(pCity));
-
+      
+      fc_snprintf(cBuf, sizeof(cBuf), "%s (%d)", city_name(pCity), pCity->size);
+      
       pStr = create_str16_from_char(cBuf, adj_font(12));
       pStr->style |= TTF_STYLE_BOLD;
    

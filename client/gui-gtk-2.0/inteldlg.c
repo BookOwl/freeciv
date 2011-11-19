@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -36,7 +36,7 @@
 #include "client_main.h"
 #include "options.h"
 
-/* client/gui-gtk-2.0 */
+/* gui-gtk-2.0 */
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
@@ -70,7 +70,6 @@ enum table_label {
   LABEL_RESEARCHING,
   LABEL_LAST
 };
-
 /******************************************************************/
 struct intel_dialog {
   struct player *pplayer;
@@ -93,7 +92,7 @@ static struct dialog_list *dialog_list;
 static struct intel_dialog *create_intel_dialog(struct player *p);
 
 /****************************************************************
-  Initialize intelligenze dialogs
+...
 *****************************************************************/
 void intel_dialog_init()
 {
@@ -101,7 +100,7 @@ void intel_dialog_init()
 }
 
 /****************************************************************
-  Free resources allocated for intelligenze dialogs
+...
 *****************************************************************/
 void intel_dialog_done()
 {
@@ -109,8 +108,7 @@ void intel_dialog_done()
 }
 
 /****************************************************************
-  Get intelligenze dialog between client user and other player
-  passed as parameter.
+...
 *****************************************************************/
 static struct intel_dialog *get_intel_dialog(struct player *pplayer)
 {
@@ -124,7 +122,7 @@ static struct intel_dialog *get_intel_dialog(struct player *pplayer)
 }
 
 /****************************************************************
-  Open intelligenze dialog
+... 
 *****************************************************************/
 void popup_intel_dialog(struct player *p)
 {
@@ -140,7 +138,7 @@ void popup_intel_dialog(struct player *p)
 }
 
 /****************************************************************
-  Intelligenze dialog destruction requested
+...
 *****************************************************************/
 static void intel_destroy_callback(GtkWidget *w, gpointer data)
 {
@@ -161,8 +159,7 @@ void close_intel_dialog(struct player *p)
 }
 
 /****************************************************************
-  Create new intelligenze dialog between client user and player
-  given as parameter.
+...
 *****************************************************************/
 static struct intel_dialog *create_intel_dialog(struct player *p)
 {
@@ -334,13 +331,13 @@ void update_intel_dialog(struct player *p)
       diplstates[i] = it;
     }
 
-    players_iterate_alive(other) {
+    players_iterate(other) {
       const struct player_diplstate *state;
       GtkTreeIter it;
       GValue v = { 0, };
 
-      if (other == p) {
-        continue;
+      if (other == p || !other->is_alive) {
+	continue;
       }
       state = player_diplstate_get(p, other);
       gtk_tree_store_append(pdialog->diplstates, &it,
@@ -349,7 +346,7 @@ void update_intel_dialog(struct player *p)
       g_value_set_static_string(&v, player_name(other));
       gtk_tree_store_set_value(pdialog->diplstates, &it, 0, &v);
       g_value_unset(&v);
-    } players_iterate_alive_end;
+    } players_iterate_end;
 
     /* techs tab. */
     gtk_list_store_clear(pdialog->techs);
@@ -380,7 +377,7 @@ void update_intel_dialog(struct player *p)
           sz_strlcpy(buf, government_name_for_player(p));
           break;
         case LABEL_CAPITAL:
-          pcity = player_capital(p);
+          pcity = player_palace(p);
           /* TRANS: "unknown" location */
           sz_strlcpy(buf, (!pcity) ? _("(unknown)") : city_name(pcity));
           break;
@@ -430,3 +427,4 @@ void update_intel_dialog(struct player *p)
     }
   }
 }
+

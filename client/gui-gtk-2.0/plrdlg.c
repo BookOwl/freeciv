@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -22,15 +22,13 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
-/* utility */
-#include "fcintl.h"
-#include "support.h"
-
-/* common */
+/* common & utility */
 #include "diptreaty.h"
+#include "fcintl.h"
 #include "packets.h"
 #include "nation.h"
 #include "player.h"
+#include "support.h"
 
 /* client */
 #include "chatline.h"
@@ -101,7 +99,7 @@ void popdown_players_dialog(void)
 }
 
 /**************************************************************************
-  Create pixbuf for player
+...
 **************************************************************************/
 static GdkPixbuf *create_player_icon(const struct player *plr)
 {
@@ -129,7 +127,7 @@ static GdkPixbuf *create_player_icon(const struct player *plr)
 }
 
 /**************************************************************************
-  Refresh player menu
+...
 **************************************************************************/
 static void update_players_menu(void)
 {
@@ -179,7 +177,7 @@ static void update_players_menu(void)
 }
 
 /**************************************************************************
-  Something selected from player menu
+...
 **************************************************************************/
 static void selection_callback(GtkTreeSelection *selection, gpointer data)
 {
@@ -187,7 +185,7 @@ static void selection_callback(GtkTreeSelection *selection, gpointer data)
 }
 
 /**************************************************************************
-  Button pressed on player list
+...
 **************************************************************************/
 static gboolean button_press_callback(GtkTreeView *view, GdkEventButton *ev)
 {
@@ -220,7 +218,7 @@ static gboolean button_press_callback(GtkTreeView *view, GdkEventButton *ev)
 }
 
 /**************************************************************************
-  Sorting function for plr dlg.
+...
 **************************************************************************/
 static gint plrdlg_sort_func(GtkTreeModel *model,
 			      GtkTreeIter *a, GtkTreeIter *b, gpointer data)
@@ -232,11 +230,11 @@ static gint plrdlg_sort_func(GtkTreeModel *model,
 
   n = GPOINTER_TO_INT(data);
 
-  gtk_tree_model_get_value(model, a, PLR_DLG_COL_ID, &value);
+  gtk_tree_model_get_value(model, a, num_player_dlg_columns + 2, &value);
   player1 = player_by_number(g_value_get_int(&value));
   g_value_unset(&value);
   
-  gtk_tree_model_get_value(model, b, PLR_DLG_COL_ID, &value);
+  gtk_tree_model_get_value(model, b, num_player_dlg_columns + 2, &value);
   player2 = player_by_number(g_value_get_int(&value));
   g_value_unset(&value);
   
@@ -289,7 +287,7 @@ static GtkListStore *players_dialog_store_new(void)
 }
 
 /**************************************************************************
-  Toggled column visibility
+...
 **************************************************************************/
 static void toggle_view(GtkCheckMenuItem* item, gpointer data)
 {
@@ -366,7 +364,7 @@ static GtkWidget *create_intelligence_menu(void)
 }
 
 /**************************************************************************
-  Create 'show' menu for player dialog
+...
 **************************************************************************/
 static GtkWidget* create_show_menu(void)
 {
@@ -398,7 +396,7 @@ static GtkWidget* create_show_menu(void)
 }
 
 /**************************************************************************
-  Create all of player dialog
+...
 **************************************************************************/
 void create_players_dialog(void)
 {
@@ -462,8 +460,8 @@ void create_players_dialog(void)
 
       col = gtk_tree_view_column_new_with_attributes(pcol->title, renderer,
 	  "text", i,
-	  "style", PLR_DLG_COL_STYLE,
-	  "weight", PLR_DLG_COL_WEIGHT,
+	  "style", num_player_dlg_columns,
+	  "weight", num_player_dlg_columns + 1,
 	  NULL);
       gtk_tree_view_column_set_sort_column_id(col, i);
       break;
@@ -473,12 +471,15 @@ void create_players_dialog(void)
 
       col = gtk_tree_view_column_new_with_attributes(pcol->title, renderer,
 	  "text", i,
-	  "style", PLR_DLG_COL_STYLE,
-	  "weight", PLR_DLG_COL_WEIGHT,
+	  "style", num_player_dlg_columns,
+	  "weight", num_player_dlg_columns + 1,
 	  NULL);
       gtk_tree_view_column_set_sort_column_id(col, i);
-      g_object_set(renderer, "xalign", 1.0, NULL);
-      gtk_tree_view_column_set_alignment(col, 1.0);
+
+      if (pcol->type == COL_RIGHT_TEXT) {
+	g_object_set(renderer, "xalign", 1.0, NULL);
+	gtk_tree_view_column_set_alignment(col, 1.0);
+      }
       break;
     }
     
@@ -745,7 +746,7 @@ void players_meet_callback(GtkMenuItem *item, gpointer data)
 }
 
 /**************************************************************************
-  Pact cancelled
+...
 **************************************************************************/
 void players_war_callback(GtkMenuItem *item, gpointer data)
 {
@@ -764,7 +765,7 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
 }
 
 /**************************************************************************
-  Withdrawing shared vision
+...
 **************************************************************************/
 void players_vision_callback(GtkMenuItem *item, gpointer data)
 {
@@ -780,7 +781,7 @@ void players_vision_callback(GtkMenuItem *item, gpointer data)
 }
 
 /**************************************************************************
-  Intelligenze report query
+...
 **************************************************************************/
 void players_intel_callback(GtkMenuItem *item, gpointer data)
 {
@@ -799,7 +800,7 @@ void players_intel_callback(GtkMenuItem *item, gpointer data)
 }
 
 /**************************************************************************
-  Spaceship query callback
+...
 **************************************************************************/
 void players_sship_callback(GtkMenuItem *item, gpointer data)
 {
@@ -851,7 +852,7 @@ static void players_ai_skill_callback(GtkMenuItem *item, gpointer data)
 }
 
 /**************************************************************************
-  Refresh players dialog views.
+...
 **************************************************************************/
 static void update_views(void)
 {

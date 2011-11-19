@@ -58,8 +58,6 @@ libgui_sdl_la_SOURCES = \
 	inputdlg.h	\
 	inteldlg.c	\
 	inteldlg.h	\
-	luaconsole.c	\
-	luaconsole.h	\
 	mapctrl.c	\
 	mapctrl.h	\
 	mapview.c	\

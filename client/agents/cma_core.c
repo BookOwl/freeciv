@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -186,7 +186,7 @@ static bool apply_result_on_server(struct city *pcity,
   connection_do_buffer(&client.conn);
 
   /* Do checks */
-  if (city_size_get(pcity) != cm_result_citizens(result)) {
+  if (pcity->size != cm_result_citizens(result)) {
     log_error("apply_result_on_server(city %d=\"%s\") bad result!",
               pcity->id, city_name(pcity));
     cm_print_city(pcity);
@@ -335,11 +335,11 @@ static void report_stats(void)
            per_mill / 10, per_mill % 10, stats.apply_result_ignored,
            (1000 - per_mill) / 10, (1000 - per_mill) % 10,
            stats.apply_result_applied, total);
-#endif /* SHOW_TIME_STATS */
+#endif
 }
 
 /****************************************************************************
-  Remove governor setting from city.
+...
 *****************************************************************************/
 static void release_city(int city_id)
 {
@@ -465,7 +465,7 @@ static void new_turn(void)
 
 /*************************** public interface *******************************/
 /****************************************************************************
-  Initialize city governor code
+...
 *****************************************************************************/
 void cma_init(void)
 {
@@ -496,7 +496,7 @@ void cma_init(void)
 }
 
 /****************************************************************************
-  Apply result on server if it's valid
+...
 *****************************************************************************/
 bool cma_apply_result(struct city *pcity, const struct cm_result *result)
 {
@@ -508,7 +508,7 @@ bool cma_apply_result(struct city *pcity, const struct cm_result *result)
 }
 
 /****************************************************************************
-  Put city under governor control
+...
 *****************************************************************************/
 void cma_put_city_under_agent(struct city *pcity,
 			      const struct cm_parameter *const parameter)
@@ -526,7 +526,7 @@ void cma_put_city_under_agent(struct city *pcity,
 }
 
 /****************************************************************************
-  Release city from governor control.
+...
 *****************************************************************************/
 void cma_release_city(struct city *pcity)
 {
@@ -536,7 +536,7 @@ void cma_release_city(struct city *pcity)
 }
 
 /****************************************************************************
-  Check whether city is under governor control, and fill parameter if it is.
+...
 *****************************************************************************/
 bool cma_is_city_under_agent(const struct city *pcity,
 			     struct cm_parameter *parameter)
@@ -599,7 +599,7 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
 }
 
 /**************************************************************************
-  Set attribute block for city from parameter.
+ ...
 **************************************************************************/
 void cma_set_parameter(enum attr_city attr, int city_id,
 		       const struct cm_parameter *parameter)

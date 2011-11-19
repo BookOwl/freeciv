@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -515,10 +515,8 @@ static void place_terrain(struct tile *ptile, int diff,
   (*to_be_placed)--;
 
   cardinal_adjc_iterate(ptile, tile1) {
-    /* Check L_UNIT and H_UNIT against 0. */
-    int Delta = (abs(map_colatitude(tile1) - map_colatitude(ptile))
-                 / MAX(L_UNIT, 1)
-                 + abs(hmap(tile1) - (hmap(ptile))) / MAX(H_UNIT, 1));
+    int Delta = (abs(map_colatitude(tile1) - map_colatitude(ptile)) / L_UNIT
+                 + abs(hmap(tile1) - (hmap(ptile))) /  H_UNIT);
     if (not_placed(tile1)
         && tmap_is(tile1, tc)
         && test_wetness(tile1, wc)
@@ -1166,7 +1164,7 @@ static void make_land(void)
         }
       } adjc_iterate_end;
 
-      depth += 30 * (ocean - land) / MAX(1, (ocean + land));
+      depth += 30 * (ocean - land) / (ocean + land);
 
       depth = MIN(depth, TERRAIN_OCEAN_DEPTH_MAXIMUM);
 
@@ -1303,7 +1301,7 @@ FIXME: Some continent numbers are unused at the end of this function, fx
   based on the map.server.size server parameter and the specified topology.
   If not map.xsize and map.ysize will be used.
 **************************************************************************/
-bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
+void map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 {
   /* save the current random state: */
   RANDOM_STATE rstate = fc_rand_state();
@@ -1321,10 +1319,7 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
   /* also, don't delete (the handcrafted!) tiny islands in a scenario */
   if (map.server.generator != MAPGEN_SCENARIO) {
     generator_init_topology(autosize);
-    /* Map can be already allocated, if we failed first map generation */
-    if (map_is_empty()) {
-      map_allocate();
-    }
+    map_allocate();
     adjust_terrain_param();
     /* if one mapgenerator fails, it will choose another mapgenerator */
     /* with a lower number to try again */
@@ -1411,7 +1406,8 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
    * provides them. */
   if (0 == map_startpos_count()) {
     enum map_startpos mode = MAPSTARTPOS_ALL;
-
+    bool success;
+    
     switch (map.server.generator) {
     case MAPGEN_SCENARIO:
     case MAPGEN_RANDOM:
@@ -1443,15 +1439,13 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
       }
       break;
     }
-
+    
     for(;;) {
-      bool success;
-
       success = create_start_positions(mode, initial_unit);
       if (success) {
         break;
       }
-
+      
       switch(mode) {
         case MAPSTARTPOS_SINGLE:
           log_verbose("Falling back to startpos=2or3");
@@ -1466,9 +1460,8 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
           mode = MAPSTARTPOS_VARIABLE;
           break;
         default:
-          log_error(_("The server couldn't allocate starting positions."));
-          destroy_tmap();
-          return FALSE;
+          fc_assert_exit_msg(FALSE, "The server couldn't allocate "
+                             "starting positions.");
       }
     }
   }
@@ -1477,8 +1470,6 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
   destroy_tmap();
 
   print_mapgen_map();
-
-  return TRUE;
 }
 
 /**************************************************************************
@@ -1619,7 +1610,7 @@ static struct tile *get_random_map_position_from_state(
 }
 
 /**************************************************************************
-  Allocate and initialize new terrain_select structure.
+  ...
 **************************************************************************/
 static struct terrain_select *tersel_new(int weight,
                                          enum mapgen_terrain_property target,
@@ -1641,7 +1632,7 @@ static struct terrain_select *tersel_new(int weight,
 }
 
 /**************************************************************************
-  Free resources allocated for terrain_select structure.
+  ...
 **************************************************************************/
 static void tersel_free(struct terrain_select *ptersel)
 {
@@ -1836,19 +1827,18 @@ static long int checkmass;
 **************************************************************************/
 static bool place_island(struct gen234_state *pstate)
 {
-  int i=0, xn, yn, nat_x, nat_y;
+  int i=0, xn, yn;
   struct tile *ptile;
 
   ptile = rand_map_pos();
-  index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
 
   /* this helps a lot for maps with high landmass */
   for (yn = pstate->n, xn = pstate->w;
        yn < pstate->s && xn < pstate->e;
        yn++, xn++) {
     struct tile *tile0 = native_pos_to_tile(xn, yn);
-    struct tile *tile1 = native_pos_to_tile(xn + nat_x - pstate->w,
-                                            yn + nat_y - pstate->n);
+    struct tile *tile1 = native_pos_to_tile(xn + ptile->nat_x - pstate->w,
+					    yn + ptile->nat_y - pstate->n);
 
     if (!tile0 || !tile1) {
       return FALSE;
@@ -1861,8 +1851,8 @@ static bool place_island(struct gen234_state *pstate)
   for (yn = pstate->n; yn < pstate->s; yn++) {
     for (xn = pstate->w; xn < pstate->e; xn++) {
       struct tile *tile0 = native_pos_to_tile(xn, yn);
-      struct tile *tile1 = native_pos_to_tile(xn + nat_x - pstate->w,
-                                              yn + nat_y - pstate->n);
+      struct tile *tile1 = native_pos_to_tile(xn + ptile->nat_x - pstate->w,
+					      yn + ptile->nat_y - pstate->n);
 
       if (!tile0 || !tile1) {
 	return FALSE;
@@ -1876,8 +1866,9 @@ static bool place_island(struct gen234_state *pstate)
   for (yn = pstate->n; yn < pstate->s; yn++) {
     for (xn = pstate->w; xn < pstate->e; xn++) {
       if (hmap(native_pos_to_tile(xn, yn)) != 0) {
-        struct tile *tile1 = native_pos_to_tile(xn + nat_x - pstate->w,
-                                                yn + nat_y - pstate->n);
+	struct tile *tile1
+	  = native_pos_to_tile(xn + ptile->nat_x - pstate->w,
+			       yn + ptile->nat_y - pstate->n);
 
 	checkmass--; 
 	if (checkmass <= 0) {
@@ -1893,12 +1884,10 @@ static bool place_island(struct gen234_state *pstate)
       }
     }
   }
-
-  pstate->s += nat_y - pstate->n;
-  pstate->e += nat_x - pstate->w;
-  pstate->n = nat_y;
-  pstate->w = nat_x;
-
+  pstate->s += ptile->nat_y - pstate->n;
+  pstate->e += ptile->nat_x - pstate->w;
+  pstate->n = ptile->nat_y;
+  pstate->w = ptile->nat_x;
   return i != 0;
 }
 
@@ -1923,39 +1912,36 @@ static int count_card_adjc_elevated_tiles(struct tile *ptile)
 **************************************************************************/
 static bool create_island(int islemass, struct gen234_state *pstate)
 {
-  int i, nat_x, nat_y;
+  int i;
   long int tries=islemass*(2+islemass/20)+99;
   bool j;
   struct tile *ptile = native_pos_to_tile(map.xsize / 2, map.ysize / 2);
 
   memset(height_map, '\0', MAP_INDEX_SIZE * sizeof(*height_map));
   hmap(native_pos_to_tile(map.xsize / 2, map.ysize / 2)) = 1;
-
-  index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
-  pstate->n = nat_y - 1;
-  pstate->w = nat_x - 1;
-  pstate->s = nat_y + 2;
-  pstate->e = nat_x + 2;
+  pstate->n = ptile->nat_y - 1;
+  pstate->w = ptile->nat_x - 1;
+  pstate->s = ptile->nat_y + 2;
+  pstate->e = ptile->nat_x + 2;
   i = islemass - 1;
   while (i > 0 && tries-->0) {
     ptile = get_random_map_position_from_state(pstate);
-    index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
 
     if ((!near_singularity(ptile) || fc_rand(50) < 25 ) 
-        && hmap(ptile) == 0 && count_card_adjc_elevated_tiles(ptile) > 0) {
+	&& hmap(ptile) == 0 && count_card_adjc_elevated_tiles(ptile) > 0) {
       hmap(ptile) = 1;
       i--;
-      if (nat_y >= pstate->s - 1 && pstate->s < map.ysize - 2) {
-        pstate->s++;
+      if (ptile->nat_y >= pstate->s - 1 && pstate->s < map.ysize - 2) {
+	pstate->s++;
       }
-      if (nat_x >= pstate->e - 1 && pstate->e < map.xsize - 2) {
-        pstate->e++;
+      if (ptile->nat_x >= pstate->e - 1 && pstate->e < map.xsize - 2) {
+	pstate->e++;
       }
-      if (nat_y <= pstate->n && pstate->n > 2) {
-        pstate->n--;
+      if (ptile->nat_y <= pstate->n && pstate->n > 2) {
+	pstate->n--;
       }
-      if (nat_x <= pstate->w && pstate->w > 2) {
-        pstate->w--;
+      if (ptile->nat_x <= pstate->w && pstate->w > 2) {
+	pstate->w--;
       }
     }
     if (i < islemass / 10) {
@@ -2421,7 +2407,7 @@ static void mapgenerator3(void)
 }
 
 /**************************************************************************
-  Generator for placing a couple of players to each island.
+...
 **************************************************************************/
 static void mapgenerator4(void)
 {

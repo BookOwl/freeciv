@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "game.h"
@@ -69,15 +69,7 @@ void popdown_races_dialog(void)
 /**************************************************************************
   Popup a dialog window to select units on a particular tile.
 **************************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Update the dialog window to select units on a particular tile.
-**************************************************************************/
-void unit_select_dialog_update_real(void)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   /* PORTME */
 }

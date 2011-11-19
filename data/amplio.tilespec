@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2011.Aug.10"
+options = "+Freeciv-2.3-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "amplio"
@@ -47,9 +47,6 @@ is_full_citybar = 1
 ; offset the city bar text by this amount (from the city tile origin)
 citybar_offset_y = 30
 
-; offset the tile label text by this amount
-tilelabel_offset_y = 15
-
 ; Font size (points) to use to draw city names and productions:
 city_names_font_size = 10
 city_productions_font_size = 8
@@ -63,7 +60,7 @@ minimap_intro_file = "misc/radar"
 ; the data path. Order may be important for color allocation on 
 ; low-color systems, and if there are any duplicate tags (lattermost
 ; tag is used).
-files =
+files = 
   "amplio/terrain1.spec",
   "amplio/terrain2.spec",
   "amplio/ocean.spec",
@@ -86,6 +83,7 @@ files =
   "amplio/select.spec",
   "amplio/grid.spec",
   "misc/cursors.spec",
+  "misc/colors.spec",
   "misc/overlays.spec",
   "misc/citybar.spec",
   "misc/shields.spec",

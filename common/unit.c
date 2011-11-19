@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -33,7 +33,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "player.h"
-#include "road.h"
 #include "tech.h"
 #include "unitlist.h"
 
@@ -60,8 +59,8 @@ bool diplomat_can_do_action(const struct unit *pdiplomat,
     return FALSE;
   }
 
-  if (!is_tiles_adjacent(unit_tile(pdiplomat), ptile)
-      && !same_pos(unit_tile(pdiplomat), ptile)) {
+  if (!is_tiles_adjacent(pdiplomat->tile, ptile)
+      && !same_pos(pdiplomat->tile, ptile)) {
     return FALSE;
   }
 
@@ -84,13 +83,13 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
   struct city *pcity=tile_city(ptile);
 
   if (action != DIPLOMAT_MOVE
-      && !can_unit_exist_at_tile(pdiplomat, unit_tile(pdiplomat))) {
+      && !can_unit_exist_at_tile(pdiplomat, pdiplomat->tile)) {
     return FALSE;
   }
 
   if (pcity) {
     if (city_owner(pcity) != unit_owner(pdiplomat)
-       && real_map_distance(unit_tile(pdiplomat), pcity->tile) <= 1) {
+       && real_map_distance(pdiplomat->tile, pcity->tile) <= 1) {
       if(action==DIPLOMAT_SABOTAGE)
 	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_MOVE)
@@ -101,11 +100,10 @@ bool is_diplomat_action_available(const struct unit *pdiplomat,
                                       city_owner(pcity))) {
         return TRUE;
       }
-      if(action == SPY_POISON
-         && city_size_get(pcity) > 1
-         && unit_has_type_flag(pdiplomat, F_SPY)) {
-        return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
-      }
+      if(action==SPY_POISON &&
+	 pcity->size>1 &&
+	 unit_has_type_flag(pdiplomat, F_SPY))
+	return pplayers_at_war(unit_owner(pdiplomat), city_owner(pcity));
       if(action==DIPLOMAT_INVESTIGATE)
         return TRUE;
       if (action == DIPLOMAT_STEAL && !is_barbarian(city_owner(pcity))) {
@@ -157,7 +155,7 @@ enum unit_airlift_result
                              const struct unit *punit,
                              const struct city *pdest_city)
 {
-  const struct city *psrc_city = tile_city(unit_tile(punit));
+  const struct city *psrc_city = tile_city(punit->tile);
   const struct player *punit_owner;
   enum unit_airlift_result ok_result = AR_OK;
 
@@ -288,8 +286,8 @@ bool unit_has_orders(const struct unit *punit)
 bool unit_can_help_build_wonder(const struct unit *punit,
 				const struct city *pcity)
 {
-  if (!is_tiles_adjacent(unit_tile(punit), pcity->tile)
-      && !same_pos(unit_tile(punit), pcity->tile)) {
+  if (!is_tiles_adjacent(punit->tile, pcity->tile)
+      && !same_pos(punit->tile, pcity->tile)) {
     return FALSE;
   }
 
@@ -308,7 +306,7 @@ bool unit_can_help_build_wonder(const struct unit *punit,
 **************************************************************************/
 bool unit_can_help_build_wonder_here(const struct unit *punit)
 {
-  struct city *pcity = tile_city(unit_tile(punit));
+  struct city *pcity = tile_city(punit->tile);
 
   return pcity && unit_can_help_build_wonder(punit, pcity);
 }
@@ -323,7 +321,7 @@ bool unit_can_est_trade_route_here(const struct unit *punit)
   struct city *phomecity, *pdestcity;
 
   return (unit_has_type_flag(punit, F_TRADE_ROUTE)
-          && (pdestcity = tile_city(unit_tile(punit)))
+          && (pdestcity = tile_city(punit->tile))
           && (phomecity = game_city_by_number(punit->homecity))
           && can_cities_trade(phomecity, pdestcity));
 }
@@ -410,10 +408,10 @@ bool is_field_unit(const struct unit *punit)
 **************************************************************************/
 bool is_hiding_unit(const struct unit *punit)
 {
+  struct unit *transporter = game_unit_by_number(punit->transported_by);
+
   return (unit_has_type_flag(punit, F_PARTIAL_INVIS)
-          || (unit_transported(punit)
-              && unit_has_type_flag(unit_transport_get(punit),
-                                    F_PARTIAL_INVIS)));
+	  || (transporter && unit_has_type_flag(transporter, F_PARTIAL_INVIS)));
 }
 
 /**************************************************************************
@@ -502,7 +500,7 @@ unit_add_or_build_city_test(const struct unit *punit)
   }
 
   fc_assert(unit_pop_value(punit) > 0);
-  new_pop = city_size_get(pcity) + unit_pop_value(punit);
+  new_pop = pcity->size + unit_pop_value(punit);
 
   if (new_pop > game.info.add_to_size_limit) {
     return UAB_TOO_BIG;
@@ -522,7 +520,7 @@ unit_add_or_build_city_test(const struct unit *punit)
 bool can_unit_change_homecity_to(const struct unit *punit,
 				 const struct city *pcity)
 {
-  struct city *acity = tile_city(unit_tile(punit));
+  struct city *acity = tile_city(punit->tile);
 
   /* Requirements to change homecity:
    *
@@ -543,7 +541,7 @@ bool can_unit_change_homecity_to(const struct unit *punit,
 **************************************************************************/
 bool can_unit_change_homecity(const struct unit *punit)
 {
-  return can_unit_change_homecity_to(punit, tile_city(unit_tile(punit)));
+  return can_unit_change_homecity_to(punit, tile_city(punit->tile));
 }
 
 /**************************************************************************
@@ -556,12 +554,7 @@ bool can_unit_change_homecity(const struct unit *punit)
 **************************************************************************/
 int get_activity_rate(const struct unit *punit)
 {
-  const struct veteran_level *vlevel;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
+  double fact = unit_type(punit)->veteran[punit->veteran].power_fact;
 
   /* The speed of the settler depends on its base move_rate, not on
    * the number of moves actually remaining or the adjusted move rate.
@@ -571,9 +564,7 @@ int get_activity_rate(const struct unit *punit)
   int move_rate = unit_type(punit)->move_rate;
 
   /* All settler actions are multiplied by ACTIVITY_COUNT. */
-  return ACTIVITY_FACTOR
-         * (float)vlevel->power_fact / 100
-         * move_rate / SINGLE_MOVE;
+  return ACTIVITY_FACTOR * fact * move_rate / SINGLE_MOVE;
 }
 
 /**************************************************************************
@@ -667,11 +658,10 @@ bool can_unit_do_autosettlers(const struct unit *punit)
 bool is_real_activity(enum unit_activity activity)
 {
   /* ACTIVITY_FORTRESS and ACTIVITY_AIRBASE are deprecated */
-  return (0 <= activity && activity < ACTIVITY_LAST)
-          && activity != ACTIVITY_FORTRESS
-          && activity != ACTIVITY_AIRBASE
-          && activity != ACTIVITY_UNKNOWN
-          && activity != ACTIVITY_PATROL_UNUSED;
+  return activity != ACTIVITY_FORTRESS
+    && activity != ACTIVITY_AIRBASE
+    && activity != ACTIVITY_UNKNOWN
+    && activity != ACTIVITY_PATROL_UNUSED;
 }
 
 /**************************************************************************
@@ -688,8 +678,7 @@ const char *get_activity_text(enum unit_activity activity)
   case ACTIVITY_POLLUTION:
     return _("Pollution");
   case ACTIVITY_ROAD:
-  case ACTIVITY_RAILROAD:
-    return road_name_translation(road_by_activity(activity));
+    return _("Road");
   case ACTIVITY_MINE:
     return _("Mine");
   case ACTIVITY_IRRIGATE:
@@ -702,6 +691,8 @@ const char *get_activity_text(enum unit_activity activity)
     return _("Fortress");
   case ACTIVITY_SENTRY:
     return _("Sentry");
+  case ACTIVITY_RAILROAD:
+    return _("Railroad");
   case ACTIVITY_PILLAGE:
     return _("Pillage");
   case ACTIVITY_GOTO:
@@ -743,14 +734,12 @@ bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
   }
 
   /* Only top-level transporters may be loaded or loaded into. */
-  if (unit_transported(pcargo)
-      || unit_transported(ptrans)) {
+  if (pcargo->transported_by != -1 || ptrans->transported_by != -1) {
     return FALSE;
   }
 
-  /* Check iff this is a valid transport. */
-  if (unit_transported(pcargo)
-      && !unit_transport_check(pcargo, ptrans)) {
+  /* Recursive transporting is not allowed (for now). */
+  if (get_transporter_occupancy(pcargo) > 0) {
     return FALSE;
   }
 
@@ -759,10 +748,8 @@ bool could_unit_load(const struct unit *pcargo, const struct unit *ptrans)
     return FALSE;
   }
 
-  /* Transporter must be native to the tile it is on (or it itself is
-   * transported). */
-  if (!can_unit_exist_at_tile(ptrans, unit_tile(ptrans))
-      && !unit_transported(ptrans)) {
+  /* Transporter must be native to the tile it is on. */
+  if (!can_unit_exist_at_tile(ptrans, ptrans->tile)) {
     return FALSE;
   }
 
@@ -780,7 +767,7 @@ bool can_unit_load(const struct unit *pcargo, const struct unit *ptrans)
 
   /* Check positions of the units.  Of course you can't load a unit onto
    * a transporter on a different tile... */
-  if (!same_pos(unit_tile(pcargo), unit_tile(ptrans))) {
+  if (!same_pos(pcargo->tile, ptrans->tile)) {
     return FALSE;
   }
 
@@ -803,14 +790,14 @@ bool can_unit_unload(const struct unit *pcargo, const struct unit *ptrans)
   }
 
   /* Make sure the unit's transporter exists and is known. */
-  if (unit_transport_get(pcargo) != ptrans) {
+  if (pcargo->transported_by != ptrans->id) {
     return FALSE;
   }
 
   /* Only top-level transporters may be unloaded.  However the unit being
    * unloaded may be transporting other units (well, at least it's allowed
    * here: elsewhere this may be disallowed). */
-  if (unit_transport_get(ptrans)) {
+  if (ptrans->transported_by != -1) {
     return FALSE;
   }
 
@@ -837,13 +824,13 @@ bool can_unit_paradrop(const struct unit *punit)
   if(punit->moves_left < utype->paratroopers_mr_req)
     return FALSE;
 
-  if (tile_has_base_flag(unit_tile(punit), BF_PARADROP_FROM)) {
+  if (tile_has_base_flag(punit->tile, BF_PARADROP_FROM)) {
     /* Paradrop has to be possible from non-native base.
      * Paratroopers are "Land" units, but they can paradrom from Airbase. */
     return TRUE;
   }
 
-  if (!tile_city(unit_tile(punit))) {
+  if (!tile_city(punit->tile)) {
     return FALSE;
   }
 
@@ -861,7 +848,7 @@ bool can_unit_bombard(const struct unit *punit)
     return FALSE;
   }
 
-  if (unit_transported(punit)) {
+  if (punit->transported_by != -1) {
     return FALSE;
   }
 
@@ -926,7 +913,7 @@ bool can_unit_do_activity_targeted(const struct unit *punit,
                                    Base_type_id base)
 {
   return can_unit_do_activity_targeted_at(punit, activity, target,
-					  unit_tile(punit), base);
+					  punit->tile, base);
 }
 
 /**************************************************************************
@@ -962,8 +949,12 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
 	    && tile_has_special(ptile, S_FALLOUT));
 
   case ACTIVITY_ROAD:
-    return can_build_road(road_by_number(ROAD_ROAD),
-			  punit, ptile);
+    return (terrain_control.may_road
+	    && unit_has_type_flag(punit, F_SETTLERS)
+	    && !tile_has_special(ptile, S_ROAD)
+	    && pterrain->road_time != 0
+	    && (!tile_has_special(ptile, S_RIVER)
+		|| player_knows_techs_with_flag(pplayer, TF_BRIDGE)));
 
   case ACTIVITY_MINE:
     /* Don't allow it if someone else is irrigating this tile.
@@ -1001,7 +992,7 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
 	    || (!tile_has_special(ptile, S_FARMLAND)
 		&& player_knows_techs_with_flag(pplayer, TF_FARMLAND)))
 	&& ((pterrain == pterrain->irrigation_result
-             && can_be_irrigated(ptile, punit))
+	     && is_water_adjacent_to_tile(ptile))
 	    || (pterrain != pterrain->irrigation_result
 		&& pterrain->irrigation_result != T_NONE
 		&& (!is_ocean(pterrain)
@@ -1035,16 +1026,20 @@ bool can_unit_do_activity_targeted_at(const struct unit *punit,
     return can_build_base(punit, pbase, ptile);
 
   case ACTIVITY_SENTRY:
-    if (!can_unit_survive_at_tile(punit, unit_tile(punit))
-        && !unit_transported(punit)) {
+    if (!can_unit_survive_at_tile(punit, punit->tile)
+	&& punit->transported_by == -1) {
       /* Don't let units sentry on tiles they will die on. */
       return FALSE;
     }
     return TRUE;
 
   case ACTIVITY_RAILROAD:
-    return can_build_road(road_by_number(ROAD_RAILROAD),
-			  punit, ptile);
+    /* if the tile has road, the terrain must be ok.. */
+    return (terrain_control.may_road
+	    && unit_has_type_flag(punit, F_SETTLERS)
+	    && tile_has_special(ptile, S_ROAD)
+	    && !tile_has_special(ptile, S_RAILROAD)
+	    && player_knows_techs_with_flag(pplayer, TF_RAILROAD));
 
   case ACTIVITY_PILLAGE:
     {
@@ -1433,15 +1428,6 @@ struct tile *unit_tile(const struct unit *punit)
   return punit->tile;
 }
 
-/*****************************************************************************
-  Set the tile location of the unit. Tile can be NULL (for transported units.
-*****************************************************************************/
-void unit_tile_set(struct unit *punit, struct tile *ptile)
-{
-  fc_assert_ret(NULL != punit);
-  punit->tile = ptile;
-}
-
 /**************************************************************************
 Returns true if the tile contains an allied unit and only allied units.
 (ie, if your nation A is allied with B, and B is allied with C, a tile
@@ -1599,15 +1585,15 @@ bool unit_being_aggressive(const struct unit *punit)
   if (!is_attack_unit(punit)) {
     return FALSE;
   }
-  if (tile_city(unit_tile(punit))) {
+  if (tile_city(punit->tile)) {
     return FALSE;
   }
   if (BORDERS_DISABLED != game.info.borders
       && game.info.happyborders
-      && tile_owner(unit_tile(punit)) == unit_owner(punit)) {
+      && tile_owner(punit->tile) == unit_owner(punit)) {
     return FALSE;
   }
-  if (tile_has_base_flag_for_unit(unit_tile(punit),
+  if (tile_has_base_flag_for_unit(punit->tile,
                                   unit_type(punit),
                                   BF_NOT_AGGRESSIVE)) {
     return !is_unit_near_a_friendly_city (punit);
@@ -1642,7 +1628,7 @@ bool is_build_or_clean_activity(enum unit_activity activity)
   Create a virtual unit skeleton. pcity can be NULL, but then you need
   to set tile and homecity yourself.
 **************************************************************************/
-struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
+struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
                                  struct unit_type *punittype,
                                  int veteran_level)
 {
@@ -1659,13 +1645,11 @@ struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
   fc_assert_ret_val(NULL != pplayer, NULL);     /* No unowned units! */
   punit->owner = pplayer;
 
-  punit->facing = rand_direction();
-
   if (pcity) {
-    unit_tile_set(punit, pcity->tile);
+    punit->tile = pcity->tile;
     punit->homecity = pcity->id;
   } else {
-    unit_tile_set(punit, NULL);
+    punit->tile = NULL;
     punit->homecity = IDENTITY_NUMBER_ZERO;
   }
 
@@ -1682,10 +1666,9 @@ struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
   punit->paradropped = FALSE;
   punit->done_moving = FALSE;
 
-  punit->transporter = NULL;
-  punit->transporting = unit_list_new();
-
+  punit->transported_by = -1;
   set_unit_activity(punit, ACTIVITY_IDLE);
+  punit->occupy = 0;
   punit->battlegroup = BATTLEGROUP_NONE;
   punit->has_orders = FALSE;
 
@@ -1716,28 +1699,9 @@ struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
   Free the memory used by virtual unit. By the time this function is
   called, you should already have unregistered it everywhere.
 **************************************************************************/
-void unit_virtual_destroy(struct unit *punit)
+void destroy_unit_virtual(struct unit *punit)
 {
   free_unit_orders(punit);
-
-  /* Check if this unit is transported. */
-  fc_assert(!unit_transported(punit));
-  if (unit_transported(punit)) {
-    fc_assert(unit_transport_unload(punit));
-  }
-
-  /* Check for transported units. Use direct access to the list. */
-  fc_assert(unit_list_size(punit->transporting) == 0);
-  if (unit_list_size(punit->transporting) != 0) {
-    /* Unload all units. */
-    unit_list_iterate(punit->transporting, pcargo) {
-      fc_assert(unit_transport_unload(pcargo));
-    } unit_list_iterate_end;
-  }
-
-  if (punit->transporting) {
-    unit_list_destroy(punit->transporting);
-  }
 
   CALL_PLR_AI_FUNC(unit_lost, punit->owner, punit);
   CALL_FUNC_EACH_AI(unit_free, punit);
@@ -1764,13 +1728,19 @@ void free_unit_orders(struct unit *punit)
 }
 
 /****************************************************************************
-  Return how many units are in the transport.
+  Expensive function to check how many units are in the transport.
 ****************************************************************************/
 int get_transporter_occupancy(const struct unit *ptrans)
 {
-  fc_assert_ret_val(ptrans, -1);
+  int occupied = 0;
 
-  return unit_list_size(ptrans->transporting);
+  unit_list_iterate(ptrans->tile->units, pcargo) {
+    if (pcargo->transported_by == ptrans->id) {
+      occupied++;
+    }
+  } unit_list_iterate_end;
+
+  return occupied;
 }
 
 /****************************************************************************
@@ -1778,7 +1748,7 @@ int get_transporter_occupancy(const struct unit *ptrans)
 ****************************************************************************/
 struct unit *transporter_for_unit(const struct unit *pcargo)
 {
-  struct tile *ptile = unit_tile(pcargo);
+  struct tile *ptile = pcargo->tile;
 
   unit_list_iterate(ptile->units, ptrans) {
     if (can_unit_load(pcargo, ptrans)) {
@@ -1816,7 +1786,7 @@ enum unit_upgrade_result unit_upgrade_test(const struct unit *punit,
       return UU_NO_MONEY;
     }
 
-    pcity = tile_city(unit_tile(punit));
+    pcity = tile_city(punit->tile);
     if (!pcity) {
       return UU_NOT_IN_CITY;
     }
@@ -1982,194 +1952,4 @@ void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data)
 {
   punit->server.ais[ai_type_number(ai)] = data;
-}
-
-/*****************************************************************************
-  Calculate how expensive it is to bribe the unit. The cost depends on the
-  distance to the capital and government form. For a damaged unit the price is
-  reduced.
-
-  The bribe cost for settlers are halved.
-**************************************************************************/
-int unit_bribe_cost(struct unit *punit)
-{
-  int cost, default_hp, dist = 0;
-  struct city *capital;
-
-  fc_assert_ret_val(punit != NULL, 0);
-
-  default_hp = unit_type(punit)->hp;
-  cost = unit_owner(punit)->economic.gold + game.info.base_bribe_cost;
-  capital = player_capital(unit_owner(punit));
-
-  /* Consider the distance to the capital. */
-  if (capital != NULL) {
-    dist = MIN(GAME_UNIT_BRIBE_DIST_MAX,
-               map_distance(capital->tile, unit_tile(punit)));
-  } else {
-    dist = GAME_UNIT_BRIBE_DIST_MAX;
-  }
-  cost /= dist + 2;
-
-  /* Consider the build cost. */
-  cost *= unit_build_shield_cost(punit) / 10;
-
-  /* FIXME: This is a weird one - should be replaced. */
-  if (unit_has_type_flag(punit, F_CITIES)) {
-    cost /= 2;
-  }
-
-  /* Veterans are not cheap. */
-  /* FIXME: Should this depend on the veteran level? */
-  cost += cost * punit->veteran / 3;
-
-  /* Cost now contains the basic bribe cost.  We now reduce it by:
-   *    bribecost = cost/2 + cost/2 * damage/hp
-   *              = cost/2 * (1 + damage/hp) */
-  return ((float)cost / 2 * (1.0 + punit->hp / default_hp));
-}
-
-/*****************************************************************************
-  Load pcargo onto ptrans. Returns TRUE on success.
-*****************************************************************************/
-bool unit_transport_load(struct unit *pcargo, struct unit *ptrans, bool force)
-{
-  fc_assert_ret_val(ptrans != NULL, FALSE);
-  fc_assert_ret_val(pcargo != NULL, FALSE);
-
-  fc_assert_ret_val(!unit_list_search(ptrans->transporting, pcargo), FALSE);
-
-  if (force || can_unit_load(pcargo, ptrans)) {
-    pcargo->transporter = ptrans;
-    unit_list_append(ptrans->transporting, pcargo);
-
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/*****************************************************************************
-  Unload pcargo from ptrans. Returns TRUE on success.
-*****************************************************************************/
-bool unit_transport_unload(struct unit *pcargo)
-{
-  struct unit *ptrans;
-
-  fc_assert_ret_val(pcargo != NULL, FALSE);
-
-  ptrans = unit_transport_get(pcargo);
-
-  if (ptrans == NULL) {
-    /* 'pcargo' is not transported. */
-    return FALSE;
-  }
-
-  /* 'pcargo' and 'ptrans' should be on the same tile. */
-  fc_assert_ret_val(same_pos(unit_tile(pcargo), unit_tile(ptrans)), FALSE);
-  /* It is an error if 'pcargo' can not be removed from the 'ptrans'. */
-  fc_assert_ret_val(unit_list_remove(ptrans->transporting, pcargo), FALSE);
-
-  /* For the server (also save for the client). */
-  pcargo->transporter = NULL;
-  /* For the client - needed as the client does not know all units. */
-  if (!is_server()) {
-    pcargo->client.transported_by = -1;
-  }
-
-  return TRUE;
-}
-
-/*****************************************************************************
-  Returns TRUE iff the unit is transported.
-*****************************************************************************/
-bool unit_transported(const struct unit *pcargo)
-{
-  fc_assert_ret_val(pcargo != NULL, FALSE);
-
-  /* The unit is transported if a transporter unit is set or, (for the client)
-   * if the transported_by field is set. */
-  if (pcargo->transporter != NULL
-      || (!is_server() && pcargo->client.transported_by != -1)) {
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/*****************************************************************************
-  Returns the transporter of the unit or NULL if it is not transported.
-*****************************************************************************/
-struct unit *unit_transport_get(const struct unit *pcargo)
-{
-  fc_assert_ret_val(pcargo != NULL, NULL);
-
-  if (pcargo->transporter == NULL) {
-    return NULL;
-  } else {
-    /* Need this as the return value is not 'const'! */
-    return game_unit_by_number(pcargo->transporter->id);
-  }
-}
-
-/*****************************************************************************
-  Returns the list of cargo units.
-*****************************************************************************/
-struct unit_list *unit_transport_cargo(const struct unit *ptrans)
-{
-  fc_assert_ret_val(ptrans != NULL, NULL);
-  fc_assert_ret_val(ptrans->transporting != NULL, NULL);
-
-  return ptrans->transporting;
-}
-
-/*****************************************************************************
-  Returns if pcargo in ptrans is a valid transport.
-*****************************************************************************/
-bool unit_transport_check(const struct unit *pcargo,
-                          const struct unit *ptrans)
-{
-  struct unit_list *ptrans_recursive = unit_list_new();
-  /* Get !const unit struct for pcargo. */
-  struct unit *plevel = game_unit_by_number(pcargo->id);
-  bool transport_ok = TRUE;
-
-  /* Recursive loop over all transporters up to max level. */
-  while (transport_ok && plevel && unit_list_size(ptrans_recursive)
-                                   < GAME_TRANSPORT_MAX_RECURSIVE) {
-    /* Check if the unit can be transported. If the unit can be transported
-     * by any of the previous transporters, fail. THis disallows to carry
-     * units of one type within the same unit type. */
-    unit_list_iterate(ptrans_recursive, pcargo_recursive) {
-      if (can_unit_transport(pcargo_recursive, plevel)) {
-        transport_ok = FALSE;
-        break;
-      }
-    } unit_list_iterate_end;
-
-    if (!transport_ok) {
-#ifdef DEBUG
-      char buf[512] = "";
-      fc_snprintf(buf, sizeof(buf), "%s [Error] ",
-                  unit_name_translation(plevel));
-      unit_list_iterate(ptrans_recursive, pcargo_recursive) {
-        cat_snprintf(buf, sizeof(buf), " in %s",
-                     unit_name_translation(pcargo_recursive));
-      } unit_list_iterate_end;
-      log_error("Invalid transport at level %d (%s).",
-                unit_list_size(ptrans_recursive), buf);
-#endif /* DEBUG */
-      break;
-    }
-
-    /* Insert cargo at the beginning of the list. */
-    unit_list_prepend(ptrans_recursive, plevel);
-
-    /* Check for next level. */
-    plevel = unit_transport_get(plevel);
-  }
-
-  unit_list_destroy(ptrans_recursive);
-
-  return transport_ok;
 }

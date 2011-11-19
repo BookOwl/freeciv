@@ -13,10 +13,6 @@
 #ifndef FC__UNIT_H
 #define FC__UNIT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
@@ -59,6 +55,10 @@ enum diplomat_actions {
   SPY_SABOTAGE_UNIT = 8,
   DIPLOMAT_ANY_ACTION   /* leave this one last */
 };
+
+enum ai_unit_task { AIUNIT_NONE, AIUNIT_AUTO_SETTLER, AIUNIT_BUILD_CITY,
+                    AIUNIT_DEFEND_HOME, AIUNIT_ATTACK, AIUNIT_ESCORT, 
+                    AIUNIT_EXPLORE, AIUNIT_RECOVER, AIUNIT_HUNTER };
 
 enum goto_move_restriction {
   GOTO_MOVE_ANY,
@@ -113,7 +113,7 @@ enum unit_airlift_result {
 };
 
 struct unit_adv {
-  enum adv_unit_task task;
+  enum ai_unit_task role;
 };
 
 struct unit_order {
@@ -123,13 +123,9 @@ struct unit_order {
   enum direction8 dir;          /* Only valid for ORDER_MOVE. */
 };
 
-struct unit;
-struct unit_list;
-
 struct unit {
   struct unit_type *utype; /* Cannot be NULL. */
   struct tile *tile;
-  enum direction8 facing;
   struct player *owner; /* Cannot be NULL. */
   int id;
   int homecity;
@@ -171,8 +167,8 @@ struct unit {
    *   - Otherwise the unit is not done moving. */
   bool done_moving;
 
-  struct unit *transporter;   /* This unit is transported by ... */
-  struct unit_list *transporting; /* This unit transports ... */
+  int transported_by;
+  int occupy; /* number of units that occupy transporter */
 
   /* The battlegroup ID: defined by the client but stored by the server. */
 #define MAX_NUM_BATTLEGROUPS (4)
@@ -192,11 +188,6 @@ struct unit {
       /* Only used at the client (the server is omniscient; ./client/). */
 
       enum unit_focus_status focus_status;
-
-      int transported_by; /* Used for unit_short_info packets where we can't
-                           * be sure that the information about the
-                           * transporter is known. */
-      bool occupied;      /* TRUE if at least one cargo on the transporter. */
 
       /* Equivalent to pcity->client.color. Only for F_CITIES units. */
       bool colored;
@@ -225,18 +216,6 @@ struct unit {
     } server;
   };
 };
-
-#ifdef DEBUG
-#define CHECK_UNIT(punit)                                                   \
-  (fc_assert(punit != NULL),                                                \
-   fc_assert(unit_type(punit) != NULL),                                     \
-   fc_assert(unit_owner(punit) != NULL),                                    \
-   fc_assert(player_by_number(player_index(unit_owner(punit)))              \
-             == unit_owner(punit)),                                         \
-   fc_assert(game_unit_by_number(punit->id) != NULL))
-#else
-#define CHECK_UNIT(punit) /* Do nothing */
-#endif
 
 bool is_real_activity(enum unit_activity activity);
 
@@ -336,7 +315,6 @@ int get_transporter_capacity(const struct unit *punit);
 
 struct player *unit_owner(const struct unit *punit);
 struct tile *unit_tile(const struct unit *punit);
-void unit_tile_set(struct unit *punit, struct tile *ptile);
 
 struct unit *is_allied_unit_tile(const struct tile *ptile,
 				 const struct player *pplayer);
@@ -355,10 +333,10 @@ bool unit_type_really_ignores_zoc(const struct unit_type *punittype);
 
 bool is_build_or_clean_activity(enum unit_activity activity);
 
-struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
+struct unit *create_unit_virtual(struct player *pplayer, struct city *pcity,
                                  struct unit_type *punittype,
 				 int veteran_level);
-void unit_virtual_destroy(struct unit *punit);
+void destroy_unit_virtual(struct unit *punit);
 bool unit_is_virtual(const struct unit *punit);
 void free_unit_orders(struct unit *punit);
 
@@ -380,20 +358,5 @@ bool unit_alive(int id);
 void *unit_ai_data(const struct unit *punit, const struct ai_type *ai);
 void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data);
-
-int unit_bribe_cost(struct unit *punit);
-
-bool unit_transport_load(struct unit *pcargo, struct unit *ptrans,
-                         bool force);
-bool unit_transport_unload(struct unit *pcargo);
-struct unit *unit_transport_get(const struct unit *pcargo);
-bool unit_transported(const struct unit *pcargo);
-struct unit_list *unit_transport_cargo(const struct unit *ptrans);
-bool unit_transport_check(const struct unit *pcargo,
-                          const struct unit *ptrans);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__UNIT_H */

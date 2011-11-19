@@ -49,11 +49,9 @@ extern int SDL_RLESurface(SDL_Surface *surface);
 extern void SDL_UnRLESurface(SDL_Surface *surface, int recode);
 
 
-/**********************************************************************
-  Blit from source rectangle to destination rectangle with alpha.
-  If dstrect is NULL, full dst surface is used.
-  We assume the "dst" has pixel alpha.
-***********************************************************************/
+
+/*we assume the "dst" has pixel alpha*/
+
 int pygame_AlphaBlit (SDL_Surface *src, SDL_Rect *srcrect,
                    SDL_Surface *dst, SDL_Rect *dstrect)
 {
@@ -146,10 +144,6 @@ int pygame_AlphaBlit (SDL_Surface *src, SDL_Rect *srcrect,
         return 0;
 }
 
-/**********************************************************************
-  Blit using alpha from src to dest. Rectangles are assumed to be
-  already clipped.
-***********************************************************************/
 static int SoftBlitAlpha(SDL_Surface *src, SDL_Rect *srcrect,
                         SDL_Surface *dst, SDL_Rect *dstrect)
 {
@@ -306,7 +300,7 @@ do {                                            \
         dB = (((sB-dB)*(sA))>>8)+dB;                \
         dA = sA+dA - ((sA*dA)/255);                \
 } while(0)
-#else /* 0 */
+#else
 #define ALPHA_BLEND(sR, sG, sB, sA, dR, dG, dB, dA)  \
 do {   if(dA){\
         dR = ( ((255-sA)*dR ) + ((sR*sA)) ) >> 8;                \
@@ -320,7 +314,7 @@ do {   if(dA){\
         dA = sA;               \
     }\
 } while(0)
-#endif /* !0 */
+#endif
 
 #if 0
 /* a sad tale of many other blending techniques that didn't fly */
@@ -349,12 +343,10 @@ do {   if(dA){\
         dR = (((dR - sR) * (255-sA) * dA) >> 16) + (sR*sA)>>8);
         dG = (((dG - sG) * (255-sA) * dA) >> 16) + (sG*sA)>>8);
         dB = (((dB - sB) * (255-sA) * dA) >> 16) + (sB*sA)>>8);
-#endif /* 0 */
+#endif
 
 
-/**********************************************************************
-  Basic alpha blitting
-***********************************************************************/
+
 static void alphablit_alpha(SDL_BlitInfo *info)
 {
         int n;
@@ -387,9 +379,6 @@ static void alphablit_alpha(SDL_BlitInfo *info)
         }
 }
 
-/**********************************************************************
-  Blit using colorkey
-***********************************************************************/
 static void alphablit_colorkey(SDL_BlitInfo *info)
 {
         int n;
@@ -425,9 +414,7 @@ static void alphablit_colorkey(SDL_BlitInfo *info)
         }
 }
 
-/**********************************************************************
-  Blit solid surface
-***********************************************************************/
+
 static void alphablit_solid(SDL_BlitInfo *info)
 {
         int n;

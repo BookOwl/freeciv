@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -25,7 +25,7 @@
 #include "featured_text.h"
 #include "map.h"
 
-/* client/include */
+/* include */
 #include "citydlg_g.h"
 #include "mapview_g.h"
 #include "messagewin_g.h"

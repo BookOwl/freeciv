@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -157,14 +157,14 @@ void send_spaceship_info(struct player *src, struct conn_list *dest)
 }
 
 /**************************************************************************
-  Handle spaceship launch request.
+...
 **************************************************************************/
 void handle_spaceship_launch(struct player *pplayer)
 {
   struct player_spaceship *ship = &pplayer->spaceship;
   int arrival;
 
-  if (!player_capital(pplayer)) {
+  if (!player_palace(pplayer)) {
     notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                   _("You need to have a capital in order to launch "
                     "your spaceship."));
@@ -196,7 +196,7 @@ void handle_spaceship_launch(struct player *pplayer)
 }
 
 /**************************************************************************
-  Handle spaceship part placement request
+...
 **************************************************************************/
 void handle_spaceship_place(struct player *pplayer,
 			    enum spaceship_place_type type, int num)
@@ -342,7 +342,7 @@ void handle_spaceship_place(struct player *pplayer,
 }
 
 /**************************************************************************
-  Handle spaceship loss.
+...
 **************************************************************************/
 void spaceship_lost(struct player *pplayer)
 {

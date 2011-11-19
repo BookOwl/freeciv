@@ -14,8 +14,6 @@
       <menuitem action="RELOAD_TILESET" />
       <menuitem action="GAME_SAVE" />
       <menuitem action="GAME_SAVE_AS" />
-      <menuitem action="MAPIMG_SAVE" />
-      <menuitem action="MAPIMG_SAVE_AS" />
       <separator />
       <menuitem action="LEAVE" />
       <menuitem action="QUIT" />
@@ -30,8 +28,6 @@
       <menuitem action="TOGGLE_FOG" />
       <menuitem action="SCENARIO_PROPERTIES" />
       <menuitem action="SAVE_SCENARIO" />
-      <separator />
-      <menuitem action="CLIENT_LUA_SCRIPT" />
     </menu>
 
     <menu action="MENU_VIEW">
@@ -39,7 +35,6 @@
       <menuitem action="SHOW_CITY_OUTPUT" />
       <menuitem action="SHOW_MAP_GRID" />
       <menuitem action="SHOW_NATIONAL_BORDERS" />
-      <menuitem action="SHOW_NATIVE_TILES" />
       <menuitem action="SHOW_CITY_FULL_BAR" />
       <menuitem action="SHOW_CITY_NAMES" />
       <menuitem action="SHOW_CITY_GROWTH" />
@@ -77,8 +72,6 @@
       <menuitem action="SELECT_SAME_TYPE_TILE" />
       <menuitem action="SELECT_SAME_TYPE_CONT" />
       <menuitem action="SELECT_SAME_TYPE" />
-      <separator />
-      <menuitem action="SELECT_DLG" />
       <separator />
       <menuitem action="UNIT_WAIT" />
       <menuitem action="UNIT_DONE" />

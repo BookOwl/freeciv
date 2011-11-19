@@ -22,7 +22,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",        "female_title"
- "Despotism",       _("Raja %s"),        _("?female:Rani %s")
+ "Despotism",       _("Datu %s"),        _("?female:Datu %s")
  "Monarchy",        _("Maharaja %s"),    _("Maharani %s")
 }
 
@@ -32,6 +32,7 @@ city_style   = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Majapahit", "indonesian", "malaysian"

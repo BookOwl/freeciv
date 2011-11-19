@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -529,7 +529,8 @@ void inputline_make_chat_link(struct tile *ptile, bool unit)
   text mark 'scroll_target' should probably be the first character of the
   last line in the text buffer.
 **************************************************************************/
-void scroll_if_necessary(GtkTextView *textview, GtkTextMark *scroll_target)
+static void scroll_if_necessary(GtkTextView *textview,
+                                GtkTextMark *scroll_target)
 {
   GtkWidget *sw;
   GtkAdjustment *vadj;
@@ -748,8 +749,8 @@ void set_message_buffer_view_link_handlers(GtkWidget *view)
 /**************************************************************************
   Convert a struct text_tag to a GtkTextTag.
 **************************************************************************/
-void apply_text_tag(const struct text_tag *ptag, GtkTextBuffer *buf,
-                    ft_offset_t text_start_offset, const char *text)
+static void apply_text_tag(const struct text_tag *ptag, GtkTextBuffer *buf,
+                           ft_offset_t text_start_offset, const char *text)
 {
   static bool initalized = FALSE;
   GtkTextIter start, stop;
@@ -931,7 +932,7 @@ void log_output_window(void)
 }
 
 /**************************************************************************
-  Clear output window. This does *not* destroy it, or free its resources
+...
 **************************************************************************/
 void clear_output_window(void)
 {
@@ -939,7 +940,7 @@ void clear_output_window(void)
 }
 
 /**************************************************************************
-  Set given text to output window
+...
 **************************************************************************/
 void set_output_window_text(const char *text)
 {
@@ -1070,7 +1071,7 @@ static void color_set(GObject *object, const gchar *color_target,
       pixmap = gdk_pixmap_new(root_window, 16, 16, -1);
       gdk_gc_set_foreground(fill_bg_gc, current_color);
       gdk_draw_rectangle(pixmap, fill_bg_gc, TRUE, 0, 0, 16, 16);
-      image = gtk_image_new_from_pixmap(pixmap, NULL);
+      image = gtk_pixmap_new(pixmap, NULL);
       gtk_tool_button_set_icon_widget(button, image);
       gtk_widget_show(image);
       g_object_unref(G_OBJECT(pixmap));
@@ -1288,6 +1289,7 @@ void chatline_init(void)
 {
   GtkWidget *vbox, *toolbar, *hbox, *button, *entry, *bbox;
   GtkToolItem *item;
+  GtkTooltips *tooltips;
   GdkColor color;
 
   /* Chatline history. */
@@ -1298,6 +1300,9 @@ void chatline_init(void)
 
   /* Inputline toolkit. */
   memset(&toolkit, 0, sizeof(toolkit));
+
+  tooltips = gtk_tooltips_new();
+  gtk_tooltips_enable(tooltips);
 
   vbox = gtk_vbox_new(FALSE, 2);
   toolkit.main_widget = vbox;
@@ -1323,7 +1328,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_BOLD));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Bold (Ctrl-B)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Bold (Ctrl-B)"), NULL);
 
   /* Italic button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_ITALIC);
@@ -1331,7 +1337,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_ITALIC));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Italic (Ctrl-I)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Italic (Ctrl-I)"), NULL);
 
   /* Strike button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_STRIKETHROUGH);
@@ -1339,7 +1346,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_STRIKE));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Strikethrough (Ctrl-S)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Strikethrough (Ctrl-S)"), NULL);
 
   /* Underline button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_UNDERLINE);
@@ -1347,7 +1355,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_UNDERLINE));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Underline (Ctrl-U)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Underline (Ctrl-U)"), NULL);
 
   /* Color button. */
   item = gtk_tool_button_new_from_stock(GTK_STOCK_SELECT_COLOR);
@@ -1355,7 +1364,8 @@ void chatline_init(void)
   g_object_set_data(G_OBJECT(item), "text_tag_type",
                     GINT_TO_POINTER(TTT_COLOR));
   g_signal_connect(item, "clicked", G_CALLBACK(make_tag_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Color (Ctrl-C)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Color (Ctrl-C)"), NULL);
 
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar),
                      gtk_separator_tool_item_new(), -1);
@@ -1368,7 +1378,8 @@ void chatline_init(void)
                     fc_strdup(_("foreground")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item), _("Select the text color"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Select the text color"), NULL);
   if (gdk_color_parse("#000000", &color)) {
     /* Set default foreground color. */
     color_set(G_OBJECT(entry), "fg_color", &color, GTK_TOOL_BUTTON(item));
@@ -1384,8 +1395,8 @@ void chatline_init(void)
                     fc_strdup(_("background")));
   g_signal_connect(item, "clicked",
                    G_CALLBACK(select_color_callback), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item),
-                              _("Select the background color"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       _("Select the background color"), NULL);
   if (gdk_color_parse("#ffffff", &color)) {
     /* Set default background color. */
     color_set(G_OBJECT(entry), "bg_color", &color, GTK_TOOL_BUTTON(item));
@@ -1401,9 +1412,9 @@ void chatline_init(void)
   gtk_toolbar_insert(GTK_TOOLBAR(toolbar), item, -1);
   g_signal_connect_swapped(item, "clicked",
                            G_CALLBACK(inputline_return), entry);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(item),
-                              /* TRANS: "Return" means the return key. */
-                              _("Send the chat (Return)"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(item),
+                       /* TRANS: "Return" means the return key. */
+                       _("Send the chat (Return)"), NULL);
 
   /* Second line */
   hbox = gtk_hbox_new(FALSE, 4);
@@ -1420,7 +1431,7 @@ void chatline_init(void)
 #endif
                                              GTK_ICON_SIZE_MENU));
   g_signal_connect(button, "toggled", G_CALLBACK(button_toggled), &toolkit);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(button), _("Chat tools"));
+  gtk_tooltips_set_tip(tooltips, GTK_WIDGET(button), _("Chat tools"), NULL);
   toolkit.toggle_button = button;
 
   /* Entry. */

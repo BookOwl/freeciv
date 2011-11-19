@@ -1,14 +1,10 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = aicore scriptcore
+SUBDIRS = aicore
 
 lib_LTLIBRARIES = libfreeciv.la
 
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility \
-	-I$(srcdir)/aicore \
-	-I$(srcdir)/scriptcore \
-	$(MAPIMG_WAND_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/aicore
 
 libfreeciv_la_SOURCES = \
 		ai.c		\
@@ -19,8 +15,6 @@ libfreeciv_la_SOURCES = \
 		borders.h	\
 		capstr.c	\
 		capstr.h	\
-		citizens.c	\
-		citizens.h	\
 		city.c		\
 		city.h		\
 		combat.c	\
@@ -37,8 +31,6 @@ libfreeciv_la_SOURCES = \
 		events.h	\
 		featured_text.c	\
 		featured_text.h	\
-		fc_cmdhelp.c	\
-		fc_cmdhelp.h	\
 		fc_interface.c	\
 		fc_interface.h	\
 		fc_types.h	\
@@ -53,8 +45,6 @@ libfreeciv_la_SOURCES = \
 		improvement.h	\
 		map.c		\
 		map.h		\
-		mapimg.c	\
-		mapimg.h	\
 		movement.c	\
 		movement.h	\
 		name_translation.h \
@@ -71,10 +61,6 @@ libfreeciv_la_SOURCES = \
 		requirements.h	\
 		research.c	\
 		research.h	\
-		rgbcolor.c	\
-		rgbcolor.h	\
-		road.c		\
-		road.h		\
 		spaceship.c	\
 		spaceship.h	\
 		specialist.c	\
@@ -87,7 +73,6 @@ libfreeciv_la_SOURCES = \
 		terrain.h	\
 		tile.c		\
 		tile.h		\
-		traits.h	\
 		unit.c		\
 		unit.h		\
 		unitlist.c	\
@@ -102,15 +87,13 @@ libfreeciv_la_SOURCES = \
 		version.h
 
 libfreeciv_la_DEPENDENCIES = \
-	$(top_builddir)/utility/libcivutility.la \
-	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/scriptcore/libscriptcore.la
+ $(top_builddir)/utility/libcivutility.la \
+ $(top_builddir)/common/aicore/libaicore.la
 
 libfreeciv_la_LIBADD = \
-	$(top_builddir)/utility/libcivutility.la \
-	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/scriptcore/libscriptcore.la \
-	$(COMMON_LIBS)
+ $(top_builddir)/utility/libcivutility.la \
+ $(top_builddir)/common/aicore/libaicore.la \
+ $(COMMON_LIBS)
 
 BUILT_SOURCES = packets_gen.c packets_gen.h
 
@@ -134,9 +117,7 @@ packets_generate: packets.def generate_packets.py
 	touch packets_generate
 
 # These files are not generated to builddir, but to srcdir */
-MAINTAINERCLEANFILES = \
-	$(srcdir)/packets_gen.h \
-	$(srcdir)/packets_gen.c
+MAINTAINERCLEANFILES = $(srcdir)/packets_gen.h $(srcdir)/packets_gen.c
 
 if SVNREV
 BUILT_SOURCES += fc_svnrev_gen.h

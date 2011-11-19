@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -1255,7 +1255,7 @@ static void option_dialog_worklist(struct option_dialog *pdialog)
                map_rgba(background->theme->format, bg_color));
   putframe(background->theme,
 		   0, 0, background->theme->w - 1, background->theme->h - 1,
-		   get_theme_color(COLOR_THEME_OPTIONDLG_WORKLISTLIST_FRAME));
+		   get_game_colorRGB(COLOR_THEME_OPTIONDLG_WORKLISTLIST_FRAME));
 
   /* Create the Scrollbar. */
   scrollbar_width = create_vertical_scrollbar(pdialog->advanced,

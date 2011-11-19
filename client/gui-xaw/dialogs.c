@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -53,7 +53,7 @@
 #include "cityrep.h"    /* city_report_dialog_popdown() */
 #include "client_main.h"
 #include "climisc.h"
-#include "control.h" /* request_xxx and unit_focus_set */
+#include "control.h" /* request_xxx and set_unit_focus */
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -719,7 +719,7 @@ static int number_of_rows(int n)
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   int i,n,r;
   char buffer[512];
@@ -833,14 +833,6 @@ void unit_select_dialog_popup(struct tile *ptile)
 }
 
 /**************************************************************************
-  Update the dialog window to select units on a particular tile.
-**************************************************************************/
-void unit_select_dialog_update_real(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 void unit_select_all_callback(Widget w, XtPointer client_data, 
@@ -855,7 +847,7 @@ void unit_select_all_callback(Widget w, XtPointer client_data,
     struct unit *punit = player_unit_by_number(client_player(),
                                                unit_select_ids[i]);
     if(punit) {
-      unit_focus_set(punit);
+      set_unit_focus(punit);
     }
   }
 }
@@ -877,7 +869,7 @@ void unit_select_callback(Widget w, XtPointer client_data,
       struct unit *punit = player_unit_by_number(client_player(),
                                                  unit_select_ids[i]);
       if(punit) {
-	unit_focus_set(punit);
+	set_unit_focus(punit);
       }
       return;
     }

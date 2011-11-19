@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -470,7 +470,7 @@ void real_menus_update(void)
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
-	ptile = unit_tile(punit);
+	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
@@ -809,7 +809,7 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_nuke();
     break;
   case MENU_ORDER_SELECT_SAME_TYPE:
-    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_WORLD);
+    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_ALL);
     break;
   case MENU_ORDER_WAIT:
     key_unit_wait();

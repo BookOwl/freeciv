@@ -19,9 +19,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",        "female_title"
- "Democracy", _("Minister-President %s"), _("?female:Minister-President %s")
- "Despotism",       _("Duke %s"),        _("Duchess %s")
- "Fundamentalism",  _("Bishop %s"),      _("?female:Bishop %s")
+ "Republic", _("Minister-President %s"), _("?female:Minister-President %s")
 }
 
 flag="wuerttemberg"
@@ -30,6 +28,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations = "badian", "bavarian", "franconian", "swiss"

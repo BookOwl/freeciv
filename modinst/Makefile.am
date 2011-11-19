@@ -2,9 +2,7 @@
 
 bin_PROGRAMS = freeciv-modpack
 
-noinst_LTLIBRARIES = libfcmp.la
-
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common $(MP_gtk_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common $(MP_gtk2_CFLAGS)
 
 if MINGW32
 MPICON = $(top_builddir)/win32/mpicon.o
@@ -14,21 +12,16 @@ desktopfile_DATA = \
 	freeciv-modpack.desktop
 endif
 
-libfcmp_la_SOURCES = \
+freeciv_modpack_SOURCES = \
 		download.c	\
 		download.h	\
-		modinst.h	\
+		modinst.c	\
 		mpcmdline.c	\
 		mpcmdline.h
 
-freeciv_modpack_SOURCES = mpgui_gtk.c
-
-freeciv_modpack_LDFLAGS = $(MP_gtk_LDFLAGS)
+freeciv_modpack_LDFLAGS = $(MP_gtk2_LDFLAGS)
 
 freeciv_modpack_LDADD = \
-		libfcmp.la \
 		$(top_builddir)/common/libfreeciv.la \
-		$(MAPIMG_WAND_LIBS) \
-		$(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS) \
-		$(MP_gtk_LIBS) \
+		$(MP_gtk2_LIBS) \
 		$(MPICON)

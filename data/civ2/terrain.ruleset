@@ -12,7 +12,7 @@
 
 [datafile]
 description="Civ2 tile_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2011.Nov.02"
+options="+Freeciv-2.3-ruleset"
 
 [options]
 may_road=1           ; 0 means no, 1 means yes
@@ -181,9 +181,6 @@ fallout_trade_penalty=50
 ;  - wet               = how "wet" the terrain is (moisture)
 ;  - dry               = how "dry" the terrain is (moisture)
 ;  - ocean_depth       = the depth of an ocean, as an average level
-; color.r              = color of the terrain (red value)
-; color.g              = color of the terrain (green value)
-; color.b              = color of the terrain (blue value)
 ; helptext             = optional help text string; should escape all raw 
 ;                        newlines so that xgettext parsing works
 ;
@@ -217,9 +214,6 @@ cooler_drier_result  = "no"
 native_to            = "Sea", "Air", "Missile", "Helicopter"
 flags                = "Oceanic", "UnsafeCoast", "NoCities", "NoPollution"
 property_ocean_depth = 36
-color.r              = 0
-color.g              = 0
-color.b              = 200
 helptext             = _("\
 Oceans cover much of the world, and only sea units (Triremes and\
  other boats) can travel on them.\
@@ -253,9 +247,6 @@ cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "NoBarbs", "CanHaveRiver"
 property_frozen      = 100
-color.r              = 232
-color.g              = 232
-color.b              = 232
 helptext             = _("\
 Glaciers are found only in the most northerly or southerly\
  reaches of the world.  They are very cold, and hence difficult to\
@@ -292,9 +283,6 @@ flags                = "CanHaveRiver"
 property_dry         = 100
 property_tropical    = 50
 property_temperate   = 20
-color.r              = 212
-color.g              = 179
-color.b              = 101
 helptext             = _("\
 Deserts are regions of extreme dryness, making agriculture and\
  trade very difficult.\
@@ -331,9 +319,6 @@ property_cold        = 20
 property_wet         = 20
 property_foliage     = 50
 property_temperate   = 50
-color.r              = 43
-color.g              = 107
-color.b              = 19
 helptext             = _("\
 Forests are densely wooded, making agriculture somewhat\
  problematic.\
@@ -368,9 +353,6 @@ native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_temperate   = 50
-color.r              = 10
-color.g              = 123
-color.b              = 2
 helptext             = _("\
 Grasslands afford exceptional agricultural opportunities.\
 ")
@@ -404,9 +386,6 @@ native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
 property_mountainous = 30
-color.r              = 142
-color.g              = 121
-color.b              = 63
 helptext             = _("\
 In addition to being amenable to agriculture, Hills are frequently\
  rich in resources.\
@@ -442,9 +421,6 @@ flags                = "CanHaveRiver"
 property_foliage     = 50
 property_tropical    = 50
 property_wet         = 50
-color.r              = 54
-color.g              = 162
-color.b              = 38
 helptext             = _("\
 Jungles are densely overgrown, making agriculture somewhat\
  problematic.\
@@ -478,9 +454,6 @@ cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_mountainous = 70
-color.r              = 167
-color.g              = 77
-color.b              = 38
 helptext             = _("\
 Mountains are regions of extreme altitude, making agriculture and\
  trade very difficult.\
@@ -516,9 +489,6 @@ flags                = "Starter", "CanHaveRiver"
 property_dry         = 50
 property_green       = 50
 property_temperate   = 50
-color.r              = 138
-color.g              = 168
-color.b              = 60
 helptext             = _("\
 Plains are very broad, sparse regions, which makes trade slightly\
  inconvenient.\
@@ -555,9 +525,6 @@ property_wet         = 100
 property_tropical    = 10
 property_temperate   = 10
 property_cold        = 10
-color.r              = 44
-color.g              = 64
-color.b              = 44
 helptext             = _("\
 Swamps suffer from an over-abundance of water, making agriculture\
  somewhat problematic.\
@@ -591,9 +558,6 @@ cooler_drier_result  = "terrain_glacier"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
 property_cold        = 50
-color.r              = 74
-color.g              = 74
-color.b              = 74
 helptext             = _("\
 Tundra are broad, cold regions, fit for some agriculture and little\
  else.\
@@ -878,22 +842,3 @@ helptext       = _("\
 Airbases allow your air units to land and refuel. Air units in an \
 airbase may be attacked by land units.\
 ")
-
-; /* <-- avoid gettext warnings
-;
-; Road types:
-; Current code requires exactly two road definitions
-;
-; name                    = translatable name as seen by user
-; native_to               = List of unit classes that consider tile
-;                           with this road native even if terrain is not
-;
-; */ <-- avoid gettext warnings
-
-[road_road]
-name          = _("Road")
-native_to     = "Land"
-
-[road_railroad]
-name          = _("Railroad")
-native_to     = "Land"

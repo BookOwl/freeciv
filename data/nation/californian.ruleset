@@ -14,25 +14,26 @@ legend=_("California is the largest US state by population and economy.\
  technology industries.")
 
 leaders = {
- "name",                  "sex"
- "Junípero Serra",        "Male" ; Missionary
- "William B. Ide",        "Male" ; Commander of California Republic
- "John C. Frémont",       "Male" ; Conqueror and military governor
- "Joaquin Murrieta",      "Male" ; Outlaw
- "Leland Stanford",       "Male" ; Tycoon and governor
- "Norton I",              "Male" ; Self declared emperor of the United States
- "Hiram Johnson",         "Male" ; Progressive politican and governor
- "Earl Warren",           "Male" ; US Supreme Court justice and governor
- "Ronald Reagan",         "Male" ; Actor, governor and president of the
-                                 ; United States
- "Arnold Schwarzenegger", "Male" ; Governator
- "Nancy Pelosi",          "Female" ; Politician, speaker
+ "name",                        "sex"
+ "Junípero Serra",              "Male" ; Missionary
+ "William B. Ide",              "Male" ; Commander of California Republic
+ "John C. Frémont",             "Male" ; Conqueror and military governor
+ "Joaquin Murrieta",            "Male" ; Outlaw
+ "Leland Stanford",             "Male" ; Tycoon and governor
+ "Norton I",                    "Male" ; Self declared emperor of the United
+                                       ; States
+ "Hiram Johnson",               "Male" ; Progressive politican and governor
+ "Earl Warren",                 "Male" ; US Supreme Court justice and
+                                       ; governor
+ "Ronald Wilson Reagan",        "Male" ; Actor, governor and president of the
+                                       ; United States
+ "Arnold Schwarzenegger",       "Male" ; Governator
+ "Nancy Pelosi",                "Female" ; Politician, speaker
 }
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",       _("Sheriff %s"),   _("?female:Sheriff %s")
- "Fundamentalism",  _("Padre %s"),     _("Madre %s")
+ "Fundamentalism",  _("Father %s"),    _("Mother %s")
  "Monarchy",        _("Emperor %s"),   _("Empress %s")
  "Republic",        _("Governor %s"),  _("?female:Governor %s")
 }
@@ -43,6 +44,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="mexican", "american", "chumash", "ohlone"
@@ -106,46 +108,5 @@ cities =
  "Alhambra",
  "Eureka",
  "San Rafael",
- "Redwood City (forest)",
- "Monterey",
- "Ventura",
- "Temecula",
- "Benicia",
- "San Mateo",
- "Vacaville",
- "Redding",
- "Turlock",
- "Indio",
- "Merced",
- "Redlands",
- "Chico",
- "San Luis Obispo",
- "South Lake Tahoe (lake)",
- "Calexico",
- "Martinez",
- "Fairfield",
- "Auburn",
- "Santa Cruz",
- "Oroville",
- "Woodland (forest)",
- "El Centro",
- "Hanford",
- "Madera",
- "Napa",
- "Nevada City",
- "Yuba City",
- "Ukiah",
- "Marysville",
- "Lakeport (lake)",
- "Red Bluff",
- "Hollister",
- "Sonora",
- "San Andreas",
- "Yreka",
- "Jackson",
- "Susanville",
- "Crescent City",
- "Willows",
- "Colusa",
- "Quincy"
+ "Redwood City"
 

@@ -30,16 +30,15 @@ taking effect.
 Value is integral amount parameter for many effects (must be in the range 
 -32767 to 32767).
 
-Requirement range may be one of: "None", "Local",
-"CAdjacent" (Cardinally Adjacent), "Adjacent", "City", 
+Requirement range may be one of: "None", "Local", "Adjacent", "City", 
 "Continent", "Player", "World". Some requirement types may only work at 
 certain ranges; this is not yet documented. In particular, at present, 
 "Continent" effects can affect only cities and units in cities.
 
-A requirement may have a 'survives' field, and if this is '1', the effect 
-survives destruction (wonders only, at world or player range only).
+A requirement may have a survives field, and if this is '1', the effect 
+survives destruction (wonders only).
 
-A requirement may have a 'negated' field, and if this is '1', the requirement
+A requirement may have a negated field, and if this is '1', the requirement
 is negated.
 
 A requirement type is the type of the requirement and can be one of "None" 
@@ -326,10 +325,6 @@ Shield2Gold_Factor
 Tile_Workable
     If value != 0, city can work target tile.
 
-Irrig_Possible
-    If value > 0, unit can irrigate target tile. In addition to requirements given
-    to this effect, unit must also have Settlers flag.
-
 Migration_Pct
     Increase the calculated migration score for the a city by amount in
     percent.
@@ -341,6 +336,3 @@ City_Radius_Sq
 City_Build_Slots
     Increase the number of units with no population cost a city can build in
     a turn if there are enough shields.
-
-City_Image
-    The index for the city image of the given city style.

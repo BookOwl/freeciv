@@ -12,25 +12,19 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
 #include "fciconv.h"
-#include "fcintl.h"
 #include "shared.h"
 #include "support.h"
 
 /* common */
-#include "fc_cmdhelp.h"
 #include "version.h"
 
 /* modinst */
-#include "modinst.h"
-
 #include "mpcmdline.h"
-
-extern struct fcmp_params fcmp;
 
 /**************************************************************************
   Parse commandline parameters. Modified argv[] so it contains only
@@ -46,33 +40,23 @@ int fcmp_parse_cmdline(int argc, char *argv[])
   int i = 1;
   bool ui_separator = FALSE;
   int ui_options = 0;
-  const char *option = NULL;
 
   while (i < argc) {
     if (ui_separator) {
       argv[1 + ui_options] = argv[i];
       ui_options++;
     } else if (is_option("--help", argv[i])) {
-      struct cmdhelp *help = cmdhelp_new(argv[0]);
+      fc_fprintf(stderr, _("Usage: %s [option ...]\n"
+			   "Valid option are:\n"), argv[0]);
+      fc_fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
+      fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+      fc_fprintf(stderr, _("      --\t\t"
+			   "Pass any following options to the UI.\n"));
 
-      cmdhelp_add(help, "h", "help",
-                  _("Print a summary of the options"));
-      cmdhelp_add(help, "L", "List URL",
-                  _("Load modpack list from given URL"));
-      cmdhelp_add(help, "p", "prefix DIR",
-                  _("Install modpacks to given directory hierarchy"));
-      cmdhelp_add(help, "v", "version",
-                  _("Print the version number"));
-      /* The function below prints a header and footer for the options.
-       * Furthermore, the options are sorted. */
-      cmdhelp_display(help, TRUE, TRUE, TRUE);
-      cmdhelp_destroy(help);
+      /* TRANS: No full stop after the URL, could cause confusion. */
+      fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
 
       exit(EXIT_SUCCESS);
-    } else if ((option = get_option_malloc("--List", argv, &i, argc))) {
-      fcmp.list_url = option;
-    } else if ((option = get_option_malloc("--prefix", argv, &i, argc))) {
-      fcmp.inst_prefix = option;
     } else if (is_option("--version", argv[i])) {
       fc_fprintf(stderr, "%s \n", freeciv_name_version());
 
@@ -82,19 +66,6 @@ int fcmp_parse_cmdline(int argc, char *argv[])
     }
 
     i++;
-  }
-
-  if (fcmp.inst_prefix == NULL) {
-    const char *home = user_home_dir();
-
-    if (home == NULL) {
-      log_error("Cannot determine user home directory");
-    } else {
-      static char pfx_buf[500];
-
-      snprintf(pfx_buf, sizeof(pfx_buf), "%s/.freeciv", home);
-      fcmp.inst_prefix = pfx_buf;
-    }
   }
 
   return ui_options;

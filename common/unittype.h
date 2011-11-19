@@ -13,10 +13,6 @@
 #ifndef FC__UNITTYPE_H
 #define FC__UNITTYPE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 #include "shared.h"
@@ -48,27 +44,30 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_VALUE3NAME "CanOccupyCity"
 #define SPECENUM_VALUE4 UCF_MISSILE
 #define SPECENUM_VALUE4NAME "Missile"
+/* Considers any road tile native terrain */
+#define SPECENUM_VALUE5 UCF_ROAD_NATIVE
+#define SPECENUM_VALUE5NAME "RoadNative"
 /* Considers any river tile native terrain */
-#define SPECENUM_VALUE5 UCF_RIVER_NATIVE
-#define SPECENUM_VALUE5NAME "RiverNative"
-#define SPECENUM_VALUE6 UCF_BUILD_ANYWHERE
-#define SPECENUM_VALUE6NAME "BuildAnywhere"
-#define SPECENUM_VALUE7 UCF_UNREACHABLE
-#define SPECENUM_VALUE7NAME "Unreachable"
+#define SPECENUM_VALUE6 UCF_RIVER_NATIVE
+#define SPECENUM_VALUE6NAME "RiverNative"
+#define SPECENUM_VALUE7 UCF_BUILD_ANYWHERE
+#define SPECENUM_VALUE7NAME "BuildAnywhere"
+#define SPECENUM_VALUE8 UCF_UNREACHABLE
+#define SPECENUM_VALUE8NAME "Unreachable"
 /* Can collect ransom from barbarian leader */
-#define SPECENUM_VALUE8 UCF_COLLECT_RANSOM
-#define SPECENUM_VALUE8NAME "CollectRansom"
+#define SPECENUM_VALUE9 UCF_COLLECT_RANSOM
+#define SPECENUM_VALUE9NAME "CollectRansom"
 /* Is subject to ZOC */
-#define SPECENUM_VALUE9 UCF_ZOC
-#define SPECENUM_VALUE9NAME "ZOC"
+#define SPECENUM_VALUE10 UCF_ZOC
+#define SPECENUM_VALUE10NAME "ZOC"
 /* Can fortify on land squares */
-#define SPECENUM_VALUE10 UCF_CAN_FORTIFY
-#define SPECENUM_VALUE10NAME "CanFortify"
-#define SPECENUM_VALUE11 UCF_CAN_PILLAGE
-#define SPECENUM_VALUE11NAME "CanPillage"
+#define SPECENUM_VALUE11 UCF_CAN_FORTIFY
+#define SPECENUM_VALUE11NAME "CanFortify"
+#define SPECENUM_VALUE12 UCF_CAN_PILLAGE
+#define SPECENUM_VALUE12NAME "CanPillage"
 /* Cities can still work tile when enemy unit on it */
-#define SPECENUM_VALUE12 UCF_DOESNT_OCCUPY_TILE
-#define SPECENUM_VALUE12NAME "DoesntOccupyTile"
+#define SPECENUM_VALUE13 UCF_DOESNT_OCCUPY_TILE
+#define SPECENUM_VALUE13NAME "DoesntOccupyTile"
 /* keep this last */
 #define SPECENUM_COUNT UCF_COUNT
 #include "specenum_gen.h"
@@ -92,7 +91,7 @@ struct unit_class {
   struct {
     enum move_level land_move;
     enum move_level sea_move;
-  } adv;
+  } ai;
 };
 
 /* Unit "special effects" flags:
@@ -198,18 +197,14 @@ enum unit_role_id {
 BV_DEFINE(bv_unit_type_flags, F_MAX);
 BV_DEFINE(bv_unit_type_roles, L_MAX);
 
-struct veteran_level {
-  struct name_translation name; /* level/rank name */
-  int power_fact; /* combat/work speed/diplomatic power factor (in %) */
-  int move_bonus;
-  int raise_chance;
-  int work_raise_chance;
-};
+struct veteran_type {
 
-struct veteran_system {
-  int levels;
+    struct name_translation name;
 
-  struct veteran_level *definitions;
+    /* server */
+    double power_fact;				/* combat/work speed/diplomatic
+  						   power factor */
+    int move_bonus;
 };
 
 struct unit_type {
@@ -252,7 +247,8 @@ struct unit_type {
   int paratroopers_mr_sub;
 
   /* Additional values for the expanded veteran system */
-  struct veteran_system *veteran;
+  int veteran_levels; /* server only */
+  struct veteran_type veteran[MAX_VET_LEVELS];
 
   /* Values for bombardment */
   int bombard_rate;
@@ -342,19 +338,6 @@ int utype_build_shield_cost(const struct unit_type *punittype);
 int utype_buy_gold_cost(const struct unit_type *punittype,
 			int shields_in_stock);
 
-const struct veteran_system *
-  utype_veteran_system(const struct unit_type *punittype);
-int utype_veteran_levels(const struct unit_type *punittype);
-const struct veteran_level *
-  utype_veteran_level(const struct unit_type *punittype, int level);
-
-struct veteran_system *veteran_system_new(int count);
-void veteran_system_destroy(struct veteran_system *vsystem);
-void veteran_system_definition(struct veteran_system *vsystem, int level,
-                               const char *vlist_name, int vlist_power,
-                               int vlist_move, int vlist_raise,
-                               int vlist_wraise);
-
 int unit_disband_shields(const struct unit *punit);
 int utype_disband_shields(const struct unit_type *punittype);
 
@@ -419,9 +402,5 @@ const struct unit_class *unit_class_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__UNITTYPE_H */

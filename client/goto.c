@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -29,12 +29,11 @@
 #include "unit.h"
 #include "unitlist.h"
 
-/* client/include */
+/* client */
 #include "client_main.h"
 #include "control.h"
 #include "mapview_g.h"
 
-/* client */
 #include "goto.h"
 #include "mapctrl_common.h"
 
@@ -311,7 +310,7 @@ static void add_part(struct goto_map *goto_map)
 
   if (goto_map->num_parts == 1) {
     /* first part */
-    p->start_tile = unit_tile(punit);
+    p->start_tile = punit->tile;
     p->start_moves_left = parameter.moves_left_initially;
     p->start_fuel_left = parameter.fuel_left_initially;
   } else {
@@ -761,8 +760,7 @@ static void fill_client_goto_parameter(struct unit *punit,
 
     /* Take into account the activity time at the origin */
     {
-      int activity_initial = get_activity_time(unit_tile(punit),
-                                               unit_owner(punit));
+      int activity_initial = get_activity_time(punit->tile, unit_owner(punit));
       if (activity_initial > 0) {
         /* First action is activity */
         parameter->moves_left_initially = 0;
@@ -799,7 +797,7 @@ static void fill_client_goto_parameter(struct unit *punit,
 
   /* Note that in connect mode the "time" does not correspond to any actual
    * move rate. */
-  parameter->start_tile = unit_tile(punit);
+  parameter->start_tile = punit->tile;
 
   /* Omniscience is always FALSE in the client */
   parameter->omniscience = FALSE;
@@ -1252,7 +1250,7 @@ struct pf_path *path_to_nearest_allied_city(struct unit *punit)
   struct pf_map *pfm;
   struct pf_path *path = NULL;
 
-  if (is_allied_city_tile(unit_tile(punit), unit_owner(punit))) {
+  if (is_allied_city_tile(punit->tile, unit_owner(punit))) {
     /* We're already on a city - don't go anywhere. */
     return NULL;
   }

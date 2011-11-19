@@ -11,7 +11,7 @@
 
 [datafile]
 description="Experimental cities data for Freeciv"
-options="+Freeciv-ruleset-Devel-2011.Nov.02"
+options="+Freeciv-2.3-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -91,8 +91,6 @@ changable_tax = 1		; set to zero to disallow changing of tax rates
 
 vision_reveal_tiles = 1		; civ1 & 2 default zero
 
-[citizen]
-nationality = 1                 ; account for the nationality of the citizens
 ; /* <-- avoid gettext warnings
 ;
 ; City styles define the way cities are drawn

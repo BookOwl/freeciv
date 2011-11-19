@@ -13,10 +13,6 @@
 #ifndef FC__NATION_H
 #define FC__NATION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "iterator.h"
 
@@ -125,8 +121,6 @@ struct nation_type {
       int init_buildings[MAX_NUM_BUILDING_LIST];
       struct government *init_government;
       struct unit_type *init_units[MAX_NUM_UNIT_LIST];
-
-      int *traits;
     } server;
 
     struct {
@@ -247,9 +241,5 @@ struct iterator *nation_iter_init(struct nation_iter *it);
   generic_iterate(struct nation_iter, struct nation_type *,\
                   NAME_pnation, nation_iter_sizeof, nation_iter_init)
 #define nations_iterate_end generic_iterate_end
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__NATION_H */

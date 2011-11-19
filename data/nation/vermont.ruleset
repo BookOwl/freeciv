@@ -9,20 +9,16 @@ legend=_("Vermont was an independent state for 14 years before it joined\
  its dairy products and maple syrup.")
 
 leaders = {
- "name",                  "sex"
- "Ethan Allen",           "Male"
- "Thomas Chittenden",     "Male"
- "Thaddeus Stevens",      "Male"
- "Moses Robinson",        "Male"
- "Ethan A. Hitchcock",    "Male"
- "Ernest W. Gibson, Jr.", "Male"
- "Madeleine M. Kunin",    "Female"
- "Bernie Sanders",        "Male"
+ "name",                "sex"
+ "Ethan Allen",         "Male"
+ "Thomas Chittenden",   "Male"
+ "Moses Robinson",      "Male"
+ "Ethan A. Hitchcock",  "Male"
+ "Bernie Sanders",      "Male"
 }
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",       _("Sheriff %s"),   _("?female:Sheriff %s")
  "Republic",        _("Governor %s"),  _("?female:Governor %s")
  "Fundamentalism",  _("Reverend %s"),  _("?female:Reverend %s")
 }
@@ -33,6 +29,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="american", "iroquois", "quebecois"
@@ -44,7 +41,7 @@ cities =
  "Burlington",
  "Rutland",
  "Barre",
- "St. Albans",
+ "Saint Albans",
  "Winooski",
  "Newport",
  "Vergennes",
@@ -56,7 +53,7 @@ cities =
  "Hartford",
  "Essex Junction",
  "Williston",
- "St. Johnsbury",
+ "Saint Johnsbury",
  "Springfields",
  "Shelburne",
  "Morristown",
@@ -81,13 +78,4 @@ cities =
  "Waterbury",
  "Wilder",
  "Poultney",
- "Brandon",
- "Woodstock",
- "Newfane",
- "Chelsea",
- "Hyde Park",
- "North Hero",
- "Guildhall",
- "South Burlington",
- "Dummerston"
-
+ "Brandon"

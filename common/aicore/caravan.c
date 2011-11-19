@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -486,7 +486,7 @@ static void caravan_evaluate_withtransit(const struct unit *caravan,
   data.param = param;
   caravan_result_init(result, game_city_by_number(caravan->homecity),
                       dest, 0);
-  caravan_search_from(caravan, param, unit_tile(caravan), 0,
+  caravan_search_from(caravan, param, caravan->tile, 0,
                       caravan->moves_left, cewt_callback, &data);
 }
 
@@ -576,7 +576,7 @@ static void caravan_find_best_destination_withtransit(
   if (src->id != caravan->homecity) {
     start_tile = src->tile;
   } else {
-    start_tile = unit_tile(caravan);
+    start_tile = caravan->tile;
   }
 
   caravan_search_from(caravan, param, start_tile, turns_before,
@@ -685,7 +685,7 @@ static void caravan_optimize_withtransit(const struct unit *caravan,
   data.caravan = caravan;
   data.best = result;
   caravan_result_init_zero(data.best);
-  caravan_search_from(caravan, param, unit_tile(caravan), 0,
+  caravan_search_from(caravan, param, caravan->tile, 0,
                       caravan->moves_left, cowt_callback, &data);
 }
 

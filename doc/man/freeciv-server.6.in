@@ -15,7 +15,6 @@ freeciv-server \- The server for the Freeciv game
 .SH SYNOPSIS
 .B freeciv-server \
 [ \-b|\-\-bind \fIaddress\fP ] \
-[ \-B|\-\-Bind\-meta \fIaddress\fP ] \
 [ \-d|\-\-debug \fIlevel_number\fP ] \
 [ \-e|\-\-exit\-on\-end ] \
 [ \-F|\-\-Fatal [ \fIsignal_number\fP ] ] \
@@ -40,10 +39,7 @@ Auth aware servers have additional parameters:
 [ \-N|\-\-Newusers ]
 
 IPv6 aware servers have additional parameter:
-.B [ \-A|\-\-Announce \fIprotocol\fP ]
-
-Server with AI module support has additional parameter:
-.B [ \-L|\-\-LoadAi \fImodule\fP ]
+.B [ \-A|\-\-announce \fIprotocol\fP ]
 
 .SH DESCRIPTION
 Freeciv is a free turn-based multiplayer strategy game, in which each player
@@ -90,12 +86,6 @@ Enables server authentication and allows access to registered players only.
 .TP
 .BI "\-b \fIaddress\fP, \-\-bind \fIaddress\fP"
 Sets the \fIaddress\fP on which the server will listen for clients.
-.TP
-.BI "\-B \fIaddress\fP, \-\-Bind\-meta \fIaddress\fP"
-Sets the \fIaddress\fP which request to metaserver are sent from. Defaults to
-address given by
-.I \-b
-option.
 .TP
 .BI "\-d \fIlevel_number\fP, \-\-debug \fIlevel_number\fP"
 Sets the amount of debugging information to be logged in the file named by the
@@ -155,9 +145,6 @@ Prints out a description of the command line options and exits.
 Reports the \fIaddress\fP to the metaserver.  Then, the metaserver will use
 this address to redirect the users.
 .TP
-.BI "\-L \fImodule\fP, \-\-LoadAI \fImodlue\fP"
-Loads AI module. This option can appear multiple times to load different
-modules.
 .BI "\-l \fIfilename\fP, \-\-log \fIfilename\fP"
 Defines a log file, \fIfilename\fP, to be produced during processing. Use the
 .I \-d
@@ -303,7 +290,7 @@ A colon separated list of directories pointing to the
 .B freeciv
 directory. By default freeciv looks in the following directories,
 in order, for any data files: the current directory; the "data" subdirectory
-of the current directory; the subdirectories ".freeciv" and ".freeciv/2.4"
+of the current directory; the subdirectories ".freeciv" and ".freeciv/2.3"
 in the user's home directory; and the directory where the files are placed
 by running "make install".  This setting has no effect if
 \fBFREECIV_DATA_PATH\fP, \fBFREECIV_SAVE_PATH\fP and
@@ -314,7 +301,7 @@ A colon separated list of directories pointing to the
 .B freeciv
 data directories. By default freeciv looks in the following directories,
 in order, for any data files: the current directory; the "data" subdirectory
-of the current directory; the subdirectory ".freeciv/2.4" in the user's
+of the current directory; the subdirectory ".freeciv/2.3" in the user's
 home directory; and the directory where the files are placed by running
 "make install".  If not set,
 .BI FREECIV_PATH

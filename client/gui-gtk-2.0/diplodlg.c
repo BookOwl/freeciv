@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -41,7 +41,6 @@
 #include "climisc.h"
 #include "options.h"
 
-/* client/gui-gtk-2.0 */
 #include "diplodlg.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -94,7 +93,7 @@ static void diplo_dialog_returnkey(GtkWidget *w, gpointer data);
 #define RESPONSE_CANCEL_MEETING 100
 
 /****************************************************************
-  Server tells us that either party has accepted treaty
+...
 *****************************************************************/
 void handle_diplomacy_accept_treaty(int counterpart, bool I_accepted,
 				    bool other_accepted)
@@ -113,7 +112,7 @@ void handle_diplomacy_accept_treaty(int counterpart, bool I_accepted,
 }
 
 /****************************************************************
-  Someone is initiating meeting with us.
+...
 *****************************************************************/
 void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
 {
@@ -122,7 +121,7 @@ void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
 
 
 /****************************************************************
-  Meeting has been cancelled.
+...
 *****************************************************************/
 void handle_diplomacy_cancel_meeting(int counterpart, int initiated_from)
 {
@@ -136,7 +135,7 @@ void handle_diplomacy_cancel_meeting(int counterpart, int initiated_from)
 }
 
 /****************************************************************
-  Added clause to the meeting
+...
 *****************************************************************/
 void handle_diplomacy_create_clause(int counterpart, int giver,
 				    enum clause_type type, int value)
@@ -153,7 +152,7 @@ void handle_diplomacy_create_clause(int counterpart, int giver,
 }
 
 /****************************************************************
-  Removed clause from meeting.
+...
 *****************************************************************/
 void handle_diplomacy_remove_clause(int counterpart, int giver,
 				    enum clause_type type, int value)
@@ -213,7 +212,7 @@ static gint sort_advance_names(gconstpointer a, gconstpointer b)
 }
 
 /****************************************************************
-  Popup menu about adding clauses
+...
 *****************************************************************/
 static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 {
@@ -426,7 +425,7 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 }
 
 /****************************************************************
-  Some clause activated
+...
 *****************************************************************/
 static void row_callback(GtkTreeView *view, GtkTreePath *path,
 			 GtkTreeViewColumn *col, gpointer data)
@@ -453,7 +452,7 @@ static void row_callback(GtkTreeView *view, GtkTreePath *path,
 
 
 /****************************************************************
-  Destroy diplomacy dialog
+...
 *****************************************************************/
 static void diplomacy_destroy(struct Diplomacy_dialog* pdialog)
 {
@@ -467,7 +466,7 @@ static void diplomacy_destroy(struct Diplomacy_dialog* pdialog)
 }
 
 /****************************************************************
-  User has responded to whole diplomacy dialog
+...
 *****************************************************************/
 static void diplomacy_response(struct gui_dialog *dlg, int response,
                                gpointer data)
@@ -715,7 +714,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
 }
 
 /**************************************************************************
-  Update diplomacy dialog
+...
 **************************************************************************/
 static void update_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 {
@@ -812,7 +811,7 @@ static void diplomacy_dialog_city_callback(GtkWidget * w, gpointer data)
 }
 
 /****************************************************************
-  Map menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data)
 {
@@ -827,7 +826,7 @@ static void diplomacy_dialog_map_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
- Seamap menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_seamap_callback(GtkWidget *w, gpointer data)
 {
@@ -843,7 +842,7 @@ static void diplomacy_dialog_seamap_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Adding pact clause
+...
 *****************************************************************/
 static void diplomacy_dialog_add_pact_clause(GtkWidget *w, gpointer data,
 					     int type)
@@ -857,7 +856,7 @@ static void diplomacy_dialog_add_pact_clause(GtkWidget *w, gpointer data,
 }
 
 /****************************************************************
-  Ceasefire pact menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_ceasefire_callback(GtkWidget *w, gpointer data)
 {
@@ -865,7 +864,7 @@ static void diplomacy_dialog_ceasefire_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Peace pact menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_peace_callback(GtkWidget *w, gpointer data)
 {
@@ -873,7 +872,7 @@ static void diplomacy_dialog_peace_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Alliance pact menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_alliance_callback(GtkWidget *w, gpointer data)
 {
@@ -881,7 +880,7 @@ static void diplomacy_dialog_alliance_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Shared vision menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_vision_callback(GtkWidget *w, gpointer data)
 {
@@ -896,7 +895,7 @@ static void diplomacy_dialog_vision_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Embassy menu item activated
+...
 *****************************************************************/
 static void diplomacy_dialog_embassy_callback(GtkWidget *w, gpointer data)
 {
@@ -912,7 +911,7 @@ static void diplomacy_dialog_embassy_callback(GtkWidget *w, gpointer data)
 
 
 /*****************************************************************
-  Close diplomacy dialog
+...
 *****************************************************************/
 void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 {
@@ -920,7 +919,7 @@ void close_diplomacy_dialog(struct Diplomacy_dialog *pdialog)
 }
 
 /*****************************************************************
-  Initialize diplomacy dialog
+...
 *****************************************************************/
 void diplomacy_dialog_init()
 {
@@ -928,7 +927,7 @@ void diplomacy_dialog_init()
 }
 
 /*****************************************************************
-  Free resources allocated for diplomacy dialog
+...
 *****************************************************************/
 void diplomacy_dialog_done()
 {
@@ -936,7 +935,7 @@ void diplomacy_dialog_done()
 }
 
 /*****************************************************************
-  Find diplomacy dialog between player and other player
+...
 *****************************************************************/
 static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 {
@@ -954,7 +953,7 @@ static struct Diplomacy_dialog *find_diplomacy_dialog(int other_player_id)
 }
 
 /*****************************************************************
-  User hit enter after entering gold amount
+...
 *****************************************************************/
 static void diplo_dialog_returnkey(GtkWidget *w, gpointer data)
 {

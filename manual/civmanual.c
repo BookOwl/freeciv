@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -38,7 +38,6 @@
 /* common */
 #include "connection.h"
 #include "events.h"
-#include "fc_cmdhelp.h"
 #include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "improvement.h"
@@ -158,7 +157,7 @@ static bool manual_command(void)
     switch (manuals) {
     case MANUAL_SETTINGS:
       fprintf(doc, _("<h1>Freeciv %s server options</h1>\n\n"), VERSION_STRING);
-      settings_iterate(SSET_ALL, pset) {
+      settings_iterate(pset) {
         char buf[256];
 
         fprintf(doc, SEPARATOR);
@@ -256,17 +255,15 @@ static bool manual_command(void)
         }
         fprintf(doc, _("<p class=\"level\">Level: %s</p>\n\n"),
                 cmdlevel_name(command_level(cmd)));
-        {
-          char *help = command_extra_help(cmd);
-          if (help) {
-            size_t help_len = strlen(help) + 1;
+        if (command_extra_help(cmd)) {
+          char *help = fc_strdup(command_extra_help(cmd));
+          size_t help_len = strlen(help) + 1;
 
-            fc_break_lines(help, LINE_BREAK);
-            help = html_special_chars(help, &help_len);
-            fprintf(doc, _("<p>Description:</p>\n\n"));
-            fprintf(doc, "<pre>%s</pre>\n\n", help);
-            FC_FREE(help);
-          }
+          fc_break_lines(help, LINE_BREAK);
+          help = html_special_chars(help, &help_len);
+          fprintf(doc, _("<p>Description:</p>\n\n"));
+          fprintf(doc, "<pre>%s</pre>\n\n", help);
+          FC_FREE(help);
         }
       }
       break;
@@ -404,15 +401,11 @@ static bool manual_command(void)
 
     fprintf(doc, TAIL);
     fclose(doc);
-    log_normal(_("Manual file %s successful written."), filename);
   } /* manuals */
 
   return TRUE;
 }
 
-/**************************************************************************
-  Entry point of whole freeciv-manual program
-**************************************************************************/
 int main(int argc, char **argv)
 {
   int inx;
@@ -451,7 +444,7 @@ int main(int argc, char **argv)
         inx++;
         showhelp = TRUE;
       }
-#endif /* NDEBUG */
+#endif
     } else if ((option = get_option_malloc("--debug", argv, &inx, argc))) {
       if (!log_parse_level_str(option, &srvarg.loglevel)) {
         showhelp = TRUE;
@@ -479,40 +472,31 @@ int main(int argc, char **argv)
     fc_fprintf(stderr, "%s \n", freeciv_name_version());
     exit(EXIT_SUCCESS);
   } else if (showhelp) {
-    struct cmdhelp *help = cmdhelp_new(argv[0]);
-
+    fc_fprintf(stderr,
+         _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
 #ifdef DEBUG
-    cmdhelp_add(help, "d", "debug NUM",
-                _("Set debug log level (%d to %d, or %d:file1,min,max:...)"),
-                LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
+    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
+                         "%d, or %d:file1,min,max:...)\n"),
+               LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
 #else
-    cmdhelp_add(help, "d", "debug NUM",
-                _("Set debug log level (%d to %d)"),
-                LOG_FATAL, LOG_VERBOSE);
-#endif /* DEBUG */
+    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
+                         "%d)\n"), LOG_FATAL, LOG_VERBOSE);
+#endif
 #ifndef NDEBUG
-    cmdhelp_add(help, "F", "Fatal [SIGNAL]",
-                _("Raise a signal on failed assertion"));
-#endif /* NDEBUG */
-    cmdhelp_add(help, "h", "help",
-                _("Print a summary of the options"));
-    cmdhelp_add(help, "l", "log FILE",
-                _("Use FILE as logfile"));
-    cmdhelp_add(help, "r", "ruleset RULESET",
-                _("Make manual for RULESET"));
-    cmdhelp_add(help, "v", "version",
-                _("Print the version number"));
-
-    /* The function below prints a header and footer for the options.
-     * Furthermore, the options are sorted. */
-    cmdhelp_display(help, TRUE, TRUE, TRUE);
-    cmdhelp_destroy(help);
-
+    fc_fprintf(stderr, _("  -F, --Fatal [SIGNAL]\t"
+                         "Raise a signal on failed assertion\n"));
+#endif
+    fc_fprintf(stderr, _("  -h, --help\t\tPrint a summary of the options\n"));
+    fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
+    fc_fprintf(stderr, _("  -r, --ruleset RULESET\tMake manual for "
+                         "RULESET\n"));
+    fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+    /* TRANS: No full stop after the URL, could cause confusion. */
+    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
 
   manual_command();
-  con_log_close();
 
-  return EXIT_SUCCESS;
+  return 0;
 }

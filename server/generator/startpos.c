@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* sqrt, HUGE_VAL */
@@ -27,7 +27,6 @@
 /* server */
 #include "maphand.h"
 
-/* server/generator */
 #include "mapgen_topology.h"
 #include "startpos.h"
 #include "temperature_map.h"
@@ -391,14 +390,17 @@ bool create_start_positions(enum map_startpos mode,
     } else {
       data.min_value *= 0.95;
       if (data.min_value <= 10) {
-        log_normal(_("The server appears to have gotten into an infinite "
-                     "loop in the allocation of starting positions.\nMaybe "
-                     "the number of players is too high for this map."));
+        log_error(_("The server appears to have gotten into an infinite "
+                    "loop in the allocation of starting positions.\nMaybe "
+                    "the number of players is too high for this map."));
+        /* TRANS: No full stop after the URL, could cause confusion. */
+        log_error(_("Please report this message at %s"), BUG_URL);
         failure = TRUE;
         break;
       }
     }
   }
+  fc_assert(player_count() == map_startpos_count());
 
   free(islands);
   free(islands_index);

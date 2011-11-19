@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -37,32 +37,30 @@
 #include "map.h"
 #include "packets.h"
 #include "player.h"
+#include "unitlist.h"
 
 /* client */
+#include "chatline.h"
+#include "choice_dialog.h"
+#include "citydlg.h"
 #include "client_main.h"
 #include "climisc.h"
 #include "connectdlg_common.h"
 #include "control.h"
 #include "goto.h"
-#include "options.h"
-#include "packhand.h"
-#include "text.h"
-#include "tilespec.h"
-
-/* client/gui-gtk-2.0 */
-#include "chatline.h"
-#include "choice_dialog.h"
-#include "citydlg.h"
-#include "editprop.h"
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "mapview.h"
+#include "options.h"
+#include "packhand.h"
 #include "plrdlg.h"
-#include "wldlg.h"
-#include "unitselect.h"
+#include "text.h"
+#include "tilespec.h"
 
 #include "dialogs.h"
+#include "editprop.h"
+#include "wldlg.h"
 
 /******************************************************************/
 static GtkWidget  *races_shell;
@@ -72,6 +70,17 @@ static GtkWidget  *races_leader;
 static GtkWidget  *races_sex[2];
 static GtkWidget  *races_city_style_list;
 static GtkTextBuffer *races_text;
+
+/******************************************************************/
+#define SELECT_UNIT_READY  1
+#define SELECT_UNIT_SENTRY 2
+#define SELECT_UNIT_ALL    3
+
+static GtkWidget *unit_select_dialog_shell;
+static GtkTreeStore *unit_select_store;
+static GtkWidget *unit_select_view;
+static GtkTreePath *unit_select_path;
+static struct tile *unit_select_ptile;
 
 static void create_races_dialog(struct player *pplayer);
 static void races_destroy_callback(GtkWidget *w, gpointer data);
@@ -139,8 +148,7 @@ void popup_notify_dialog(const char *caption, const char *headline,
 }
 
 /****************************************************************
-  User has responded to notify dialog with possibility to
-  center (goto) on event location.
+...
 *****************************************************************/
 static void notify_goto_response(GtkWidget *w, gint response)
 {
@@ -257,7 +265,7 @@ void popup_connect_msg(const char *headline, const char *message)
 }
 
 /****************************************************************
-  User has responded to revolution dialog
+...
 *****************************************************************/
 static void revolution_response(GtkWidget *w, gint response, gpointer data)
 {
@@ -276,7 +284,7 @@ static void revolution_response(GtkWidget *w, gint response, gpointer data)
 }
 
 /****************************************************************
-  Popup revolution dialog for user
+...
 *****************************************************************/
 void popup_revolution_dialog(struct government *government)
 {
@@ -328,7 +336,7 @@ static void pillage_callback(GtkWidget *w, gpointer data)
 }
 
 /****************************************************************
-  Pillage dialog destroyed
+...
 *****************************************************************/
 static void pillage_destroy_callback(GtkWidget *w, gpointer data)
 {
@@ -385,24 +393,301 @@ void popup_pillage_dialog(struct unit *punit,
   }
 }
 
-/*****************************************************************************
-  Popup unit selection dialog. It is a wrapper for the main function; see
-  unitselect.c:unit_select_dialog_popup_main().
-*****************************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+/**************************************************************************
+...
+**************************************************************************/
+static void unit_select_row_activated(GtkTreeView *view, GtkTreePath *path)
 {
-  unit_select_dialog_popup_main(ptile, TRUE);
+  GtkTreeIter it;
+  struct unit *punit;
+  gint id;
+
+  gtk_tree_model_get_iter(GTK_TREE_MODEL(unit_select_store), &it, path);
+  gtk_tree_model_get(GTK_TREE_MODEL(unit_select_store), &it, 0, &id, -1);
+ 
+  if ((punit = player_unit_by_number(client_player(), id))) {
+    set_unit_focus(punit);
+  }
+
+  gtk_widget_destroy(unit_select_dialog_shell);
 }
 
-/*****************************************************************************
-  Update unit selection dialog. It is a wrapper for the main function; see
-  unitselect.c:unit_select_dialog_popup_main().
-*****************************************************************************/
-void unit_select_dialog_update_real(void)
+/**************************************************************************
+...
+**************************************************************************/
+static void unit_select_append(struct unit *punit, GtkTreeIter *it,
+    			       GtkTreeIter *parent)
 {
-  unit_select_dialog_popup_main(NULL, FALSE);
+  GdkPixbuf *pix;
+
+  pix = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8,
+      tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+
+  {
+    struct canvas canvas_store;
+
+    canvas_store.type = CANVAS_PIXBUF;
+    canvas_store.v.pixbuf = pix;   
+
+    gdk_pixbuf_fill(pix, 0x00000000);
+    put_unit(punit, &canvas_store, 0, 0);
+  }
+
+  gtk_tree_store_append(unit_select_store, it, parent);
+  gtk_tree_store_set(unit_select_store, it,
+      0, punit->id,
+      1, pix,
+      2, unit_name_translation(punit),
+      -1);
+  g_object_unref(pix);
+
+  if (unit_is_in_focus(punit)) {
+    unit_select_path =
+      gtk_tree_model_get_path(GTK_TREE_MODEL(unit_select_store), it);
+  }
 }
 
+/**************************************************************************
+...
+**************************************************************************/
+static void unit_select_recurse(int root_id, GtkTreeIter *it_root)
+{
+  unit_list_iterate(unit_select_ptile->units, pleaf) {
+    GtkTreeIter it_leaf;
+
+    if (pleaf->transported_by == root_id) {
+      unit_select_append(pleaf, &it_leaf, it_root);
+      if (pleaf->occupy > 0) {
+	unit_select_recurse(pleaf->id, &it_leaf);
+      }
+    }
+  } unit_list_iterate_end;
+}
+
+/**************************************************************************
+...
+**************************************************************************/
+static void refresh_unit_select_dialog(void)
+{
+  if (unit_select_dialog_shell) {
+    gtk_tree_store_clear(unit_select_store);
+
+    unit_select_recurse(-1, NULL);
+    gtk_tree_view_expand_all(GTK_TREE_VIEW(unit_select_view));
+
+    if (unit_select_path) {
+      gtk_tree_view_set_cursor(GTK_TREE_VIEW(unit_select_view),
+	  unit_select_path, NULL, FALSE);
+      gtk_tree_path_free(unit_select_path);
+      unit_select_path = NULL;
+    }
+  }
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void unit_select_destroy_callback(GtkObject *object, gpointer data)
+{
+  unit_select_dialog_shell = NULL;
+}
+
+/****************************************************************
+...
+*****************************************************************/
+static void unit_select_cmd_callback(GtkWidget *w, gint rid, gpointer data)
+{
+  struct tile *ptile = unit_select_ptile;
+
+  switch (rid) {
+  case SELECT_UNIT_READY:
+    {
+      struct unit *pmyunit = NULL;
+
+      unit_list_iterate(ptile->units, punit) {
+        if (unit_owner(punit) == client.conn.playing) {
+          pmyunit = punit;
+
+          /* Activate this unit. */
+	  punit->client.focus_status = FOCUS_AVAIL;
+	  if (unit_has_orders(punit)) {
+	    request_orders_cleared(punit);
+	  }
+	  if (punit->activity != ACTIVITY_IDLE || punit->ai_controlled) {
+	    punit->ai_controlled = FALSE;
+	    request_new_unit_activity(punit, ACTIVITY_IDLE);
+	  }
+        }
+      } unit_list_iterate_end;
+
+      if (pmyunit) {
+        /* Put the focus on one of the activated units. */
+        set_unit_focus(pmyunit);
+      }
+    }
+    break;
+
+  case SELECT_UNIT_SENTRY:
+    {
+      unit_list_iterate(ptile->units, punit) {
+        if (unit_owner(punit) == client.conn.playing) {
+          if ((punit->activity == ACTIVITY_IDLE) &&
+              !punit->ai_controlled &&
+              can_unit_do_activity(punit, ACTIVITY_SENTRY)) {
+            request_new_unit_activity(punit, ACTIVITY_SENTRY);
+          }
+        }
+      } unit_list_iterate_end;
+    }
+    break;
+
+  case SELECT_UNIT_ALL:
+    {
+      unit_list_iterate(ptile->units, punit) {
+        if (unit_owner(punit) == client.conn.playing) {
+          if (punit->activity == ACTIVITY_IDLE &&
+              !punit->ai_controlled) {
+            /* Give focus to it */
+            add_unit_focus(punit);
+          }
+        }
+      } unit_list_iterate_end;
+    }
+    break;
+
+  default:
+    break;
+  }
+  
+  gtk_widget_destroy(unit_select_dialog_shell);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+#define NUM_UNIT_SELECT_COLUMNS 2
+
+void popup_unit_select_dialog(struct tile *ptile)
+{
+  if (!unit_select_dialog_shell) {
+    GtkTreeStore *store;
+    GtkWidget *shell, *view, *sw, *hbox;
+    GtkWidget *ready_cmd, *sentry_cmd, *select_all_cmd, *close_cmd;
+
+    static const char *titles[NUM_UNIT_SELECT_COLUMNS] = {
+      N_("Unit"),
+      N_("Name")
+    };
+    static bool titles_done;
+
+    GType types[NUM_UNIT_SELECT_COLUMNS+1] = {
+      G_TYPE_INT,
+      GDK_TYPE_PIXBUF,
+      G_TYPE_STRING
+    };
+    int i;
+
+
+    shell = gtk_dialog_new_with_buttons(_("Unit selection"),
+      NULL,
+      0,
+      NULL);
+    unit_select_dialog_shell = shell;
+    setup_dialog(shell, toplevel);
+    g_signal_connect(shell, "destroy",
+      G_CALLBACK(unit_select_destroy_callback), NULL);
+    gtk_window_set_position(GTK_WINDOW(shell), GTK_WIN_POS_MOUSE);
+    g_signal_connect(shell, "response",
+      G_CALLBACK(unit_select_cmd_callback), NULL);
+
+    hbox = gtk_hbox_new(FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(GTK_DIALOG(shell)->vbox), hbox);
+
+    intl_slist(ARRAY_SIZE(titles), titles, &titles_done);
+
+    store = gtk_tree_store_newv(ARRAY_SIZE(types), types);
+    unit_select_store = store;
+
+    view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
+    unit_select_view = view;
+    g_object_unref(store);
+ 
+    for (i = 1; i < ARRAY_SIZE(types); i++) {
+      GtkTreeViewColumn *column;
+      GtkCellRenderer *render;
+
+      column = gtk_tree_view_column_new();
+      gtk_tree_view_column_set_title(column, titles[i-1]);
+
+      switch (types[i]) {
+	case G_TYPE_STRING:
+	  render = gtk_cell_renderer_text_new();
+	  gtk_tree_view_column_pack_start(column, render, TRUE);
+	  gtk_tree_view_column_set_attributes(column, render, "text", i, NULL);
+	  break;
+	default:
+	  render = gtk_cell_renderer_pixbuf_new();
+	  gtk_tree_view_column_pack_start(column, render, FALSE);
+	  gtk_tree_view_column_set_attributes(column, render,
+	      "pixbuf", i, NULL);
+	  break;
+      }
+      gtk_tree_view_append_column(GTK_TREE_VIEW(view), column);
+    }
+
+    g_signal_connect(view, "row_activated",
+	G_CALLBACK(unit_select_row_activated), NULL);
+
+
+    sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_size_request(sw, -1, 300);
+    gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(sw),
+	GTK_SHADOW_ETCHED_IN);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+	GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(sw), view);
+    gtk_box_pack_start(GTK_BOX(hbox), sw, TRUE, TRUE, 0);
+
+
+    ready_cmd =
+    gtk_dialog_add_button(GTK_DIALOG(shell),
+      _("_Ready all"), SELECT_UNIT_READY);
+
+    gtk_button_box_set_child_secondary(
+      GTK_BUTTON_BOX(GTK_DIALOG(shell)->action_area),
+      ready_cmd, TRUE);
+
+    sentry_cmd =
+    gtk_dialog_add_button(GTK_DIALOG(shell),
+      _("_Sentry idle"), SELECT_UNIT_SENTRY);
+
+    gtk_button_box_set_child_secondary(
+      GTK_BUTTON_BOX(GTK_DIALOG(shell)->action_area),
+      sentry_cmd, TRUE);
+
+    select_all_cmd =
+    gtk_dialog_add_button(GTK_DIALOG(shell),
+      _("Select _all"), SELECT_UNIT_ALL);
+
+    gtk_button_box_set_child_secondary(
+      GTK_BUTTON_BOX(GTK_DIALOG(shell)->action_area),
+      select_all_cmd, TRUE);
+
+    close_cmd =
+    gtk_dialog_add_button(GTK_DIALOG(shell),
+      GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+
+    gtk_dialog_set_default_response(GTK_DIALOG(shell), GTK_RESPONSE_CLOSE);
+
+    gtk_widget_show_all(GTK_DIALOG(shell)->vbox);
+    gtk_widget_show_all(GTK_DIALOG(shell)->action_area);
+  }
+
+  unit_select_ptile = ptile;
+  refresh_unit_select_dialog();
+
+  gtk_window_present(GTK_WINDOW(unit_select_dialog_shell));
+}
 /****************************************************************
   NATION SELECTION DIALOG
 ****************************************************************/
@@ -537,7 +822,7 @@ static GtkWidget* create_nation_selection_list(void)
 
 
 /****************************************************************
-  Create nations dialog
+...
 *****************************************************************/
 static void create_races_dialog(struct player *pplayer)
 {
@@ -766,8 +1051,8 @@ void popup_races_dialog(struct player *pplayer)
 }
 
 /****************************************************************
-  Close nations dialog  
-*****************************************************************/
+  ...
+ *****************************************************************/
 void popdown_races_dialog(void)
 {
   if (races_shell) {
@@ -781,8 +1066,8 @@ void popdown_races_dialog(void)
 
 
 /****************************************************************
-  Nations dialog has been destroyed
-*****************************************************************/
+  ...
+ *****************************************************************/
 static void races_destroy_callback(GtkWidget *w, gpointer data)
 {
   races_shell = NULL;
@@ -815,8 +1100,8 @@ static void populate_leader_list(void)
 }
 
 /**************************************************************************
-  Set sensitivity of nations to select.
-**************************************************************************/
+  ...
+ **************************************************************************/
 void races_toggles_set_sensitive(void)
 {
   GtkTreeModel *model;
@@ -824,6 +1109,7 @@ void races_toggles_set_sensitive(void)
   GtkTreePath *path;
   gboolean chosen;
   int i;
+  gboolean changed;
 
   if (!races_shell) {
     return;
@@ -846,7 +1132,8 @@ void races_toggles_set_sensitive(void)
       } while (gtk_tree_model_iter_next(model, &it));
     }
   }
-
+  
+  changed = false;
   for (i = 0; i <= nation_group_count(); i++) {
     gtk_tree_view_get_cursor(GTK_TREE_VIEW(races_nation_list[i]), &path, NULL);
     model = gtk_tree_view_get_model(GTK_TREE_VIEW(races_nation_list[i]));    
@@ -857,6 +1144,7 @@ void races_toggles_set_sensitive(void)
       if (chosen) {
           GtkTreeSelection* select = gtk_tree_view_get_selection(GTK_TREE_VIEW(races_nation_list[i]));
 	  gtk_tree_selection_unselect_all(select);
+	  changed = true;
       }
 
       gtk_tree_path_free(path);
@@ -940,7 +1228,7 @@ static void races_nation_callback(GtkTreeSelection *select, gpointer data)
 }
 
 /**************************************************************************
-  Leader name has been chosen
+...
 **************************************************************************/
 static void races_leader_callback(void)
 {
@@ -960,7 +1248,7 @@ static void races_leader_callback(void)
 }
 
 /**************************************************************************
-  Leader sex has been chosen
+...
 **************************************************************************/
 static void races_sex_callback(GtkWidget *w, gpointer data)
 {
@@ -968,7 +1256,7 @@ static void races_sex_callback(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
-  Nation has been selected
+...
 **************************************************************************/
 static gboolean races_selection_func(GtkTreeSelection *select,
 				     GtkTreeModel *model, GtkTreePath *path,
@@ -983,7 +1271,7 @@ static gboolean races_selection_func(GtkTreeSelection *select,
 }
 
 /**************************************************************************
-  City style has been chosen
+...
 **************************************************************************/
 static void races_city_style_callback(GtkTreeSelection *select, gpointer data)
 {
@@ -998,7 +1286,7 @@ static void races_city_style_callback(GtkTreeSelection *select, gpointer data)
 }
 
 /**************************************************************************
-  User has selected some of the responses for whole nations dialog
+...
 **************************************************************************/
 static void races_response(GtkWidget *w, gint response, gpointer data)
 {
@@ -1097,5 +1385,4 @@ void popdown_all_game_dialogs(void)
 {
   gui_dialog_destroy_all();
   property_editor_popdown(editprop_get_property_editor());
-  unit_select_dialog_popdown();
 }

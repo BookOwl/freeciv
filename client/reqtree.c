@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -29,12 +29,14 @@
 
 /* client */
 #include "client_main.h"
-#include "options.h"
 #include "tilespec.h"
-#include "reqtree.h"
 
 #include "colors_g.h"
 #include "sprite_g.h"
+
+#include "reqtree.h"
+#include "tilespec.h"
+#include "options.h"
 
 /*
  * Hierarchical directed draph drawing for Freeciv's technology tree

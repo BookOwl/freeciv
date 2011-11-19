@@ -83,8 +83,6 @@
  *       int (*compar) (const foo_t *const *, const foo_t *const *));
  *    void foo_list_shuffle(struct foo_list *plist);
  *    void foo_list_reverse(struct foo_list *plist);
- *    void foo_list_allocate_mutex(struct foo_list *plist);
- *    void foo_list_release_mutex(struct foo_list *plist);
  *    foo_t *foo_list_link_data(const struct foo_list_link *plink);
  *    struct foo_list_link *
  *        foo_list_link_prev(const struct foo_list_link *plink);
@@ -122,10 +120,6 @@
  * you can have multiple different speclists. For each speclist, this file
  * should be included _once_, inside a .h file which _is_ itself protected
  * against multiple inclusions. */
-
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
 
 #include "genlist.h"
 
@@ -491,22 +485,6 @@ static inline void SPECLIST_FOO(_list_reverse) (SPECLIST_LIST *tthis)
 }
 
 /****************************************************************************
-  Allocate speclist mutex
-****************************************************************************/
-static inline void SPECLIST_FOO(_list_allocate_mutex) (SPECLIST_LIST *tthis)
-{
-  genlist_allocate_mutex((struct genlist *) tthis);
-}
-
-/****************************************************************************
-  Release speclist mutex
-****************************************************************************/
-static inline void SPECLIST_FOO(_list_release_mutex) (SPECLIST_LIST *tthis)
-{
-  genlist_release_mutex((struct genlist *) tthis);
-}
-
-/****************************************************************************
   Return the data of the link.
 ****************************************************************************/
 static inline SPECLIST_TYPE *
@@ -710,10 +688,3 @@ do {                                                                        \
 } while (FALSE);
 
 #endif /* FC__SPECLIST_H */
-
-/* This is after #endif FC__SPECLIST_H on purpose.
-   extern "C" portion begins well before latter part of the header
-   is guarded against multiple inclusions. */
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */

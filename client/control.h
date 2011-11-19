@@ -13,10 +13,6 @@
 #ifndef FC__CONTROL_H
 #define FC__CONTROL_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "packets.h"
 #include "unitlist.h"
 
@@ -94,22 +90,19 @@ void request_unit_convert(struct unit *punit);
 void request_units_wait(struct unit_list *punits);
 void request_unit_wakeup(struct unit *punit);
 
-#define SPECENUM_NAME unit_select_type_mode
-#define SPECENUM_VALUE0   SELTYPE_SINGLE
-#define SPECENUM_VALUE1   SELTYPE_SAME
-#define SPECENUM_VALUE2   SELTYPE_ALL
-#include "specenum_gen.h"
+enum unit_select_type_mode {
+  SELTYPE_SINGLE = 0,
+  SELTYPE_SAME,
+  SELTYPE_ALL,
+  NUM_SELTYPES
+};
 
-#define SPECENUM_NAME unit_select_location_mode
-#define SPECENUM_VALUE0   SELLOC_UNITS  /* Units on tile. */
-#define SPECENUM_VALUE1   SELLOC_TILE   /* Tile. */
-#define SPECENUM_VALUE2   SELLOC_CONT   /* Continent. */
-#define SPECENUM_VALUE3   SELLOC_LAND   /* Move type: land. */
-#define SPECENUM_VALUE4   SELLOC_SEA    /* Move type: sea. */
-#define SPECENUM_VALUE5   SELLOC_BOTH   /* Move type: both. */
-#define SPECENUM_VALUE6   SELLOC_WORLD  /* World. */
-#define SPECENUM_COUNT    SELLOC_COUNT
-#include "specenum_gen.h"
+enum unit_select_location_mode {
+  SELLOC_TILE = 0,
+  SELLOC_CONT, /* Continent. */
+  SELLOC_ALL,
+  NUM_SELLOCS
+};
 
 void request_unit_select(struct unit_list *punits,
                          enum unit_select_type_mode seltype,
@@ -123,7 +116,6 @@ void request_toggle_city_outlines(void);
 void request_toggle_city_output(void);
 void request_toggle_map_grid(void);
 void request_toggle_map_borders(void);
-void request_toggle_map_native(void);
 void request_toggle_city_full_bar(void);
 void request_toggle_city_names(void);
 void request_toggle_city_growth(void);
@@ -154,16 +146,14 @@ struct unit *head_of_units_in_focus(void);
 struct unit_list *get_units_in_focus(void);
 int get_num_units_in_focus(void);
 
-void unit_focus_set(struct unit *punit);
-void unit_focus_set_and_select(struct unit *punit);
-void unit_focus_add(struct unit *punit);
-void unit_focus_remove(struct unit *punit);
-void unit_focus_urgent(struct unit *punit);
+void set_unit_focus(struct unit *punit);
+void set_unit_focus_and_select(struct unit *punit);
+void add_unit_focus(struct unit *punit);
+void urgent_unit_focus(struct unit *punit);
 
-void unit_focus_advance(void);
-void unit_focus_update(void);
-
+void advance_unit_focus(void);
 void auto_center_on_focus_unit(void);
+void update_unit_focus(void);
 void update_unit_pix_label(struct unit_list *punitlist);
 
 struct unit *find_visible_unit(struct tile *ptile);
@@ -201,7 +191,6 @@ void key_city_outlines_toggle(void);
 void key_city_output_toggle(void);
 void key_map_grid_toggle(void);
 void key_map_borders_toggle(void);
-void key_map_native_toggle(void);
 void key_recall_previous_focus_unit(void);
 void key_unit_move(enum direction8 gui_dir);
 void key_unit_airbase(void);
@@ -248,8 +237,5 @@ void cancel_city(struct tile *ptile);
 
 extern int num_units_below;
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__CONTROL_H */

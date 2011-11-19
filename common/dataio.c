@@ -20,7 +20,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <limits.h>
@@ -61,14 +61,13 @@
 
 #include "dataio.h"
 
-static bool get_conv(char *dst, size_t ndst, const char *src,
-		     size_t nsrc);
-
+/**************************************************************************
+...
+**************************************************************************/
 static DIO_PUT_CONV_FUN put_conv_callback = NULL;
-static DIO_GET_CONV_FUN get_conv_callback = get_conv;
 
 /**************************************************************************
-  Sets string conversion callback to be used when putting text.
+...
 **************************************************************************/
 void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
 {
@@ -77,7 +76,7 @@ void dio_set_put_conv_callback(DIO_PUT_CONV_FUN fun)
 
 /**************************************************************************
  Returns FALSE if the destination isn't large enough or the source was
- bad. This is default get_conv_callback.
+ bad.
 **************************************************************************/
 static bool get_conv(char *dst, size_t ndst, const char *src,
 		     size_t nsrc)
@@ -97,7 +96,12 @@ static bool get_conv(char *dst, size_t ndst, const char *src,
 }
 
 /**************************************************************************
-  Sets string conversion callback to use when getting text.
+...
+**************************************************************************/
+static DIO_GET_CONV_FUN get_conv_callback = get_conv;
+
+/**************************************************************************
+...
 **************************************************************************/
 void dio_set_get_conv_callback(DIO_GET_CONV_FUN fun)
 {
@@ -195,7 +199,7 @@ size_t dio_input_remaining(struct data_in *din)
 }
 
 /**************************************************************************
-  Insert value using 8 bits. May overflow.
+...
 **************************************************************************/
 void dio_put_uint8(struct data_out *dout, int value)
 {
@@ -209,7 +213,7 @@ void dio_put_uint8(struct data_out *dout, int value)
 }
 
 /**************************************************************************
-  Insert value using 16 bits. May overflow.
+...
 **************************************************************************/
 void dio_put_uint16(struct data_out *dout, int value)
 {
@@ -223,7 +227,7 @@ void dio_put_uint16(struct data_out *dout, int value)
 }
 
 /**************************************************************************
-  Insert value using 16 bits.
+...
 **************************************************************************/
 void dio_put_uint32(struct data_out *dout, int value)
 {
@@ -237,7 +241,7 @@ void dio_put_uint32(struct data_out *dout, int value)
 }
 
 /**************************************************************************
-  Insert value 0 or 1 using 8 bits.
+...
 **************************************************************************/
 void dio_put_bool8(struct data_out *dout, bool value)
 {
@@ -250,7 +254,7 @@ void dio_put_bool8(struct data_out *dout, bool value)
 }
 
 /**************************************************************************
-  Insert value 0 or 1 using 32 bits.
+...
 **************************************************************************/
 void dio_put_bool32(struct data_out *dout, bool value)
 {
@@ -263,9 +267,7 @@ void dio_put_bool32(struct data_out *dout, bool value)
 }
 
 /**************************************************************************
-  Insert number of values brefore stop_value using 8 bits. Then
-  insert values using 8 bits for each. stop_value is not required to
-  fit in 8 bits. Actual values may overflow.
+...
 **************************************************************************/
 void dio_put_uint8_vec8(struct data_out *dout, int *values, int stop_value)
 {
@@ -287,9 +289,7 @@ void dio_put_uint8_vec8(struct data_out *dout, int *values, int stop_value)
 }
 
 /**************************************************************************
-  Insert number of values brefore stop_value using 8 bits. Then
-  insert values using 16 bits for each. stop_value is not required to
-  fit in 16 bits. Actual values may overflow.
+...
 **************************************************************************/
 void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value)
 {
@@ -311,7 +311,7 @@ void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value)
 }
 
 /**************************************************************************
-  Insert block directly from memory.
+...
 **************************************************************************/
 void dio_put_memory(struct data_out *dout, const void *value, size_t size)
 {
@@ -322,7 +322,7 @@ void dio_put_memory(struct data_out *dout, const void *value, size_t size)
 }
 
 /**************************************************************************
-  Insert NULL-terminated string. Conversion callback is used if set.
+...
 **************************************************************************/
 void dio_put_string(struct data_out *dout, const char *value)
 {
@@ -340,9 +340,7 @@ void dio_put_string(struct data_out *dout, const char *value)
 }
 
 /**************************************************************************
-  Insert number of bits as 16 bit value and then insert bits. In incoming
-  value string each bit is represented by one character, value '1' indicating
-  TRUE bit.
+...
 **************************************************************************/
 void dio_put_bit_string(struct data_out *dout, const char *value)
 {
@@ -377,8 +375,7 @@ void dio_put_bit_string(struct data_out *dout, const char *value)
 }
 
 /**************************************************************************
-  Insert tech numbers from value array as 8 bit values until there is value
-  A_LAST or MAX_NUM_TECH_LIST tech numbers has been inserted.
+...
 **************************************************************************/
 void dio_put_tech_list(struct data_out *dout, const int *value)
 {
@@ -393,8 +390,7 @@ void dio_put_tech_list(struct data_out *dout, const int *value)
 }
 
 /**************************************************************************
-  Insert number of worklist items as 8 bit value and then insert
-  8 bit kind and 8 bit number for each worklist item.
+...
 **************************************************************************/
 void dio_put_worklist(struct data_out *dout, const struct worklist *pwl)
 {
@@ -470,7 +466,7 @@ void dio_get_uint32(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take boolean value from 8 bits.
+...
 **************************************************************************/
 void dio_get_bool8(struct data_in *din, bool * dest)
 {
@@ -487,7 +483,7 @@ void dio_get_bool8(struct data_in *din, bool * dest)
 }
 
 /**************************************************************************
-  Take boolean value from 32 bits.
+...
 **************************************************************************/
 void dio_get_bool32(struct data_in *din, bool * dest)
 {
@@ -504,7 +500,7 @@ void dio_get_bool32(struct data_in *din, bool * dest)
 }
 
 /**************************************************************************
-  Take value from 8 bits.
+...
 **************************************************************************/
 void dio_get_sint8(struct data_in *din, int *dest)
 {
@@ -520,7 +516,7 @@ void dio_get_sint8(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take value from 16 bits.
+...
 **************************************************************************/
 void dio_get_sint16(struct data_in *din, int *dest)
 {
@@ -536,7 +532,7 @@ void dio_get_sint16(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take memory block directly.
+...
 **************************************************************************/
 void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 {
@@ -549,7 +545,7 @@ void dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 }
 
 /**************************************************************************
-  Take string. Conversion callback is used.
+...
 **************************************************************************/
 void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 {
@@ -590,7 +586,7 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
 }
 
 /**************************************************************************
-  Take bits and produce string containing chars '0' and '1'
+...
 **************************************************************************/
 void dio_get_bit_string(struct data_in *din, char *dest,
 			size_t max_dest_size)
@@ -635,8 +631,7 @@ void dio_get_bit_string(struct data_in *din, char *dest,
 }
 
 /**************************************************************************
-  Take tech numbers until A_LAST encontered, or MAX_NUM_TECH_LIST techs
-  retrieved.
+...
 **************************************************************************/
 void dio_get_tech_list(struct data_in *din, int *dest)
 {
@@ -655,8 +650,7 @@ void dio_get_tech_list(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take worklist item count and then kind and number for each item, and
-  put them to provided worklist.
+...
 **************************************************************************/
 void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 {
@@ -677,8 +671,7 @@ void dio_get_worklist(struct data_in *din, struct worklist *pwl)
 }
 
 /**************************************************************************
-  Take vector of 8 bit values and insert stop_value after them. stop_value
-  does not need to fit in 8 bits.
+...
 **************************************************************************/
 void dio_get_uint8_vec8(struct data_in *din, int **values, int stop_value)
 {
@@ -748,3 +741,4 @@ void dio_put_requirement(struct data_out *dout, const struct requirement *preq)
   dio_put_bool8(dout, survives);
   dio_put_bool8(dout, negated);
 }
+

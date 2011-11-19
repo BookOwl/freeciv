@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* sqrt */
@@ -38,7 +38,6 @@ int ice_base_colatitude = 0 ;
 int map_colatitude(const struct tile *ptile)
 {
   double x, y;
-  int tile_x, tile_y;
 
   fc_assert_ret_val(ptile != NULL, MAX_COLATITUDE / 2);
 
@@ -49,9 +48,7 @@ int map_colatitude(const struct tile *ptile)
     return MAX_COLATITUDE / 2;
   }
 
-
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
-  do_in_natural_pos(ntl_x, ntl_y, tile_x, tile_y) {
+  do_in_natural_pos(ntl_x, ntl_y, ptile->x, ptile->y) {
     if (!topo_has_flag(TF_WRAPX) && !topo_has_flag(TF_WRAPY)) {
       /* A FLAT (unwrapped) map 
        *

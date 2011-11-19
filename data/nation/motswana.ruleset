@@ -1,7 +1,7 @@
 [nation_motswana]
 
-name=_("Motswana")
-plural=_("?plural:Batswana")
+name=_("Botswanan")
+plural=_("?plural:Botswanans")
 groups="Modern", "African"
 legend=_("The Republic of Botswana is a country in Southern Africa.\
  It gained independence from the UK in 1966. Botswana is considered\
@@ -24,9 +24,10 @@ city_style = "tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="Boer", "Mosotho", "Zimbabwean"
+civilwar_nations="Boer", "Malawian", "Zimbabwean"
 
 cities =
  "Gaborone",

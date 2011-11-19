@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -34,10 +34,17 @@
 #include "packets.h"
 #include "unitlist.h"
 
-/* common/aicore */
+/* aicore */
 #include "citymap.h"
 #include "path_finding.h"
 #include "pf_tools.h"
+
+/* ai */
+#include "aicity.h"
+#include "aisettler.h"
+#include "aitools.h"
+#include "aiunit.h"
+#include "defaultai.h"
 
 /* server */
 #include "citytools.h"
@@ -47,7 +54,7 @@
 #include "unithand.h"
 #include "unittools.h"
 
-/* server/advisors */
+/* advisors */
 #include "advdata.h"
 #include "advgoto.h"
 #include "advtools.h"
@@ -68,9 +75,26 @@
 #define WORKER_FEAR_FACTOR 2
 
 struct settlermap {
+
   int enroute; /* unit ID of settler en route to this tile */
   int eta; /* estimated number of turns until enroute arrives */
+
 };
+
+
+/**************************************************************************
+  Manages settlers.
+**************************************************************************/
+void ai_manage_settler(struct player *pplayer, struct unit *punit)
+{
+  punit->ai_controlled = TRUE;
+  def_ai_unit_data(punit)->done = TRUE; /* we will manage this unit later... ugh */
+  /* if BUILD_CITY must remain BUILD_CITY, otherwise turn into autosettler */
+  if (punit->server.adv->role == AIUNIT_NONE) {
+    ai_unit_new_role(punit, AIUNIT_AUTO_SETTLER, NULL);
+  }
+  return;
+}
 
 /**************************************************************************
   Calculate the attractiveness of building a road/rail at the given tile.
@@ -86,13 +110,11 @@ static int road_bonus(struct tile *ptile, enum tile_special_type special)
   bool has_road[12], is_slow[12];
   int dx[12] = {-1,  0,  1, -1, 1, -1, 0, 1,  0, -2, 2, 0};
   int dy[12] = {-1, -1, -1,  0, 0,  1, 1, 1, -2,  0, 0, 2};
-  int x, y;
-
+  
   fc_assert_ret_val(special == S_ROAD || special == S_RAILROAD, 0);
 
-  index_to_map_pos(&x, &y, tile_index(ptile));
   for (i = 0; i < 12; i++) {
-    struct tile *tile1 = map_pos_to_tile(x + dx[i], y + dy[i]);
+    struct tile *tile1 = map_pos_to_tile(ptile->x + dx[i], ptile->y + dy[i]);
 
     if (!tile1) {
       has_road[i] = FALSE;
@@ -381,20 +403,20 @@ int settler_evaluate_improvements(struct unit *punit,
                   /* If we can make railroads eventually, consider making
                    * road here, and set extras and time to to consider
                    * railroads in main consider_settler_action call. */
-                  consider_settler_action(pplayer, act, extra, base_value,
-                                          oldv, in_use, time,
+                  int act_rr = adv_city_worker_act_get(pcity, cindex,
+                                                       ACTIVITY_ROAD);
+                  consider_settler_action(pplayer, ACTIVITY_ROAD, extra,
+                                          act_rr, oldv, in_use, time,
                                           &best_newv, &best_oldv,
                                           best_act, best_tile, ptile);
 
-                  base_value = adv_city_worker_act_get(pcity, cindex,
-                                                       ACTIVITY_RAILROAD);
+                  base_value
+                    = adv_city_worker_act_get(pcity, cindex,
+                                              ACTIVITY_RAILROAD);
 
                   /* Count road time plus rail time. */
                   time += get_turns_for_activity_at(punit, ACTIVITY_RAILROAD, 
                                                     ptile);
-
-                  /* Bonus for rail connectivity instead of road. */
-                  extra = road_bonus(ptile, S_RAILROAD) * 3;
                 }
               } else if (act == ACTIVITY_RAILROAD) {
                 extra = road_bonus(ptile, S_RAILROAD) * 3;
@@ -422,8 +444,8 @@ int settler_evaluate_improvements(struct unit *punit,
 
   if (best_newv > 0) {
     log_debug("Settler %d@(%d,%d) wants to %s at (%d,%d) with desire %d",
-              punit->id, TILE_XY(unit_tile(punit)),
-              get_activity_text(*best_act), TILE_XY(*best_tile), best_newv);
+              punit->id, TILE_XY(punit->tile), get_activity_text(*best_act),
+              TILE_XY(*best_tile), best_newv);
   } else {
     /* Fill in dummy values.  The callers should check if the return value
      * is > 0 but this will avoid confusing them. */
@@ -449,6 +471,8 @@ void auto_settler_findwork(struct player *pplayer,
                            struct settlermap *state,
                            int recursion)
 {
+  struct cityresult result;
+  int best_impr = 0;            /* best terrain improvement we can do */
   enum unit_activity best_act;
   struct tile *best_tile = NULL;
   struct pf_path *path = NULL;
@@ -458,13 +482,16 @@ void auto_settler_findwork(struct player *pplayer,
 
   if (recursion > unit_list_size(pplayer->units)) {
     fc_assert(recursion <= unit_list_size(pplayer->units));
-    adv_unit_new_task(punit, AUT_NONE, NULL);
+    ai_unit_new_role(punit, AIUNIT_NONE, NULL);
     set_unit_activity(punit, ACTIVITY_IDLE);
     send_unit_info(NULL, punit);
     return; /* avoid further recursion. */
   }
 
   CHECK_UNIT(punit);
+
+  result.total = 0;
+  result.result = 0;
 
   fc_assert_ret(pplayer && punit);
   fc_assert_ret(unit_has_type_flag(punit, F_CITIES)
@@ -474,15 +501,15 @@ void auto_settler_findwork(struct player *pplayer,
 
   if (unit_has_type_flag(punit, F_SETTLERS)) {
     TIMING_LOG(AIT_WORKERS, TIMER_START);
-    settler_evaluate_improvements(punit, &best_act, &best_tile, 
-                                  &path, state);
+    best_impr = settler_evaluate_improvements(punit, &best_act, &best_tile, 
+                                              &path, state);
     if (path) {
       completion_time = pf_path_last_position(path)->turn;
     }
     TIMING_LOG(AIT_WORKERS, TIMER_STOP);
   }
 
-  adv_unit_new_task(punit, AUT_AUTO_SETTLER, best_tile);
+  ai_unit_new_role(punit, AIUNIT_AUTO_SETTLER, best_tile);
 
   auto_settler_setup_work(pplayer, punit, state, recursion, path,
                           best_tile, best_act,
@@ -504,7 +531,7 @@ void auto_settler_setup_work(struct player *pplayer, struct unit *punit,
                              int completion_time)
 {
   /* Run the "autosettler" program */
-  if (punit->server.adv->task == AUT_AUTO_SETTLER) {
+  if (punit->server.adv->role == AIUNIT_AUTO_SETTLER) {
     struct pf_map *pfm = NULL;
     struct pf_parameter parameter;
 
@@ -523,15 +550,14 @@ void auto_settler_setup_work(struct player *pplayer, struct unit *punit,
       fc_assert(state[tile_index(best_tile)].enroute == displaced->id);
       fc_assert(state[tile_index(best_tile)].eta > completion_time
                 || (state[tile_index(best_tile)].eta == completion_time
-                    && (real_map_distance(best_tile, unit_tile(punit))
-                        < real_map_distance(best_tile,
-                                            unit_tile(displaced)))));
+                    && (real_map_distance(best_tile, punit->tile)
+                        < real_map_distance(best_tile, displaced->tile))));
       UNIT_LOG(LOG_DEBUG, punit,
                "%d (%d,%d) has displaced %d (%d,%d) on %d,%d",
                punit->id, completion_time,
-               real_map_distance(best_tile, unit_tile(punit)),
+               real_map_distance(best_tile, punit->tile),
                displaced->id, state[tile_index(best_tile)].eta,
-               real_map_distance(best_tile, unit_tile(displaced)),
+               real_map_distance(best_tile, displaced->tile),
                TILE_XY(best_tile));
     }
 
@@ -573,7 +599,7 @@ void auto_settler_setup_work(struct player *pplayer, struct unit *punit,
 
       alive = adv_follow_path(punit, path, best_tile);
 
-      if (alive && same_pos(unit_tile(punit), best_tile)
+      if (alive && same_pos(punit->tile, best_tile)
 	  && punit->moves_left > 0) {
 	/* Reached destination and can start working immediately */
         unit_activity_handling(punit, best_act);
@@ -641,15 +667,15 @@ void auto_settlers_player(struct player *pplayer)
    * from the human player and take precedence. */
   unit_list_iterate_safe(pplayer->units, punit) {
     if ((punit->ai_controlled || pplayer->ai_controlled)
-        && (unit_has_type_flag(punit, F_SETTLERS)
-            || unit_has_type_flag(punit, F_CITIES))
-        && !unit_has_orders(punit)
+	&& (unit_has_type_flag(punit, F_SETTLERS)
+	    || unit_has_type_flag(punit, F_CITIES))
+	&& !unit_has_orders(punit)
         && punit->moves_left > 0) {
       log_debug("%s settler at (%d, %d) is ai controlled.",
                 nation_rule_name(nation_of_player(pplayer)),
-                TILE_XY(unit_tile(punit)));
+                TILE_XY(punit->tile)); 
       if (punit->activity == ACTIVITY_SENTRY) {
-        unit_activity_handling(punit, ACTIVITY_IDLE);
+	unit_activity_handling(punit, ACTIVITY_IDLE);
       }
       if (punit->activity == ACTIVITY_GOTO && punit->moves_left > 0) {
         unit_activity_handling(punit, ACTIVITY_IDLE);
@@ -658,44 +684,17 @@ void auto_settlers_player(struct player *pplayer)
         if (!pplayer->ai_controlled) {
           auto_settler_findwork(pplayer, punit, state, 0);
         } else {
-          CALL_PLR_AI_FUNC(settler_run, pplayer, pplayer, punit, state);
+          CALL_PLR_AI_FUNC(auto_settler, pplayer, pplayer, punit, state);
         }
       }
     }
   } unit_list_iterate_safe_end;
-  /* Reset auto settler state for the next run. */
-  if (pplayer->ai_controlled) {
-    CALL_PLR_AI_FUNC(settler_reset, pplayer, pplayer);
-  }
 
   if (timer_in_use(t)) {
-
-#ifdef LOG_TIMERS
     log_verbose("%s autosettlers consumed %g milliseconds.",
                 nation_rule_name(nation_of_player(pplayer)),
                 1000.0 * read_timer_seconds(t));
-#else
-    log_verbose("%s autosettlers finished",
-                nation_rule_name(nation_of_player(pplayer)));
-#endif
-
   }
 
   FC_FREE(state);
-}
-
-/************************************************************************** 
-  Change unit's advisor task.
-**************************************************************************/
-void adv_unit_new_task(struct unit *punit, enum adv_unit_task task,
-                       struct tile *ptile)
-{
-  if (punit->server.adv->task == task) {
-    /* Already that task */
-    return;
-  }
-
-  punit->server.adv->task = task;
-
-  CALL_PLR_AI_FUNC(unit_task, unit_owner(punit), punit, task, ptile);
 }

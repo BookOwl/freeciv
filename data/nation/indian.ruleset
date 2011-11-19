@@ -2,20 +2,15 @@
 
 name=_("Indian")
 plural=_("?plural:Indians")
-groups="Modern", "Asian"
-legend=_("The Republic of India was created in 1950 following a\
- non-violent independence movement led by Mahatma Gandhi. With more\
- than a billion inhabitants it is the world's second most populous\
- country as well as the world's largest democracy.")
+groups="Ancient", "Medieval", "Modern", "Asian"
+legend=_("The cradle of Ancient Indian civilization lay in the Indus river\
+ valley in modern-day Pakistan.")
 
 leaders = {
  "name",                "sex"
- "Chandragupta",        "Male"
- "Ashoka",              "Male"
- "Shivaji",             "Male"
- "Subhas Chandra Bose", "Male"
  "Mohandas Gandhi",     "Male"
- "Jawaharlal Nehru",    "Male"
+ "Ashoka",              "Male"
+ "Chandragupta",        "Male"
  "Indira Gandhi",       "Female"
 }
 
@@ -33,10 +28,11 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with="Gupta", "Chola", "Mughal"
-civilwar_nations="Bengali", "Sikh", "Kashmiri", "Assamese"
+civilwar_nations="Lankese", "Bengali", "Sikh", "Kashmiri"
 
 cities =
  "Delhi",

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -1488,7 +1488,7 @@ static void units_report_command_callback(struct gui_dialog *pdialog,
       if (ACTIVITY_IDLE == punit->activity
           || ACTIVITY_SENTRY == punit->activity) {
         if (can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-          unit_focus_set_and_select(punit);
+          set_unit_focus_and_select(punit);
         }
       }
     }

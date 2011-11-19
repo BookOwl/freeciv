@@ -25,11 +25,10 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
- "Anarchy",         _("Usurper %s"),        _("?female:Usurper %s")
  "Despotism",       _("Count Palatine %s"), _("Countess Palatine %s")
  "Fundamentalism",  _("Prince-Bishop %s"),  _("Mother Superior %s")
  "Monarchy",        _("Elector %s"),        _("Electress %s")
- "Democracy",  _("Minister-President %s"), _("?female:Minister-President %s")
+ "Republic",  _("Minister-President %s"), _("?female:Minister-President %s")
 }
 
 flag="palatinate"
@@ -38,8 +37,9 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "lorrain", "bavarian", "badian", "rhenish"
+civilwar_nations = "lorrain", "bavarian", "badian"
 
 cities =
  "Heidelberg",

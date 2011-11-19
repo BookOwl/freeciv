@@ -32,7 +32,7 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",            "female_title"
  "Despotism",       _("Prince %s"),          _("Princess %s")
- "Fundamentalism",  _("Bishop %s"),          _("Mother Superior %s")
+ "Fundamentalism",  _("Bishop %s"),          _("?female:Bishop %s")
  "Communism",       _("First Secretary %s"), _("?female:First Secretary %s")
 }
 
@@ -42,6 +42,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with =
@@ -61,12 +62,11 @@ civilwar_nations =
  "Lendian",
  "Lipka Tatar",
  "Belarusian",
- "Ukrainian",
- "Kashubian",
- "Old Prussian"
+ "Ukrainian"
+; "Kashubian",
 ; "Rusyn",
 ; "Polanian",
-
+; "Old Prussian"
 
 cities =
 ; Te bedą pierwsze, bo tak pasuje
