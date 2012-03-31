@@ -17,12 +17,6 @@ leaders = {
  "Calypso",     "Female"
 }
 
-ruler_titles = {
- "government",     "male_title",        "female_title"
- "Anarchy",        _("Usurper %s"),     _("?female:Usurper %s")
- "Monarchy",       _("High King %s"),   _("High Queen %s")
-}
-
 flag="atlantis"
 flag_alt = "-"
 city_style = "Classical"
@@ -30,6 +24,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="martian", "antarctican", "guanche"
 

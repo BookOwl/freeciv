@@ -12,11 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
-#include "astring.h"
 #include "fcintl.h"
 #include "log.h"
 
@@ -66,7 +65,7 @@ void popdown_bribe_dialog(void);
 static struct diplomat_dialog *pDiplomat_Dlg = NULL;
 
 /****************************************************************
-  User interacted with diplomat dialog.
+...
 *****************************************************************/
 static int diplomat_dlg_window_callback(struct widget *pWindow)
 {
@@ -77,7 +76,7 @@ static int diplomat_dlg_window_callback(struct widget *pWindow)
 }
 
 /****************************************************************
-  User clicked "Establish Embassy"
+...
 *****************************************************************/
 static int diplomat_embassy_callback(struct widget *pWidget)
 {
@@ -95,7 +94,7 @@ static int diplomat_embassy_callback(struct widget *pWidget)
 }
 
 /****************************************************************
-  User clicked "Investigate City"
+...
 *****************************************************************/
 static int diplomat_investigate_callback(struct widget *pWidget)
 {
@@ -113,7 +112,7 @@ static int diplomat_investigate_callback(struct widget *pWidget)
 }
 
 /****************************************************************
-  User clicked "Poison City"
+...
 *****************************************************************/
 static int spy_poison_callback( struct widget *pWidget )
 {
@@ -147,7 +146,7 @@ static int spy_sabotage_request(struct widget *pWidget)
 }
 
 /****************************************************************
-  User clicked "Sabotage City" for diplomat (not spy)
+...
 *****************************************************************/
 static int diplomat_sabotage_callback(struct widget *pWidget)
 {
@@ -162,12 +161,8 @@ static int diplomat_sabotage_callback(struct widget *pWidget)
   }
   return -1;
 }
-
 /* --------------------------------------------------------- */
 
-/****************************************************************
-  User interacted with spy's steal dialog window.
-*****************************************************************/
 static int spy_steal_dlg_window_callback(struct widget *pWindow)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -176,9 +171,6 @@ static int spy_steal_dlg_window_callback(struct widget *pWindow)
   return -1;
 }
 
-/****************************************************************
-  Exit spy's steal dialog.
-*****************************************************************/
 static int exit_spy_steal_dlg_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -187,9 +179,6 @@ static int exit_spy_steal_dlg_callback(struct widget *pWidget)
   return -1;  
 }
 
-/****************************************************************
-  User selected which tech spy steals.
-*****************************************************************/
 static int spy_steal_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -208,7 +197,7 @@ static int spy_steal_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  Popup spy tech stealing dialog.
+  ...
 **************************************************************************/
 static int spy_steal_popup(struct widget *pWidget)
 {
@@ -346,16 +335,9 @@ static int spy_steal_popup(struct widget *pWidget)
   } advance_index_iterate_end;
   
   /* Get Spy tech to use for "At Spy's Discretion" -- this will have the
-   * side effect of displaying the unit's icon */
+   * side effect of display the unit's icon */
   i = advance_number(unit_type(game_unit_by_number(id))->require_advance);
-  {
-    struct astring str = ASTRING_INIT;
-    /* TRANS: %s is a unit name, e.g., Spy */
-    astr_set(&str, _("At %s's Discretion"),
-             unit_name_translation(game_unit_by_number(id)));
-    copy_chars_to_string16(pStr, astr_str(&str));
-    astr_free(&str);
-  }
+  copy_chars_to_string16(pStr, _("At Spy's Discretion"));
   pSurf = create_sellect_tech_icon(pStr, i, FULL_MODE);
 	
   pBuf = create_icon2(pSurf, pWindow->dst,
@@ -428,7 +410,7 @@ static int spy_steal_popup(struct widget *pWidget)
 }
 
 /****************************************************************
-  Technology stealing dialog, diplomat (not spy) version
+...
 *****************************************************************/
 static int diplomat_steal_callback(struct widget *pWidget)
 {
@@ -501,7 +483,7 @@ static int diplomat_bribe_callback(struct widget *pWidget)
 }
 
 /****************************************************************
-  User clicked "Sabotage Unit"
+...
 *****************************************************************/
 static int spy_sabotage_unit_callback(struct widget *pWidget)
 {
@@ -516,7 +498,7 @@ static int spy_sabotage_unit_callback(struct widget *pWidget)
 }
 
 /****************************************************************
-  Close diplomat dialog.
+...
 *****************************************************************/
 static int diplomat_close_callback(struct widget *pWidget)
 {
@@ -571,12 +553,13 @@ void popup_diplomat_dialog(struct unit *pUnit, struct tile *ptile)
   /* window */
   if (pCity)
   {
-    struct astring title = ASTRING_INIT;
-    /* TRANS: %s is a unit name, e.g., Spy */
-    astr_set(&title, _("Choose Your %s's Strategy"),
-             unit_name_translation(pUnit));
-    pStr = create_str16_from_char(astr_str(&title), adj_font(12));
-    astr_free(&title);
+    if(spy) {
+      pStr = create_str16_from_char(_("Choose Your Spy's Strategy") , adj_font(12));
+    }
+    else
+    {
+      pStr = create_str16_from_char(_("Choose Your Diplomat's Strategy"), adj_font(12));
+    }
   }
   else
   {
@@ -772,7 +755,7 @@ void popup_diplomat_dialog(struct unit *pUnit, struct tile *ptile)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
+                           pUnit->tile);
  
   /* setup widget size and start position */
     
@@ -814,9 +797,6 @@ void close_diplomat_dialog(void)
 /* ============================ SABOTAGE DIALOG ========================= */
 /* ====================================================================== */
 
-/****************************************************************
-  User selected what to sabotage.
-****************************************************************/
 static int sabotage_impr_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -952,14 +932,8 @@ void popup_sabotage_dialog(struct city *pCity)
   /* ------------------ */
   }
   
-  {
-    struct astring str = ASTRING_INIT;
-    /* TRANS: %s is a unit name, e.g., Spy */
-    astr_set(&str, _("At %s's Discretion"), unit_name_translation(pUnit));
-    create_active_iconlabel(pBuf, pWindow->dst, pStr, astr_str(&str),
-                            sabotage_impr_callback);
-    astr_free(&str);
-  }
+  create_active_iconlabel(pBuf, pWindow->dst, pStr, _("At Spy's Discretion"),
+			  sabotage_impr_callback);
   pBuf->data.cont = pCont;  
   set_wstate(pBuf, FC_WS_NORMAL);
   
@@ -997,7 +971,7 @@ void popup_sabotage_dialog(struct city *pCity)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pUnit));
+                           pUnit->tile);        
   
   w = area.w;
   
@@ -1038,7 +1012,7 @@ void popup_sabotage_dialog(struct city *pCity)
       area2.y = pBuf->size.h / 2 - 1;
       area2.w = pBuf->size.w - adj_size(20);
       
-      SDL_FillRect(pBuf->theme , &area2, map_rgba(pBuf->theme->format, *get_theme_color(COLOR_THEME_SABOTAGEDLG_SEPARATOR)));
+      SDL_FillRect(pBuf->theme , &area2, map_rgba(pBuf->theme->format, *get_game_colorRGB(COLOR_THEME_SABOTAGEDLG_SEPARATOR)));
     }
     
     if (pBuf == pLast) {
@@ -1077,7 +1051,7 @@ void popup_sabotage_dialog(struct city *pCity)
 static struct small_diplomat_dialog *pIncite_Dlg = NULL;
 
 /****************************************************************
-  User interacted with Incite Revolt dialog window.
+...
 *****************************************************************/
 static int incite_dlg_window_callback(struct widget *pWindow)
 {
@@ -1088,7 +1062,7 @@ static int incite_dlg_window_callback(struct widget *pWindow)
 }
 
 /****************************************************************
-  User confirmed incite
+...
 *****************************************************************/
 static int diplomat_incite_yes_callback(struct widget *pWidget)
 {
@@ -1104,7 +1078,7 @@ static int diplomat_incite_yes_callback(struct widget *pWidget)
 }
 
 /****************************************************************
-  Close incite dialog.
+...
 *****************************************************************/
 static int exit_incite_dlg_callback(struct widget *pWidget)
 {
@@ -1336,9 +1310,6 @@ void popup_incite_dialog(struct city *pCity, int cost)
 /* ====================================================================== */
 static struct small_diplomat_dialog *pBribe_Dlg = NULL;
 
-/**************************************************************************
-  User interacted with bribe dialog window.
-**************************************************************************/
 static int bribe_dlg_window_callback(struct widget *pWindow)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -1347,9 +1318,6 @@ static int bribe_dlg_window_callback(struct widget *pWindow)
   return -1;
 }
 
-/**************************************************************************
-  User confirmed bribe.
-**************************************************************************/
 static int diplomat_bribe_yes_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -1363,9 +1331,6 @@ static int diplomat_bribe_yes_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  Close bribe dialog.
-**************************************************************************/
 static int exit_bribe_dlg_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -1527,8 +1492,8 @@ void popup_bribe_dialog(struct unit *pUnit, int cost)
   
   auto_center_on_focus_unit();
   put_window_near_map_tile(pWindow, pWindow->size.w, pWindow->size.h,
-                           unit_tile(pDiplomatUnit));
-
+                           pDiplomatUnit->tile);      
+  
   /* setup widget size and start position */
   pBuf = pWindow;
   

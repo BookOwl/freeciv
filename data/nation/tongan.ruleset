@@ -18,8 +18,8 @@ leaders = {
 }
 
 ruler_titles = {
- "government",     "male_title",           "female_title"
- "Fundamentalism", _("Elder %s"),          _("?female:Elder %s")
+ "government",    "male_title",           "female_title"
+ "Democracy",     _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag= "tonga"
@@ -28,9 +28,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="samoan", "fijian"
+civilwar_nations="polynesian", "fijian"
 
 cities =
  "Nuku'alofa",

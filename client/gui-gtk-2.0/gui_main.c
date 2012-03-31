@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
@@ -69,9 +69,8 @@
 #include "text.h"
 #include "tilespec.h"
 
-/* client/gui-gtk-2.0 */
+/* gui-gtk-2.0 */
 #include "chatline.h"
-#include "citizensinfo.h"
 #include "connectdlg.h"
 #include "cma_fe.h"
 #include "dialogs.h"
@@ -89,7 +88,6 @@
 #include "optiondlg.h"
 #include "pages.h"
 #include "plrdlg.h"
-#include "luaconsole.h"
 #include "spaceshipdlg.h"
 #include "repodlgs.h"
 #include "resources.h"
@@ -162,6 +160,7 @@ GtkWidget *unit_info_label;
 GtkWidget *unit_info_box;
 GtkWidget *unit_info_frame;
 
+GtkTooltips *main_tips;
 GtkWidget *econ_ebox;
 GtkWidget *bulb_ebox;
 GtkWidget *sun_ebox;
@@ -189,9 +188,7 @@ static GtkWidget *allied_chat_toggle_button;
 
 static enum Display_color_type display_color_type;  /* practically unused */
 static gint timer_id;                               /*       ditto        */
-static GIOChannel *srv_channel;
-static GIOChannel *ggz_channel;
-static guint srv_id, ggz_id;
+static guint input_id, ggz_input_id;
 gint cur_x, cur_y;
 
 
@@ -199,8 +196,7 @@ static gboolean show_info_button_release(GtkWidget *w, GdkEventButton *ev, gpoin
 static gboolean show_info_popup(GtkWidget *w, GdkEventButton *ev, gpointer data);
 
 static void end_turn_callback(GtkWidget *w, gpointer data);
-static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data);
+static void get_net_input(gpointer data, gint fid, GdkInputCondition condition);
 static void set_wait_for_writable_socket(struct connection *pc,
                                          bool socket_writable);
 
@@ -245,7 +241,7 @@ void set_city_names_font_sizes(int my_city_names_font_size,
 }
 
 /**************************************************************************
-  Callback for freelog
+...
 **************************************************************************/
 static void log_callback_utf8(enum log_level level, const char *message,
                               bool file_too)
@@ -301,7 +297,7 @@ static void parse_options(int argc, char **argv)
 }
 
 /**************************************************************************
-  Focus on widget. Returns whether focus was really changed.
+...
 **************************************************************************/
 static gboolean toplevel_focus(GtkWidget *w, GtkDirectionType arg)
 {
@@ -344,7 +340,7 @@ static void main_message_area_size_allocate(GtkWidget *widget,
 }
 
 /**************************************************************************
-  Focus on map canvas
+...
 **************************************************************************/
 gboolean map_canvas_focus(void)
 {
@@ -385,7 +381,7 @@ static gboolean toplevel_handler(GtkWidget *w, GdkEventKey *ev, gpointer data)
 }
 
 /**************************************************************************
-  Handle keypress events when map canvas is in focus
+...
 **************************************************************************/
 static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
                                      gpointer data)
@@ -564,7 +560,7 @@ static gboolean key_press_map_canvas(GtkWidget *w, GdkEventKey *ev,
 }
 
 /**************************************************************************
-  Handler for "key release" for toplevel window
+...
 **************************************************************************/
 static gboolean toplevel_key_release_handler(GtkWidget *w, GdkEventKey *ev,
                                              gpointer data)
@@ -652,7 +648,7 @@ static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
       break;
     };
   }
-#endif /* 0 */
+#endif
 
   return FALSE;
 }
@@ -818,10 +814,10 @@ static void populate_unit_pixmap_table(void)
   /* Note, we ref this and other widgets here so that we can unref them
    * in reset_unit_table. */
   unit_pixmap = gtk_pixcomm_new(tileset_unit_width(tileset), tileset_unit_height(tileset));
-  g_object_ref(unit_pixmap);
+  gtk_widget_ref(unit_pixmap);
   gtk_pixcomm_clear(GTK_PIXCOMM(unit_pixmap));
   unit_pixmap_button = gtk_event_box_new();
-  g_object_ref(unit_pixmap_button);
+  gtk_widget_ref(unit_pixmap_button);
   gtk_container_add(GTK_CONTAINER(unit_pixmap_button), unit_pixmap);
   gtk_table_attach_defaults(GTK_TABLE(table), unit_pixmap_button, 0, 1, 0, 1);
   g_signal_connect(unit_pixmap_button, "button_press_event",
@@ -833,9 +829,9 @@ static void populate_unit_pixmap_table(void)
     for (i = 0; i < num_units_below; i++) {
       unit_below_pixmap[i] = gtk_pixcomm_new(tileset_unit_width(tileset),
                                              tileset_unit_height(tileset));
-      g_object_ref(unit_below_pixmap[i]);
+      gtk_widget_ref(unit_below_pixmap[i]);
       unit_below_pixmap_button[i] = gtk_event_box_new();
-      g_object_ref(unit_below_pixmap_button[i]);
+      gtk_widget_ref(unit_below_pixmap_button[i]);
       gtk_container_add(GTK_CONTAINER(unit_below_pixmap_button[i]),
                         unit_below_pixmap[i]);
       g_signal_connect(unit_below_pixmap_button[i],
@@ -852,9 +848,9 @@ static void populate_unit_pixmap_table(void)
   /* create arrow (popup for all units on the selected tile) */
   more_arrow_pixmap = gtk_image_new_from_pixbuf(
           sprite_get_pixbuf(get_arrow_sprite(tileset, ARROW_RIGHT)));
-  g_object_ref(more_arrow_pixmap);
+  gtk_widget_ref(more_arrow_pixmap);
   more_arrow_pixmap_button = gtk_event_box_new();
-  g_object_ref(more_arrow_pixmap_button);
+  gtk_widget_ref(more_arrow_pixmap_button);
   gtk_container_add(GTK_CONTAINER(more_arrow_pixmap_button),
                     more_arrow_pixmap);
   g_signal_connect(more_arrow_pixmap_button,
@@ -888,20 +884,20 @@ void reset_unit_table(void)
      * populatate_unit_pixmap_table. */
     gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                          unit_pixmap_button);
-    g_object_unref(unit_pixmap);
-    g_object_unref(unit_pixmap_button);
+    gtk_widget_unref(unit_pixmap);
+    gtk_widget_unref(unit_pixmap_button);
     if (!gui_gtk2_small_display_layout) {
       for (i = 0; i < num_units_below; i++) {
         gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                              unit_below_pixmap_button[i]);
-        g_object_unref(unit_below_pixmap[i]);
-        g_object_unref(unit_below_pixmap_button[i]);
+        gtk_widget_unref(unit_below_pixmap[i]);
+        gtk_widget_unref(unit_below_pixmap_button[i]);
       }
     }
     gtk_container_remove(GTK_CONTAINER(unit_pixmap_table),
                          more_arrow_pixmap_button);
-    g_object_unref(more_arrow_pixmap);
-    g_object_unref(more_arrow_pixmap_button);
+    gtk_widget_unref(more_arrow_pixmap);
+    gtk_widget_unref(more_arrow_pixmap_button);
   }
 
   populate_unit_pixmap_table();
@@ -1002,6 +998,8 @@ static void setup_widgets(void)
       create_load_page(), NULL);
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
       create_network_page(), NULL);
+
+  main_tips = gtk_tooltips_new();
 
   editgui_create_widgets();
 
@@ -1216,7 +1214,7 @@ static void setup_widgets(void)
 
   fc_snprintf(buf, sizeof(buf), "%s:\n%s",
               _("Turn Done"), _("Shift+Return"));
-  gtk_widget_set_tooltip_text(turn_done_button, buf);
+  gtk_tooltips_set_tip(main_tips, turn_done_button, buf, "");
 
   /* Selected unit status */
 
@@ -1482,7 +1480,7 @@ static void ggz_closed(void)
 {
   set_client_page(PAGE_MAIN);
 }
-#endif /* GGZ_GTK */
+#endif
 
 /**************************************************************************
  called from main().
@@ -1652,9 +1650,7 @@ void ui_main(int argc, char **argv)
   load_cursors();
   cma_fe_init();
   diplomacy_dialog_init();
-  luaconsole_dialog_init();
   happiness_dialog_init();
-  citizens_dialog_init();
   intel_dialog_init();
   spaceship_dialog_init();
   chatline_init();
@@ -1675,8 +1671,6 @@ void ui_main(int argc, char **argv)
   free_mapcanvas_and_overview();
   spaceship_dialog_done();
   intel_dialog_done();
-  citizens_dialog_done();
-  luaconsole_dialog_done();
   happiness_dialog_done();
   diplomacy_dialog_done();
   cma_fe_done();
@@ -1791,7 +1785,7 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
     punit = game_unit_by_number(unit_id_top);
     if (punit && unit_is_in_focus(punit)) {
       /* Clicking on the currently selected unit will center it. */
-      center_tile_mapcanvas(unit_tile(punit));
+      center_tile_mapcanvas(punit->tile);
     }
     return TRUE;
   }
@@ -1802,7 +1796,7 @@ static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
   punit = game_unit_by_number(unit_ids[i]);
   if (NULL != punit && unit_owner(punit) == client.conn.playing) {
     /* Unit shouldn't be NULL but may be owned by an ally. */
-    unit_focus_set(punit);
+    set_unit_focus(punit);
   }
 
   return TRUE;
@@ -1818,14 +1812,14 @@ static gboolean select_more_arrow_pixmap_callback(GtkWidget *w, GdkEvent *ev,
   struct unit *punit = game_unit_by_number(unit_id_top);
 
   if (punit) {
-    unit_select_dialog_popup(unit_tile(punit));
+    popup_unit_select_dialog(punit->tile);
   }
 
   return TRUE;
 }
 
 /**************************************************************************
-  Button released when showing info popup
+...
 **************************************************************************/
 static gboolean show_info_button_release(GtkWidget *w, GdkEventButton *ev, gpointer data)
 {
@@ -1836,7 +1830,7 @@ static gboolean show_info_button_release(GtkWidget *w, GdkEventButton *ev, gpoin
 }
 
 /**************************************************************************
-  Popup info box
+...
 **************************************************************************/
 static gboolean show_info_popup(GtkWidget *w, GdkEventButton *ev, gpointer data)
 {
@@ -1874,29 +1868,23 @@ static void end_turn_callback(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
-  Read input from server socket
+...
 **************************************************************************/
-static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data)
+static void get_net_input(gpointer data, gint fid, GdkInputCondition condition)
 {
-  input_from_server(g_io_channel_unix_get_fd(source));
-
-  return TRUE;
+  input_from_server(fid);
 }
 
 /**************************************************************************
   Callback for when the GGZ socket has data pending.
 **************************************************************************/
-static gboolean get_ggz_input(GIOChannel *source, GIOCondition condition,
-                              gpointer data)
+static void get_ggz_input(gpointer data, gint fid, GdkInputCondition condition)
 {
-  input_from_ggz(g_io_channel_unix_get_fd(source));
-
-  return TRUE;
+  input_from_ggz(fid);
 }
 
 /**************************************************************************
-  Set socket writability state
+...
 **************************************************************************/
 static void set_wait_for_writable_socket(struct connection *pc,
 					 bool socket_writable)
@@ -1909,13 +1897,11 @@ static void set_wait_for_writable_socket(struct connection *pc,
     return;
 
   log_debug("set_wait_for_writable_socket(%d)", socket_writable);
-
-  g_source_remove(srv_id);
-  srv_id = g_io_add_watch(srv_channel,
-                          G_IO_IN | (socket_writable ? G_IO_OUT : 0) | G_IO_ERR,
-                          get_net_input,
-                          NULL);
-
+  gtk_input_remove(input_id);
+  input_id = gtk_input_add_full(client.conn.sock, GDK_INPUT_READ
+				| (socket_writable ? GDK_INPUT_WRITE : 0)
+				| GDK_INPUT_EXCEPTION,
+				get_net_input, NULL, NULL, NULL);
   previous_state = socket_writable;
 }
 
@@ -1925,15 +1911,8 @@ static void set_wait_for_writable_socket(struct connection *pc,
 **************************************************************************/
 void add_net_input(int sock)
 {
-#ifdef WIN32_NATIVE
-  srv_channel = g_io_channel_win32_new_socket(sock);
-#else
-  srv_channel = g_io_channel_unix_new(sock);
-#endif
-  srv_id = g_io_add_watch(srv_channel,
-                          G_IO_IN | G_IO_ERR,
-                          get_net_input,
-                          NULL);
+  input_id = gtk_input_add_full(sock, GDK_INPUT_READ | GDK_INPUT_EXCEPTION,
+				get_net_input, NULL, NULL, NULL);
   client.conn.notify_of_writable_data = set_wait_for_writable_socket;
 }
 
@@ -1943,8 +1922,7 @@ void add_net_input(int sock)
 **************************************************************************/
 void remove_net_input(void)
 {
-  g_source_remove(srv_id);
-  g_io_channel_unref(srv_channel);
+  gtk_input_remove(input_id);
   gdk_window_set_cursor(root_window, NULL);
 }
 
@@ -1953,15 +1931,8 @@ void remove_net_input(void)
 **************************************************************************/
 void add_ggz_input(int sock)
 {
-#ifdef WIN32_NATIVE
-  ggz_channel = g_io_channel_win32_new_socket(sock);
-#else
-  ggz_channel = g_io_channel_unix_new(sock);
-#endif
-  ggz_id = g_io_add_watch(ggz_channel,
-                          G_IO_IN,
-                          get_ggz_input,
-                          NULL);
+  ggz_input_id = gtk_input_add_full(sock, GDK_INPUT_READ, get_ggz_input,
+				    NULL, NULL, NULL);
 }
 
 /**************************************************************************
@@ -1970,8 +1941,7 @@ void add_ggz_input(int sock)
 **************************************************************************/
 void remove_ggz_input(void)
 {
-  g_source_remove(ggz_id);
-  g_io_channel_unref(ggz_channel);
+  gtk_input_remove(ggz_input_id);
 }
 
 /****************************************************************
@@ -2031,14 +2001,13 @@ struct callback {
 /****************************************************************************
   A wrapper for the callback called through add_idle_callback.
 ****************************************************************************/
-static gboolean idle_callback_wrapper(gpointer data)
+static gint idle_callback_wrapper(gpointer data)
 {
   struct callback *cb = data;
 
   (cb->callback)(cb->data);
   free(cb);
-
-  return FALSE;
+  return 0;
 }
 
 /****************************************************************************
@@ -2052,7 +2021,7 @@ void add_idle_callback(void (callback)(void *), void *data)
 
   cb->callback = callback;
   cb->data = data;
-  g_idle_add(idle_callback_wrapper, cb);
+  gtk_idle_add(idle_callback_wrapper, cb);
 }
 
 /****************************************************************************

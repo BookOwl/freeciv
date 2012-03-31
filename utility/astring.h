@@ -19,10 +19,6 @@
 #ifndef FC__ASTRING_H
 #define FC__ASTRING_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <string.h>             /* strlen() */
 
 /* utility */
@@ -40,14 +36,15 @@ struct astring {
 };
 
 /* Can assign this in variable declaration to initialize:
- * Notice a static astring var is exactly this already. */
+ * Notice a static astring var is exactly this already.
+ * For athing need to call ath_init() due to size. */
 #define ASTRING_INIT { NULL, 0, 0 }
 
 void astr_init(struct astring *astr) fc__attribute((nonnull (1)));
 void astr_free(struct astring *astr) fc__attribute((nonnull (1)));
 
 static inline const char *astr_str(const struct astring *astr)
-                                   fc__attribute((nonnull (1)));
+                          fc__attribute((nonnull (1)));
 static inline size_t astr_len(const struct astring *astr)
                      fc__attribute((nonnull (1)));
 static inline size_t astr_size(const struct astring *astr)
@@ -57,8 +54,6 @@ static inline size_t astr_capacity(const struct astring *astr)
 static inline bool astr_empty(const struct astring *astr)
                    fc__attribute((nonnull (1)));
 
-char *astr_to_str(struct astring *astr)
-                  fc__attribute((nonnull (1)));
 void astr_reserve(struct astring *astr, size_t size)
      fc__attribute((nonnull (1)));
 void astr_clear(struct astring *astr)
@@ -92,7 +87,7 @@ static inline const char *astr_str(const struct astring *astr)
 }
 
 /****************************************************************************
-  Returns the length of the string.
+  Returns the lenght of the string.
 ****************************************************************************/
 static inline size_t astr_len(const struct astring *astr)
 {
@@ -116,7 +111,7 @@ static inline size_t astr_capacity(const struct astring *astr)
 }
 
 /****************************************************************************
-  Returns whether the string is empty or not.
+  Returns wether the string is empty or not.
 ****************************************************************************/
 static inline bool astr_empty(const struct astring *astr)
 {
@@ -126,9 +121,5 @@ static inline bool astr_empty(const struct astring *astr)
 #undef str
 #undef n
 #undef n_alloc
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__ASTRING_H */

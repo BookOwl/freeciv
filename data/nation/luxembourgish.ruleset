@@ -25,6 +25,7 @@ leaders = {
 
 ruler_titles = {
  "government",     "male_title",           "female_title"
+ "Democracy",      _("Prime Minister %s"), _("?female:Prime Minister %s")
  "Despotism",      _("Count %s"),          _("Countess %s")
  "Fundamentalism", _("Bishop %s"),         _("Mother Superior %s")
  "Monarchy",       _("Grand Duke %s"),     _("Grand Duchess %s")
@@ -37,9 +38,10 @@ city_style = "european"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with="dutch"
-civilwar_nations="rhenish", "french", "walloon", "dutch"
+civilwar_nations="german", "french", "walloon", "dutch"
 
 cities =
  "Lëtzebuerg",		;Luxembourg

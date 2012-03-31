@@ -32,8 +32,9 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "thracian", "paeonian", "epirote", "liburnian"
+civilwar_nations = "thracian", "greek", "roman"
 
 ; known regional capitals listed first.
 ; remaining order is following the coastline, S-N, W-E,

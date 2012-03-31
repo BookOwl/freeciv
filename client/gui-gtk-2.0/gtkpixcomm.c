@@ -34,7 +34,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -71,9 +71,7 @@ struct op {
   gint x, y;
 };
 
-/***************************************************************************
-  Return pixcomm GtkType
-***************************************************************************/
+
 GType
 gtk_pixcomm_get_type(void)
 {
@@ -99,9 +97,6 @@ gtk_pixcomm_get_type(void)
   return pixcomm_type;
 }
 
-/***************************************************************************
-  Initialize pixcomm class
-***************************************************************************/
 static void
 gtk_pixcomm_class_init(GtkPixcommClass *klass)
 {
@@ -114,9 +109,6 @@ gtk_pixcomm_class_init(GtkPixcommClass *klass)
   widget_class->expose_event = gtk_pixcomm_expose;
 }
 
-/***************************************************************************
-  Initialize pixcomm instance
-***************************************************************************/
 static void
 gtk_pixcomm_init(GtkPixcomm *pixcomm)
 {
@@ -126,9 +118,6 @@ gtk_pixcomm_init(GtkPixcomm *pixcomm)
   pixcomm->freeze_count = 0;
 }
 
-/***************************************************************************
-  Destroy pixcomm instance
-***************************************************************************/
 static void
 gtk_pixcomm_destroy(GtkObject *object)
 {
@@ -148,9 +137,6 @@ gtk_pixcomm_destroy(GtkObject *object)
   }
 }
 
-/***************************************************************************
-  Create new pixcomm instance
-***************************************************************************/
 GtkWidget*
 gtk_pixcomm_new(gint width, gint height)
 {
@@ -189,9 +175,6 @@ void gtk_pixcomm_set_scale(GtkPixcomm *pixcomm, gdouble scale)
   }
 }
 
-/***************************************************************************
-  Redraw pixcomm widget
-***************************************************************************/
 static void
 refresh(GtkPixcomm *p)
 {
@@ -200,9 +183,7 @@ refresh(GtkPixcomm *p)
   }
 }
 
-/***************************************************************************
-  Clear pixcomm
-***************************************************************************/
+
 void
 gtk_pixcomm_clear(GtkPixcomm *p)
 {
@@ -212,9 +193,6 @@ gtk_pixcomm_clear(GtkPixcomm *p)
   refresh(p);
 }
 
-/***************************************************************************
-  Fill pixcomm with color.
-***************************************************************************/
 void
 gtk_pixcomm_fill(GtkPixcomm *p, GdkColor *color)
 {
@@ -231,9 +209,6 @@ gtk_pixcomm_fill(GtkPixcomm *p, GdkColor *color)
   refresh(p);
 }
 
-/***************************************************************************
-  Copy sprite to pixcomm
-***************************************************************************/
 void gtk_pixcomm_copyto(GtkPixcomm *p, struct sprite *src, gint x, gint y)
 {
   struct op v;
@@ -249,9 +224,6 @@ void gtk_pixcomm_copyto(GtkPixcomm *p, struct sprite *src, gint x, gint y)
   refresh(p);
 }
 
-/***************************************************************************
-  Draw pixcomm
-***************************************************************************/
 static gboolean
 gtk_pixcomm_expose(GtkWidget *widget, GdkEventExpose *ev)
 {
@@ -348,9 +320,6 @@ gtk_pixcomm_expose(GtkWidget *widget, GdkEventExpose *ev)
   return FALSE;
 }
 
-/***************************************************************************
-  Increase pixcomm freeze count so it won't be drawn until thawed
-***************************************************************************/
 void
 gtk_pixcomm_freeze(GtkPixcomm *p)
 {
@@ -359,9 +328,6 @@ gtk_pixcomm_freeze(GtkPixcomm *p)
   p->freeze_count++;
 }
 
-/***************************************************************************
-  Reduce pixcomm freeze count possibly causing pixcomm to be drawn.
-***************************************************************************/
 void
 gtk_pixcomm_thaw(GtkPixcomm *p)
 {

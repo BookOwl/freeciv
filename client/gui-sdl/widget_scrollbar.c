@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -964,17 +964,19 @@ static void inside_scroll_up_loop(void *pData)
 static Uint16 scroll_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void *pData)
 {
   struct UP_DOWN *pMotion = (struct UP_DOWN *)pData;
-  int yrel;
-  int y;
+  int xrel, yrel;
+  int x, y;
   int normalized_y;
   int net_slider_area;
   int net_count;
   float scroll_step;
-
+  
+  xrel = pMotionEvent->x - pMotion->prev_x;
   yrel = pMotionEvent->y - pMotion->prev_y;
   pMotion->prev_x = pMotionEvent->x;
   pMotion->prev_y = pMotionEvent->y;
-
+  
+  x = pMotionEvent->x - pMotion->pVscroll->pScrollBar->dst->dest_rect.x;
   y = pMotionEvent->y - pMotion->pVscroll->pScrollBar->dst->dest_rect.y;
 
   normalized_y = (y - pMotion->offset);

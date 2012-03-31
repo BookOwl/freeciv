@@ -12,7 +12,7 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -28,6 +28,16 @@
 #include "base.h"
 
 static struct base_type base_types[MAX_BASE_TYPES];
+
+static const char *base_type_flag_names[] = {
+  "NoAggressive", "NoStackDeath",
+  "DiplomatDefense", "ParadropFrom", "NativeTile"
+};
+
+/* This must correspond to enum base_gui_type in base.h */
+static const char *base_gui_type_names[] = {
+  "Fortress", "Airbase", "Other"
+};
 
 /****************************************************************************
   Check if base provides effect
@@ -130,20 +140,6 @@ struct base_type *base_type_by_translated_name(const char *name)
 }
 
 /****************************************************************************
-  Is there base of the given type cardinally near tile?
-****************************************************************************/
-bool is_base_card_near(const struct tile *ptile, const struct base_type *pbase)
-{
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    if (tile_has_base(adjc_tile, pbase)) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
   Is there base of the given type near tile?
 ****************************************************************************/
 bool is_base_near_tile(const struct tile *ptile, const struct base_type *pbase)
@@ -168,11 +164,6 @@ bool can_build_base(const struct unit *punit, const struct base_type *pbase,
     return FALSE;
   }
 
-  if (tile_terrain(ptile)->base_time == 0) {
-    /* Bases cannot be built on this terrain. */
-    return FALSE;
-  }
-
   if (!pbase->buildable) {
     /* Base type not buildable. */
     return FALSE;
@@ -188,6 +179,24 @@ bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                          RPT_CERTAIN);
 }
 
+/**************************************************************************
+  Convert base flag names to enum; case insensitive;
+  returns BF_LAST if can't match.
+**************************************************************************/
+enum base_flag_id base_flag_from_str(const char *s)
+{
+  enum base_flag_id i;
+
+  fc_assert_ret_val(ARRAY_SIZE(base_type_flag_names) == BF_LAST, BF_LAST);
+
+  for(i = 0; i < BF_LAST; i++) {
+    if (fc_strcasecmp(base_type_flag_names[i], s)==0) {
+      return i;
+    }
+  }
+  return BF_LAST;
+}
+  
 /****************************************************************************
   Returns base_type entry for an ID value.
 ****************************************************************************/
@@ -275,6 +284,25 @@ void base_types_free(void)
       pbase->helptext = NULL;
     }
   } base_type_iterate_end;
+}
+
+/**************************************************************************
+  Convert base gui type names to enum; case insensitive;
+  returns BASE_GUI_LAST if can't match.
+**************************************************************************/
+enum base_gui_type base_gui_type_from_str(const char *s)
+{
+  enum base_gui_type i;
+
+  fc_assert_ret_val(ARRAY_SIZE(base_gui_type_names) == BASE_GUI_LAST,
+                    BASE_GUI_LAST);
+
+  for(i = 0; i < BASE_GUI_LAST; i++) {
+    if (fc_strcasecmp(base_gui_type_names[i], s)==0) {
+      return i;
+    }
+  }
+  return BASE_GUI_LAST;
 }
 
 /**************************************************************************

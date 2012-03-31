@@ -20,7 +20,7 @@
  *********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* #define SDL_CVS */
@@ -404,7 +404,7 @@ void update_info_label(void)
 
   /* set text settings */
   pText->style |= TTF_STYLE_BOLD;
-  pText->fgcol = *get_theme_color(COLOR_THEME_MAPVIEW_INFO_TEXT);
+  pText->fgcol = *get_game_colorRGB(COLOR_THEME_MAPVIEW_INFO_TEXT);
   pText->bgcol = (SDL_Color) {0, 0, 0, 0};
 
   if (NULL != client.conn.playing) {
@@ -441,18 +441,18 @@ void update_info_label(void)
     /* Horizontal lines */
     putline(Main.gui->surface,
                area.x + 1, area.y, area.x + area.w - 2, area.y,
-               get_theme_color(COLOR_THEME_MAPVIEW_INFO_FRAME));
+               get_game_colorRGB(COLOR_THEME_MAPVIEW_INFO_FRAME));
     putline(Main.gui->surface,
                area.x + 1, area.y + area.h - 1, area.x + area.w - 2, area.y + area.h - 1,
-               get_theme_color(COLOR_THEME_MAPVIEW_INFO_FRAME));
+               get_game_colorRGB(COLOR_THEME_MAPVIEW_INFO_FRAME));
   
     /* vertical lines */
     putline(Main.gui->surface,
                area.x + area.w - 1, area.y + 1, area.x + area.w - 1, area.y + area.h - 2,
-               get_theme_color(COLOR_THEME_MAPVIEW_INFO_FRAME));
+               get_game_colorRGB(COLOR_THEME_MAPVIEW_INFO_FRAME));
     putline(Main.gui->surface,
                area.x, area.y + 1, area.x, area.y + area.h - 2,
-               get_theme_color(COLOR_THEME_MAPVIEW_INFO_FRAME));
+               get_game_colorRGB(COLOR_THEME_MAPVIEW_INFO_FRAME));
   
     /* blit text to screen */  
     blit_entire_src(pTmp, Main.gui->surface, area.x + adj_size(5), area.y + adj_size(2));
@@ -480,7 +480,7 @@ static int fucus_units_info_callback(struct widget *pWidget)
     struct unit *pUnit = pWidget->data.unit;
     if (pUnit) {
       request_new_unit_activity(pUnit, ACTIVITY_IDLE);
-      unit_focus_set(pUnit);
+      set_unit_focus(pUnit);
     }
   }
   return -1;
@@ -513,7 +513,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
       int sy, y, width, height, n;
       bool right;
       char buffer[512];
-      struct tile *pTile = unit_tile(pUnit);
+      struct tile *pTile = pUnit->tile;
 
       /* get and draw unit name (with veteran status) */
       pStr = create_str16_from_char(unit_name_translation(pUnit), adj_font(12));
@@ -535,9 +535,9 @@ void redraw_unit_info_label(struct unit_list *punitlist)
       if(pUnit->veteran) {
 	copy_chars_to_string16(pStr, _("veteran"));
         change_ptsize16(pStr, adj_font(10));
-	pStr->fgcol = *get_theme_color(COLOR_THEME_MAPVIEW_UNITINFO_VETERAN_TEXT);
+	pStr->fgcol = *get_game_colorRGB(COLOR_THEME_MAPVIEW_UNITINFO_VETERAN_TEXT);
         pVet_Name = create_text_surf_from_str16(pStr);
-        pStr->fgcol = *get_theme_color(COLOR_THEME_MAPVIEW_UNITINFO_TEXT);
+        pStr->fgcol = *get_game_colorRGB(COLOR_THEME_MAPVIEW_UNITINFO_TEXT);
       }
 
       /* get and draw other info (MP, terran, city, etc.) */
@@ -594,6 +594,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
             /* Look at city owner, not tile owner (the two should be the same, if
              * borders are in use). */
             struct player *pOwner = city_owner(pCity);
+            bool citywall;
 /*            bool barrack = FALSE, airport = FALSE, port = FALSE;*/
 	    const char *diplo_city_adjectives[DS_LAST] =
     			{Q_("?city:Neutral"), Q_("?city:Hostile"),
@@ -603,6 +604,8 @@ void redraw_unit_info_label(struct unit_list *punitlist)
 	    cat_snprintf(buffer, sizeof(buffer),
 			 _("\nCity of %s"),
 			 city_name(pCity));
+
+	    citywall = pCity->client.walls;
                           
 #if 0       
             /* This has hardcoded assumption that EFT_LAND_REGEN is always
@@ -657,7 +660,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
 	if (pInfo_Window->size.h > 
             4 * h + (DEFAULT_UNITS_H + (pInfo_Window->size.h - pInfo_Window->area.h)) || right) {
           cat_snprintf(buffer, sizeof(buffer), _("\nFood/Prod/Trade: %s"),
-				get_tile_output_text(unit_tile(pUnit)));
+				get_tile_output_text(pUnit->tile));
 	}
 	
 	copy_chars_to_string16(pStr, buffer);
@@ -1111,7 +1114,7 @@ void draw_selection_rectangle(int canvas_x, int canvas_y, int w, int h)
   /* PORTME */
   putframe(Main.map,
            canvas_x, canvas_y, canvas_x + w, canvas_y + h,
-           get_theme_color(COLOR_THEME_SELECTIONRECTANGLE));
+           get_game_colorRGB(COLOR_THEME_SELECTIONRECTANGLE));
 }
 
 /**************************************************************************

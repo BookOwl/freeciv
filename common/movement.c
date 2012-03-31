@@ -12,7 +12,7 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -28,13 +28,16 @@
 #include "fc_types.h"
 #include "game.h"
 #include "map.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "unittype.h"
 #include "terrain.h"
 
 #include "movement.h"
+
+static const char *move_type_names[] = {
+  "Land", "Sea", "Both"
+};
 
 /****************************************************************************
   This function calculates the move rate of the unit, taking into 
@@ -45,19 +48,11 @@
 int unit_move_rate(const struct unit *punit)
 {
   int move_rate = 0;
-  int base_move_rate;
-  struct unit_class *pclass;
-  const struct veteran_level *vlevel;
+  int base_move_rate = unit_type(punit)->move_rate 
+    + unit_type(punit)->veteran[punit->veteran].move_bonus;
+  struct unit_class *pclass = unit_class(punit);
 
-  fc_assert_ret_val(punit != NULL, 0);
-
-  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
-  fc_assert_ret_val(vlevel != NULL, 0);
-
-  base_move_rate = unit_type(punit)->move_rate + vlevel->move_bonus;
   move_rate = base_move_rate;
-
-  pclass = unit_class(punit);
 
   if (uclass_has_flag(pclass, UCF_DAMAGE_SLOWS)) {
     /* Scale the MP based on how many HP the unit has. */
@@ -88,7 +83,7 @@ bool unit_can_defend_here(const struct unit *punit)
   /* Do not just check if unit is transported.
    * Even transported units may step out from transport to fight,
    * if this is their native terrain. */
-  return can_unit_exist_at_tile(punit, unit_tile(punit));
+  return can_unit_exist_at_tile(punit, punit->tile);
 }
 
 /****************************************************************************
@@ -97,7 +92,7 @@ bool unit_can_defend_here(const struct unit *punit)
 ****************************************************************************/
 bool can_attack_non_native(const struct unit_type *utype)
 {
-  return (utype_class(utype)->move_type == UMT_SEA
+  return (utype_class(utype)->move_type == SEA_MOVING
           && !utype_has_flag(utype, F_NO_LAND_ATTACK));
 }
 
@@ -107,13 +102,13 @@ bool can_attack_non_native(const struct unit_type *utype)
 ****************************************************************************/
 bool can_attack_from_non_native(const struct unit_type *utype)
 {
-  /* It's clear that UMT_LAND should not be able to attack from
-   * non-native (unless F_MARINES) and it's clear that UMT_SEA
+  /* It's clear that LAND_MOVING should not be able to attack from
+   * non-native (unless F_MARINES) and it's clear that SEA_MOVING
    * should be able to attack from non-native. It's not clear what to do
-   * with UMT_BOTH. At the moment we return FALSE for
+   * with BOTH_MOVING. At the moment we return FALSE for
    * them. One can always give "Marines" flag for them. This should be
    * generalized for unit_classes anyway. */
-  return (utype_class(utype)->move_type == UMT_SEA
+  return (utype_class(utype)->move_type == SEA_MOVING
           || utype_has_flag(utype, F_MARINES));
 }
 
@@ -122,7 +117,7 @@ bool can_attack_from_non_native(const struct unit_type *utype)
 ****************************************************************************/
 bool is_sailing_unit(const struct unit *punit)
 {
-  return (uclass_move_type(unit_class(punit)) == UMT_SEA);
+  return (uclass_move_type(unit_class(punit)) == SEA_MOVING);
 }
 
 
@@ -131,7 +126,7 @@ bool is_sailing_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_ground_unit(const struct unit *punit)
 {
-  return (uclass_move_type(unit_class(punit)) == UMT_LAND);
+  return (uclass_move_type(unit_class(punit)) == LAND_MOVING);
 }
 
 
@@ -140,7 +135,7 @@ bool is_ground_unit(const struct unit *punit)
 ****************************************************************************/
 bool is_sailing_unittype(const struct unit_type *punittype)
 {
-  return (utype_move_type(punittype) == UMT_SEA);
+  return (utype_move_type(punittype) == SEA_MOVING);
 }
 
 
@@ -149,7 +144,7 @@ bool is_sailing_unittype(const struct unit_type *punittype)
 ****************************************************************************/
 bool is_ground_unittype(const struct unit_type *punittype)
 {
-  return (utype_move_type(punittype) == UMT_LAND);
+  return (utype_move_type(punittype) == LAND_MOVING);
 }
 
 /****************************************************************************
@@ -206,7 +201,9 @@ bool can_exist_at_tile(const struct unit_type *utype,
   if (NULL != tile_city(ptile)
       && (uclass_has_flag(utype_class(utype), UCF_BUILD_ANYWHERE)
           || is_native_near_tile(utype, ptile)
-          || (1 == game.info.citymindist
+          || ((1 == game.info.citymindist
+               || (0 == game.info.citymindist
+                   && 1 == game.info.min_dist_bw_cities))
               && is_city_channel_tile(utype_class(utype), ptile)))) {
     return TRUE;
   }
@@ -283,15 +280,10 @@ bool is_native_to_class(const struct unit_class *punitclass,
   if (BV_ISSET(pterrain->native_to, uclass_index(punitclass))) {
     return TRUE;
   }
-
-  road_type_iterate(proad) {
-    if (contains_special(special, road_special(proad))
-        && road_has_flag(proad, RF_NATIVE_TILE)
-        && is_native_road_to_uclass(proad, punitclass)) {
-      return TRUE;
-    }
-  } road_type_iterate_end;
-
+  if (uclass_has_flag(punitclass, UCF_ROAD_NATIVE)
+      && contains_special(special, S_ROAD)) {
+    return TRUE;
+  }
   if (uclass_has_flag(punitclass, UCF_RIVER_NATIVE)
       && contains_special(special, S_RIVER)) {
     return TRUE;
@@ -421,7 +413,7 @@ static bool zoc_ok_move_gen(const struct unit *punit,
 ****************************************************************************/
 bool zoc_ok_move(const struct unit *punit, const struct tile *dst_tile)
 {
-  return zoc_ok_move_gen(punit, unit_tile(punit), dst_tile);
+  return zoc_ok_move_gen(punit, punit->tile, dst_tile);
 }
 
 
@@ -505,7 +497,7 @@ unit_move_to_tile_test(const struct unit_type *punittype,
     }
 
     /* 6) */
-    if (utype_move_type(punittype) == UMT_LAND
+    if (utype_move_type(punittype) == LAND_MOVING
         && is_ocean_tile(src_tile)      /* Moving from ocean */
         && !utype_has_flag(punittype, F_MARINES)) {
       /* Most ground units can't move into cities from ships. (Note this
@@ -577,6 +569,22 @@ bool can_unit_type_transport(const struct unit_type *transporter,
   }
 
   return BV_ISSET(transporter->cargo, uclass_index(transported));
+}
+
+/**************************************************************************
+  Convert move type names to enum; case insensitive;
+  returns MOVETYPE_LAST if can't match.
+**************************************************************************/
+enum unit_move_type move_type_from_str(const char *s)
+{
+  int i;
+
+  for (i = 0; i < MOVETYPE_LAST; i++) {
+    if (fc_strcasecmp(move_type_names[i], s)==0) {
+      return i;
+    }
+  }
+  return MOVETYPE_LAST;
 }
 
 /**************************************************************************

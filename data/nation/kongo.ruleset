@@ -20,15 +20,21 @@ leaders = {
  "Nvita a Nkanga",      "Male"
 }
 
+ruler_titles = {
+ "government",      "male_title",        "female_title"
+ "Monarchy",        _("Manikongo %s"),   _("?female:Manikongo %s")
+}
+
 flag         = "kongo"
 flag_alt     = "-"
 city_style   = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "congolese", "brazzaville-congolese"
+civilwar_nations = "swazi", "zulu"
 
 cities =
  "M'banza-Kongo",

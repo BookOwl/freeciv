@@ -16,7 +16,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -31,7 +31,6 @@
 #include "government.h"
 #include "player.h"
 #include "tech.h"
-#include "traits.h"
 
 #include "nation.h"
 
@@ -67,8 +66,7 @@ static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
 #define NATION_CHECK(pnation, action)                                       \
     fc_assert_action(nation_check(pnation,                                  \
                                   log_do_output_for_level(LOG_ERROR),       \
-                                  __FILE__, __FUNCTION__, __FC_LINE__),     \
-                                  action)
+                                  __FILE__, __FUNCTION__, __LINE__), action)
 #else
 #define NATION_CHECK(pnation, action) /* Do Nothing. */
 #endif /* DEBUG */
@@ -567,7 +565,6 @@ static void nation_init(struct nation_type *pnation)
     pnation->server.civilwar_nations = nation_list_new();
     pnation->server.parent_nations = nation_list_new();
     pnation->server.conflicts_with = nation_list_new();
-    pnation->server.traits = fc_calloc(trait_max() + 1, sizeof(int));
   }
 }
 
@@ -585,7 +582,6 @@ static void nation_free(struct nation_type *pnation)
     nation_list_destroy(pnation->server.civilwar_nations);
     nation_list_destroy(pnation->server.parent_nations);
     nation_list_destroy(pnation->server.conflicts_with);
-    FC_FREE(pnation->server.traits);
   }
 
   memset(pnation, 0, sizeof(*pnation));

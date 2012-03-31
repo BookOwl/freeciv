@@ -12,11 +12,8 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "citydlg.h"
 
@@ -24,7 +21,7 @@
   Pop up (or bring to the front) a dialog for the given city.  It may or
   may not be modal.
 **************************************************************************/
-void gui_real_city_dialog_popup(struct city *pcity)
+void real_city_dialog_popup(struct city *pcity)
 {
   /* PORTME */
 }
@@ -32,7 +29,7 @@ void gui_real_city_dialog_popup(struct city *pcity)
 /**************************************************************************
   Close the dialog for the given city.
 **************************************************************************/
-void gui_popdown_city_dialog(struct city *pcity)
+void popdown_city_dialog(struct city *pcity)
 {
   /* PORTME */
 }
@@ -40,7 +37,7 @@ void gui_popdown_city_dialog(struct city *pcity)
 /**************************************************************************
   Close the dialogs for all cities.
 **************************************************************************/
-void gui_popdown_all_city_dialogs(void)
+void popdown_all_city_dialogs(void)
 {
   /* PORTME */
 }
@@ -48,7 +45,7 @@ void gui_popdown_all_city_dialogs(void)
 /**************************************************************************
   Refresh (update) all data for the given city's dialog.
 **************************************************************************/
-void gui_real_city_dialog_refresh(struct city *pcity)
+void real_city_dialog_refresh(struct city *pcity)
 {
   /* PORTME */
 }
@@ -58,7 +55,7 @@ void gui_real_city_dialog_refresh(struct city *pcity)
   typically means updating both the unit's home city (if any) and the
   city in which it is present (if any).
 **************************************************************************/
-void gui_refresh_unit_city_dialogs(struct unit *punit)
+void refresh_unit_city_dialogs(struct unit *punit)
 {
   /* PORTME */
 #if 0
@@ -67,7 +64,7 @@ void gui_refresh_unit_city_dialogs(struct unit *punit)
   struct city_dialog *pdialog;
 
   pcity_sup = game_city_by_number(punit->homecity);
-  pcity_pre = tile_city(unit_tile(punit));
+  pcity_pre = tile_city(punit->tile);
 
   if (pcity_sup && (pdialog = get_city_dialog(pcity_sup))) {
     city_dialog_update_supported_units(pdialog);
@@ -82,7 +79,7 @@ void gui_refresh_unit_city_dialogs(struct unit *punit)
 /**************************************************************************
   Return whether the dialog for the given city is open.
 **************************************************************************/
-bool gui_city_dialog_is_open(struct city *pcity)
+bool city_dialog_is_open(struct city *pcity)
 {
   /* PORTME */
   return FALSE;

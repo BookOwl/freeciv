@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -33,8 +33,11 @@
 #include "player.h"
 #include "unit.h"
 
-/* common/scriptcore */
-#include "luascript_types.h"
+/* ai */
+#include "advdiplomacy.h"
+
+/* scripting */
+#include "script.h"
 
 /* server */
 #include "citytools.h"
@@ -47,9 +50,6 @@
 
 /* server/advisors */
 #include "autosettlers.h"
-
-/* server/scripting */
-#include "script_server.h"
 
 #include "diplhand.h"
 
@@ -89,7 +89,7 @@ static void call_treaty_accepted(struct player *pplayer, struct player *aplayer,
 }
 
 /**************************************************************************
-  Initialize diplhand module
+...
 **************************************************************************/
 void diplhand_init(void)
 {
@@ -122,7 +122,7 @@ void free_treaties(void)
 }
 
 /**************************************************************************
-  Find currently active treaty between two players.
+...
 **************************************************************************/
 struct Treaty *find_treaty(struct player *plr0, struct player *plr1)
 {
@@ -431,11 +431,11 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
                            advance_name_for_player(pdest, pclause->value),
                            nation_plural_for_player(pgiver));
 
-          script_server_signal_emit("tech_researched", 3,
-                                    API_TYPE_TECH_TYPE,
-                                    advance_by_number(pclause->value),
-                                    API_TYPE_PLAYER, pdest,
-                                    API_TYPE_STRING, "traded");
+          script_signal_emit("tech_researched", 3,
+                             API_TYPE_TECH_TYPE,
+                             advance_by_number(pclause->value),
+                             API_TYPE_PLAYER, pdest,
+                             API_TYPE_STRING, "traded");
           do_dipl_cost(pdest, pclause->value);
           found_new_tech(pdest, pclause->value, FALSE, TRUE);
         }
@@ -613,7 +613,7 @@ void establish_embassy(struct player *pplayer, struct player *aplayer)
 }
 
 /**************************************************************************
-  Handle request to remove clause from treaty.
+...
 **************************************************************************/
 void handle_diplomacy_remove_clause_req(struct player *pplayer,
 					int counterpart, int giver,
@@ -646,7 +646,7 @@ void handle_diplomacy_remove_clause_req(struct player *pplayer,
 }
 
 /**************************************************************************
-  Handle request to add clause to treaty between two players.
+...
 **************************************************************************/
 void handle_diplomacy_create_clause_req(struct player *pplayer,
 					int counterpart, int giver,
@@ -694,8 +694,7 @@ void handle_diplomacy_create_clause_req(struct player *pplayer,
 }
 
 /**************************************************************************
-  Cancel meeting. No sanity checking of input parameters, so don't call
-  this with input directly from untrusted source.
+...
 **************************************************************************/
 static void really_diplomacy_cancel_meeting(struct player *pplayer,
 					    struct player *pother)
@@ -723,7 +722,7 @@ static void really_diplomacy_cancel_meeting(struct player *pplayer,
 }
 
 /**************************************************************************
-  Handle meeting cancelling request.
+...
 **************************************************************************/
 void handle_diplomacy_cancel_meeting_req(struct player *pplayer,
 					 int counterpart)
@@ -738,7 +737,7 @@ void handle_diplomacy_cancel_meeting_req(struct player *pplayer,
 }
 
 /**************************************************************************
-  Handle meeting opening request.
+...
 **************************************************************************/
 void handle_diplomacy_init_meeting_req(struct player *pplayer,
 				       int counterpart)
@@ -815,7 +814,7 @@ void send_diplomatic_meetings(struct connection *dest)
 }
 
 /**************************************************************************
-  Cancels all meetings of player.
+...
 **************************************************************************/
 void cancel_all_meetings(struct player *pplayer)
 {
@@ -849,3 +848,4 @@ void reject_all_treaties(struct player *pplayer)
 					  FALSE);
   } players_iterate_end;
 }
+

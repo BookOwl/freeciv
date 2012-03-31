@@ -23,6 +23,7 @@ leaders = {
 
 ruler_titles = {
  "government",       "male_title",          "female_title"
+ "Democracy",        _("Prime Minister %s"),_("?female:Prime Minister %s")
  "Fundamentalism",   _("Bishop %s"),        _("Mother Superior %s")
  "Despotism",        _("Master %s"),        _("Mistress %s")
  "Monarchy",         _("Grand Master %s"),  _("Grand Mistress %s")
@@ -35,6 +36,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="sicilian", "carthaginian" 
 

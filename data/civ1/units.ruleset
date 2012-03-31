@@ -11,7 +11,7 @@
 
 [datafile]
 description="Civ1-style unit_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.3-ruleset"
 
 [veteran_system]
 ; What are the names of the levels?
@@ -53,12 +53,7 @@ veteran_move_bonus = 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
-; move_type     = Where unit moves; "Land", "Sea", or "Both".
-;                 This is optional field. If it's not
-;                 given, move type is automatically determined from native
-;                 terrains. You need to set it only if you want to set move
-;                 type "Both" for unit that has no native Land terrains or
-;                 for unit that has no native Oceanic terrains.
+; move_type     = Where unit moves; Land, Sea or Both.
 ; min_speed     = Minimum speed after damage and effects
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or airbase
 ; hut_behavior  = What happens to huts when unit enters tile: "Normal", "Nothing" or
@@ -72,6 +67,7 @@ veteran_move_bonus = 0, 0
 ; "DamageSlows"   = Damages units are slowed down
 ; "CanOccupyCity" = Military units of this class can occupy enemy cities
 ; "Missile"       = Unit is destroyed when it attacks
+; "RoadNative"    = Road tiles are always considered native terrain
 ; "RiverNative"   = River tiles are always considered native terrain
 ; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
 ; "Unreachable"   = Unit can be attacked only by units explicitly listing this class as target
@@ -89,6 +85,7 @@ veteran_move_bonus = 0, 0
 [unitclass_land]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Land")
+move_type     = "Land"
 min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
@@ -98,13 +95,15 @@ flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
 [unitclass_sea]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Sea")
+move_type     = "Sea"
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "DamageSlows"
+flags         = "TerrainSpeed", "DamageSlows"
 
 [unitclass_air]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Air")
+move_type     = "Both"
 min_speed     = 1
 hp_loss_pct   = 0
 hut_behavior  = "Nothing"
@@ -113,6 +112,7 @@ flags         = "Unreachable", "DoesntOccupyTile"
 [unitclass_missile]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Missile")
+move_type     = "Both"
 min_speed     = 1
 hp_loss_pct   = 0
 hut_behavior  = "Nothing"
@@ -149,7 +149,6 @@ flags         = "Missile", "Unreachable", "DoesntOccupyTile"
 ;                 "None" => available from start
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; convert_to    = can be converted to another type of unit by name
-; convert_time  = time it takes to convert to another unit type
 ; class         = One of the classes listed above
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
@@ -158,15 +157,6 @@ flags         = "Missile", "Unreachable", "DoesntOccupyTile"
 ; cargo         = Unit classes this unit can transport
 ; city_size     = Initial size of the cities Settlers type unit builds
 ; flags         = special flag strings
-;
-; veteran_names = Special veteran level for this unit. See the definitions in
-;                 game.ruleset. All of the veteran_* entries have to have the
-;                 same length!
-; veteran_raise_chance =
-; veteran_work_raise_chance =
-; veteran_power_fact =
-; veteran_move_bonus =
-;
 ; roles         = special role strings
 ; sound_move	= optional sound effect when the unit moves
 ; sound_move_alt= optional alternative sound effect if above not

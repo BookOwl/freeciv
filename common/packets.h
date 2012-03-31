@@ -13,10 +13,6 @@
 #ifndef FC__PACKETS_H
 #define FC__PACKETS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 struct connection;
 struct data_in;
 
@@ -94,24 +90,13 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 					    struct packet_player_attribute_chunk
 					    *packet);
 
-#ifdef DEBUG
-#define PACKET_TYPE_SANITY(_type_) \
-  if (((_type_ & 0xff00) >> 8) == PACKET_SERVER_JOIN_REQ) { \
-    log_error("Packet type %s (%d) has upper byte matching old PACKET_SERVER_JOIN_REQ.", \
-              packet_name(_type_), _type_); \
-  }
-#else  /* DEBUG */
-#define PACKET_TYPE_SANITY(_type_)
-#endif /* DEBUG */
-
 #define SEND_PACKET_START(type) \
   unsigned char buffer[MAX_LEN_PACKET]; \
   struct data_out dout; \
   \
   dio_output_init(&dout, buffer, sizeof(buffer)); \
   dio_put_uint16(&dout, 0); \
-  dio_put_uint16(&dout, type); \
-  PACKET_TYPE_SANITY(type)
+  dio_put_uint8(&dout, type);
 
 #define SEND_PACKET_END \
   { \
@@ -135,7 +120,7 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
     dio_input_init(&din, pc->buffer->data, MIN(size, pc->buffer->ndata)); \
   } \
   dio_get_uint16(&din, NULL); \
-  dio_get_uint16(&din, NULL);
+  dio_get_uint8(&din, NULL);
 
 #define RECEIVE_PACKET_END(result) \
   check_packet(&din, pc); \
@@ -160,9 +145,5 @@ void check_packet(struct data_in *din, struct connection *pc);
   } else {                                                                  \
     strvec = NULL;                                                          \
   }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PACKETS_H */

@@ -15,7 +15,7 @@ EXTRA_DIST =			\
 	README.cma		\
 	README.delta		\
 	README.effects		\
-	README.fcdb		\
+	README.ftwl		\
 	README.graphics		\
 	README.nations		\
 	README.packaging	\

@@ -11,7 +11,6 @@ legend=_("In the centuries after their unification by Chinggis Khan, the\
 leaders = {
  "name",        "sex"
  "Chinggis",	"Male" ; Genghis / Чингис
- "Börte",       "Female" ; Bortei / Бөртэ
  "Ögedei",	"Male" ; Өгэдэй
  "Bat",		"Male" ; Batu / Бат
  "Tsagadai",	"Male" ; Chagatai / Цагадай
@@ -38,10 +37,11 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Tibetan", "Tuvan", "Kalmyk", "Timurid", "Uyghur", "Tatar",
- "Crimean Tatar", "Buryat", "Golden Horde"
+ "Crimean Tatar"
 
 cities=
  "Karakorum", ; Каракорум

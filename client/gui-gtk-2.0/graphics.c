@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -23,27 +23,21 @@
 
 #include "gtkpixcomm.h"
 
-/* utility */
+#include "game.h"
 #include "log.h"
 #include "mem.h"
+#include "movement.h"
 #include "shared.h"
 #include "support.h"
-
-/* common */
-#include "game.h"
-#include "movement.h"
 #include "unit.h"
 #include "version.h"
 
-/* client */
 #include "climisc.h"
 #include "colors.h"
+#include "gui_main.h"
 #include "mapview_g.h"
 #include "options.h"
 #include "tilespec.h"
-
-/* client/gui-gtk-2.0 */
-#include "gui_main.h"
 
 #include "graphics.h"
 
@@ -53,7 +47,7 @@ struct sprite *radar_gfx_sprite;
 GdkCursor *fc_cursors[CURSOR_LAST][NUM_CURSOR_FRAMES];
 
 /***************************************************************************
-  Returns TRUE to indicate that gtk-client supports isometric view
+...
 ***************************************************************************/
 bool isometric_view_supported(void)
 {
@@ -61,19 +55,22 @@ bool isometric_view_supported(void)
 }
 
 /***************************************************************************
-  Returns TRUE to indicate that gtk-client supports overhead view
+...
 ***************************************************************************/
 bool overhead_view_supported(void)
 {
   return TRUE;
 }
 
+/***************************************************************************
+...
+***************************************************************************/
 #define COLOR_MOTTO_FACE_R    0x2D
 #define COLOR_MOTTO_FACE_G    0x71
 #define COLOR_MOTTO_FACE_B    0xE3
 
 /**************************************************************************
-  Draw string with shadow
+...
 **************************************************************************/
 void gtk_draw_shadowed_string(GdkDrawable *drawable,
 			      GdkGC *black_gc,
@@ -85,7 +82,7 @@ void gtk_draw_shadowed_string(GdkDrawable *drawable,
 }
 
 /***************************************************************************
-  Load cursor sprites
+...
 ***************************************************************************/
 void load_cursors(void)
 {
@@ -107,14 +104,13 @@ void load_cursors(void)
 }
 
 /***************************************************************************
-  Put unit sprite to canvas
+ ...
 ***************************************************************************/
 void create_overlay_unit(struct canvas *pcanvas, struct unit_type *punittype)
 {
   int x1, x2, y1, y2;
   int width, height;
-  struct sprite *sprite = get_unittype_sprite(tileset, punittype,
-                                              direction8_invalid());
+  struct sprite *sprite = get_unittype_sprite(tileset, punittype);
 
   sprite_get_bounding_box(sprite, &x1, &y1, &x2, &y2);
   if (pcanvas->type == CANVAS_PIXBUF) {

@@ -18,7 +18,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -44,7 +44,6 @@
 #include "unitlist.h"
 
 /* server */
-#include "aiiface.h"
 #include "citytools.h"
 #include "gamehand.h"
 #include "maphand.h"
@@ -118,10 +117,11 @@ static struct player *create_barbarian_player(enum barbarian_type type)
   } players_iterate_end;
 
   /* make a new player, or not */
-  barbarians = server_create_player(-1, default_ai_type_name(), NULL);
+  barbarians = server_create_player(-1);
   if (!barbarians) {
     return NULL;
   }
+
   server_player_init(barbarians, TRUE, TRUE);
 
   nation = pick_a_nation(NULL, FALSE, TRUE, type);
@@ -133,7 +133,7 @@ static struct player *create_barbarian_player(enum barbarian_type type)
 
   sz_strlcpy(barbarians->username, ANON_USER_NAME);
   barbarians->is_connected = FALSE;
-  barbarians->government = nation->init_government;
+  barbarians->government = nation->server.init_government;
   fc_assert(barbarians->revolution_finishes < 0);
   barbarians->server.capital = FALSE;
   barbarians->economic.gold = 100;
@@ -155,8 +155,6 @@ static struct player *create_barbarian_player(enum barbarian_type type)
       player_diplstate_get(barbarians, pplayer)->type = DS_WAR;
     }
   } players_iterate_end;
-
-  CALL_PLR_AI_FUNC(gained_control, barbarians, barbarians);
 
   log_verbose("Created barbarian %s, player %d", player_name(barbarians),
               player_number(barbarians));
@@ -260,7 +258,7 @@ bool unleash_barbarians(struct tile *ptile)
       || game.info.turn < game.server.onsetbarbarian
       || num_role_units(L_BARBARIAN) == 0) {
     unit_list_iterate_safe((ptile)->units, punit) {
-      wipe_unit(punit, ULR_BARB_UNLEASH);
+      wipe_unit(punit);
     } unit_list_iterate_safe_end;
     return FALSE;
   }
@@ -270,8 +268,7 @@ bool unleash_barbarians(struct tile *ptile)
     return FALSE;
   }
 
-  adv_data_phase_init(barbarians, TRUE);
-  CALL_PLR_AI_FUNC(phase_begin, barbarians, barbarians, TRUE);
+  ai_data_phase_init(barbarians, TRUE);
 
   unit_cnt = 3 + fc_rand(4);
   for (i = 0; i < unit_cnt; i++) {
@@ -408,7 +405,7 @@ bool unleash_barbarians(struct tile *ptile)
     /* There's barbarian in this village! Kill the explorer. */
     unit_list_iterate_safe((ptile)->units, punit2) {
       if (unit_owner(punit2) != barbarians) {
-        wipe_unit(punit2, ULR_BARB_UNLEASH);
+        wipe_unit(punit2);
         alive = FALSE;
       } else {
         send_unit_info(NULL, punit2);
@@ -571,6 +568,7 @@ static void try_summon_barbarians(void)
     if (!barbarians) {
       return;
     }
+
     /* Setup data phase if it's not already set up. Created ferries may
        need that data.
        We don't know if create_barbarian_player() above created completely
@@ -578,12 +576,9 @@ static void try_summon_barbarians(void)
        one, phase has already been set up at turn begin and will be closed
        at turn end. If this is completely new player, we have to take care
        of both opening and closing the data phase. Return value of
-       adv_data_phase_init() tells us if data phase was already initialized
+       ai_data_phase_init() tells us if data phase was already initialized
        at turn beginning. */
-    miniphase = adv_data_phase_init(barbarians, TRUE);
-    if (miniphase) {
-      CALL_PLR_AI_FUNC(phase_begin, barbarians, barbarians, TRUE);
-    }
+    miniphase = ai_data_phase_init(barbarians, TRUE);
 
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
 
@@ -616,8 +611,7 @@ static void try_summon_barbarians(void)
     }
 
     if (miniphase) {
-      CALL_PLR_AI_FUNC(phase_finished, barbarians, barbarians);
-      adv_data_phase_done(barbarians);
+      ai_data_phase_done(barbarians);
     }
   }
 

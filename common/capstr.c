@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>		/* getenv() */
@@ -75,9 +75,6 @@ const char * const our_capability = our_capability_internal;
  * The actual capability string is now defined in version.in.
  */
 
-/**************************************************************************
-  Setup our internal network capability string.
-**************************************************************************/
 void init_our_capability(void)
 {
   const char *s;

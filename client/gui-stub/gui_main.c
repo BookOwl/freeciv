@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
@@ -25,11 +25,7 @@
 #include "fciconv.h"
 #include "log.h"
 
-/* gui main header */
-#include "gui_stub.h"
-
 /* client */
-#include "gui_cbsetter.h"
 #include "client_main.h"
 #include "editgui_g.h"
 #include "ggz_g.h"
@@ -46,8 +42,8 @@ const bool gui_use_transliteration = FALSE;
   Called by the tileset code to set the font size that should be used to
   draw the city names and productions.
 ****************************************************************************/
-void gui_set_city_names_font_sizes(int my_city_names_font_size,
-                                   int my_city_productions_font_size)
+void set_city_names_font_sizes(int my_city_names_font_size,
+			       int my_city_productions_font_size)
 {
   log_error("Unimplemented set_city_names_font_sizes.");
   /* PORTME */
@@ -56,7 +52,7 @@ void gui_set_city_names_font_sizes(int my_city_names_font_size,
 /**************************************************************************
   Do any necessary pre-initialization of the UI, if necessary.
 **************************************************************************/
-void gui_ui_init(void)
+void ui_init(void)
 {
   /* PORTME */
 }
@@ -66,7 +62,6 @@ void gui_ui_init(void)
 **************************************************************************/
 int main(int argc, char **argv)
 {
-  setup_gui_funcs();
   return client_main(argc, argv);
 }
 
@@ -109,7 +104,7 @@ static void parse_options(int argc, char **argv)
   The main loop for the UI.  This is called from main(), and when it
   exits the client will exit.
 **************************************************************************/
-void gui_ui_main(int argc, char *argv[])
+void ui_main(int argc, char *argv[])
 {
   parse_options(argc, argv);
 
@@ -120,7 +115,7 @@ void gui_ui_main(int argc, char *argv[])
 /****************************************************************************
   Extra initializers for client options.
 ****************************************************************************/
-void gui_gui_options_extra_init(void)
+void gui_options_extra_init(void)
 {
   /* Nothing to do. */
 }
@@ -128,7 +123,7 @@ void gui_gui_options_extra_init(void)
 /**************************************************************************
   Do any necessary UI-specific cleanup
 **************************************************************************/
-void gui_ui_exit()
+void ui_exit()
 {
   /* PORTME */
 }
@@ -136,7 +131,7 @@ void gui_ui_exit()
 /**************************************************************************
   Return our GUI type
 **************************************************************************/
-enum gui_type gui_get_gui_type(void)
+enum gui_type get_gui_type(void)
 {
   return GUI_STUB;
 }
@@ -144,7 +139,7 @@ enum gui_type gui_get_gui_type(void)
 /**************************************************************************
  Update the connected users list at pregame state.
 **************************************************************************/
-void gui_real_conn_list_dialog_update(void)
+void real_conn_list_dialog_update(void)
 {
   /* PORTME */
 }
@@ -153,7 +148,7 @@ void gui_real_conn_list_dialog_update(void)
   Make a bell noise (beep).  This provides low-level sound alerts even
   if there is no real sound support.
 **************************************************************************/
-void gui_sound_bell(void)
+void sound_bell(void)
 {
   /* PORTME */
 }
@@ -165,7 +160,7 @@ void gui_sound_bell(void)
   This function is called after the client succesfully has connected
   to the server.
 **************************************************************************/
-void gui_add_net_input(int sock)
+void add_net_input(int sock)
 {
   /* PORTME */
 }
@@ -175,7 +170,7 @@ void gui_add_net_input(int sock)
 
   This function is called if the client disconnects from the server.
 **************************************************************************/
-void gui_remove_net_input(void)
+void remove_net_input(void)
 {
   /* PORTME */
 }
@@ -183,7 +178,7 @@ void gui_remove_net_input(void)
 /**************************************************************************
   Called to monitor a GGZ socket.
 **************************************************************************/
-void gui_add_ggz_input(int sock)
+void add_ggz_input(int sock)
 {
   /* PORTME */
 }
@@ -192,7 +187,7 @@ void gui_add_ggz_input(int sock)
   Called on disconnection to remove monitoring on the GGZ socket.  Only
   call this if we're actually in GGZ mode.
 **************************************************************************/
-void gui_remove_ggz_input(void)
+void remove_ggz_input(void)
 {
   /* PORTME */
 }
@@ -208,7 +203,7 @@ void gui_remove_ggz_input(void)
   the icon for the active unit. Or idx in [0..num_units_below-1] for
   secondary (inactive) units on the same tile.
 **************************************************************************/
-void gui_set_unit_icon(int idx, struct unit *punit)
+void set_unit_icon(int idx, struct unit *punit)
 {
   /* PORTME */
 }
@@ -220,7 +215,7 @@ void gui_set_unit_icon(int idx, struct unit *punit)
 
   Is disabled by default.
 **************************************************************************/
-void gui_set_unit_icons_more_arrow(bool onoff)
+void set_unit_icons_more_arrow(bool onoff)
 {
   /* PORTME */
 }
@@ -230,7 +225,7 @@ void gui_set_unit_icons_more_arrow(bool onoff)
   Standard updates like update_unit_info_label() are handled in the platform-
   independent code, so some clients will not need to do anything here.
 ****************************************************************************/
-void gui_real_focus_units_changed(void)
+void real_focus_units_changed(void)
 {
   /* PORTME */
 }
@@ -240,7 +235,7 @@ void gui_real_focus_units_changed(void)
   function should be called sometimes soon, and passed the 'data' pointer
   as its data.
 ****************************************************************************/
-void gui_add_idle_callback(void (callback)(void *), void *data)
+void add_idle_callback(void (callback)(void *), void *data)
 {
   /* PORTME */
 
@@ -252,56 +247,56 @@ void gui_add_idle_callback(void (callback)(void *), void *data)
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_tileset_changed(void)
+void editgui_tileset_changed(void)
 {}
 
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_refresh(void)
+void editgui_refresh(void)
 {}
 
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_popup_properties(const struct tile_list *tiles, int objtype)
+void editgui_popup_properties(const struct tile_list *tiles, int objtype)
 {}
 
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_popdown_all(void)
+void editgui_popdown_all(void)
 {}
 
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_notify_object_changed(int objtype, int object_id, bool remove)
+void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 {}
 
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_notify_object_created(int tag, int id)
+void editgui_notify_object_created(int tag, int id)
 {}
 
 /****************************************************************************
   Stub for ggz function
 ****************************************************************************/
-void gui_gui_ggz_embed_leave_table(void)
+void gui_ggz_embed_leave_table(void)
 {}
 
 /****************************************************************************
   Stub for ggz function
 ****************************************************************************/
-void gui_gui_ggz_embed_ensure_server(void)
+void gui_ggz_embed_ensure_server(void)
 {}
 
 
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
-void gui_gui_update_font(const char *font_name, const char *font_value)
+void gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
 }

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -449,11 +449,11 @@ void real_menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
 			   can_units_do_activity(punits, ACTIVITY_EXPLORE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_ROAD,
-			   can_units_do_connect(punits, ACTIVITY_ROAD, NULL));
+			   can_units_do_connect(punits, ACTIVITY_ROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_RAIL,
-			   can_units_do_connect(punits, ACTIVITY_RAILROAD, NULL));
+			   can_units_do_connect(punits, ACTIVITY_RAILROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE,
-			   can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL));
+			   can_units_do_connect(punits, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_GOTO_CITY,
 			   any_cities);
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_WONDER,
@@ -470,7 +470,7 @@ void real_menus_update(void)
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
-	ptile = unit_tile(punit);
+	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
@@ -767,13 +767,13 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_auto_explore();
     break;
   case MENU_ORDER_CONNECT_ROAD:
-    key_unit_connect(ACTIVITY_ROAD, NULL);
+    key_unit_connect(ACTIVITY_ROAD);
     break;
   case MENU_ORDER_CONNECT_RAIL:
-    key_unit_connect(ACTIVITY_RAILROAD, NULL);
+    key_unit_connect(ACTIVITY_RAILROAD);
     break;
   case MENU_ORDER_CONNECT_IRRIGATE:
-    key_unit_connect(ACTIVITY_IRRIGATE, NULL);
+    key_unit_connect(ACTIVITY_IRRIGATE);
     break;
   case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -809,7 +809,7 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_nuke();
     break;
   case MENU_ORDER_SELECT_SAME_TYPE:
-    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_WORLD);
+    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_ALL);
     break;
   case MENU_ORDER_WAIT:
     key_unit_wait();

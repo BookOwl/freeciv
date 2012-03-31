@@ -21,6 +21,7 @@ ruler_titles =
  { "government", "male_title",  "female_title"
  ; /* TRANS: Lugal = Great Man */
  "Monarchy",   _("%s Lugal"),   _("?female:%s Lugal")
+ "Communism",  _("%s Ensi"),    _("?female:%s Ensi")
 } 
 
 flag = "babylon"
@@ -29,8 +30,9 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "israelite", "persian", "aramean", "sumerian", "assyrian"
+civilwar_nations = "israeli", "persian", "aramean", "sumerian", "assyrian"
 
 cities =
  "Babilum", ; Babylon

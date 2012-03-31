@@ -30,9 +30,10 @@ city_style = "Celtic"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="choctaw", "iroquois", "chickasaw"
+civilwar_nations="sioux", "iroquois", "nuu-chah-nulth"
 
 ; names of early Cherokee settlements in no particular order
 cities =

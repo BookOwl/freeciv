@@ -20,7 +20,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",          "female_title"
- "Despotism",       _("Voivode %s"),       _("?female:Voivode %s")
+ "Despotism",       _("?title:Leader %s"), _("?female:Leader %s")
+ "Democracy",       _("Prime Minister %s"),_("?female:Prime Minister %s")
  "Fundamentalism",  _("Pope %s"),          _("Priestess %s")
  "Communism",   _("General Secretary %s"), _("?female:General Secretary %s")
 }
@@ -32,6 +33,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="silesian", "czech"
 

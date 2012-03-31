@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -59,25 +59,21 @@
 #include <winsock.h>
 #endif
 
-/* utility */
-#include "capability.h"
 #include "fciconv.h"
+
+#include "capability.h"
+#include "dataio.h"
+#include "events.h"
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
+#include "packets.h"
 #include "shared.h"
 #include "support.h"
 #include "timing.h"
 
-/* common */
-#include "dataio.h"
-#include "events.h"
-#include "game.h"
-#include "packets.h"
-
-/* server */
-#include "aiiface.h"
 #include "auth.h"
 #include "connecthand.h"
 #include "console.h"
@@ -173,7 +169,7 @@ static bool readline_handled_input = FALSE;
 static bool readline_initialized = FALSE;
 
 /*****************************************************************************
-  Readline callback for input.
+...
 *****************************************************************************/
 static void handle_readline_input_callback(char *line)
 {
@@ -233,8 +229,7 @@ static void close_connection(struct connection *pconn)
 }
 
 /*****************************************************************************
-  Close all network stuff: connections, listening sockets, metaserver
-  connection...
+...
 *****************************************************************************/
 void close_connections_and_socket(void)
 {
@@ -307,8 +302,8 @@ static void really_close_connections(void)
 }
 
 /****************************************************************************
-  Break a client connection. You should almost always use
-  connection_close_server() instead of calling this function directly.
+  Break a client connection. You should almost always use connection_close()
+  instead of calling this function directly.
 ****************************************************************************/
 static void server_conn_close_callback(struct connection *pconn)
 {
@@ -337,7 +332,7 @@ static void cut_lagging_connection(struct connection *pconn)
      * disconnected and reconnect. */
     log_verbose("connection (%s) cut due to lagging player",
                 conn_description(pconn));
-    connection_close_server(pconn, _("lagging connection"));
+    connection_close(pconn, _("lagging connection"));
   }
 }
 
@@ -391,7 +386,7 @@ void flush_packets(void)
         if(FD_ISSET(pconn->sock, &exceptfs)) {
           log_verbose("connection (%s) cut due to exception data",
                       conn_description(pconn));
-          connection_close_server(pconn, _("network exception"));
+          connection_close(pconn, _("network exception"));
         } else {
 	  if(pconn->send_buffer && pconn->send_buffer->ndata > 0) {
 	    if(FD_ISSET(pconn->sock, &writefs)) {
@@ -438,19 +433,14 @@ static void incoming_client_packets(struct connection *pconn)
 
   while (get_packet(pconn, &packet)) {
     bool command_ok;
-
-#if PROCESSING_TIME_STATISTICS
     int request_id;
 
-    request_time = renew_timer_start(request_time, TIMER_USER, TIMER_ACTIVE);
-#endif /* PROCESSING_TIME_STATISTICS */
-
-    pconn->server.last_request_id_seen
-      = get_next_request_id(pconn->server.last_request_id_seen);
-
 #if PROCESSING_TIME_STATISTICS
-    request_id = pconn->server.last_request_id_seen;
-#endif /* PROCESSING_TIME_STATISTICS */
+    request_time = renew_timer_start(request_time, TIMER_USER, TIMER_ACTIVE);
+#endif
+
+    request_id = pconn->server.last_request_id_seen
+      = get_next_request_id(pconn->server.last_request_id_seen);
 
     connection_do_buffer(pconn);
     start_processing_request(pconn, pconn->server.last_request_id_seen);
@@ -464,16 +454,16 @@ static void incoming_client_packets(struct connection *pconn)
 #if PROCESSING_TIME_STATISTICS
     log_verbose("processed request %d in %gms", request_id, 
                 read_timer_seconds(request_time) * 1000.0);
-#endif /* PROCESSING_TIME_STATISTICS */
+#endif
 
     if (!command_ok) {
-      connection_close_server(pconn, _("rejected"));
+      connection_close(pconn, _("rejected"));
     }
   }
 
 #if PROCESSING_TIME_STATISTICS
   free_timer(request_time);
-#endif /* PROCESSING_TIME_STATISTICS */
+#endif
 }
 
 
@@ -550,7 +540,7 @@ enum server_events server_sniff_all_input(void)
       if (connections && conn_list_size(game.est_connections) == 0) {
 	if (last_noplayers != 0) {
 	  if (time(NULL) > last_noplayers + srvarg.quitidle) {
-	    save_game_auto("Lost all connections", AS_QUITIDLE);
+	    save_game_auto("Lost all connections", "quitidle");
             log_normal(_("Restarting for lack of players."));
             set_meta_message_string("restarting for lack of players");
 	    (void) send_server_info_to_metaserver(META_INFO);
@@ -598,7 +588,7 @@ enum server_events server_sniff_all_input(void)
           } else {
             log_verbose("connection (%s) cut due to ping timeout",
                         conn_description(pconn));
-            connection_close_server(pconn, _("ping timeout"));
+            connection_close(pconn, _("ping timeout"));
           }
         } else {
           connection_ping(pconn);
@@ -612,13 +602,12 @@ enum server_events server_sniff_all_input(void)
       if (srvarg.auth_enabled
           && !pconn->server.is_closing
           && pconn->server.status != AS_ESTABLISHED) {
-        auth_process_status(pconn);
+        process_authentication_status(pconn);
       }
     } conn_list_iterate_end
 
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (S_S_RUNNING == server_state() && game.info.timeout == -1) {
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
       return S_E_END_OF_TURN_TIMEOUT;
     }
@@ -671,7 +660,6 @@ enum server_events server_sniff_all_input(void)
 
     if (fc_select(max_desc + 1, &readfs, &writefs, &exceptfs, &tv) == 0) {
       /* timeout */
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
       if (game.info.timeout > 0
 	  && S_S_RUNNING == server_state()
@@ -748,7 +736,7 @@ enum server_events server_sniff_all_input(void)
           && FD_ISSET(pconn->sock, &exceptfs)) {
         log_verbose("connection (%s) cut due to exception data",
                     conn_description(pconn));
-        connection_close_server(pconn, _("network exception"));
+        connection_close(pconn, _("network exception"));
       }
     }
 #ifdef GGZ_SERVER
@@ -836,10 +824,10 @@ enum server_events server_sniff_all_input(void)
           /* We read packets; now handle them. */
           incoming_client_packets(pconn);
         } else if (-2 == nb) {
-          connection_close_server(pconn, _("client disconnected"));
+          connection_close(pconn, _("client disconnected"));
         } else {
           /* Read failure; the connection is closed. */
-          connection_close_server(pconn, _("read error"));
+          connection_close(pconn, _("read error"));
         }
       }
 
@@ -862,8 +850,6 @@ enum server_events server_sniff_all_input(void)
     break;
   }
   con_prompt_off();
-
-  call_ai_refresh();
 
   if (game.info.timeout > 0
       && S_S_RUNNING == server_state()
@@ -936,14 +922,8 @@ static int server_accept_connection(int sockfd)
   if (fromend.saddr.sa_family == AF_INET6) {
     inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
               dst, sizeof(dst));
-  } else if (fromend.saddr.sa_family == AF_INET) {
-    inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));
   } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family in server_accept_connection()");
-
-    return -1;
+    inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));
   }
 #else  /* IPv6 support */
   dst = inet_ntoa(fromend.saddr_in4.sin_addr);
@@ -1047,32 +1027,35 @@ int server_make_connection(int new_sock, const char *client_addr, const char *cl
 int server_open_socket(void)
 {
   /* setup socket address */
+  union fc_sockaddr names[2];
   union fc_sockaddr addr;
   struct ip_mreq mreq4;
   const char *cause, *group;
-  int j, on, s;
+  int i, j, name_count, on, s;
   int lan_family;
-  struct fc_sockaddr_list *list;
-  int name_count;
 
 #ifdef IPV6_SUPPORT
   struct ipv6_mreq mreq6;
 #endif
 
-#ifdef IPV6_SUPPORT
-  list = net_lookup_service(srvarg.bind_addr, srvarg.port, FC_ADDR_ANY);
-#else  /* IPV6_SUPPORT */
-  list = net_lookup_service(srvarg.bind_addr, srvarg.port, FC_ADDR_IPV4);
-#endif /* IPV6_SUPPORT */
-
-  name_count = fc_sockaddr_list_size(list);
-
   /* Lookup addresses to bind. */
-  if (name_count <= 0) {
+  if (!net_lookup_service(srvarg.bind_addr, srvarg.port, &names[0], FALSE)) {
     log_fatal(_("Server: bad address: <%s:%d>."),
               srvarg.bind_addr, srvarg.port);
     exit(EXIT_FAILURE);
   }
+  name_count = 1;
+#ifdef IPV6_SUPPORT
+  if (names[0].saddr.sa_family == AF_INET6) {
+    /* net_lookup_service() prefers IPv6 address.
+     * Check if there is also IPv4 address.
+     * TODO: This would be easier using getaddrinfo() */
+    if (net_lookup_service(srvarg.bind_addr, srvarg.port,
+                           &names[1], TRUE /* force IPv4 */)) {
+      name_count = 2;
+    }
+  }
+#endif
 
   cause = NULL;
   on = 1;
@@ -1080,10 +1063,10 @@ int server_open_socket(void)
   /* Loop to create sockets, bind, listen. */
   listen_socks = fc_calloc(name_count, sizeof(listen_socks[0]));
   listen_count = 0;
+  for (i = 0; i < name_count; i++) {
 
-  fc_sockaddr_list_iterate(list, paddr) {
     /* Create socket for client connections. */
-    s = socket(paddr->saddr.sa_family, SOCK_STREAM, 0);
+    s = socket(names[i].saddr.sa_family, SOCK_STREAM, 0);
     if (s == -1) {
       /* Probably EAFNOSUPPORT or EPROTONOSUPPORT.
        * Kernel might have disabled AF_INET6. */
@@ -1095,25 +1078,25 @@ int server_open_socket(void)
                    (char *)&on, sizeof(on)) == -1) {
       log_error("setsockopt SO_REUSEADDR failed: %s",
                 fc_strerror(fc_get_errno()));
-      sockaddr_debug(paddr);
+      sockaddr_debug(&names[i]);
     }
 
     /* AF_INET6 sockets should use IPv6 only,
      * without stealing IPv4 from AF_INET sockets. */
 #ifdef IPV6_SUPPORT
-    if (paddr->saddr.sa_family == AF_INET6) {
+    if (names[i].saddr.sa_family == AF_INET6) {
 #ifdef IPV6_V6ONLY
       if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY,
                      (char *)&on, sizeof(on)) == -1) {
         log_error("setsockopt IPV6_V6ONLY failed: %s",
                   fc_strerror(fc_get_errno()));
-        sockaddr_debug(paddr);
+        sockaddr_debug(&names[i]);
       }
-#endif /* IPV6_V6ONLY */
+#endif
     }
-#endif /* IPv6 support */
+#endif
 
-    if (bind(s, &paddr->saddr, sockaddr_size(paddr)) == -1) {
+    if (bind(s, &names[i].saddr, sockaddr_size(&names[i])) == -1) {
       cause = "bind";
 
       if (fc_get_errno() == EADDRNOTAVAIL) {
@@ -1142,17 +1125,15 @@ int server_open_socket(void)
     }
     listen_socks[listen_count] = s;
     listen_count++;
-  } fc_sockaddr_list_iterate_end;
+  }
 
   if (listen_count == 0) {
     log_fatal("%s failed: %s", cause, fc_strerror(fc_get_errno()));
-    fc_sockaddr_list_iterate(list, paddr) {
-      sockaddr_debug(paddr);
-    } fc_sockaddr_list_iterate_end;
+    for (i = 0; i < name_count; i++) {
+      sockaddr_debug(&names[i]);
+    }
     exit(EXIT_FAILURE);
   }
-
-  fc_sockaddr_list_destroy(list);
 
   connections_set_close_callback(server_conn_close_callback);
 
@@ -1164,7 +1145,7 @@ int server_open_socket(void)
   if (srvarg.announce == ANNOUNCE_IPV6) {
     lan_family = AF_INET6;
   } else
-#endif /* IPV6 support */
+#endif /* IPV6 used */
   {
     lan_family = AF_INET;
   }
@@ -1194,14 +1175,10 @@ int server_open_socket(void)
     addr.saddr_in6.sin6_addr = in6addr_any;
   } else
 #endif /* IPv6 support */
-  if (addr.saddr.sa_family == AF_INET) {
+  {
     addr.saddr_in4.sin_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
     addr.saddr_in4.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family in server_open_socket()");
   }
 
   if (bind(socklan, &addr.saddr, sockaddr_size(&addr)) < 0) {
@@ -1209,7 +1186,7 @@ int server_open_socket(void)
   }
 
 #ifndef IPV6_SUPPORT
-  if (addr.saddr.sa_family == AF_INET) {
+  {
 #ifdef HAVE_INET_ATON
     inet_aton(group, &mreq4.imr_multiaddr);
 #else  /* HEVE_INET_ATON */
@@ -1224,7 +1201,7 @@ int server_open_socket(void)
       log_error("FC_IPV6_ADD_MEMBERSHIP (%s) failed: %s",
                 group, fc_strerror(fc_get_errno()));
     }
-  } else if (addr.saddr.sa_family == AF_INET) {
+  } else {
     inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
 #endif /* IPv6 support */
     mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
@@ -1234,10 +1211,6 @@ int server_open_socket(void)
       log_error("IP_ADD_MEMBERSHIP (%s) failed: %s",
                 group, fc_strerror(fc_get_errno()));
     }
-  } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family for broadcasting.");
   }
 
   return 0;
@@ -1272,7 +1245,7 @@ void init_connections(void)
 }
 
 /**************************************************************************
-  Starts processing of request packet from client.
+...
 **************************************************************************/
 static void start_processing_request(struct connection *pconn,
                                      int request_id)
@@ -1287,7 +1260,7 @@ static void start_processing_request(struct connection *pconn,
 }
 
 /**************************************************************************
-  Finish processing of request packet from client.
+...
 **************************************************************************/
 static void finish_processing_request(struct connection *pconn)
 {
@@ -1315,7 +1288,7 @@ static void connection_ping(struct connection *pconn)
 }
 
 /**************************************************************************
-  Handle response to ping.
+...
 **************************************************************************/
 void handle_conn_pong(struct connection *pconn)
 {
@@ -1336,7 +1309,7 @@ void handle_conn_pong(struct connection *pconn)
 }
 
 /**************************************************************************
-  Send ping time info about all connections to all connections.
+...
 **************************************************************************/
 static void send_ping_times_to_all(void)
 {
@@ -1420,8 +1393,6 @@ static void send_lanserver_response(void)
   char port[256];
   char version[256];
   char players[256];
-  int nhumans;
-  char humans[256];
   char status[256];
   struct data_out dout;
   union fc_sockaddr addr;
@@ -1455,7 +1426,7 @@ static void send_lanserver_response(void)
     log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return;
   }
-#endif /* HAVE_WINSOCK */
+#endif
 
   if (setsockopt(socksend, SOL_SOCKET, SO_BROADCAST, 
                  (const char*)&setting, sizeof(setting))) {
@@ -1488,15 +1459,6 @@ static void send_lanserver_response(void)
 
    fc_snprintf(players, sizeof(players), "%d",
                normal_player_count());
-
-   nhumans = 0;
-   players_iterate(pplayer) {
-     if (pplayer->is_alive && !pplayer->ai_controlled) {
-       nhumans++;
-     }
-   } players_iterate_end;
-   fc_snprintf(humans, sizeof(humans), "%d", nhumans);
-
    fc_snprintf(port, sizeof(port), "%d",
               srvarg.port );
 
@@ -1507,7 +1469,6 @@ static void send_lanserver_response(void)
   dio_put_string(&dout, version);
   dio_put_string(&dout, status);
   dio_put_string(&dout, players);
-  dio_put_string(&dout, humans);
   dio_put_string(&dout, get_meta_message_string());
   size = dio_output_used(&dout);
 

@@ -38,7 +38,7 @@
 **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <ctype.h>
@@ -70,9 +70,6 @@
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>		/* usleep, fcntl, gethostname */
-#endif
-#ifdef HAVE_SYS_UTSNAME_H
-#include <sys/utsname.h>
 #endif
 #ifdef HAVE_LIBZ
 #include <zlib.h>
@@ -123,7 +120,7 @@ int fc_strcasecmp(const char *str0, const char *str1)
 
   return ((int) (unsigned char) fc_tolower(*str0))
     - ((int) (unsigned char) fc_tolower(*str1));
-#endif /* HAVE_STRCASECMP */
+#endif
 }
 
 /***************************************************************
@@ -155,7 +152,7 @@ int fc_strncasecmp(const char *str0, const char *str1, size_t n)
   else
     return ((int) (unsigned char) fc_tolower(*str0))
       - ((int) (unsigned char) fc_tolower(*str1));
-#endif /* HAVE_STRNCASECMP */
+#endif
 }
 
 /***************************************************************
@@ -268,7 +265,7 @@ char *fc_strcasestr(const char *haystack, const char *needle)
     }
   }
   return NULL;
-#endif /* HAVE_STRCASESTR */
+#endif
 }
 
 /****************************************************************************
@@ -314,9 +311,9 @@ FILE *fc_fopen(const char *filename, const char *opentype)
 	result = fopen(filename_in_local_encoding, opentype);
 	free(filename_in_local_encoding);
 	return result;
-#else  /* WIN32_NATIVE */
+#else
 	return fopen(filename, opentype);
-#endif /* WIN32_NATIVE */
+#endif
 }
 
 /*****************************************************************
@@ -333,11 +330,11 @@ gzFile fc_gzopen(const char *filename, const char *opentype)
 	result = gzopen(filename_in_local_encoding, opentype);
 	free(filename_in_local_encoding);
 	return result;
-#else  /* WIN32_NATIVE */
+#else
 	return gzopen(filename, opentype);
-#endif /* WIN32_NATIVE */
+#endif
 }
-#endif /* HAVE_LIBZ */
+#endif
 
 /******************************************************************
   Wrapper function for opendir() with filename conversion to local
@@ -352,9 +349,9 @@ DIR *fc_opendir(const char *dirname)
 	result = opendir(dirname_in_local_encoding);
 	free(dirname_in_local_encoding);
 	return result;
-#else  /* WIN32_NATIVE */
+#else
 	return opendir(dirname);
-#endif /* WIN32_NATIVE */
+#endif
 }
 
 /*****************************************************************
@@ -370,9 +367,9 @@ int fc_remove(const char *filename)
 	result = remove(filename_in_local_encoding);
 	free(filename_in_local_encoding);
 	return result;
-#else  /* WIN32_NATIVE */
+#else
 	return remove(filename);
-#endif /* WIN32_NATIVE */
+#endif
 }
 
 /*****************************************************************
@@ -388,9 +385,9 @@ int fc_stat(const char *filename, struct stat *buf)
 	result = stat(filename_in_local_encoding, buf);
 	free(filename_in_local_encoding);
 	return result;
-#else  /* WIN32_NATIVE */
+#else
 	return stat(filename, buf);
-#endif /* WIN32_NATIVE */
+#endif
 }
 
 /***************************************************************
@@ -424,20 +421,20 @@ const char *fc_strerror(fc_errno err)
 		_("error %ld (failed FormatMessage)"), err);
   }
   return buf;
-#else  /* WIN32_NATIVE */
+#else
 #ifdef HAVE_STRERROR
   static char buf[256];
 
   return local_to_internal_string_buffer(strerror(err),
                                          buf, sizeof(buf));
-#else  /* HAVE_STRERROR */
+#else
   static char buf[64];
 
   fc_snprintf(buf, sizeof(buf),
 	      _("error %d (compiled without strerror)"), err);
   return buf;
-#endif /* HAVE_STRERROR */
-#endif /* WIN32_NATIVE */
+#endif
+#endif
 }
 
 
@@ -448,30 +445,30 @@ void fc_usleep(unsigned long usec)
 {
 #ifdef HAVE_USLEEP
   usleep(usec);
-#else  /* HAVE_USLEEP */
+#else
 #ifdef HAVE_SNOOZE		/* BeOS */
   snooze(usec);
-#else  /* HAVE_SNOOZE */
+#else
 #ifdef GENERATING_MAC
   EventRecord the_event;	/* dummy - always be a null event */
   usec /= 16666;		/* microseconds to 1/60th seconds */
   if (usec < 1) usec = 1;
   /* suposed to give other application processor time for the mac */
   WaitNextEvent(0, &the_event, usec, 0L);
-#else  /* GENERATING_MAC */
+#else
 #ifdef WIN32_NATIVE
   Sleep(usec / 1000);
-#else  /* WIN32_NATIVE */
+#else
   struct timeval tv;
   tv.tv_sec=0;
   tv.tv_usec=usec;
   /* FIXME: an interrupt can cause an EINTR return here.  In that case we
    * need to have another select call. */
   fc_select(0, NULL, NULL, NULL, &tv);
-#endif /* WIN32_NATIVE */
-#endif /* GENERATING_MAC */
-#endif /* HAVE_SNOOZE */
-#endif /* HAVE_USLEEP */
+#endif
+#endif
+#endif
+#endif
 }
 
 /**************************************************************************
@@ -592,7 +589,7 @@ size_t fc_strlcpy(char *dest, const char *src, size_t n)
     dest[num_to_copy] = '\0';
     return len;
   }
-#endif /* HAVE_STRLCPY */
+#endif
 }
 
 /****************************************************************************
@@ -627,7 +624,7 @@ size_t fc_strlcat(char *dest, const char *src, size_t n)
     dest[num_to_copy] = '\0';
     return len_dest + len_src;
   }
-#endif /* HAVE_STRLCAT */
+#endif
 }
 
 /****************************************************************************
@@ -703,7 +700,7 @@ int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
     return -1;
 
   return r;
-#else  /* HAVE_WORKING_VSNPRINTF */
+#else
   {
     /* Don't use fc_malloc() or log_*() here, since they may call
        fc_vsnprintf() if it fails.  */
@@ -724,7 +721,7 @@ int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
     r = vsnprintf(buf, n, format, ap);
 #else
     r = vsprintf(buf, format, ap);
-#endif /* HAVE_VSNPRINTF */
+#endif
     buf[VSNP_BUF_SIZE - 1] = '\0';
     len = strlen(buf);
 
@@ -742,7 +739,7 @@ int fc_vsnprintf(char *str, size_t n, const char *format, va_list ap)
       return -1;
     }
   }
-#endif /* HAVE_WORKING_VSNPRINTF */
+#endif  
 }
 
 /****************************************************************************
@@ -828,7 +825,7 @@ static unsigned int WINAPI thread_proc(LPVOID data)
   }
   return 0;
 }
-#endif /* WIN32_NATIVE */
+#endif
 
 /**********************************************************************
   Initialize console I/O in case SOCKET_ZERO_ISNT_STDIN.
@@ -843,7 +840,7 @@ void fc_init_console(void)
 
   mybuf[0] = '\0';
   mythread = (HANDLE)_beginthreadex(NULL, 0, thread_proc, NULL, 0, &threadid);
-#else  /* WIN32_NATIVE */
+#else
   static int initialized = 0;
   if (!initialized) {
     initialized = 1;
@@ -851,7 +848,7 @@ void fc_init_console(void)
     fc_nonblock(fileno(stdin));
 #endif
   }
-#endif /* WIN32_NATIVE */
+#endif
 }
 
 /**********************************************************************
@@ -870,7 +867,7 @@ char *fc_read_console(void)
     return mybuf;
   }
   return NULL;
-#else  /* WIN32_NATIVE */
+#else
   if (!feof(stdin)) {    /* input from server operator */
     static char *bufptr = mybuf;
     /* fetch chars until \n, or run out of space in buffer */
@@ -885,10 +882,10 @@ char *fc_read_console(void)
     }
   }
   return NULL;
-#endif /* WIN32_NATIVE */
+#endif
 }
 
-#endif /* SOCKET_ZERO_ISNT_STDIN */
+#endif
 
 /**********************************************************************
   Returns TRUE iff the file is a regular file or a link to a regular
@@ -1053,127 +1050,4 @@ char fc_tolower(char c)
     return c;
   }
   return (char) tolower((int) ((unsigned char) c));
-}
-
-/*****************************************************************
-  Returns an uname like string.
-*****************************************************************/
-void fc_uname(char *buf, size_t len)
-{
-#ifdef HAVE_UNAME
-  {
-    struct utsname un;
-
-    uname(&un);
-    fc_snprintf(buf, len, "%s %s [%s]", un.sysname, un.release, un.machine);
-  }
-#else /* ! HAVE_UNAME */
-  /* Fill in here if you are making a binary without sys/utsname.h and know
-     the OS name, release number, and machine architechture */
-#ifdef WIN32_NATIVE
-  {
-    /* TODO: Add handling of newer Windows versions. */
-    char cpuname[16];
-    char *osname;
-    SYSTEM_INFO sysinfo;
-    OSVERSIONINFO osvi;
-
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-    GetVersionEx(&osvi);
-
-    switch (osvi.dwPlatformId) {
-    case VER_PLATFORM_WIN32s:
-      osname = "Win32s";
-      break;
-
-    case VER_PLATFORM_WIN32_WINDOWS:
-      osname = "Win32";
-
-      if (osvi.dwMajorVersion == 4) {
-	switch (osvi.dwMinorVersion) {
-	case  0: osname = "Win95";    break;
-	case 10: osname = "Win98";    break;
-	case 90: osname = "WinME";    break;
-	default:			    break;
-	}
-      }
-      break;
-
-    case VER_PLATFORM_WIN32_NT:
-      osname = "WinNT";
-
-      if (osvi.dwMajorVersion == 5) {
-	switch (osvi.dwMinorVersion) {
-	case 0: osname = "Win2000";   break;
-	case 1: osname = "WinXP";	    break;
-	default:			    break;
-	}
-      }
-      break;
-
-    default:
-      osname = osvi.szCSDVersion;
-      break;
-    }
-
-    GetSystemInfo(&sysinfo); 
-    switch (sysinfo.wProcessorArchitecture) {
-      case PROCESSOR_ARCHITECTURE_INTEL:
-	{
-	  unsigned int ptype;
-	  if (sysinfo.wProcessorLevel < 3) /* Shouldn't happen. */
-	    ptype = 3;
-	  else if (sysinfo.wProcessorLevel > 9) /* P4 */
-	    ptype = 6;
-	  else
-	    ptype = sysinfo.wProcessorLevel;
-
-          fc_snprintf(cpuname, sizeof(cpuname), "i%d86", ptype);
-	}
-	break;
-
-      case PROCESSOR_ARCHITECTURE_MIPS:
-	sz_strlcpy(cpuname, "mips");
-	break;
-
-      case PROCESSOR_ARCHITECTURE_ALPHA:
-	sz_strlcpy(cpuname, "alpha");
-	break;
-
-      case PROCESSOR_ARCHITECTURE_PPC:
-	sz_strlcpy(cpuname, "ppc");
-	break;
-#if 0
-      case PROCESSOR_ARCHITECTURE_IA64:
-	sz_strlcpy(cpuname, "ia64");
-	break;
-#endif
-      default:
-	sz_strlcpy(cpuname, "unknown");
-	break;
-    }
-    fc_snprintf(buf, len, "%s %ld.%ld [%s]",
-                osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
-  }
-#else  /* WIN32_NATIVE */
-  fc_snprintf(buf, len, "unknown unknown [unknown]");
-#endif /* WIN32_NATIVE */
-#endif /* HAVE_UNAME */
-}
-
-/*****************************************************************
-  basename() replacement that always takes const parameter.
-  POSIX basename() modifies its parameter, GNU one does not.
-  Ideally we would like to use GNU one, when available, directly
-  without extra string copies.
-*****************************************************************/
-const char *fc_basename(const char *path)
-{
-  static char buf[2048];
-
-  /* Copy const parameter string to buffer that basename() can
-   * modify */
-  fc_strlcpy(buf, path, sizeof(buf));
-
-  return basename(buf);
 }

@@ -20,8 +20,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",         "female_title"
- "Despotism",       _("Prince %s"),      _("Princess %s")
- "Fundamentalism",  _("Patriarch %s"),   _("Matriarch %s")
+ "Republic",        _("Voivode %s"),      _("?female:Voivode %s")
+ "Democracy",       _("Presidente %s"),   _("Presidenta %s")
 }
 
 flag="moldova"
@@ -30,9 +30,10 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "romanian", "transnistrian", "turkish"
+civilwar_nations = "romanian", "ukrainian", "turkish"
 
 cities =
   "Chişinau",

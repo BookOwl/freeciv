@@ -39,6 +39,7 @@ ruler_titles = {
  "Communism",      _("Comandante %s"),   _("Comandanta %s")
  "Despotism",      _("General %s"),      _("?female:General %s")
  "Fundamentalism", _("Archbishop %s"),   _("Mother Superior %s")
+ "Republic",       _("Liberator %s"),    _("?female:Liberator %s")
 }
 
 flag="bolivia"
@@ -47,9 +48,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "aymara", "inca", "peruvian", "acrean"
+civilwar_nations = "aymara", "inca", "peruvian", "chilean"
 
 cities =
  "La Paz (!ocean, mountains)",

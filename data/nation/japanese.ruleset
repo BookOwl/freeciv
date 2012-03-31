@@ -13,13 +13,13 @@ leaders = {
  "Hirohito",            "Male"
  "Oda Nobunaga",        "Male"
  "Tokugawa Ieyasu",     "Male"
- "Suiko",               "Female"
 }
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
  "Monarchy",        _("Emperor %s"),        _("Empress %s")
  "Republic",        _("Shogun %s"),         _("?female:Shogun %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="japan"
@@ -28,6 +28,7 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="ryukyuan", "ainu"
 

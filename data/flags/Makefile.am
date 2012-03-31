@@ -8,27 +8,20 @@ flag_files =				\
 		aborigines.png		\
 		acadia.png		\
 		aceh.png		\
-		acre.png		\
-		adygea.png		\
 		afghanistan.png		\
-		africa.png		\
 		ainu.png		\
 		akwe.png		\
-		aland.png		\
 		albania.png		\
 		aleut.png		\
 		algeria.png		\
 		almohad.png		\
-		alsace.png		\
 		amazigh.png		\
 		amazon.png		\
 		andorra.png		\
 		angola.png		\
-		anhalt.png		\
 		anishinaabe.png		\
 		antarctica.png		\
 		antarctica_alt.png	\
-		antigua_and_barbuda.png	\
 		apache.png		\
 		arab.png		\
 		aragon.png		\
@@ -36,36 +29,27 @@ flag_files =				\
 		argentina.png		\
 		armenia.png		\
 		ashanti.png		\
-		assam.png		\
 		assyria.png		\
 		asturias.png		\
 		atlantis.png		\
 		australia.png		\
 		austria.png		\
-		avar.png		\
 		aymara.png		\
 		azerbaijan.png		\
 		aztec.png		\
 		babylon.png		\
 		baden.png		\
-		bahamas.png		\
-		bahrain.png		\
 		bangladesh.png		\
-		barbados.png		\
 		barbarian.png		\
 		bashkortostan.png	\
 		bavarian.png		\
 		belarus.png		\
 		belgium.png		\
-		belize.png		\
-		bengal.png		\
-		benin.png		\
 		benin_ancient.png	\
 		bhutan.png		\
 		biafra.png		\
 		boer.png		\
 		bolivia.png		\
-		bophuthatswana.png	\
 		bosnia.png		\
 		bosporus.png		\
 		botswana.png		\
@@ -73,64 +57,47 @@ flag_files =				\
 		brasil.png		\
 		britannia.png		\
 		brittany.png		\
-		brunei.png		\
 		bulgaria.png		\
 		burgundy.png		\
 		burkina_faso.png	\
 		burundi.png		\
-		buryatia.png		\
 		byzantium.png		\
 		caddo.png		\
 		california.png		\
 		cameroon.png		\
 		canada.png		\
 		canada_old.png		\
-		canar.png		\
-		cape_verde.png		\
 		car.png			\
 		cartago.png		\
 		castile.png		\
 		catalan.png		\
 		celtiberian.png		\
 		central_america.png	\
-		chad.png		\
 		cham.png		\
 		chananea.png		\
 		chechnya.png		\
 		cheyenne.png		\
-		chiapas.png		\
-		chickasaw.png		\
 		chile.png		\
 		chimu.png		\
 		china.png		\
-		choctaw.png		\
 		chola.png		\
-		chrobatian.png		\
 		chumash.png		\
-		chuvashia.png		\
-		clatsop.png		\
 		colombia.png		\
 		comanche.png		\
-		comoros.png		\
 		constantine.png		\
 		cornwall.png		\
 		corsica.png		\
 		cossack.png		\
 		costa_rica.png		\
 		courland.png		\
-		crete.png		\
 		crimean_tatar.png	\
 		croatia.png		\
 		cuba.png		\
-		cuyavia.png		\
 		cyprus.png		\
 		czech.png		\
-		czechoslovakia.png	\
 		dahomey.png		\
-		darfur.png		\
 		ddr.png			\
 		denmark.png		\
-		djibouti.png		\
 		dominica.png		\
 		dominican_republic.png	\
 		dr_congo.png		\
@@ -142,40 +109,27 @@ flag_files =				\
 		elam.png		\
 		el_salvador.png		\
 		england.png		\
-		epirus.png		\
-		equatorial_guinea.png	\
 		esperanto.png		\
 		estonia.png		\
 		eritrea.png		\
 		ethiopia.png		\
-		ethiopia_old.png	\
 		etruscan.png		\
 		europe.png		\
 		euskadi.png		\
-		evenkia.png		\
-		faroes.png		\
 		fiji.png		\
 		finland.png		\
 		flanders.png		\
-		florence.png		\
 		france_old.png		\
 		france.png		\
 		franconia.png		\
-		french_polynesia.png	\
 		frisia.png		\
-		friuli.png		\
-		gabon.png		\
 		gael.png		\
 		galicia.png		\
-		gambia.png		\
 		gaul.png		\
 		georgia.png		\
 		germany.png		\
 		gokturk.png		\
 		ghana.png		\
-		ghana_ancient.png	\
-		ghaznavid.png		\
-		golden_horde.png	\
 		greater_poland.png	\
 		greece_ancient.png	\
 		greece.png		\
@@ -184,8 +138,6 @@ flag_files =				\
 		guanche.png		\
 		guarani.png		\
 		guatemala.png		\
-		guinea.png		\
-		guinea-bissau.png	\
 		gupta.png		\
 		guyana.png		\
 		hacker.png		\
@@ -195,8 +147,6 @@ flag_files =				\
 		hanover.png		\
 		hansa.png		\
 		hawaii.png		\
-		helvetii.png		\
-		hephthalite.png		\
 		hesse.png		\
 		himyar.png		\
 		hittite.png		\
@@ -209,7 +159,6 @@ flag_files =				\
 		illyria.png		\
 		inca.png		\
 		india.png		\
-		indoeuropean.png	\
 		indonesia.png		\
 		innu.png		\
 		iran_ancient.png	\
@@ -219,39 +168,28 @@ flag_files =				\
 		ireland.png		\
 		iroquois.png		\
 		israel.png		\
-		israel_ancient.png	\
 		italy.png		\
 		ivory_coast.png		\
-		jaffna.png		\
 		jamaica.png		\
 		japan.png		\
 		jbonai.png		\
-		jerusalem.png		\
 		jolof.png		\
-		jordan.png		\
 		kalmykia.png		\
 		kampuchea.png		\
 		kanem-bornu.png		\
 		karelia.png		\
-		karen.png		\
 		kashmir.png		\
-		kashubia.png		\
-		katanga.png		\
 		kazakhstan.png		\
 		keetoowah.png		\
 		kenya.png		\
 		khazaria.png		\
-		khmer.png		\
 		khwarezm.png		\
 		kiev.png		\
-		kiribati.png		\
 		kongo.png		\
 		korea.png		\
 		korea_ancient.png	\
 		kosovo.png		\
-		kuna_yala.png		\
 		kurd.png		\
-		kuwait.png		\
 		kyrgyzstan.png		\
 		labarum.png		\
 		laos.png		\
@@ -259,21 +197,12 @@ flag_files =				\
 		lebanon.png		\
 		lendian.png		\
 		leon.png		\
-		lesotho.png		\
-		lesotho_old.png		\
-		liberia.png		\
-		liburnian.png		\
 		libya.png		\
-		libya_old.png		\
 		liechtenstein.png	\
-		liguria.png		\
 		lipkatatar.png		\
-		lippe.png		\
 		lithuania.png		\
 		lorraine.png		\
-		luna.png		\
 		lusatia.png		\
-		luwian.png		\
 		luxembourg.png		\
 		maasai.png		\
 		macedon.png		\
@@ -282,19 +211,14 @@ flag_files =				\
 		majapahit.png		\
 		malawi.png		\
 		malaysia.png		\
-		maldives.png		\
 		mali.png		\
 		mali_ancient.png	\
 		malta.png		\
-		mamluk.png		\
 		man.png			\
 		manchuria.png		\
 		maori.png		\
 		mapuche.png		\
-		marathi.png		\
 		mars.png		\
-		mauritania.png		\
-		mauritius.png		\
 		maya.png		\
 		mazovia.png		\
 		mecklenburg.png		\
@@ -304,34 +228,26 @@ flag_files =				\
 		mikmaq.png		\
 		milan.png		\
 		miskito.png		\
-		mitanni.png		\
 		mixtec.png		\
 		moldova.png		\
-		moluccas.png		\
-		mon.png			\
 		monaco_alternative.png	\
 		mongolia.png		\
 		montenegro.png		\
 		moravia.png		\
 		mordovia.png		\
 		morocco.png		\
-		moscow.png		\
 		mozambique.png		\
 		mughal.png		\
 		muskogee.png		\
 		mwiska.png		\
 		myanmar.png		\
-		nagorno_karabakh.png	\
 		namibia.png		\
 		naples.png		\
 		nato.png		\
-		nauru.png		\
 		navajo.png		\
-		nenetsia.png		\
 		nepal.png		\
 		nestoria.png		\
 		netherlands.png		\
-		netherlands_antilles.png	\
 		newfoundland.png	\
 		newzealand.png		\
 		nez_perce.png		\
@@ -354,7 +270,6 @@ flag_files =				\
 		otomi.png		\
 		ottoman.png		\
 		oz.png			\
-		paeonia.png		\
 		pakistan.png		\
 		palatinate.png		\
 		palestine.png		\
@@ -363,11 +278,9 @@ flag_files =				\
 		papua_newguinea.png	\
 		paraguay.png		\
 		pashtun.png		\
-		pelasgian.png		\
 		peru.png		\
 		philippines.png		\
 		phoenicia.png		\
-		pict.png		\
 		piedmont.png		\
 		pirate.png		\
 		piratini.png		\
@@ -375,17 +288,12 @@ flag_files =				\
 		polynesian.png		\
 		pomerania.png		\
 		portugal.png		\
-		prusai.png		\
 		prussia.png		\
 		puerto_rico.png		\
 		purhepecha.png		\
-		qatar.png		\
 		qing.png		\
 		quebec.png		\
-		rapa_nui.png		\
 		raramuri.png		\
-		r_congo.png		\
-		rhineland.png		\
 		rif.png			\
 		romania.png		\
 		rome.png		\
@@ -394,50 +302,34 @@ flag_files =				\
 		rwanda.png		\
 		ryukyu.png		\
 		sadr.png		\
-		saka.png		\
 		sakha.png		\
-		salish.png		\
-		samoa.png		\
 		samogitia.png		\
 		san_marino.png		\
-		sao_tome_and_principe.png	\
 		sapmi.png		\
-		sardinia.png		\
 		sarmatia.png		\
 		saudi_arabia.png	\
 		savoy.png		\
 		saxony.png		\
-		scania.png		\
 		schleswig-holstein.png	\
 		scotland.png		\
-		scottishgaelic.png	\
 		scythia.png		\
 		seleucid.png		\
-		seljuk.png		\
-		seminole.png		\
 		senegal.png		\
 		serbia.png		\
-		shan.png		\
 		shawnee.png		\
 		siberia.png		\
 		sicily.png		\
-		sierra_leone.png	\
 		sikh.png		\
 		sikkim.png		\
 		silesia.png		\
 		singapore.png		\
-		sinhalese.png		\
 		slavic.png		\
 		slovakia.png		\
 		slovenia.png		\
-		sokoto.png		\
-		solomon_islands.png	\
 		somalia.png		\
-		somaliland.png		\
 		songhai.png		\
 		south_africa.png	\
 		southern_cross.png	\
-		southern_sudan.png	\
 		south_yemen.png		\
 		soviet.png		\
 		spain.png		\
@@ -450,13 +342,12 @@ flag_files =				\
 		svg.png			\
 		swaziland.png		\
 		sweden.png		\
-		switzerland.png		\
+		swiss.png		\
 		syria.png		\
 		taino.png		\
 		tairona.png		\
 		taiwan.png		\
 		tajikistan.png		\
-		tanganyika.png		\
 		tannu_tuva.png		\
 		tanzania.png		\
 		tatarstan.png		\
@@ -465,18 +356,13 @@ flag_files =				\
 		texas.png		\
 		thailand.png		\
 		thrace.png		\
-		thuringia.png		\
 		tibet.png		\
 		timur.png		\
 		tocharian.png		\
 		togo.png		\
 		toltec.png		\
 		tonga.png		\
-		transnistria.png	\
 		transylvania.png	\
-		trinidad_and_tobago.png	\
-		trnc.png		\
-		tuareg.png		\
 		tunisia.png		\
 		tupi.png		\
 		turkey.png		\
@@ -496,62 +382,42 @@ flag_files =				\
 		valknut.png		\
 		vampire.png		\
 		vandal.png		\
-		vanuatu.png		\
 		vatican.png		\
-		vedic.png		\
-		venda.png		\
-		venetic.png		\
 		venezuela.png		\
 		venice.png		\
 		vermont.png		\
 		vietnam.png		\
 		viking.png		\
 		visigoth.png		\
-		vistulan.png		\
-		volapuk.png		\
-		volga_bulgar.png	\
-		volga_german.png	\
 		wales.png		\
 		wallonia.png		\
 		west_indies_federation.png	\
-		west_papua.png		\
 		westphalia.png		\
 		wuerttemberg.png	\
-		xhosa.png		\
 		yemen.png		\
 		yucatan.png		\
 		yugoslavia.png		\
-		zambia.png		\
-		zanzibar.png		\
 		zapotec.png		\
-		zhuang.png		\
 		zimbabwe.png		\
 		zulu.png		\
 		abkhazia-large.png		\
 		aborigines-large.png		\
 		acadia-large.png		\
 		aceh-large.png		\
-		acre-large.png			\
-		adygea-large.png		\
 		afghanistan-large.png		\
-		africa-large.png	\
 		ainu-large.png		\
 		akwe-large.png		\
-		aland-large.png			\
 		albania-large.png		\
 		aleut-large.png		\
 		algeria-large.png		\
 		almohad-large.png		\
-		alsace-large.png		\
 		amazigh-large.png		\
 		amazon-large.png		\
 		andorra-large.png		\
 		angola-large.png		\
-		anhalt-large.png		\
 		anishinaabe-large.png		\
 		antarctica-large.png		\
 		antarctica_alt-large.png	\
-		antigua_and_barbuda-large.png	\
 		apache-large.png		\
 		arab-large.png		\
 		aragon-large.png		\
@@ -559,36 +425,27 @@ flag_files =				\
 		argentina-large.png		\
 		armenia-large.png		\
 		ashanti-large.png		\
-		assam-large.png			\
 		assyria-large.png		\
 		asturias-large.png		\
 		atlantis-large.png		\
 		australia-large.png		\
 		austria-large.png		\
-		avar-large.png			\
 		aymara-large.png		\
 		azerbaijan-large.png		\
 		aztec-large.png		\
 		babylon-large.png		\
 		baden-large.png		\
-		bahamas-large.png		\
-		bahrain-large.png		\
 		bangladesh-large.png		\
-		barbados-large.png		\
 		barbarian-large.png		\
 		bashkortostan-large.png	\
 		bavarian-large.png		\
 		belarus-large.png		\
 		belgium-large.png		\
-		belize-large.png		\
-		bengal-large.png		\
-		benin-large.png			\
-		benin_ancient-large.png		\
+		benin_ancient-large.png	\
 		bhutan-large.png		\
 		biafra-large.png		\
 		boer-large.png		\
 		bolivia-large.png		\
-		bophuthatswana-large.png	\
 		bosnia-large.png		\
 		bosporus-large.png		\
 		botswana-large.png		\
@@ -596,64 +453,47 @@ flag_files =				\
 		brasil-large.png		\
 		britannia-large.png		\
 		brittany-large.png		\
-		brunei-large.png		\
 		bulgaria-large.png		\
 		burgundy-large.png		\
 		burkina_faso-large.png	\
 		burundi-large.png		\
-		buryatia-large.png		\
 		byzantium-large.png		\
 		caddo-large.png		\
 		california-large.png		\
 		cameroon-large.png		\
 		canada-large.png		\
 		canada_old-large.png		\
-		canar-large.png			\
-		cape_verde-large.png		\
 		car-large.png			\
 		cartago-large.png		\
 		castile-large.png		\
 		catalan-large.png		\
 		celtiberian-large.png		\
 		central_america-large.png	\
-		chad-large.png			\
 		cham-large.png		\
 		chananea-large.png		\
 		chechnya-large.png		\
 		cheyenne-large.png		\
-		chiapas-large.png		\
-		chickasaw-large.png		\
 		chile-large.png		\
 		chimu-large.png		\
 		china-large.png		\
-		choctaw-large.png		\
 		chola-large.png		\
-		chrobatian-large.png		\
 		chumash-large.png		\
-		chuvashia-large.png		\
-		clatsop-large.png		\
 		colombia-large.png		\
 		comanche-large.png		\
-		comoros-large.png		\
 		constantine-large.png		\
 		cornwall-large.png		\
 		corsica-large.png		\
 		cossack-large.png		\
 		costa_rica-large.png		\
 		courland-large.png		\
-		crete-large.png			\
 		crimean_tatar-large.png	\
 		croatia-large.png		\
 		cuba-large.png		\
-		cuyavia-large.png		\
 		cyprus-large.png		\
 		czech-large.png		\
-		czechoslovakia-large.png	\
 		dahomey-large.png		\
-		darfur-large.png		\
 		ddr-large.png			\
 		denmark-large.png		\
-		djibouti-large.png		\
 		dominica-large.png		\
 		dominican_republic-large.png	\
 		dr_congo-large.png		\
@@ -665,40 +505,27 @@ flag_files =				\
 		elam-large.png		\
 		el_salvador-large.png		\
 		england-large.png		\
-		epirus-large.png		\
-		equatorial_guinea-large.png	\
 		esperanto-large.png		\
 		estonia-large.png		\
 		eritrea-large.png		\
 		ethiopia-large.png		\
-		ethiopia_old-large.png		\
 		etruscan-large.png		\
 		europe-large.png		\
 		euskadi-large.png		\
-		evenkia-large.png		\
-		faroes-large.png		\
 		fiji-large.png		\
 		finland-large.png		\
 		flanders-large.png		\
-		florence-large.png		\
 		france_old-large.png		\
 		france-large.png		\
 		franconia-large.png		\
-		french_polynesia-large.png	\
 		frisia-large.png		\
-		friuli-large.png		\
-		gabon-large.png			\
 		gael-large.png		\
 		galicia-large.png		\
-		gambia-large.png		\
 		gaul-large.png		\
 		georgia-large.png		\
 		germany-large.png		\
 		gokturk-large.png		\
 		ghana-large.png		\
-		ghana_ancient-large.png		\
-		ghaznavid-large.png		\
-		golden_horde-large.png		\
 		greater_poland-large.png	\
 		greece_ancient-large.png	\
 		greece-large.png		\
@@ -707,8 +534,6 @@ flag_files =				\
 		guanche-large.png		\
 		guarani-large.png		\
 		guatemala-large.png		\
-		guinea-large.png		\
-		guinea-bissau-large.png		\
 		gupta-large.png		\
 		guyana-large.png		\
 		hacker-large.png		\
@@ -718,8 +543,6 @@ flag_files =				\
 		hanover-large.png		\
 		hansa-large.png		\
 		hawaii-large.png		\
-		helvetii-large.png		\
-		hephthalite-large.png		\
 		hesse-large.png		\
 		himyar-large.png		\
 		hittite-large.png		\
@@ -732,7 +555,6 @@ flag_files =				\
 		illyria-large.png		\
 		inca-large.png		\
 		india-large.png		\
-		indoeuropean-large.png		\
 		indonesia-large.png		\
 		innu-large.png		\
 		iran_ancient-large.png	\
@@ -742,39 +564,28 @@ flag_files =				\
 		ireland-large.png		\
 		iroquois-large.png		\
 		israel-large.png		\
-		israel_ancient-large.png	\
 		italy-large.png		\
 		ivory_coast-large.png		\
-		jaffna-large.png		\
 		jamaica-large.png		\
 		japan-large.png		\
 		jbonai-large.png		\
-		jerusalem-large.png		\
 		jolof-large.png		\
-		jordan-large.png		\
 		kalmykia-large.png		\
 		kampuchea-large.png		\
 		kanem-bornu-large.png		\
 		karelia-large.png		\
-		karen-large.png		\
 		kashmir-large.png		\
-		kashubia-large.png		\
-		katanga-large.png		\
 		kazakhstan-large.png		\
 		keetoowah-large.png		\
 		kenya-large.png		\
 		khazaria-large.png		\
-		khmer-large.png			\
 		khwarezm-large.png		\
 		kiev-large.png		\
-		kiribati-large.png		\
 		kongo-large.png		\
 		korea-large.png		\
 		korea_ancient-large.png	\
 		kosovo-large.png		\
-		kuna_yala-large.png		\
 		kurd-large.png		\
-		kuwait-large.png		\
 		kyrgyzstan-large.png		\
 		labarum-large.png		\
 		laos-large.png		\
@@ -782,21 +593,12 @@ flag_files =				\
 		lebanon-large.png		\
 		lendian-large.png		\
 		leon-large.png		\
-		lesotho-large.png		\
-		lesotho_old-large.png		\
-		liberia-large.png		\
-		liburnian-large.png		\
-		libya-large.png			\
-		libya_old-large.png		\
+		libya-large.png		\
 		liechtenstein-large.png	\
-		liguria-large.png		\
 		lipkatatar-large.png		\
-		lippe-large.png			\
 		lithuania-large.png		\
 		lorraine-large.png		\
-		luna-large.png			\
 		lusatia-large.png		\
-		luwian-large.png		\
 		luxembourg-large.png		\
 		maasai-large.png		\
 		macedon-large.png		\
@@ -805,19 +607,14 @@ flag_files =				\
 		majapahit-large.png		\
 		malawi-large.png		\
 		malaysia-large.png		\
-		maldives-large.png		\
 		mali-large.png		\
 		mali_ancient-large.png	\
 		malta-large.png		\
-		mamluk-large.png		\
 		man-large.png			\
 		manchuria-large.png		\
 		maori-large.png		\
 		mapuche-large.png		\
-		marathi-large.png		\
 		mars-large.png		\
-		mauritania-large.png		\
-		mauritius-large.png		\
 		maya-large.png		\
 		mazovia-large.png		\
 		mecklenburg-large.png		\
@@ -827,34 +624,26 @@ flag_files =				\
 		mikmaq-large.png		\
 		milan-large.png		\
 		miskito-large.png		\
-		mitanni-large.png		\
 		mixtec-large.png		\
 		moldova-large.png		\
-		moluccas-large.png		\
-		mon-large.png			\
 		monaco_alternative-large.png	\
 		mongolia-large.png		\
 		montenegro-large.png		\
 		moravia-large.png		\
 		mordovia-large.png		\
 		morocco-large.png		\
-		moscow-large.png		\
 		mozambique-large.png		\
 		mughal-large.png		\
 		muskogee-large.png		\
 		mwiska-large.png		\
 		myanmar-large.png		\
-		nagorno_karabakh-large.png	\
 		namibia-large.png		\
 		naples-large.png		\
-		nato-large.png			\
-		nauru-large.png			\
+		nato-large.png		\
 		navajo-large.png		\
-		nenetsia-large.png		\
 		nepal-large.png		\
 		nestoria-large.png		\
 		netherlands-large.png		\
-		netherlands_antilles-large.png	\
 		newfoundland-large.png	\
 		newzealand-large.png		\
 		nez_perce-large.png		\
@@ -877,7 +666,6 @@ flag_files =				\
 		otomi-large.png		\
 		ottoman-large.png		\
 		oz-large.png			\
-		paeonia-large.png		\
 		pakistan-large.png		\
 		palatinate-large.png		\
 		palestine-large.png		\
@@ -886,11 +674,9 @@ flag_files =				\
 		papua_newguinea-large.png	\
 		paraguay-large.png		\
 		pashtun-large.png		\
-		pelasgian-large.png		\
-		peru-large.png			\
+		peru-large.png		\
 		philippines-large.png		\
 		phoenicia-large.png		\
-		pict-large.png			\
 		piedmont-large.png		\
 		pirate-large.png		\
 		piratini-large.png		\
@@ -898,17 +684,12 @@ flag_files =				\
 		polynesian-large.png		\
 		pomerania-large.png		\
 		portugal-large.png		\
-		prusai-large.png		\
 		prussia-large.png		\
 		puerto_rico-large.png		\
 		purhepecha-large.png		\
-		qatar-large.png			\
-		qing-large.png			\
+		qing-large.png		\
 		quebec-large.png		\
-		rapa_nui-large.png		\
 		raramuri-large.png		\
-		r_congo-large.png		\
-		rhineland-large.png		\
 		rif-large.png			\
 		romania-large.png		\
 		rome-large.png		\
@@ -917,50 +698,34 @@ flag_files =				\
 		rwanda-large.png		\
 		ryukyu-large.png		\
 		sadr-large.png		\
-		saka-large.png			\
 		sakha-large.png		\
-		salish-large.png		\
-		samoa-large.png			\
 		samogitia-large.png		\
 		san_marino-large.png		\
-		sao_tome_and_principe-large.png	\
 		sapmi-large.png		\
-		sardinia-large.png		\
 		sarmatia-large.png		\
 		saudi_arabia-large.png	\
 		savoy-large.png		\
 		saxony-large.png		\
-		scania-large.png		\
 		schleswig-holstein-large.png	\
 		scotland-large.png		\
-		scottishgaelic-large.png	\
 		scythia-large.png		\
 		seleucid-large.png		\
-		seljuk-large.png		\
-		seminole-large.png		\
 		senegal-large.png		\
 		serbia-large.png		\
-		shan-large.png			\
 		shawnee-large.png		\
 		siberia-large.png		\
 		sicily-large.png		\
-		sierra_leone-large.png		\
 		sikh-large.png		\
 		sikkim-large.png		\
 		silesia-large.png		\
 		singapore-large.png		\
-		sinhalese-large.png		\
 		slavic-large.png		\
 		slovakia-large.png		\
 		slovenia-large.png		\
-		sokoto-large.png		\
-		solomon_islands-large.png	\
 		somalia-large.png		\
-		somaliland-large.png		\
 		songhai-large.png		\
 		south_africa-large.png	\
 		southern_cross-large.png	\
-		southern_sudan-large.png	\
 		south_yemen-large.png		\
 		soviet-large.png		\
 		spain-large.png		\
@@ -973,13 +738,12 @@ flag_files =				\
 		svg-large.png			\
 		swaziland-large.png		\
 		sweden-large.png		\
-		switzerland-large.png		\
+		swiss-large.png		\
 		syria-large.png		\
 		taino-large.png		\
 		tairona-large.png		\
 		taiwan-large.png		\
 		tajikistan-large.png		\
-		tanganyika-large.png		\
 		tannu_tuva-large.png		\
 		tanzania-large.png		\
 		tatarstan-large.png		\
@@ -988,18 +752,13 @@ flag_files =				\
 		texas-large.png		\
 		thailand-large.png		\
 		thrace-large.png		\
-		thuringia-large.png		\
 		tibet-large.png		\
 		timur-large.png		\
 		tocharian-large.png		\
 		togo-large.png		\
 		toltec-large.png		\
 		tonga-large.png		\
-		transnistria-large.png		\
 		transylvania-large.png	\
-		trinidad_and_tobago-large.png	\
-		trnc-large.png			\
-		tuareg-large.png		\
 		tunisia-large.png		\
 		tupi-large.png		\
 		turkey-large.png		\
@@ -1019,35 +778,22 @@ flag_files =				\
 		valknut-large.png		\
 		vampire-large.png		\
 		vandal-large.png		\
-		vanuatu-large.png		\
 		vatican-large.png		\
-		vedic-large.png			\
-		venda-large.png			\
-		venetic-large.png		\
 		venezuela-large.png		\
 		venice-large.png		\
 		vermont-large.png		\
 		vietnam-large.png		\
 		viking-large.png		\
 		visigoth-large.png		\
-		vistulan-large.png		\
-		volapuk-large.png		\
-		volga_bulgar-large.png		\
-		volga_german-large.png		\
-		wales-large.png			\
+		wales-large.png		\
 		wallonia-large.png		\
 		west_indies_federation-large.png	\
-		west_papua-large.png		\
 		westphalia-large.png		\
-		wuerttemberg-large.png		\
-		xhosa-large.png			\
-		yemen-large.png			\
+		wuerttemberg-large.png	\
+		yemen-large.png		\
 		yucatan-large.png		\
 		yugoslavia-large.png		\
-		zambia-large.png		\
-		zanzibar-large.png		\
 		zapotec-large.png		\
-		zhuang-large.png		\
 		zimbabwe-large.png		\
 		zulu-large.png
 
@@ -1056,27 +802,20 @@ shield_files =					\
 		aborigines-shield.png		\
 		acadia-shield.png		\
 		aceh-shield.png			\
-		acre-shield.png			\
-		adygea-shield.png		\
 		afghanistan-shield.png		\
-		africa-shield.png		\
 		ainu-shield.png			\
 		akwe-shield.png			\
-		aland-shield.png		\
 		albania-shield.png		\
 		aleut-shield.png		\
 		algeria-shield.png		\
 		almohad-shield.png		\
-		alsace-shield.png		\
 		amazigh-shield.png		\
 		amazon-shield.png		\
 		andorra-shield.png		\
 		angola-shield.png		\
-		anhalt-shield.png		\
 		anishinaabe-shield.png		\
 		antarctica-shield.png		\
 		antarctica_alt-shield.png	\
-		antigua_and_barbuda-shield.png	\
 		apache-shield.png		\
 		arab-shield.png			\
 		aragon-shield.png		\
@@ -1084,36 +823,27 @@ shield_files =					\
 		argentina-shield.png		\
 		armenia-shield.png		\
 		ashanti-shield.png		\
-		assam-shield.png		\
 		assyria-shield.png		\
 		asturias-shield.png		\
 		atlantis-shield.png		\
 		australia-shield.png		\
 		austria-shield.png		\
-		avar-shield.png			\
 		aymara-shield.png		\
 		azerbaijan-shield.png		\
 		aztec-shield.png		\
 		babylon-shield.png		\
 		baden-shield.png		\
-		bahamas-shield.png		\
-		bahrain-shield.png		\
 		bangladesh-shield.png		\
-		barbados-shield.png		\
 		barbarian-shield.png		\
 		bashkortostan-shield.png	\
 		bavarian-shield.png		\
 		belarus-shield.png		\
 		belgium-shield.png		\
-		belize-shield.png		\
-		bengal-shield.png		\
-		benin-shield.png		\
 		benin_ancient-shield.png	\
 		bhutan-shield.png		\
 		biafra-shield.png		\
 		boer-shield.png			\
 		bolivia-shield.png		\
-		bophuthatswana-shield.png	\
 		bosnia-shield.png		\
 		bosporus-shield.png		\
 		botswana-shield.png		\
@@ -1121,64 +851,47 @@ shield_files =					\
 		brasil-shield.png		\
 		britannia-shield.png		\
 		brittany-shield.png		\
-		brunei-shield.png		\
 		bulgaria-shield.png		\
 		burgundy-shield.png		\
 		burkina_faso-shield.png		\
 		burundi-shield.png		\
-		buryatia-shield.png		\
 		byzantium-shield.png		\
 		caddo-shield.png		\
 		california-shield.png		\
 		cameroon-shield.png		\
 		canada-shield.png		\
 		canada_old-shield.png		\
-		canar-shield.png		\
-		cape_verde-shield.png		\
 		car-shield.png			\
 		cartago-shield.png		\
 		castile-shield.png		\
 		catalan-shield.png		\
 		celtiberian-shield.png		\
 		central_america-shield.png	\
-		chad-shield.png			\
 		cham-shield.png			\
 		chananea-shield.png		\
 		chechnya-shield.png		\
 		cheyenne-shield.png		\
-		chiapas-shield.png		\
-		chickasaw-shield.png		\
 		chile-shield.png		\
 		chimu-shield.png		\
 		china-shield.png		\
-		choctaw-shield.png		\
 		chola-shield.png		\
-		chrobatian-shield.png		\
 		chumash-shield.png		\
-		chuvashia-shield.png		\
-		clatsop-shield.png		\
 		colombia-shield.png		\
 		comanche-shield.png		\
-		comoros-shield.png		\
 		constantine-shield.png		\
 		cornwall-shield.png		\
 		corsica-shield.png		\
 		costa_rica-shield.png		\
 		cossack-shield.png		\
 		courland-shield.png		\
-		crete-shield.png		\
 		crimean_tatar-shield.png	\
 		croatia-shield.png		\
 		cuba-shield.png			\
-		cuyavia-shield.png		\
 		cyprus-shield.png		\
 		czech-shield.png		\
-		czechoslovakia-shield.png	\
 		dahomey-shield.png		\
-		darfur-shield.png		\
 		ddr-shield.png			\
 		denmark-shield.png		\
-		djibouti-shield.png		\
 		dominica-shield.png		\
 		dominican_republic-shield.png	\
 		dr_congo-shield.png		\
@@ -1190,40 +903,27 @@ shield_files =					\
 		elam-shield.png			\
 		el_salvador-shield.png		\
 		england-shield.png		\
-		epirus-shield.png		\
-		equatorial_guinea-shield.png	\
 		esperanto-shield.png		\
 		estonia-shield.png		\
 		eritrea-shield.png		\
 		ethiopia-shield.png		\
-		ethiopia_old-shield.png		\
 		etruscan-shield.png		\
 		europe-shield.png		\
 		euskadi-shield.png		\
-		evenkia-shield.png		\
-		faroes-shield.png		\
 		fiji-shield.png			\
 		finland-shield.png		\
 		flanders-shield.png		\
-		florence-shield.png		\
 		france_old-shield.png		\
 		france-shield.png		\
-		french_polynesia-shield.png	\
 		franconia-shield.png		\
 		frisia-shield.png		\
-		friuli-shield.png		\
-		gabon-shield.png		\
 		gael-shield.png			\
 		galicia-shield.png		\
-		gambia-shield.png		\
 		gaul-shield.png			\
 		georgia-shield.png		\
 		germany-shield.png		\
 		ghana-shield.png		\
-		ghana_ancient-shield.png	\
-		ghaznavid-shield.png		\
 		gokturk-shield.png		\
-		golden_horde-shield.png		\
 		greater_poland-shield.png	\
 		greece_ancient-shield.png	\
 		greece-shield.png		\
@@ -1232,8 +932,6 @@ shield_files =					\
 		guanche-shield.png		\
 		guarani-shield.png		\
 		guatemala-shield.png		\
-		guinea-shield.png		\
-		guinea-bissau-shield.png	\
 		gupta-shield.png		\
 		guyana-shield.png		\
 		hacker-shield.png		\
@@ -1243,8 +941,6 @@ shield_files =					\
 		hanover-shield.png		\
 		hansa-shield.png		\
 		hawaii-shield.png		\
-		helvetii-shield.png		\
-		hephthalite-shield.png		\
 		hesse-shield.png		\
 		himyar-shield.png		\
 		hittite-shield.png		\
@@ -1257,7 +953,6 @@ shield_files =					\
 		illyria-shield.png		\
 		inca-shield.png			\
 		india-shield.png		\
-		indoeuropean-shield.png		\
 		indonesia-shield.png		\
 		innu-shield.png			\
 		iran_ancient-shield.png		\
@@ -1267,39 +962,28 @@ shield_files =					\
 		ireland-shield.png		\
 		iroquois-shield.png		\
 		israel-shield.png		\
-		israel_ancient-shield.png	\
 		italy-shield.png		\
 		ivory_coast-shield.png		\
-		jaffna-shield.png		\
 		jamaica-shield.png		\
 		japan-shield.png		\
 		jbonai-shield.png		\
-		jerusalem-shield.png		\
 		jolof-shield.png		\
-		jordan-shield.png		\
 		kalmykia-shield.png		\
 		kampuchea-shield.png		\
 		kanem-bornu-shield.png		\
 		karelia-shield.png		\
-		karen-shield.png		\
 		kashmir-shield.png		\
-		kashubia-shield.png		\
-		katanga-shield.png		\
 		kazakhstan-shield.png		\
 		keetoowah-shield.png		\
 		kenya-shield.png		\
 		khazaria-shield.png		\
-		khmer-shield.png		\
 		khwarezm-shield.png		\
 		kiev-shield.png			\
-		kiribati-shield.png		\
 		kongo-shield.png		\
 		korea-shield.png		\
 		korea_ancient-shield.png	\
 		kosovo-shield.png		\
-		kuna_yala-shield.png		\
 		kurd-shield.png			\
-		kuwait-shield.png		\
 		kyrgyzstan-shield.png		\
 		labarum-shield.png		\
 		laos-shield.png			\
@@ -1307,21 +991,12 @@ shield_files =					\
 		lebanon-shield.png		\
 		lendian-shield.png		\
 		leon-shield.png			\
-		lesotho-shield.png		\
-		lesotho_old-shield.png		\
-		liberia-shield.png		\
-		liburnian-shield.png		\
 		libya-shield.png		\
-		libya_old-shield.png		\
 		liechtenstein-shield.png	\
-		liguria-shield.png		\
 		lipkatatar-shield.png		\
-		lippe-shield.png		\
 		lithuania-shield.png		\
 		lorraine-shield.png		\
-		luna-shield.png			\
 		lusatia-shield.png		\
-		luwian-shield.png		\
 		luxembourg-shield.png		\
 		maasai-shield.png		\
 		macedon-shield.png		\
@@ -1330,19 +1005,14 @@ shield_files =					\
 		majapahit-shield.png		\
 		malawi-shield.png		\
 		malaysia-shield.png		\
-		maldives-shield.png		\
 		mali-shield.png			\
 		mali_ancient-shield.png		\
 		malta-shield.png		\
-		mamluk-shield.png		\
 		man-shield.png			\
 		manchuria-shield.png		\
 		maori-shield.png		\
 		mapuche-shield.png		\
-		marathi-shield.png		\
 		mars-shield.png			\
-		mauritania-shield.png		\
-		mauritius-shield.png		\
 		maya-shield.png			\
 		mazovia-shield.png		\
 		mecklenburg-shield.png		\
@@ -1352,34 +1022,26 @@ shield_files =					\
 		mikmaq-shield.png		\
 		milan-shield.png		\
 		miskito-shield.png		\
-		mitanni-shield.png		\
 		mixtec-shield.png		\
 		moldova-shield.png		\
-		moluccas-shield.png		\
-		mon-shield.png			\
 		monaco_alternative-shield.png	\
 		mongolia-shield.png		\
 		montenegro-shield.png		\
 		moravia-shield.png		\
 		mordovia-shield.png		\
 		morocco-shield.png		\
-		moscow-shield.png		\
 		mozambique-shield.png		\
 		mughal-shield.png		\
 		muskogee-shield.png		\
 		mwiska-shield.png		\
 		myanmar-shield.png		\
-		nagorno_karabakh-shield.png	\
 		namibia-shield.png		\
 		naples-shield.png		\
 		nato-shield.png			\
-		nauru-shield.png		\
 		navajo-shield.png		\
-		nenetsia-shield.png		\
 		nepal-shield.png		\
 		nestoria-shield.png		\
 		netherlands-shield.png		\
-		netherlands_antilles-shield.png	\
 		newfoundland-shield.png		\
 		newzealand-shield.png		\
 		nez_perce-shield.png		\
@@ -1402,7 +1064,6 @@ shield_files =					\
 		otomi-shield.png		\
 		ottoman-shield.png		\
 		oz-shield.png			\
-		paeonia-shield.png		\
 		pakistan-shield.png		\
 		palatinate-shield.png		\
 		palestine-shield.png		\
@@ -1411,11 +1072,9 @@ shield_files =					\
 		papua_newguinea-shield.png	\
 		paraguay-shield.png		\
 		pashtun-shield.png		\
-		pelasgian-shield.png		\
 		peru-shield.png			\
 		philippines-shield.png		\
 		phoenicia-shield.png		\
-		pict-shield.png			\
 		piedmont-shield.png		\
 		pirate-shield.png		\
 		piratini-shield.png		\
@@ -1423,17 +1082,12 @@ shield_files =					\
 		polynesian-shield.png		\
 		pomerania-shield.png		\
 		portugal-shield.png		\
-		prusai-shield.png		\
 		prussia-shield.png		\
 		puerto_rico-shield.png		\
 		purhepecha-shield.png		\
-		qatar-shield.png		\
 		qing-shield.png			\
 		quebec-shield.png		\
-		rapa_nui-shield.png		\
 		raramuri-shield.png		\
-		r_congo-shield.png		\
-		rhineland-shield.png		\
 		rif-shield.png			\
 		romania-shield.png		\
 		rome-shield.png			\
@@ -1442,50 +1096,34 @@ shield_files =					\
 		rwanda-shield.png		\
 		ryukyu-shield.png		\
 		sadr-shield.png			\
-		saka-shield.png			\
 		sakha-shield.png		\
-		salish-shield.png		\
-		samoa-shield.png		\
 		samogitia-shield.png		\
 		san_marino-shield.png		\
-		sao_tome_and_principe-shield.png	\
 		sapmi-shield.png		\
-		sardinia-shield.png		\
 		sarmatia-shield.png		\
 		saudi_arabia-shield.png		\
 		savoy-shield.png		\
 		saxony-shield.png		\
-		scania-shield.png		\
 		schleswig-holstein-shield.png	\
 		scotland-shield.png		\
-		scottishgaelic-shield.png	\
 		scythia-shield.png		\
 		seleucid-shield.png		\
-		seljuk-shield.png		\
-		seminole-shield.png		\
 		senegal-shield.png		\
 		serbia-shield.png		\
-		shan-shield.png			\
 		shawnee-shield.png		\
 		siberia-shield.png		\
 		sicily-shield.png		\
-		sierra_leone-shield.png		\
 		sikh-shield.png			\
 		sikkim-shield.png		\
 		silesia-shield.png		\
 		singapore-shield.png		\
-		sinhalese-shield.png		\
 		slavic-shield.png		\
 		slovakia-shield.png		\
 		slovenia-shield.png		\
-		sokoto-shield.png		\
-		solomon_islands-shield.png	\
 		somalia-shield.png		\
-		somaliland-shield.png		\
 		songhai-shield.png		\
 		south_africa-shield.png		\
 		southern_cross-shield.png	\
-		southern_sudan-shield.png	\
 		south_yemen-shield.png		\
 		soviet-shield.png		\
 		spain-shield.png		\
@@ -1498,13 +1136,12 @@ shield_files =					\
 		svg-shield.png			\
 		swaziland-shield.png		\
 		sweden-shield.png		\
-		switzerland-shield.png		\
+		swiss-shield.png		\
 		syria-shield.png		\
 		taino-shield.png		\
 		tairona-shield.png		\
 		taiwan-shield.png		\
 		tajikistan-shield.png		\
-		tanganyika-shield.png		\
 		tannu_tuva-shield.png		\
 		tanzania-shield.png		\
 		tatarstan-shield.png		\
@@ -1513,18 +1150,13 @@ shield_files =					\
 		texas-shield.png		\
 		thailand-shield.png		\
 		thrace-shield.png		\
-		thuringia-shield.png		\
 		tibet-shield.png		\
 		timur-shield.png		\
 		togo-shield.png			\
 		toltec-shield.png		\
 		tocharian-shield.png		\
 		tonga-shield.png		\
-		transnistria-shield.png		\
 		transylvania-shield.png		\
-		trinidad_and_tobago-shield.png	\
-		trnc-shield.png			\
-		tuareg-shield.png		\
 		tunisia-shield.png		\
 		tupi-shield.png			\
 		turkey-shield.png		\
@@ -1544,62 +1176,42 @@ shield_files =					\
 		valknut-shield.png		\
 		vampire-shield.png		\
 		vandal-shield.png		\
-		vanuatu-shield.png		\
 		vatican-shield.png		\
-		vedic-shield.png		\
-		venda-shield.png		\
-		venetic-shield.png		\
 		venezuela-shield.png		\
 		venice-shield.png		\
 		vermont-shield.png		\
 		vietnam-shield.png		\
 		viking-shield.png		\
 		visigoth-shield.png		\
-		vistulan-shield.png		\
-		volapuk-shield.png		\
-		volga_bulgar-shield.png		\
-		volga_german-shield.png		\
 		wales-shield.png		\
 		wallonia-shield.png		\
 		west_indies_federation-shield.png	\
-		west_papua-shield.png		\
 		westphalia-shield.png		\
 		wuerttemberg-shield.png		\
-		xhosa-shield.png		\
 		yemen-shield.png		\
 		yucatan-shield.png		\
 		yugoslavia-shield.png		\
 		zapotec-shield.png		\
-		zhuang-shield.png		\
-		zambia-shield.png		\
-		zanzibar-shield.png		\
 		zimbabwe-shield.png		\
 		zulu-shield.png			\
 		abkhazia-shield-large.png		\
 		aborigines-shield-large.png		\
 		acadia-shield-large.png		\
 		aceh-shield-large.png			\
-		acre-shield-large.png			\
-		adygea-shield-large.png			\
 		afghanistan-shield-large.png		\
-		africa-shield-large.png			\
 		ainu-shield-large.png			\
 		akwe-shield-large.png			\
-		aland-shield-large.png			\
 		albania-shield-large.png		\
 		aleut-shield-large.png		\
 		algeria-shield-large.png		\
 		almohad-shield-large.png		\
-		alsace-shield-large.png			\
 		amazigh-shield-large.png		\
 		amazon-shield-large.png		\
 		andorra-shield-large.png		\
 		angola-shield-large.png		\
-		anhalt-shield-large.png			\
 		anishinaabe-shield-large.png		\
 		antarctica-shield-large.png		\
 		antarctica_alt-shield-large.png	\
-		antigua_and_barbuda-shield-large.png	\
 		apache-shield-large.png		\
 		arab-shield-large.png			\
 		aragon-shield-large.png		\
@@ -1607,36 +1219,27 @@ shield_files =					\
 		argentina-shield-large.png		\
 		armenia-shield-large.png		\
 		ashanti-shield-large.png		\
-		assam-shield-large.png			\
 		assyria-shield-large.png		\
 		asturias-shield-large.png		\
 		atlantis-shield-large.png		\
 		australia-shield-large.png		\
 		austria-shield-large.png		\
-		avar-shield-large.png			\
 		aymara-shield-large.png		\
 		azerbaijan-shield-large.png		\
 		aztec-shield-large.png		\
 		babylon-shield-large.png		\
 		baden-shield-large.png		\
-		bahamas-shield-large.png		\
-		bahrain-shield-large.png		\
 		bangladesh-shield-large.png		\
-		barbados-shield-large.png		\
 		barbarian-shield-large.png		\
 		bashkortostan-shield-large.png	\
 		bavarian-shield-large.png		\
 		belarus-shield-large.png		\
 		belgium-shield-large.png		\
-		belize-shield-large.png			\
-		bengal-shield-large.png			\
-		benin-shield-large.png			\
 		benin_ancient-shield-large.png	\
 		bhutan-shield-large.png		\
 		biafra-shield-large.png		\
 		boer-shield-large.png			\
 		bolivia-shield-large.png		\
-		bophuthatswana-shield-large.png		\
 		bosnia-shield-large.png		\
 		bosporus-shield-large.png		\
 		botswana-shield-large.png		\
@@ -1644,64 +1247,47 @@ shield_files =					\
 		brasil-shield-large.png		\
 		britannia-shield-large.png		\
 		brittany-shield-large.png		\
-		brunei-shield-large.png			\
 		bulgaria-shield-large.png		\
 		burgundy-shield-large.png		\
 		burkina_faso-shield-large.png		\
 		burundi-shield-large.png		\
-		buryatia-shield-large.png			\
 		byzantium-shield-large.png		\
 		caddo-shield-large.png		\
 		california-shield-large.png		\
 		cameroon-shield-large.png		\
 		canada-shield-large.png		\
 		canada_old-shield-large.png		\
-		canar-shield-large.png			\
-		cape_verde-shield-large.png		\
 		car-shield-large.png			\
 		cartago-shield-large.png		\
 		castile-shield-large.png		\
 		catalan-shield-large.png		\
 		celtiberian-shield-large.png		\
 		central_america-shield-large.png	\
-		chad-shield-large.png			\
 		cham-shield-large.png			\
 		chananea-shield-large.png		\
 		chechnya-shield-large.png		\
 		cheyenne-shield-large.png		\
-		chiapas-shield-large.png		\
-		chickasaw-shield-large.png		\
 		chile-shield-large.png		\
 		chimu-shield-large.png		\
 		china-shield-large.png		\
-		choctaw-shield-large.png		\
 		chola-shield-large.png		\
-		chrobatian-shield-large.png		\
 		chumash-shield-large.png		\
-		chuvashia-shield-large.png		\
-		clatsop-shield-large.png		\
 		colombia-shield-large.png		\
 		comanche-shield-large.png		\
-		comoros-shield-large.png		\
 		constantine-shield-large.png		\
 		cornwall-shield-large.png		\
 		corsica-shield-large.png		\
 		costa_rica-shield-large.png		\
 		cossack-shield-large.png		\
 		courland-shield-large.png		\
-		crete-shield-large.png			\
 		crimean_tatar-shield-large.png	\
 		croatia-shield-large.png		\
 		cuba-shield-large.png			\
-		cuyavia-shield-large.png		\
 		cyprus-shield-large.png		\
 		czech-shield-large.png		\
-		czechoslovakia-shield-large.png		\
 		dahomey-shield-large.png		\
-		darfur-shield-large.png			\
 		ddr-shield-large.png			\
 		denmark-shield-large.png		\
-		djibouti-shield-large.png		\
 		dominica-shield-large.png		\
 		dominican_republic-shield-large.png	\
 		dr_congo-shield-large.png		\
@@ -1713,40 +1299,27 @@ shield_files =					\
 		elam-shield-large.png			\
 		el_salvador-shield-large.png		\
 		england-shield-large.png		\
-		epirus-shield-large.png			\
-		equatorial_guinea-shield-large.png	\
 		esperanto-shield-large.png		\
 		estonia-shield-large.png		\
 		eritrea-shield-large.png		\
 		ethiopia-shield-large.png		\
-		ethiopia_old-shield-large.png		\
 		etruscan-shield-large.png		\
 		europe-shield-large.png		\
 		euskadi-shield-large.png		\
-		evenkia-shield-large.png		\
-		faroes-shield-large.png			\
 		fiji-shield-large.png			\
 		finland-shield-large.png		\
 		flanders-shield-large.png		\
-		florence-shield-large.png		\
 		france_old-shield-large.png		\
 		france-shield-large.png		\
 		franconia-shield-large.png		\
-		french_polynesia-shield-large.png	\
 		frisia-shield-large.png		\
-		friuli-shield-large.png			\
-		gabon-shield-large.png			\
 		gael-shield-large.png			\
 		galicia-shield-large.png		\
-		gambia-shield-large.png			\
 		gaul-shield-large.png			\
 		georgia-shield-large.png		\
 		germany-shield-large.png		\
 		ghana-shield-large.png		\
-		ghana_ancient-shield-large.png		\
-		ghaznavid-shield-large.png		\
 		gokturk-shield-large.png		\
-		golden_horde-shield-large.png		\
 		greater_poland-shield-large.png	\
 		greece_ancient-shield-large.png	\
 		greece-shield-large.png		\
@@ -1755,8 +1328,6 @@ shield_files =					\
 		guanche-shield-large.png		\
 		guarani-shield-large.png		\
 		guatemala-shield-large.png		\
-		guinea-shield-large.png			\
-		guinea-bissau-shield-large.png		\
 		gupta-shield-large.png		\
 		guyana-shield-large.png		\
 		hacker-shield-large.png		\
@@ -1766,8 +1337,6 @@ shield_files =					\
 		hanover-shield-large.png		\
 		hansa-shield-large.png		\
 		hawaii-shield-large.png		\
-		helvetii-shield-large.png		\
-		hephthalite-shield-large.png		\
 		hesse-shield-large.png		\
 		himyar-shield-large.png		\
 		hittite-shield-large.png		\
@@ -1780,7 +1349,6 @@ shield_files =					\
 		illyria-shield-large.png		\
 		inca-shield-large.png			\
 		india-shield-large.png		\
-		indoeuropean-shield-large.png		\
 		indonesia-shield-large.png		\
 		innu-shield-large.png			\
 		iran_ancient-shield-large.png		\
@@ -1790,39 +1358,28 @@ shield_files =					\
 		ireland-shield-large.png		\
 		iroquois-shield-large.png		\
 		israel-shield-large.png		\
-		israel_ancient-shield-large.png		\
 		italy-shield-large.png		\
 		ivory_coast-shield-large.png		\
-		jaffna-shield-large.png			\
 		jamaica-shield-large.png		\
 		japan-shield-large.png		\
 		jbonai-shield-large.png		\
-		jerusalem-shield-large.png		\
 		jolof-shield-large.png		\
-		jordan-shield-large.png			\
 		kalmykia-shield-large.png		\
 		kampuchea-shield-large.png		\
 		kanem-bornu-shield-large.png		\
 		karelia-shield-large.png		\
-		karen-shield-large.png			\
 		kashmir-shield-large.png		\
-		kashubia-shield-large.png		\
-		katanga-shield-large.png		\
 		kazakhstan-shield-large.png		\
 		keetoowah-shield-large.png		\
 		kenya-shield-large.png		\
 		khazaria-shield-large.png		\
-		khmer-shield-large.png			\
 		khwarezm-shield-large.png		\
 		kiev-shield-large.png			\
-		kiribati-shield-large.png		\
 		kongo-shield-large.png		\
 		korea-shield-large.png		\
 		korea_ancient-shield-large.png	\
 		kosovo-shield-large.png		\
-		kuna_yala-shield-large.png		\
 		kurd-shield-large.png			\
-		kuwait-shield-large.png			\
 		kyrgyzstan-shield-large.png		\
 		labarum-shield-large.png		\
 		laos-shield-large.png			\
@@ -1830,21 +1387,12 @@ shield_files =					\
 		lebanon-shield-large.png		\
 		lendian-shield-large.png		\
 		leon-shield-large.png			\
-		lesotho-shield-large.png		\
-		lesotho_old-shield-large.png		\
-		liberia-shield-large.png		\
-		liburnian-shield-large.png		\
 		libya-shield-large.png		\
-		libya_old-shield-large.png		\
 		liechtenstein-shield-large.png	\
-		liguria-shield-large.png		\
 		lipkatatar-shield-large.png		\
-		lippe-shield-large.png			\
 		lithuania-shield-large.png		\
 		lorraine-shield-large.png		\
-		luna-shield-large.png			\
 		lusatia-shield-large.png		\
-		luwian-shield-large.png			\
 		luxembourg-shield-large.png		\
 		maasai-shield-large.png		\
 		macedon-shield-large.png		\
@@ -1853,19 +1401,14 @@ shield_files =					\
 		majapahit-shield-large.png		\
 		malawi-shield-large.png		\
 		malaysia-shield-large.png		\
-		maldives-shield-large.png		\
 		mali-shield-large.png			\
 		mali_ancient-shield-large.png		\
 		malta-shield-large.png		\
-		mamluk-shield-large.png			\
 		man-shield-large.png			\
 		manchuria-shield-large.png		\
 		maori-shield-large.png		\
 		mapuche-shield-large.png		\
-		marathi-shield-large.png		\
 		mars-shield-large.png			\
-		mauritania-shield-large.png		\
-		mauritius-shield-large.png		\
 		maya-shield-large.png			\
 		mazovia-shield-large.png		\
 		mecklenburg-shield-large.png		\
@@ -1875,34 +1418,26 @@ shield_files =					\
 		mikmaq-shield-large.png		\
 		milan-shield-large.png		\
 		miskito-shield-large.png		\
-		mitanni-shield-large.png		\
 		mixtec-shield-large.png		\
 		moldova-shield-large.png		\
-		moluccas-shield-large.png		\
-		mon-shield-large.png			\
 		monaco_alternative-shield-large.png	\
 		mongolia-shield-large.png		\
 		montenegro-shield-large.png		\
 		moravia-shield-large.png		\
 		mordovia-shield-large.png		\
 		morocco-shield-large.png		\
-		moscow-shield-large.png			\
 		mozambique-shield-large.png		\
 		mughal-shield-large.png		\
 		muskogee-shield-large.png		\
 		mwiska-shield-large.png		\
 		myanmar-shield-large.png		\
-		nagorno_karabakh-shield-large.png	\
 		namibia-shield-large.png		\
 		naples-shield-large.png		\
 		nato-shield-large.png			\
-		nauru-shield-large.png			\
-		navajo-shield-large.png			\
-		nenetsia-shield-large.png		\
+		navajo-shield-large.png		\
 		nepal-shield-large.png		\
 		nestoria-shield-large.png		\
 		netherlands-shield-large.png		\
-		netherlands_antilles-shield-large.png	\
 		newfoundland-shield-large.png		\
 		newzealand-shield-large.png		\
 		nez_perce-shield-large.png		\
@@ -1925,7 +1460,6 @@ shield_files =					\
 		otomi-shield-large.png		\
 		ottoman-shield-large.png		\
 		oz-shield-large.png			\
-		paeonia-shield-large.png		\
 		pakistan-shield-large.png		\
 		palatinate-shield-large.png		\
 		palestine-shield-large.png		\
@@ -1934,11 +1468,9 @@ shield_files =					\
 		papua_newguinea-shield-large.png	\
 		paraguay-shield-large.png		\
 		pashtun-shield-large.png		\
-		pelasgian-shield-large.png		\
 		peru-shield-large.png			\
 		philippines-shield-large.png		\
 		phoenicia-shield-large.png		\
-		pict-shield-large.png			\
 		piedmont-shield-large.png		\
 		pirate-shield-large.png		\
 		piratini-shield-large.png		\
@@ -1946,17 +1478,12 @@ shield_files =					\
 		polynesian-shield-large.png		\
 		pomerania-shield-large.png		\
 		portugal-shield-large.png		\
-		prusai-shield-large.png			\
 		prussia-shield-large.png		\
 		puerto_rico-shield-large.png		\
 		purhepecha-shield-large.png		\
-		qatar-shield-large.png			\
 		qing-shield-large.png			\
 		quebec-shield-large.png		\
-		rapa_nui-shield-large.png		\
 		raramuri-shield-large.png		\
-		r_congo-shield-large.png		\
-		rhineland-shield-large.png		\
 		rif-shield-large.png			\
 		romania-shield-large.png		\
 		rome-shield-large.png			\
@@ -1965,50 +1492,34 @@ shield_files =					\
 		rwanda-shield-large.png		\
 		ryukyu-shield-large.png		\
 		sadr-shield-large.png			\
-		saka-shield-large.png			\
 		sakha-shield-large.png		\
-		salish-shield-large.png			\
-		samoa-shield-large.png			\
 		samogitia-shield-large.png		\
 		san_marino-shield-large.png		\
-		sao_tome_and_principe-shield-large.png	\
 		sapmi-shield-large.png		\
-		sardinia-shield-large.png		\
 		sarmatia-shield-large.png		\
 		saudi_arabia-shield-large.png		\
 		savoy-shield-large.png		\
 		saxony-shield-large.png		\
-		scania-shield-large.png			\
 		schleswig-holstein-shield-large.png	\
 		scotland-shield-large.png		\
-		scottishgaelic-shield-large.png		\
 		scythia-shield-large.png		\
 		seleucid-shield-large.png		\
-		seljuk-shield-large.png			\
-		seminole-shield-large.png		\
 		senegal-shield-large.png		\
 		serbia-shield-large.png		\
-		shan-shield-large.png			\
 		shawnee-shield-large.png		\
 		siberia-shield-large.png		\
 		sicily-shield-large.png		\
-		sierra_leone-shield-large.png		\
 		sikh-shield-large.png			\
 		sikkim-shield-large.png		\
 		silesia-shield-large.png		\
 		singapore-shield-large.png		\
-		sinhalese-shield-large.png		\
 		slavic-shield-large.png		\
 		slovakia-shield-large.png		\
 		slovenia-shield-large.png		\
-		sokoto-shield-large.png			\
-		solomon_islands-shield-large.png	\
 		somalia-shield-large.png		\
-		somaliland-shield-large.png		\
 		songhai-shield-large.png		\
 		south_africa-shield-large.png		\
 		southern_cross-shield-large.png	\
-		southern_sudan-shield-large.png		\
 		south_yemen-shield-large.png		\
 		soviet-shield-large.png		\
 		spain-shield-large.png		\
@@ -2021,13 +1532,12 @@ shield_files =					\
 		svg-shield-large.png			\
 		swaziland-shield-large.png		\
 		sweden-shield-large.png		\
-		switzerland-shield-large.png		\
+		swiss-shield-large.png		\
 		syria-shield-large.png		\
 		taino-shield-large.png		\
 		tairona-shield-large.png		\
 		taiwan-shield-large.png		\
 		tajikistan-shield-large.png		\
-		tanganyika-shield-large.png		\
 		tannu_tuva-shield-large.png		\
 		tanzania-shield-large.png		\
 		tatarstan-shield-large.png		\
@@ -2036,18 +1546,13 @@ shield_files =					\
 		texas-shield-large.png		\
 		thailand-shield-large.png		\
 		thrace-shield-large.png		\
-		thuringia-shield-large.png		\
 		tibet-shield-large.png		\
 		timur-shield-large.png		\
 		togo-shield-large.png			\
 		toltec-shield-large.png		\
 		tocharian-shield-large.png		\
 		tonga-shield-large.png		\
-		transnistria-shield-large.png		\
 		transylvania-shield-large.png		\
-		trinidad_and_tobago-shield-large.png	\
-		trnc-shield-large.png			\
-		tuareg-shield-large.png			\
 		tunisia-shield-large.png		\
 		tupi-shield-large.png			\
 		turkey-shield-large.png		\
@@ -2067,35 +1572,22 @@ shield_files =					\
 		valknut-shield-large.png		\
 		vampire-shield-large.png		\
 		vandal-shield-large.png		\
-		vanuatu-shield-large.png		\
 		vatican-shield-large.png		\
-		vedic-shield-large.png			\
-		venda-shield-large.png			\
-		venetic-shield-large.png		\
 		venezuela-shield-large.png		\
 		venice-shield-large.png		\
 		vermont-shield-large.png		\
 		vietnam-shield-large.png		\
 		viking-shield-large.png		\
 		visigoth-shield-large.png		\
-		vistulan-shield-large.png		\
-		volapuk-shield-large.png		\
-		volga_bulgar-shield-large.png		\
-		volga_german-shield-large.png		\
 		wales-shield-large.png		\
 		wallonia-shield-large.png		\
 		west_indies_federation-shield-large.png	\
-		west_papua-shield-large.png		\
 		westphalia-shield-large.png		\
 		wuerttemberg-shield-large.png		\
-		xhosa-shield-large.png			\
-		yemen-shield-large.png			\
+		yemen-shield-large.png		\
 		yucatan-shield-large.png		\
 		yugoslavia-shield-large.png		\
-		zambia-shield-large.png			\
-		zanzibar-shield-large.png			\
 		zapotec-shield-large.png		\
-		zhuang-shield-large.png		\
 		zimbabwe-shield-large.png		\
 		zulu-shield-large.png
 
@@ -2104,27 +1596,20 @@ svg_files = 				\
 		aborigines.svg		\
 		acadia.svg		\
 		aceh.svg		\
-		acre.svg		\
-		adygea.svg		\
 		afghanistan.svg		\
-		africa.svg		\
 		ainu.svg		\
 		akwe.svg		\
-		aland.svg		\
 		albania.svg		\
 		aleut.svg		\
 		algeria.svg		\
 		almohad.svg		\
-		alsace.svg		\
 		amazigh.svg		\
 		amazon.svg		\
 		andorra.svg		\
 		angola.svg		\
-		anhalt.svg		\
 		anishinaabe.svg		\
 		antarctica.svg		\
 		antarctica_alt.svg	\
-		antigua_and_barbuda.svg	\
 		apache.svg		\
 		arab.svg		\
 		aragon.svg		\
@@ -2132,36 +1617,27 @@ svg_files = 				\
 		argentina.svg		\
 		armenia.svg		\
 		ashanti.svg		\
-		assam.svg		\
 		assyria.svg		\
 		asturias.svg		\
 		atlantis.svg		\
 		australia.svg		\
 		austria.svg		\
-		avar.svg		\
 		aymara.svg		\
 		azerbaijan.svg		\
 		aztec.svg		\
 		babylon.svg		\
 		baden.svg		\
-		bahamas.svg		\
-		bahrain.svg		\
 		bangladesh.svg		\
-		barbados.svg		\
 		barbarian.svg		\
 		bashkortostan.svg	\
 		bavarian.svg		\
 		belarus.svg		\
 		belgium.svg		\
-		belize.svg		\
-		bengal.svg		\
-		benin.svg		\
 		benin_ancient.svg	\
 		bhutan.svg		\
 		biafra.svg		\
 		boer.svg		\
 		bolivia.svg		\
-		bophuthatswana.svg	\
 		bosporus.svg		\
 		botswana.svg		\
 		bosnia.svg		\
@@ -2169,20 +1645,16 @@ svg_files = 				\
 		brasil.svg		\
 		britannia.svg		\
 		brittany.svg		\
-		brunei.svg		\
 		bulgaria.svg		\
 		burgundy.svg		\
 		burkina_faso.svg	\
 		burundi.svg		\
-		buryatia.svg		\
 		byzantium.svg		\
 		caddo.svg		\
 		california.svg		\
 		cameroon.svg		\
 		canada.svg		\
 		canada_old.svg		\
-		canar.svg		\
-		cape_verde.svg		\
 		car.svg			\
 		cartago.svg		\
 		castile.svg		\
@@ -2193,40 +1665,27 @@ svg_files = 				\
 		chananea.svg		\
 		chechnya.svg		\
 		cheyenne.svg		\
-		chad.svg		\
-		chiapas.svg		\
-		chickasaw.svg		\
 		chile.svg		\
 		chimu.svg		\
 		china.svg		\
-		choctaw.svg		\
 		chola.svg		\
-		chrobatian.svg		\
 		chumash.svg		\
-		chuvashia.svg		\
-		clatsop.svg		\
 		colombia.svg		\
 		comanche.svg		\
-		comoros.svg		\
 		constantine.svg		\
 		cornwall.svg		\
 		corsica.svg		\
 		cossack.svg		\
 		costa_rica.svg		\
 		courland.svg		\
-		crete.svg		\
 		crimean_tatar.svg	\
 		croatia.svg		\
 		cuba.svg		\
-		cuyavia.svg		\
 		cyprus.svg		\
 		czech.svg		\
-		czechoslovakia.svg	\
 		dahomey.svg		\
-		darfur.svg		\
 		ddr.svg			\
 		denmark.svg		\
-		djibouti.svg		\
 		dominica.svg		\
 		dominican_republic.svg	\
 		dr_congo.svg		\
@@ -2238,40 +1697,27 @@ svg_files = 				\
 		elam.svg		\
 		el_salvador.svg		\
 		england.svg		\
-		epirus.svg		\
-		equatorial_guinea.svg	\
 		esperanto.svg		\
 		estonia.svg		\
 		eritrea.svg		\
 		ethiopia.svg		\
-		ethiopia_old.svg	\
 		etruscan.svg		\
 		europe.svg		\
 		euskadi.svg		\
-		evenkia.svg		\
-		faroes.svg		\
 		fiji.svg		\
 		finland.svg		\
 		flanders.svg		\
-		florence.svg		\
 		france_old.svg		\
 		france.svg		\
 		franconia.svg		\
-		french_polynesia.svg	\
 		frisia.svg		\
-		friuli.svg		\
-		gabon.svg		\
 		gael.svg		\
 		galicia.svg		\
-		gambia.svg		\
 		gaul.svg		\
 		georgia.svg		\
 		germany.svg		\
 		ghana.svg		\
-		ghana_ancient.svg	\
-		ghaznavid.svg		\
 		gokturk.svg		\
-		golden_horde.svg	\
 		greater_poland.svg	\
 		greece_ancient.svg	\
 		greece.svg		\
@@ -2280,8 +1726,6 @@ svg_files = 				\
 		guanche.svg		\
 		guarani.svg		\
 		guatemala.svg		\
-		guinea.svg		\
-		guinea-bissau.svg	\
 		gupta.svg		\
 		guyana.svg		\
 		hacker.svg		\
@@ -2291,8 +1735,6 @@ svg_files = 				\
 		hanover.svg		\
 		hansa.svg		\
 		hawaii.svg		\
-		helvetii.svg		\
-		hephthalite.svg		\
 		hesse.svg		\
 		himyar.svg		\
 		hittite.svg		\
@@ -2305,7 +1747,6 @@ svg_files = 				\
 		illyria.svg		\
 		inca.svg		\
 		india.svg		\
-		indoeuropean.svg	\
 		indonesia.svg		\
 		innu.svg		\
 		iran_ancient.svg	\
@@ -2315,39 +1756,28 @@ svg_files = 				\
 		ireland.svg		\
 		iroquois.svg		\
 		israel.svg		\
-		israel_ancient.svg	\
 		italy.svg		\
 		ivory_coast.svg		\
-		jaffna.svg		\
 		jamaica.svg		\
 		japan.svg		\
 		jbonai.svg		\
-		jerusalem.svg		\
 		jolof.svg		\
-		jordan.svg		\
 		kalmykia.svg		\
 		kampuchea.svg		\
 		kanem-bornu.svg		\
 		karelia.svg		\
-		karen.svg		\
 		kashmir.svg		\
-		kashubia.svg		\
-		katanga.svg		\
 		kazakhstan.svg		\
 		keetoowah.svg		\
 		kenya.svg		\
 		khazaria.svg		\
-		khmer.svg		\
 		khwarezm.svg		\
 		kiev.svg		\
-		kiribati.svg		\
 		kongo.svg		\
 		korea.svg		\
 		korea_ancient.svg	\
 		kosovo.svg		\
-		kuna_yala.svg		\
 		kurd.svg		\
-		kuwait.svg		\
 		kyrgyzstan.svg		\
 		labarum.svg		\
 		laos.svg		\
@@ -2355,21 +1785,12 @@ svg_files = 				\
 		lebanon.svg		\
 		lendian.svg		\
 		leon.svg		\
-		lesotho.svg		\
-		lesotho_old.svg		\
-		liberia.svg		\
-		liburnian.svg		\
 		libya.svg		\
-		libya_old.svg		\
 		liechtenstein.svg	\
-		liguria.svg		\
 		lipkatatar.svg		\
-		lippe.svg		\
 		lithuania.svg		\
 		lorraine.svg		\
-		luna.svg		\
 		lusatia.svg		\
-		luwian.svg		\
 		luxembourg.svg		\
 		maasai.svg		\
 		macedon.svg		\
@@ -2378,19 +1799,14 @@ svg_files = 				\
 		majapahit.svg		\
 		malawi.svg		\
 		malaysia.svg		\
-		maldives.svg		\
 		mali.svg		\
 		mali_ancient.svg	\
 		malta.svg		\
-		mamluk.svg		\
 		man.svg			\
 		manchuria.svg		\
 		maori.svg		\
 		mapuche.svg		\
-		marathi.svg		\
 		mars.svg		\
-		mauritania.svg		\
-		mauritius.svg		\
 		maya.svg		\
 		mazovia.svg		\
 		mecklenburg.svg		\
@@ -2400,34 +1816,26 @@ svg_files = 				\
 		mikmaq.svg		\
 		milan.svg		\
 		miskito.svg		\
-		mitanni.svg		\
 		mixtec.svg		\
 		moldova.svg		\
-		moluccas.svg		\
-		mon.svg			\
 		monaco_alternative.svg	\
 		mongolia.svg		\
 		montenegro.svg		\
 		moravia.svg		\
 		mordovia.svg		\
 		morocco.svg		\
-		moscow.svg		\
 		mozambique.svg		\
 		mughal.svg		\
 		muskogee.svg		\
 		mwiska.svg		\
 		myanmar.svg		\
-		nagorno_karabakh.svg	\
 		namibia.svg		\
 		naples.svg		\
 		nato.svg		\
-		nauru.svg		\
 		navajo.svg		\
-		nenetsia.svg		\
 		nepal.svg		\
 		nestoria.svg		\
 		netherlands.svg		\
-		netherlands_antilles.svg	\
 		newfoundland.svg	\
 		newzealand.svg		\
 		nez_perce.svg		\
@@ -2450,7 +1858,6 @@ svg_files = 				\
 		otomi.svg		\
 		ottoman.svg		\
 		oz.svg			\
-		paeonia.svg		\
 		pakistan.svg		\
 		palatinate.svg		\
 		palestine.svg		\
@@ -2459,11 +1866,9 @@ svg_files = 				\
 		papua_newguinea.svg	\
 		paraguay.svg		\
 		pashtun.svg		\
-		pelasgian.svg		\
 		peru.svg		\
 		philippines.svg		\
 		phoenicia.svg		\
-		pict.svg		\
 		piedmont.svg		\
 		pirate.svg		\
 		piratini.svg		\
@@ -2471,18 +1876,13 @@ svg_files = 				\
 		pomerania.svg		\
 		polynesian.svg		\
 		portugal.svg		\
-		prusai.svg		\
 		prussia.svg		\
 		puerto_rico.svg		\
 		purhepecha.svg		\
-		qatar.svg		\
 		qing.svg		\
 		quebec.svg		\
-		rapa_nui.svg		\
-		raramuri.svg		\
-		r_congo.svg		\
-		rhineland.svg		\
 		rif.svg			\
+		raramuri.svg		\
 		romania.svg		\
 		rome.svg		\
 		rvn.svg			\
@@ -2490,50 +1890,34 @@ svg_files = 				\
 		rwanda.svg		\
 		ryukyu.svg		\
 		sadr.svg		\
-		saka.svg		\
 		sakha.svg		\
-		salish.svg		\
-		samoa.svg		\
 		samogitia.svg		\
 		san_marino.svg		\
-		sao_tome_and_principe.svg	\
 		sapmi.svg		\
-		sardinia.svg		\
 		sarmatia.svg		\
 		savoy.svg		\
 		saudi_arabia.svg	\
 		saxony.svg		\
-		scania.svg		\
 		schleswig-holstein.svg	\
 		scotland.svg		\
-		scottishgaelic.svg	\
 		scythia.svg		\
 		seleucid.svg		\
-		seljuk.svg		\
-		seminole.svg		\
 		senegal.svg		\
 		serbia.svg		\
-		shan.svg		\
 		shawnee.svg		\
 		siberia.svg		\
 		sicily.svg		\
-		sierra_leone.svg	\
 		sikh.svg		\
 		sikkim.svg		\
 		silesia.svg		\
 		singapore.svg		\
-		sinhalese.svg		\
 		slavic.svg		\
 		slovakia.svg		\
 		slovenia.svg		\
-		sokoto.svg		\
-		solomon_islands.svg	\
 		somalia.svg		\
-		somaliland.svg		\
 		songhai.svg		\
 		south_africa.svg	\
 		southern_cross.svg	\
-		southern_sudan.svg	\
 		south_yemen.svg		\
 		soviet.svg		\
 		spain.svg		\
@@ -2546,13 +1930,12 @@ svg_files = 				\
 		svg.svg			\
 		swaziland.svg		\
 		sweden.svg		\
-		switzerland.svg		\
+		swiss.svg		\
 		syria.svg		\
 		taino.svg		\
 		tairona.svg		\
 		taiwan.svg		\
 		tajikistan.svg		\
-		tanganyika.svg		\
 		tannu_tuva.svg		\
 		tanzania.svg		\
 		tatarstan.svg		\
@@ -2560,7 +1943,6 @@ svg_files = 				\
 		teutonic_order.svg	\
 		texas.svg		\
 		thailand.svg		\
-		thuringia.svg		\
 		thrace.svg		\
 		tibet.svg		\
 		timur.svg		\
@@ -2568,11 +1950,7 @@ svg_files = 				\
 		togo.svg		\
 		toltec.svg		\
 		tonga.svg		\
-		transnistria.svg	\
 		transylvania.svg	\
-		trinidad_and_tobago.svg	\
-		trnc.svg		\
-		tuareg.svg		\
 		tunisia.svg		\
 		tupi.svg		\
 		turkey.svg		\
@@ -2592,35 +1970,22 @@ svg_files = 				\
 		valknut.svg		\
 		vampire.svg		\
 		vandal.svg		\
-		vanuatu.svg		\
 		vatican.svg		\
-		vedic.svg		\
-		venda.svg		\
-		venetic.svg		\
 		venezuela.svg		\
 		venice.svg		\
 		vermont.svg		\
 		vietnam.svg		\
 		viking.svg		\
 		visigoth.svg		\
-		vistulan.svg		\
-		volapuk.svg		\
-		volga_bulgar.svg	\
-		volga_german.svg	\
 		wales.svg		\
 		wallonia.svg		\
 		west_indies_federation.svg	\
-		west_papua.svg		\
 		westphalia.svg		\
 		wuerttemberg.svg	\
-		xhosa.svg		\
 		yemen.svg		\
 		yucatan.svg		\
 		yugoslavia.svg		\
-		zambia.svg		\
-		zanzibar.svg		\
 		zapotec.svg		\
-		zhuang.svg		\
 		zimbabwe.svg		\
 		zulu.svg
 

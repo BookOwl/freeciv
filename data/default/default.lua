@@ -20,7 +20,7 @@ function default_hut_get_gold(unit, gold)
   local owner = unit.owner
 
   notify.event(owner, unit.tile, E.HUT_GOLD, PL_("You found %d gold.",
-                                                   "You found %d gold.", gold),
+                                                 "You found %d gold.", gold),
                gold)
   change_gold(owner, gold)
 end
@@ -81,19 +81,17 @@ function default_hut_get_city(unit)
   end
 end
 
--- Get barbarians from hut, unless close to a city, king enters, or
--- barbarians are disabled
+-- Get barbarians from hut, unless close to a city or king enters
 -- Unit may die: returns true if unit is alive
 function default_hut_get_barbarians(unit)
   local tile = unit.tile
   local type = unit.utype
   local owner = unit.owner
 
-  if server.setting.get("barbarians") == "DISABLED"
-    or unit.tile:city_exists_within_max_city_map(true)
+  if unit.tile:city_exists_within_max_city_map(true)
     or type:has_flag('Gameloss') then
-      notify.event(owner, unit.tile, E.HUT_BARB_CITY_NEAR,
-                   _("An abandoned village is here."))
+    notify.event(owner, unit.tile, E.HUT_BARB_CITY_NEAR,
+                 _("An abandoned village is here."))
     return true
   end
   

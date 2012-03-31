@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* log */
@@ -34,8 +34,8 @@
 #include "maphand.h"
 #include "srv_log.h"
 
-/* server/advisors */
-#include "advgoto.h"
+/* server/ai */
+#include "aitools.h"
 
 #include "autoexplorer.h"
 
@@ -101,7 +101,7 @@ static bool player_may_explore(const struct tile *ptile,
 }
 
 /***************************************************************************
-  TB function used by explorer_goto().
+  TB function used by ai_explorer_goto().
 ***************************************************************************/
 static enum tile_behavior explorer_tb(const struct tile *ptile,
                                       enum known_type k,
@@ -119,31 +119,14 @@ static enum tile_behavior explorer_tb(const struct tile *ptile,
 static bool explorer_goto(struct unit *punit, struct tile *ptile)
 {
   struct pf_parameter parameter;
-  struct adv_risk_cost risk_cost;
-  bool alive = TRUE;
-  struct pf_map *pfm;
-  struct pf_path *path;
+  struct ai_risk_cost risk_cost;
 
-  pft_fill_unit_parameter(&parameter, punit);
+  ai_fill_unit_param(&parameter, &risk_cost, punit, ptile);
   parameter.get_TB = explorer_tb;
-  adv_avoid_risks(&parameter, &risk_cost, punit, NORMAL_STACKING_FEARFULNESS);
 
-  /* Show the destination in the client */
-  punit->goto_tile = ptile;
-
-  UNIT_LOG(LOG_DEBUG, punit, "explorer_goto to %d,%d", TILE_XY(ptile));
-
-  pfm = pf_map_new(&parameter);
-  path = pf_map_path(pfm, ptile);
-
-  if (path != NULL) {
-    alive = adv_follow_path(punit, path, ptile);
-    pf_path_destroy(path);
-  }
-
-  pf_map_destroy(pfm);
-
-  return alive;
+  UNIT_LOG(LOG_DEBUG, punit, "ai_explorer_goto to %d,%d",
+           ptile->x, ptile->y);
+  return ai_unit_goto_constrained(punit, ptile, &parameter);
 }
 
 /**************************************************************************

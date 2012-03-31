@@ -13,10 +13,6 @@
 #ifndef FC__HELPDATA_H
 #define FC__HELPDATA_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <stddef.h>		/* size_t */
 
 #include "improvement.h" 	/* Impr_type_id */
@@ -66,9 +62,5 @@ char *helptext_unit_upkeep_str(struct unit_type *punittype);
         help_iter_start();                \
         while((pitem=help_iter_next())) {   
 #define help_items_iterate_end }}
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__HELPDATA_H */

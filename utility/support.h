@@ -14,10 +14,6 @@
 #ifndef FC__SUPPORT_H
 #define FC__SUPPORT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /********************************************************************** 
   Replacements for functions which are not available on all platforms.
   Where the functions are available natively, these are just wrappers.
@@ -159,13 +155,5 @@ bool fc_isspace(char c);
 bool fc_isupper(char c);
 char fc_toupper(char c);
 char fc_tolower(char c);
-
-void fc_uname(char *buf, size_t len);
-
-const char *fc_basename(const char *path);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__SUPPORT_H */

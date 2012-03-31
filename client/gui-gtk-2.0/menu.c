@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -28,7 +28,6 @@
 /* common */
 #include "game.h"
 #include "government.h"
-#include "road.h"
 #include "unit.h"
 
 /* client */
@@ -59,9 +58,7 @@
 #include "plrdlg.h"
 #include "ratesdlg.h"
 #include "repodlgs.h"
-#include "luaconsole.h"
 #include "spaceshipdlg.h"
-#include "unitselect.h"
 #include "wldlg.h"
 
 #include "menu.h"
@@ -160,23 +157,7 @@ static void save_game_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void save_game_as_callback(GtkAction *action, gpointer data)
 {
-  save_game_dialog_popup();
-}
-
-/****************************************************************************
-  Action "SAVE_MAPIMG" callback.
-****************************************************************************/
-static void save_mapimg_callback(GtkAction *action, gpointer data)
-{
-  mapimg_client_save(NULL);
-}
-
-/****************************************************************************
-  Action "SAVE_MAPIMG_AS" callback.
-****************************************************************************/
-static void save_mapimg_as_callback(GtkAction *action, gpointer data)
-{
-  save_mapimg_dialog_popup();
+  popup_save_dialog(FALSE);
 }
 
 /****************************************************************
@@ -277,14 +258,6 @@ static void report_top_cities_callback(GtkAction *action, gpointer data)
 static void report_messages_callback(GtkAction *action, gpointer data)
 {
   meswin_dialog_popup(TRUE);
-}
-
-/****************************************************************
-  Action "CLIENT_LUA_SCRIPT" callback.
-*****************************************************************/
-static void client_lua_script_callback(GtkAction *action, gpointer data)
-{
-  luaconsole_dialog_popup(TRUE);
 }
 
 /****************************************************************
@@ -551,17 +524,6 @@ static void show_national_borders_callback(GtkToggleAction *action,
 }
 
 /****************************************************************
-  Action "SHOW_NATIVE_TILES" callback.
-*****************************************************************/
-static void show_native_tiles_callback(GtkToggleAction *action,
-                                       gpointer data)
-{
-  if (draw_native ^ gtk_toggle_action_get_active(action)) {
-    key_map_native_toggle();
-  }
-}
-
-/****************************************************************
   Action "SHOW_CITY_FULL_BAR" callback.
 *****************************************************************/
 static void show_city_full_bar_callback(GtkToggleAction *action,
@@ -787,7 +749,7 @@ static void show_better_fog_of_war_callback(GtkToggleAction *action,
 }
 
 /****************************************************************
-  Action "FULL_SCREEN" callback.
+  Action "SHOW_NATIONAL_BORDERS" callback.
 *****************************************************************/
 static void full_screen_callback(GtkToggleAction *action, gpointer data)
 {
@@ -835,7 +797,7 @@ static void scenario_properties_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void save_scenario_callback(GtkAction *action, gpointer data)
 {
-  save_scenario_dialog_popup();
+  popup_save_dialog(TRUE);
 }
 
 /****************************************************************
@@ -875,15 +837,7 @@ static void select_same_type_cont_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void select_same_type_callback(GtkAction *action, gpointer data)
 {
-  request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_WORLD);
-}
-
-/*****************************************************************************
-  Open unit selection dialog.
-*****************************************************************************/
-static void select_dialog_callback(GtkAction *action, gpointer data)
-{
-  unit_select_dialog_popup(NULL);
+  request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_ALL);
 }
 
 /****************************************************************
@@ -1096,7 +1050,7 @@ static void build_mine_callack(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_road_callback(GtkAction *action, gpointer data)
 {
-  key_unit_connect(ACTIVITY_ROAD, NULL);
+  key_unit_connect(ACTIVITY_ROAD);
 }
 
 /****************************************************************
@@ -1104,7 +1058,7 @@ static void connect_road_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_rail_callback(GtkAction *action, gpointer data)
 {
-  key_unit_connect(ACTIVITY_RAILROAD, NULL);
+  key_unit_connect(ACTIVITY_RAILROAD);
 }
 
 /****************************************************************
@@ -1112,7 +1066,7 @@ static void connect_rail_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_irrigation_callack(GtkAction *action, gpointer data)
 {
-  key_unit_connect(ACTIVITY_IRRIGATE, NULL);
+  key_unit_connect(ACTIVITY_IRRIGATE);
 }
 
 /****************************************************************
@@ -1158,7 +1112,7 @@ static void build_fortress_callback(GtkAction *action, gpointer data)
     /* FIXME: this can provide different actions for different units...
      * not good! */
     struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                   punit, unit_tile(punit));
+                                                   punit, punit->tile);
 
     if (pbase && can_unit_do_activity_base(punit, pbase->item_number)) {
       request_new_unit_activity_base(punit, pbase);
@@ -1225,18 +1179,6 @@ static void base_callback(GtkMenuItem *item, gpointer data)
 
   unit_list_iterate(get_units_in_focus(), punit) {
     request_new_unit_activity_base(punit, pbase);
-  } unit_list_iterate_end;
-}
-
-/****************************************************************************
-  The player has chosen a road to build from the menu.
-****************************************************************************/
-static void road_callback(GtkMenuItem *item, gpointer data)
-{
-  struct road_type *proad = data;
-
-  unit_list_iterate(get_units_in_focus(), punit) {
-    request_new_unit_activity_road(punit, proad);
   } unit_list_iterate_end;
 }
 
@@ -1334,10 +1276,6 @@ static GtkActionGroup *get_safe_group(void)
        NULL, NULL, G_CALLBACK(save_game_callback)},
       {"GAME_SAVE_AS", GTK_STOCK_SAVE_AS, _("Save Game _As..."),
        NULL, NULL, G_CALLBACK(save_game_as_callback)},
-      {"MAPIMG_SAVE", NULL, _("Save Map _Image"),
-       NULL, NULL, G_CALLBACK(save_mapimg_callback)},
-      {"MAPIMG_SAVE_AS", NULL, _("Save _Map Image As..."),
-       NULL, NULL, G_CALLBACK(save_mapimg_as_callback)},
       {"LEAVE", NULL, _("_Leave"),
        NULL, NULL, G_CALLBACK(leave_callback)},
       {"QUIT", GTK_STOCK_QUIT, _("_Quit"),
@@ -1348,9 +1286,6 @@ static GtkActionGroup *get_safe_group(void)
        "<Control>f", NULL, G_CALLBACK(find_city_callback)},
       {"WORKLISTS", NULL, _("Work_lists"),
        "<Control>l", NULL, G_CALLBACK(worklists_callback)},
-
-      {"CLIENT_LUA_SCRIPT", NULL, _("Client _Lua Script"),
-       NULL, NULL, G_CALLBACK(client_lua_script_callback)},
 
       /* Civilization menu. */
       {"MAP_VIEW", NULL, Q_("?noun:_View"),
@@ -1444,9 +1379,6 @@ static GtkActionGroup *get_safe_group(void)
       {"SHOW_NATIONAL_BORDERS", NULL, _("National _Borders"),
        "<Control>b", NULL,
        G_CALLBACK(show_national_borders_callback), FALSE},
-      {"SHOW_NATIVE_TILES", NULL, _("Native Tiles"),
-       "<Shift><Control>n", NULL,
-       G_CALLBACK(show_native_tiles_callback), FALSE},
       {"SHOW_CITY_FULL_BAR", NULL, _("City Full Bar"),
        NULL, NULL, G_CALLBACK(show_city_full_bar_callback), FALSE},
       {"SHOW_CITY_NAMES", NULL, _("City _Names"),
@@ -1555,7 +1487,6 @@ static GtkActionGroup *get_unit_group(void)
       {"MENU_WORK", NULL, _("_Work"), NULL, NULL, NULL},
       {"MENU_COMBAT", NULL, _("_Combat"), NULL, NULL, NULL},
       {"MENU_BUILD_BASE", NULL, _("Build _Base"), NULL, NULL, NULL},
-      {"MENU_BUILD_PATH", NULL, _("Build _Path"), NULL, NULL, NULL}
     };
 
     const GtkActionEntry action_entries[] = {
@@ -1571,9 +1502,6 @@ static GtkActionGroup *get_unit_group(void)
        "<shift>c", NULL, G_CALLBACK(select_same_type_cont_callback)},
       {"SELECT_SAME_TYPE", NULL, _("Same Type _Everywhere"),
        "<shift>x", NULL, G_CALLBACK(select_same_type_callback)},
-
-      {"SELECT_DLG", NULL, _("Unit selection dialog"),
-       NULL, NULL, G_CALLBACK(select_dialog_callback)},
 
       {"UNIT_WAIT", NULL, _("_Wait"),
        "w", NULL, G_CALLBACK(unit_wait_callback)},
@@ -1773,8 +1701,7 @@ GtkWidget *setup_menus(GtkWidget *window)
 
   /* Creates the UI manager. */
   ui_manager = gtk_ui_manager_new();
-  /* FIXME - following line commented out due to Gna bug #17162 */
-  /* gtk_ui_manager_set_add_tearoffs(ui_manager, TRUE); */
+  gtk_ui_manager_set_add_tearoffs(ui_manager, TRUE);
   g_signal_connect(ui_manager, "add_widget",
                    G_CALLBACK(add_widget_callback), menubar);
 
@@ -1969,6 +1896,7 @@ void real_menus_update(void)
   GtkActionGroup *edit_group;
   GtkActionGroup *unit_group;
   GtkActionGroup *playing_group;
+  GtkActionGroup *player_group;
   struct unit_list *punits = NULL;
   bool units_all_same_tile = TRUE, units_all_same_type = TRUE;
   GtkMenu *menu;
@@ -1983,6 +1911,7 @@ void real_menus_update(void)
   edit_group = get_edit_group();
   unit_group = get_unit_group();
   playing_group = get_playing_group();
+  player_group = get_player_group();
 
   if (get_num_units_in_focus() > 0) {
     const struct tile *ptile = NULL;
@@ -1991,14 +1920,14 @@ void real_menus_update(void)
     unit_list_iterate(punits, punit) {
       fc_assert((ptile==NULL) == (ptype==NULL));
       if (ptile || ptype) {
-        if (unit_tile(punit) != ptile) {
+        if (punit->tile != ptile) {
           units_all_same_tile = FALSE;
         }
         if (unit_type(punit) != ptype) {
           units_all_same_type = FALSE;
         }
       } else {
-        ptile = unit_tile(punit);
+        ptile = punit->tile;
         ptype = unit_type(punit);
       }
     } unit_list_iterate_end;
@@ -2015,26 +1944,6 @@ void real_menus_update(void)
   menus_set_sensitive(safe_group, "EDIT_MODE",
                       can_conn_enable_editing(&client.conn));
   editgui_refresh();
-
-  {
-    char road_buf[500];
-    struct road_type *proad;
-
-    proad = road_by_special(S_ROAD);
-    if (proad != NULL) {
-      /* TRANS: Connect with some road type (Road/Railroad) */
-      snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "CONNECT_ROAD", road_buf);
-    }
-
-    proad = road_by_special(S_RAILROAD);
-    if (proad != NULL) {
-      snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "CONNECT_RAIL", road_buf);
-    }
-  }
 
   if (!can_client_issue_orders()) {
     return;
@@ -2075,23 +1984,6 @@ void real_menus_update(void)
         gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
                                  can_units_do_base(punits,
                                                    base_number(pbase)));
-      }
-    }
-    g_list_free(list);
-  }
-
-  /* Set road sensitivity. */
-  if ((menu = find_action_menu(unit_group, "MENU_BUILD_PATH"))) {
-    GList *list, *iter;
-    struct road_type *proad;
-
-    list = gtk_container_get_children(GTK_CONTAINER(menu));
-    for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      proad = g_object_get_data(G_OBJECT(iter->data), "road");
-      if (NULL != proad) {
-        gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
-                                 can_units_do_road(punits,
-                                                   road_number(proad)));
       }
     }
     g_list_free(list);
@@ -2153,11 +2045,11 @@ void real_menus_update(void)
   menus_set_sensitive(unit_group, "UNIT_EXPLORE",
                       can_units_do_activity(punits, ACTIVITY_EXPLORE));
   menus_set_sensitive(unit_group, "CONNECT_ROAD",
-                      can_units_do_connect(punits, ACTIVITY_ROAD, NULL));
+                      can_units_do_connect(punits, ACTIVITY_ROAD));
   menus_set_sensitive(unit_group, "CONNECT_RAIL",
-                      can_units_do_connect(punits, ACTIVITY_RAILROAD, NULL));
+                      can_units_do_connect(punits, ACTIVITY_RAILROAD));
   menus_set_sensitive(unit_group, "CONNECT_IRRIGATION",
-                      can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL));
+                      can_units_do_connect(punits, ACTIVITY_IRRIGATE));
   menus_set_sensitive(unit_group, "DIPLOMAT_ACTION",
                       can_units_do_diplomat_action(punits,
                                                    DIPLOMAT_ANY_ACTION));
@@ -2172,7 +2064,7 @@ void real_menus_update(void)
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-      if (tile_city(unit_tile(punit))) {
+      if (tile_city(punit->tile)) {
         city_on_tile = TRUE;
         break;
       }
@@ -2190,29 +2082,20 @@ void real_menus_update(void)
     menus_rename(unit_group, "BUILD_ROAD", _("Establish Trade _Route"));
   } else if (units_have_flag(punits, F_SETTLERS, TRUE)) {
     bool has_road = FALSE;
-    char road_item[500];
-    struct road_type *proad;
 
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-      if (tile_has_special(unit_tile(punit), S_ROAD)) {
+      if (tile_has_special(punit->tile, S_ROAD)) {
         has_road = TRUE;
         break;
       }
     } unit_list_iterate_end;
 
     if (has_road) {
-      proad = road_by_special(S_RAILROAD);
+      menus_rename(unit_group, "BUILD_ROAD", _("Build _Railroad"));
     } else {
-      proad = road_by_special(S_ROAD);
-    }
-
-    if (proad != NULL) {
-      /* TRANS: Build road of specific type (Road/Railroad) */
-      snprintf(road_item, sizeof(road_item), _("Build %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "BUILD_ROAD", road_item);
+      menus_rename(unit_group, "BUILD_ROAD", _("Build _Road"));
     }
   } else {
     menus_rename(unit_group, "BUILD_ROAD", _("Build _Road"));
@@ -2262,13 +2145,13 @@ void real_menus_update(void)
   if (units_all_same_tile) {
     struct unit *punit = unit_list_get(punits, 0);
 
-    pterrain = tile_terrain(unit_tile(punit));
+    pterrain = tile_terrain(punit->tile);
     if (pterrain->irrigation_result != T_NONE
         && pterrain->irrigation_result != pterrain) {
       fc_snprintf(irrtext, sizeof(irrtext), _("Change to %s"),
-                  get_tile_change_menu_text(unit_tile(punit),
+                  get_tile_change_menu_text(punit->tile,
                                             ACTIVITY_IRRIGATE));
-    } else if (tile_has_special(unit_tile(punit), S_IRRIGATION)
+    } else if (tile_has_special(punit->tile, S_IRRIGATION)
                && player_knows_techs_with_flag(unit_owner(punit),
                                                TF_FARMLAND)) {
       sz_strlcpy(irrtext, _("Bu_ild Farmland"));
@@ -2279,7 +2162,7 @@ void real_menus_update(void)
     if (pterrain->mining_result != T_NONE
         && pterrain->mining_result != pterrain) {
       fc_snprintf(mintext, sizeof(mintext), _("Change to %s"),
-                  get_tile_change_menu_text(unit_tile(punit), ACTIVITY_MINE));
+                  get_tile_change_menu_text(punit->tile, ACTIVITY_MINE));
     } else {
       sz_strlcpy(mintext, _("Build _Mine"));
     }
@@ -2287,7 +2170,7 @@ void real_menus_update(void)
     if (pterrain->transform_result != T_NONE
         && pterrain->transform_result != pterrain) {
       fc_snprintf(transtext, sizeof(transtext), _("Transf_orm to %s"),
-                  get_tile_change_menu_text(unit_tile(punit),
+                  get_tile_change_menu_text(punit->tile,
                                             ACTIVITY_TRANSFORM));
     } else {
       sz_strlcpy(transtext, _("Transf_orm Terrain"));
@@ -2426,27 +2309,6 @@ void real_menus_init(void)
     } base_type_iterate_end;
   }
 
-  if ((menu = find_action_menu(unit_group, "MENU_BUILD_PATH"))) {
-    GList *list, *iter;
-    GtkWidget *item;
-
-    /* Remove previous road entries. */
-    list = gtk_container_get_children(GTK_CONTAINER(menu));
-    for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      gtk_widget_destroy(GTK_WIDGET(iter->data));
-    }
-    g_list_free(list);
-
-    /* Add new road entries. */
-    road_type_iterate(r) {
-      item = gtk_menu_item_new_with_label(road_name_translation(r));
-      g_object_set_data(G_OBJECT(item), "road", r);
-      g_signal_connect(item, "activate", G_CALLBACK(road_callback), r);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      gtk_widget_show(item);
-    } road_type_iterate_end;
-  }
-
   gtk_action_group_set_sensitive(safe_group, TRUE);
   gtk_action_group_set_sensitive(player_group, client_has_player());
 
@@ -2460,7 +2322,6 @@ void real_menus_init(void)
   menus_set_active(safe_group, "SHOW_NATIONAL_BORDERS", draw_borders);
   menus_set_sensitive(safe_group, "SHOW_NATIONAL_BORDERS",
                       BORDERS_DISABLED != game.info.borders);
-  menus_set_active(safe_group, "SHOW_NATIVE_TILES", draw_native);
   menus_set_active(safe_group, "SHOW_CITY_FULL_BAR", draw_full_citybar);
   menus_set_active(safe_group, "SHOW_CITY_NAMES", draw_city_names);
   menus_set_active(safe_group, "SHOW_CITY_GROWTH", draw_city_growth);

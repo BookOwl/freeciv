@@ -13,16 +13,13 @@
 #ifndef FC__MOVEMENT_H
 #define FC__MOVEMENT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "tile.h"
 
 #define SINGLE_MOVE     3
-#define MOVE_COST_IGTER 1
 #define MOVE_COST_RIVER 1
+#define MOVE_COST_RAIL  0
+#define MOVE_COST_ROAD  1
 
 struct unit_type;
 struct terrain;
@@ -94,8 +91,6 @@ int unit_class_transporter_capacity(const struct tile *ptile,
                                     const struct unit_class *pclass);
 struct unit *transport_from_tile(struct unit *punit, struct tile *ptile);
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
+enum unit_move_type move_type_from_str(const char *s);
 
 #endif  /* FC__MOVEMENT_H */

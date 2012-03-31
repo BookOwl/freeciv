@@ -1,8 +1,8 @@
 ## Process this file with automake to produce Makefile.in
 
-noinst_LTLIBRARIES = libcivutility.la
+SUBDIRS = ftwl
 
-AM_CFLAGS = $(UTILITY_CFLAGS)
+noinst_LTLIBRARIES = libcivutility.la
 
 libcivutility_la_SOURCES = \
 		astring.c       \
@@ -15,14 +15,10 @@ libcivutility_la_SOURCES = \
 		distribute.h	\
 		fc_utf8.c	\
 		fc_utf8.h	\
-		fcbacktrace.c	\
-		fcbacktrace.h	\
 		fciconv.c	\
 		fciconv.h	\
 		fcintl.c	\
 		fcintl.h	\
-		fcthread.c	\
-		fcthread.h	\
 		generate_specenum.py	\
 		genhash.c	\
 		genhash.h	\
@@ -36,8 +32,6 @@ libcivutility_la_SOURCES = \
 		iterator.h	\
 		log.c		\
 		log.h		\
-		netfile.c	\
-		netfile.h	\
 		netintf.c	\
 		netintf.h	\
 		pqueue.c	\
@@ -48,10 +42,6 @@ libcivutility_la_SOURCES = \
 		rand.h		\
 		registry.c	\
 		registry.h	\
-		registry_ini.c	\
-		registry_ini.h	\
-		section_file.c	\
-		section_file.h	\
 		shared.c	\
 		shared.h	\
 		specenum_gen.h	\

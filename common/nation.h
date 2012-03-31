@@ -13,10 +13,6 @@
 #ifndef FC__NATION_H
 #define FC__NATION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "iterator.h"
 
@@ -105,13 +101,6 @@ struct nation_type {
 
   struct player *player; /* Who's using the nation, or NULL. */
 
-  /* Items given to this nation at game start. */
-  /* (Only used in the client for documentation purposes.) */
-  int init_techs[MAX_NUM_TECH_LIST];
-  int init_buildings[MAX_NUM_BUILDING_LIST];
-  struct government *init_government;
-  struct unit_type *init_units[MAX_NUM_UNIT_LIST];
-
   union {
     struct {
       /* Only used in the server (./ai/ and ./server/). */
@@ -127,7 +116,11 @@ struct nation_type {
        * British and English. */
       struct nation_list *conflicts_with;
 
-      int *traits;
+      /* Items given to this nation at game start. */
+      int init_techs[MAX_NUM_TECH_LIST];
+      int init_buildings[MAX_NUM_BUILDING_LIST];
+      struct government *init_government;
+      struct unit_type *init_units[MAX_NUM_UNIT_LIST];
     } server;
 
     struct {
@@ -248,9 +241,5 @@ struct iterator *nation_iter_init(struct nation_iter *it);
   generic_iterate(struct nation_iter, struct nation_type *,\
                   NAME_pnation, nation_iter_sizeof, nation_iter_init)
 #define nations_iterate_end generic_iterate_end
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__NATION_H */

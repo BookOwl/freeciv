@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -34,7 +34,7 @@
 #include "packets.h"
 #include "unit.h"
 
-/* client/agents */
+/* agents */
 #include "cma_fec.h"
 
 /* client */
@@ -317,7 +317,7 @@ void city_report_dialog_popdown(void)
 }
 
 /****************************************************************
-  Make submenu listing possible build targets
+...
 *****************************************************************/
 static void append_impr_or_unit_to_menu_item(GtkMenuItem *parent_item,
 					     bool append_units,
@@ -342,6 +342,7 @@ static void append_impr_or_unit_to_menu_item(GtkMenuItem *parent_item,
     ""
   };
 
+  gtk_menu_item_remove_submenu(parent_item);
   menu = gtk_menu_new();
   gtk_menu_item_set_submenu(parent_item, menu);
 
@@ -553,8 +554,7 @@ static void sell_impr_iterate(GtkTreeModel *model, GtkTreePath *path,
 }
 
 /****************************************************************************
-  Some build target, either improvement or unit, has been selected from
-  some menu.
+  ...
 ****************************************************************************/
 static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
 {
@@ -749,8 +749,8 @@ static void append_cma_to_menu_item(GtkMenuItem *parent_item, bool change_cma)
     return;
   }
 
+  gtk_menu_item_remove_submenu(parent_item);
   if (!can_client_issue_orders()) {
-    gtk_menu_item_set_submenu(parent_item, NULL);
     return;
   }
   menu = gtk_menu_new();
@@ -969,7 +969,7 @@ static void production_menu_shown(GtkWidget *widget, gpointer data)
 }
 
 /****************************************************************
-  Update city report views
+...
 *****************************************************************/
 static void city_report_update_views(void)
 {
@@ -993,7 +993,7 @@ static void city_report_update_views(void)
 }
 
 /****************************************************************
-  User has toggled some column viewing option
+...
 *****************************************************************/
 static void toggle_view(GtkCheckMenuItem *item, gpointer data)
 {
@@ -1004,7 +1004,7 @@ static void toggle_view(GtkCheckMenuItem *item, gpointer data)
 }
 
 /****************************************************************
-  Create view menu for city report menubar.
+...
 *****************************************************************/
 static void update_view_menu(GtkWidget *show_item)
 {
@@ -1023,7 +1023,7 @@ static void update_view_menu(GtkWidget *show_item)
 }
 
 /****************************************************************
-  Create menubar for city report
+...
 *****************************************************************/
 static GtkWidget *create_city_report_menubar(void)
 {
@@ -1119,7 +1119,15 @@ static gint cityrep_sort_func(GtkTreeModel *model, GtkTreeIter *a,
 }
 
 /****************************************************************
-  Create city report dialog.
+  Clean up when city report tree view is destroyed
+*****************************************************************/
+static void city_view_destroyed(GtkObject *object, gpointer column_tooltips)
+{
+  gtk_object_destroy(column_tooltips);
+}
+
+/****************************************************************
+...
 *****************************************************************/
 static void create_city_report_dialog(bool make_modal)
 {
@@ -1128,6 +1136,7 @@ static void create_city_report_dialog(bool make_modal)
   struct city_report_spec *spec;
 
   GtkWidget *w, *sw, *menubar;
+  GtkTooltips *column_tooltips = gtk_tooltips_new();
   int i;
 
   gui_dialog_new(&city_dialog_shell, GTK_NOTEBOOK(top_notebook), NULL, TRUE);
@@ -1187,6 +1196,10 @@ static void create_city_report_dialog(bool make_modal)
   g_signal_connect(city_selection, "changed",
 	G_CALLBACK(city_selection_changed_callback), NULL);
 
+  /* Ensure column_tooltips gets cleaned up */
+  g_signal_connect(city_view, "destroy",
+                   G_CALLBACK(city_view_destroyed), column_tooltips);
+
   for (i = 0, spec = city_report_specs; i < NUM_CREPORT_COLS; i++, spec++) {
     GtkWidget *header;
     GtkCellRenderer *renderer;
@@ -1196,7 +1209,7 @@ static void create_city_report_dialog(bool make_modal)
     col = gtk_tree_view_column_new_with_attributes(NULL, renderer,
                                                    "text", i, NULL);
     header = gtk_label_new(titles[i]);
-    gtk_widget_set_tooltip_text(header, spec->explanation);
+    gtk_tooltips_set_tip(column_tooltips, header, spec->explanation, NULL);
     gtk_widget_show(header);
     gtk_tree_view_column_set_widget(col, header);
     gtk_tree_view_column_set_visible(col, spec->show);
@@ -1226,7 +1239,7 @@ static void create_city_report_dialog(bool make_modal)
 }
 
 /****************************************************************
-  User has chosen to select all cities
+...
 *****************************************************************/
 static void city_select_all_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1234,7 +1247,7 @@ static void city_select_all_callback(GtkMenuItem *item, gpointer data)
 }
 
 /****************************************************************
-  User has chosen to unselect all cities
+...
 *****************************************************************/
 static void city_unselect_all_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1242,7 +1255,7 @@ static void city_unselect_all_callback(GtkMenuItem *item, gpointer data)
 }
 
 /****************************************************************
-  User has chosen to invert selection
+...
 *****************************************************************/
 static void city_invert_selection_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1259,7 +1272,7 @@ static void city_invert_selection_callback(GtkMenuItem *item, gpointer data)
 }
 
 /****************************************************************
-  User has chosen to select coastal cities
+...
 *****************************************************************/
 static void city_select_coastal_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1302,7 +1315,7 @@ static void same_island_iterate(GtkTreeModel *model, GtkTreePath *path,
 }
 
 /****************************************************************
-  User has chosen to select all cities on same island
+...
 *****************************************************************/
 static void city_select_same_island_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1310,7 +1323,7 @@ static void city_select_same_island_callback(GtkMenuItem *item, gpointer data)
 }
       
 /****************************************************************
-  User has chosen to select cities with certain target in production
+...
 *****************************************************************/
 static void city_select_building_callback(GtkMenuItem *item, gpointer data)
 {
@@ -1405,7 +1418,7 @@ static void city_command_callback(struct gui_dialog *dlg, int response,
 }
 
 /****************************************************************
-  User has selected city row from city report.
+...
 *****************************************************************/
 static void city_activated_callback(GtkTreeView *view, GtkTreePath *path,
 				    GtkTreeViewColumn *col, gpointer data)
@@ -1484,7 +1497,7 @@ void real_city_report_update_city(struct city *pcity)
 }
 
 /****************************************************************
-  Create submenu for changing production target
+...
 *****************************************************************/
 static void create_change_menu(GtkWidget *item)
 {
@@ -1597,7 +1610,7 @@ static void create_sell_menu(GtkWidget *item)
 
 
 /****************************************************************
-  Pops up menu where user can select build target.
+...
 *****************************************************************/
 static void popup_change_menu(GtkMenuShell *menu, gpointer data)
 {
@@ -1757,7 +1770,7 @@ static void recreate_sell_menu(void)
 }
 
 /****************************************************************
-  Creates select menu
+...
 *****************************************************************/
 static void create_select_menu(GtkWidget *item)
 {
@@ -1876,7 +1889,7 @@ static void create_select_menu(GtkWidget *item)
 }
 
 /****************************************************************
-  Returns whether city is building given target
+...
 *****************************************************************/
 static bool city_building_impr_or_unit(const struct city *pcity,
 				       struct universal target)
@@ -1885,7 +1898,7 @@ static bool city_building_impr_or_unit(const struct city *pcity,
 }
 
 /****************************************************************
-  Popup select menu
+...
 *****************************************************************/
 static void popup_select_menu(GtkMenuShell *menu, gpointer data)
 {

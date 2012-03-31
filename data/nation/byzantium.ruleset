@@ -22,11 +22,10 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",        "female_title"
- "Anarchy",         _("Usurper %s"),     _("?female:Usurper %s")
- "Despotism",       _("Despot %s"),      _("?female:Despot %s")
+ "Despotism",       _("Imperator %s"),   _("Imperatrix %s")
  "Fundamentalism",  _("Patriarch %s"),   _("Matriarch %s")
- "Monarchy",        _("Emperor %s"),     _("Empress %s")
- "Republic",        _("Consul %s"),      _("?female:Consul %s")
+ ; /* TRANS: Basileus = Monarch */
+ "Monarchy",        _("Basileus %s"),    _("Basilissa %s")
 }
 
 flag="byzantium"
@@ -35,6 +34,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 ; Byzantium was a successor-empire of the Hellenic culture

@@ -31,7 +31,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",       _("Lord %s"),      _("Lady %s")
+ "Monarchy",        _("Lord %s"),      _("Lady %s")
 }
 
 flag="mixtec"
@@ -40,6 +40,7 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with = "mexican"
 civilwar_nations = "zapotec", "aztec"

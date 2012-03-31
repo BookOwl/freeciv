@@ -18,57 +18,6 @@
 #include "packets.h"		/* enum unit_info_use */
 #include "unitlist.h"
 
-#define SPECENUM_NAME unit_loss_reason
-#define SPECENUM_VALUE0 ULR_KILLED
-#define SPECENUM_VALUE0NAME "killed"
-#define SPECENUM_VALUE1 ULR_RETIRED
-#define SPECENUM_VALUE1NAME "retired"
-#define SPECENUM_VALUE2 ULR_DISBANDED
-#define SPECENUM_VALUE2NAME "disbanded"
-#define SPECENUM_VALUE3 ULR_BARB_UNLEASH
-#define SPECENUM_VALUE3NAME "barb_unleash"
-#define SPECENUM_VALUE4 ULR_CITY_LOST
-#define SPECENUM_VALUE4NAME "city_lost"
-#define SPECENUM_VALUE5 ULR_STARVED
-#define SPECENUM_VALUE5NAME "starved"
-#define SPECENUM_VALUE6 ULR_SOLD
-#define SPECENUM_VALUE6NAME "sold"
-#define SPECENUM_VALUE7 ULR_USED
-#define SPECENUM_VALUE7NAME "used"
-#define SPECENUM_VALUE8 ULR_EXECUTED
-#define SPECENUM_VALUE8NAME "executed"
-#define SPECENUM_VALUE9 ULR_ELIMINATED
-#define SPECENUM_VALUE9NAME "eliminated"
-#define SPECENUM_VALUE10 ULR_EDITOR
-#define SPECENUM_VALUE10NAME "editor"
-#define SPECENUM_VALUE11 ULR_NONNATIVE_TERR
-#define SPECENUM_VALUE11NAME "nonnative_terr"
-#define SPECENUM_VALUE12 ULR_PLAYER_DIED
-#define SPECENUM_VALUE12NAME "player_died"
-#define SPECENUM_VALUE13 ULR_ARMISTICE
-#define SPECENUM_VALUE13NAME "armistice"
-#define SPECENUM_VALUE14 ULR_SDI
-#define SPECENUM_VALUE14NAME "sdi"
-#define SPECENUM_VALUE15 ULR_DETONATED
-#define SPECENUM_VALUE15NAME "detonated"
-#define SPECENUM_VALUE16 ULR_MISSILE
-#define SPECENUM_VALUE16NAME "missile"
-#define SPECENUM_VALUE17 ULR_NUKE
-#define SPECENUM_VALUE17NAME "nuke"
-#define SPECENUM_VALUE18 ULR_HP_LOSS
-#define SPECENUM_VALUE18NAME "hp_loss"
-#define SPECENUM_VALUE19 ULR_FUEL
-#define SPECENUM_VALUE19NAME "fuel"
-#define SPECENUM_VALUE20 ULR_STACK_CONFLICT
-#define SPECENUM_VALUE20NAME "stack_conflict"
-#define SPECENUM_VALUE21 ULR_BRIBED
-#define SPECENUM_VALUE21NAME "bribed"
-#define SPECENUM_VALUE22 ULR_CAPTURED
-#define SPECENUM_VALUE22NAME "captured"
-#define SPECENUM_VALUE23 ULR_CAUGHT
-#define SPECENUM_VALUE23NAME "caught"
-#include "specenum_gen.h"
-
 /* battle related */
 struct unit_type *find_a_unit_type(enum unit_role_id role,
 				   enum unit_role_id role_tech);
@@ -103,7 +52,8 @@ void unit_list_refresh_vision(struct unit_list *punitlist);
 void bounce_unit(struct unit *punit, bool verbose);
 void unit_assign_specific_activity_target(struct unit *punit,
                                           enum unit_activity *activity,
-                                          struct act_tgt *target);
+                                          enum tile_special_type *target,
+                                          Base_type_id *base);
 void unit_forget_last_activity(struct unit *punit);
 
 /* creation/deletion/upgrading */
@@ -116,12 +66,11 @@ struct unit *create_unit_full(struct player *pplayer, struct tile *ptile,
 			      struct unit_type *punittype, int veteran_level,
 			      int homecity_id, int moves_left, int hp_left,
 			      struct unit *ptrans);
-void wipe_unit(struct unit *punit, enum unit_loss_reason reason);
+void wipe_unit(struct unit *punit);
 void kill_unit(struct unit *pkiller, struct unit *punit, bool vet);
 
 struct unit *unit_change_owner(struct unit *punit, struct player *pplayer,
-                               int homecity, enum unit_loss_reason reason)
-                               fc__warn_unused_result;
+                               int homecity) fc__warn_unused_result;
 
 /* sending to client */
 void package_unit(struct unit *punit, struct packet_unit_info *packet);
@@ -140,9 +89,9 @@ void do_nuclear_explosion(struct player *pplayer, struct tile *ptile);
 bool do_airline(struct unit *punit, struct city *city2);
 void do_explore(struct unit *punit);
 bool do_paradrop(struct unit *punit, struct tile *ptile);
-void unit_transport_load_send(struct unit *punit, struct unit *ptrans);
-void unit_transport_unload_send(struct unit *punit);
-bool unit_move(struct unit *punit, struct tile *ptile, int move_cost);
+void load_unit_onto_transporter(struct unit *punit, struct unit *ptrans);
+void unload_unit_from_transporter(struct unit *punit);
+bool move_unit(struct unit *punit, struct tile *ptile, int move_cost);
 bool execute_orders(struct unit *punit);
 
 bool unit_can_do_action_now(const struct unit *punit);

@@ -19,7 +19,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -118,7 +118,8 @@ static int ok_worklist_editor_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     int i, j;
     struct city *pCity = pEditor->pCity;
-
+    bool same_prod = TRUE;
+    
     /* remove duplicate entry of impv./wonder target from worklist */
     for(i = 0; i < worklist_length(&pEditor->worklist_copy); i++) {
   
@@ -148,6 +149,7 @@ static int ok_worklist_editor_callback(struct widget *pWidget)
       /* change production */
       if(!are_universals_equal(&pCity->production, &pEditor->currently_building)) {
         city_change_production(pCity, pEditor->currently_building);
+        same_prod = FALSE;
       }
       
       /* commit new city worklist */
@@ -1052,7 +1054,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   SDL_FillRect(pMain, NULL, map_rgba(pMain->format, bg_color));
   putframe(pMain,
            0, 0, pMain->w - 1, pMain->h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
     
   /* ---------------- */
   /* Create Main Window */
@@ -1622,13 +1624,13 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   dst.h = adj_size(145);
   
   SDL_FillRect(pWindow->theme, &dst,
-    map_rgba(pWindow->theme->format, *get_theme_color(COLOR_THEME_BACKGROUND)));
+    map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_BACKGROUND)));
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   putframe(pWindow->theme,
            dst.x + 2, dst.y + 2, dst.x + dst.w - 3, dst.y + dst.h - 3,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   
   dst.x = area.x;
   dst.y += dst.h + adj_size(2);
@@ -1637,7 +1639,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   SDL_FillRectAlpha(pWindow->theme, &dst, &bg_color2);
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   
   if(pEditor->pGlobal) {
     dst.x = area.x;
@@ -1646,14 +1648,14 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
     dst.h = pWindow->size.h - dst.y - adj_size(4);
 
     SDL_FillRect(pWindow->theme, &dst,
-      map_rgba(pWindow->theme->format, *get_theme_color(COLOR_THEME_BACKGROUND)));
+      map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_BACKGROUND)));
     putframe(pWindow->theme,
              dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-             get_theme_color(COLOR_THEME_WLDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
     putframe(pWindow->theme,
              dst.x + adj_size(2), dst.y + adj_size(2),
              dst.x + dst.w - adj_size(3), dst.y + dst.h - adj_size(3),
-             get_theme_color(COLOR_THEME_WLDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   }
 
   widget_set_position(pWindow,

@@ -28,13 +28,10 @@ libgui_stub_la_SOURCES = \
 	graphics.h	\
 	gui_main.c	\
 	gui_main.h	\
-	gui_stub.h	\
 	helpdlg.c	\
 	helpdlg.h	\
 	inteldlg.c	\
 	inteldlg.h	\
-	luaconsole.c	\
-	luaconsole.h	\
 	mapctrl.c	\
 	mapctrl.h	\
 	mapview.c	\

@@ -34,7 +34,7 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",        "female_title"
  "Communism",       _("Comandante %s"),  _("Comandanta %s")
- "Despotism",       _("Dictator %s"),    _("Dictatrix %s")
+ "Despotism",       _("General %s"),     _("?female:General %s")
  "Fundamentalism",  _("Abbot %s"),       _("Mother Superior %s")
 }
 
@@ -44,6 +44,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with="guarani"

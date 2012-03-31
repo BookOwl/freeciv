@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -54,7 +54,7 @@
 
 #include "connectdlg.h"
 
-static struct server_list *pServer_list = NULL;
+static const struct server_list *pServer_list = NULL;
 static struct server_scan *pServer_scan = NULL; 
     
 static struct ADVANCED_DLG *pMeta_Severs = NULL;
@@ -67,7 +67,7 @@ static int convert_servername_callback(struct widget *pWidget);
 static void popup_new_user_passwd_dialog(const char *pMessage);
 
 /*
-  THESE FUNCTIONS ARE ONE BIG TMP SOLUTION AND SHOULD BE FULLY REWRITTEN !!
+  THOSE FUNCTIONS ARE ONE BIG TMP SOLUTION AND SHOULD BE FULL REWRITEN !!
 */
 
 /**************************************************************************
@@ -87,7 +87,7 @@ void handle_game_load(bool load_successful, const char *filename)
 }
 
 /**************************************************************************
-  User interacted with connect -widget
+  ...
 **************************************************************************/
 static int connect_callback(struct widget *pWidget)
 {
@@ -113,7 +113,7 @@ static int connect_callback(struct widget *pWidget)
 
 
 /**************************************************************************
-  User interacted with server list window.
+  ...
 **************************************************************************/
 static int meta_severs_window_callback(struct widget *pWindow)
 {
@@ -121,7 +121,7 @@ static int meta_severs_window_callback(struct widget *pWindow)
 }
 
 /**************************************************************************
-  Close servers dialog.
+  ...
 **************************************************************************/
 static int exit_meta_severs_dlg_callback(struct widget *pWidget)
 {
@@ -140,7 +140,7 @@ static int exit_meta_severs_dlg_callback(struct widget *pWidget)
 
 
 /**************************************************************************
-  Server selected from dialog.
+  ...
 **************************************************************************/
 static int sellect_meta_severs_callback(struct widget *pWidget)
 {
@@ -181,13 +181,13 @@ static void server_scan_error(struct server_scan *scan,
 }
 
 /**************************************************************************
-  SDL wrapper on create_server_list(...) function witch add
+  SDL wraper on create_server_list(...) function witch add
   same functionality for LAN server dettection.
   WARING !: for LAN scan use "finish_lanserver_scan()" to free server list.
 **************************************************************************/
-static struct srv_list *sdl_create_server_list(bool lan)
+static const struct server_list *sdl_create_server_list(bool lan)
 {
-  struct srv_list *list = NULL;
+  const struct server_list *server_list = NULL;
   int i;
     
   if (lan) {
@@ -204,19 +204,17 @@ static struct srv_list *sdl_create_server_list(bool lan)
     
   for (i = 0; i < 100; i++) {
     server_scan_poll(pServer_scan);
-    list = server_scan_get_list(pServer_scan);
-    if (list) {
+    server_list = server_scan_get_list(pServer_scan);
+    if (server_list) {
       break;
     }
     SDL_Delay(100);
   }
   
-  return list;
+  return server_list;
 }
 
-/**************************************************************************
-  Open connection dialog for either meta or lan scan.
-**************************************************************************/
+
 void popup_connection_dialog(bool lan_scan)
 {
   SDL_Color bg_color = {255, 255, 255, 128};
@@ -227,7 +225,6 @@ void popup_connection_dialog(bool lan_scan)
   SDL_String16 *pStr;
   SDL_Surface *pLogo;
   SDL_Rect area, area2;
-  struct srv_list *srvrs;
   
   queue_flush();
   close_connection_dialog();
@@ -269,17 +266,9 @@ void popup_connection_dialog(bool lan_scan)
   
   redraw_group(pNewWidget, pLabelWindow, TRUE);
   flush_dirty();
-
+  
   /* create server list */
-  srvrs = sdl_create_server_list(lan_scan);
-
-  /* Copy list */
-  pServer_list = server_list_new();
-  fc_allocate_mutex(&srvrs->mutex);
-  server_list_iterate(srvrs->servers, pserver) {
-    server_list_append(pServer_list, pserver);
-  } server_list_iterate_end;
-  fc_release_mutex(&srvrs->mutex);
+  pServer_list = sdl_create_server_list(lan_scan);
 
   /* clear label */
   popdown_window_group_dialog(pNewWidget, pLabelWindow);
@@ -334,7 +323,7 @@ void popup_connection_dialog(bool lan_scan)
     
     pNewWidget->string16->style |= SF_CENTER;
     pNewWidget->string16->bgcol = (SDL_Color) {0, 0, 0, 0};
-
+    
     pNewWidget->action = sellect_meta_severs_callback;
     set_wstate(pNewWidget, FC_WS_NORMAL);
     pNewWidget->data.ptr = (void *)pServer;
@@ -448,20 +437,20 @@ void popup_connection_dialog(bool lan_scan)
   
   putframe(pWindow->dst->surface,
            area2.x - 1, area2.y - 1, area2.x + area2.w, area2.y + area2.h,
-           get_theme_color(COLOR_THEME_CONNECTDLG_INNERFRAME));
+           get_game_colorRGB(COLOR_THEME_CONNECTDLG_INNERFRAME));
   
   redraw_group(pMeta_Severs->pBeginWidgetList, pWindow->prev, 0);
 
   putframe(pWindow->dst->surface,
            pWindow->size.x, pWindow->size.y,
            area.x + area.w - 1, area.y + area.h - 1,
-           get_theme_color(COLOR_THEME_CONNECTDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_CONNECTDLG_FRAME));
     
   widget_flush(pWindow);
 }
 
 /**************************************************************************
-  User interacted with playername widget.
+  ...
 **************************************************************************/
 static int convert_playername_callback(struct widget *pWidget)
 {
@@ -483,7 +472,7 @@ static int convert_playername_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  User interacted with servername widget.
+...
 **************************************************************************/
 static int convert_servername_callback(struct widget *pWidget)
 {
@@ -505,7 +494,7 @@ static int convert_servername_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  User interacted with port number widget.
+  ...
 **************************************************************************/
 static int convert_portnr_callback(struct widget *pWidget)
 {
@@ -528,9 +517,6 @@ static int convert_portnr_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  User interacted with cancel -button
-**************************************************************************/
 static int cancel_connect_dlg_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -540,9 +526,6 @@ static int cancel_connect_dlg_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  Open dialog for joining to game.
-**************************************************************************/
 void popup_join_game_dialog()
 {
   char pCharPort[6];
@@ -571,7 +554,7 @@ void popup_join_game_dialog()
   
   /* player name label */
   pPlayer_name = create_str16_from_char(_("Player Name :"), adj_font(10));
-  pPlayer_name->fgcol = *get_theme_color(COLOR_THEME_JOINGAMEDLG_TEXT);
+  pPlayer_name->fgcol = *get_game_colorRGB(COLOR_THEME_JOINGAMEDLG_TEXT);
   pBuf = create_iconlabel(NULL, pWindow->dst, pPlayer_name,
           (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
   add_to_gui_list(ID_LABEL, pBuf);
@@ -587,7 +570,7 @@ void popup_join_game_dialog()
 
   /* server name label */
   pServer_name = create_str16_from_char(_("Freeciv Server :"), adj_font(10));
-  pServer_name->fgcol = *get_theme_color(COLOR_THEME_JOINGAMEDLG_TEXT);
+  pServer_name->fgcol = *get_game_colorRGB(COLOR_THEME_JOINGAMEDLG_TEXT);
   pBuf = create_iconlabel(NULL, pWindow->dst, pServer_name,
           (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
   add_to_gui_list(ID_LABEL, pBuf);
@@ -604,7 +587,7 @@ void popup_join_game_dialog()
 
   /* port label */
   pPort_nr = create_str16_from_char(_("Port :"), adj_font(10));
-  pPort_nr->fgcol = *get_theme_color(COLOR_THEME_JOINGAMEDLG_TEXT);
+  pPort_nr->fgcol = *get_game_colorRGB(COLOR_THEME_JOINGAMEDLG_TEXT);
   pBuf = create_iconlabel(NULL, pWindow->dst, pPort_nr,
           (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
   add_to_gui_list(ID_LABEL, pBuf);
@@ -645,11 +628,11 @@ void popup_join_game_dialog()
   
   dialog_w = MAX(adj_size(40) + pBuf->size.w * 2, adj_size(210)) + adj_size(80);
   
-#ifdef SMALL_SCREEN
+  #ifdef SMALL_SCREEN
   dialog_h = area.h + (pWindow->size.h - pWindow->area.h);
-#else
+  #else
   dialog_h = area.h + (pWindow->size.h - pWindow->area.h);
-#endif
+  #endif
 
   pLogo = theme_get_background(theme, BACKGROUND_JOINGAMEDLG);
   if (resize_window(pWindow, pLogo, NULL, dialog_w, dialog_h)) {
@@ -723,7 +706,7 @@ void popup_join_game_dialog()
 }
 
 /**************************************************************************
-  User interacted with password widget
+  ...
 **************************************************************************/
 static int convert_passwd_callback(struct widget *pWidget)
 {
@@ -738,7 +721,7 @@ static int convert_passwd_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  User interacted with "Next" -button after entering password.
+  ...
 **************************************************************************/
 static int send_passwd_callback(struct widget *pWidget)
 {
@@ -764,7 +747,7 @@ static int send_passwd_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  Open password dialog.
+  ...
 **************************************************************************/
 static int cancel_passwd_callback(struct widget *pWidget)
 {
@@ -799,7 +782,7 @@ static void popup_user_passwd_dialog(const char *pMessage)
   
   /* text label */
   pLabelStr = create_str16_from_char(pMessage, adj_font(12));
-  pLabelStr->fgcol = *get_theme_color(COLOR_THEME_USERPASSWDDLG_TEXT);
+  pLabelStr->fgcol = *get_game_colorRGB(COLOR_THEME_USERPASSWDDLG_TEXT);
   pBuf = create_iconlabel(NULL, pWindow->dst, pLabelStr,
           (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
   add_to_gui_list(ID_LABEL, pBuf);
@@ -941,7 +924,7 @@ static int convert_secound_passwd_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  Open dialog for new password.
+  ...
 **************************************************************************/
 static void popup_new_user_passwd_dialog(const char *pMessage)
 {
@@ -965,7 +948,7 @@ static void popup_new_user_passwd_dialog(const char *pMessage)
   
   /* text label */
   pLabelStr = create_str16_from_char(pMessage, adj_font(12));
-  pLabelStr->fgcol = *get_theme_color(COLOR_THEME_USERPASSWDDLG_TEXT);
+  pLabelStr->fgcol = *get_game_colorRGB(COLOR_THEME_USERPASSWDDLG_TEXT);
   pBuf = create_iconlabel(NULL, pWindow->dst, pLabelStr,
           (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
   add_to_gui_list(ID_LABEL, pBuf);
@@ -1133,7 +1116,7 @@ void handle_authentication_req(enum authentication_type type,
 }
 
 /**************************************************************************
-  Provide an interface for connecting to a Freeciv server.
+  Provide an interface for connecting to a FreeCiv server.
   SDLClient use it as popup main start menu which != connecting dlg.
 **************************************************************************/
 void gui_server_connect(void)

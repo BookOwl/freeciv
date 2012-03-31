@@ -13,10 +13,6 @@
 #ifndef FC__DATAIO_H
 #define FC__DATAIO_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "bitvector.h"
 #include "support.h"            /* bool type */
 
@@ -73,8 +69,6 @@ void dio_get_string(struct data_in *din, char *dest, size_t max_dest_size);
 void dio_get_bit_string(struct data_in *din, char *dest,
 			size_t max_dest_size);
 void dio_get_tech_list(struct data_in *din, int *dest);
-void dio_get_unit_list(struct data_in *din, int *dest);
-void dio_get_building_list(struct data_in *din, int *dest);
 void dio_get_worklist(struct data_in *din, struct worklist *pwl);
 void dio_get_requirement(struct data_in *din, struct requirement *preq);
 
@@ -102,8 +96,6 @@ void dio_put_string(struct data_out *dout, const char *value);
 void dio_put_bit_string(struct data_out *dout, const char *value);
 void dio_put_city_map(struct data_out *dout, const char *value);
 void dio_put_tech_list(struct data_out *dout, const int *value);
-void dio_put_unit_list(struct data_out *dout, const int *value);
-void dio_put_building_list(struct data_out *dout, const int *value);
 void dio_put_worklist(struct data_out *dout, const struct worklist *pwl);
 void dio_put_requirement(struct data_out *dout, const struct requirement *preq);
 
@@ -114,8 +106,4 @@ void dio_put_uint16_vec8(struct data_out *dout, int *values, int stop_value);
 #define DIO_BV_PUT(pdout, bv) \
   dio_put_memory((pdout), (bv).vec, sizeof((bv).vec))
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
-#endif  /* FC__DATAIO_H */
+#endif  /* FC__PACKETS_H */

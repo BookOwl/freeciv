@@ -20,11 +20,6 @@ leaders = {
  "Muwatallis",          "Male"
 }
 
-ruler_titles = {
- "government",     "male_title",        "female_title"
- "Anarchy",        _("Usurper %s"),     _("?female:Usurper %s")
-}
-
 ; Flag modeled after Neo-Hittite Two-Headed Sphinx. Gold and purple are
 ; royal colors in many historical near-eastern empires.
 ; http://www.arthistory.upenn.edu/spr03/422/April10/303.JPG
@@ -34,8 +29,9 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "babylonian", "sumerian", "assyrian", "mitanni", "luwian"
+civilwar_nations = "babylonian", "sumerian", "assyrian"
 
 cities =
  "Nesa",

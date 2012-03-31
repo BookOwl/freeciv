@@ -14,22 +14,18 @@ leaders = {
  "Megawati Sukarnoputri",       "Female"
 }
 
-ruler_titles = {
- "government",      "male_title",            "female_title"
- "Monarchy",        _("Sultan %s"),          _("Sultana %s")
- "Fundamentalism",  _("Imam %s"),            _("Imama %s")
-}
 flag="indonesia"
 flag_alt = "-"
 city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 ; Singapore has very similar flag
 conflicts_with="Singaporean", "Majapahit", "Sri Vijaya"
-civilwar_nations="Acehnese", "East Timorese", "Moluccan", "Papuan"
+civilwar_nations="Acehnese", "East Timorese"
 
 cities =
  "Jakarta",

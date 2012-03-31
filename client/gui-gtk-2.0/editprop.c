@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <limits.h> /* USHRT_MAX */
@@ -39,7 +39,6 @@
 #include "mapview_common.h"
 #include "tilespec.h"
 
-/* client/gui-gtk-2.0 */
 #include "canvas.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -314,7 +313,6 @@ enum object_property_ids {
   OPID_TILE_SPECIALS,
   OPID_TILE_BASES,
   OPID_TILE_VISION, /* tile_known and tile_seen */
-  OPID_TILE_LABEL,
 
   OPID_STARTPOS_IMAGE,
   OPID_STARTPOS_XY,
@@ -535,6 +533,7 @@ struct property_page {
   GtkListStore *object_store;
   GtkWidget *object_view;
   GtkWidget *extviewer_notebook;
+  GtkTooltips *tooltips;
 
   struct property_editor *pe_parent;
 
@@ -963,7 +962,7 @@ static int built_status_to_string(char *buf, int buflen,
 
 /****************************************************************************
   Returns TRUE if a unit can be created at the given tile based on the
-  state of the editor (see editor_unit_virtual_create).
+  state of the editor (see editor_create_unit_virtual).
 ****************************************************************************/
 static bool can_create_unit_at_tile(struct tile *ptile)
 {
@@ -976,7 +975,7 @@ static bool can_create_unit_at_tile(struct tile *ptile)
     return FALSE;
   }
 
-  vunit = editor_unit_virtual_create();
+  vunit = editor_create_unit_virtual();
   if (!vunit) {
     return FALSE;
   }
@@ -1426,14 +1425,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
   case OBJTYPE_TILE:
     {
       const struct tile *ptile = objbind_get_object(ob);
-      int tile_x, tile_y, nat_x, nat_y;
 
       if (NULL == ptile) {
         goto FAILED;
       }
-
-      index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
-      index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
 
       switch (propid) {
       case OPID_TILE_IMAGE:
@@ -1469,23 +1464,23 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         }
         break;
       case OPID_TILE_XY:
-        pv->data.v_string = g_strdup_printf("(%d, %d)", tile_x, tile_y);
+        pv->data.v_string = g_strdup_printf("(%d, %d)", ptile->x, ptile->y);
         pv->must_free = TRUE;
         break;
       case OPID_TILE_INDEX:
         pv->data.v_int = tile_index(ptile);
         break;
       case OPID_TILE_X:
-        pv->data.v_int = tile_x;
+        pv->data.v_int = ptile->x;
         break;
       case OPID_TILE_Y:
-        pv->data.v_int = tile_y;
+        pv->data.v_int = ptile->y;
         break;
       case OPID_TILE_NAT_X:
-        pv->data.v_int = nat_x;
+        pv->data.v_int = ptile->nat_x;
         break;
       case OPID_TILE_NAT_Y:
-        pv->data.v_int = nat_y;
+        pv->data.v_int = ptile->nat_y;
         break;
       case OPID_TILE_CONTINENT:
         pv->data.v_int = ptile->continent;
@@ -1521,13 +1516,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
           } players_iterate_end;
         } vision_layer_iterate_end;
         pv->must_free = TRUE;
-        break;
-      case OPID_TILE_LABEL:
-        if (ptile->label != NULL) {
-          pv->data.v_const_string = ptile->label;
-        } else {
-          pv->data.v_const_string = "";
-        }
         break;
       default:
         log_error("%s(): Unhandled request for value of property %d "
@@ -1672,7 +1660,7 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_const_string = pcity->name;
         break;
       case OPID_CITY_SIZE:
-        pv->data.v_int = city_size_get(pcity);
+        pv->data.v_int = pcity->size;
         break;
       case OPID_CITY_BUILDINGS:
         pv->data.v_built = fc_malloc(sizeof(pcity->built));
@@ -1869,7 +1857,15 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         if (unit_has_type_flag(punit, F_NO_VETERAN)) {
           *pmax = 0;
         } else {
-          *pmax = utype_veteran_levels(putype) - 1;
+          int i;
+          /* FIXME: The maximum veteran level is
+           * really not stored anywhere?? */
+          for (i = 1; i < MAX_VET_LEVELS; i++) {
+            if (rule_name(&putype->veteran[i].name)[0] == '\0') {
+              break;
+            }
+          }
+          *pmax = i - 1;
         }
         *pstep = 1;
         *pbig_step = 3;
@@ -1900,7 +1896,7 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         return TRUE;
       case OPID_CITY_FOOD_STOCK:
         *pmin = 0;
-        *pmax = city_granary_size(city_size_get(pcity));
+        *pmax = city_granary_size(pcity->size);
         *pstep = 1;
         *pbig_step = 5;
         return TRUE;
@@ -2025,6 +2021,7 @@ static void objbind_set_modified_value(struct objbind *ob,
                                        struct propval *pv)
 {
   struct propstate *ps;
+  enum value_types valtype;
   bool equal;
   struct propval *pv_old, *pv_copy;
   enum object_property_ids propid;
@@ -2033,6 +2030,7 @@ static void objbind_set_modified_value(struct objbind *ob,
     return;
   }
 
+  valtype = objprop_get_valtype(op);
   propid = objprop_get_id(op);
 
   pv_old = objbind_get_value_from_object(ob, op);
@@ -2198,7 +2196,7 @@ static void objbind_pack_current_values(struct objbind *ob,
 
       packet->id = pcity->id;
       sz_strlcpy(packet->name, pcity->name);
-      packet->size = city_size_get(pcity);
+      packet->size = pcity->size;
       for (i = 0; i < B_LAST; i++) {
         packet->built[i] = pcity->built[i].turn;
       }
@@ -2299,9 +2297,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
         return;
       case OPID_TILE_BASES:
         packet->bases = pv->data.v_bv_bases;
-        return;
-      case OPID_TILE_LABEL:
-        sz_strlcpy(packet->label, pv->data.v_string);
         return;
       default:
         break;
@@ -2824,7 +2819,6 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_CITY_NAME:
   case OPID_PLAYER_NAME:
   case OPID_GAME_SCENARIO_NAME:
-  case OPID_TILE_LABEL:
     entry = gtk_entry_new();
     gtk_entry_set_width_chars(GTK_ENTRY(entry), 8);
     g_signal_connect(entry, "changed",
@@ -3004,7 +2998,6 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_CITY_NAME:
   case OPID_PLAYER_NAME:
   case OPID_GAME_SCENARIO_NAME:
-  case OPID_TILE_LABEL:
     entry = objprop_get_child_widget(op, "entry");
     if (pv) {
       gtk_entry_set_text(GTK_ENTRY(entry), pv->data.v_string);
@@ -3554,6 +3547,7 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 {
   struct objprop *op;
   enum object_property_ids propid;
+  enum value_types valtype;
   int id, turn_built;
   bool present, all;
   char buf[128];
@@ -3569,6 +3563,7 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   op = extviewer_get_objprop(ev);
   propid = objprop_get_id(op);
+  valtype = objprop_get_valtype(op);
 
   if (propval_equal(pv, ev->pv_cached)) {
     return;
@@ -3752,6 +3747,7 @@ static void extviewer_clear_widgets(struct extviewer *ev)
 {
   struct objprop *op;
   enum object_property_ids propid;
+  enum value_types valtype;
 
   if (!ev) {
     return;
@@ -3759,6 +3755,7 @@ static void extviewer_clear_widgets(struct extviewer *ev)
 
   op = extviewer_get_objprop(ev);
   propid = objprop_get_id(op);
+  valtype = objprop_get_valtype(op);
 
   propval_free(ev->pv_cached);
   ev->pv_cached = NULL;
@@ -4080,9 +4077,6 @@ static void property_page_setup_objprops(struct property_page *pp)
 #endif /* DEBUG */
     ADDPROP(OPID_TILE_VISION, _("Vision"),
             OPF_HAS_WIDGET, VALTYPE_TILE_VISION_DATA);
-    /* TRANS: Tile property "Label" label in editor */
-    ADDPROP(OPID_TILE_LABEL, Q_("?property:Label"),
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_STRING);
     return;
 
   case OBJTYPE_STARTPOS:
@@ -4336,6 +4330,7 @@ property_page_new(enum editor_object_type objtype,
 
   pp = fc_calloc(1, sizeof(struct property_page));
   pp->objtype = objtype;
+  pp->tooltips = gtk_tooltips_new();
   pp->pe_parent = pe;
 
   sizegroup = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
@@ -4454,10 +4449,10 @@ property_page_new(enum editor_object_type objtype,
     gtk_box_pack_start(GTK_BOX(hbox2), label, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(button), hbox2);
     gtk_size_group_add_widget(sizegroup, button);
-    gtk_widget_set_tooltip_text(button,
+    gtk_tooltips_set_tip(pp->tooltips, button,
         _("Pressing this button will send a request to the server "
           "to destroy (i.e. erase) the objects selected in the object "
-          "list."));
+          "list."), "");
     g_signal_connect(button, "clicked",
                      G_CALLBACK(property_page_destroy_button_clicked), pp);
     gtk_box_pack_end(GTK_BOX(hbox), button, FALSE, FALSE, 0);
@@ -4470,13 +4465,13 @@ property_page_new(enum editor_object_type objtype,
     gtk_box_pack_start(GTK_BOX(hbox2), label, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(button), hbox2);
     gtk_size_group_add_widget(sizegroup, button);
-    gtk_widget_set_tooltip_text(button,
+    gtk_tooltips_set_tip(pp->tooltips, button,
         _("Pressing this button will create a new object of the "
           "same type as the current property page and add it to "
           "the page. The specific type and count of the objects "
           "is taken from the editor tool state. So for example, "
           "the \"tool value\" of the unit tool and its \"count\" "
-          "parameter affect unit creation."));
+          "parameter affect unit creation."), "");
     g_signal_connect(button, "clicked",
                      G_CALLBACK(property_page_create_button_clicked), pp);
     gtk_box_pack_end(GTK_BOX(hbox), button, FALSE, FALSE, 0);
@@ -4564,11 +4559,12 @@ property_page_new(enum editor_object_type objtype,
   gtk_box_pack_start(GTK_BOX(hbox2), label, FALSE, FALSE, 0);
 
   entry = gtk_entry_new();
-  gtk_widget_set_tooltip_text(entry, 
+  gtk_tooltips_set_tip(pp->tooltips, entry, 
       _("Enter a filter string to limit which properties are shown. "
         "The filter is one or more text patterns separated by | "
         "(\"or\") or & (\"and\"). The symbol & has higher precedence "
-        "than |. A pattern may also be negated by prefixing it with !."));
+        "than |. A pattern may also be negated by prefixing it with !."),
+      "");
   g_signal_connect(entry, "changed",
       G_CALLBACK(property_page_quick_find_entry_changed), pp);
   gtk_box_pack_start(GTK_BOX(hbox2), entry, TRUE, TRUE, 0);
@@ -4578,21 +4574,21 @@ property_page_new(enum editor_object_type objtype,
 
   button = gtk_button_new_from_stock(GTK_STOCK_APPLY);
   gtk_size_group_add_widget(sizegroup, button);
-  gtk_widget_set_tooltip_text(button,
+  gtk_tooltips_set_tip(pp->tooltips, button,
       _("Pressing this button will send all modified properties of "
         "the objects selected in the object list to the server. "
         "Modified properties' names are shown in red in the properties "
-        "panel."));
+        "panel."), "");
   g_signal_connect(button, "clicked",
                    G_CALLBACK(property_page_apply_button_clicked), pp);
   gtk_box_pack_end(GTK_BOX(hbox2), button, FALSE, FALSE, 0);
 
   button = gtk_button_new_from_stock(GTK_STOCK_REFRESH);
   gtk_size_group_add_widget(sizegroup, button);
-  gtk_widget_set_tooltip_text(button,
+  gtk_tooltips_set_tip(pp->tooltips, button,
       _("Pressing this button will reset all modified properties of "
         "the selected objects to their current values (the values "
-        "they have on the server)."));
+        "they have on the server)."), "");
   g_signal_connect(button, "clicked",
                    G_CALLBACK(property_page_refresh_button_clicked), pp);
   gtk_box_pack_end(GTK_BOX(hbox2), button, FALSE, FALSE, 0);
@@ -4711,11 +4707,12 @@ static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
                                             int num_layers)
 {
   struct canvas canvas;
-  int h, i, fh, fw, canvas_x, canvas_y;
+  int w, h, i, fh, fw, canvas_x, canvas_y;
   GdkPixbuf *pixbuf;
 
   fw = tileset_full_tile_width(tileset);
   fh = tileset_full_tile_height(tileset);
+  w = tileset_tile_width(tileset);
   h = tileset_tile_height(tileset);
 
   pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, fw, fh);
@@ -4732,7 +4729,7 @@ static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
   for (i = 0; i < num_layers; i++) {
     put_one_element(&canvas, layers[i],
                     ptile, NULL, NULL, punit, pcity,
-                    canvas_x, canvas_y, NULL, NULL);
+                    canvas_x, canvas_y, NULL);
   }
   return pixbuf;
 }
@@ -5744,7 +5741,7 @@ static struct property_editor *property_editor_new(void)
   win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(win), _("Property Editor"));
   gtk_window_set_resizable(GTK_WINDOW(win), TRUE);
-  gtk_window_set_default_size(GTK_WINDOW(win), 780, 560);
+  gtk_window_set_default_size(GTK_WINDOW(win), 780, 500);
   gtk_window_set_position(GTK_WINDOW(win), GTK_WIN_POS_CENTER_ON_PARENT);
   gtk_window_set_transient_for(GTK_WINDOW(win), GTK_WINDOW(toplevel));
   gtk_window_set_destroy_with_parent(GTK_WINDOW(win), TRUE);

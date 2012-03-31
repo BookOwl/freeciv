@@ -17,17 +17,13 @@ leaders = {
  "Dido",                "Female"
 }
 
-ruler_titles = {
- "government",      "male_title",        "female_title"
- "Anarchy",         _("Usurper %s"),     _("?female:Usurper %s")
-}
-
 flag="cartago"
 flag_alt = "tunisia"	; Used previously
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="phoenician", "sicilian", "iberian"
 

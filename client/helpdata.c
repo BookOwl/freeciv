@@ -17,7 +17,7 @@
 *****************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -43,7 +43,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "requirements.h"
-#include "road.h"
 #include "specialist.h"
 #include "unit.h"
 #include "version.h"
@@ -131,7 +130,7 @@ void free_help_texts(void)
 static void insert_generated_text(char *outbuf, size_t outlen, const char *name)
 {
   if (0 == strcmp (name, "TerrainAlterations")) {
-    int clean_pollution_time = -1, clean_fallout_time = -1;
+    int rail_time = -1, clean_pollution_time = -1, clean_fallout_time = -1;
     int buildable_bases = 0;
 
     CATLSTR(outbuf, outlen,
@@ -181,6 +180,15 @@ static void insert_generated_text(char *outbuf, size_t outlen, const char *name)
             (pterrain->transform_result == T_NONE) ? "-" : transform_time,
             transform_result);
 
+	/* FIXME: properly handle the (uncommon) case where these are
+	 * terrain-dependent, instead of just silence */
+	if (rail_time != 0 && pterrain->road_time > 0) {
+	  if (rail_time < 0)
+	    rail_time = pterrain->rail_time;
+	  else
+	    if (rail_time != pterrain->rail_time)
+	      rail_time = 0; /* give up */
+	}
 	if (clean_pollution_time != 0 &&
 	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
 	  if (clean_pollution_time < 0)
@@ -205,7 +213,7 @@ static void insert_generated_text(char *outbuf, size_t outlen, const char *name)
 	buildable_bases++;
     } base_type_iterate_end;
 
-    if (clean_pollution_time > 0 || clean_fallout_time > 0 ||
+    if (rail_time > 0 || clean_pollution_time > 0 || clean_fallout_time > 0 ||
 	buildable_bases > 0) {
       CATLSTR(outbuf, outlen, "\n");
       CATLSTR(outbuf, outlen,
@@ -215,6 +223,9 @@ static void insert_generated_text(char *outbuf, size_t outlen, const char *name)
 	      _("Activity            Time\n"));
       CATLSTR(outbuf, outlen,
 	      "---------------------------");
+      if (rail_time > 0)
+	cat_snprintf(outbuf, outlen,
+		     _("\nRailroad           %3d"), rail_time);
       if (clean_pollution_time > 0)
 	cat_snprintf(outbuf, outlen,
 		     _("\nClean pollution    %3d"), clean_pollution_time);
@@ -275,7 +286,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                                            (preq->source.value.advance)));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -332,7 +342,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    improvement_name_translation
                    (preq->source.value.building));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -345,12 +354,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz,
                    _("Requires the %s terrain special on the tile.\n"),
-                   special_name_translation(preq->source.value.special));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s terrain special on the tile or "
-                     "a cardinally adjacent tile.\n"),
                    special_name_translation(preq->source.value.special));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -373,11 +376,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz, _("Requires the %s terrain on the tile.\n"),
-                   terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s terrain on the tile or "
-                                "a cardinally adjacent tile.\n"),
                    terrain_name_translation(preq->source.value.terrain));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -406,7 +404,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    nation_adjective_translation(preq->source.value.nation));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -423,7 +420,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires %s.\n"),
                    utype_name_translation(preq->source.value.utype));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -452,7 +448,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
         }
       }
       break;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -471,7 +466,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires %s units.\n"),
                    uclass_name_translation(preq->source.value.uclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -503,7 +497,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
         cat_snprintf(buf, bufsz, _("Requires %s units.\n"), astr_str(&list));
         done = TRUE;
         break;
-      case REQ_RANGE_CADJACENT:
       case REQ_RANGE_ADJACENT:
       case REQ_RANGE_CITY:
       case REQ_RANGE_CONTINENT:
@@ -547,12 +540,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_class_name_translation
                    (preq->source.value.terrainclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires %s terrain class on a cardinally adjacent tile.\n"),
-                   terrain_class_name_translation
-                   (preq->source.value.terrainclass));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz,
                    _("Requires %s terrain class on an adjacent tile.\n"),
@@ -575,37 +562,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
                    base_name_translation(preq->source.value.base));
       return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on a cardinally adjacent tile.\n"),
-                   base_name_translation(preq->source.value.base));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
                    base_name_translation(preq->source.value.base));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_ROAD:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on a cardinally adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
       return TRUE;
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -630,7 +589,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_alteration_name_translation
                    (preq->source.value.terrainalter));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -717,7 +675,7 @@ static void insert_allows(struct universal *psource,
 }
 
 /****************************************************************
-  Allocate and initialize new help item
+...
 *****************************************************************/
 static struct help_item *new_help_item(int type)
 {
@@ -1608,7 +1566,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
          || uclass_has_flag(utype_class(utype), UCF_MISSILE))
         && utype->defense_strength == 0);
     switch(utype_move_type(utype)) {
-      case UMT_BOTH:
+      case BOTH_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"
@@ -1617,7 +1575,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
           CATLSTR(buf, bufsz,
                   _("* May be promoted after defeating an enemy unit.\n"));
         break;
-      case UMT_LAND:
+      case LAND_MOVING:
         if (utype_has_flag(utype, F_DIPLOMAT)||utype_has_flag(utype, F_SPY)) {
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran under communist governments.\n"));
@@ -1634,7 +1592,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                     _("* May be promoted after defeating an enemy unit.\n"));
         }
         break;
-      case UMT_SEA:
+      case SEA_MOVING:
         if (!utype_has_flag(utype, F_NOBUILD))
           CATLSTR(buf, bufsz,
                   _("* Will be built as a veteran in cities with appropriate"
@@ -1788,6 +1746,14 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
     cat_snprintf(buf, bufsz,
                  /* TRANS: %s is list of units separated by "and". */
                  _("* Allows %s to build roads on river tiles.\n"),
+                 astr_str(&astr));
+  }
+
+  if (advance_has_flag(i, TF_RAILROAD)
+      && role_units_translations(&astr, F_SETTLERS, FALSE)) {
+    cat_snprintf(buf, bufsz,
+                 /* TRANS: %s is list of units separated by "and". */
+                 _("* Allows %s to upgrade roads to railroads.\n"),
                  astr_str(&astr));
   }
 
@@ -2509,132 +2475,14 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
 }
 
 /****************************************************************************
-  Returns nation legend and characteristics
+  Returns nation legend
 ****************************************************************************/
 void helptext_nation(char *buf, size_t bufsz, struct nation_type *pnation,
 		     const char *user_text)
 {
-  fc_assert_ret(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   if (pnation->legend[0] != '\0') {
     sprintf(buf, "%s\n\n", _(pnation->legend));
-  }
-  
-  cat_snprintf(buf, bufsz,
-               _("Initial government is %s.\n"),
-               government_name_translation(pnation->init_government));
-  if (pnation->init_techs[0] != A_LAST) {
-    const char *tech_names[MAX_NUM_TECH_LIST];
-    int i;
-    struct astring list = ASTRING_INIT;
-    for (i = 0; i < MAX_NUM_TECH_LIST; i++) {
-      if (pnation->init_techs[i] == A_LAST) {
-        break;
-      }
-      tech_names[i] =
-        advance_name_translation(advance_by_number(pnation->init_techs[i]));
-    }
-    astr_build_and_list(&list, tech_names, i);
-    if (game.rgame.global_init_techs[0] != A_LAST) {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of techs */
-                   _("Starts with knowledge of %s in addition to the standard "
-                     "starting technologies.\n"), astr_str(&list));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of techs */
-                   _("Starts with knowledge of %s.\n"), astr_str(&list));
-    }
-    astr_free(&list);
-  }
-  if (pnation->init_units[0]) {
-    const struct unit_type *utypes[MAX_NUM_UNIT_LIST];
-    int count[MAX_NUM_UNIT_LIST];
-    int i, j, n = 0, total = 0;
-    /* Count how many of each type there is. */
-    for (i = 0; i < MAX_NUM_UNIT_LIST; i++) {
-      if (!pnation->init_units[i]) {
-        break;
-      }
-      for (j = 0; j < n; j++) {
-        if (pnation->init_units[i] == utypes[j]) {
-          count[j]++;
-          total++;
-          break;
-        }
-      }
-      if (j == n) {
-        utypes[n] = pnation->init_units[i];
-        count[n] = 1;
-        total++;
-        n++;
-      }
-    }
-    {
-      /* Construct the list of unit types and counts. */
-      struct astring utype_names[MAX_NUM_UNIT_LIST];
-      struct astring list = ASTRING_INIT;
-      for (i = 0; i < n; i++) {
-        astr_init(&utype_names[i]);
-        if (count[i] > 1) {
-          /* TRANS: a unit type followed by a count. For instance,
-           * "Fighter (2)" means two Fighters. Count is never 1. 
-           * Used in a list. */
-          astr_set(&utype_names[i], _("%s (%d)"),
-                   utype_name_translation(utypes[i]), count[i]);
-        } else {
-          astr_set(&utype_names[i], "%s", utype_name_translation(utypes[i]));
-        }
-      }
-      {
-        const char *utype_name_strs[MAX_NUM_UNIT_LIST];
-        for (i = 0; i < n; i++) {
-          utype_name_strs[i] = astr_str(&utype_names[i]);
-        }
-        astr_build_and_list(&list, utype_name_strs, n);
-      }
-      for (i = 0; i < n; i++) {
-        astr_free(&utype_names[i]);
-      }
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of unit types
-                    * possibly with counts. Plurality is in total number of
-                    * units represented. */
-                   PL_("Starts with the following additional unit: %s.\n",
-                       "Starts with the following additional units: %s.\n",
-                      total), astr_str(&list));
-      astr_free(&list);
-    }
-  }
-  if (pnation->init_buildings[0] != B_LAST) {
-    const char *impr_names[MAX_NUM_BUILDING_LIST];
-    int i;
-    struct astring list = ASTRING_INIT;
-    for (i = 0; i < MAX_NUM_BUILDING_LIST; i++) {
-      if (pnation->init_buildings[i] == B_LAST) {
-        break;
-      }
-      impr_names[i] =
-        improvement_name_translation(
-          improvement_by_number(pnation->init_buildings[i]));
-    }
-    astr_build_and_list(&list, impr_names, i);
-    if (game.rgame.global_init_buildings[0] != B_LAST) {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of improvements */
-                   _("First city will get %s for free in addition to the "
-                     "standard improvements.\n"), astr_str(&list));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of improvements */
-                   _("First city will get %s for free.\n"), astr_str(&list));
-    }
-    astr_free(&list);
-  }
-
-  if (user_text && user_text[0] != '\0') {
-    CATLSTR(buf, bufsz, "\n");
-    CATLSTR(buf, bufsz, user_text);
   }
 }

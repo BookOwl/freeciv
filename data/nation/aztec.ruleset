@@ -27,8 +27,7 @@ leaders = {
 
 ruler_titles = {
  "government",  "male_title",            "female_title"
- "Democracy",   _("Speaker %s"),         _("?female:Speaker %s")
- "Monarchy",    _("Emperor %s"),         _("Empress %s")
+ "Republic",    _("Speaker %s"),         _("?female:Speaker %s")
 } 
 
 flag="aztec"
@@ -37,6 +36,7 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with = "Mexican"
 civilwar_nations = "Otomi", "P'urhepecha"

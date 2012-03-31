@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -55,7 +55,7 @@
 #include "client_main.h"
 #include "climap.h"
 #include "climisc.h"
-#include "control.h"	/* request_xxx and unit_focus_set */
+#include "control.h"	/* request_xxx and set_unit_focus */
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
@@ -243,7 +243,7 @@ static void get_contents_of_storage(struct city_dialog *pdialog,
   if (pdialog) {
     pcity=pdialog->pcity;
     foodstock=pcity->food_stock;
-    foodbox=city_granary_size(city_size_get(pcity));
+    foodbox=city_granary_size(pcity->size);
     granaryturns = city_turns_to_grow(pcity);
     if (granaryturns == 0) {
       fc_snprintf(buf, sizeof(buf), _("blocked"));
@@ -440,7 +440,7 @@ void refresh_unit_city_dialogs(struct unit *punit)
   struct city_dialog *pdialog;
 
   pcity_sup = player_city_by_number(client_player(), punit->homecity);
-  pcity_pre=tile_city(unit_tile(punit));
+  pcity_pre=tile_city(punit->tile);
   
   if(pcity_sup && (pdialog=get_city_dialog(pcity_sup)))
     city_dialog_update_supported_units(pdialog, 0);
@@ -1134,7 +1134,7 @@ void show_units_callback(Widget w, XtPointer client_data,
   struct tile *ptile = pdialog->pcity->tile;
 
   if( unit_list_size(ptile->units) )
-    unit_select_dialog_popup(ptile);
+    popup_unit_select_dialog(ptile);
 }
 
 
@@ -1184,9 +1184,9 @@ static void present_units_activate_callback(Widget w, XtPointer client_data,
     player_unit_by_number(client_player(), (size_t) client_data);
 
   if (NULL != punit) {
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1210,9 +1210,9 @@ static void supported_units_activate_callback(Widget w, XtPointer client_data,
     player_unit_by_number(client_player(), (size_t) client_data);
 
   if (NULL != punit) {
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1239,9 +1239,9 @@ static void present_units_activate_close_callback(Widget w,
   destroy_message_dialog(w);
 
   if (NULL != punit) {
-    struct city *pcity = tile_city(unit_tile(punit));
+    struct city *pcity = tile_city(punit->tile);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1268,7 +1268,7 @@ static void supported_units_activate_close_callback(Widget w,
     struct city *pcity =
       player_city_by_number(client_player(), punit->homecity);
 
-    unit_focus_set(punit);
+    set_unit_focus(punit);
     if (NULL != pcity) {
       struct city_dialog *pdialog = get_city_dialog(pcity);
 
@@ -1358,16 +1358,16 @@ void present_units_callback(Widget w, XtPointer client_data,
        || (can_conn_edit(&client.conn)
            && NULL == client.conn.playing
            && (punit = game_unit_by_number((size_t) client_data))))
-      && (pcity = tile_city(unit_tile(punit)))
+      && (pcity = tile_city(punit->tile))
       && (pdialog = get_city_dialog(pcity))) {
     
     if(e->type==ButtonRelease && e->xbutton.button==Button2)  {
-      unit_focus_set(punit);
+      set_unit_focus(punit);
       close_city_dialog(pdialog);
       return;
     }
     if(e->type==ButtonRelease && e->xbutton.button==Button3)  {
-      unit_focus_set(punit);
+      set_unit_focus(punit);
       return;
     }
 
@@ -1467,7 +1467,7 @@ void trade_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	      city_name(pdialog->pcity));
   bptr = end_of_strn(bptr, &nleft);
   
-  for (i = 0; i < MAX_TRADE_ROUTES; i++)
+  for (i = 0; i < NUM_TRADE_ROUTES; i++)
     if(pdialog->pcity->trade[i]) {
       struct city *pcity;
       x=1;
@@ -1527,11 +1527,7 @@ void city_dialog_update_building(struct city_dialog *pdialog)
   struct city *pcity=pdialog->pcity;
 
   XtSetSensitive(pdialog->buy_command, city_can_buy(pcity));
-  /* FIXME: Should not pass NULL as improvement
-   * to test_player_sell_building_now(). It skips many tests. */
-  XtSetSensitive(pdialog->sell_command,
-                 test_player_sell_building_now(client.conn.playing,
-                                               pcity, NULL) == TR_SUCCESS);
+  XtSetSensitive(pdialog->sell_command, !pcity->did_sell);
 
   xaw_set_label(pdialog->building_label,
 		city_production_name_translation(pcity));
@@ -1575,12 +1571,12 @@ static void citizen_callback(Widget w, XtPointer client_data,
   int i;
 
   /* HACK: figure out which figure was clicked. */
-  for (i = 0; i < city_size_get(pdialog->pcity); i++) {
+  for (i = 0; i < pdialog->pcity->size; i++) {
     if (pdialog->citizen_labels[i] == w) {
       break;
     }
   }
-  fc_assert(i < city_size_get(pdialog->pcity));
+  fc_assert(i < pdialog->pcity->size);
 
   city_rotate_specialist(pdialog->pcity, i);
 }
@@ -1642,12 +1638,12 @@ static void support_units_callback(Widget w, XtPointer client_data,
 
       if ( NULL != pdialog) {
 	if(e->type==ButtonRelease && e->xbutton.button==Button2)  {
-	  unit_focus_set(punit);
+	  set_unit_focus(punit);
 	  close_city_dialog(pdialog);
 	  return;
 	}
 	if(e->type==ButtonRelease && e->xbutton.button==Button3)  {
-	  unit_focus_set(punit);
+	  set_unit_focus(punit);
 	  return;
 	}
 	wd = popup_message_dialog(pdialog->shell,

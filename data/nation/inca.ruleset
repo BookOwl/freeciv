@@ -30,8 +30,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",       _("Inka %s"),      _("Qoya %s")
- "Monarchy",        _("Sapa Inka %s"), _("Sapa Qoya %s")
+ "Monarchy",        _("Sapa Inka %s"), _("Qoya %s")
 }
 
 flag="inca"
@@ -40,8 +39,9 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations="aymara", "chimu", "canari"
+civilwar_nations="aymara", "chimu"
 
 cities =
  "Qosqo",

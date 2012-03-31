@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -1006,11 +1006,15 @@ static void help_update_terrain(const struct help_item *pitem,
     }
     xaw_set_label(help_terrain_resources, buf);
 
-    sprintf(buf, "%d%%/%d%%/%d%% / %d",
-            pterrain->road_output_incr_pct[O_FOOD],
-            pterrain->road_output_incr_pct[O_SHIELD],
-            pterrain->road_output_incr_pct[O_TRADE],
-            pterrain->road_time);
+    if (pterrain->road_trade_incr > 0) {
+      sprintf(buf, _("+%d Trade / %d"),
+	      pterrain->road_trade_incr,
+	      pterrain->road_time);
+    } else if (pterrain->road_time > 0) {
+      sprintf(buf, _("no extra / %d"), pterrain->road_time);
+    } else {
+      strcpy(buf, _("n/a"));
+    }
     xaw_set_label(help_terrain_road_result_time_data, buf);
 
     strcpy(buf, _("n/a"));

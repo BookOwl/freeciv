@@ -41,7 +41,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <time.h>
@@ -55,7 +55,6 @@
 # include <sys/timeb.h>
 #endif
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 #include "shared.h"		/* TRUE, FALSE */

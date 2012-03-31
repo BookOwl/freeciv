@@ -22,8 +22,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",       _("Lord %s"),      _("?female:Lady %s")
- "Fundamentalism",  _("Elder %s"),     _("?female:Elder %s")
+ ; /* TRANS: Ajaw = Lord */
+ "Monarchy",        _("Ajaw %s"),         _("?female:Ajaw %s")
 }
 
 flag = "maya"
@@ -32,8 +32,9 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "guatemalan", "yucatecan", "chiapanec"
+civilwar_nations = "guatemalan", "yucatecan"
 
 ; Oldest names take precedence. Later/alternative names in comment.
 cities =
@@ -44,7 +45,7 @@ cities =
  "Popo",			;Toniná
  "Ox Witz Ja'",			;Caracol
  "Ja'",				;Dos Pilas
- "Chi'che'en Itsa",		;Chichén Itzá
+ "Chi'che'e'n Itsa",		;Chichén Itzá
  "Oxwitik",			;Copán
  "Óox Máal",			;Uxmal
  "Q'umarkaj",			;Gumarcaj, Utatlán

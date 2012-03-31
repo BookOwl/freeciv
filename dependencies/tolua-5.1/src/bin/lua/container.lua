@@ -9,9 +9,6 @@
 -- the author has no obligation to provide maintenance, support, updates,
 -- enhancements, or modifications. 
 
--- table to store namespaced typedefs/enums in global scope
-global_typedefs = {}
-global_enums = {}
 
 -- Container class
 -- Represents a container of features to be bound
@@ -196,11 +193,9 @@ end
 
 -- append typedef 
 function classContainer:appendtypedef (t)
- local namespace = getnamespace(classContainer.curr)
  self.typedefs.tolua_n = self.typedefs.tolua_n + 1
  self.typedefs[self.typedefs.tolua_n] = t
- self.typedefs[t.utype] = namespace .. t.utype
- global_typedefs[namespace..t.utype] = t
+	self.typedefs[t.utype] = getnamespace(classContainer.curr) .. t.utype
 end
 
 -- append usertype: return full type
@@ -219,10 +214,8 @@ end
 
 -- append enum 
 function classContainer:appendenum (t)
- local namespace = getnamespace(classContainer.curr)
  self.enums.tolua_n = self.enums.tolua_n + 1
  self.enums[self.enums.tolua_n] = t
- global_enums[namespace..t.name] = t
 end
 
 -- determine lua function name overload
@@ -237,11 +230,6 @@ end
 
 -- applies typedef: returns the 'the facto' modifier and type
 function classContainer:applytypedef (type)
- if global_typedefs[type] then
-	local mod1, type1 = global_typedefs[type].mod, global_typedefs[type].type 
-	local mod2, type2 = applytypedef(type1)
-	return mod2 .. ' ' .. mod1, type2
- end
  local basetype = gsub(type,"^.*::","")
  local env = self
  while env do
@@ -298,9 +286,6 @@ end
 
 
 function classContainer:isenum (type)
- if global_enums[type] then
-  return true
- end
  local basetype = gsub(type,"^.*::","")
  local env = self
  while env do
@@ -308,14 +293,14 @@ function classContainer:isenum (type)
    local i=1
    while env.enums[i] do
     if env.enums[i].name == basetype then
-         return true
+         return 1
         end
         i = i+1
    end
   end
   env = env.parent
  end
- return false 
+ return nil 
 end
 
 -- parse chunk
@@ -404,7 +389,7 @@ function classContainer:doparse (s)
   local b,e,decl,kind,arg,const = strfind(s,"^%s*([_%w][_%w%s%*&:]*operator)%s*([^%s][^%s]*)%s*(%b())%s*(c?o?n?s?t?)%s*;%s*")
   if not b then
 		 -- try inline
-   b,e,decl,kind,arg,const = strfind(s,"^%s*([_%w][_%w%s%*&:]*operator)%s*([^%s][^%s]*)%s*(%b())%s*(c?o?n?s?t?)%s*%b{}%s*;?%s*")
+   b,e,decl,kind,arg,const = strfind(s,"^%s*([_%w][_%w%s%*&:]*operator)%s*([^%s][^%s]*)%s*(%b())%s*(c?o?n?s?t?)%s*%b{}%s*")
   end 
 		if b then
    _curr_code = strsub(s,b,e)
@@ -429,10 +414,10 @@ function classContainer:doparse (s)
 
  -- try inline function
  do
-  local b,e,decl,arg,const = strfind(s,"^%s*([~_%w][_@%w%s%*&:]*[_%w])%s*(%b())%s*(c?o?n?s?t?).-%b{}%s*;?%s*")
+  local b,e,decl,arg,const = strfind(s,"^%s*([~_%w][_@%w%s%*&:]*[_%w])%s*(%b())%s*(c?o?n?s?t?).-%b{}%s*")
   if not b then
    -- try a single letter function name
-   b,e,decl,arg,const = strfind(s,"^%s*([_%w])%s*(%b())%s*(c?o?n?s?t?).-%b{}%s*;?%s*")
+   b,e,decl,arg,const = strfind(s,"^%s*([_%w])%s*(%b())%s*(c?o?n?s?t?).-%b{}%s*")
   end
   if b then
    _curr_code = strsub(s,b,e)
@@ -456,11 +441,7 @@ function classContainer:doparse (s)
 						b,e,name,base,body = strfind(s,"^%s*union%s*([_%w][_%w@]*)%s*(.-)%s*(%b{})%s*;%s*")
 						if not b then
 							base = ''
-							b,e,body,name = strfind(s,"^%s*typedef%s%s*struct%s*[_%w]*%s*(%b{})%s*([_%w][_%w@]*)%s*;%s*")
-						if not b then
-							base = ''
-								b,e,body,name = strfind(s,"^%s*typedef%s%s*union%s*[_%w]*%s*(%b{})%s*([_%w][_%w@]*)%s*;%s*")
-							end
+							b,e,body,name = strfind(s,"^%s*typedef%s%s*struct%s%s*[_%w]*%s*(%b{})%s*([_%w][_%w@]*)%s*;%s*")
 						end
 					end
 				end

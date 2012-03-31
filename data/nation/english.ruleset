@@ -22,10 +22,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
- "Anarchy",         _("Pretender %s"),      _("?female:Pretender %s")
- "Despotism",       _("Lord %s"),         _("Lady %s")
- "Fundamentalism",  _("Bishop %s"),         _("?female:Bishop %s")
- "Republic",        _("Lord Protector %s"), _("Lady Protector %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
+ "Fundamentalism",  _("Lord Protector %s"), _("Lady Protector %s")
 }
 
 flag="england"
@@ -34,6 +32,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "cornish", "british", "northumbrian"
 
