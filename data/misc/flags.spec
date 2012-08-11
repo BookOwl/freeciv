@@ -312,7 +312,6 @@ artists = "
    Mapuche		Guillermo Romero
    Marathi		Sankalp Dravid
    Mars			Vasco Alexandre Da Silva Costa
-   Marshall Islands	SKopp (Wikimedia Commons)
    Mauritania		Flad (Wikimedia Commons)
    Mauritius		J.M. Maalderink
    Maya			Daniel Markstedt
@@ -869,7 +868,6 @@ sprites =
 		"f.mapuche", "flags/mapuche"
 		"f.marathi", "flags/marathi"
 		"f.mars", "flags/mars"
-		"f.marshall_islands", "flags/marshall_islands"
 		"f.mauritania", "flags/mauritania"
 		"f.mauritius", "flags/mauritius"
 		"f.maya", "flags/maya"

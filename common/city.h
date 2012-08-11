@@ -74,6 +74,11 @@ BV_DEFINE(bv_city_options, CITYO_LAST);
 #define INCITE_IMPOSSIBLE_COST (1000 * 1000 * 1000)
 
 /*
+ * Number of trade routes a city can have.
+ */
+#define NUM_TRADE_ROUTES        4
+
+/*
  * Size of the biggest possible city.
  *
  * The constant may be changed since it isn't externally visible.
@@ -301,7 +306,7 @@ struct city {
   citizens *nationality;      /* Nationality of the citizens. */
 
   /* trade routes */
-  int trade[MAX_TRADE_ROUTES], trade_value[MAX_TRADE_ROUTES];
+  int trade[NUM_TRADE_ROUTES], trade_value[NUM_TRADE_ROUTES];
 
   /* Tile output, regardless of if the tile is actually worked. It is used
    * as cache for the output of the tiles within the city map.
@@ -540,7 +545,6 @@ bool city_can_use_specialist(const struct city *pcity,
 bool city_has_building(const struct city *pcity,
 		       const struct impr_type *pimprove);
 bool is_capital(const struct city *pcity);
-bool is_gov_center(const struct city *pcity);
 bool city_got_citywalls(const struct city *pcity);
 bool city_got_defense_effect(const struct city *pcity,
                              const struct unit_type *attacker);

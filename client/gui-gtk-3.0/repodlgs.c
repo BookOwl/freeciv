@@ -230,7 +230,10 @@ static void science_diagram_button_release_callback(GtkWidget *widget,
 static gboolean science_diagram_update(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
   /* FIXME: this currently redraws everything! */
-  struct canvas canvas = FC_STATIC_CANVAS_INIT;
+  struct canvas canvas = {
+    .surface = NULL,
+    .drawable = NULL
+  };
   struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
   int width, height;
   GtkAdjustment *hadjustment;

@@ -21,7 +21,6 @@
 #include "fcintl.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 
@@ -51,7 +50,6 @@ static int get_tile_value(struct tile *ptile)
 {
   struct terrain *old_terrain;
   bv_special old_special;
-  bv_roads old_roads;
   int value, irrig_bonus, mine_bonus;
 
   /* Give one point for each food / shield / trade produced. */
@@ -62,21 +60,8 @@ static int get_tile_value(struct tile *ptile)
 
   old_terrain = ptile->terrain;
   old_special = ptile->special;
-  old_roads   = ptile->roads;
 
-  if (num_role_units(L_SETTLERS) > 0) {
-    struct unit_type *start_worker = get_role_unit(L_SETTLERS, 0);
-
-    road_type_iterate(proad) {
-      if (road_can_be_built(proad, ptile)
-          && are_reqs_active(NULL, NULL, NULL, ptile,
-                             start_worker, NULL, NULL, &proad->reqs,
-                             RPT_CERTAIN)) {
-        tile_add_road(ptile, proad);
-      }
-    } road_type_iterate_end;
-  }
-
+  tile_set_special(ptile, S_ROAD);
   tile_apply_activity(ptile, ACTIVITY_IRRIGATE);
   irrig_bonus = -value;
   output_type_iterate(o) {
@@ -85,9 +70,7 @@ static int get_tile_value(struct tile *ptile)
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
-
-  /* Same set of roads used with mine as with irrigation. */
-
+  tile_set_special(ptile, S_ROAD);
   tile_apply_activity(ptile, ACTIVITY_MINE);
   mine_bonus = -value;
   output_type_iterate(o) {
@@ -96,7 +79,6 @@ static int get_tile_value(struct tile *ptile)
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
-  ptile->roads   = old_roads;
 
   value += MAX(0, MAX(mine_bonus, irrig_bonus)) / 2;
 

@@ -149,6 +149,7 @@ struct civ_game {
       int revolution_length;
       int save_compress_level;
       enum fz_method save_compress_type;
+      int saveversion; /* save game version to use */
       int save_nturns;
       unsigned autosaves; /* FIXME: char would be enough, but current settings.c code wants to
                              write sizeof(unsigned) bytes */
@@ -156,7 +157,6 @@ struct civ_game {
       bool homecaughtunits;
       char start_units[MAX_LEN_STARTUNIT];
       int start_year;
-      int techloss_forgiveness;
       int techlost_donor;
       int techlost_recv;
       int tcptimeout;
@@ -345,10 +345,6 @@ extern struct civ_game game;
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
 
-#define GAME_DEFAULT_TECHLOSSFG      -1
-#define GAME_MIN_TECHLOSSFG          -1
-#define GAME_MAX_TECHLOSSFG          200
-
 #define GAME_DEFAULT_CITYMINDIST     2
 #define GAME_MIN_CITYMINDIST         1
 #define GAME_MAX_CITYMINDIST         9
@@ -369,10 +365,6 @@ extern struct civ_game game;
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
 #define GAME_MAX_RAPTUREDELAY        99 /* 99 practicaly disables rapturing */
-
-#define GAME_DEFAULT_DISASTERS       10
-#define GAME_MIN_DISASTERS           0
-#define GAME_MAX_DISASTERS           1000
  
 #define GAME_DEFAULT_SAVEPALACE      TRUE
 
@@ -512,8 +504,9 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_AUTOATTACK      FALSE
 
-#define GAME_DEFAULT_RULESETDIR      "classic"
+#define GAME_DEFAULT_RULESETDIR      "default"
 
+#define GAME_DEFAULT_SAVEVERSION     0
 #define GAME_DEFAULT_SAVE_NAME       "freeciv"
 #define GAME_DEFAULT_SAVETURNS       1
 #define GAME_MIN_SAVETURNS           1

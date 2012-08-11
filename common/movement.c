@@ -29,7 +29,6 @@
 #include "fc_types.h"
 #include "game.h"
 #include "map.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "unittype.h"
@@ -98,8 +97,8 @@ bool unit_can_defend_here(const struct unit *punit)
 ****************************************************************************/
 bool can_attack_non_native(const struct unit_type *utype)
 {
-  return uclass_has_flag(utype_class(utype), UCF_ATTACK_NON_NATIVE)
-         && !utype_has_flag(utype, UTYF_ONLY_NATIVE_ATTACK);
+  return (utype_class(utype)->move_type == UMT_SEA
+          && !utype_has_flag(utype, F_NO_LAND_ATTACK));
 }
 
 /****************************************************************************
@@ -108,8 +107,14 @@ bool can_attack_non_native(const struct unit_type *utype)
 ****************************************************************************/
 bool can_attack_from_non_native(const struct unit_type *utype)
 {
-  return uclass_has_flag(utype_class(utype), UCF_ATT_FROM_NON_NATIVE)
-         || utype_has_flag(utype, UTYF_MARINES);
+  /* It's clear that UMT_LAND should not be able to attack from
+   * non-native (unless F_MARINES) and it's clear that UMT_SEA
+   * should be able to attack from non-native. It's not clear what to do
+   * with UMT_BOTH. At the moment we return FALSE for
+   * them. One can always give "Marines" flag for them. This should be
+   * generalized for unit_classes anyway. */
+  return (utype_class(utype)->move_type == UMT_SEA
+          || utype_has_flag(utype, F_MARINES));
 }
 
 /****************************************************************************
@@ -164,8 +169,7 @@ bool is_city_channel_tile(const struct unit_class *punitclass,
       if (dbv_isset(&tile_processed, tile_index(piter))) {
         continue;
       } else if (is_native_to_class(punitclass, tile_terrain(piter),
-                                    piter->special, piter->bases,
-                                    piter->roads)) {
+                                    piter->special, piter->bases)) {
         found = TRUE;
         break;
       } else if (NULL != tile_city(piter)) {
@@ -208,7 +212,7 @@ bool can_exist_at_tile(const struct unit_type *utype,
   }
 
   /* A trireme unit cannot exist in an ocean tile without access to land. */
-  if (utype_has_flag(utype, UTYF_TRIREME) && !is_safe_ocean(ptile)) {
+  if (utype_has_flag(utype, F_TRIREME) && !is_safe_ocean(ptile)) {
     return FALSE;
   }
 
@@ -235,8 +239,7 @@ bool is_native_tile(const struct unit_type *punittype,
                     const struct tile *ptile)
 {
   return is_native_to_class(utype_class(punittype), tile_terrain(ptile),
-                            ptile->special,
-                            tile_bases(ptile), tile_roads(ptile));
+                            ptile->special, ptile->bases);
 }
 
 
@@ -247,11 +250,9 @@ bool is_native_tile(const struct unit_type *punittype,
 ****************************************************************************/
 bool is_native_terrain(const struct unit_type *punittype,
                        const struct terrain *pterrain,
-                       bv_special special, bv_bases bases,
-                       bv_roads roads)
+                       bv_special special, bv_bases bases)
 {
-  return is_native_to_class(utype_class(punittype), pterrain, special, bases,
-                            roads);
+  return is_native_to_class(utype_class(punittype), pterrain, special, bases);
 }
 
 /****************************************************************************
@@ -263,8 +264,7 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile)
 {
   return is_native_to_class(punitclass, tile_terrain(ptile),
-                            tile_specials(ptile), tile_bases(ptile),
-                            tile_roads(ptile));
+                            tile_specials(ptile), tile_bases(ptile));
 }
 
 /****************************************************************************
@@ -273,8 +273,7 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
 ****************************************************************************/
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_special special, bv_bases bases,
-                        bv_roads roads)
+                        bv_special special, bv_bases bases)
 {
   if (!pterrain) {
     /* Unknown is considered native terrain */
@@ -284,15 +283,10 @@ bool is_native_to_class(const struct unit_class *punitclass,
   if (BV_ISSET(pterrain->native_to, uclass_index(punitclass))) {
     return TRUE;
   }
-
-  road_type_iterate(proad) {
-    if (BV_ISSET(roads, road_index(proad))
-        && road_has_flag(proad, RF_NATIVE_TILE)
-        && is_native_road_to_uclass(proad, punitclass)) {
-      return TRUE;
-    }
-  } road_type_iterate_end;
-
+  if (uclass_has_flag(punitclass, UCF_ROAD_NATIVE)
+      && contains_special(special, S_ROAD)) {
+    return TRUE;
+  }
   if (uclass_has_flag(punitclass, UCF_RIVER_NATIVE)
       && contains_special(special, S_RIVER)) {
     return TRUE;
@@ -508,7 +502,7 @@ unit_move_to_tile_test(const struct unit_type *punittype,
     /* 6) */
     if (utype_move_type(punittype) == UMT_LAND
         && is_ocean_tile(src_tile)      /* Moving from ocean */
-        && !utype_has_flag(punittype, UTYF_MARINES)) {
+        && !utype_has_flag(punittype, F_MARINES)) {
       /* Most ground units can't move into cities from ships. (Note this
        * check is only for movement, not attacking: most ground units
        * can't attack from ship at *any* units on land.) */
@@ -542,12 +536,12 @@ unit_move_to_tile_test(const struct unit_type *punittype,
   }
 
   /* 10) */
-  if (utype_has_flag(punittype, UTYF_TRIREME) && !is_safe_ocean(dst_tile)) {
+  if (utype_has_flag(punittype, F_TRIREME) && !is_safe_ocean(dst_tile)) {
     return MR_TRIREME;
   }
 
   /* 11) */
-  if (!utype_has_flag(punittype, UTYF_CIVILIAN)
+  if (!utype_has_flag(punittype, F_CIVILIAN)
       && !player_can_invade_tile(unit_owner, dst_tile)) {
     return MR_PEACE;
   }

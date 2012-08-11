@@ -35,15 +35,12 @@
 #include "citizens.h"
 #include "city.h"
 #include "events.h"
-#include "disaster.h"
 #include "game.h"
 #include "government.h"
 #include "map.h"
 #include "player.h"
-#include "road.h"
 #include "specialist.h"
 #include "tech.h"
-#include "traderoutes.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -141,8 +138,6 @@ static void check_city_migrations_player(const struct player *pplayer);
 void city_refresh(struct city *pcity)
 {
   pcity->server.needs_refresh = FALSE;
-
-  city_map_update_radius_sq(pcity);
   city_units_upkeep(pcity); /* update unit upkeep */
   city_refresh_from_main_map(pcity, NULL);
 }
@@ -512,9 +507,6 @@ void update_city_activities(struct player *pplayer)
     int i = 0, r;
 
     city_list_iterate(pplayer->cities, pcity) {
-      citizens_convert(pcity);
-
-      /* Add cities to array for later random order handling */
       cities[i++] = pcity;
     } city_list_iterate_end;
 
@@ -625,6 +617,7 @@ bool city_reduce_size(struct city *pcity, citizens pop_loss,
                       struct player *destroyer)
 {
   citizens loss_remain;
+  int i;
 
   if (pop_loss == 0) {
     return TRUE;
@@ -652,19 +645,27 @@ bool city_reduce_size(struct city *pcity, citizens pop_loss,
   /* First try to kill off the specialists */
   loss_remain = pop_loss - city_reduce_specialists(pcity, pop_loss);
 
+  /* Update number of people in each feelings category.
+   * This must be after new city size and specialists counts
+   * have been set, and before any auto_arrange_workers() */
+  city_refresh(pcity);
+
   if (loss_remain > 0) {
     /* Take it out on workers */
     loss_remain -= city_reduce_workers(pcity, loss_remain);
   }
 
-  /* Update number of people in each feelings category.
-   * This also updates the city radius if needed. */
-  city_refresh(pcity);
+  /* check squared city radius */
+  if (city_map_update_radius_sq(pcity, TRUE)) {
+    city_refresh(pcity);
+  }
 
   /* Update citizens. */
   citizens_update(pcity);
-
+  /* Rearrange workers. */
+  auto_arrange_workers(pcity);
   /* Send city data. */
+  send_city_info(city_owner(pcity), pcity);
   sync_cities();
 
   fc_assert_ret_val_msg(0 == loss_remain, TRUE,
@@ -674,9 +675,13 @@ bool city_reduce_size(struct city *pcity, citizens pop_loss,
                         city_name(pcity), city_size_get(pcity));
 
   /* Update cities that have trade routes with us */
-  trade_routes_iterate(pcity, pcity2) {
-    city_refresh(pcity2);
-  } trade_routes_iterate_end;
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    struct city *pcity2 = game_city_by_number(pcity->trade[i]);
+
+    if (pcity2) {
+      city_refresh(pcity2);
+    }
+  }
 
   sanity_check_city(pcity);
   return TRUE;
@@ -723,7 +728,7 @@ static int granary_savings(const struct city *pcity)
 **************************************************************************/
 static bool city_increase_size(struct city *pcity)
 {
-  int new_food;
+  int i, new_food;
   int savings_pct = granary_savings(pcity);
   bool have_square = FALSE;
   bool rapture_grow = city_rapture_grow(pcity); /* check before size increase! */
@@ -786,15 +791,23 @@ static bool city_increase_size(struct city *pcity)
     pcity->specialists[DEFAULT_SPECIALIST]++; /* or else city is !sane */
   }
 
+  /* Check squared city radius */
+  city_map_update_radius_sq(pcity, TRUE);
   /* Update citizens. */
   citizens_update(pcity);
-  /* Refresh the city data; this also checks the squared city radius. */
+  /* Update workers. */
+  auto_arrange_workers(pcity);
+
   city_refresh(pcity);
 
   /* Update cities that have trade routes with us */
-  trade_routes_iterate(pcity, pcity2) {
-    city_refresh(pcity2);
-  } trade_routes_iterate_end;
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    struct city *pcity2 = game_city_by_number(pcity->trade[i]);
+
+    if (pcity2) {
+      city_refresh(pcity2);
+    }
+  }
 
   notify_player(powner, city_tile(pcity), E_CITY_GROWTH, ftc_server,
                 _("%s grows to size %d."),
@@ -856,7 +869,7 @@ static void city_populate(struct city *pcity)
      */
     unit_list_iterate_safe(pcity->units_supported, punit) {
       if (unit_type(punit)->upkeep[O_FOOD] > 0 
-          && !unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+          && !unit_has_type_flag(punit, F_UNDISBANDABLE)) {
 
         notify_player(city_owner(pcity), city_tile(pcity),
                       E_UNIT_LOST_MISC, ftc_server,
@@ -1097,19 +1110,6 @@ static bool worklist_change_build_target(struct player *pplayer,
                                         API_TYPE_CITY, pcity,
                                         API_TYPE_STRING, "need_terrain");
 	      break;
-	    case VUT_RESOURCE:
-              notify_player(pplayer, city_tile(pcity),
-                            E_CITY_CANTBUILD, ftc_server,
-                            _("%s can't build %s from the worklist; "
-                              "%s resource is required.  Postponing..."),
-                            city_link(pcity),
-                            city_improvement_name_translation(pcity, ptarget),
-                            resource_name_translation(preq->source.value.resource));
-              script_server_signal_emit("building_cant_be_built", 3,
-                                        API_TYPE_BUILDING_TYPE, ptarget,
-                                        API_TYPE_CITY, pcity,
-                                        API_TYPE_STRING, "need_resource");
-	      break;
 	    case VUT_NATION:
 	      /* FIXME: we should skip rather than postpone, since we'll
 	       * never be able to meet this req... */
@@ -1166,32 +1166,6 @@ static bool worklist_change_build_target(struct player *pplayer,
                                         API_TYPE_BUILDING_TYPE, ptarget,
                                         API_TYPE_CITY, pcity,
                                         API_TYPE_STRING, "need_terrainclass");
-	      break;
-	    case VUT_TERRFLAG:
-              notify_player(pplayer, city_tile(pcity),
-                            E_CITY_CANTBUILD, ftc_server,
-                            _("%s can't build %s from the worklist; "
-                              "%s terrain flag is required.  Postponing..."),
-                            city_link(pcity),
-                            city_improvement_name_translation(pcity, ptarget),
-                            terrain_flag_id_name(preq->source.value.terrainflag));
-              script_server_signal_emit("building_cant_be_built", 3,
-                                        API_TYPE_BUILDING_TYPE, ptarget,
-                                        API_TYPE_CITY, pcity,
-                                        API_TYPE_STRING, "need_terrainflag");
-	      break;
-            case VUT_ROAD:
-              notify_player(pplayer, city_tile(pcity),
-                            E_CITY_CANTBUILD, ftc_server,
-                            _("%s can't build %s from the worklist; "
-                              "%s road is required.  Postponing..."),
-                            city_link(pcity),
-                            city_improvement_name_translation(pcity, ptarget),
-                            road_name_translation(preq->source.value.road));
-              script_server_signal_emit("building_cant_be_built", 3,
-                                        API_TYPE_BUILDING_TYPE, ptarget,
-                                        API_TYPE_CITY, pcity,
-                                        API_TYPE_STRING, "need_road");
 	      break;
 	    case VUT_UTYPE:
 	    case VUT_UTFLAG:
@@ -1310,7 +1284,7 @@ void choose_build_target(struct player *pplayer, struct city *pcity)
   switch (pcity->production.kind) {
   case VUT_UTYPE:
     /* We can build a unit again unless it's unique or we have lost the tech. */
-    if (!utype_has_flag(pcity->production.value.utype, UTYF_UNIQUE)
+    if (!utype_has_flag(pcity->production.value.utype, F_UNIQUE)
         && can_city_build_unit_now(pcity, pcity->production.value.utype)) {
       return;
     }
@@ -1431,7 +1405,7 @@ static bool city_distribute_surplus_shields(struct player *pplayer,
     unit_list_iterate_safe(pcity->units_supported, punit) {
       if (utype_upkeep_cost(unit_type(punit), pplayer, O_SHIELD) > 0
 	  && pcity->surplus[O_SHIELD] < 0
-          && !unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+          && !unit_has_type_flag(punit, F_UNDISBANDABLE)) {
         notify_player(pplayer, city_tile(pcity),
                       E_UNIT_LOST_MISC, ftc_server,
                       _("%s can't upkeep %s, unit disbanded."),
@@ -1443,7 +1417,7 @@ static bool city_distribute_surplus_shields(struct player *pplayer,
   }
 
   if (pcity->surplus[O_SHIELD] < 0) {
-    /* Special case: UTYF_UNDISBANDABLE. This nasty unit won't go so easily.
+    /* Special case: F_UNDISBANDABLE. This nasty unit won't go so easily.
      * It'd rather make the citizens pay in blood for their failure to upkeep
      * it! If we make it here all normal units are already disbanded, so only
      * undisbandable ones remain. */
@@ -1451,7 +1425,7 @@ static bool city_distribute_surplus_shields(struct player *pplayer,
       int upkeep = utype_upkeep_cost(unit_type(punit), pplayer, O_SHIELD);
 
       if (upkeep > 0 && pcity->surplus[O_SHIELD] < 0) {
-        fc_assert_action(unit_has_type_flag(punit, UTYF_UNDISBANDABLE),
+        fc_assert_action(unit_has_type_flag(punit, F_UNDISBANDABLE),
                          continue);
         notify_player(pplayer, city_tile(pcity),
                       E_UNIT_LOST_MISC, ftc_server,
@@ -1590,8 +1564,9 @@ static bool city_build_building(struct player *pplayer, struct city *pcity)
     if (space_part) {
       /* space ship part build */
       send_spaceship_info(pplayer, NULL);
-    } else {
-      /* Update city data. */
+    }
+    if (!space_part || city_map_update_radius_sq(pcity, TRUE)) {
+      /* new building or updated squared city radius */
       city_refresh(pcity);
     }
 
@@ -2041,51 +2016,40 @@ static bool city_balance_treasury_units(struct city *pcity)
   return pplayer->economic.gold >= 0;
 }
 
-/**************************************************************************
- Add some Pollution if we have waste
-**************************************************************************/
-static bool place_pollution(struct city *pcity, enum tile_special_type type)
-{
-  struct tile *ptile;
-  struct tile *pcenter = city_tile(pcity);
-  int city_radius_sq = city_map_radius_sq_get(pcity);
-  int k = 100;
-
-  while (k > 0) {
-    /* place pollution on a random city tile */
-    int cx, cy;
-    int tile_id = fc_rand(city_map_tiles(city_radius_sq));
-    city_tile_index_to_xy(&cx, &cy, tile_id, city_radius_sq);
-
-    /* check for a a real map position */
-    if (!(ptile = city_map_to_tile(pcenter, city_radius_sq, cx, cy))) {
-      continue;
-    }
-
-    if (!terrain_has_flag(tile_terrain(ptile), TER_NO_POLLUTION)
-        && !tile_has_special(ptile, type)) {
-      tile_set_special(ptile, type);
-      update_tile_knowledge(ptile);
-
-      return TRUE;
-    }
-    k--;
-  }
-  log_debug("pollution not placed: city: %s", city_name(pcity));
-
-  return FALSE;
-}
 
 /**************************************************************************
  Add some Pollution if we have waste
 **************************************************************************/
 static void check_pollution(struct city *pcity)
 {
+  struct tile *ptile;
+  struct tile *pcenter = city_tile(pcity);
+  int city_radius_sq = city_map_radius_sq_get(pcity);
+  int k=100;
+
   if (pcity->pollution != 0 && fc_rand(100) <= pcity->pollution) {
-    if (place_pollution(pcity, S_POLLUTION)) {
-      notify_player(city_owner(pcity), city_tile(pcity), E_POLLUTION, ftc_server,
-                    _("Pollution near %s."), city_link(pcity));
+    while (k > 0) {
+      /* place pollution on a random city tile */
+      int cx, cy;
+      int tile_id = fc_rand(city_map_tiles(city_radius_sq));
+      city_tile_index_to_xy(&cx, &cy, tile_id, city_radius_sq);
+
+      /* check for a a real map position */
+      if (!(ptile = city_map_to_tile(pcenter, city_radius_sq, cx, cy))) {
+        continue;
+      }
+
+      if (!terrain_has_flag(tile_terrain(ptile), TER_NO_POLLUTION)
+	  && !tile_has_special(ptile, S_POLLUTION)) {
+	tile_set_special(ptile, S_POLLUTION);
+	update_tile_knowledge(ptile);
+        notify_player(city_owner(pcity), pcenter, E_POLLUTION, ftc_server,
+                      _("Pollution near %s."), city_link(pcity));
+	return;
+      }
+      k--;
     }
+    log_debug("pollution not placed: city: %s", city_name(pcity));
   }
 }
 
@@ -2790,141 +2754,6 @@ void check_city_migrations(void)
     }
 
     check_city_migrations_player(pplayer);
-  } players_iterate_end;
-}
-
-/**************************************************************************
-  Disaster has hit a city. Apply its effects.
-**************************************************************************/
-static void apply_disaster(struct city *pcity, struct disaster_type *pdis)
-{
-  struct player *pplayer = city_owner(pcity);
-  struct tile *ptile = city_tile(pcity);
-  bool had_effect = FALSE;
-  struct city *city_or_null = pcity;
-
-  log_debug("%s at %s", disaster_rule_name(pdis), city_name(pcity));
-
-  notify_player(pplayer, ptile, E_DISASTER,
-                ftc_server,
-                /* TRANS: Disasters such as Earthquake */
-                _("%s was hit by %s."), city_name(pcity),
-                disaster_rule_name(pdis));
-
-  if (disaster_has_effect(pdis, DE_DESTROY_BUILDING)) {
-    int total = 0;
-    struct impr_type *imprs[B_LAST];
-
-    city_built_iterate(pcity, pimprove) {
-      if (is_improvement(pimprove)) {
-        imprs[total++] = pimprove;
-      }
-    } city_built_iterate_end;
-
-    if (total > 0) {
-      int num = fc_rand(total);
-
-      building_lost(pcity, imprs[num]);
-
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("%s destroyed."),
-                    improvement_name_translation(imprs[num]));
-
-      had_effect = TRUE;
-    }
-  }
-
-  if (disaster_has_effect(pdis, DE_REDUCE_POP)) {
-    if (!city_reduce_size(pcity, 1, NULL)) {
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("City got destroyed completely."));
-      city_or_null = NULL;
-    } else {
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("Some population lost."));
-    }
-
-    had_effect = TRUE;
-  }
-
-  if (disaster_has_effect(pdis, DE_EMPTY_FOODSTOCK)) {
-    if (pcity->food_stock > 0) {
-      pcity->food_stock = 0;
-
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("Foodbox emptied."));
-
-      had_effect = TRUE;
-    }
-  }
-
-  if (disaster_has_effect(pdis, DE_EMPTY_PRODSTOCK)) {
-    if (pcity->shield_stock > 0) {
-      pcity->shield_stock = 0;
-
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("Production box emptied."));
-
-      had_effect = TRUE;
-
-    }
-  }
-
-  if (disaster_has_effect(pdis, DE_POLLUTION)) {
-    if (place_pollution(pcity, S_POLLUTION)) {
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("Tile polluted"));
-      had_effect = TRUE;
-    }
-  }
-
-  if (disaster_has_effect(pdis, DE_FALLOUT)) {
-    if (place_pollution(pcity, S_FALLOUT)) {
-      notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                    _("Fallout contaminated tile."));
-      had_effect = TRUE;
-    }
-  }
-
-  if (!had_effect) {
-    notify_player(pplayer, ptile, E_DISASTER, ftc_server,
-                  _("We survived the disaster without serious damages."));
-  }
-
-  script_server_signal_emit("disaster", 2,
-                            API_TYPE_DISASTER, pdis,
-                            API_TYPE_CITY, city_or_null);
-}
-
-/**************************************************************************
-  Check for any disasters hitting any city, and apply those disasters.
-**************************************************************************/
-void check_disasters(void)
-{
-  if (game.info.disasters == 0) {
-    /* Shortcut out as no disaster is possible. */
-    return;
-  }
-
-  players_iterate(pplayer) {
-    /* Safe city iterator needed as disaster may destroy city */
-    city_list_iterate_safe(pplayer->cities, pcity) {
-      int id = pcity->id;
-
-      disaster_type_iterate(pdis) {
-        if (city_exist(id)) {
-          /* City survived earlier disasters. */
-          int probability = game.info.disasters * pdis->frequency;
-          int result = fc_rand(DISASTER_BASE_RARITY);
-
-          if (result < probability)  {
-            if (can_disaster_happen(pdis, pcity)) {
-              apply_disaster(pcity, pdis);
-            }
-          }
-        }
-      } disaster_type_iterate_end;
-    } city_list_iterate_safe_end;
   } players_iterate_end;
 }
 

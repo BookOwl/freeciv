@@ -36,13 +36,15 @@ static struct terrain civ_terrains[MAX_NUM_TERRAINS];
 static struct resource civ_resources[MAX_NUM_RESOURCES];
 
 enum tile_special_type infrastructure_specials[] = {
+  S_ROAD,
+  S_RAILROAD,
   S_IRRIGATION,
   S_FARMLAND,
   S_MINE,
+  S_OLD_FORTRESS,
+  S_OLD_AIRBASE,
   S_LAST
 };
-
-static char *user_terrain_flag_names[TER_USER_LAST-TER_USER_1];
 
 /****************************************************************************
   Initialize terrain and resource structures.
@@ -501,57 +503,21 @@ int count_terrain_property_near_tile(const struct tile *ptile,
   return count;
 }
 
-/****************************************************************************
-  Returns TRUE iff any cardinally adjacent tile contains the given resource.
-****************************************************************************/
-bool is_resource_card_near(const struct tile *ptile,
-                           const struct resource *pres,
-                           bool check_self)
-{
-  if (!pres) {
-    return FALSE;
-  }
-
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    if (tile_resource(adjc_tile) == pres) {
-      return TRUE;
-    }
-  } cardinal_adjc_iterate_end;
-
-  return check_self && tile_resource(ptile) == pres;
-}
-
-/****************************************************************************
-  Returns TRUE iff any adjacent tile contains the given resource.
-****************************************************************************/
-bool is_resource_near_tile(const struct tile *ptile,
-                           const struct resource *pres,
-                           bool check_self)
-{
-  if (!pres) {
-    return FALSE;
-  }
-
-  adjc_iterate(ptile, adjc_tile) {
-    if (tile_resource(adjc_tile) == pres) {
-      return TRUE;
-    }
-  } adjc_iterate_end;
-
-  return check_self && tile_resource(ptile) == pres;
-}
-
 /* Names of specials.
  * (These must correspond to enum tile_special_type.)
  */
 static const char *tile_special_type_names[] =
 {
+  NULL,
   N_("Irrigation"),
+  NULL,
   N_("Mine"),
   N_("Pollution"),
   N_("Hut"),
+  N_("Fortress"), /* Obsolete, placeholder for backward compatibility */
   N_("River"),
   N_("Farmland"),
+  N_("Airbase"),  /* Obsolete, placeholder for backward compatibility */
   N_("Fallout")
 };
 
@@ -569,6 +535,12 @@ enum tile_special_type special_by_rule_name(const char *name)
     }
   } tile_special_type_iterate_end;
 
+  road_type_iterate(road) {
+    if (0 == strcmp(road_rule_name(road), name)) {
+      return road_special(road);
+    }
+  } road_type_iterate_end;
+
   return S_LAST;
 }
 
@@ -577,8 +549,15 @@ enum tile_special_type special_by_rule_name(const char *name)
 ****************************************************************************/
 const char *special_name_translation(enum tile_special_type type)
 {
+  struct road_type *road;
+
   fc_assert_ret_val(ARRAY_SIZE(tile_special_type_names) == S_LAST, NULL);
   fc_assert_ret_val(type >= 0 && type < S_LAST, NULL);
+
+  road = road_by_special(type);
+  if (road != NULL) {
+    return road_name_translation(road);
+  }
 
   return _(tile_special_type_names[type]);
 }
@@ -588,8 +567,15 @@ const char *special_name_translation(enum tile_special_type type)
 ****************************************************************************/
 const char *special_rule_name(enum tile_special_type type)
 {
+  struct road_type *road;
+
   fc_assert_ret_val(ARRAY_SIZE(tile_special_type_names) == S_LAST, NULL);
   fc_assert_ret_val(type >= 0 && type < S_LAST, NULL);
+
+  road = road_by_special(type);
+  if (road != NULL) {
+    return road_rule_name(road);
+  }
 
   return tile_special_type_names[type];
 }
@@ -646,9 +632,15 @@ bool is_native_terrain_to_special(enum tile_special_type special,
 {
   /* FIXME: The special definition should be moved into the ruleset. */
   switch (special) {
+  case S_ROAD:
+    return (terrain_control.may_road
+            && 0 != pterrain->road_time);
   case S_IRRIGATION:
     return (terrain_control.may_irrigate
             && pterrain == pterrain->irrigation_result);
+  case S_RAILROAD:
+    return (terrain_control.may_road
+            && 0 != pterrain->road_time);
   case S_MINE:
     return (terrain_control.may_mine
             && pterrain == pterrain->mining_result);
@@ -663,11 +655,8 @@ bool is_native_terrain_to_special(enum tile_special_type special,
             && pterrain == pterrain->irrigation_result);
   case S_FALLOUT:
     return !terrain_has_flag(pterrain, TER_NO_POLLUTION);
-  case S_OLD_ROAD:
-  case S_OLD_RAILROAD:
   case S_OLD_FORTRESS:
   case S_OLD_AIRBASE:
-    fc_assert(FALSE);
   case S_LAST:
     break;
   }
@@ -803,32 +792,25 @@ int count_terrain_flag_near_tile(const struct tile *ptile,
     eg: "Road/Farmland"
   This only includes "infrastructure", i.e., man-made specials.
 ****************************************************************************/
-const char *get_infrastructure_text(bv_special spe, bv_bases bases, bv_roads roads)
+const char *get_infrastructure_text(bv_special spe, bv_bases bases)
 {
   static char s[256];
   char *p;
+  enum eroad road = ROAD_LAST;
 
   s[0] = '\0';
 
-  road_type_iterate(proad) {
-    if (BV_ISSET(roads, road_index(proad))) {
-      bool hidden = FALSE;
+  /* Since railroad requires road, Road/Railroad is redundant */
+  if (contains_special(spe, S_RAILROAD)) {
+    road = ROAD_RAILROAD;
+  } else if (contains_special(spe, S_ROAD)) {
+    road = ROAD_ROAD;
+  }
 
-      road_type_iterate(top) {
-        int topi = road_index(top);
-
-        if (BV_ISSET(proad->hidden_by, topi)
-            && BV_ISSET(roads, topi)) {
-          hidden = TRUE;
-          break;
-        }
-      } road_type_iterate_end;
-
-      if (!hidden) {
-        cat_snprintf(s, sizeof(s), "%s/", road_name_translation(proad));
-      }
-    }
-  } road_type_iterate_end;
+  if (road != ROAD_LAST) {
+    cat_snprintf(s, sizeof(s), "%s/",
+                 road_name_translation(road_by_number(road)));
+  }
 
   /* Likewise for farmland on irrigation */
   if (contains_special(spe, S_FARMLAND)) {
@@ -860,7 +842,9 @@ const char *get_infrastructure_text(bv_special spe, bv_bases bases, bv_roads roa
 ****************************************************************************/
 enum tile_special_type get_infrastructure_prereq(enum tile_special_type spe)
 {
-  if (spe == S_FARMLAND) {
+  if (spe == S_RAILROAD) {
+    return S_ROAD;
+  } else if (spe == S_FARMLAND) {
     return S_IRRIGATION;
   } else {
     return S_LAST;
@@ -873,112 +857,93 @@ enum tile_special_type get_infrastructure_prereq(enum tile_special_type spe)
   better is available.
   Bases are encoded as numbers beyond S_LAST.
 ****************************************************************************/
-bool get_preferred_pillage(struct act_tgt *tgt,
-                           bv_special pset,
-                           bv_bases bases,
-                           bv_roads roads)
+int get_preferred_pillage(bv_special pset,
+                          bv_bases bases)
 {
-  tgt->type = ATT_SPECIAL;
   if (contains_special(pset, S_FARMLAND)) {
-    tgt->obj.spe = S_FARMLAND;
-    return TRUE;
+    return S_FARMLAND;
   }
   if (contains_special(pset, S_IRRIGATION)) {
-    tgt->obj.spe = S_IRRIGATION;
-    return TRUE;
+    return S_IRRIGATION;
   }
   if (contains_special(pset, S_MINE)) {
-    tgt->obj.spe = S_MINE;
-    return TRUE;
+    return S_MINE;
   }
   base_type_iterate(pbase) {
     if (BV_ISSET(bases, base_index(pbase))) {
-      tgt->type = ATT_BASE;
-      tgt->obj.base = base_index(pbase);
-      return TRUE;
+      return S_LAST + base_index(pbase) + 1;
     }
   } base_type_iterate_end;
-
-  road_type_iterate(proad) {
-    if (BV_ISSET(roads, road_index(proad))) {
-      tgt->type = ATT_ROAD;
-      tgt->obj.road = road_index(proad);
-      return TRUE;
-    }
-  } road_type_iterate_end;
-
-  return FALSE;
+  if (contains_special(pset, S_RAILROAD)) {
+    return S_RAILROAD;
+  }
+  if (contains_special(pset, S_ROAD)) {
+    return S_ROAD;
+  }
+  return S_LAST;
 }
 
 /****************************************************************************
-  What terrain class terrain type belongs to.
+  Does terrain type belong to terrain class?
 ****************************************************************************/
-enum terrain_class terrain_type_terrain_class(const struct terrain *pterrain)
+bool terrain_belongs_to_class(const struct terrain *pterrain,
+                              enum terrain_class class)
 {
-  return pterrain->tclass;
+  switch(class) {
+   case TC_LAND:
+     return !is_ocean(pterrain);
+   case TC_OCEAN:
+     return is_ocean(pterrain);
+  }
+
+  fc_assert(FALSE);
+  return FALSE;
 }
 
 /****************************************************************************
   Is there terrain of the given class cardinally near tile?
 ****************************************************************************/
-bool is_terrain_class_card_near(const struct tile *ptile,
-                                enum terrain_class tclass)
+bool is_terrain_class_card_near(const struct tile *ptile, enum terrain_class class)
 {
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    struct terrain* pterrain = tile_terrain(adjc_tile);
+  switch(class) {
+   case TC_LAND:
+     cardinal_adjc_iterate(ptile, adjc_tile) {
+       struct terrain* pterrain = tile_terrain(adjc_tile);
+       if (T_UNKNOWN != pterrain
+           && !terrain_has_flag(pterrain, TER_OCEANIC)) {
+         return TRUE;
+       }
+     } cardinal_adjc_iterate_end;
+     return FALSE;
+   case TC_OCEAN:
+     return is_ocean_card_near(ptile);
+  }
 
-    if (pterrain != T_UNKNOWN) {
-      if (terrain_type_terrain_class(pterrain) == tclass) {
-        return TRUE;
-      }
-    }
-  } cardinal_adjc_iterate_end;
-
+  fc_assert(FALSE);
   return FALSE;
 }
 
 /****************************************************************************
   Is there terrain of the given class near tile?
 ****************************************************************************/
-bool is_terrain_class_near_tile(const struct tile *ptile,
-                                enum terrain_class tclass)
+bool is_terrain_class_near_tile(const struct tile *ptile, enum terrain_class class)
 {
-  adjc_iterate(ptile, adjc_tile) {
-    struct terrain* pterrain = tile_terrain(adjc_tile);
-
-    if (pterrain != T_UNKNOWN) {
-      if (terrain_type_terrain_class(pterrain) == tclass) {
-        return TRUE;
-      }
-    }
-  } adjc_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Return the number of adjacent tiles that have given terrain class.
-****************************************************************************/
-int count_terrain_class_near_tile(const struct tile *ptile,
-                                  bool cardinal_only, bool percentage,
-                                  enum terrain_class tclass)
-{
-  int count = 0, total = 0;
-
-  variable_adjc_iterate(ptile, adjc_tile, cardinal_only) {
-    struct terrain *pterrain = tile_terrain(adjc_tile);
-    if (T_UNKNOWN != pterrain
-        && terrain_type_terrain_class(pterrain) == tclass) {
-      count++;
-    }
-    total++;
-  } variable_adjc_iterate_end;
-
-  if (percentage) {
-    count = count * 100 / total;
+  switch(class) {
+   case TC_LAND:
+     adjc_iterate(ptile, adjc_tile) {
+       struct terrain* pterrain = tile_terrain(adjc_tile);
+       if (T_UNKNOWN != pterrain
+           && !terrain_has_flag(pterrain, TER_OCEANIC)) {
+         return TRUE;
+       }
+     } adjc_iterate_end;
+     return FALSE;
+   case TC_OCEAN:
+     return is_ocean_near_tile(ptile);
   }
 
-  return count;
+  fc_assert(FALSE);
+  return FALSE;
 }
 
 /****************************************************************************
@@ -1029,73 +994,8 @@ const char *terrain_alteration_name_translation(enum terrain_alteration talter)
    case TA_CAN_MINE:
      return special_name_translation(S_MINE);
    case TA_CAN_ROAD:
-     return _("Road");
+     return special_name_translation(S_ROAD);
    default:
      return NULL;
   }
-}
-
-/****************************************************************************
-   Time to complete the base building activity on the given terrain.
-****************************************************************************/
-int terrain_base_time(const struct terrain *pterrain,
-                      Base_type_id base)
-{
-  struct base_type *pbase = base_by_number(base);
-
-  if (pbase->build_time == 0) {
-    /* Terrain specific build time */
-    return pterrain->base_time;
-  } else {
-    /* Road specific build time */
-    return pbase->build_time;
-  }
-}
-
-/****************************************************************************
-  Time to complete the road building activity on the given terrain.
-****************************************************************************/
-int terrain_road_time(const struct terrain *pterrain,
-                            Road_type_id road)
-{
-  struct road_type *proad = road_by_number(road);
-
-  if (proad->build_time == 0) {
-    /* Terrain specific build time */
-    return pterrain->road_time;
-  } else {
-    /* Road specific build time */
-    return proad->build_time;
-  }
-}
-
-/**************************************************************************
-  Sets user defined name for terrain flag.
-**************************************************************************/
-void set_user_terrain_flag_name(enum terrain_flag_id id, const char *name)
-{
-  int tfid = id - TER_USER_1;
-
-  fc_assert_ret(id >= TER_USER_1 && id < TER_USER_LAST);
-
-  if (user_terrain_flag_names[tfid] != NULL) {
-    free(user_terrain_flag_names[tfid]);
-    user_terrain_flag_names[tfid] = NULL;
-  }
-
-  if (name && name[0] != '\0') {
-    user_terrain_flag_names[tfid] = fc_strdup(name);
-  }
-}
-
-/**************************************************************************
-  Terrain flag name callback, called from specenum code.
-**************************************************************************/
-char *terrain_flag_id_name_cb(enum terrain_flag_id flag)
-{
-  if (flag < TER_USER_1 || flag > TER_USER_LAST) {
-    return NULL;
-  }
-
-  return user_terrain_flag_names[flag-TER_USER_1];
 }

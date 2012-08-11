@@ -49,7 +49,6 @@ void really_close_connection_dialog(void)
 void qtg_close_connection_dialog()
 {
   /* PORTME */
-  qtg_real_set_client_page(PAGE_MAIN);
 }
 
 /**************************************************************************

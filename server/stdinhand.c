@@ -679,9 +679,6 @@ static bv_handicap handicap_of_skill_level(int level)
    case AI_LEVEL_EXPERIMENTAL:
      BV_SET(handicap, H_EXPERIMENTAL);
      break;
-   case AI_LEVEL_CHEATING:
-     BV_SET(handicap, H_RATES);
-     break;
   }
 
   return handicap;
@@ -3766,25 +3763,14 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check,
   }
 
   if (!check) {
-    bool success = TRUE;
+    cmd_reply(CMD_RULESETDIR, caller, C_OK, 
+              _("Ruleset directory set to \"%s\""), str);
 
     log_verbose("set_rulesetdir() does load_rulesets() with \"%s\"", str);
     sz_strlcpy(game.server.rulesetdir, str);
 
     /* load the ruleset (and game settings defined in the ruleset) */
-    if (load_rulesets()) {
-      cmd_reply(CMD_RULESETDIR, caller, C_OK, 
-                _("Ruleset directory set to \"%s\""), str);
-    } else {
-      cmd_reply(CMD_RULESETDIR, caller, C_SYNTAX,
-                _("Failed loading rulesets from directory \"%s\""), str);
-
-      success = FALSE;
-
-      /* While loading of the requested ruleset failed, we might
-       * have changed ruleset from third one to default. Handle
-       * rest of the ruleset changing accordingly. */
-    }
+    load_rulesets();
 
     if (game.est_connections) {
       /* Now that the rulesets are loaded we immediately send updates to any
@@ -3793,8 +3779,6 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check,
     }
     /* list changed values */
     show_changed(caller, check, read_recursion);
-
-    return success;
   }
 
   return TRUE;
@@ -4250,6 +4234,20 @@ static bool handle_stdin_input_real(struct connection *caller,
     return remove_player_command(caller, arg, check);
   case CMD_SAVE:
     return save_command(caller,arg, check);
+#ifdef DEBUG
+  case CMD_OLDSAVE:
+    {
+      bool ret;
+      int saveversion = game.server.saveversion;
+
+      /* Old save format has the save version -1; set it temporary. */
+      game.server.saveversion = -1;
+      ret = save_command(caller, arg, check);
+      game.server.saveversion = saveversion;
+
+      return ret;
+    }
+#endif /* DEBUG */
   case CMD_LOAD:
     return load_command(caller, arg, check);
   case CMD_METAPATCHES:

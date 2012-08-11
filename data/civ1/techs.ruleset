@@ -9,7 +9,7 @@
 
 [datafile]
 description="Civ1-style technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.4-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -453,7 +453,7 @@ graphic_alt = "-"
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = ""
+flags    = "Railroad"
 graphic     = "a.railroad"
 graphic_alt = "-"
 helptext = _("Decreases one-time revenue from new trade routes.")

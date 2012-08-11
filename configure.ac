@@ -73,8 +73,6 @@ dnl Use Automake 1.11 silent rules by default if available
 dnl verbose build using  make V=1
 ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
-UTILITY_LIBS=
-
 dnl AC_PROG_SED is available only in autoconf 2.60 and later. With older
 dnl autoconf, assume that 'sed' is ok. This is needed for the configuration
 dnl of the clients, database setting and the mapimg toolkits.
@@ -130,7 +128,7 @@ dnl check if a database backend is available
 if test "x$fcdb_mysql" = "xyes" || test "x$fcdb_postgres" = "xyes" \
    || test "x$fcdb_sqlite3" = "xyes"; then
   enable_fcdb=yes
-  AC_DEFINE([HAVE_FCDB], [1], [Database backend available])
+  AC_DEFINE(HAVE_FCDB,1,[ ])
 else
   enable_fcdb=no
 fi
@@ -231,10 +229,11 @@ dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE(client,
-[  --enable-client[=auto/all/gtk2/gtk3/sdl/xaw/qt/stub]
+[  --enable-client[=auto/all/gtk2/gtk3/sdl/xaw/qt/win32/stub]
                           clients to compile [[auto]] (or list for multiple)
-                          maintained clients: gtk3/gtk2/sdl/xaw/stub
-                          clients in development: qt],
+                          maintained clients: gtk2/gtk3/sdl/xaw/stub
+                          clients in development: qt
+                          unmaintained clients: win32],
 [clients=${enableval}],
 [client=auto])
 
@@ -243,6 +242,7 @@ gui_gtk3=no
 gui_sdl=no
 gui_xaw=no
 gui_qt=no
+gui_win32=no
 gui_beos=no
 gui_stub=no
 
@@ -265,8 +265,8 @@ for gui in $(echo $clients | $SED 's/,/ /g') ; do
          test "x$gui" = "xgtk-3.0" ; then
       gui_gtk3=yes
     elif test "x$gui" = "xgtk" ; then
-      AC_MSG_WARN([for requested client 'gtk' enabled gtk3-client, that has changed since earlier versions])
-      gui_gtk3=yes
+      AC_MSG_WARN([for requested client 'gtk' enabled gtk2-client, but that default may change in the future])
+      gui_gtk2=yes
     else
       if test ! -d "${srcdir}/client/gui-$gui" ; then
         AC_MSG_ERROR(bad value ${gui} for --enable-client)
@@ -552,8 +552,8 @@ fi
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([CURL], [libcurl],,
     [AC_MSG_ERROR([libcurl development files required])])
-UTILITY_CFLAGS="${UTILITY_CFLAGS} ${CURL_CFLAGS}"
-UTILITY_LIBS="${UTILITY_LIBS} ${CURL_LIBS}"
+CFLAGS="$CFLAGS $CURL_CFLAGS"
+LIBS="$LIBS $CURL_LIBS"
 
 dnl Set debug flags supported by compiler
 EXTRA_DEBUG_CFLAGS=""
@@ -571,7 +571,7 @@ AC_C99_STDINT_H
 
 dnl BeOS-specific settings
 if test x`$UNAME -s` = xBeOS ; then
-  AC_DEFINE([SOCKET_ZERO_ISNT_STDIN], [1], [BeOS-specific setting])
+  AC_DEFINE(SOCKET_ZERO_ISNT_STDIN, 1, [BeOS-specific setting])
   CFLAGS="$CFLAGS -Wno-multichar"
   LDFLAGS="$LDFLAGS -x none"
   if test x$enable_debug = xyes ; then
@@ -637,17 +637,18 @@ dnl note this has to match the path installed by po/Makefile
 if test x"$MINGW32" != "xyes"; then
   CPPFLAGS="$CPPFLAGS -DLOCALEDIR=\"\\\"$localedir\\\"\""
 else
-  AC_DEFINE_UNQUOTED([LOCALEDIR], ["./share/locale"], [Locale directory (windows)])
+  AC_DEFINE_UNQUOTED(LOCALEDIR, "./share/locale", [Locale directory (windows)])
 fi
 
 CPPFLAGS="$CPPFLAGS -DBINDIR=\"\\\"$bindir\\\"\""
 
 COMMON_LIBS=-lm
+UTILITY_LIBS=
 
 dnl Check for zlib
 AC_CHECK_LIB(z, gzgets,
-  [AC_DEFINE([HAVE_LIBZ], [1], [zlib is available])
-UTILITY_LIBS="${UTILITY_LIBS} -lz"
+  [AC_DEFINE(HAVE_LIBZ, 1, [zlib is available])
+UTILITY_LIBS="$UTILITY_LIBS -lz"
 COMMON_LIBS="$COMMON_LIBS -lz"], 
   AC_MSG_ERROR([Could not find zlib library.]))
 
@@ -663,16 +664,15 @@ fi
 dnl Check for bzip2 compression
 AC_CHECK_LIB(bz2, BZ2_bzReadOpen,
   [AC_CHECK_HEADERS([bzlib.h],
-   [AC_DEFINE([HAVE_LIBBZ2], [1], [libbzip2 is available])
-UTILITY_LIBS="${UTILITY_LIBS} -lbz2"])])
+   [AC_DEFINE(HAVE_LIBBZ2, 1, [libbzip2 is available])
+UTILITY_LIBS="$UTILITY_LIBS -lbz2"])])
 
 dnl Check for xz compression
 AC_CHECK_LIB(lzma, lzma_code,
   [AC_CHECK_HEADERS([lzma.h],
-   [AC_DEFINE([HAVE_LIBLZMA], [1], [liblzma is available])
+   [AC_DEFINE(HAVE_LIBLZMA, 1, [liblzma is available])
 UTILITY_LIBS="${UTILITY_LIBS} -llzma"])])
 
-AC_SUBST([UTILITY_CFLAGS])
 AC_SUBST([UTILITY_LIBS])
 AC_SUBST([COMMON_LIBS])
 
@@ -697,7 +697,9 @@ if test "x$thread_impl" = "xnone" ; then
 fi
 
 if test "x$thread_impl" = "xnone" ; then
-  AC_MSG_ERROR([No usable thread implementation available])
+  AC_MSG_RESULT([none])
+else
+  AC_DEFINE([HAVE_THREADS], [1], [Defined if there is any thread implementation at all])
 fi
 
 dnl Check and choose clients
@@ -720,11 +722,11 @@ if test "x$client" != "xno"; then
     AS_MESSAGE([checking for which clients to compile:...])
   fi
 
-  dnl Gtk-3.0-specific overrides
-  FC_GTK3_CLIENT
-
   dnl Gtk-2.0-specific overrides
   FC_GTK2_CLIENT
+
+  dnl Gtk-3.0-specific overrides
+  FC_GTK3_CLIENT
 
   dnl SDL-specific overrides
   FC_SDL_CLIENT
@@ -754,6 +756,9 @@ if test "x$client" != "xno"; then
       fi
     fi
   fi
+
+  dnl Win32-specific overrides
+  FC_WIN32_CLIENT
 
   dnl Stub-specific overrides
   if test "x$gui_stub" = "xyes" || test "x$client" = "xall" ; then
@@ -785,6 +790,7 @@ if test "x$client" = "xall" ; then
      test "x$gui_sdl" = "xyes" ||
      test "x$gui_xaw" = "xyes" ||
      test "x$gui_qt" = "xyes" ||
+     test "x$gui_win32" = "xyes" ||
      test "x$gui_beos" = "xyes" ||
      test "x$gui_stub" = "xyes" ; then
     client=yes
@@ -816,54 +822,20 @@ AM_CONDITIONAL([CLIENT], [test "x$client" = "xyes"])
 
 dnl freeciv-modpack checks
 AC_ARG_ENABLE([fcmp],
-[  --enable-fcmp[[=no/yes/gtk/gtk2/gtk3/qt/all/auto]] build freeciv-modpack-program [[default=auto]]],
-[fc_mp=${enableval}],
-[fc_mp=auto])
+[  --enable-fcmp[[=no/yes/gtk2/gtk3/test]] build freeciv-modpack-program [[default=test]]],
+[case "${enableval}" in
+  yes|no|gtk2|gtk3|test) fc_mp=${enableval} ;;
+  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fcmp]) ;;
+esac], [fc_mp=test])
 
-fcmp_gtk=no
-fcmp_gtk2=no
-fcmp_gtk3=no
-fcmp_qt=no
+modinst=no
 
-for mp in $(echo $fc_mp | $SED 's/,/ /g') ; do
-  if test "x$mp" = "xno" ; then
-    modinst=no
-  elif test "x$mp" = "xauto" || test "x$mp" = "xyes" ; then
-    modinst=auto
-  elif test "x$mp" = "xall" ; then
-    modinst=all
-  else
-    if test "x$mp" = "xgtk2"   ||
-       test "x$mp" = "xgtk2.0" ||
-       test "x$mp" = "xgtk20"  ||
-       test "x$mp" = "xgtk-2.0" ; then
-      req_fcmp_gtk2=yes
-    elif test "x$mp" = "xgtk3"   ||
-         test "x$mp" = "xgtk3.0" ||
-         test "x$mp" = "xgtk30"  ||
-         test "x$mp" = "xgtk-3.0" ; then
-      req_fcmp_gtk3=yes
-    elif test "x$mp" = "xgtk" ; then
-      req_fcmp_gtk=yes
-    elif test "x$mp" = "xqt" ; then
-      req_fcmp_qt=yes
-    elif test "x$mp" != "xyes" ; then
-      AC_MSG_ERROR(bad value ${mp} for --enable-fcmp)
-    fi
-  fi
-done
-
-if test "x$req_fcmp_gtk2" = "xyes" && test "x$req_fcmp_gtk3" = "xyes" ; then
-  AC_MSG_ERROR([Cannot build both gtk2 and gtk3 version of modpack installer])
-fi
-
-if test "x$req_fcmp_gtk3" = "xyes" || test "x$req_fcmp_gtk" = "xyes" ||
-   test "x$modinst" = "xall" || test "x$modinst" = "xauto" ; then
+if test "x$fc_mp" = "xyes" || test "x$fc_mp" = "xgtk3" || test "x$fc_mp" = "xtest" ; then
   AM_PATH_GTK_3_0([3.0.0],
 [
   PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
 [
-  fcmp_gtk3=yes
+  modinst=gtk3
   MP_gtk_CFLAGS="$GTK3_CFLAGS $GHTREAD_CFLAGS"
   MP_gtk_LIBS="$GTK3_LIBS $GTHREAD_LIBS"
   if test "x$MINGW32" = "xyes"; then
@@ -871,26 +843,20 @@ if test "x$req_fcmp_gtk3" = "xyes" || test "x$req_fcmp_gtk" = "xyes" ||
     MP_gtk_CFLAGS="$MP_gtk_CFLAGS -mms-bitfields"
     MP_gtk_LDFLAGS="$MP_gtk_LDFLAGS -mwindows"
   fi
-
-  if test "x$modinst" = "xauto" ; then
-    modinst=found
-  fi
 ])])
 fi
 
-if test "x$req_fcmp_gtk3" = "xyes" && test "x$fcmp_gtk3" != "xyes" ; then
+if test "x$fc_mp" = "xgtk3" && test "x$modinst" != "xgtk3" ; then
   AC_MSG_ERROR([Cannot build gtk3-version of freeciv-modpack as requested])
 fi
 
-if test "x$req_fcmp_gtk2" = "xyes" ||
-   ( test "x$fcmp_gtk3" != "xyes" && test "x$req_fcmp_gtk" = "xyes") ||
-   test "x$modinst" = "xauto" || test "x$modinst" = "xall" ; then
-
+if test "x$modinst" = "xno" &&
+   ( test "x$fc_mp" = "xyes" || test "x$fc_mp" = "xgtk2" || test "x$fc_mp" = "xtest" ) ; then
   AM_PATH_GTK_2_0([2.12.0],
 [
   PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
 [
-  fcmp_gtk2=yes
+  modinst=gtk2
   MP_gtk_CFLAGS="$GTK2_CFLAGS $GTHREAD_CFLAGS"
   MP_gtk_LIBS="$GTK2_LIBS $GTHREAD_LIBS"
   if test "x$MINGW32" = "xyes"; then
@@ -898,63 +864,23 @@ if test "x$req_fcmp_gtk2" = "xyes" ||
      MP_gtk_CFLAGS="$MP_gtk_CFLAGS -mms-bitfields"
      MP_gtk_LDFLAGS="$MP_gtk_LDFLAGS -mwindows"
   fi
-
-  if test "x$modinst" = "xauto" ; then
-    modinst=found
-  fi
 ])])
 fi
-
-if test "x$req_fcmp_gtk2" = "xyes" && test "x$fcmp_gtk2" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build gtk2-version of freeciv-modpack as requested])
-fi
-
-if test "x$req_fcmp_gtk" = "xyes" &&
-   test "x$fcmp_gtk2" != "xyes" && test "x$fcmp_gtk3" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build gtk-version of freeciv-modpack as requested])
-fi
-
-if test "x$req_fcmp_qt" = "xyes" ||
-   test "x$modinst" = "xauto" || test "x$modinst" = "xall" ; then
-
-   if test "x$cxx_works" = "xyes" ; then
-     FC_QT
-
-     if test "x$fc_qt_usable" = "xtrue" ; then
-       fcmp_qt=yes
-
-       MP_qt_CPPFLAGS=$FC_QT_CPPFLAGS
-       MP_qt_LIBS=$FC_QT_LIBS
-
-       if test "x$modinst" = "xauto" ; then
-         modinst=found
-       fi
-     fi
-   fi
-
-fi
-
-if test "x$req_fcmp_qt" = "xyes" && test "x$fcmp_qt" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build Qt-version of freeciv-modpack as requested])
-fi
-
-if test "x$modinst" != "xfound" &&
-   test "x$modinst" != "xno" &&
-   test "x$fcmp_gtk3" != "xyes" &&
-   test "x$fcmp_gtk2" != "xyes" &&
-   test "x$fcmp_qt" != "xyes" ;then
-  AC_MSG_ERROR([Cannot build modpack installer with any gui])
-fi 
 
 if test "x$modinst" != "xno" && test "x$MINGW32" != "xyes" ; then
   dnl Hack to get a run-time icon -- not needed on Windows
   MP_gtk_CFLAGS="$MP_gtk_CFLAGS -DMPICON_PATH=\"\\\"$datadir/freeciv/misc/mpicon.png\\\"\""
 fi
 
+if test "x$fc_mp" = "xgtk2" && test "x$modinst" != "xgtk2" ; then
+  AC_MSG_ERROR([Cannot build gtk2-version of freeciv-modpack as requested])
+fi
+
+if test "x$fc_mp" = "xyes" && test "x$modinst" = "xno" ; then
+  AC_MSG_ERROR([freeciv-modpack build requested but it's impossible])
+fi
+
 AM_CONDITIONAL([MODINST], [test "x$modinst" != "xno"])
-AM_CONDITIONAL([MODINST_GTK],
-[test "x$fcmp_gtk3" = "xyes" || test "x$fcmp_gtk2" = "xyes"])
-AM_CONDITIONAL([MODINST_QT], [test "x$fcmp_qt" = "xyes"])
 
 AC_SUBST([GUI_gtk2_CFLAGS])
 AC_SUBST([GUI_gtk2_LIBS])
@@ -973,6 +899,9 @@ AC_SUBST([GUI_qt_CFLAGS])
 AC_SUBST([GUI_qt_CXXFLAGS])
 AC_SUBST([GUI_qt_LIBS])
 AC_SUBST([GUI_qt_LDFLAGS])
+AC_SUBST([GUI_win32_CFLAGS])
+AC_SUBST([GUI_win32_LIBS])
+AC_SUBST([GUI_win32_LDFLAGS])
 AC_SUBST([GUI_stub_CFLAGS])
 AC_SUBST([GUI_stub_LIBS])
 AC_SUBST([GUI_stub_LDFLAGS])
@@ -982,8 +911,6 @@ AC_SUBST([GUI_beos_LDFLAGS])
 AC_SUBST([MP_gtk_CFLAGS])
 AC_SUBST([MP_gtk_LIBS])
 AC_SUBST([MP_gtk_LDFLAGS])
-AC_SUBST([MP_qt_CPPFLAGS])
-AC_SUBST([MP_qt_LIBS])
 AC_SUBST([SOUND_CFLAGS])
 AC_SUBST([SOUND_LIBS])
 AC_SUBST([VERSION_WITHOUT_LABEL])
@@ -996,6 +923,7 @@ AM_CONDITIONAL(CLIENT_GUI_GTK_3_0, test "x$gui_gtk3" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "x$gui_xaw" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_QT, test "x$gui_qt" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_STUB, test "x$gui_stub" = "xyes")
+AM_CONDITIONAL(CLIENT_GUI_WIN32, test "x$gui_win32" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_BEOS, test "x$gui_beos" = "xyes")
 AM_CONDITIONAL(MINGW32, test x"$MINGW32" = "xyes")
 
@@ -1068,7 +996,7 @@ AC_CHECK_FUNCS([bind connect fileno flock ftime gethostbyname gethostname \
                 backtrace])
 
 AC_MSG_CHECKING(for working gettimeofday)
-  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE([HAVE_GETTIMEOFDAY], [1],
+  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE(HAVE_GETTIMEOFDAY, 1,
 	[Define if the gettimeofday function works and is sane.]),)
 
 dnl Check for extra socket libraries.
@@ -1099,17 +1027,17 @@ dnl and not in LIBS.
 dnl Now check if non blocking sockets are possible
 dnl (if fcntl or ioctl exists)
 
-AC_CHECK_FUNC([fcntl],
-              [AC_DEFINE([HAVE_FCNTL], [1], [fcntl support])
-               AC_DEFINE([NONBLOCKING_SOCKETS], [1], [nonblocking sockets support])],
-               [AC_CHECK_FUNC([ioctl], 
-                             [AC_DEFINE([HAVE_IOCTL], [1], [ioctl support])
-                              AC_DEFINE([NONBLOCKING_SOCKETS], [1], [nonblocking sockets support])])])
+AC_CHECK_FUNC(fcntl,
+              [AC_DEFINE(HAVE_FCNTL, 1, [fcntl support])
+               AC_DEFINE(NONBLOCKING_SOCKETS, 1, [nonblocking sockets support])],
+               [AC_CHECK_FUNC(ioctl, 
+                             [AC_DEFINE(HAVE_IOCTL, 1, [ioctl support])
+                              AC_DEFINE(NONBLOCKING_SOCKETS, 1, [nonblocking sockets support])])])
 
 dnl Checks if SIGPIPE is usable
 AC_MSG_CHECKING([for SIGPIPE])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <signal.h>]], [[signal (SIGPIPE, SIG_IGN)]])],[AC_MSG_RESULT([yes])
-                AC_DEFINE([HAVE_SIGPIPE], [1], [sigpipe support])],[AC_MSG_RESULT([no])])
+                AC_DEFINE(HAVE_SIGPIPE, 1, [sigpipe support])],[AC_MSG_RESULT([no])])
 
 AC_ARG_ENABLE([crosser],
 [  --enable-crosser        build version to be used with crosser environment],
@@ -1228,22 +1156,6 @@ AC_SUBST([TOLUA_AS_DEPENDENCY])
 TOLUA="\$(top_builddir)/dependencies/tolua-5.1/src/bin/tolua$EXEEXT"
 AC_SUBST([TOLUA])
 
-AC_ARG_ENABLE([fcweb],
-[  --fcweb        build fcweb version of server [[false]]],
-[case "${enableval}" in
-  yes)
-    fcweb=true ;;
-  no)
-    fcweb=false ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fcweb]) ;;
-esac], [fcweb=false])
-
-AM_CONDITIONAL([FREECIV_WEB], [test "x$fcweb" = "xtrue"])
-if test "x$fcweb" = "xtrue" ; then
-  AC_DEFINE([FREECIV_WEB], [1], [Build freeciv-web version])
-fi
-
-
 dnl Freeciv uses a non-standard macro, Q_(), to handle cases of qualified
 dnl translatable strings and macro PL_() to handle plural forms.
 dnl Since the Gettext supplied Autoconf support
@@ -1346,10 +1258,8 @@ AC_CONFIG_FILES([Makefile
 	  data/isotrident/Makefile
 	  data/stdsounds/Makefile
 	  data/default/Makefile
-	  data/classic/Makefile
-	  data/multiplayer/Makefile
+          data/multiplayer/Makefile
 	  data/experimental/Makefile
-          data/civ2civ3/Makefile
 	  data/civ1/Makefile
 	  data/civ2/Makefile
 	  data/scenarios/Makefile
@@ -1429,13 +1339,15 @@ AC_CONFIG_FILES([Makefile
 	  client/gui-gtk-3.0/Makefile
 	  client/gui-xaw/Makefile
           client/gui-qt/Makefile
+	  client/gui-win32/Makefile
 	  client/gui-stub/Makefile
           client/luascript/Makefile
 	  server/Makefile
           server/advisors/Makefile
 	  server/generator/Makefile
 	  server/scripting/Makefile
-          tools/Makefile
+	  manual/Makefile
+          modinst/Makefile
 	  po/Makefile.in
 	  doc/Makefile
 	  doc/man/Makefile
@@ -1453,7 +1365,7 @@ AC_CONFIG_FILES([Makefile
 	  data/Freeciv
 	  client/freeciv.desktop:bootstrap/freeciv.desktop.in
 	  server/freeciv-server.desktop:bootstrap/freeciv-server.desktop.in
-	  tools/freeciv-modpack.desktop:bootstrap/freeciv-modpack.desktop.in])
+	  modinst/freeciv-modpack.desktop:bootstrap/freeciv-modpack.desktop.in])
 AC_CONFIG_FILES([fcgui:bootstrap/fcgui.in], [chmod +x fcgui])
 AC_CONFIG_FILES([fcser:bootstrap/fcser.in], [chmod +x fcser])
 
@@ -1505,8 +1417,8 @@ AC_MSG_NOTICE([
   Build freeciv client:  $client
 
   Maintained client frontends:
-    Gtk-3.0: $gui_gtk3
     Gtk-2.0: $gui_gtk2
+    Gtk-3.0: $gui_gtk3
     SDL:     $gui_sdl
     Xaw:     $gui_xaw
     Stub:    $gui_stub
@@ -1514,6 +1426,10 @@ AC_MSG_NOTICE([
   In-development client frontends:
   (these are not yet ready for general use)
     QT:      $gui_qt
+
+  Not maintained client frontends:
+  (no guarantee that they even compile)
+    Win32:   $gui_win32
 
   == Server ==
   Build freeciv server:  $server

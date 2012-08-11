@@ -51,9 +51,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 /* Makes tile native terrain for units */
 #define SPECENUM_VALUE4 BF_NATIVE_TILE
 #define SPECENUM_VALUE4NAME "NativeTile"
-/* Owner's flag is displayed next to base */
-#define SPECENUM_VALUE5 BF_SHOW_FLAG
-#define SPECENUM_VALUE5NAME "ShowFlag"
 #define SPECENUM_COUNT BF_COUNT
 #include "specenum_gen.h"
 
@@ -67,7 +64,6 @@ struct base_type {
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
   char activity_gfx[MAX_LEN_NAME];
-  char act_gfx_alt[MAX_LEN_NAME];
   struct requirement_vector reqs;
   enum base_gui_type gui_type;
   int build_time;
@@ -116,9 +112,6 @@ bool is_native_tile_to_base(const struct base_type *pbase,
 /* Ancillary functions */
 bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                     const struct tile *ptile);
-bool player_can_build_base(const struct base_type *pbase,
-                           const struct player *pplayer,
-                           const struct tile *ptile);
 
 struct base_type *get_base_by_gui_type(enum base_gui_type type,
                                        const struct unit *punit,
@@ -127,7 +120,6 @@ struct base_type *get_base_by_gui_type(enum base_gui_type type,
 bool can_bases_coexist(const struct base_type *base1, const struct base_type *base2);
 
 bool territory_claiming_base(const struct base_type *pbase);
-struct player *base_owner(const struct tile *ptile);
 
 /* Initialization and iteration */
 void base_types_init(void);

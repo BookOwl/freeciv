@@ -21,8 +21,9 @@ extern "C" {
 #include "tile.h"
 
 #define SINGLE_MOVE     3
-#define MOVE_COST_IGTER 1
 #define MOVE_COST_RIVER 1
+#define MOVE_COST_RAIL  0
+#define MOVE_COST_ROAD  1
 
 struct unit_type;
 struct terrain;
@@ -64,12 +65,10 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile);
 bool is_native_terrain(const struct unit_type *punittype,
                        const struct terrain *pterrain,
-                       bv_special special, bv_bases bases,
-                       bv_roads roads);
+                       bv_special special, bv_bases bases);
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_special special, bv_bases bases,
-                        bv_roads roads);
+                        bv_special special, bv_bases bases);
 bool is_native_near_tile(const struct unit_class *uclass, const struct tile *ptile);
 bool can_exist_at_tile(const struct unit_type *utype,
                        const struct tile *ptile);

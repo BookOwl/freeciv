@@ -86,6 +86,9 @@ enum command_id {
   CMD_RESET,
   CMD_LUA,
   CMD_KICK,
+#ifdef DEBUG
+  CMD_OLDSAVE,
+#endif /* DEBUG */
   CMD_DELEGATE,
   CMD_FCDB,
   CMD_MAPIMG,

@@ -19,7 +19,6 @@
 #include "ai.h"
 
 /* threaded ai */
-#include "taimsg.h"
 #include "taiplayer.h"
 
 const char *fc_ai_threaded_capstr(void);
@@ -46,17 +45,12 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
 
   strncpy(ai->name, "threaded", sizeof(ai->name));
 
-  tai_init_self(ai);
+  tai_set_self(ai);
 
   ai->funcs.player_alloc = tai_player_alloc;
   ai->funcs.player_free = tai_player_free;
   ai->funcs.gained_control = tai_control_gained;
   ai->funcs.lost_control = tai_control_lost;
-
-  ai->funcs.first_activities = tai_first_activities;
-  ai->funcs.phase_finished = tai_phase_finished;
-
-  ai->funcs.refresh = tai_refresh;
 
   return TRUE;
 }

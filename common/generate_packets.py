@@ -1555,9 +1555,6 @@ def main():
 extern "C" {
 #endif /* __cplusplus */
 
-/* common */
-#include "disaster.h"
-
 ''')
 
     # write structs

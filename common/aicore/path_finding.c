@@ -295,7 +295,7 @@ static void pf_normal_node_init(struct pf_normal_map *pfnm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -919,7 +919,7 @@ static void pf_danger_node_init(struct pf_danger_map *pfdm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -1767,7 +1767,7 @@ static void pf_fuel_node_init(struct pf_fuel_map *pffm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -2166,7 +2166,7 @@ static inline bool
 pf_fuel_map_attack_is_possible(const struct pf_parameter *param,
                                int moves_left, int moves_left_req)
 {
-  if (BV_ISSET(param->unit_flags, UTYF_ONEATTACK)) {
+  if (BV_ISSET(param->unit_flags, F_ONEATTACK)) {
     if (param->fuel == 1) {
       /* Case missile */
       return TRUE;
@@ -2311,7 +2311,7 @@ static bool pf_fuel_map_iterate(struct pf_map *pfm)
 
         moves_left = loc_moves_left - cost;
         if (moves_left < node1->moves_left_req
-            && (!BV_ISSET(params->unit_flags, UTYF_ONEATTACK)
+            && (!BV_ISSET(params->unit_flags, F_ONEATTACK)
                 || 1 != params->fuel
                 || 0 >= moves_left)) {
           /* We don't have enough moves left, but missiles
@@ -2947,7 +2947,7 @@ static int pf_reverse_map_get_costs(const struct tile *to_tile,
              && !tile_city(to_tile)) {
     return -1;  /* Impossible move. */
   } else if (uclass_has_flag(param->uclass, UCF_TERRAIN_SPEED)) {
-    if (BV_ISSET(param->unit_flags, UTYF_IGTER)) {
+    if (BV_ISSET(param->unit_flags, F_IGTER)) {
       cost = MIN(map_move_cost(param->owner, from_tile, to_tile), SINGLE_MOVE);
     } else {
       cost = map_move_cost(param->owner, from_tile, to_tile);

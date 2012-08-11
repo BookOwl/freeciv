@@ -16,7 +16,6 @@
 struct city;
 
 void citizens_update(struct city *pcity);
-void citizens_convert(struct city *pcity);
 
 void citizens_print(const struct city *pcity);
 

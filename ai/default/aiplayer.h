@@ -29,22 +29,19 @@ void dai_player_free(struct player *pplayer);
 void dai_player_save(struct player *pplayer, struct section_file *file, int plrno);
 void dai_player_load(struct player *pplayer, struct section_file *file, int plrno);
 
-static inline struct ai_city *def_ai_city_data(const struct city *pcity,
-                                               struct ai_type *deftype)
+static inline struct ai_city *def_ai_city_data(const struct city *pcity)
 {
-  return (struct ai_city *)city_ai_data(pcity, deftype);
+  return (struct ai_city *)city_ai_data(pcity, default_ai_get_self());
 }
 
-static inline struct unit_ai *def_ai_unit_data(const struct unit *punit,
-                                               struct ai_type *deftype)
+static inline struct unit_ai *def_ai_unit_data(const struct unit *punit)
 {
-  return (struct unit_ai *)unit_ai_data(punit, deftype);
+  return (struct unit_ai *)unit_ai_data(punit, default_ai_get_self());
 }
 
-static inline struct ai_plr *def_ai_player_data(const struct player *pplayer,
-                                                struct ai_type *deftype)
+static inline struct ai_plr *def_ai_player_data(const struct player *pplayer)
 {
-  return (struct ai_plr *)player_ai_data(pplayer, deftype);
+  return (struct ai_plr *)player_ai_data(pplayer, default_ai_get_self());
 }
 
 #endif /* FC__AIPLAYER_H */

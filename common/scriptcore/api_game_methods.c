@@ -342,6 +342,7 @@ const char *api_methods_tech_type_name_translation(lua_State *L,
   return advance_name_translation(ptech);
 }
 
+
 /*****************************************************************************
   Return rule name for Terrain
 *****************************************************************************/
@@ -363,29 +364,6 @@ const char *api_methods_terrain_name_translation(lua_State *L,
   LUASCRIPT_CHECK_SELF(L, pterrain, NULL);
 
   return terrain_name_translation(pterrain);
-}
-
-/*****************************************************************************
-  Return rule name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_rule_name(lua_State *L, Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_rule_name(pdis);
-}
-
-/*****************************************************************************
-  Return translated name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_name_translation(lua_State *L,
-                                                  Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_name_translation(pdis);
 }
 
 /*****************************************************************************
@@ -571,6 +549,7 @@ int api_methods_tile_sq_distance(lua_State *L, Tile *ptile1, Tile *ptile2)
   return sq_map_distance(ptile1, ptile2);
 }
 
+
 /*****************************************************************************
   Can punit found a city on its tile?
 *****************************************************************************/
@@ -610,17 +589,17 @@ Direction api_methods_unit_orientation_get(lua_State *L, Unit *punit)
 bool api_methods_unit_type_has_flag(lua_State *L, Unit_Type *punit_type,
                                     const char *flag)
 {
-  enum unit_type_flag_id id;
+  enum unit_flag_id id;
 
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_SELF(L, punit_type, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, flag, 3, string, FALSE);
 
   id = unit_flag_by_rule_name(flag);
-  if (id != UTYF_LAST) {
+  if (id != F_LAST) {
     return utype_has_flag(punit_type, id);
   } else {
-    luascript_error(L, "Unit type flag \"%s\" does not exist", flag);
+    luascript_error(L, "Unit flag \"%s\" does not exist", flag);
     return FALSE;
   }
 }

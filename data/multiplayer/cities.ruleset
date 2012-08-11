@@ -8,7 +8,7 @@
 
 [datafile]
 description="Cities data for Freeciv"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.4-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -88,12 +88,8 @@ changable_tax = 1		; set to zero to disallow changing of tax rates
 
 vision_reveal_tiles = 1		; civ1 & 2 default zero
 
-pop_report_zeroes = 4           ; Population in reports in tens of thousands
-
 [citizen]
-nationality   = 0               ; account for the nationality of the citizens
-convert_speed = 50              ; base probability 50/1000 -> once every 20 turns
-
+nationality = 0                 ; account for the nationality of the citizens
 ; /* <-- avoid gettext warnings
 ;
 ; City styles define the way cities are drawn

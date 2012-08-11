@@ -200,10 +200,6 @@ void srv_init(void)
   /* NLS init */
   init_nls();
 
-  /* This is before ai module initializations so that if ai module
-   * wants to use registry files, it can. */
-  registry_module_init();
-
   /* This must be before command line argument parsing.
      This allocates default ai, and we want that to take place before
      loading additional ai modules from command line. */
@@ -764,7 +760,7 @@ static void kill_dying_players(void)
         && 0 == unit_list_size(pplayer->units)) {
       player_status_add(pplayer, PSTATUS_DYING);
     }
-    /* also UTYF_GAMELOSS in unittools server_remove_unit() */
+    /* also F_GAMELOSS in unittools server_remove_unit() */
     if (player_status_check(pplayer, PSTATUS_DYING)) {
       /* Can't get more dead than this. */
       voter_died = voter_died || pplayer->is_connected;
@@ -1075,7 +1071,7 @@ static void end_turn(void)
       continue;
     }
     unit_list_iterate(pplayer->units, punit) {
-      if (unit_has_type_flag(punit, UTYF_CITIES)) {
+      if (unit_has_type_flag(punit, F_CITIES)) {
         settlers++;
       }
     } unit_list_iterate_end;
@@ -1099,8 +1095,6 @@ static void end_turn(void)
     log_debug("Season of migrations");
     check_city_migrations();
   }
-
-  check_disasters();
 
   if (game.info.global_warming) {
     update_environmental_upset(S_POLLUTION, &game.info.heating,
@@ -1375,7 +1369,6 @@ void server_quit(void)
   edithand_free();
   voting_free();
   close_connections_and_socket();
-  registry_module_close();
   free_nls();
   con_log_close();
   exit(EXIT_SUCCESS);
@@ -2533,7 +2526,6 @@ static void srv_ready(void)
       log_error(_("Please report this message at %s"), BUG_URL);
       exit(EXIT_FAILURE);
     }
-    script_server_signal_emit("map_generated", 0);
     game_map_init();
   }
 

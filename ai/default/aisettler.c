@@ -205,7 +205,7 @@ static struct cityresult *settler_map_iterate(struct pf_parameter *parameter,
 static struct cityresult *find_best_city_placement(struct unit *punit,
                                                    bool look_for_boat,
                                                    bool use_virt_boat);
-static bool dai_do_build_city(struct player *pplayer, struct unit *punit);
+static bool ai_do_build_city(struct player *pplayer, struct unit *punit);
 
 /*****************************************************************************
   Allocated a city result.
@@ -271,7 +271,7 @@ static struct cityresult *cityresult_fill(struct player *pplayer,
   bool virtual_city = FALSE;
   bool handicap = ai_handicap(pplayer, H_MAP);
   struct adv_data *adv = adv_data_get(pplayer);
-  struct ai_plr *ai = dai_plr_data_get(pplayer);
+  struct ai_plr *ai = ai_plr_data_get(pplayer);
   struct cityresult *result;
 
   fc_assert_ret_val(ai != NULL, NULL);
@@ -492,7 +492,7 @@ static void tile_data_cache_destroy(struct tile_data_cache *ptdc)
 static const struct tile_data_cache *tdc_plr_get(struct player *plr,
                                                  int tindex)
 {
-  struct ai_plr *ai = dai_plr_data_get(plr);
+  struct ai_plr *ai = ai_plr_data_get(plr);
 
   fc_assert_ret_val(ai != NULL, NULL);
   fc_assert_ret_val(ai->settler != NULL, NULL);
@@ -526,7 +526,7 @@ static const struct tile_data_cache *tdc_plr_get(struct player *plr,
 static void tdc_plr_set(struct player *plr, int tindex,
                          const struct tile_data_cache *ptdc)
 {
-  struct ai_plr *ai = dai_plr_data_get(plr);
+  struct ai_plr *ai = ai_plr_data_get(plr);
 
   fc_assert_ret(ai != NULL);
   fc_assert_ret(ai->settler != NULL);
@@ -584,7 +584,7 @@ static int defense_bonus(const struct cityresult *result)
 **************************************************************************/
 static int naval_bonus(const struct cityresult *result)
 {
-  bool ocean_adjacent = is_terrain_class_near_tile(result->tile, TC_OCEAN);
+  bool ocean_adjacent = is_ocean_near_tile(result->tile);
 
   /* Adjust for ocean adjacency, which is nice */
   if (ocean_adjacent) {
@@ -882,8 +882,7 @@ static struct cityresult *find_best_city_placement(struct unit *punit,
     ferry = game_unit_by_number(ferry_id);
   }
 
-  if (ferry || (use_virt_boat
-                && is_terrain_class_near_tile(unit_tile(punit), TC_OCEAN)
+  if (ferry || (use_virt_boat && is_ocean_near_tile(unit_tile(punit))
                 && tile_city(unit_tile(punit)))) {
     if (!ferry) {
       /* No boat?  Get a virtual one! */
@@ -961,7 +960,7 @@ static struct cityresult *find_best_city_placement(struct unit *punit,
 /**************************************************************************
   Initialize ai settler engine.
 **************************************************************************/
-void dai_auto_settler_init(struct ai_plr *ai)
+void ai_auto_settler_init(struct ai_plr *ai)
 {
   fc_assert_ret(ai != NULL);
   fc_assert_ret(ai->settler == NULL);
@@ -985,7 +984,6 @@ void dai_auto_settler_run(struct player *pplayer, struct unit *punit,
 {
   int best_impr = 0;            /* best terrain improvement we can do */
   enum unit_activity best_act;
-  struct act_tgt best_target;
   struct tile *best_tile = NULL;
   struct pf_path *path = NULL;
 
@@ -998,29 +996,29 @@ void dai_auto_settler_run(struct player *pplayer, struct unit *punit,
 
 BUILD_CITY:
 
-  if (def_ai_unit_data(punit, default_ai_get_self())->task == AIUNIT_BUILD_CITY) {
+  if (def_ai_unit_data(punit)->task == AIUNIT_BUILD_CITY) {
     struct tile *ptile = punit->goto_tile;
     int sanity = punit->id;
 
     /* Check that the mission is still possible.  If the tile has become
      * unavailable, call it off. */
     if (!city_can_be_built_here(ptile, punit)) {
-      dai_unit_new_task(punit, AIUNIT_NONE, NULL);
+      ai_unit_new_task(punit, AIUNIT_NONE, NULL);
       set_unit_activity(punit, ACTIVITY_IDLE);
       send_unit_info(NULL, punit);
       return; /* avoid recursion at all cost */
     } else {
      /* Go there */
-      if ((!dai_gothere(pplayer, punit, ptile)
+      if ((!ai_gothere(pplayer, punit, ptile)
            && NULL == game_unit_by_number(sanity))
           || punit->moves_left <= 0) {
         return;
       }
       if (same_pos(unit_tile(punit), ptile)) {
-        if (!dai_do_build_city(pplayer, punit)) {
+        if (!ai_do_build_city(pplayer, punit)) {
           UNIT_LOG(LOG_DEBUG, punit, "could not make city on %s",
                    tile_get_info_text(unit_tile(punit), 0));
-          dai_unit_new_task(punit, AIUNIT_NONE, NULL);
+          ai_unit_new_task(punit, AIUNIT_NONE, NULL);
           /* Only known way to end in here is that hut turned in to a city
            * when settler entered tile. So this is not going to lead in any
            * serious recursion. */
@@ -1040,10 +1038,10 @@ BUILD_CITY:
 
   /*** Try find some work ***/
 
-  if (unit_has_type_flag(punit, UTYF_SETTLERS)) {
+  if (unit_has_type_flag(punit, F_SETTLERS)) {
     TIMING_LOG(AIT_WORKERS, TIMER_START);
-    best_impr = settler_evaluate_improvements(punit, &best_act, &best_target,
-                                              &best_tile, &path, state);
+    best_impr = settler_evaluate_improvements(punit, &best_act, &best_tile, 
+                                              &path, state);
     UNIT_LOG(LOG_DEBUG, punit, "impr want %d", best_impr);
     if (path) {
       completion_time = pf_path_last_position(path)->turn;
@@ -1051,7 +1049,7 @@ BUILD_CITY:
     TIMING_LOG(AIT_WORKERS, TIMER_STOP);
   }
 
-  if (unit_has_type_flag(punit, UTYF_CITIES)) {
+  if (unit_has_type_flag(punit, F_CITIES)) {
     struct cityresult *result;
 
     /* may use a boat: */
@@ -1093,7 +1091,7 @@ BUILD_CITY:
       adv_unit_new_task(punit, AUT_AUTO_SETTLER, best_tile);
     } else {
       UNIT_LOG(LOG_DEBUG, punit, "cannot find work");
-      dai_unit_new_task(punit, AIUNIT_NONE, NULL);
+      ai_unit_new_task(punit, AIUNIT_NONE, NULL);
       goto CLEANUP;
     }
   } else {
@@ -1102,7 +1100,7 @@ BUILD_CITY:
   }
 
   auto_settler_setup_work(pplayer, punit, state, 0, path,
-                          best_tile, best_act, &best_target,
+                          best_tile, best_act,
                           completion_time);
 
 CLEANUP:
@@ -1117,7 +1115,7 @@ CLEANUP:
 **************************************************************************/
 void dai_auto_settler_reset(struct player *pplayer)
 {
-  struct ai_plr *ai = dai_plr_data_get(pplayer);
+  struct ai_plr *ai = ai_plr_data_get(pplayer);
 
   fc_assert_ret(ai != NULL);
   fc_assert_ret(ai->settler != NULL);
@@ -1141,7 +1139,7 @@ void dai_auto_settler_reset(struct player *pplayer)
 /**************************************************************************
   Deinitialize ai settler engine.
 **************************************************************************/
-void dai_auto_settler_free(struct ai_plr *ai)
+void ai_auto_settler_free(struct ai_plr *ai)
 {
   fc_assert_ret(ai != NULL);
 
@@ -1157,7 +1155,7 @@ void dai_auto_settler_free(struct ai_plr *ai)
 /**************************************************************************
   Build a city and initialize AI infrastructure cache.
 **************************************************************************/
-static bool dai_do_build_city(struct player *pplayer, struct unit *punit)
+static bool ai_do_build_city(struct player *pplayer, struct unit *punit)
 {
   struct tile *ptile = unit_tile(punit);
   struct city *pcity;
@@ -1166,7 +1164,7 @@ static bool dai_do_build_city(struct player *pplayer, struct unit *punit)
   unit_activity_handling(punit, ACTIVITY_IDLE);
 
   /* Free city reservations */
-  dai_unit_new_task(punit, AIUNIT_NONE, NULL);
+  ai_unit_new_task(punit, AIUNIT_NONE, NULL);
 
   pcity = tile_city(ptile);
   if (pcity) {
@@ -1192,7 +1190,7 @@ static bool dai_do_build_city(struct player *pplayer, struct unit *punit)
   initialize_infrastructure_cache(pplayer);
 
   /* Init ai.choice. Handling ferryboats might use it. */
-  init_choice(&def_ai_city_data(pcity, default_ai_get_self())->choice);
+  init_choice(&def_ai_city_data(pcity)->choice);
 
   return TRUE;
 }
@@ -1206,10 +1204,10 @@ void contemplate_new_city(struct city *pcity)
   struct unit *virtualunit;
   struct tile *pcenter = city_tile(pcity);
   struct player *pplayer = city_owner(pcity);
-  struct unit_type *unit_type = best_role_unit(pcity, UTYF_CITIES); 
+  struct unit_type *unit_type = best_role_unit(pcity, F_CITIES); 
 
   if (unit_type == NULL) {
-    log_debug("No UTYF_CITIES role unit available");
+    log_debug("No F_CITIES role unit available");
     return;
   }
 
@@ -1221,8 +1219,8 @@ void contemplate_new_city(struct city *pcity)
 
   if (pplayer->ai_controlled) {
     struct cityresult *result;
-    bool is_coastal = is_terrain_class_near_tile(pcenter, TC_OCEAN);
-    struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+    bool is_coastal = is_ocean_near_tile(pcenter);
+    struct ai_city *city_data = def_ai_city_data(pcity);
 
     result = find_best_city_placement(virtualunit, is_coastal, is_coastal);
 

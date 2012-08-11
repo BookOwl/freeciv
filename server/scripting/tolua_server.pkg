@@ -98,10 +98,6 @@ module edit {
   void api_edit_create_base
     @ create_base (lua_State *L, Tile *ptile, const char *name,
                    Player *pplayer);
-  void api_edit_create_road
-    @ create_road (lua_State *L, Tile *ptile, const char *name);
-  void api_edit_tile_set_label
-    @ tile_set_label (lua_State *L, Tile *ptile, const char *label);
   Player *api_edit_create_player
     @ create_player(lua_State *L, const char *username, Nation_Type *nation,
                     const char *ai);
@@ -227,20 +223,12 @@ function Tile:create_base(name, player)
   edit.create_base(self, name, player)
 end
 
-function Tile:create_road(name)
-  edit.create_road(self, name)
-end
-
 function Tile:unleash_barbarians()
   return edit.unleash_barbarians(self)
 end
 
 function Tile:place_partisans(player, count, sq_radius)
   edit.place_partisans(self, player, count, sq_radius)
-end
-
-function Tile:set_label(label)
-  edit.tile_set_label(self, label)
 end
 
 $]

@@ -14,7 +14,7 @@
 
 [datafile]
 description="Experimental game rules for Freeciv"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.4-ruleset"
 
 [about]
 ; Ruleset name
@@ -207,50 +207,6 @@ skip_year_0 = 1
 positive_label = _("CE")
 ; /* TRANS: year label (Before Common Era) */
 negative_label = _("BCE")
-
-; /* <-- avoid gettext warnings
-;
-; Disaster types:
-;
-; name                    = translatable name as seen by user
-; reqs                    = requirements for disaster to happen (see effects.ruleset
-;                           and README.effects for help on requirements)
-; nreqs                   = requirements to avoid disaster
-; frequency               = how likely disaster is to occur
-; effects
-;   - "DestroyBuilding"   = Random building is destroyed
-;   - "ReducePopulation"  = Reduce city size by one
-;   - "EmptyFoodStock"    = Remove all food from food stock
-;   - "EmptyProdStock"    = Destroy current production
-;   - "Pollution"         = One tile surrounding city polluted
-;   - "Fallout"           = One tile surrounding city polluted with fallout
-;
-; */ <-- avoid gettext warnings
-
-[disaster_earthquake]
-name           = _("Earthquake")
-frequency      = 10
-effects        = "DestroyBuilding"
-
-[disaster_fire]
-name           = _("Fire")
-frequency      = 10
-effects        = "DestroyBuilding"
-
-;
-; Trade settings
-;
-; For each of the trade route types; "National", "NationalIC", "IN", "INIC":
-; "pct" - Trade income %. If this is 0, trade route cannot be established at all
-;
-[trade]
-settings =
-  { "type",       "pct"
-    "National",   100
-    "NationalIC", 200
-    "IN",         200
-    "INIC",       400
-  }
 
 [playercolors]
 background.r = 86

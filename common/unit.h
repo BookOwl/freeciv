@@ -60,6 +60,12 @@ enum diplomat_actions {
   DIPLOMAT_ANY_ACTION   /* leave this one last */
 };
 
+enum goto_move_restriction {
+  GOTO_MOVE_ANY,
+  GOTO_MOVE_CARDINAL_ONLY, /* No diagonal moves.  */
+  GOTO_MOVE_STRAIGHTEST
+};
+
 enum goto_route_type {
   ROUTE_GOTO, ROUTE_PATROL
 };
@@ -114,7 +120,6 @@ struct unit_order {
   enum unit_orders order;
   enum unit_activity activity;  /* Only valid for ORDER_ACTIVITY. */
   Base_type_id base;            /* Only valid for activity ACTIVITY_BASE */
-  Road_type_id road;            /* Only valid for activity ACTIVITY_GEN_ROAD */
   enum direction8 dir;          /* Only valid for ORDER_MOVE. */
 };
 
@@ -145,13 +150,15 @@ struct unit {
    * fractional values in some cases). */
   int activity_count;
 
-  struct act_tgt activity_target;
+  enum tile_special_type activity_target;
+  Base_type_id           activity_base;
 
   /* Previous activity, so it can be resumed without loss of progress
    * if the user changes their mind during a turn. */
   enum unit_activity changed_from;
   int changed_from_count;
-  struct act_tgt changed_from_target;
+  enum tile_special_type changed_from_target;
+  Base_type_id           changed_from_base;
 
   bool ai_controlled; /* 0: not automated; 1: automated */
   bool moved;
@@ -274,47 +281,38 @@ bool can_unit_change_homecity_to(const struct unit *punit,
 				 const struct city *pcity);
 bool can_unit_change_homecity(const struct unit *punit);
 const char *get_activity_text(enum unit_activity activity);
-bool cmp_act_tgt(struct act_tgt *act1, struct act_tgt *act2);
 bool can_unit_continue_current_activity(struct unit *punit);
 bool can_unit_do_activity(const struct unit *punit,
 			  enum unit_activity activity);
 bool can_unit_do_activity_targeted(const struct unit *punit,
 				   enum unit_activity activity,
-                                   struct act_tgt *target);
+				   enum tile_special_type target,
+                                   Base_type_id base);
 bool can_unit_do_activity_targeted_at(const struct unit *punit,
 				      enum unit_activity activity,
-				      struct act_tgt *target,
-				      const struct tile *ptile);
+				      enum tile_special_type target,
+				      const struct tile *ptile,
+                                      Base_type_id base);
 bool can_unit_do_activity_base(const struct unit *punit,
                                Base_type_id base);
-bool can_unit_do_activity_road(const struct unit *punit,
-                               Road_type_id road);
 void set_unit_activity(struct unit *punit, enum unit_activity new_activity);
 void set_unit_activity_targeted(struct unit *punit,
 				enum unit_activity new_activity,
-                                struct act_tgt *new_target);
+				enum tile_special_type new_target,
+                                Base_type_id base);
 void set_unit_activity_base(struct unit *punit,
                             Base_type_id base);
-void set_unit_activity_road(struct unit *punit,
-                            Road_type_id road);
 int get_activity_rate(const struct unit *punit);
 int get_activity_rate_this_turn(const struct unit *punit);
 int get_turns_for_activity_at(const struct unit *punit,
 			      enum unit_activity activity,
 			      const struct tile *ptile);
-int get_turns_for_road_at(const struct unit *punit,
-			  const struct road_type *proad,
-			  const struct tile *ptile);
-int get_turns_for_base_at(const struct unit *punit,
-                          const struct base_type *pbase,
-                          const struct tile *ptile);
 bool activity_requires_target(enum unit_activity activity);
 bool can_unit_do_autosettlers(const struct unit *punit); 
 bool is_unit_activity_on_tile(enum unit_activity activity,
 			      const struct tile *ptile);
 bv_special get_unit_tile_pillage_set(const struct tile *ptile);
 bv_bases get_unit_tile_pillage_base_set(const struct tile *ptile);
-bv_roads get_unit_tile_pillage_road_set(const struct tile *ptile);
 bool is_attack_unit(const struct unit *punit);
 bool is_military_unit(const struct unit *punit);           /* !set !dip !cara */
 bool is_diplomat_unit(const struct unit *punit);

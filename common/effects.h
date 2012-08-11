@@ -224,12 +224,8 @@ struct requirement;
 #define SPECENUM_VALUE83NAME "City_Image"
 #define SPECENUM_VALUE84 EFT_IRRIG_POSSIBLE
 #define SPECENUM_VALUE84NAME "Irrig_Possible"
-#define SPECENUM_VALUE85 EFT_MAX_TRADE_ROUTES
-#define SPECENUM_VALUE85NAME "Max_Trade_Routes"
-#define SPECENUM_VALUE86 EFT_GOV_CENTER
-#define SPECENUM_VALUE86NAME "Gov_Center"
 /* keep this last */
-#define SPECENUM_VALUE87 EFT_LAST
+#define SPECENUM_VALUE85 EFT_LAST
 #include "specenum_gen.h"
 
 /* An effect is provided by a source.  If the source is present, and the

@@ -77,7 +77,6 @@
 #include "packets.h"
 
 /* server */
-#include "aiiface.h"
 #include "auth.h"
 #include "connecthand.h"
 #include "console.h"
@@ -618,7 +617,6 @@ enum server_events server_sniff_all_input(void)
 
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (S_S_RUNNING == server_state() && game.info.timeout == -1) {
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
       return S_E_END_OF_TURN_TIMEOUT;
     }
@@ -671,7 +669,6 @@ enum server_events server_sniff_all_input(void)
 
     if (fc_select(max_desc + 1, &readfs, &writefs, &exceptfs, &tv) == 0) {
       /* timeout */
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
       if (game.info.timeout > 0
 	  && S_S_RUNNING == server_state()
@@ -862,8 +859,6 @@ enum server_events server_sniff_all_input(void)
     break;
   }
   con_prompt_off();
-
-  call_ai_refresh();
 
   if (game.info.timeout > 0
       && S_S_RUNNING == server_state()

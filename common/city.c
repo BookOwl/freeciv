@@ -37,7 +37,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "specialist.h"
-#include "traderoutes.h"
 #include "unit.h"
 
 /* aicore */
@@ -721,7 +720,7 @@ bool city_production_build_units(const struct city *pcity,
   }
 
   utype = pcity->production.value.utype;
-  if (utype_pop_value(utype) != 0 || utype_has_flag(utype, UTYF_UNIQUE)) {
+  if (utype_pop_value(utype) != 0 || utype_has_flag(utype, F_UNIQUE)) {
     /* unit with population cost or unique unit means that only one unit can
      * be build */
     (*num_units)++;
@@ -1231,6 +1230,9 @@ int city_tile_output(const struct city *pcity, const struct tile *ptile,
     if (tile_has_special(ptile, S_RIVER) && !is_ocean_tile(ptile)) {
       prod += terrain_control.river_trade_incr;
     }
+    if (tile_has_special(ptile, S_ROAD)) {
+      prod += pterrain->road_trade_incr;
+    }
     break;
   case O_GOLD:
   case O_SCIENCE:
@@ -1239,8 +1241,9 @@ int city_tile_output(const struct city *pcity, const struct tile *ptile,
     break;
   }
 
-  prod += tile_roads_output_incr(ptile, otype) * pterrain->road_output_incr_pct[otype] / 100;
-  prod += (prod * tile_roads_output_bonus(ptile, otype) / 100);
+  if (tile_has_special(ptile, S_RAILROAD)) {
+    prod += (prod * terrain_control.rail_tile_bonus[otype]) / 100;
+  }
 
   if (pcity) {
     const struct output_type *output = &output_types[otype];
@@ -1428,9 +1431,7 @@ bool can_cities_trade(const struct city *pc1, const struct city *pc2)
   return (pc1 && pc2 && pc1 != pc2
           && (city_owner(pc1) != city_owner(pc2)
               || map_distance(pc1->tile, pc2->tile)
-                 >= game.info.trademindist)
-          && (trade_route_type_trade_pct(cities_trade_route_type(pc1, pc2))
-              > 0));
+                 >= game.info.trademindist));
 }
 
 /**************************************************************************
@@ -1448,7 +1449,7 @@ int get_city_min_trade_route(const struct city *pcity, int *slot)
     *slot = 0;
   }
   /* find min */
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     if (pcity->trade[i] && (!found || value > pcity->trade_value[i])) {
       if (slot) {
 	*slot = i;
@@ -1477,7 +1478,7 @@ bool can_establish_trade_route(const struct city *pc1, const struct city *pc2)
     return FALSE;
   }
     
-  if (city_num_trade_routes(pc1) == max_trade_routes(pc1)) {
+  if (city_num_trade_routes(pc1) == NUM_TRADE_ROUTES) {
     trade = trade_between_cities(pc1, pc2);
     /* can we replace trade route? */
     if (get_city_min_trade_route(pc1, NULL) >= trade) {
@@ -1485,7 +1486,7 @@ bool can_establish_trade_route(const struct city *pc1, const struct city *pc2)
     }
   }
   
-  if (city_num_trade_routes(pc2) == max_trade_routes(pc2)) {
+  if (city_num_trade_routes(pc2) == NUM_TRADE_ROUTES) {
     if (trade == -1) {
       trade = trade_between_cities(pc1, pc2);
     }
@@ -1508,13 +1509,16 @@ int trade_between_cities(const struct city *pc1, const struct city *pc2)
 
   if (NULL != pc1 && NULL != pc1->tile
       && NULL != pc2 && NULL != pc2->tile) {
-
     bonus = real_map_distance(pc1->tile, pc2->tile)
             + city_size_get(pc1) + city_size_get(pc2);
 
-    bonus = bonus * trade_route_type_trade_pct(cities_trade_route_type(pc1, pc2)) / 100;
-
-    bonus /= 12;
+    if (tile_continent(pc1->tile) != tile_continent(pc2->tile)) {
+      bonus *= 2;
+    }
+    if (city_owner(pc1) == city_owner(pc2)) {
+      bonus /= 2;
+    }
+    bonus /= 6;
   }
 
   return bonus;
@@ -1527,11 +1531,8 @@ int city_num_trade_routes(const struct city *pcity)
 {
   int i, n = 0;
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
-    if (pcity->trade[i] != 0) {
-      n++;
-    }
-  }
+  for (i = 0; i < NUM_TRADE_ROUTES; i++)
+    if(pcity->trade[i] != 0) n++;
   
   return n;
 }
@@ -1570,12 +1571,14 @@ int get_caravan_enter_city_trade_bonus(const struct city *pc1,
 **************************************************************************/
 bool have_cities_trade_route(const struct city *pc1, const struct city *pc2)
 {
-  trade_routes_iterate(pc1, route_to) {
-    if (route_to->id == pc2->id) {
+  int i;
+  
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    if (pc1->trade[i] == pc2->id || pc2->trade[i] == pc1->id) {
+      /* Looks like they do have a trade route. */
       return TRUE;
     }
-  } trade_routes_iterate_end;
-
+  }
   return FALSE;
 }
 
@@ -1585,15 +1588,7 @@ bool have_cities_trade_route(const struct city *pc1, const struct city *pc2)
 **************************************************************************/
 bool is_capital(const struct city *pcity)
 {
-  return (get_city_bonus(pcity, EFT_CAPITAL_CITY) > 0);
-}
-
-/**************************************************************************
-  Return TRUE iff this city is governmental center.
-**************************************************************************/
-bool is_gov_center(const struct city *pcity)
-{
-  return (get_city_bonus(pcity, EFT_GOV_CENTER) > 0);
+  return (get_city_bonus(pcity, EFT_CAPITAL_CITY) != 0);
 }
 
 /**************************************************************************
@@ -2628,15 +2623,18 @@ int city_pollution(const struct city *pcity, int shield_total)
 static int get_trade_illness(const struct city *pcity)
 {
   float illness_trade = 0.0;
+  int i;
 
-  trade_routes_iterate(pcity, trade_city) {
-    if (trade_city->turn_plague != -1
+  for (i = 0 ; i < NUM_TRADE_ROUTES ; i++) {
+    struct city *trade_city = game_city_by_number(pcity->trade[i]);
+    if (trade_city != NULL
+        && trade_city->turn_plague != -1
         && game.info.turn - trade_city->turn_plague < 5) {
       illness_trade += (float)game.info.illness_trade_infection
                        * sqrt(1.0 * city_size_get(pcity)
                               * city_size_get(trade_city)) / 100.0;
     }
-  } trade_routes_iterate_end;
+  }
 
   return (int)illness_trade;
 }
@@ -2758,7 +2756,7 @@ static inline void set_city_production(struct city *pcity)
   } output_type_iterate_end;
 
   /* Add on special extra incomes: trade routes and tithes. */
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     pcity->trade_value[i] =
 	trade_between_cities(pcity, game_city_by_number(pcity->trade[i]));
     pcity->prod[O_TRADE] += pcity->trade_value[i];
@@ -2975,32 +2973,13 @@ int city_waste(const struct city *pcity, Output_type_id otype, int total)
   }
 
   if (waste_by_dist > 0) {
-    const struct city *gov_center = NULL;
-    int min_dist = FC_INFINITY;
+    const struct city *capital = player_capital(city_owner(pcity));
 
-    /* Check the special case that city itself is gov center
-     * before expensive iteration through all cities. */
-    if (is_gov_center(pcity)) {
-      gov_center = pcity;
-      min_dist = 0;
+    if (!capital) {
+      return total; /* no capital - no income */
     } else {
-      city_list_iterate(city_owner(pcity)->cities, gc) {
-        /* Do not recheck current city */
-        if (gc != pcity && is_gov_center(gc)) {
-          int dist = real_map_distance(gc->tile, pcity->tile);
-
-          if (dist < min_dist) {
-            gov_center = gc;
-            min_dist = dist;
-          }
-        }
-      } city_list_iterate_end;
-    }
-
-    if (gov_center == NULL) {
-      return total; /* no gov center - no income */
-    } else {
-      waste_level += waste_by_dist * min_dist;
+      waste_level += waste_by_dist
+                     * real_map_distance(capital->tile, pcity->tile);
     }
   }
 
@@ -3288,7 +3267,7 @@ bool is_free_worked(const struct city *pcity, const struct tile *ptile)
 **************************************************************************/
 enum citytile_type citytile_by_rule_name(const char *name)
 {
-  if (!fc_strcasecmp(name, "Center")) {
+  if (!fc_strcasecmp(name, "center")) {
     return CITYT_CENTER;
   }
 

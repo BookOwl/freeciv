@@ -73,13 +73,31 @@ void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py)
 **************************************************************************/
 GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text)
 {
-  GtkWidget *button;
+  GtkWidget *label;
   GtkWidget *image;
+  GtkWidget *hbox;
+  GtkWidget *align;
+  GtkWidget *button;
   
-  button = gtk_button_new_with_mnemonic(label_text);
-  image = gtk_image_new_from_stock(stock, GTK_ICON_SIZE_BUTTON);
-  gtk_button_set_image(GTK_BUTTON(button), image);
+  button = gtk_button_new();
 
+  label = gtk_label_new_with_mnemonic(label_text);
+  gtk_label_set_mnemonic_widget(GTK_LABEL(label), button);
+  g_object_set_data(G_OBJECT(button), "label", label);
+
+  image = gtk_image_new_from_stock(stock, GTK_ICON_SIZE_BUTTON);
+  g_object_set_data(G_OBJECT(button), "image", image);
+
+  hbox = gtk_hbox_new(FALSE, 2);
+
+  align = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
+
+  gtk_box_pack_start(GTK_BOX (hbox), image, FALSE, FALSE, 0);
+  gtk_box_pack_end(GTK_BOX (hbox), label, FALSE, FALSE, 0);
+
+  gtk_container_add(GTK_CONTAINER(button), align);
+  gtk_container_add(GTK_CONTAINER(align), hbox);
+  gtk_widget_show_all(align);
   return button;
 }
 
@@ -89,7 +107,10 @@ GtkWidget *gtk_stockbutton_new(const gchar *stock, const gchar *label_text)
 **************************************************************************/
 void gtk_stockbutton_set_label(GtkWidget *button, const gchar *label_text)
 {
-  gtk_button_set_label(GTK_BUTTON(button), label_text);
+  GtkWidget *label;
+
+  label = g_object_get_data(G_OBJECT(button), "label");
+  gtk_label_set_markup_with_mnemonic(GTK_LABEL(label), label_text);
 }
 
 /**************************************************************************
@@ -574,7 +595,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
     {
       GtkWidget *hbox, *label, *image, *button, *event_box;
       gint w, h;
-      gchar *buf;
+      char buf[256];
 
       gtk_icon_size_lookup_for_settings(
         gtk_settings_get_for_screen(gtk_widget_get_screen(vbox)),
@@ -592,9 +613,8 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
       g_signal_connect_swapped(button, "clicked",
 	  G_CALLBACK(gui_dialog_delete_tab_handler), dlg);
 
-      buf = g_strdup_printf(_("Close Tab:\n%s"), _("Ctrl+W"));
+      fc_snprintf(buf, sizeof(buf), _("Close Tab:\n%s"), _("Ctrl+W"));
       gtk_widget_set_tooltip_text(button, buf);
-      g_free(buf);
 
       image = gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
       gtk_misc_set_padding(GTK_MISC(image), 0, 0);
@@ -603,7 +623,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
       gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
 
       gtk_widget_show_all(hbox);
-
+      
       event_box = gtk_event_box_new();
       gtk_event_box_set_visible_window(GTK_EVENT_BOX(event_box), FALSE);
       gtk_container_add(GTK_CONTAINER(event_box), hbox);
@@ -1028,7 +1048,7 @@ void gui_update_font_full(const char *font_name, const char *font_value,
 
   gui_update_font(font_name, font_value);
 
-  screen = gtk_widget_get_screen(toplevel);
+  screen = gdk_screen_get_default();
   settings = gtk_settings_get_for_screen(screen);
 
   fc_snprintf(buf, sizeof(buf), "Freeciv*.%s", font_name);

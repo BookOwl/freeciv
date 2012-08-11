@@ -26,7 +26,6 @@
 #include "featured_text.h"
 #include "game.h"
 #include "map.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client/include */
@@ -150,7 +149,7 @@ void refresh_unit_mapcanvas(struct unit *punit, struct tile *ptile,
 {
   if (full_refresh && draw_native) {
     queue_mapview_update(UPDATE_MAP_CANVAS_VISIBLE);
-  } else if (full_refresh && unit_has_type_flag(punit, UTYF_CITIES)) {
+  } else if (full_refresh && unit_has_type_flag(punit, F_CITIES)) {
     queue_mapview_tile_update(ptile, TILE_UPDATE_CITYMAP);
   } else {
     queue_mapview_tile_update(ptile, TILE_UPDATE_UNIT);
@@ -1231,14 +1230,21 @@ static void draw_trade_route_line(const struct tile *ptile1,
 **************************************************************************/
 static void draw_trade_routes_for_city(const struct city *pcity_src)
 {
+  int i;
+  const struct city *pcity_dest;
+
   if (!pcity_src) {
     return;
   }
 
-  trade_routes_iterate(pcity_src, pcity_dest) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    pcity_dest = game_city_by_number(pcity_src->trade[i]);
+    if (!pcity_dest) {
+      continue;
+    }
     draw_trade_route_line(city_tile(pcity_src), city_tile(pcity_dest),
                           COLOR_MAPVIEW_TRADE_ROUTE_LINE);
-  } trade_routes_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -2135,7 +2141,7 @@ void move_unit_map_canvas(struct unit *punit,
   }
 
   if (unit_is_in_focus(punit) && hover_state != HOVER_NONE) {
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, NULL, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
     update_unit_info_label(get_units_in_focus());
   }
 
@@ -2278,7 +2284,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
     unit_list_iterate(tile1->units, psettler) {
       if ((NULL == client.conn.playing
            || unit_owner(psettler) == client.conn.playing)
-          && unit_has_type_flag(psettler, UTYF_CITIES)
+          && unit_has_type_flag(psettler, F_CITIES)
           && city_can_be_built_here(unit_tile(psettler), psettler)) {
         if (!closest_settler) {
           closest_settler = psettler;
@@ -2367,7 +2373,6 @@ void get_city_mapview_trade_routes(struct city *pcity,
                                    enum color_std *pcolor)
 {
   int num_trade_routes = 0, i;
-  int max_routes;
 
   if (!trade_routes_buffer || trade_routes_buffer_len <= 0) {
     return;
@@ -2381,7 +2386,7 @@ void get_city_mapview_trade_routes(struct city *pcity,
     return;
   }
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     if (pcity->trade[i] <= 0) {
       /* NB: pcity->trade_value[i] == 0 is a valid case. */
       continue;
@@ -2389,13 +2394,11 @@ void get_city_mapview_trade_routes(struct city *pcity,
     num_trade_routes++;
   }
 
-  max_routes = max_trade_routes(pcity);
-
   fc_snprintf(trade_routes_buffer, trade_routes_buffer_len,
-              "%d/%d", num_trade_routes, max_routes);
+              "%d/%d", num_trade_routes, NUM_TRADE_ROUTES);
 
   if (pcolor) {
-    if (num_trade_routes == max_routes) {
+    if (num_trade_routes == NUM_TRADE_ROUTES) {
       *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_ALL_BUILT;
     } else if (num_trade_routes == 0) {
       *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_NO_BUILT;

@@ -2,16 +2,9 @@
 
 SUBDIRS = advisors generator scripting
 
-if FREECIV_WEB
-srvbin = freeciv-web
-else
-srvbin = freeciv-server
-endif
-
-bin_PROGRAMS = $(srvbin)
+bin_PROGRAMS = freeciv-server
 lib_LTLIBRARIES = libfreeciv-srv.la
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/ai \
 	-I$(top_srcdir)/ai/default \
 	-I$(top_srcdir)/common \
 	-I$(top_srcdir)/common/aicore \
@@ -28,7 +21,7 @@ if MINGW32
 SERVERICON=../win32/servericon.o
 endif
 
-exe_sources = \
+freeciv_server_SOURCES = \
 		civserver.c	\
 		civserver.h
 
@@ -79,8 +72,6 @@ libfreeciv_srv_la_SOURCES = \
 		plrhand.h	\
 		report.c	\
 		report.h	\
-		rssanity.c	\
-		rssanity.h	\
 		ruleset.c	\
 		ruleset.h	\
 		sanitycheck.c	\
@@ -136,7 +127,6 @@ MAINTAINERCLEANFILES = \
 
 srvlibs = \
  $(da_libs) \
- $(top_builddir)/ai/libaicommon.la \
  $(top_builddir)/server/advisors/libadvisors.la \
  $(top_builddir)/server/generator/libgenerator.la \
  $(top_builddir)/server/scripting/libscripting_fcdb.la \
@@ -148,14 +138,14 @@ libfreeciv_srv_la_DEPENDENCIES = \
 libfreeciv_srv_la_LIBADD = \
  $(srvlibs)
 
-exe_dependencies = \
+freeciv_server_DEPENDENCIES = \
  $(top_builddir)/common/libfreeciv.la \
  ./libfreeciv-srv.la \
  $(LUA_AS_DEPENDENCY) $(TOLUA_AS_DEPENDENCY) $(LUASQL_AS_DEPENDENCY)
 
-exe_ldflags = $(GGZDMOD_LDFLAGS)
+freeciv_server_LDFLAGS = $(GGZDMOD_LDFLAGS)
 
-exe_ldadd = \
+freeciv_server_LDADD = \
  ./libfreeciv-srv.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) \
@@ -163,18 +153,6 @@ exe_ldadd = \
  $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS) \
  $(FCDB_MYSQL_LIBS) $(FCDB_POSTGRES_LIBS) $(FCDB_SQLITE3_LIBS) \
  $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
-
-if FREECIV_WEB
-freeciv_web_SOURCES = $(exe_sources)
-freeciv_web_DEPENDENCIES = $(exe_dependencies)
-freeciv_web_LDFLAGS = $(exe_ldflags)
-freeciv_web_LDADD = $(exe_ldadd)
-else
-freeciv_server_SOURCES = $(exe_sources)
-freeciv_server_DEPENDENCIES = $(exe_dependencies)
-freeciv_server_LDFLAGS = $(exe_ldflags)
-freeciv_server_LDADD = $(exe_ldadd)
-endif
 
 desktopfiledir = $(prefix)/share/applications
 desktopfile_DATA = \

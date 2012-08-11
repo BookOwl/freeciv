@@ -34,8 +34,7 @@ this file.
 
 - Tracking of the nationality of citizens is enabled. At the moment, this
   affects the cost of inciting a city to revolt and the chance of
-  migration. Over time, citizens will slowly be assimilated into their
-  host state.
+  migration.
 
 - After The Corporation is researched, the upkeep for most modern military
   units (Riflemen onwards) is changed from shields to gold, and cities
@@ -95,7 +94,7 @@ this file.
 To play a game with the experimental rules, start the server with:
        ./fcser -r data/experimental.serv
 or a single player game with
-       ./freeciv-gtk3 -r data/experimental.serv
+       ./freeciv-gtk2 -r data/experimental.serv
 (and any other command-line arguments you normally use; depending on
 how you have Freeciv installed you may have to give the installed
 data directory path instead of "data")

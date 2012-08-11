@@ -11,7 +11,7 @@
 
 [datafile]
 description="Civ2 unit_type data for Freeciv (approximate)"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.4-ruleset"
 
 [flags]
 ; Names for custom unit type flags.
@@ -77,6 +77,7 @@ veteran_move_bonus = 0, 0
 ; "DamageSlows"   = Damages units are slowed down
 ; "CanOccupyCity" = Military units of this class can occupy enemy cities
 ; "Missile"       = Unit is destroyed when it attacks
+; "RoadNative"    = Road tiles are always considered native terrain
 ; "RiverNative"   = River tiles are always considered native terrain
 ; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
 ; "Unreachable"   = Unit can be attacked only by units explicitly listing this class as target
@@ -88,12 +89,6 @@ veteran_move_bonus = 0, 0
 ; "CanPillage"    = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
-; "AttackNonNative"   = Unit can attack units on non-native tiles. Unit type flag
-;                       "Only_Native_Attack" can override this
-; "AttFromNonNative"  = Unit can launch attach from non-native tile (against native one)
-;                       This applies for both attacking from transport or cities. If only
-;                       some unit types of the class should get this property, use type flag
-;                       "Marines"
 ;
 ; */ <-- avoid gettext warnings
 
@@ -119,7 +114,7 @@ flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
 name          = _("?unitclass:Sea")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "DamageSlows", "AttackNonNative", "AttFromNonNative"
+flags         = "DamageSlows"
 
 [unitclass_heli]
 ; /* TRANS: Unit class: used adjectivally */
@@ -167,7 +162,6 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ;                 "None" => available from start
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; convert_to    = can be converted to another type of unit by name
-; convert_time  = time it takes to convert to another unit type
 ; class         = One of the classes listed above
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
@@ -1599,7 +1593,7 @@ uk_food       = 0
 uk_gold       = 0
 cargo         = "Missile"
 flags         = "Partial_Invis", "BadCityDefender",
-	        "Only_Native_Attack"
+	        "No_Land_Attack"
 roles         = "Hunter"
 helptext      = _("\
 Traveling under the surface of the ocean, Submarines have\

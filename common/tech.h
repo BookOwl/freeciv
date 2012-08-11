@@ -78,18 +78,18 @@ typedef int Tech_type_id;
 /* "Settler" unit types can build bridges over rivers */
 #define SPECENUM_VALUE1 TF_BRIDGE
 #define SPECENUM_VALUE1NAME "Bridge"
+/* "Settler" unit types can build rail roads */
+#define SPECENUM_VALUE2 TF_RAILROAD
+#define SPECENUM_VALUE2NAME "Railroad"
 /* Increase the pollution factor created by population by one */
-#define SPECENUM_VALUE2 TF_POPULATION_POLLUTION_INC
-#define SPECENUM_VALUE2NAME "Population_Pollution_Inc"
+#define SPECENUM_VALUE3 TF_POPULATION_POLLUTION_INC
+#define SPECENUM_VALUE3NAME "Population_Pollution_Inc"
 /* "Settler" unit types can build farmland */
-#define SPECENUM_VALUE3 TF_FARMLAND
-#define SPECENUM_VALUE3NAME "Farmland"
+#define SPECENUM_VALUE4 TF_FARMLAND
+#define SPECENUM_VALUE4NAME "Farmland"
 /* Player can build air units */
-#define SPECENUM_VALUE4 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE4NAME "Build_Airborne"
-/* Player can claim ocean tiles non-adjacent to border source */ 
-#define SPECENUM_VALUE5 TF_CLAIM_OCEAN
-#define SPECENUM_VALUE5NAME "Claim_Ocean"
+#define SPECENUM_VALUE5 TF_BUILD_AIRBORNE
+#define SPECENUM_VALUE5NAME "Build_Airborne"
 /* Keep this last. */
 #define SPECENUM_COUNT TF_COUNT
 #include "specenum_gen.h"

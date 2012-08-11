@@ -189,7 +189,7 @@ static bool maybe_become_veteran_real(struct unit *punit, bool settler)
   fc_assert_ret_val(vlevel != NULL, FALSE);
 
   if (punit->veteran + 1 >= vsystem->levels
-      || unit_has_type_flag(punit, UTYF_NO_VETERAN)) {
+      || unit_has_type_flag(punit, F_NO_VETERAN)) {
     return FALSE;
   } else if (!settler) {
     int mod = 100 + get_unittype_bonus(unit_owner(punit), unit_tile(punit),
@@ -199,7 +199,7 @@ static bool maybe_become_veteran_real(struct unit *punit, bool settler)
      * For example with a base chance of 50% for green units and a modifier
      * of +50% the end chance is 75%. */
     chance = vlevel->raise_chance * mod / 100;
-  } else if (settler && unit_has_type_flag(punit, UTYF_SETTLERS)) {
+  } else if (settler && unit_has_type_flag(punit, F_SETTLERS)) {
     chance = vlevel->work_raise_chance;
   } else {
     /* No battle and no work done. */
@@ -504,7 +504,7 @@ static void unit_restore_hitpoints(struct unit *punit)
   punit->hp += get_unit_bonus(punit, EFT_UNIT_RECOVER);
 
   if (!punit->homecity && 0 < game.server.killunhomed
-      && !unit_has_type_flag(punit, UTYF_GAMELOSS)) {
+      && !unit_has_type_flag(punit, F_GAMELOSS)) {
     /* Hit point loss of units without homecity; at least 1 hp! */
     /* Gameloss units are immune to this effect. */
     int hp_loss = MAX(unit_type(punit)->hp * game.server.killunhomed / 100,
@@ -610,14 +610,16 @@ static int total_activity(struct tile *ptile, enum unit_activity act)
   for a given task and target.
 **************************************************************************/
 static int total_activity_targeted(struct tile *ptile, enum unit_activity act,
-                                   struct act_tgt *tgt)
+                                   enum tile_special_type tgt,
+                                   Base_type_id base)
 {
   int total = 0;
 
+  fc_assert(!(tgt == S_LAST && base == BASE_NONE));
   unit_list_iterate (ptile->units, punit)
-    if (punit->activity == act && cmp_act_tgt(&punit->activity_target, tgt)) {
+    if ((punit->activity == act) && (punit->activity_target == tgt)
+        && (tgt != S_LAST || punit->activity_base == base))
       total += punit->activity_count;
-    }
   unit_list_iterate_end;
   return total;
 }
@@ -632,27 +634,10 @@ static int total_activity_base(struct tile *ptile, Base_type_id base)
 
   unit_list_iterate (ptile->units, punit)
     if (punit->activity == ACTIVITY_BASE
-        && punit->activity_target.obj.base == base) {
+        && punit->activity_base == base) {
       total += punit->activity_count;
     }
   unit_list_iterate_end;
-  return total;
-}
-
-/**************************************************************************
-  Calculate the total amount of road building activity performed by all
-  units on a tile for a given road.
-**************************************************************************/
-static int total_activity_road(struct tile *ptile, Road_type_id road)
-{
-  int total = 0;
-
-  unit_list_iterate (ptile->units, punit) {
-    if (punit->activity == ACTIVITY_GEN_ROAD
-        && punit->activity_target.obj.road == road) {
-      total += punit->activity_count;
-    }
-  } unit_list_iterate_end;
   return total;
 }
 
@@ -693,31 +678,6 @@ void notify_unit_experience(struct unit *punit)
 }
 
 /**************************************************************************
-  Convert a single unit to another type.
-**************************************************************************/
-static void unit_convert(struct unit *punit)
-{
-  struct unit_type *to_type, *from_type;
-
-  from_type = unit_type(punit);
-  to_type = from_type->converted_to;
-
-  if (unit_can_convert(punit)) {
-    transform_unit(punit, to_type, TRUE);
-    notify_player(unit_owner(punit), unit_tile(punit),
-                  E_UNIT_UPGRADED, ftc_server,
-                  _("%s converted to %s."),
-                  utype_name_translation(from_type),
-                  utype_name_translation(to_type));
-  } else {
-    notify_player(unit_owner(punit), unit_tile(punit),
-                  E_UNIT_UPGRADED, ftc_server,
-                  _("%s cannot be converted."),
-                  utype_name_translation(from_type));
-  }
-}
-
-/**************************************************************************
   progress settlers in their current tasks, 
   and units that is pillaging.
   also move units that is on a goto.
@@ -745,30 +705,26 @@ static void update_unit_activity(struct unit *punit)
 
   case ACTIVITY_FORTIFYING:
   case ACTIVITY_SENTRY:
-  case ACTIVITY_CONVERT:
     punit->activity_count += get_activity_rate_this_turn(punit);
     break;
 
   case ACTIVITY_POLLUTION:
+  case ACTIVITY_ROAD:
   case ACTIVITY_MINE:
   case ACTIVITY_IRRIGATE:
+  case ACTIVITY_FORTRESS:
+  case ACTIVITY_RAILROAD:
   case ACTIVITY_PILLAGE:
   case ACTIVITY_TRANSFORM:
+  case ACTIVITY_AIRBASE:
   case ACTIVITY_FALLOUT:
   case ACTIVITY_BASE:
-  case ACTIVITY_GEN_ROAD:
     punit->activity_count += get_activity_rate_this_turn(punit);
 
     /* settler may become veteran when doing something useful */
     if (maybe_become_veteran_real(punit, TRUE)) {
       notify_unit_experience(punit);
     }
-    break;
-  case ACTIVITY_OLD_ROAD:
-  case ACTIVITY_OLD_RAILROAD:
-  case ACTIVITY_FORTRESS:
-  case ACTIVITY_AIRBASE:
-    fc_assert(FALSE);
     break;
   };
 
@@ -777,11 +733,12 @@ static void update_unit_activity(struct unit *punit)
   switch (activity) {
   case ACTIVITY_IDLE:
   case ACTIVITY_FORTIFIED:
+  case ACTIVITY_FORTRESS:
   case ACTIVITY_SENTRY:
   case ACTIVITY_GOTO:
   case ACTIVITY_UNKNOWN:
+  case ACTIVITY_AIRBASE:
   case ACTIVITY_FORTIFYING:
-  case ACTIVITY_CONVERT:
   case ACTIVITY_PATROL_UNUSED:
   case ACTIVITY_LAST:
     /* no default, ensure all handled */
@@ -793,24 +750,23 @@ static void update_unit_activity(struct unit *punit)
 
   case ACTIVITY_PILLAGE:
     if (total_activity_targeted(ptile, ACTIVITY_PILLAGE, 
-                                &punit->activity_target) >= 1) {
-      switch (punit->activity_target.type) {
-        case ATT_SPECIAL:
-          tile_clear_special(ptile, punit->activity_target.obj.spe);
-          break;
-        case ATT_BASE:
-          destroy_base(ptile, base_by_number(punit->activity_target.obj.base));
-          break;
-        case ATT_ROAD:
-          tile_remove_road(ptile, road_by_number(punit->activity_target.obj.road));
-          break;
+                                punit->activity_target,
+                                punit->activity_base) >= 1) {
+      enum tile_special_type what_pillaged = punit->activity_target;
+
+      if (what_pillaged == S_LAST) {
+        fc_assert(punit->activity_base != BASE_NONE);
+        destroy_base(ptile, base_by_number(punit->activity_base));
+        bounce_units_on_terrain_change(ptile);
+      } else {
+        tile_clear_special(ptile, what_pillaged);
+        bounce_units_on_terrain_change(ptile);
       }
-
-      bounce_units_on_terrain_change(ptile);
-
       unit_list_iterate (ptile->units, punit2) {
         if ((punit2->activity == ACTIVITY_PILLAGE)
-            && cmp_act_tgt(&punit->activity_target, &punit2->activity_target)) {
+            && (punit2->activity_target == what_pillaged)
+            && (what_pillaged != S_LAST
+                || punit2->activity_base == punit->activity_base)) {
 	  set_unit_activity(punit2, ACTIVITY_IDLE);
 	  send_unit_info(NULL, punit2);
 	}
@@ -842,36 +798,16 @@ static void update_unit_activity(struct unit *punit)
     break;
 
   case ACTIVITY_BASE:
-    if (total_activity_base(ptile, punit->activity_target.obj.base)
-        >= tile_activity_base_time(ptile, punit->activity_target.obj.base)) {
-      struct base_type *new_base = base_by_number(punit->activity_target.obj.base);
+    if (total_activity_base(ptile, punit->activity_base)
+        >= tile_activity_base_time(ptile, punit->activity_base)) {
+      struct base_type *new_base = base_by_number(punit->activity_base);
 
       create_base(ptile, new_base, unit_owner(punit));
       update_tile_knowledge(ptile);
 
       unit_list_iterate (ptile->units, punit2) {
-        if (punit2->activity == ACTIVITY_BASE
-            && cmp_act_tgt(&punit->activity_target, &punit2->activity_target)) {
-	  set_unit_activity(punit2, ACTIVITY_IDLE);
-	  send_unit_info(NULL, punit2);
-	}
-      } unit_list_iterate_end;
-      /* Deliberately don't set unit_activity_done -- we already dealt with
-       * other units working on the same thing above */
-    }
-    break;
-
-  case ACTIVITY_GEN_ROAD:
-    if (total_activity_road(ptile, punit->activity_target.obj.road)
-        >= tile_activity_road_time(ptile, punit->activity_target.obj.road)) {
-      struct road_type *new_road = road_by_number(punit->activity_target.obj.road);
-
-      tile_add_road(ptile, new_road);
-      update_tile_knowledge(ptile);
-
-      unit_list_iterate (ptile->units, punit2) {
-        if (punit2->activity == ACTIVITY_GEN_ROAD
-            && cmp_act_tgt(&punit->activity_target, &punit2->activity_target)) {
+        if ((punit2->activity == ACTIVITY_BASE)
+            && (punit2->activity_base == punit->activity_base)) {
 	  set_unit_activity(punit2, ACTIVITY_IDLE);
 	  send_unit_info(NULL, punit2);
 	}
@@ -901,13 +837,22 @@ static void update_unit_activity(struct unit *punit)
     }
     break;
 
-  case ACTIVITY_OLD_ROAD:
-  case ACTIVITY_OLD_RAILROAD:
-  case ACTIVITY_FORTRESS:
-  case ACTIVITY_AIRBASE:
-    fc_assert(FALSE);
+  case ACTIVITY_ROAD:
+    if (total_activity (ptile, ACTIVITY_ROAD)
+	+ total_activity (ptile, ACTIVITY_RAILROAD)
+        >= tile_activity_time(ACTIVITY_ROAD, ptile)) {
+      tile_set_special(ptile, S_ROAD);
+      unit_activity_done = TRUE;
+    }
     break;
-  }
+
+  case ACTIVITY_RAILROAD:
+    if (total_activity_done(ptile, ACTIVITY_RAILROAD)) {
+      tile_set_special(ptile, S_RAILROAD);
+      unit_activity_done = TRUE;
+    }
+    break;
+  };
 
   if (unit_activity_done) {
     update_tile_knowledge(ptile);
@@ -932,14 +877,7 @@ static void update_unit_activity(struct unit *punit)
 
   if (activity == ACTIVITY_FORTIFYING) {
     if (punit->activity_count >= 1) {
-      set_unit_activity(punit, ACTIVITY_FORTIFIED);
-    }
-  }
-
-  if (activity == ACTIVITY_CONVERT) {
-    if (punit->activity_count >= unit_type(punit)->convert_time * ACTIVITY_FACTOR) {
-      unit_convert(punit);
-      set_unit_activity(punit, ACTIVITY_IDLE);
+      set_unit_activity(punit,ACTIVITY_FORTIFIED);
     }
   }
 
@@ -971,6 +909,7 @@ static void unit_remember_current_activity(struct unit *punit)
 {
   punit->changed_from        = punit->activity;
   punit->changed_from_target = punit->activity_target;
+  punit->changed_from_base   = punit->activity_base;
   punit->changed_from_count  = punit->activity_count;
 }
 
@@ -986,45 +925,71 @@ void unit_forget_last_activity(struct unit *punit)
 /**************************************************************************
   For some activities (currently only pillaging), the precise target can
   be assigned by the server rather than explicitly requested by the client.
-  This function assigns a specific activity+target if the current
+  This function assigns a specific activity+target+base if the current
   settings are open-ended (otherwise leaves them unchanged).
 **************************************************************************/
 void unit_assign_specific_activity_target(struct unit *punit,
                                           enum unit_activity *activity,
-                                          struct act_tgt *target)
+                                          enum tile_special_type *target,
+                                          Base_type_id *base)
 {
   if (*activity == ACTIVITY_PILLAGE
-      && target->type == ATT_SPECIAL && target->obj.spe == S_LAST) {
+      && *target == S_LAST && *base == BASE_NONE) {
     struct tile *ptile = unit_tile(punit);
-    struct act_tgt tgt;
-
     bv_special specials = tile_specials(ptile);
     bv_bases bases = tile_bases(ptile);
-    bv_roads roads = tile_roads(ptile);
-
-    while (get_preferred_pillage(&tgt, specials, bases, roads)) {
-
-      switch (tgt.type) {
-      case ATT_SPECIAL:
-        clear_special(&specials, tgt.obj.spe);
-        break;
-      case ATT_BASE:
-        BV_CLR(bases, tgt.obj.base);
-        break;
-      case ATT_ROAD:
-        BV_CLR(roads, tgt.obj.road);
-        break;
+    enum tile_special_type new_target;
+    while ((new_target = get_preferred_pillage(specials, bases)) != S_LAST) {
+      Base_type_id new_base;
+      if (new_target > S_LAST) {
+        new_base = new_target - S_LAST - 1;
+        new_target = S_LAST;
+        BV_CLR(bases, new_base);
+      } else {
+        new_base = BASE_NONE;
+        clear_special(&specials, new_target);
       }
-
       if (can_unit_do_activity_targeted(punit, *activity,
-                                        &tgt)) {
-        *target = tgt;
+                                        new_target, new_base)) {
+        *target = new_target;
+        *base = new_base;
         return;
       }
     }
     /* Nothing we can pillage here. */
     *activity = ACTIVITY_IDLE;
   }
+}
+
+/**************************************************************************
+  Return what kind of path should be selected for unit doing activity when
+  it moves.
+**************************************************************************/
+enum goto_move_restriction get_activity_move_restriction(enum unit_activity activity)
+{
+  enum goto_move_restriction restr;
+
+  switch (activity) {
+  case ACTIVITY_IRRIGATE:
+    restr = GOTO_MOVE_CARDINAL_ONLY;
+    break;
+  case ACTIVITY_POLLUTION:
+  case ACTIVITY_ROAD:
+  case ACTIVITY_MINE:
+  case ACTIVITY_FORTRESS:
+  case ACTIVITY_RAILROAD:
+  case ACTIVITY_PILLAGE:
+  case ACTIVITY_TRANSFORM:
+  case ACTIVITY_AIRBASE:
+  case ACTIVITY_FALLOUT:
+    restr = GOTO_MOVE_STRAIGHTEST;
+    break;
+  default:
+    restr = GOTO_MOVE_ANY;
+    break;
+  }
+
+  return (restr);
 }
 
 /**************************************************************************
@@ -1361,7 +1326,7 @@ void transform_unit(struct unit *punit, struct unit_type *to_unit,
 
   /* New type may not have the same veteran system, and we may want to
    * knock some levels off. */
-  if (utype_has_flag(to_unit, UTYF_NO_VETERAN)) {
+  if (utype_has_flag(to_unit, F_NO_VETERAN)) {
     punit->veteran = 0;
   } else {
     punit->veteran = MIN(punit->veteran,
@@ -1426,7 +1391,7 @@ struct unit *create_unit_full(struct player *pplayer, struct tile *ptile,
   unit_tile_set(punit, ptile);
 
   pcity = game_city_by_number(homecity_id);
-  if (utype_has_flag(type, UTYF_NOHOME)) {
+  if (utype_has_flag(type, F_NOHOME)) {
     punit->homecity = 0; /* none */
   } else {
     punit->homecity = homecity_id;
@@ -1457,7 +1422,7 @@ struct unit *create_unit_full(struct player *pplayer, struct tile *ptile,
 
   unit_list_prepend(pplayer->units, punit);
   unit_list_prepend(ptile->units, punit);
-  if (pcity && !utype_has_flag(type, UTYF_NOHOME)) {
+  if (pcity && !utype_has_flag(type, F_NOHOME)) {
     fc_assert(city_owner(pcity) == pplayer);
     unit_list_prepend(pcity->units_supported, punit);
     /* Refresh the unit's homecity. */
@@ -1535,8 +1500,8 @@ static void server_remove_unit(struct unit *punit)
   vision_free(punit->server.vision);
   punit->server.vision = NULL;
 
-  /* check if this unit had UTYF_GAMELOSS flag */
-  if (unit_has_type_flag(punit, UTYF_GAMELOSS) && unit_owner(punit)->is_alive) {
+  /* check if this unit had F_GAMELOSS flag */
+  if (unit_has_type_flag(punit, F_GAMELOSS) && unit_owner(punit)->is_alive) {
     notify_conn(game.est_connections, ptile, E_UNIT_LOST_MISC, ftc_server,
                 _("Unable to defend %s, %s has lost the game."),
                 unit_link(punit),
@@ -1644,14 +1609,14 @@ void wipe_unit(struct unit *punit, enum unit_loss_reason reason)
     unit_list_iterate_safe(ptile->units, pcargo) {
       if (!unit_transported(pcargo)
           && !can_unit_exist_at_tile(pcargo, ptile)
-          && (unit_has_type_flag(pcargo, UTYF_UNDISBANDABLE)
-           || unit_has_type_flag(pcargo, UTYF_GAMELOSS))) {
+          && (unit_has_type_flag(pcargo, F_UNDISBANDABLE)
+           || unit_has_type_flag(pcargo, F_GAMELOSS))) {
         struct unit *ptransport = transport_from_tile(pcargo, ptile);
         if (ptransport != NULL) {
           unit_transport_load(pcargo, ptransport, FALSE);
           send_unit_info(NULL, pcargo);
         } else {
-          if (unit_has_type_flag(pcargo, UTYF_UNDISBANDABLE)) {
+          if (unit_has_type_flag(pcargo, F_UNDISBANDABLE)) {
             pcity = find_closest_city(unit_tile(pcargo), NULL,
                                       unit_owner(pcargo), TRUE, FALSE, FALSE,
                                       TRUE, FALSE);
@@ -1664,7 +1629,7 @@ void wipe_unit(struct unit *punit, enum unit_loss_reason reason)
                             city_link(pcity));
 	    }
           }
-          if (!unit_has_type_flag(pcargo, UTYF_UNDISBANDABLE) || !pcity) {
+          if (!unit_has_type_flag(pcargo, F_UNDISBANDABLE) || !pcity) {
             unit_lost_with_transport(pplayer, pcargo, putype_save);
           }
         }
@@ -1955,40 +1920,12 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
   packet->hp = punit->hp;
   packet->activity = punit->activity;
   packet->activity_count = punit->activity_count;
-
-  packet->activity_tgt_spe = S_LAST;
-  packet->activity_tgt_base = BASE_NONE;
-  packet->activity_tgt_road = ROAD_NONE;
-  switch (punit->activity_target.type) {
-    case ATT_SPECIAL:
-      packet->activity_tgt_spe = punit->activity_target.obj.spe;
-      break;
-    case ATT_BASE:
-      packet->activity_tgt_base = punit->activity_target.obj.base;
-      break;
-    case ATT_ROAD:
-      packet->activity_tgt_road = punit->activity_target.obj.road;
-      break;
-  }
-
+  packet->activity_target = punit->activity_target;
+  packet->activity_base = punit->activity_base;
   packet->changed_from = punit->changed_from;
   packet->changed_from_count = punit->changed_from_count;
-
-  packet->changed_from_tgt_spe = S_LAST;
-  packet->changed_from_tgt_base = BASE_NONE;
-  packet->changed_from_tgt_road = ROAD_NONE;
-  switch (punit->changed_from_target.type) {
-    case ATT_SPECIAL:
-      packet->changed_from_tgt_spe = punit->changed_from_target.obj.spe;
-      break;
-    case ATT_BASE:
-      packet->changed_from_tgt_base = punit->changed_from_target.obj.base;
-      break;
-    case ATT_ROAD:
-      packet->changed_from_tgt_road = punit->changed_from_target.obj.road;
-      break;
-  }
-
+  packet->changed_from_target = punit->changed_from_target;
+  packet->changed_from_base = punit->changed_from_base;
   packet->ai = punit->ai_controlled;
   packet->fuel = punit->fuel;
   packet->goto_tile = (NULL != punit->goto_tile
@@ -2017,7 +1954,6 @@ void package_unit(struct unit *punit, struct packet_unit_info *packet)
       packet->orders_dirs[i] = punit->orders.list[i].dir;
       packet->orders_activities[i] = punit->orders.list[i].activity;
       packet->orders_bases[i] = punit->orders.list[i].base;
-      packet->orders_roads[i] = punit->orders.list[i].road;
     }
   } else {
     packet->orders_length = packet->orders_index = 0;
@@ -2060,17 +1996,10 @@ void package_short_unit(struct unit *punit,
   if (punit->activity == ACTIVITY_EXPLORE
       || punit->activity == ACTIVITY_GOTO) {
     packet->activity = ACTIVITY_IDLE;
+    packet->activity_base = BASE_NONE;
   } else {
     packet->activity = punit->activity;
-  }
-
-  packet->activity_tgt_base = BASE_NONE;
-  packet->activity_tgt_road = ROAD_NONE;
-
-  if (packet->activity == ACTIVITY_BASE) {
-    packet->activity_tgt_base = punit->activity_target.obj.base;
-  } else if (packet->activity == ACTIVITY_GEN_ROAD) {
-    packet->activity_tgt_road = punit->activity_target.obj.road;
+    packet->activity_base = punit->activity_base;
   }
 
   /* Transported_by information is sent to the client even for units that
@@ -2433,9 +2362,8 @@ void do_explore(struct unit *punit)
 bool do_paradrop(struct unit *punit, struct tile *ptile)
 {
   struct player *pplayer = unit_owner(punit);
-  struct player_tile *plrtile;
 
-  if (!unit_has_type_flag(punit, UTYF_PARATROOPERS)) {
+  if (!unit_has_type_flag(punit, F_PARATROOPERS)) {
     notify_player(pplayer, unit_tile(punit), E_BAD_COMMAND, ftc_server,
                   _("This unit type can not be paradropped."));
     return FALSE;
@@ -2457,14 +2385,11 @@ bool do_paradrop(struct unit *punit, struct tile *ptile)
     return FALSE;
   }
 
-  plrtile = map_get_player_tile(ptile, pplayer);
-
   /* Safe terrain according to player map? */
   if (!is_native_terrain(unit_type(punit),
-                         plrtile->terrain,
-                         plrtile->special,
-                         plrtile->bases,
-                         plrtile->roads)) {
+                         map_get_player_tile(ptile, pplayer)->terrain,
+                         map_get_player_tile(ptile, pplayer)->special,
+                         map_get_player_tile(ptile, pplayer)->bases)) {
     notify_player(pplayer, ptile, E_BAD_COMMAND, ftc_server,
                   _("This unit cannot paradrop into %s."),
                   terrain_name_translation(
@@ -2552,7 +2477,7 @@ static bool hut_get_limited(struct unit *punit)
                       "You found %d gold.", cred), cred);
     pplayer->economic.gold += cred;
   } else if (city_exists_within_max_city_map(unit_tile(punit), TRUE)
-             || unit_has_type_flag(punit, UTYF_GAMELOSS)) {
+             || unit_has_type_flag(punit, F_GAMELOSS)) {
     notify_player(pplayer, unit_tile(punit),
                   E_HUT_BARB_CITY_NEAR, ftc_server,
                   _("An abandoned village is here."));
@@ -2720,7 +2645,7 @@ static bool unit_survive_autoattack(struct unit *punit)
     penemywin = unit_win_chance(penemy, punit_defender);
 
     if ((penemywin > 1.0 - punitwin
-         || unit_has_type_flag(punit, UTYF_DIPLOMAT)
+         || unit_has_type_flag(punit, F_DIPLOMAT)
          || get_transporter_capacity(punit) > 0)
         && penemywin > threshold) {
 #ifdef REALLY_DEBUG_THIS
@@ -2963,10 +2888,12 @@ static void check_unit_activity(struct unit *punit)
   case ACTIVITY_GOTO:
     break;
   case ACTIVITY_POLLUTION:
+  case ACTIVITY_ROAD:
   case ACTIVITY_MINE:
   case ACTIVITY_IRRIGATE:
   case ACTIVITY_FORTIFIED:
   case ACTIVITY_FORTRESS:
+  case ACTIVITY_RAILROAD:
   case ACTIVITY_PILLAGE:
   case ACTIVITY_TRANSFORM:
   case ACTIVITY_UNKNOWN:
@@ -2975,10 +2902,6 @@ static void check_unit_activity(struct unit *punit)
   case ACTIVITY_FALLOUT:
   case ACTIVITY_PATROL_UNUSED:
   case ACTIVITY_BASE:
-  case ACTIVITY_GEN_ROAD:
-  case ACTIVITY_CONVERT:
-  case ACTIVITY_OLD_ROAD:
-  case ACTIVITY_OLD_RAILROAD:
   case ACTIVITY_LAST:
     set_unit_activity(punit, ACTIVITY_IDLE);
     break;
@@ -3338,7 +3261,6 @@ bool execute_orders(struct unit *punit)
   int moves_made = 0;
   enum unit_activity activity;
   Base_type_id base;
-  Road_type_id road;
 
   fc_assert_ret_val(unit_has_orders(punit), TRUE);
 
@@ -3432,11 +3354,8 @@ bool execute_orders(struct unit *punit)
     case ORDER_ACTIVITY:
       activity = order.activity;
       base = order.base;
-      road = order.road;
       if ((activity == ACTIVITY_BASE && !can_unit_do_activity_base(punit, base))
-          || (activity == ACTIVITY_GEN_ROAD
-              && !can_unit_do_activity_road(punit, road))
-          || (activity != ACTIVITY_BASE && activity != ACTIVITY_GEN_ROAD
+          || (activity != ACTIVITY_BASE
               && !can_unit_do_activity(punit, activity))) {
         cancel_orders(punit, "  orders canceled because of failed activity");
         notify_player(pplayer, unit_tile(punit), E_UNIT_ORDERS, ftc_server,
@@ -3447,12 +3366,10 @@ bool execute_orders(struct unit *punit)
       }
       punit->done_moving = TRUE;
 
-      if (activity == ACTIVITY_GEN_ROAD) {
-        set_unit_activity_road(punit, road);
-      } else if (activity == ACTIVITY_BASE) {
-        set_unit_activity_base(punit, base);
-      } else {
+      if (activity != ACTIVITY_BASE) {
         set_unit_activity(punit, activity);
+      } else {
+        set_unit_activity_base(punit, base);
       }
       send_unit_info(NULL, punit);
       break;

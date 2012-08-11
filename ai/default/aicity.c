@@ -26,7 +26,6 @@
 #include "game.h"
 #include "government.h"
 #include "specialist.h"
-#include "traderoutes.h"
 
 /* server */
 #include "cityhand.h"
@@ -45,9 +44,6 @@
 #include "infracache.h"
 
 /* ai */
-#include "aitraits.h"
-
-/* ai/default */
 #include "advdiplomacy.h"
 #include "advdomestic.h"
 #include "advmilitary.h"
@@ -116,7 +112,7 @@
   } while(FALSE);
 #endif /* NDEBUG */
 
-static void dai_sell_obsolete_buildings(struct city *pcity);
+static void ai_sell_obsolete_buildings(struct city *pcity);
 static void resolve_city_emergency(struct player *pplayer, struct city *pcity);
 
 /************************************************************************** 
@@ -140,7 +136,7 @@ static void want_tech_for_improvement_effect(struct player *pplayer,
   /* The conversion factor was determined by experiment,
    * and might need adjustment.
    */
-  const int tech_want = building_want * def_ai_city_data(pcity, default_ai_get_self())->building_wait
+  const int tech_want = building_want * def_ai_city_data(pcity)->building_wait
                         * 14 / 8;
 #if 0
   /* This logging is relatively expensive,
@@ -198,9 +194,9 @@ void dont_want_tech_obsoleting_impr(struct player *pplayer,
   maybe cache it?  Although barbarians don't normally have many cities, 
   so can be a bigger bother to cache it.
 **************************************************************************/
-static void dai_barbarian_choose_build(struct player *pplayer, 
-                                       struct city *pcity,
-                                       struct adv_choice *choice)
+static void ai_barbarian_choose_build(struct player *pplayer, 
+                                      struct city *pcity,
+				      struct adv_choice *choice)
 {
   struct unit_type *bestunit = NULL;
   int i, bestattack = 0;
@@ -246,11 +242,11 @@ static void dai_barbarian_choose_build(struct player *pplayer,
   Note that AI cheats -- it suffers no penalty for switching from unit to 
   improvement, etc.
 **************************************************************************/
-static void dai_city_choose_build(struct player *pplayer, struct city *pcity)
+static void ai_city_choose_build(struct player *pplayer, struct city *pcity)
 {
   struct adv_choice newchoice;
   struct adv_data *adv = adv_data_get(pplayer);
-  struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   init_choice(&newchoice);
 
@@ -262,12 +258,12 @@ static void dai_city_choose_build(struct player *pplayer, struct city *pcity)
   }
 
   if (is_barbarian(pplayer)) {
-    dai_barbarian_choose_build(pplayer, pcity, &(city_data->choice));
+    ai_barbarian_choose_build(pplayer, pcity, &(city_data->choice));
   } else {
     /* FIXME: 101 is the "overriding military emergency" indicator */
     if ((city_data->choice.want <= 100
          || city_data->urgency == 0)
-        && !(dai_on_war_footing(pplayer) && city_data->choice.want > 0
+        && !(ai_on_war_footing(pplayer) && city_data->choice.want > 0
              && pcity->id != adv->wonder_city)) {
       domestic_advisor_choose_build(pplayer, pcity, &newchoice);
       copy_if_better_choice(&newchoice, &(city_data->choice));
@@ -280,13 +276,13 @@ static void dai_city_choose_build(struct player *pplayer, struct city *pcity)
     CITY_LOG(LOG_WANT, pcity, "Falling back - didn't want to build soldiers,"
 	     " workers, caravans, settlers, or buildings!");
     city_data->choice.want = 1;
-    if (best_role_unit(pcity, UTYF_TRADE_ROUTE)) {
+    if (best_role_unit(pcity, F_TRADE_ROUTE)) {
       city_data->choice.value.utype
-        = best_role_unit(pcity, UTYF_TRADE_ROUTE);
+        = best_role_unit(pcity, F_TRADE_ROUTE);
       city_data->choice.type = CT_CIVILIAN;
-    } else if (best_role_unit(pcity, UTYF_SETTLERS)) {
+    } else if (best_role_unit(pcity, F_SETTLERS)) {
       city_data->choice.value.utype
-        = best_role_unit(pcity, UTYF_SETTLERS);
+        = best_role_unit(pcity, F_SETTLERS);
       city_data->choice.type = CT_CIVILIAN;
     } else {
       CITY_LOG(LOG_ERROR, pcity, "Cannot even build a fallback "
@@ -299,7 +295,7 @@ static void dai_city_choose_build(struct player *pplayer, struct city *pcity)
     ASSERT_CHOICE(city_data->choice);
 
     CITY_LOG(LOG_DEBUG, pcity, "wants %s with desire %d.",
-	     dai_choice_rule_name(&city_data->choice),
+	     ai_choice_rule_name(&city_data->choice),
 	     city_data->choice.want);
     
     /* FIXME: parallel to citytools change_build_target() */
@@ -378,12 +374,12 @@ static void increase_maxbuycost(struct player *pplayer, int new_value)
   end up with after the upgrade. military is if we want to upgrade non-
   military or military units.
 **************************************************************************/
-static void dai_upgrade_units(struct city *pcity, int limit, bool military)
+static void ai_upgrade_units(struct city *pcity, int limit, bool military)
 {
   struct player *pplayer = city_owner(pcity);
   int expenses;
 
-  dai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses, NULL);
 
   unit_list_iterate(pcity->tile->units, punit) {
     if (pcity->owner == punit->owner) {
@@ -402,7 +398,7 @@ static void dai_upgrade_units(struct city *pcity, int limit, bool military)
         int real_limit = limit;
 
         /* Triremes are DANGEROUS!! We'll do anything to upgrade 'em. */
-        if (unit_has_type_flag(punit, UTYF_TRIREME)) {
+        if (unit_has_type_flag(punit, F_TRIREME)) {
           real_limit = expenses;
         }
         if (pplayer->economic.gold - cost > real_limit) {
@@ -423,12 +419,12 @@ static void dai_upgrade_units(struct city *pcity, int limit, bool military)
 /************************************************************************** 
   Buy and upgrade stuff!
 **************************************************************************/
-static void dai_spend_gold(struct player *pplayer)
+static void ai_spend_gold(struct player *pplayer)
 {
   struct adv_choice bestchoice;
-  int cached_limit = dai_gold_reserve(pplayer);
+  int cached_limit = ai_gold_reserve(pplayer);
   int expenses;
-  bool war_footing = dai_on_war_footing(pplayer);
+  bool war_footing = ai_on_war_footing(pplayer);
 
   /* Disband explorers that are at home but don't serve a purpose. 
    * FIXME: This is a hack, and should be removed once we
@@ -438,7 +434,7 @@ static void dai_spend_gold(struct player *pplayer)
     unit_list_iterate_safe(ptile->units, punit) {
       if (unit_has_type_role(punit, L_EXPLORER)
           && pcity->id == punit->homecity
-          && def_ai_city_data(pcity, default_ai_get_self())->urgency == 0) {
+          && def_ai_city_data(pcity)->urgency == 0) {
         CITY_LOG(LOG_BUY, pcity, "disbanding %s to increase production",
                  unit_rule_name(punit));
 	handle_unit_disband(pplayer,punit->id);
@@ -446,7 +442,7 @@ static void dai_spend_gold(struct player *pplayer)
     } unit_list_iterate_safe_end;
   } city_list_iterate_end;
 
-  dai_calc_data(pplayer, NULL, &expenses, NULL);
+  ai_calc_data(pplayer, NULL, &expenses, NULL);
 
   do {
     bool expensive; /* don't buy when it costs x2 unless we must */
@@ -458,7 +454,7 @@ static void dai_spend_gold(struct player *pplayer)
     /* Find highest wanted item on the buy list */
     init_choice(&bestchoice);
     city_list_iterate(pplayer->cities, acity) {
-      struct ai_city *acity_data = def_ai_city_data(acity, default_ai_get_self());
+      struct ai_city *acity_data = def_ai_city_data(acity);
 
       if (acity_data->choice.want
           > bestchoice.want && ai_fuzzy(pplayer, TRUE)) {
@@ -474,7 +470,7 @@ static void dai_spend_gold(struct player *pplayer)
       break;
     }
 
-    city_data = def_ai_city_data(pcity, default_ai_get_self());
+    city_data = def_ai_city_data(pcity);
 
     /* Not dealing with this city a second time */
     city_data->choice.want = 0;
@@ -494,7 +490,7 @@ static void dai_spend_gold(struct player *pplayer)
           upgrade_limit = expenses;
         }
         /* Upgrade only military units now */
-        dai_upgrade_units(pcity, upgrade_limit, TRUE);
+        ai_upgrade_units(pcity, upgrade_limit, TRUE);
       }
     }
 
@@ -510,7 +506,7 @@ static void dai_spend_gold(struct player *pplayer)
     }
 
     if (is_unit_choice_type(bestchoice.type)
-        && utype_has_flag(bestchoice.value.utype, UTYF_CITIES)) {
+        && utype_has_flag(bestchoice.value.utype, F_CITIES)) {
       if (get_city_bonus(pcity, EFT_GROWTH_FOOD) == 0
           && bestchoice.value.utype->pop_cost > 0
           && city_size_get(pcity) <= bestchoice.value.utype->pop_cost) {
@@ -558,7 +554,7 @@ static void dai_spend_gold(struct player *pplayer)
             || (bestchoice.want > 200 && city_data->urgency > 1))) {
       /* Buy stuff */
       CITY_LOG(LOG_BUY, pcity, "Crash buy of %s for %d (want %d)",
-               dai_choice_rule_name(&bestchoice),
+               ai_choice_rule_name(&bestchoice),
                buycost,
                bestchoice.want);
       really_handle_city_buy(pplayer, pcity);
@@ -567,7 +563,7 @@ static void dai_spend_gold(struct player *pplayer)
                && assess_defense(pcity) == 0) {
       /* We have no gold but MUST have a defender */
       CITY_LOG(LOG_BUY, pcity, "must have %s but can't afford it (%d < %d)!",
-               dai_choice_rule_name(&bestchoice),
+               ai_choice_rule_name(&bestchoice),
                pplayer->economic.gold,
                buycost);
       try_to_sell_stuff(pplayer, pcity);
@@ -582,7 +578,7 @@ static void dai_spend_gold(struct player *pplayer)
   if (!war_footing) {
     /* Civilian upgrades now */
     city_list_iterate(pplayer->cities, pcity) {
-      dai_upgrade_units(pcity, cached_limit, FALSE);
+      ai_upgrade_units(pcity, cached_limit, FALSE);
     } city_list_iterate_end;
   }
 
@@ -636,23 +632,22 @@ static int unit_foodbox_cost(struct unit *punit)
   Estimates the want for a terrain improver (aka worker) by creating a 
   virtual unit and feeding it to settler_evaluate_improvements.
 
-  TODO: AI does not ship UTYF_SETTLERS around, only UTYF_CITIES - Per
+  TODO: AI does not ship F_SETTLERS around, only F_CITIES - Per
 **************************************************************************/
 static void contemplate_terrain_improvements(struct city *pcity)
 {
   struct unit *virtualunit;
   int want;
   enum unit_activity best_act;
-  struct act_tgt best_target;
   struct tile *best_tile = NULL; /* May be accessed by log_*() calls. */
   struct tile *pcenter = city_tile(pcity);
   struct player *pplayer = city_owner(pcity);
   struct adv_data *ai = adv_data_get(pplayer);
-  struct unit_type *unit_type = best_role_unit(pcity, UTYF_SETTLERS);
+  struct unit_type *unit_type = best_role_unit(pcity, F_SETTLERS);
   Continent_id place = tile_continent(pcenter);
 
   if (unit_type == NULL) {
-    log_debug("No UTYF_SETTLERS role unit available");
+    log_debug("No F_SETTLERS role unit available");
     return;
   }
 
@@ -661,8 +656,7 @@ static void contemplate_terrain_improvements(struct city *pcity)
   /* Advisors data space not allocated as it's not needed in the
      lifetime of the virtualunit. */
   unit_tile_set(virtualunit, pcenter);
-  want = settler_evaluate_improvements(virtualunit, &best_act, &best_target,
-                                       &best_tile,
+  want = settler_evaluate_improvements(virtualunit, &best_act, &best_tile,
                                        NULL, NULL);
   want = (want - unit_food_upkeep(virtualunit) * FOOD_WEIGHTING) * 100
          / (40 + unit_foodbox_cost(virtualunit));
@@ -686,7 +680,7 @@ static void contemplate_terrain_improvements(struct city *pcity)
            ai->stats.cities[place]);
   fc_assert(want >= 0);
 
-  def_ai_city_data(pcity, default_ai_get_self())->settler_want = want;
+  def_ai_city_data(pcity)->settler_want = want;
 }
 
 /**************************************************************************
@@ -695,7 +689,7 @@ static void contemplate_terrain_improvements(struct city *pcity)
   build choices,
   extra gold spending.
 **************************************************************************/
-void dai_manage_cities(struct player *pplayer)
+void ai_manage_cities(struct player *pplayer)
 {
   pplayer->ai_common.maxbuycost = 0;
 
@@ -708,7 +702,7 @@ void dai_manage_cities(struct player *pplayer)
       /* Fix critical shortages or unhappiness */
       resolve_city_emergency(pplayer, pcity);
     }
-    dai_sell_obsolete_buildings(pcity);
+    ai_sell_obsolete_buildings(pcity);
     sync_cities();
   } city_list_iterate_end;
   TIMING_LOG(AIT_EMERGENCY, TIMER_STOP);
@@ -720,12 +714,12 @@ void dai_manage_cities(struct player *pplayer)
   /* Initialize the infrastructure cache, which is used shortly. */
   initialize_infrastructure_cache(pplayer);
   city_list_iterate(pplayer->cities, pcity) {
-    struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+    struct ai_city *city_data = def_ai_city_data(pcity);
     /* Note that this function mungs the seamap, but we don't care */
     TIMING_LOG(AIT_CITY_MILITARY, TIMER_START);
     military_advisor_choose_build(pplayer, pcity, &city_data->choice);
     TIMING_LOG(AIT_CITY_MILITARY, TIMER_STOP);
-    if (dai_on_war_footing(pplayer) && city_data->choice.want > 0) {
+    if (ai_on_war_footing(pplayer) && city_data->choice.want > 0) {
       continue; /* Go, soldiers! */
     }
     /* Will record its findings in pcity->settler_want */ 
@@ -751,10 +745,10 @@ void dai_manage_cities(struct player *pplayer)
   dai_auto_settler_reset(pplayer);
 
   city_list_iterate(pplayer->cities, pcity) {
-    dai_city_choose_build(pplayer, pcity);
+    ai_city_choose_build(pplayer, pcity);
   } city_list_iterate_end;
 
-  dai_spend_gold(pplayer);
+  ai_spend_gold(pplayer);
 }
 
 /**************************************************************************
@@ -772,7 +766,7 @@ static bool building_unwanted(struct player *plr, struct impr_type *pimprove)
 /**************************************************************************
   Sell an obsolete building if there are any in the city.
 **************************************************************************/
-static void dai_sell_obsolete_buildings(struct city *pcity)
+static void ai_sell_obsolete_buildings(struct city *pcity)
 {
   struct player *pplayer = city_owner(pcity);
 
@@ -858,7 +852,7 @@ static void resolve_city_emergency(struct player *pplayer, struct city *pcity)
     if (city_unhappy(pcity)
         && (utype_happy_cost(unit_type(punit), pplayer) > 0
             && (unit_being_aggressive(punit) || is_field_unit(punit)))
-        && def_ai_unit_data(punit, default_ai_get_self())->passenger == 0) {
+        && def_ai_unit_data(punit)->passenger == 0) {
       UNIT_LOG(LOG_EMERGENCY, punit, "is causing unrest, disbanded");
       handle_unit_disband(pplayer, punit->id);
       city_refresh(pcity);
@@ -896,7 +890,7 @@ void dai_city_alloc(struct city *pcity)
 **************************************************************************/
 void dai_city_free(struct city *pcity)
 {
-  struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   if (city_data != NULL) {
     city_set_ai_data(pcity, default_ai_get_self(), NULL);
@@ -910,7 +904,7 @@ void dai_city_free(struct city *pcity)
 void dai_city_save(struct section_file *file, const struct city *pcity,
 		   const char *citystr)
 {
-  struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   /* FIXME: remove this when the urgency is properly recalculated. */
   secfile_insert_int(file, city_data->urgency, "%s.ai.urgency", citystr);
@@ -936,7 +930,7 @@ void dai_city_save(struct section_file *file, const struct city *pcity,
 void dai_city_load(const struct section_file *file, struct city *pcity,
 		   const char *citystr)
 {
-  struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   /* FIXME: remove this when the urgency is properly recalculated. */
   city_data->urgency
@@ -1087,12 +1081,10 @@ static int improvement_effect_value(struct player *pplayer,
   struct unit_class *uclass;
   enum unit_move_type move = unit_move_type_invalid();
   int num;
-  int trait;
 
   switch (peffect->type) {
   /* These (Wonder) effects have already been evaluated in base_want() */
   case EFT_CAPITAL_CITY:
-  case EFT_GOV_CENTER:
   case EFT_UPKEEP_FREE:
   case EFT_TECH_UPKEEP_FREE:
   case EFT_POLLU_POP_PCT:
@@ -1313,7 +1305,11 @@ static int improvement_effect_value(struct player *pplayer,
   case EFT_VETERAN_BUILD:
     /* FIXME: check other reqs (e.g., unitflag) */
     num = num_affected_units(peffect, ai);
-    v += amount * (3 * c + num);
+    if (amount < 0) {
+      v -= (3 * c + num);
+    } else if (amount > 0) {
+      v += (3 * c + num);
+    }
     break;
   case EFT_UPGRADE_UNIT:
     if (amount == 1) {
@@ -1357,7 +1353,7 @@ static int improvement_effect_value(struct player *pplayer,
               /* FIXME: This ignores riverboats on some rulesets.
                         We should analyze rulesets when game starts
                         and have relevant checks here. */
-              && is_terrain_class_near_tile(pcity->tile, TC_OCEAN))) {
+              && is_ocean_near_tile(pcity->tile))) {
         if (ai->threats.continent[tile_continent(pcity->tile)]) {
           v += amount;
         } else {
@@ -1412,7 +1408,7 @@ static int improvement_effect_value(struct player *pplayer,
   case EFT_OUTPUT_INC_TILE_CELEBRATE:
   case EFT_TRADE_REVENUE_BONUS:
   case EFT_TILE_WORKABLE:
-  case EFT_IRRIG_POSSIBLE:
+   case EFT_IRRIG_POSSIBLE:
     break;
     /* This has no effect for AI */
   case EFT_VISIBLE_WALLS:
@@ -1440,20 +1436,6 @@ static int improvement_effect_value(struct player *pplayer,
 
       v += amount; /* AI wants migration into its cities! */
     } iterate_outward_end;
-    break;
-  case EFT_MAX_TRADE_ROUTES:
-    trait = ai_trait_get_value(TRAIT_TRADER, pplayer);
-    v += amount
-      * (pow(2.0,
-             (double) get_city_bonus(pcity, EFT_TRADE_REVENUE_BONUS) / 1000.0)
-         + c)
-      * trait
-      / TRAIT_DEFAULT_VALUE;
-    if (city_num_trade_routes(pcity) >= max_trade_routes(pcity)
-        && amount > 0) {
-      /* Has no free trade routes before this */
-      v += trait;
-    }
     break;
   case EFT_LAST:
     log_error("Bad effect type.");
@@ -1580,7 +1562,7 @@ static int city_want(struct player *pplayer, struct city *acity,
     memcpy(prod, acity->citizen_base, O_LAST * sizeof(*prod));
   }
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     prod[O_TRADE] += acity->trade_value[i];
   }
   prod[O_GOLD] += get_city_tithes_bonus(acity);
@@ -1649,7 +1631,7 @@ static int base_want(struct player *pplayer, struct city *pcity,
   city_range_iterate(pcity, pplayer->cities,
                      adv->impr_range[improvement_index(pimprove)], acity) {
     final_want += city_want(pplayer, acity, adv, pimprove)
-      - def_ai_city_data(acity, default_ai_get_self())->worth;
+      - def_ai_city_data(acity)->worth;
   } city_range_iterate_end;
 
   /* Restore */
@@ -1908,7 +1890,7 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
 
   /* First find current worth of cities and cache this. */
   city_list_iterate(pplayer->cities, acity) {
-    def_ai_city_data(acity, default_ai_get_self())->worth = city_want(pplayer, acity, ai, NULL);
+    def_ai_city_data(acity)->worth = city_want(pplayer, acity, ai, NULL);
   } city_list_iterate_end;
 
   /* Clear old building wants.
@@ -1917,7 +1899,7 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
    * if improvements have improvements as requirements.
    */
   city_list_iterate(pplayer->cities, pcity) {
-    struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+    struct ai_city *city_data = def_ai_city_data(pcity);
 
     if (city_data->building_turn <= game.info.turn) {
       /* Do a scheduled recalculation this turn */
@@ -1943,8 +1925,7 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
     if (is_coinage
      || can_player_build_improvement_later(pplayer, pimprove)) {
       city_list_iterate(pplayer->cities, pcity) {
-        struct ai_city *city_data = def_ai_city_data(pcity,
-                                                     default_ai_get_self());
+        struct ai_city *city_data = def_ai_city_data(pcity);
 
         if (pcity != wonder_city && is_wonder(pimprove)) {
           /* Only wonder city should build wonders! */
@@ -1966,13 +1947,6 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
 
           fc_assert(!(already
                       && 0 < pcity->server.adv->building_want[improvement_index(pimprove)]));
-
-          /* If I am not an expansionist, I want buildings more than units */
-          if (pcity->server.adv->building_want[improvement_index(pimprove)] > 0) {
-            pcity->server.adv->building_want[improvement_index(pimprove)]
-              *= TRAIT_DEFAULT_VALUE
-              / ai_trait_get_value(TRAIT_EXPANSIONIST, pplayer);
-          }
         }
         /* else wait until a later turn */
       } city_list_iterate_end;
@@ -1999,7 +1973,7 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
 
   /* Reset recalc counter */
   city_list_iterate(pplayer->cities, pcity) {
-    struct ai_city *city_data = def_ai_city_data(pcity, default_ai_get_self());
+    struct ai_city *city_data = def_ai_city_data(pcity);
 
     if (city_data->building_turn <= game.info.turn) {
       /* This will spread recalcs out so that no one turn end is 
@@ -2016,7 +1990,7 @@ void dai_build_adv_adjust(struct player *pplayer, struct city *wonder_city)
 **************************************************************************/
 void dai_consider_wonder_city(struct city *pcity, bool *result)
 {
-  if (def_ai_city_data(pcity, default_ai_get_self())->grave_danger > 0) {
+  if (def_ai_city_data(pcity)->grave_danger > 0) {
     *result = FALSE;
   } else {
     *result = TRUE;

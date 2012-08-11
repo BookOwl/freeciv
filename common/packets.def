@@ -3,7 +3,7 @@
 Max used id:
 ============
 
-Max id: 227
+Max id: 221
 
 Packets are not ordered by their id, but by their category. New packet
 with higher id may get added to existing category, and not to the end of file.
@@ -61,9 +61,7 @@ Syntax:
     PACKET_PROCESSING_FINISHED, PACKET_SERVER_JOIN_REQ and
     PACKET_SERVER_JOIN_REPLY are excluded here. These packets should
     never change their number. The packet number can be freely chosen
-    as long as it is below 65536 and unique. For backward compatibility  
-    reasons using values from range 1024-1279 ((4x256)-(5*256-1))        
-    should be avoided. 
+    as long as it is below 255 and unique.
 
    Packet flags:
    -------------
@@ -214,6 +212,7 @@ type EFFECT_TYPE        = uint8(enum effect_type)
 type EVENT              = sint16(enum event_type)
 type GUI_TYPE           = uint8(enum gui_type)
 type IMPR_GENUS         = uint8(enum impr_genus_id)
+type IMPR_RANGE         = uint8(enum impr_range)
 type KNOWN              = uint8(enum known_type)
 type ORDERS             = uint8(enum unit_orders)
 type PHASE_MODE         = uint8(enum phase_mode_types)
@@ -225,13 +224,10 @@ type RIVER_MOVE         = uint8(enum special_river_move)
 type SPECIAL            = uint16(enum tile_special_type)
 type SSET_CLASS         = uint8(enum sset_class)
 type SSET_TYPE          = uint8(enum sset_type)
-type ROAD_COMPAT        = uint8(enum road_compat)
 
 # typedefs for bit vectors
 type BV_BASE_FLAGS      = bitvector(bv_base_flags)
 type BV_BASES           = bitvector(bv_bases)
-type BV_ROADS           = bitvector(bv_roads)
-type BV_ROAD_FLAGS      = bitvector(bv_road_flags)
 type BV_CITY_OPTIONS    = bitvector(bv_city_options)
 type BV_IMPR_FLAGS      = bitvector(bv_impr_flags)
 type BV_IMPRS           = bitvector(bv_imprs)
@@ -244,14 +240,13 @@ type BV_UCLASS_FLAGS    = bitvector(bv_unit_class_flags)
 type BV_UNIT_CLASSES    = bitvector(bv_unit_classes)
 type BV_UTYPE_FLAGS     = bitvector(bv_unit_type_flags)
 type BV_UTYPE_ROLES     = bitvector(bv_unit_type_roles)
-type BV_DISASTER_EFFECTS = bitvector(bv_disaster_effects)
 
 # typedefs for IDs
 type BASE               = sint8(Base_type_id)
-type ROAD               = sint8(Road_type_id)
 type CITY               = UINT16
 type CONNECTION         = SINT16
 type CONTINENT          = sint16(Continent_id)
+type EDIT_TECH_MODE     = uint8(enum editor_tech_mode)
 type GOVERNMENT         = UINT8
 type IMPROVEMENT        = uint8(Impr_type_id)
 type NATION             = sint16(Nation_type_id)
@@ -364,7 +359,7 @@ PACKET_ENDGAME_REPORT = 12; sc, lsend, no-delta, handle-via-packet
   UINT8 player_num;
 end
 
-PACKET_ENDGAME_PLAYER = 223; sc, lsend, no-delta, handle-via-packet
+PACKET_ENDGAME_PLAYER = 220; sc, lsend, no-delta, handle-via-packet
   UINT8 category_num;
   PLAYER player_id;
   UINT16 score;
@@ -389,7 +384,6 @@ PACKET_TILE_INFO = 15; sc, lsend, is-game-info
   RESOURCE resource;
   BOOL special[S_LAST];
   BV_BASES bases;
-  BV_ROADS roads;
   STRING spec_sprite[MAX_LEN_NAME];
   STRING label[MAX_LEN_NAME];
 end
@@ -414,9 +408,7 @@ PACKET_GAME_INFO = 16; sc
   /* size limit for cities before they can celebrate */
   UINT8 celebratesize;
   BOOL changable_tax;
-  UINT8 pop_report_zeroes;
   BOOL citizen_nationality;
-  UINT16 citizen_convert_speed;
   UINT8 citymindist;
   UINT32 cooling;
   UINT32 coolinglevel;
@@ -464,7 +456,6 @@ PACKET_GAME_INFO = 16; sc
   BOOL pillage_select;
   STRING positive_year_label[MAX_LEN_NAME];
   UINT8 rapturedelay;
-  UINT16 disasters;
   BOOL restrictinfra;
   BOOL unreachable_protects;
   UINT32 sciencebox;
@@ -557,8 +548,8 @@ PACKET_CITY_INFO = 31; sc, lsend, is-game-info, force, cancel(PACKET_CITY_SHORT_
   SINT16 usage[O_LAST];
   UINT16 food_stock, shield_stock;
 
-  UINT16 trade[MAX_TRADE_ROUTES];
-  UINT8 trade_value[MAX_TRADE_ROUTES];
+  UINT16 trade[NUM_TRADE_ROUTES];
+  UINT8 trade_value[NUM_TRADE_ROUTES];
 
   UINT16 pollution;
   UINT16 illness_trade;
@@ -791,15 +782,11 @@ PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
   UINT8 movesleft, hp, fuel, activity_count, changed_from_count;
   TILE goto_tile;
   ACTIVITY activity;
-  SPECIAL activity_tgt_spe;
-  BASE activity_tgt_base;
-  ROAD activity_tgt_road;
+  SPECIAL activity_target;
+  BASE activity_base;
   ACTIVITY changed_from;
-  SPECIAL changed_from_tgt_spe;
-  BASE changed_from_tgt_base;
-  ROAD changed_from_tgt_road;
+  SPECIAL changed_from_target;
   BASE changed_from_base;
-  ROAD changed_from_road;
 
   SINT8 battlegroup;
 
@@ -810,7 +797,6 @@ PACKET_UNIT_INFO = 63; sc, lsend, is-game-info, cancel(PACKET_UNIT_SHORT_INFO)
   DIRECTION orders_dirs[MAX_LEN_ROUTE:orders_length];
   ACTIVITY orders_activities[MAX_LEN_ROUTE:orders_length];
   BASE orders_bases[MAX_LEN_ROUTE:orders_length];
-  ROAD orders_roads[MAX_LEN_ROUTE:orders_length];
 end
 
 PACKET_UNIT_SHORT_INFO = 64; sc, lsend, is-game-info, cancel(PACKET_UNIT_INFO)
@@ -824,8 +810,7 @@ PACKET_UNIT_SHORT_INFO = 64; sc, lsend, is-game-info, cancel(PACKET_UNIT_INFO)
   BOOL occupied, goes_out_of_sight, transported;
 
   UINT8 hp, activity;
-  BASE activity_tgt_base;
-  ROAD activity_tgt_road;
+  BASE activity_base;
   UNIT transported_by; /* Only valid if transported is set. */
 
   /* in packet only, not in unit struct */
@@ -887,7 +872,6 @@ PACKET_UNIT_ORDERS = 73; cs
   DIRECTION dir[MAX_LEN_ROUTE:length];
   ACTIVITY activity[MAX_LEN_ROUTE:length];
   BASE base[MAX_LEN_ROUTE:length];
-  ROAD road[MAX_LEN_ROUTE:length];
   TILE dest_tile;
 end
 
@@ -907,6 +891,10 @@ PACKET_UNIT_UNLOAD = 76; cs, dsend
 end
 
 PACKET_UNIT_UPGRADE = 77; cs, dsend
+  UNIT unit_id;
+end
+
+PACKET_UNIT_CONVERT = 78; cs, dsend
   UNIT unit_id;
 end
 
@@ -949,22 +937,11 @@ PACKET_UNIT_DIPLOMAT_ANSWER = 85; sc, dsend, lsend
   DIPLOMAT_ACTION action_type;
 end
 
-PACKET_UNIT_CHANGE_ACTIVITY = 222; cs, dsend
+PACKET_UNIT_CHANGE_ACTIVITY = 86; cs, dsend
   UNIT unit_id;
   ACTIVITY activity;
   SPECIAL activity_target;
-end
-
-PACKET_UNIT_CHANGE_ACTIVITY_BASE = 86; cs, dsend
-  UNIT unit_id;
-  ACTIVITY activity;
   BASE activity_base;
-end
-
-PACKET_UNIT_CHANGE_ACTIVITY_ROAD = 221; cs, dsend
-  UNIT unit_id;
-  ACTIVITY activity;
-  ROAD activity_road;
 end
 
 /* 88 & 89 are ping packets (not modifiable). */
@@ -1177,7 +1154,6 @@ PACKET_RULESET_UNIT = 140; sc, lsend
   UINT8 firepower;
   SINT8 obsoleted_by;
   SINT8 converted_to;
-  UINT8 convert_time;
   UINT8 fuel;
 
   UINT8 happy_cost;   # unhappy people in home city
@@ -1280,11 +1256,12 @@ PACKET_RULESET_TERRAIN_CONTROL = 146; sc, lsend
   STRING river_help_text[MAX_LEN_PACKET]; # help for Civ2-style rivers
 
   UINT16 road_superhighway_trade_bonus;  # % added to trade if road/s-highway
+  UINT16 rail_tile_bonus[O_LAST];        /* % added to output if railroad */
   UINT8 pollution_tile_penalty[O_LAST]; /* % taken from output if polluted */
   UINT8 fallout_tile_penalty[O_LAST]; /* % taken from output if polluted */
 end
 
-PACKET_RULESETS_READY = 225; sc, lsend
+PACKET_RULESETS_READY = 221; sc, lsend
 end
 
 PACKET_RULESET_NATION_GROUPS = 147; sc, lsend
@@ -1357,7 +1334,6 @@ end
 PACKET_RULESET_TERRAIN = 151; sc, lsend
   TERRAIN id;
 
-  UINT8 tclass;
   BV_TERRAIN_FLAGS flags;
   BV_UNIT_CLASSES native_to;
 
@@ -1373,8 +1349,7 @@ PACKET_RULESET_TERRAIN = 151; sc, lsend
   UINT8 num_resources;
   RESOURCE resources[MAX_NUM_RESOURCES:num_resources];
 
-  UINT16 road_output_incr_pct[O_LAST];
-  UINT8 base_time;
+  UINT8 road_trade_incr;
   UINT8 road_time;
 
   TERRAIN irrigation_result;
@@ -1387,6 +1362,7 @@ PACKET_RULESET_TERRAIN = 151; sc, lsend
 
   TERRAIN transform_result;
   UINT8 transform_time;
+  UINT8 rail_time;
   UINT8 clean_pollution_time;
   UINT8 clean_fallout_time;
 
@@ -1417,7 +1393,6 @@ PACKET_RULESET_BASE = 153; sc, lsend
   STRING graphic_str[MAX_LEN_NAME];
   STRING graphic_alt[MAX_LEN_NAME];
   STRING activity_gfx[MAX_LEN_NAME];
-  STRING act_gfx_alt[MAX_LEN_NAME];
   UINT8 reqs_count;
   REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
   BASE_GUI gui_type;
@@ -1432,45 +1407,6 @@ PACKET_RULESET_BASE = 153; sc, lsend
   STRING helptext[MAX_LEN_PACKET];
 end
 
-PACKET_RULESET_ROAD = 220; sc, lsend
-  UINT8 id;
-  STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
-  STRING graphic_str[MAX_LEN_NAME];
-  STRING graphic_alt[MAX_LEN_NAME];
-  STRING activity_gfx[MAX_LEN_NAME];
-  STRING act_gfx_alt[MAX_LEN_NAME];
-  UINT8 move_cost;
-  UINT8 build_time;
-  BOOL buildable;
-  UINT16 tile_incr[O_LAST];
-  UINT16 tile_bonus[O_LAST];
-  UINT8 reqs_count;
-  REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
-  ROAD_COMPAT compat;
-  BV_UNIT_CLASSES native_to;
-  BV_ROADS hidden_by;
-  BV_ROAD_FLAGS flags;
-  STRING helptext[MAX_LEN_PACKET];
-end
-
-PACKET_RULESET_DISASTER = 224; sc, lsend
-  UINT8 id;
-  STRING name[MAX_LEN_NAME];
-  STRING rule_name[MAX_LEN_NAME];
-  UINT8 reqs_count;
-  REQUIREMENT reqs[MAX_NUM_REQS:reqs_count];
-  UINT8 nreqs_count;
-  REQUIREMENT nreqs[MAX_NUM_REQS:nreqs_count];
-  UINT8 frequency;
-  BV_DISASTER_EFFECTS effects;
-end
-
-PACKET_RULESET_TRADE = 227; sc, lsend
-  UINT8 id;
-  UINT16 trade_pct;
-end
-
 /**************************************************************************
   Ruleset control values: single values, all of which are needed before
   sending other ruleset data.  After sending this packet, resend every
@@ -1483,8 +1419,6 @@ PACKET_RULESET_CONTROL = 155; sc, lsend
   UINT16 num_impr_types;
   UINT16 num_tech_types;
   UINT16 num_base_types;
-  UINT16 num_road_types;
-  UINT16 num_disaster_types;
   UINT16 government_count;
   UINT16 nation_count;
   UINT16 styles_count;
@@ -1493,7 +1427,6 @@ PACKET_RULESET_CONTROL = 155; sc, lsend
   UINT16 num_specialist_types;
 
   STRING prefered_tileset[MAX_LEN_NAME];
-  STRING prefered_soundset[MAX_LEN_NAME];
 
   STRING name[MAX_LEN_NAME];
   STRING description[MAX_LEN_PACKET];
@@ -1717,13 +1650,6 @@ PACKET_EDIT_TILE_BASE = 203; cs, handle-per-conn, dsend
   UINT8 size;
 end
 
-PACKET_EDIT_TILE_ROAD = 226; cs, handle-per-conn, dsend
-  TILE tile; key
-  ROAD road_type_id;
-  BOOL remove;
-  UINT8 size;
-end
-
 PACKET_EDIT_STARTPOS = 204; cs, sc, dsend, handle-per-conn, handle-via-packet, no-delta
   TILE id;
   BOOL remove;
@@ -1739,7 +1665,6 @@ end
 PACKET_EDIT_TILE = 206; cs, handle-per-conn, handle-via-packet
   TILE tile; key
   BV_SPECIAL specials;
-  BV_ROADS roads;
   BV_BASES bases;
   RESOURCE resource;
   TERRAIN terrain;
@@ -1805,7 +1730,7 @@ PACKET_EDIT_CITY = 213; cs, handle-per-conn, handle-via-packet
   UINT8 ppl_happy[5], ppl_content[5], ppl_unhappy[5], ppl_angry[5];
   UINT8 specialists_size;
   UINT8 specialists[SP_MAX:specialists_size];
-  UINT16 trade[MAX_TRADE_ROUTES];
+  UINT16 trade[NUM_TRADE_ROUTES];
   UINT16 food_stock, shield_stock;
   BOOL airlift;
   BOOL debug;

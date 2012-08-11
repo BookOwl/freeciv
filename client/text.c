@@ -278,7 +278,7 @@ const char *popup_info_text(struct tile *ptile)
     unit_list_iterate(get_units_in_focus(), pfocus_unit) {
       struct city *hcity = game_city_by_number(pfocus_unit->homecity);
 
-      if (unit_has_type_flag(pfocus_unit, UTYF_TRADE_ROUTE)
+      if (unit_has_type_flag(pfocus_unit, F_TRADE_ROUTE)
 	  && can_cities_trade(hcity, pcity)
 	  && can_establish_trade_route(hcity, pcity)) {
 	/* TRANS: "Trade from Warsaw: 5" */
@@ -290,8 +290,7 @@ const char *popup_info_text(struct tile *ptile)
   }
   {
     const char *infratext = get_infrastructure_text(ptile->special,
-                                                    ptile->bases,
-                                                    ptile->roads);
+                                                    ptile->bases);
     if (*infratext != '\0') {
       astr_add_line(&str, _("Infrastructure: %s"), infratext);
     }
@@ -413,8 +412,6 @@ const char *concat_tile_activity_text(struct tile *ptile)
   int activity_units[ACTIVITY_LAST];
   int base_total[MAX_BASE_TYPES];
   int base_units[MAX_BASE_TYPES];
-  int road_total[MAX_ROAD_TYPES];
-  int road_units[MAX_ROAD_TYPES];
   int num_activities = 0;
   int pillaging = 0;
   int remains, turns, i;
@@ -426,20 +423,14 @@ const char *concat_tile_activity_text(struct tile *ptile)
   memset(activity_units, 0, sizeof(activity_units));
   memset(base_total, 0, sizeof(base_total));
   memset(base_units, 0, sizeof(base_units));
-  memset(road_total, 0, sizeof(road_total));
-  memset(road_units, 0, sizeof(road_units));
 
   unit_list_iterate(ptile->units, punit) {
     if (punit->activity == ACTIVITY_PILLAGE) {
       pillaging = 1;
     } else if (punit->activity == ACTIVITY_BASE) {
-      base_total[punit->activity_target.obj.base] += punit->activity_count;
-      base_total[punit->activity_target.obj.base] += get_activity_rate_this_turn(punit);
-      base_units[punit->activity_target.obj.base] += get_activity_rate(punit);
-    } else if (punit->activity == ACTIVITY_GEN_ROAD) {
-      road_total[punit->activity_target.obj.road] += punit->activity_count;
-      road_total[punit->activity_target.obj.road] += get_activity_rate_this_turn(punit);
-      road_units[punit->activity_target.obj.road] += get_activity_rate(punit);
+      base_total[punit->activity_base] += punit->activity_count;
+      base_total[punit->activity_base] += get_activity_rate_this_turn(punit);
+      base_units[punit->activity_base] += get_activity_rate(punit);
     } else {
       activity_total[punit->activity] += punit->activity_count;
       activity_total[punit->activity] += get_activity_rate_this_turn(punit);
@@ -448,14 +439,11 @@ const char *concat_tile_activity_text(struct tile *ptile)
   } unit_list_iterate_end;
 
   if (pillaging) {
-    bv_special pillage_spe = get_unit_tile_pillage_set(ptile);
+    bv_special pillage_targets = get_unit_tile_pillage_set(ptile);
     bv_bases pillage_bases = get_unit_tile_pillage_base_set(ptile);
-    bv_roads pillage_roads = get_unit_tile_pillage_road_set(ptile);
-    if (BV_ISSET_ANY(pillage_spe)
-        || BV_ISSET_ANY(pillage_bases)
-        || BV_ISSET_ANY(pillage_roads)) {
+    if (BV_ISSET_ANY(pillage_targets) || BV_ISSET_ANY(pillage_bases)) {
       astr_add(&str, "%s(%s)", _("Pillage"),
-               get_infrastructure_text(pillage_spe, pillage_bases, pillage_roads));
+               get_infrastructure_text(pillage_targets, pillage_bases));
     } else {
       /* Untargeted pillaging is happening. */
       astr_add(&str, "%s", _("Pillage"));
@@ -482,24 +470,6 @@ const char *concat_tile_activity_text(struct tile *ptile)
 	  num_activities++;
 	}
       } base_type_iterate_end;
-    } else if (i == ACTIVITY_GEN_ROAD) {
-      road_type_iterate(rp) {
-        Road_type_id r = road_index(rp);
-	if (road_units[r] > 0) {
-	  remains = tile_activity_road_time(ptile, r) - road_total[r];
-	  if (remains > 0) {
-	    turns = 1 + (remains + road_units[r] - 1) / road_units[r];
-	  } else {
-	    /* road will be finished this turn */
-	    turns = 1;
-	  }
-	  if (num_activities > 0) {
-	    astr_add(&str, "/");
-	  }
-	  astr_add(&str, "%s(%d)", road_name_translation(rp), turns);
-	  num_activities++;
-	}
-      } road_type_iterate_end;
     } else if (is_build_or_clean_activity(i) && activity_units[i] > 0) {
       if (num_activities > 0) {
 	astr_add(&str, "/");
@@ -1127,8 +1097,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     {
       const char *infratext
         = get_infrastructure_text(unit_tile(punit)->special,
-                                  unit_tile(punit)->bases,
-                                  unit_tile(punit)->roads);
+                                  unit_tile(punit)->bases);
       if (*infratext != '\0') {
         astr_add_line(&str, "%s", infratext);
       } else {
@@ -1147,7 +1116,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     memset(types_count, 0, sizeof(types_count));
     unit_list_iterate(punits, punit) {
-      if (unit_has_type_flag(punit, UTYF_CIVILIAN)) {
+      if (unit_has_type_flag(punit, F_CIVILIAN)) {
 	nonmil++;
       } else {
 	mil++;
@@ -1177,7 +1146,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     for (i = 0; i < 2; i++) {
       if (top[i] && types_count[utype_index(top[i])] > 0) {
-	if (utype_has_flag(top[i], UTYF_CIVILIAN)) {
+	if (utype_has_flag(top[i], F_CIVILIAN)) {
 	  nonmil -= types_count[utype_index(top[i])];
 	} else {
 	  mil -= types_count[utype_index(top[i])];
@@ -1298,7 +1267,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
     fc_snprintf(buf, bufsz, _("No units to disband!"));
     return FALSE;
   } else if (unit_list_size(punits) == 1) {
-    if (unit_has_type_flag(unit_list_front(punits), UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(unit_list_front(punits), F_UNDISBANDABLE)) {
       fc_snprintf(buf, bufsz, _("%s refuses to disband!"),
                   unit_name_translation(unit_list_front(punits)));
       return FALSE;
@@ -1311,7 +1280,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
   } else {
     int count = 0;
     unit_list_iterate(punits, punit) {
-      if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+      if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
         count++;
       }
     } unit_list_iterate_end;

@@ -82,7 +82,6 @@ client/gui-gtk-3.0/optiondlg.c
 client/gui-gtk-3.0/pages.c
 client/gui-gtk-3.0/plrdlg.c
 client/gui-gtk-3.0/repodlgs.c
-client/gui-gtk-3.0/soundset_dlg.c
 client/gui-gtk-3.0/spaceshipdlg.c
 client/gui-gtk-3.0/theme_dlg.c
 client/gui-gtk-3.0/tileset_dlg.c
@@ -193,18 +192,17 @@ data/civ2/terrain.ruleset
 data/civ2/units.ruleset
 # lua files are included nevertheless
 data/database.lua
+data/default/buildings.ruleset
+data/default/cities.ruleset
 data/default/default.lua
-data/default/nationlist.ruleset
-data/classic/buildings.ruleset
-data/classic/cities.ruleset
-data/classic/game.ruleset
-data/classic/governments.ruleset
-data/classic/nations.ruleset
+data/default/game.ruleset
+data/default/governments.ruleset
+data/default/nations.ruleset
 # lua files are included nevertheless
-data/classic/script.lua
-data/classic/techs.ruleset
-data/classic/terrain.ruleset
-data/classic/units.ruleset
+data/default/script.lua
+data/default/techs.ruleset
+data/default/terrain.ruleset
+data/default/units.ruleset
 data/experimental/buildings.ruleset
 data/experimental/cities.ruleset
 data/experimental/game.ruleset
@@ -212,14 +210,6 @@ data/experimental/governments.ruleset
 data/experimental/techs.ruleset
 data/experimental/terrain.ruleset
 data/experimental/units.ruleset
-data/civ2civ3/buildings.ruleset
-data/civ2civ3/cities.ruleset
-data/civ2civ3/game.ruleset
-data/civ2civ3/governments.ruleset
-data/civ2civ3/nations.ruleset
-data/civ2civ3/techs.ruleset
-data/civ2civ3/terrain.ruleset
-data/civ2civ3/units.ruleset
 data/Freeciv.in
 data/helpdata.txt
 data/multiplayer/buildings.ruleset
@@ -526,7 +516,6 @@ data/nation/manx.ruleset
 data/nation/maori.ruleset
 data/nation/mapuche.ruleset
 data/nation/marathi.ruleset
-data/nation/marshallese.ruleset
 data/nation/martian.ruleset
 data/nation/mauritanian.ruleset
 data/nation/mauritian.ruleset
@@ -782,14 +771,12 @@ data/scenarios/italy-100x100-v1.5.sav
 data/scenarios/japan-88x100-v1.3.sav
 data/scenarios/north_america_116x100-v1.2.sav
 data/scenarios/tutorial.sav
+manual/civmanual.c
+modinst/download.c
+modinst/download.h
+modinst/modinst.c
+modinst/mpcmdline.c
 po/Strings.txt
-tools/civmanual.c
-tools/download.c
-tools/download.h
-tools/modinst.c
-tools/mpcmdline.c
-tools/mpgui_gtk.c
-tools/mpgui_qt.cpp
 server/aiiface.c
 server/auth.c
 server/barbarian.c
@@ -833,6 +820,6 @@ utility/inputfile.c
 utility/log.c
 utility/netfile.c
 utility/netintf.c
-utility/registry_ini.c
+utility/registry.c
 utility/shared.c
 utility/support.c

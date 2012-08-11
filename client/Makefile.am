@@ -27,6 +27,9 @@ endif
 if CLIENT_GUI_STUB
 GUI_SUBDIRS += gui-stub
 endif
+if CLIENT_GUI_WIN32
+GUI_SUBDIRS += gui-win32
+endif
 
 ALL_AUDIO_SDL_FILES=audio_sdl.c audio_sdl.h
 
@@ -140,14 +143,6 @@ freeciv_client_src = $(AUDIO_SDL_FILES) \
 	audio_none.c    \
 	audio_none.h
 
-gui_interface_src = \
-	gui_interface.c \
-	gui_interface.h
-
-gui_cbs_src = \
-	gui_cbsetter.c \
-	gui_cbsetter.h
-
 # packhand_gen.c & packhand_gen.h are generated files, but as they are
 # generated outside this directory (when building common) there's no point in
 # setting them to BUILT_SOURCES.
@@ -236,7 +231,7 @@ bin_PROGRAMS += freeciv-qt
 noinst_LTLIBRARIES += libfcgui-qt.la
 libfcgui_qt_la_SOURCES = $(freeciv_client_src)
 libfcgui_qt_la_LIBADD = gui-qt/libgui-qt.la $(clientlibs)
-freeciv_qt_SOURCES = dummycxx.cpp $(gui_interface_src)
+freeciv_qt_SOURCES = dummycxx.cpp
 freeciv_qt_LDFLAGS = $(GUI_qt_LDFLAGS) $(GGZMOD_LDFLAGS)
 freeciv_qt_LDADD = \
  libfcgui-qt.la \
@@ -247,12 +242,29 @@ freeciv_qt_LDADD = \
  $(GUI_qt_LIBS)
 endif
 
+if CLIENT_GUI_WIN32
+bin_PROGRAMS += freeciv-win32
+noinst_LTLIBRARIES += libfcgui-win32.la
+libfcgui_win32_la_SOURCES = $(freeciv_client_src)
+libfcgui_win32_la_LIBADD = gui-win32/libgui-win32.la $(clientlibs)
+freeciv_win32_SOURCES = dummy.c
+freeciv_win32_LDFLAGS = $(GUI_win32_LDFLAGS) $(GGZMOD_LDFLAGS)
+freeciv_win32_LDADD = \
+ $(SOUND_LIBS) \
+ libfcgui-win32.la \
+ $(top_builddir)/common/libfreeciv.la \
+ $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
+ $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS) \
+ $(MAPIMG_WAND_LIBS) \
+ $(GUI_win32_LIBS)
+endif
+
 if CLIENT_GUI_STUB
 bin_PROGRAMS += freeciv-stub
 noinst_LTLIBRARIES += libfcgui-stub.la
 libfcgui_stub_la_SOURCES = $(freeciv_client_src)
 libfcgui_stub_la_LIBADD = gui-stub/libgui-stub.la $(clientlibs)
-freeciv_stub_SOURCES = $(gui_interface_src) $(gui_cbs_src)
+freeciv_stub_SOURCES = dummy.c
 freeciv_stub_LDFLAGS = $(GUI_stub_LDFLAGS) $(GGZMOD_LDFLAGS)
 freeciv_stub_LDADD = \
  libfcgui-stub.la \

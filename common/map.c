@@ -31,7 +31,6 @@
 #include "movement.h"
 #include "nation.h"
 #include "packets.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -95,7 +94,7 @@ static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
   Return a bitfield of the specials on the tile that are infrastructure.
 ****************************************************************************/
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
-                                       int *pcount)
+					  int *pcount)
 {
   bv_special pspresent;
   int i, count = 0;
@@ -134,27 +133,6 @@ bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount)
     *pcount = count;
   }
   return bspresent;
-}
-
-/****************************************************************************
-  Return a bitfield of the pillageable roads on the tile.
-****************************************************************************/
-bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount)
-{
-  bv_roads rspresent;
-  int count = 0;
-
-  BV_CLR_ALL(rspresent);
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)) {
-      BV_SET(rspresent, road_index(proad));
-      count++;
-    }
-  } road_type_iterate_end;
-  if (pcount) {
-    *pcount = count;
-  }
-  return rspresent;
 }
 
 /***************************************************************
@@ -359,7 +337,6 @@ static void tile_init(struct tile *ptile)
 
   tile_clear_all_specials(ptile);
   BV_CLR_ALL(ptile->bases);
-  BV_CLR_ALL(ptile->roads);
   ptile->resource = NULL;
   ptile->terrain  = T_UNKNOWN;
   ptile->units    = unit_list_new();
@@ -646,7 +623,7 @@ int map_distance(const struct tile *tile0, const struct tile *tile1)
 *************************************************************************/
 bool is_cardinally_adj_to_ocean(const struct tile *ptile)
 {
-  return is_terrain_class_card_near(ptile, TC_OCEAN);
+  return count_terrain_flag_near_tile(ptile, TRUE, FALSE, TER_OCEANIC) > 0;
 }
 
 /****************************************************************************
@@ -686,8 +663,7 @@ a sufficient number of adjacent tiles that are not ocean.
 **************************************************************************/
 bool can_reclaim_ocean(const struct tile *ptile)
 {
-  int land_tiles = 100 - count_terrain_class_near_tile(ptile, FALSE, TRUE,
-                                                       TC_OCEAN);
+  int land_tiles = 100 - count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return land_tiles >= terrain_control.ocean_reclaim_requirement_pct;
 }
@@ -699,7 +675,7 @@ a sufficient number of adjacent tiles that are ocean.
 **************************************************************************/
 bool can_channel_land(const struct tile *ptile)
 {
-  int ocean_tiles = count_terrain_class_near_tile(ptile, FALSE, TRUE, TC_OCEAN);
+  int ocean_tiles = count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return ocean_tiles >= terrain_control.land_channel_requirement_pct;
 }
@@ -720,9 +696,6 @@ static int tile_move_cost_ptrs(const struct unit *punit,
   bool cardinal_move;
   struct unit_class *pclass = NULL;
   bool native = TRUE;
-  int road_cost = -1;
-  int river_cost = -1;
-  int cost;
 
   if (punit) {
     pclass = unit_class(punit);
@@ -745,34 +718,24 @@ static int tile_move_cost_ptrs(const struct unit *punit,
     return SINGLE_MOVE;
   }
 
-  /* Railroad check has to be before UTYF_IGTER check so that UTYF_IGTER
-   * units are not penalized. UTYF_IGTER affects also entering and
-   * leaving ships, so UTYF_IGTER check has to be before native terrain
+  /* Railroad check has to be before F_IGTER check so that F_IGTER
+   * units are not penalized. F_IGTER affects also entering and
+   * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
-  if (!restrict_infra(pplayer, t1, t2)) {
-    road_type_iterate(proad) {
-      if ((!punit || is_native_road_to_uclass(proad, pclass))
-          && tile_has_road(t1, proad) && tile_has_road(t2, proad)) {
-        if (!road_has_flag(proad, RF_CARDINAL_ONLY)
-            || is_move_cardinal(t1, t2)) {
-          if (road_cost == -1 || road_cost > proad->move_cost) {
-            road_cost = proad->move_cost;
-          }
-        }
-      }
-    } road_type_iterate_end;
+  if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
+      && native && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_RAIL;
   }
-
-  if (road_cost >= 0 && road_cost < MOVE_COST_IGTER) {
-    return road_cost;
-  }
-
-  if (punit && unit_has_type_flag(punit, UTYF_IGTER)) {
-    return MOVE_COST_IGTER;
+  if (punit && unit_has_type_flag(punit, F_IGTER)) {
+    return SINGLE_MOVE/3;
   }
   if (!native) {
     /* Loading to transport or entering port */
     return SINGLE_MOVE;
+  }
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
+      && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_ROAD;
   }
 
   if (tile_has_special(t1, S_RIVER) && tile_has_special(t2, S_RIVER)) {
@@ -781,35 +744,22 @@ static int tile_move_cost_ptrs(const struct unit *punit,
     case RMV_NORMAL:
       break;
     case RMV_FAST_STRICT:
-      if (cardinal_move) {
-        river_cost = MOVE_COST_RIVER;
-      }
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
       break;
     case RMV_FAST_RELAXED:
-      if (cardinal_move) {
-	river_cost = MOVE_COST_RIVER;
-      } else {
-	river_cost = 2 * MOVE_COST_RIVER;
-      }
-      break;
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
+      else
+	return 2 * MOVE_COST_RIVER;
     case RMV_FAST_ALWAYS:
-      river_cost = MOVE_COST_RIVER;
-      break;
+      return MOVE_COST_RIVER;
     default:
       break;
     }
   }
 
-  cost = tile_terrain(t2)->movement_cost * SINGLE_MOVE;
-
-  if (road_cost >= 0) {
-    cost = MIN(cost, road_cost);
-  }
-  if (river_cost >= 0) {
-    cost = MIN(cost, river_cost);
-  }
-
-  return cost;
+  return tile_terrain(t2)->movement_cost * SINGLE_MOVE;
 }
 
 /****************************************************************************

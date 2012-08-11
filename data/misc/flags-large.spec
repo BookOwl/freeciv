@@ -314,7 +314,6 @@ sprites =
 		"f.mapuche", "flags/mapuche-large"
 		"f.marathi", "flags/marathi-large"
 		"f.mars", "flags/mars-large"
-		"f.marshall_islands", "flags/marshall_islands-large"
 		"f.mauritania", "flags/mauritania-large"
 		"f.mauritius", "flags/mauritius-large"
 		"f.maya", "flags/maya-large"

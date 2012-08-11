@@ -63,7 +63,7 @@ struct unit_ai {
         > unit_type(punit)->transport_capacity)
 #define HOSTILE_PLAYER(pplayer, aplayer)                                    \
   (WAR(pplayer, aplayer)                                                    \
-   || dai_diplomacy_get(pplayer, aplayer)->countdown >= 0)
+   || ai_diplomacy_get(pplayer, aplayer)->countdown >= 0)
 #define UNITTYPE_COSTS(ut)						\
   (ut->pop_cost * 3 + ut->happy_cost					\
    + ut->upkeep[O_SHIELD] + ut->upkeep[O_FOOD] + ut->upkeep[O_GOLD])
@@ -78,11 +78,11 @@ extern struct unit_type *simple_ai_types[U_LAST];
 #define RAMPAGE_HUT_OR_BETTER        99998
 #define RAMPAGE_FREE_CITY_OR_BETTER  99999
 #define BODYGUARD_RAMPAGE_THRESHOLD (SHIELD_WEIGHTING * 4)
-bool dai_military_rampage(struct unit *punit, int thresh_adj,
-                          int thresh_move);
-void dai_manage_units(struct player *pplayer); 
-void dai_manage_unit(struct player *pplayer, struct unit *punit);
-void dai_manage_military(struct player *pplayer,struct unit *punit);
+bool ai_military_rampage(struct unit *punit, int thresh_adj,
+                         int thresh_move);
+void ai_manage_units(struct player *pplayer); 
+void ai_manage_unit(struct player *pplayer, struct unit *punit);
+void ai_manage_military(struct player *pplayer,struct unit *punit);
 struct city *find_nearest_safe_city(struct unit *punit);
 int look_for_charge(struct player *pplayer, struct unit *punit,
                     struct unit **aunit, struct city **acity);
@@ -110,8 +110,6 @@ bool is_on_unit_upgrade_path(const struct unit_type *test,
 
 void dai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
 				 enum danger_consideration *result);
-
-enum unit_move_type dai_uclass_move_type(const struct unit_class *pclass);
 
 /* Call this after rulesets are loaded */
 void dai_units_ruleset_init(void);

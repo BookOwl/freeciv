@@ -6,19 +6,21 @@
 
 MAJOR_VERSION="2"
 MINOR_VERSION="4"
-PATCH_VERSION="99"
-VERSION_LABEL="-dev"
+PATCH_VERSION="0"
+VERSION_LABEL="-beta1+"
 
-IS_DEVEL_VERSION=1
-IS_BETA_VERSION=0
+IS_DEVEL_VERSION=0
+IS_BETA_VERSION=1
 
-NEXT_STABLE_VERSION="2.5.0"
+NEXT_STABLE_VERSION="2.4.0"
 
 # 0 to disable display of release month until we can make better estimate
-RELEASE_MONTH=0
+RELEASE_MONTH=2
 
-DATASUBDIR=dev
-DEFAULT_FOLLOW_TAG=stable
+DATASUBDIR=2.4
+# Change this back for RCs/stable release
+#DEFAULT_FOLLOW_TAG=stable
+DEFAULT_FOLLOW_TAG=S2_4
 
 # Freeciv network capstring: see documentation in common/capstr.c
 #
@@ -30,8 +32,8 @@ DEFAULT_FOLLOW_TAG=stable
 #   - Avoid adding a new mandatory capability to the development branch for
 #     as long as possible.  We want to maintain network compatibility with
 #     the stable branch for as long as possible.
-NETWORK_CAPSTRING_MANDATORY="+Freeciv.Devel-2.5-2012.Aug.11"
-NETWORK_CAPSTRING_OPTIONAL=""
+NETWORK_CAPSTRING_MANDATORY="+Freeciv-2.4-network"
+NETWORK_CAPSTRING_OPTIONAL="rules_finished"
 
 FREECIV_DISTRIBUTOR=""
 

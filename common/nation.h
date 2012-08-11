@@ -126,8 +126,6 @@ struct nation_type {
       /* Nations which we don't want in the same game. For example,
        * British and English. */
       struct nation_list *conflicts_with;
-
-      int *traits;
     } server;
 
     struct {

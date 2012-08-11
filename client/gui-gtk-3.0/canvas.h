@@ -25,6 +25,4 @@ struct canvas
   cairo_t *drawable;
 };
 
-#define FC_STATIC_CANVAS_INIT { NULL, NULL }
-
 #endif  /* FC__CANVAS_H */

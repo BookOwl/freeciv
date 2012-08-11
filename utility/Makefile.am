@@ -2,8 +2,6 @@
 
 noinst_LTLIBRARIES = libcivutility.la
 
-AM_CFLAGS = $(UTILITY_CFLAGS)
-
 libcivutility_la_SOURCES = \
 		astring.c       \
 		astring.h       \
@@ -48,10 +46,6 @@ libcivutility_la_SOURCES = \
 		rand.h		\
 		registry.c	\
 		registry.h	\
-		registry_ini.c	\
-		registry_ini.h	\
-		section_file.c	\
-		section_file.h	\
 		shared.c	\
 		shared.h	\
 		specenum_gen.h	\

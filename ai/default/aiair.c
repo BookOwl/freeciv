@@ -86,8 +86,8 @@ static struct tile *find_nearest_airbase(const struct unit *punit,
   Very preliminary estimate for our intent to attack the tile (x, y).
   Used by bombers only.
 **********************************************************************/
-static bool dai_should_we_air_attack_tile(struct unit *punit,
-                                          struct tile *ptile)
+static bool ai_should_we_air_attack_tile(struct unit *punit,
+					 struct tile *ptile)
 {
   struct city *acity = tile_city(ptile);
 
@@ -96,7 +96,7 @@ static bool dai_should_we_air_attack_tile(struct unit *punit,
    * attack anything.  Production should not happen if there is an idle 
    * unit of the same type nearby */
   if (acity && punit->id != 0
-      && def_ai_city_data(acity, default_ai_get_self())->invasion.occupy == 0
+      && def_ai_city_data(acity)->invasion.occupy == 0
       && !unit_can_take_over(punit)) {
     /* No units capable of occupying are invading */
     log_debug("Don't want to attack %s, although we could",
@@ -111,8 +111,8 @@ static bool dai_should_we_air_attack_tile(struct unit *punit,
   Returns an estimate for the profit gained through attack.
   Assumes that the victim is within one day's flight
 **********************************************************************/
-static int dai_evaluate_tile_for_air_attack(struct unit *punit, 
-                                            struct tile *dst_tile)
+static int ai_evaluate_tile_for_air_attack(struct unit *punit, 
+					   struct tile *dst_tile)
 {
   struct unit *pdefender;
   /* unit costs in shields */
@@ -155,7 +155,7 @@ static int dai_evaluate_tile_for_air_attack(struct unit *punit,
 
   balanced_cost = build_cost_balanced(unit_type(punit));
 
-  sortie_time = (unit_has_type_flag(punit, UTYF_ONEATTACK) ? 1 : 0);
+  sortie_time = (unit_has_type_flag(punit, F_ONEATTACK) ? 1 : 0);
 
   profit = kill_desire(victim_cost, unit_attack, unit_cost, victim_defence, 1) 
     - SHIELD_WEIGHTING + 2 * TRADE_WEIGHTING;
@@ -216,9 +216,9 @@ static int find_something_to_bomb(struct unit *punit, struct pf_path **path,
     }
 
     if (is_enemy_unit_tile(ptile, pplayer)
-        && dai_should_we_air_attack_tile(punit, ptile)
+        && ai_should_we_air_attack_tile(punit, ptile)
         && can_unit_attack_tile(punit, ptile)) {
-      int new_best = dai_evaluate_tile_for_air_attack(punit, ptile);
+      int new_best = ai_evaluate_tile_for_air_attack(punit, ptile);
 
       if (new_best > best) {
         best_tile = ptile;
@@ -246,8 +246,8 @@ static int find_something_to_bomb(struct unit *punit, struct pf_path **path,
   base for air operations by (air)unit punit.  Returns NULL if not
   found.  The path is stored in the path argument if not NULL.
 **********************************************************************/
-static struct tile *dai_find_strategic_airbase(const struct unit *punit,
-                                               struct pf_path **path)
+static struct tile *ai_find_strategic_airbase(const struct unit *punit,
+                                              struct pf_path **path)
 {
   struct player *pplayer = unit_owner(punit);
   struct pf_parameter parameter;
@@ -270,7 +270,7 @@ static struct tile *dai_find_strategic_airbase(const struct unit *punit,
     }
 
     if ((pcity = tile_city(ptile))
-        && def_ai_city_data(pcity, default_ai_get_self())->grave_danger != 0) {
+        && def_ai_city_data(pcity)->grave_danger != 0) {
       best_tile = ptile;
       break; /* Fly there immediately!! */
     }
@@ -318,7 +318,7 @@ static struct tile *dai_find_strategic_airbase(const struct unit *punit,
   } 
   TODO: distant target selection, support for fuel > 2
 ***********************************************************************/
-void dai_manage_airunit(struct player *pplayer, struct unit *punit)
+void ai_manage_airunit(struct player *pplayer, struct unit *punit)
 {
   struct tile *dst_tile = unit_tile(punit);
   /* Loop prevention */
@@ -347,7 +347,7 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
         pf_map_destroy(pfm);
         if (alive && punit->moves_left > 0) {
           /* Maybe do something else. */
-          dai_manage_airunit(pplayer, punit);
+          ai_manage_airunit(pplayer, punit);
         }
         return;
       }
@@ -363,7 +363,7 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
       if (punit->fuel == 1) {
 	UNIT_LOG(LOG_DEBUG, punit, "Oops, fallin outta the sky");
       }
-      def_ai_unit_data(punit, default_ai_get_self())->done = TRUE; /* Won't help trying again */
+      def_ai_unit_data(punit)->done = TRUE; /* Won't help trying again */
       return;
     }
 
@@ -388,11 +388,11 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
       if (is_tiles_adjacent(unit_tile(punit), dst_tile)) {
         (void) unit_move_handling(punit, dst_tile, TRUE, FALSE);
       }
-    } else if ((dst_tile = dai_find_strategic_airbase(punit, &path))) {
+    } else if ((dst_tile = ai_find_strategic_airbase(punit, &path))) {
       log_debug("%s will fly to (%i, %i) (%s) to fight there",
                 unit_rule_name(punit), TILE_XY(dst_tile),
                 tile_city(dst_tile) ? city_name(tile_city(dst_tile)) : "");
-      def_ai_unit_data(punit, default_ai_get_self())->done = TRUE; /* Wait for next turn */
+      def_ai_unit_data(punit)->done = TRUE; /* Wait for next turn */
       if (!adv_follow_path(punit, path, dst_tile)) {
         pf_path_destroy(path);
         return; /* The unit died. */
@@ -401,7 +401,7 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
     } else {
       log_debug("%s cannot find anything to kill and is staying put", 
                 unit_rule_name(punit));
-      def_ai_unit_data(punit, default_ai_get_self())->done = TRUE;
+      def_ai_unit_data(punit)->done = TRUE;
       unit_activity_handling(punit, ACTIVITY_IDLE);
     }
   }
@@ -410,7 +410,7 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
       && punit->moves_left != moves) {
     /* We have moved this turn, might have ended up stuck out in the fields
      * so, as a safety measure, let's manage again */
-    dai_manage_airunit(pplayer, punit);
+    ai_manage_airunit(pplayer, punit);
   }
 
 }
@@ -421,8 +421,8 @@ void dai_manage_airunit(struct player *pplayer, struct unit *punit)
   The interface is somewhat different from other ai_choose, but
   that's what it should be like, I believe -- GB
 ******************************************************************/
-bool dai_choose_attacker_air(struct player *pplayer, struct city *pcity, 
-                             struct adv_choice *choice)
+bool ai_choose_attacker_air(struct player *pplayer, struct city *pcity, 
+			    struct adv_choice *choice)
 {
   bool want_something = FALSE;
 

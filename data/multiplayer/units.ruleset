@@ -16,7 +16,7 @@
 
 [datafile]
 description="Unit definitions for the multiplayer ruleset."
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.4-ruleset"
 
 [flags]
 ; Names for custom unit type flags.
@@ -82,6 +82,7 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "DamageSlows"   = Damages units are slowed down
 ; "CanOccupyCity" = Military units of this class can occupy enemy cities
 ; "Missile"       = Unit is destroyed when it attacks
+; "RoadNative"    = Road tiles are always considered native terrain
 ; "RiverNative"   = River tiles are always considered native terrain
 ; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
 ; "Unreachable"   = Unit can be attacked only by units explicitly listing this class as target
@@ -93,12 +94,6 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "CanPillage"    = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
-; "AttackNonNative"   = Unit can attack units on non-native tiles. Unit type flag
-;                       "Only_Native_Attack" can override this
-; "AttFromNonNative"  = Unit can launch attach from non-native tile (against native one)
-;                       This applies for both attacking from transport or cities. If only
-;                       some unit types of the class should get this property, use type flag
-;                       "Marines"
 ;
 ; */ <-- avoid gettext warnings
 
@@ -124,14 +119,14 @@ flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
 name          = _("?unitclass:Sea")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "DamageSlows", "AttackNonNative", "AttFromNonNative"
+flags         = "DamageSlows"
 
 [unitclass_trireme]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Trireme")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "DamageSlows", "AttFromNonNative"
+flags         = "DamageSlows"
 
 [unitclass_heli]
 ; /* TRANS: Unit class: used adjectivally */
@@ -181,7 +176,6 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; gov_req       = required government, names from governments.ruleset
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; convert_to    = can be converted to another type of unit by name
-; convert_time  = time it takes to convert to another unit type
 ; class         = One of the classes listed above
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
@@ -226,7 +220,7 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; "IgWall"	= ignore effect of city walls
 ; "FieldUnit"	= cause unhappiness even when not being aggressive
 ; "AEGIS"	= fivefold increased defence against "AirUnit" attacks
-; "Marines"	= can attack from non-native tile (from transport or city)
+; "Marines"	= (land only) can attack from transports
 ; "Partial_Invis" = visible only to adjancent units; does not hide transported
 ;		  units other than missiles
 ; "Settlers"	= can irrigate and build roads
@@ -237,7 +231,7 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; "Transform"	= can transform terrain
 ; "Paratroopers"= (land only) can paradrop
 ; "Cities"	= can disband to produce a city
-; "Only_Native_Attack" = cannot attack targets on non-native tiles even if unit class can
+; "No_Land_Attack" = (sea only) cannot attack targets on land
 ; "AddToCity"	= can disband to add a single point of population to a city
 ;		  (see cities.ruleset for limitation of this ability)
 ; "Fanatic"	= can only be built by governments that allow them
@@ -1448,7 +1442,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 cargo         = "Land"
-flags         = "BadCityDefender"
+flags         = "BadCityDefender", "No_Land_Attack"
 roles         = "Ferryboat"
 helptext      = _("\
 The Trireme is your first boat unit. It can act\
@@ -1746,7 +1740,7 @@ uk_food       = 0
 uk_gold       = 0
 cargo         = "Missile"
 flags         = "Partial_Invis", "BadCityDefender",
-	        "Only_Native_Attack"
+	        "No_Land_Attack"
 roles         = "Hunter"
 helptext      = _("\
 Traveling under the surface of the ocean, Submarines have\
@@ -1780,7 +1774,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 cargo         = "Air", "Missile", "Helicopter"
-flags         = "BadCityDefender", "Only_Native_Attack"
+flags         = "BadCityDefender", "No_Land_Attack"
 roles         = ""
 helptext      = _("\
 The Carrier is a mobile airport.\

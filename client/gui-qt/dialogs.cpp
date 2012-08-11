@@ -15,15 +15,9 @@
 #include <fc_config.h>
 #endif
 
-// Qt
-#include <QDialog>
-
 // common
 #include "game.h"
 #include "government.h"
-
-// client
-#include "packhand.h"
 
 // gui-qt
 #include "qtg_cxxside.h"
@@ -104,42 +98,11 @@ void races_toggles_set_sensitive(void)
 /**************************************************************************
   Popup a dialog asking if the player wants to start a revolution.
 **************************************************************************/
-void popup_revolution_dialog(struct government *government)
+void popup_revolution_dialog(void)
 {
-  QMessageBox ask(gui()->central_wdg);
-  int ret;
-
-  if (0 > client.conn.playing->revolution_finishes) {
-    ask.setText(_("You say you wanna revolution?"));
-    ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
-    ask.setDefaultButton(QMessageBox::Cancel);
-    ask.setIcon(QMessageBox::Warning);
-    ask.setWindowTitle(_("Revolution!"));
-    ret = ask.exec();
-
-    switch (ret) {
-    case QMessageBox::Cancel:
-      break;
-    case QMessageBox::Ok:
-      revolution_response(government);
-      break;
-    }
-  } else {
-    revolution_response(government);
-  }
+  /* PORTME */
 }
 
-/***************************************************************************
-  Starts revolution with targeted government as target or anarchy otherwise
-***************************************************************************/
-void revolution_response(struct government *government)
-{
-  if (!government) {
-    start_revolution();
-  } else {
-    set_government_choice(government);
-  }
-}
 /**************************************************************************
   Popup a dialog giving a player choices when their caravan arrives at
   a city (other than its home city).  Example:
@@ -203,8 +166,8 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_special spe,
-                          bv_bases bases, bv_roads roads)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases)
 {
   /* PORTME */
 }
@@ -222,15 +185,6 @@ void popup_disband_dialog(struct unit_list *punits)
   user and load.
 **************************************************************************/
 void popup_tileset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
 {
   /* PORTME */
 }

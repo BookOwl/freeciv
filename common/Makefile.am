@@ -31,8 +31,6 @@ libfreeciv_la_SOURCES = \
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		disaster.c	\
-		disaster.h	\
 		effects.c	\
 		effects.h	\
 		events.c	\
@@ -89,9 +87,6 @@ libfreeciv_la_SOURCES = \
 		terrain.h	\
 		tile.c		\
 		tile.h		\
-		traderoutes.c	\
-		traderoutes.h	\
-		traits.h	\
 		unit.c		\
 		unit.h		\
 		unitlist.c	\

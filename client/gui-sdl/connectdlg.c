@@ -54,7 +54,7 @@
 
 #include "connectdlg.h"
 
-static struct server_list *pServer_list = NULL;
+static const struct server_list *pServer_list = NULL;
 static struct server_scan *pServer_scan = NULL; 
     
 static struct ADVANCED_DLG *pMeta_Severs = NULL;
@@ -185,9 +185,9 @@ static void server_scan_error(struct server_scan *scan,
   same functionality for LAN server dettection.
   WARING !: for LAN scan use "finish_lanserver_scan()" to free server list.
 **************************************************************************/
-static struct srv_list *sdl_create_server_list(bool lan)
+static const struct server_list *sdl_create_server_list(bool lan)
 {
-  struct srv_list *list = NULL;
+  const struct server_list *server_list = NULL;
   int i;
     
   if (lan) {
@@ -204,14 +204,14 @@ static struct srv_list *sdl_create_server_list(bool lan)
     
   for (i = 0; i < 100; i++) {
     server_scan_poll(pServer_scan);
-    list = server_scan_get_list(pServer_scan);
-    if (list) {
+    server_list = server_scan_get_list(pServer_scan);
+    if (server_list) {
       break;
     }
     SDL_Delay(100);
   }
   
-  return list;
+  return server_list;
 }
 
 /**************************************************************************
@@ -227,7 +227,6 @@ void popup_connection_dialog(bool lan_scan)
   SDL_String16 *pStr;
   SDL_Surface *pLogo;
   SDL_Rect area, area2;
-  struct srv_list *srvrs;
   
   queue_flush();
   close_connection_dialog();
@@ -269,17 +268,9 @@ void popup_connection_dialog(bool lan_scan)
   
   redraw_group(pNewWidget, pLabelWindow, TRUE);
   flush_dirty();
-
+  
   /* create server list */
-  srvrs = sdl_create_server_list(lan_scan);
-
-  /* Copy list */
-  pServer_list = server_list_new();
-  fc_allocate_mutex(&srvrs->mutex);
-  server_list_iterate(srvrs->servers, pserver) {
-    server_list_append(pServer_list, pserver);
-  } server_list_iterate_end;
-  fc_release_mutex(&srvrs->mutex);
+  pServer_list = sdl_create_server_list(lan_scan);
 
   /* clear label */
   popdown_window_group_dialog(pNewWidget, pLabelWindow);

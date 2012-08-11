@@ -22,9 +22,6 @@
 #include "log.h"
 #include "support.h"
 
-/* gui main header */
-#include "gui_stub.h"
-
 #include "connectdlg_g.h"
 
 /* client */
@@ -45,7 +42,7 @@ void really_close_connection_dialog(void)
  Close and destroy the dialog. But only if we don't have a local
  server running (that we started).
 **************************************************************************/
-void gui_close_connection_dialog()
+void close_connection_dialog()
 {
   /* PORTME */
 }
@@ -100,7 +97,7 @@ void handle_game_load(bool load_successful, const char *filename)
 /**************************************************************************
   Provide an interface for connecting to a Freeciv server.
 **************************************************************************/
-void gui_gui_server_connect(void)
+void gui_server_connect(void)
 {
   /* PORTME */
 }

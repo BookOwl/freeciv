@@ -35,7 +35,6 @@
 #include "log.h"
 #include "mem.h"
 #include "rand.h"
-#include "registry.h"
 #include "support.h"
 #include "timing.h"
 
@@ -324,7 +323,6 @@ int client_main(int argc, char *argv[])
   }
 
   init_nls();
-  registry_module_init();
   audio_init();
   init_character_encodings(gui_character_encoding, gui_use_transliteration);
 
@@ -628,7 +626,6 @@ void client_exit(void)
   conn_list_destroy(game.all_connections);
   conn_list_destroy(game.est_connections);
 
-  registry_module_close();
   free_nls();
 
   backtrace_deinit();

@@ -14,13 +14,29 @@ else
 SSUBDIRS =
 endif
 
+if SERVER
+if CLIENT
+MSUBDIRS = manual
+else
+MSUBDIRS = 
+endif
+else
+MSUBDIRS = 
+endif
+
 if MAKE_DATA
 DSUBDIRS = data
 else
 DSUBDIRS =
 endif
 
-SUBDIRS = $(DSUBDIRS) dependencies utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc tools
+if MODINST
+MODSUBDIRS = modinst
+else
+MODSUBDIRS =
+endif
+
+SUBDIRS = $(DSUBDIRS) dependencies utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS) $(MODSUBDIRS)
 
 ## Automake should distribute config.rpath automatically - and new
 ## versions probably do. We still support versions that do not, so
@@ -39,7 +55,6 @@ EXTRA_DIST=	autogen.sh 			\
 		bootstrap/freeciv-modpack.desktop.in	\
 		bootstrap/freeciv.spec.in	\
 		bootstrap/config.rpath		\
-		bootstrap/Makerules.mk		\
 		bootstrap/langnames.txt		\
 		m4/ac_path_lib.m4		\
 		m4/alsa.m4			\
@@ -77,7 +92,6 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/pkg.m4			\
 		m4/postgres.m4			\
 		m4/progtest.m4			\
-		m4/qt.m4			\
 		m4/qt-client.m4			\
 		m4/readline.m4			\
 		m4/sdl-client.m4		\
@@ -85,6 +99,7 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/sqlite3.m4			\
 		m4/sound.m4			\
 		m4/vsnprintf.m4			\
+		m4/win32-client.m4		\
 		m4/xaw-client.m4		\
 		m4/x.m4				\
 		vms/config.h_vms		\

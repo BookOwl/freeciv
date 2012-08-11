@@ -9,8 +9,6 @@ endif
 AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common
 
 da_sources = \
-	taimsg.c		\
-	taimsg.h		\
 	taiplayer.c		\
 	taiplayer.h		\
 	threadedai.c

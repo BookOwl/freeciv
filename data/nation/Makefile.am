@@ -302,7 +302,6 @@ pkgdata_DATA = \
 		maori.ruleset \
 		mapuche.ruleset \
 		marathi.ruleset \
-		marshallese.ruleset \
 		martian.ruleset \
 		mauritanian.ruleset \
 		mauritian.ruleset \
