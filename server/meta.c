@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <ctype.h>
@@ -42,11 +42,9 @@
 
 /* utility */
 #include "fcintl.h"
-#include "fcthread.h"
 #include "log.h"
 #include "mem.h"
 #include "netintf.h"
-#include "netfile.h"
 #include "support.h"
 #include "timing.h"
 
@@ -67,10 +65,14 @@
 
 static bool server_is_open = FALSE;
 
+static union fc_sockaddr names[2];
+static int   name_count;
+static char  metaname[MAX_LEN_ADDR];
+static int   metaport;
+static char *metaserver_path;
+
 static char meta_patches[256] = "";
 static char meta_message[256] = "";
-
-static fc_thread *meta_srv_thread = NULL;
 
 /*************************************************************************
  the default metaserver patches for this server
@@ -181,7 +183,7 @@ void set_user_meta_message_string(const char *string)
 }
 
 /*************************************************************************
-  Return string describing both metaserver name and port.
+...
 *************************************************************************/
 char *meta_addr_port(void)
 {
@@ -202,7 +204,7 @@ static void metaserver_failed(void)
 /****************************************************************************
   Insert a setting in the metaserver message. Return TRUE if it succeded.
 ****************************************************************************/
-static inline bool meta_insert_setting(struct netfile_post *post,
+static inline bool meta_insert_setting(char *s, size_t rest,
                                        const char *set_name)
 {
   const struct setting *pset = setting_by_name(set_name);
@@ -210,32 +212,10 @@ static inline bool meta_insert_setting(struct netfile_post *post,
 
   fc_assert_ret_val_msg(NULL != pset, FALSE,
                         "Setting \"%s\" not found!", set_name);
-  netfile_add_form_str(post, "vn[]", setting_name(pset));
-  netfile_add_form_str(post, "vv[]",
-                       setting_value_name(pset, FALSE, buf, sizeof(buf)));
+  fc_snprintf(s, rest, "vn[]=%s&vv[]=%s&",
+              fc_url_encode(setting_name(pset)),
+              setting_value_name(pset, FALSE, buf, sizeof(buf)));
   return TRUE;
-}
-
-/*************************************************************************
-  Send POST to metaserver. This runs in its own thread.
-*************************************************************************/
-static void send_metaserver_post(void *arg)
-{
-  struct netfile_post *post = (struct netfile_post *) arg;
-  char *addr;
-
-  if (srvarg.bind_meta_addr != NULL) {
-    addr = srvarg.bind_meta_addr;
-  } else {
-    addr = srvarg.bind_addr;
-  }
-
-  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, addr)) {
-    con_puts(C_METAERROR, _("Error connecting metaserver"));
-    metaserver_failed();
-  }
-
-  netfile_close_post(post);
 }
 
 /*************************************************************************
@@ -243,11 +223,45 @@ static void send_metaserver_post(void *arg)
 *************************************************************************/
 static bool send_to_metaserver(enum meta_flag flag)
 {
+  static char msg[8192];
+  static char str[8192];
+  int rest = sizeof(str);
+  int i;
   int players = 0;
   int humans = 0;
+  int len;
+  int sock = -1;
+  char *s = str;
   char host[512];
   char state[20];
-  struct netfile_post *post;
+
+  if (!server_is_open) {
+    return FALSE;
+  }
+
+  /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */  
+  for (i = 0; i < name_count; i++) {
+    if ((sock = socket(names[i].saddr.sa_family, SOCK_STREAM, 0)) == -1) {
+      /* Probably EAFNOSUPPORT or EPROTONOSUPPORT. */
+      continue;
+    }
+
+    if (fc_connect(sock, &names[i].saddr,
+                   sockaddr_size(&names[i])) == -1) {
+      fc_closesocket(sock);
+      sock = -1;
+      continue;
+    } else {
+      /* We have a connection! */
+      break;
+    }
+  }
+
+  if (sock == -1) {
+    log_error("Metaserver: %s", fc_strerror(fc_get_errno()));
+    metaserver_failed();
+    return FALSE;
+  }
 
   switch(server_state()) {
   case S_S_INITIAL:
@@ -268,28 +282,36 @@ static bool send_to_metaserver(enum meta_flag flag)
     sz_strlcpy(host, "unknown");
   }
 
-  /* Freed in metaserver thread function send_metaserver_post() */
-  post = netfile_start_post();
-
-  netfile_add_form_str(post, "host", host);
-  netfile_add_form_int(post, "port", srvarg.port);
-  netfile_add_form_str(post, "state", state);
+  fc_snprintf(s, rest, "host=%s&port=%d&state=%s&",
+              host, srvarg.port, state);
+  s = end_of_strn(s, &rest);
 
   if (flag == META_GOODBYE) {
-    netfile_add_form_int(post, "bye", 1);
+    fc_strlcpy(s, "bye=1&", rest);
+    s = end_of_strn(s, &rest);
   } else {
-    netfile_add_form_str(post, "version", VERSION_STRING);
-    netfile_add_form_str(post, "patches",
-                         get_meta_patches_string());
-    netfile_add_form_str(post, "capability", our_capability);
+    fc_snprintf(s, rest, "version=%s&", fc_url_encode(VERSION_STRING));
+    s = end_of_strn(s, &rest);
 
-    netfile_add_form_str(post, "serverid", srvarg.serverid);
-    netfile_add_form_str(post, "message",
-                         get_meta_message_string());
+    fc_snprintf(s, rest, "patches=%s&", 
+                fc_url_encode(get_meta_patches_string()));
+    s = end_of_strn(s, &rest);
+
+    fc_snprintf(s, rest, "capability=%s&", fc_url_encode(our_capability));
+    s = end_of_strn(s, &rest);
+
+    fc_snprintf(s, rest, "serverid=%s&",
+                fc_url_encode(srvarg.serverid));
+    s = end_of_strn(s, &rest);
+
+    fc_snprintf(s, rest, "message=%s&",
+                fc_url_encode(get_meta_message_string()));
+    s = end_of_strn(s, &rest);
 
     /* NOTE: send info for ALL players or none at all. */
     if (normal_player_count() == 0) {
-      netfile_add_form_int(post, "dropplrs", 1);
+      fc_strlcpy(s, "dropplrs=1&", rest);
+      s = end_of_strn(s, &rest);
     } else {
       players = 0; /* a counter for players_available */
       humans = 0;
@@ -309,15 +331,24 @@ static bool send_to_metaserver(enum meta_flag flag)
           sz_strlcpy(type, "Human");
         }
 
-        netfile_add_form_str(post, "plu[]", plr->username);
-        netfile_add_form_str(post, "plt[]", type);
-        netfile_add_form_str(post, "pll[]", player_name(plr));
-        netfile_add_form_str(post, "pln[]",
-                             fc_url_encode(plr->nation != NO_NATION_SELECTED 
-                                           ? nation_plural_for_player(plr)
-                                           : "none"));
-        netfile_add_form_str(post, "plh[]",
-                             pconn ? pconn->addr : "");
+        fc_snprintf(s, rest, "plu[]=%s&", fc_url_encode(plr->username));
+        s = end_of_strn(s, &rest);
+
+        fc_snprintf(s, rest, "plt[]=%s&", type);
+        s = end_of_strn(s, &rest);
+
+        fc_snprintf(s, rest, "pll[]=%s&", fc_url_encode(player_name(plr)));
+        s = end_of_strn(s, &rest);
+
+        fc_snprintf(s, rest, "pln[]=%s&",
+                    fc_url_encode(plr->nation != NO_NATION_SELECTED 
+                                  ? nation_plural_for_player(plr)
+                                  : "none"));
+        s = end_of_strn(s, &rest);
+
+        fc_snprintf(s, rest, "plh[]=%s&",
+                    pconn ? fc_url_encode(pconn->addr) : "");
+        s = end_of_strn(s, &rest);
 
         /* is this player available to take?
          * TODO: there's some duplication here with 
@@ -350,8 +381,10 @@ static bool send_to_metaserver(enum meta_flag flag)
       } players_iterate_end;
 
       /* send the number of available players. */
-      netfile_add_form_int(post, "available", players);
-      netfile_add_form_int(post, "humans", humans);
+      fc_snprintf(s, rest, "available=%d&", players);
+      s = end_of_strn(s, &rest);
+      fc_snprintf(s, rest, "humans=%d&", humans);
+      s = end_of_strn(s, &rest);
     }
 
     /* Send some variables: should be listed in inverted order? */
@@ -363,46 +396,66 @@ static bool send_to_metaserver(enum meta_flag flag)
       int i;
 
       for (i = 0; i < ARRAY_SIZE(settings); i++) {
-        meta_insert_setting(post, settings[i]);
+        if (meta_insert_setting(s, rest, settings[i])) {
+          s = end_of_strn(s, &rest);
+        }
       }
 
       /* HACK: send the most determinant setting for the map size. */
       switch (map.server.mapsize) {
       case MAPSIZE_FULLSIZE:
-        meta_insert_setting(post, "size");
+        if (meta_insert_setting(s, rest, "size")) {
+          s = end_of_strn(s, &rest);
+        }
         break;
       case MAPSIZE_PLAYER:
-        meta_insert_setting(post, "tilesperplayer");
+        if (meta_insert_setting(s, rest, "tilesperplayer")) {
+          s = end_of_strn(s, &rest);
+        }
         break;
       case MAPSIZE_XYSIZE:
-        meta_insert_setting(post, "xsize");
-        meta_insert_setting(post, "ysize");
+        if (meta_insert_setting(s, rest, "xsize")) {
+          s = end_of_strn(s, &rest);
+        }
+        if (meta_insert_setting(s, rest, "ysize")) {
+          s = end_of_strn(s, &rest);
+        }
         break;
       }
     }
 
     /* Turn and year. */
-    netfile_add_form_str(post, "vn[]", "turn");
-    netfile_add_form_int(post, "vv[]", game.info.turn);
-    netfile_add_form_str(post, "vn[]", "year");
-    netfile_add_form_int(post, "vv[]", game.info.year);
+    fc_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
+                fc_url_encode("turn"), game.info.turn);
+    s = end_of_strn(s, &rest);
+    fc_snprintf(s, rest, "vn[]=%s&vv[]=%d&",
+                fc_url_encode("year"), game.info.year);
+    s = end_of_strn(s, &rest);
   }
 
-  if (meta_srv_thread != NULL) {
-    /* Previously started thread */
-    fc_thread_wait(meta_srv_thread);
-  } else {
-    meta_srv_thread = fc_malloc(sizeof(meta_srv_thread));
-  }
+  len = fc_snprintf(msg, sizeof(msg),
+    "POST %s HTTP/1.1\r\n"
+    "Host: %s:%d\r\n"
+    "Content-Type: application/x-www-form-urlencoded; charset=\"utf-8\"\r\n"
+    "Content-Length: %lu\r\n"
+    "\r\n"
+    "%s\r\n",
+    metaserver_path,
+    metaname,
+    metaport,
+    (unsigned long) (sizeof(str) - rest + 1),
+    str
+  );
 
-  /* Send POST in new thread */
-  fc_thread_start(meta_srv_thread, &send_metaserver_post, post);
+  fc_writesocket(sock, msg, len);
+
+  fc_closesocket(sock);
 
   return TRUE;
 }
 
 /*************************************************************************
-  Stop sending updates to metaserver
+ 
 *************************************************************************/
 void server_close_meta(void)
 {
@@ -414,6 +467,37 @@ void server_close_meta(void)
 *************************************************************************/
 bool server_open_meta(void)
 {
+  const char *path;
+ 
+  if (metaserver_path) {
+    free(metaserver_path);
+    metaserver_path = NULL;
+  }
+  
+  if (!(path = fc_lookup_httpd(metaname, &metaport, srvarg.metaserver_addr))) {
+    return FALSE;
+  }
+  
+  metaserver_path = fc_strdup(path);
+
+  if (!net_lookup_service(metaname, metaport, &names[0], FALSE)) {
+    log_error(_("Metaserver: bad address: <%s %d>."), metaname, metaport);
+    metaserver_failed();
+    return FALSE;
+  }
+  name_count = 1;
+#ifdef IPV6_SUPPORT
+  if (names[0].saddr.sa_family == AF_INET6) {
+    /* net_lookup_service() prefers IPv6 address.
+     * Check if there is also IPv4 address.
+     * TODO: This would be easier using getaddrinfo() */
+    if (net_lookup_service(metaname, metaport,
+                           &names[1], TRUE /* force IPv4 */)) {
+      name_count = 2;
+    }
+  }
+#endif
+
   if (meta_patches[0] == '\0') {
     set_meta_patches_string(default_meta_patches_string());
   }
@@ -442,23 +526,13 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
   static struct timer *last_send_timer = NULL;
   static bool want_update;
 
-  if (!server_is_open) {
-    return FALSE;
-  }
-
   /* if we're bidding farewell, ignore all timers */
   if (flag == META_GOODBYE) { 
     if (last_send_timer) {
       free_timer(last_send_timer);
       last_send_timer = NULL;
     }
-    send_to_metaserver(flag);
-
-    /* Wait metaserver thread to finish */
-    fc_thread_wait(meta_srv_thread);
-    meta_srv_thread = NULL;
-
-    return TRUE;
+    return send_to_metaserver(flag);
   }
 
   /* don't allow the user to spam the metaserver with updates */
@@ -484,6 +558,5 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
 
   clear_timer_start(last_send_timer);
   want_update = FALSE;
-
   return send_to_metaserver(flag);
 }

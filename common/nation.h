@@ -13,17 +13,12 @@
 #ifndef FC__NATION_H
 #define FC__NATION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "iterator.h"
 
 /* common */
 #include "fc_types.h"
 #include "name_translation.h"
-#include "rgbcolor.h"
 #include "terrain.h"            /* MAX_NUM_TERRAINS */
 
 #define NO_NATION_SELECTED (NULL)
@@ -106,13 +101,6 @@ struct nation_type {
 
   struct player *player; /* Who's using the nation, or NULL. */
 
-  /* Items given to this nation at game start. */
-  /* (Only used in the client for documentation purposes.) */
-  int init_techs[MAX_NUM_TECH_LIST];
-  int init_buildings[MAX_NUM_BUILDING_LIST];
-  struct government *init_government;
-  struct unit_type *init_units[MAX_NUM_UNIT_LIST];
-
   union {
     struct {
       /* Only used in the server (./ai/ and ./server/). */
@@ -128,10 +116,11 @@ struct nation_type {
        * British and English. */
       struct nation_list *conflicts_with;
 
-      /* Nation's associated player color (NULL if none). */
-      struct rgbcolor *rgb;
-
-      int *traits;
+      /* Items given to this nation at game start. */
+      int init_techs[MAX_NUM_TECH_LIST];
+      int init_buildings[MAX_NUM_BUILDING_LIST];
+      struct government *init_government;
+      struct unit_type *init_units[MAX_NUM_UNIT_LIST];
     } server;
 
     struct {
@@ -163,16 +152,11 @@ const char *nation_plural_for_player(const struct player *pplayer);
 
 int city_style_of_nation(const struct nation_type *nation);
 
-const struct rgbcolor *nation_color(const struct nation_type *pnation);
-
 /* Ancillary nation routines */
 bool is_nation_playable(const struct nation_type *nation);
 enum barbarian_type nation_barbarian_type(const struct nation_type *nation);
 bool can_conn_edit_players_nation(const struct connection *pconn,
 				  const struct player *pplayer);
-
-void set_allowed_nation_groups(struct nation_group_list *plist);
-const struct nation_group_list *get_allowed_nation_groups(void);
 
 /* General nation leader accessor functions. */
 const struct nation_leader_list *
@@ -217,8 +201,6 @@ struct nation_group *nation_group_by_number(int id);
 struct nation_group *nation_group_by_rule_name(const char *name);
 
 void nation_group_set_match(struct nation_group *pgroup, int match);
-void nation_group_set_set(struct nation_group *pgroup, bool is_set);
-bool nation_group_is_a_set(const struct nation_group *pgroup);
 
 const char *nation_group_untranslated_name(const struct nation_group *pgroup);
 const char *nation_group_rule_name(const struct nation_group *pgroup);
@@ -259,9 +241,5 @@ struct iterator *nation_iter_init(struct nation_iter *it);
   generic_iterate(struct nation_iter, struct nation_type *,\
                   NAME_pnation, nation_iter_sizeof, nation_iter_init)
 #define nations_iterate_end generic_iterate_end
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__NATION_H */

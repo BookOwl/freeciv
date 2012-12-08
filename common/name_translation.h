@@ -14,14 +14,6 @@
 #ifndef FC__NAME_TRANSLATION_H
 #define FC__NAME_TRANSLATION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#ifdef HAVE_CONFIG_H
-#include <fc_config.h>
-#endif
-
 /* utility */
 #include "fcintl.h"
 #include "support.h"
@@ -119,9 +111,5 @@ static inline const char *
 #undef vernacular
 #undef rulename
 #undef translated
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__NAME_TRANSLATION_H */

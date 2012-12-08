@@ -17,7 +17,7 @@
 *****************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -43,7 +43,6 @@
 #include "movement.h"
 #include "packets.h"
 #include "requirements.h"
-#include "road.h"
 #include "specialist.h"
 #include "unit.h"
 #include "version.h"
@@ -60,8 +59,8 @@
 /* This must be in same order as enum in helpdlg_g.h */
 static const char * const help_type_names[] = {
   "(Any)", "(Text)", "Units", "Improvements", "Wonders",
-  "Techs", "Terrain", "Bases", "Roads", "Specialists", "Governments",
-  "Ruleset", "Nations", NULL
+  "Techs", "Terrain", "Bases", "Specialists", "Governments", "Ruleset",
+  "Nations", NULL
 };
 
 /*define MAX_LAST (MAX(MAX(MAX(A_LAST,B_LAST),U_LAST),terrain_count()))*/
@@ -126,71 +125,12 @@ void free_help_texts(void)
 }
 
 /****************************************************************************
-  Insert fixed-width table describing veteran system.
-  If only one veteran level, inserts 'nolevels' if non-NULL.
-  Otherwise, insert 'intro' then a table.
-****************************************************************************/
-static bool insert_veteran_help(char *outbuf, size_t outlen,
-                                const struct veteran_system *veteran,
-                                const char *intro, const char *nolevels)
-{
-  /* game.veteran can be NULL in pregame; if so, keep quiet about
-   * veteran levels */
-  if (!veteran) {
-    return FALSE;
-  }
-
-  fc_assert_ret_val(veteran->levels >= 1, FALSE);
-
-  if (veteran->levels == 1) {
-    /* Only a single veteran level. Don't bother to name it. */
-    if (nolevels) {
-      CATLSTR(outbuf, outlen, nolevels);
-      return TRUE;
-    } else {
-      return FALSE;
-    }
-  } else {
-    int i;
-    fc_assert_ret_val(veteran->definitions != NULL, FALSE);
-    if (intro) {
-      CATLSTR(outbuf, outlen, intro);
-      CATLSTR(outbuf, outlen, "\n\n");
-    }
-    /* raise_chance and work_raise_chance don't get to the client, so we
-     * can't report them */
-    CATLSTR(outbuf, outlen,
-            /* TRANS: Header for fixed-width veteran level table.
-             * TRANS: Translators cannot change column widths :(
-             * TRANS: "Level name" left-justified, other two right-justified */
-            _("Veteran level      Power factor   Move bonus\n"));
-    CATLSTR(outbuf, outlen,
-            /* TRANS: Part of header for veteran level table. */
-            _("--------------------------------------------"));
-    for (i = 0; i < veteran->levels; i++) {
-      const struct veteran_level *level = &veteran->definitions[i];
-      const char *name = name_translation(&level->name);
-      /* Use get_internal_string_length() for correct alignment with
-       * multibyte character encodings */
-      cat_snprintf(outbuf, outlen,
-          "\n%s%*s %4d%% %12s",
-          name, MAX(0, 25 - (int)get_internal_string_length(name)), "",
-          level->power_fact,
-          /* e.g. "-    ", "+ 1/3", "+ 1    ", "+ 2 2/3" */
-          move_points_text(level->move_bonus, "+ ", "-", TRUE));
-    }
-    return TRUE;
-  }
-}
-
-/****************************************************************************
   Insert generated text for the helpdata "name".
-  Returns TRUE if anything was added.
 ****************************************************************************/
-static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
+static void insert_generated_text(char *outbuf, size_t outlen, const char *name)
 {
   if (0 == strcmp (name, "TerrainAlterations")) {
-    int clean_pollution_time = -1, clean_fallout_time = -1;
+    int rail_time = -1, clean_pollution_time = -1, clean_fallout_time = -1;
     int buildable_bases = 0;
 
     CATLSTR(outbuf, outlen,
@@ -240,6 +180,15 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
             (pterrain->transform_result == T_NONE) ? "-" : transform_time,
             transform_result);
 
+	/* FIXME: properly handle the (uncommon) case where these are
+	 * terrain-dependent, instead of just silence */
+	if (rail_time != 0 && pterrain->road_time > 0) {
+	  if (rail_time < 0)
+	    rail_time = pterrain->rail_time;
+	  else
+	    if (rail_time != pterrain->rail_time)
+	      rail_time = 0; /* give up */
+	}
 	if (clean_pollution_time != 0 &&
 	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
 	  if (clean_pollution_time < 0)
@@ -264,7 +213,7 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
 	buildable_bases++;
     } base_type_iterate_end;
 
-    if (clean_pollution_time > 0 || clean_fallout_time > 0 ||
+    if (rail_time > 0 || clean_pollution_time > 0 || clean_fallout_time > 0 ||
 	buildable_bases > 0) {
       CATLSTR(outbuf, outlen, "\n");
       CATLSTR(outbuf, outlen,
@@ -274,6 +223,9 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
 	      _("Activity            Time\n"));
       CATLSTR(outbuf, outlen,
 	      "---------------------------");
+      if (rail_time > 0)
+	cat_snprintf(outbuf, outlen,
+		     _("\nRailroad           %3d"), rail_time);
       if (clean_pollution_time > 0)
 	cat_snprintf(outbuf, outlen,
 		     _("\nClean pollution    %3d"), clean_pollution_time);
@@ -291,11 +243,6 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
         }
       } base_type_iterate_end;
     }
-    return TRUE;
-  } else if (0 == strcmp (name, "VeteranLevels")) {
-    return insert_veteran_help(outbuf, outlen, game.veteran,
-        _("In this ruleset, the following veteran levels are defined:"),
-        _("This ruleset has no default veteran levels defined."));
   } else if (0 == strcmp (name, "FreecivVersion")) {
     const char *ver = freeciv_name_version();
     cat_snprintf(outbuf, outlen,
@@ -303,10 +250,8 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
                   * "Freeciv version 2.3.0-beta1 (beta version)" (translated).
                   * Second %s is client_string, e.g., "gui-gtk-2.0". */
                  _("This is %s, %s client."), ver, client_string);
-    return TRUE;
   }
-  log_error("Unknown directive '$%s' in help", name);
-  return FALSE;
+  return;
 }
 
 /****************************************************************
@@ -341,7 +286,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                                            (preq->source.value.advance)));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -398,7 +342,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    improvement_name_translation
                    (preq->source.value.building));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -411,12 +354,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_LOCAL:
       cat_snprintf(buf, bufsz,
                    _("Requires the %s terrain special on the tile.\n"),
-                   special_name_translation(preq->source.value.special));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires the %s terrain special on the tile or "
-                     "a cardinally adjacent tile.\n"),
                    special_name_translation(preq->source.value.special));
       return TRUE;
     case REQ_RANGE_ADJACENT:
@@ -441,41 +378,10 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires the %s terrain on the tile.\n"),
                    terrain_name_translation(preq->source.value.terrain));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s terrain on the tile or "
-                                "a cardinally adjacent tile.\n"),
-                   terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz,_("Requires the %s terrain on the tile or "
                                 "an adjacent tile.\n"),
                    terrain_name_translation(preq->source.value.terrain));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_RESOURCE:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires the %s resource on the tile.\n"),
-                   resource_name_translation(preq->source.value.resource));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s resource on the tile or "
-                                "a cardinally adjacent tile.\n"),
-                   resource_name_translation(preq->source.value.resource));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz,_("Requires the %s resource on the tile or "
-                                "an adjacent tile.\n"),
-                   resource_name_translation(preq->source.value.resource));
       return TRUE;
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -498,7 +404,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    nation_adjective_translation(preq->source.value.nation));
       return TRUE;
     case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -512,10 +417,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
       /* TRANS: %s is a single kind of unit (e.g., "Settlers"). */
-      cat_snprintf(buf, bufsz, Q_("?unit:Requires %s.\n"),
+      cat_snprintf(buf, bufsz, _("Requires %s.\n"),
                    utype_name_translation(preq->source.value.utype));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -538,14 +442,12 @@ static bool insert_requirement(char *buf, size_t bufsz,
         if (role_units_translations(&astr, preq->source.value.unitflag,
                                     TRUE)) {
           /* TRANS: %s is a list of unit types separated by "or". */
-          cat_snprintf(buf, bufsz, Q_("?ulist:Requires %s.\n"),
-                       astr_str(&astr));
+          cat_snprintf(buf, bufsz, _("Requires %s.\n"), astr_str(&astr));
           astr_free(&astr);
           return TRUE;
         }
       }
       break;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -561,10 +463,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
       /* TRANS: %s is a single unit class (e.g., "Air"). */
-      cat_snprintf(buf, bufsz, Q_("?uclass:Requires %s units.\n"),
+      cat_snprintf(buf, bufsz, _("Requires %s units.\n"),
                    uclass_name_translation(preq->source.value.uclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -593,11 +494,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
       switch (preq->range) {
       case REQ_RANGE_LOCAL:
         /* TRANS: %s is a list of unit classes separated by "or". */
-        cat_snprintf(buf, bufsz, Q_("?uclasslist:Requires %s units.\n"),
-                     astr_str(&list));
+        cat_snprintf(buf, bufsz, _("Requires %s units.\n"), astr_str(&list));
         done = TRUE;
         break;
-      case REQ_RANGE_CADJACENT:
       case REQ_RANGE_ADJACENT:
       case REQ_RANGE_CITY:
       case REQ_RANGE_CONTINENT:
@@ -615,14 +514,12 @@ static bool insert_requirement(char *buf, size_t bufsz,
     break;
 
   case VUT_OTYPE:
-    /* TRANS: Applies only to food. */
-    cat_snprintf(buf, bufsz, Q_("?output:Applies only to %s.\n"),
+    cat_snprintf(buf, bufsz, _("Applies only to %s.\n"),
                  get_output_name(preq->source.value.outputtype));
     return TRUE;
 
   case VUT_SPECIALIST:
-    /* TRANS: Applies only to scientist */
-    cat_snprintf(buf, bufsz, Q_("?specialist:Applies only to %s.\n"),
+    cat_snprintf(buf, bufsz, _("Applies only to %s.\n"),
                  specialist_plural_translation(preq->source.value.specialist));
     return TRUE;
 
@@ -643,43 +540,11 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_class_name_translation
                    (preq->source.value.terrainclass));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires %s terrain class on a cardinally adjacent tile.\n"),
-                   terrain_class_name_translation
-                   (preq->source.value.terrainclass));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz,
                    _("Requires %s terrain class on an adjacent tile.\n"),
                    terrain_class_name_translation
                    (preq->source.value.terrainclass));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_TERRFLAG:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires \"%s\" terrain flag on the tile.\n"),
-                   terrain_flag_id_name(preq->source.value.terrainflag));
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires \"%s\" terrain flag on a cardinally adjacent tile.\n"),
-                   terrain_flag_id_name(preq->source.value.terrainflag));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz,
-                   _("Requires \"%s\" terrain flag on an adjacent tile.\n"),
-                   terrain_flag_id_name(preq->source.value.terrainflag));
       return TRUE;
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -697,37 +562,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
       cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
                    base_name_translation(preq->source.value.base));
       return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on a cardinally adjacent tile.\n"),
-                   base_name_translation(preq->source.value.base));
-      return TRUE;
     case REQ_RANGE_ADJACENT:
       cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
                    base_name_translation(preq->source.value.base));
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_ROAD:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      cat_snprintf(buf, bufsz, _("Requires a %s on the tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-   case REQ_RANGE_CADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on a cardinally adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      cat_snprintf(buf, bufsz, _("Requires a %s on an adjacent tile.\n"),
-                   road_name_translation(preq->source.value.road));
       return TRUE;
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -752,7 +589,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                    terrain_alteration_name_translation
                    (preq->source.value.terrainalter));
       return TRUE;
-    case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
     case REQ_RANGE_CONTINENT:
@@ -839,7 +675,7 @@ static void insert_allows(struct universal *psource,
 }
 
 /****************************************************************
-  Allocate and initialize new help item
+...
 *****************************************************************/
 static struct help_item *new_help_item(int type)
 {
@@ -1014,16 +850,6 @@ void boot_help_texts(struct player *pplayer)
               help_list_append(category_nodes, pitem);
             } base_type_iterate_end;
             break;
-          case HELP_ROAD:
-            road_type_iterate(proad) {
-              pitem = new_help_item(current_type);
-              fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                          road_name_translation(proad));
-              pitem->topic = fc_strdup(name);
-              pitem->text = fc_strdup("");
-              help_list_append(category_nodes, pitem);
-            } road_type_iterate_end;
-            break;
           case HELP_SPECIALIST:
             specialist_type_iterate(sp) {
               struct specialist *pspec = specialist_by_number(sp);
@@ -1116,16 +942,13 @@ void boot_help_texts(struct player *pplayer)
 
       long_buffer[0] = '\0';
       for (i=0; i<npara; i++) {
-        bool inserted;
         const char *para = paras[i];
         if(strncmp(para, "$", 1)==0) {
-          inserted =
-            insert_generated_text(long_buffer, sizeof(long_buffer), para+1);
+          insert_generated_text(long_buffer, sizeof(long_buffer), para+1);
         } else {
           sz_strlcat(long_buffer, _(para));
-          inserted = TRUE;
         }
-        if (inserted && i!=npara-1) {
+        if (i!=npara-1) {
           sz_strlcat(long_buffer, "\n\n");
         }
       }
@@ -1331,8 +1154,8 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
    * uniqueness, so we don't mention it here.) */
 
   if (building_has_effect(pimprove, EFT_ENABLE_NUKE)
-      && num_role_units(UTYF_NUCLEAR) > 0) {
-    struct unit_type *u = get_role_unit(UTYF_NUCLEAR, 0);
+      && num_role_units(F_NUCLEAR) > 0) {
+    struct unit_type *u = get_role_unit(F_NUCLEAR, 0);
 
     cat_snprintf(buf, bufsz,
 		 /* TRANS: 'Allows all players with knowledge of atomic
@@ -1425,9 +1248,6 @@ static int techs_with_flag_string(char *buf, size_t bufsz,
 char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
 		    const char *user_text, struct unit_type *utype)
 {
-  bool can_be_veteran;
-  int flagid;
-
   fc_assert_ret_val(NULL != buf && 0 < bufsz && NULL != user_text, NULL);
 
   if (!utype) {
@@ -1435,17 +1255,13 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     fc_strlcpy(buf, user_text, bufsz);
     return buf;
   }
-
-  can_be_veteran = !utype_has_flag(utype, UTYF_NO_VETERAN)
-    && utype_veteran_levels(utype) > 1;
-
   buf[0] = '\0';
 
   cat_snprintf(buf, bufsz,
                _("* Belongs to %s unit class.\n"),
                uclass_name_translation(utype_class(utype)));
   if (uclass_has_flag(utype_class(utype), UCF_CAN_OCCUPY_CITY)
-      && !utype_has_flag(utype, UTYF_CIVILIAN)) {
+      && !utype_has_flag(utype, F_CIVILIAN)) {
     CATLSTR(buf, bufsz, _("  * Can occupy empty enemy cities.\n"));
   }
   if (!uclass_has_flag(utype_class(utype), UCF_TERRAIN_SPEED)) {
@@ -1464,7 +1280,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, _("  * Gets used up in making an attack.\n"));
   }
   if (uclass_has_flag(utype_class(utype), UCF_CAN_FORTIFY)
-      && !utype_has_flag(utype, UTYF_SETTLERS)) {
+      && !utype_has_flag(utype, F_SETTLERS)) {
     CATLSTR(buf, bufsz,
             /* xgettext:no-c-format */
             _("  * May fortify, granting a 50% defensive bonus.\n"));
@@ -1478,14 +1294,9 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
 	    _("  * Can pillage tile improvements.\n"));
   }
   if (uclass_has_flag(utype_class(utype), UCF_DOESNT_OCCUPY_TILE)
-      && !utype_has_flag(utype, UTYF_CIVILIAN)) {
+      && !utype_has_flag(utype, F_CIVILIAN)) {
     CATLSTR(buf, bufsz,
 	    _("  * Doesn't prevent enemy cities from working the tile it's on.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_ATTACK_NON_NATIVE)
-      && !utype_has_flag(utype, UTYF_ONLY_NATIVE_ATTACK)) {
-    CATLSTR(buf, bufsz,
-	    _("  * Can attack units on non-native tiles.\n"));
   }
 
   if (utype->need_improvement) {
@@ -1500,10 +1311,10 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                  government_name_translation(utype->need_government));
   }
   
-  if (utype_has_flag(utype, UTYF_NOBUILD)) {
+  if (utype_has_flag(utype, F_NOBUILD)) {
     CATLSTR(buf, bufsz, _("* May not be built in cities.\n"));
   }
-  if (utype_has_flag(utype, UTYF_BARBARIAN_ONLY)) {
+  if (utype_has_flag(utype, F_BARBARIAN_ONLY)) {
     CATLSTR(buf, bufsz, _("* Only barbarians may build this.\n"));
   }
   {
@@ -1530,26 +1341,15 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                  _("* May be converted into %s.\n"),
                  utype_name_translation(utype->converted_to));
   }
-  if (utype_has_flag(utype, UTYF_NOHOME)) {
+  if (utype_has_flag(utype, F_NOHOME)) {
     CATLSTR(buf, bufsz, _("* Never has a home city.\n"));
   }
-  if (utype_has_flag(utype, UTYF_GAMELOSS)) {
+  if (utype_has_flag(utype, F_GAMELOSS)) {
     CATLSTR(buf, bufsz, _("* Losing this unit will lose you the game!\n"));
   }
-  if (utype_has_flag(utype, UTYF_UNIQUE)) {
+  if (utype_has_flag(utype, F_UNIQUE)) {
     CATLSTR(buf, bufsz,
 	    _("* Each player may only have one of this type of unit.\n"));
-  }
-  for (flagid = UTYF_USER_FLAG_1 ; flagid < UTYF_LAST; flagid++) {
-    if (utype_has_flag(utype, flagid)) {
-      const char *helptxt = unit_type_flag_helptxt(flagid);
-
-      if (helptxt != NULL) {
-        CATLSTR(buf, bufsz, "* ");
-        CATLSTR(buf, bufsz, _(helptxt));
-        CATLSTR(buf, bufsz, "\n");
-      }
-    }
   }
   if (utype->pop_cost > 0) {
     cat_snprintf(buf, bufsz,
@@ -1576,24 +1376,24 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                  utype->transport_capacity, astr_str(&list));
     astr_free(&list);
   }
-  if (utype_has_flag(utype, UTYF_TRIREME)) {
+  if (utype_has_flag(utype, F_TRIREME)) {
     CATLSTR(buf, bufsz, _("* Must stay next to coast.\n"));
   }
-  if (utype_has_flag(utype, UTYF_TRADE_ROUTE)) {
+  if (utype_has_flag(utype, F_TRADE_ROUTE)) {
     cat_snprintf(buf, bufsz,
                  /* TRANS: "Manhattan" distance is the distance along
                   * gridlines, with no diagonals allowed. */
                  _("* Can establish trade routes (must travel to target"
                    " city and must be at least %d tiles [in Manhattan"
                    " distance] from this unit's home city).\n"),
-                 game.info.trademindist);
+                 game.info.trademindist_new);
   }
-  if (utype_has_flag(utype, UTYF_HELP_WONDER)) {
+  if (utype_has_flag(utype, F_HELP_WONDER)) {
     cat_snprintf(buf, bufsz,
 		 _("* Can help build wonders (adds %d production).\n"),
 		 utype_build_shield_cost(utype));
   }
-  if (utype_has_flag(utype, UTYF_UNDISBANDABLE)) {
+  if (utype_has_flag(utype, F_UNDISBANDABLE)) {
     CATLSTR(buf, bufsz, _("* May not be disbanded.\n"));
   } else {
     CATLSTR(buf, bufsz,
@@ -1601,17 +1401,17 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
 	    _("* May be disbanded in a city to recover 50% of the"
 	      " production cost.\n"));
   }
-  if (utype_has_flag(utype, UTYF_CITIES)) {
+  if (utype_has_flag(utype, F_CITIES)) {
     CATLSTR(buf, bufsz, _("* Can build new cities.\n"));
   }
-  if (utype_has_flag(utype, UTYF_ADD_TO_CITY)) {
+  if (utype_has_flag(utype, F_ADD_TO_CITY)) {
     cat_snprintf(buf, bufsz,
 		 _("* Can add on %d population to cities of no more than"
 		   " size %d.\n"),
 		 utype_pop_value(utype),
 		 game.info.add_to_size_limit - utype_pop_value(utype));
   }
-  if (utype_has_flag(utype, UTYF_SETTLERS)) {
+  if (utype_has_flag(utype, F_SETTLERS)) {
     char buf2[1024];
 
     /* Roads, rail, mines, irrigation. */
@@ -1639,80 +1439,103 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, _("* Can clean pollution from tiles.\n"));
     CATLSTR(buf, bufsz, _("* Can clean nuclear fallout from tiles.\n"));
   }
+  if (utype_has_flag(utype, F_TRANSFORM)) {
+    CATLSTR(buf, bufsz, _("* Can transform tiles.\n"));
+  }
   /* FIXME: bases -- but there is no good way to find out which bases a unit
    * can conceivably build currently, so we have to remain silent. */
-  if (utype_has_flag(utype, UTYF_DIPLOMAT)) {
-    if (utype_has_flag(utype, UTYF_SPY)) {
+  if (utype_has_flag(utype, F_DIPLOMAT)) {
+    if (utype_has_flag(utype, F_SPY)) {
       CATLSTR(buf, bufsz, _("* Can perform diplomatic actions,"
 			    " plus special spy abilities.\n"));
     } else {
       CATLSTR(buf, bufsz, _("* Can perform diplomatic actions.\n"));
     }
   }
-  if (utype_has_flag(utype, UTYF_DIPLOMAT)
-      || utype_has_flag(utype, UTYF_SUPERSPY)) {
+  if (utype_has_flag(utype, F_DIPLOMAT)
+      || utype_has_flag(utype, F_SUPERSPY)) {
     CATLSTR(buf, bufsz, _("* Defends cities against diplomatic actions.\n"));
   }
-  if (utype_has_flag(utype, UTYF_SUPERSPY)) {
+  if (utype_has_flag(utype, F_SUPERSPY)) {
     CATLSTR(buf, bufsz, _("* Will never lose a diplomat-versus-diplomat fight.\n"));
   }
-  if (utype_has_flag(utype, UTYF_SPY)
-      && utype_has_flag(utype, UTYF_SUPERSPY)) {
-    CATLSTR(buf, bufsz, _("* Will always survive a spy mission.\n"));
-  }
-  if (utype_has_flag(utype, UTYF_UNBRIBABLE)) {
+  if (utype_has_flag(utype, F_UNBRIBABLE)) {
     CATLSTR(buf, bufsz, _("* May not be bribed.\n"));
   }
-  if (utype_has_flag(utype, UTYF_PARTIAL_INVIS)) {
+  if (utype_has_flag(utype, F_PARTIAL_INVIS)) {
     CATLSTR(buf, bufsz,
             _("* Is invisible except when next to an enemy unit or city.\n"));
   }
-  if (utype_has_flag(utype, UTYF_ONLY_NATIVE_ATTACK)) {
+  if (utype_has_flag(utype, F_NO_LAND_ATTACK)) {
     CATLSTR(buf, bufsz,
-            _("* Can only attack units on native tiles.\n"));
+            _("* Can only attack units on ocean tiles (no land attacks).\n"));
   }
-  if (utype_has_flag(utype, UTYF_MARINES)) {
+  if (utype_has_flag(utype, F_MARINES)) {
     CATLSTR(buf, bufsz,
 	    _("* Can attack from aboard sea units: against"
 	      " enemy cities and onto land tiles.\n"));
   }
-  if (utype_has_flag(utype, UTYF_PARATROOPERS)) {
+  if (utype_has_flag(utype, F_PARATROOPERS)) {
     cat_snprintf(buf, bufsz,
 		 _("* Can be paradropped from a friendly city or suitable base"
 		   " (range: %d tiles).\n"),
 		 utype->paratroopers_range);
   }
+  if (utype_has_flag(utype, F_PIKEMEN)) {
+    CATLSTR(buf, bufsz,
+            _("* Gets double defense against units specified as 'mounted'.\n"));
+  }
+  if (utype_has_flag(utype, F_HORSE)) {
+    CATLSTR(buf, bufsz,
+	    _("* Counts as 'mounted' against certain defenders.\n"));
+  }
+  if (utype_has_flag(utype, F_HELICOPTER)) {
+    CATLSTR(buf, bufsz,
+            _("* Counts as 'helicopter' against certain attackers.\n"));
+  }
+  if (utype_has_flag(utype, F_FIGHTER)) {
+    CATLSTR(buf, bufsz,
+            _("* Very good at attacking 'helicopter' units.\n"));
+  }
+  if (utype_has_flag(utype, F_AIRUNIT)) {
+    CATLSTR(buf, bufsz,
+            _("* Very bad at attacking AEGIS units.\n"));
+  }
   if (!uclass_has_flag(utype_class(utype), UCF_MISSILE)
-      && utype_has_flag(utype, UTYF_ONEATTACK)) {
+      && utype_has_flag(utype, F_ONEATTACK)) {
     CATLSTR(buf, bufsz,
 	    _("* Making an attack ends this unit's turn.\n"));
   }
-  if (utype_has_flag(utype, UTYF_NUCLEAR)) {
+  if (utype_has_flag(utype, F_NUCLEAR)) {
     CATLSTR(buf, bufsz,
 	    _("* This unit's attack causes a nuclear explosion!\n"));
   }
-  if (utype_has_flag(utype, UTYF_CITYBUSTER)) {
+  if (utype_has_flag(utype, F_CITYBUSTER)) {
     CATLSTR(buf, bufsz,
 	    _("* Gets double firepower when attacking cities.\n"));
   }
-  if (utype_has_flag(utype, UTYF_IGWALL)) {
+  if (utype_has_flag(utype, F_IGWALL)) {
     CATLSTR(buf, bufsz, _("* Ignores the effects of city walls.\n"));
   }
-  if (utype_has_flag(utype, UTYF_BOMBARDER)) {
+  if (utype_has_flag(utype, F_BOMBARDER)) {
     cat_snprintf(buf, bufsz,
 		 _("* Does bombard attacks (%d per turn).  These attacks will"
 		   " only damage (never kill) the defender, but have no risk"
 		   " for the attacker.\n"),
 		 utype->bombard_rate);
   }
-  if (utype_has_flag(utype, UTYF_IGTER)) {
+  if (utype_has_flag(utype, F_AEGIS)) {
+    CATLSTR(buf, bufsz,
+	    _("* Gets quintuple defense against missiles and aircraft.\n"));
+  }
+  if (utype_has_flag(utype, F_IGTER)) {
     CATLSTR(buf, bufsz,
 	    _("* Ignores terrain effects (treats all tiles as roads).\n"));
   }
-  if (utype_has_flag(utype, UTYF_IGZOC)) {
+  if (utype_has_flag(utype, F_IGZOC)) {
     CATLSTR(buf, bufsz, _("* Ignores zones of control.\n"));
   }
-  if (utype_has_flag(utype, UTYF_CIVILIAN)) {
+  if (utype_has_flag(utype, F_CIVILIAN)) {
     CATLSTR(buf, bufsz,
             _("* A non-military unit:\n"));
     CATLSTR(buf, bufsz,
@@ -1724,17 +1547,69 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz,
             _("  * Doesn't prevent enemy cities from working the tile it's on.\n"));
   }
-  if (utype_has_flag(utype, UTYF_FIELDUNIT)) {
+  if (utype_has_flag(utype, F_FIELDUNIT)) {
     CATLSTR(buf, bufsz,
             _("* A field unit: one unhappiness applies even when non-aggressive.\n"));
   }
-  if (utype_has_flag(utype, UTYF_CAPTURER)) {
+  if (utype_has_flag(utype, F_CAPTURER)) {
     CATLSTR(buf, bufsz, _("* Can capture some enemy units.\n"));
   }
-  if (utype_has_flag(utype, UTYF_CAPTURABLE)) {
+  if (utype_has_flag(utype, F_CAPTURABLE)) {
     CATLSTR(buf, bufsz, _("* Can be captured by some enemy units.\n"));
   }
-  if (utype_has_flag(utype, UTYF_SHIELD2GOLD)) {
+  if (utype_has_flag(utype, F_NO_VETERAN)) {
+    CATLSTR(buf, bufsz, _("* Will never achieve veteran status.\n"));
+  } else {
+    /* Some units can never become veteran through combat in practice. */
+    bool veteran_through_combat =
+      !((utype->attack_strength == 0
+         || uclass_has_flag(utype_class(utype), UCF_MISSILE))
+        && utype->defense_strength == 0);
+    switch(utype_move_type(utype)) {
+      case BOTH_MOVING:
+        if (!utype_has_flag(utype, F_NOBUILD))
+          CATLSTR(buf, bufsz,
+                  _("* Will be built as a veteran in cities with appropriate"
+                    " training facilities (see Airport).\n"));
+        if (veteran_through_combat)
+          CATLSTR(buf, bufsz,
+                  _("* May be promoted after defeating an enemy unit.\n"));
+        break;
+      case LAND_MOVING:
+        if (utype_has_flag(utype, F_DIPLOMAT)||utype_has_flag(utype, F_SPY)) {
+          if (veteran_through_combat)
+            CATLSTR(buf, bufsz,
+                    _("* May be promoted after a successful mission.\n"));
+        } else {
+          if (!utype_has_flag(utype, F_NOBUILD))
+            CATLSTR(buf, bufsz,
+                    _("* Will be built as a veteran in cities with appropriate"
+                      " training facilities (see Barracks).\n"));
+          if (veteran_through_combat)
+            CATLSTR(buf, bufsz,
+                    _("* May be promoted after defeating an enemy unit.\n"));
+        }
+        break;
+      case SEA_MOVING:
+        if (!utype_has_flag(utype, F_NOBUILD))
+          CATLSTR(buf, bufsz,
+                  _("* Will be built as a veteran in cities with appropriate"
+                    " training facilities (see Port Facility).\n"));
+        if (veteran_through_combat)
+          CATLSTR(buf, bufsz,
+                  _("* May be promoted after defeating an enemy unit.\n"));
+        break;
+      default:          /* should never happen in default rulesets */
+        if (veteran_through_combat)
+          CATLSTR(buf, bufsz,
+                  _("* May be promoted through combat or training.\n"));
+        else
+          CATLSTR(buf, bufsz,
+                  _("* May be built as a veteran through training.\n"));
+        break;
+    }
+  }
+  if (utype_has_flag(utype, F_SHIELD2GOLD)) {
     /* FIXME: the conversion shield => gold is activated if
      *        EFT_SHIELD2GOLD_FACTOR is not equal null; how to determine
      *        possible sources? */
@@ -1784,58 +1659,8 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       astr_free(&list);
     }
   }
-  if (!can_be_veteran) {
-    /* Only mention this if the game generally has veteran levels. */
-    if (game.veteran->levels > 1) {
-      CATLSTR(buf, bufsz, _("* Will never achieve veteran status.\n"));
-    }
-  } else {
-    /* Not useful currently: */
-#if 0
-    /* Some units can never become veteran through combat in practice. */
-    bool veteran_through_combat =
-      !((utype->attack_strength == 0
-         || uclass_has_flag(utype_class(utype), UCF_MISSILE))
-        && utype->defense_strength == 0);
-#endif
-    /* FIXME: if we knew the raise chances on the client, we could be
-     * more specific here about whether veteran status can be acquired
-     * through combat/missions/work. */
-    CATLSTR(buf, bufsz, _("* May acquire veteran status.\n"));
-    if (utype_veteran_has_power_bonus(utype)) {
-      if (utype->attack_strength > 0
-          || utype->defense_strength > 0) {
-        CATLSTR(buf, bufsz,
-                _("  * Veterans have increased strength in combat.\n"));
-      }
-      /* SUPERSPY always wins/escapes */
-      if ((utype_has_flag(utype, UTYF_DIPLOMAT)
-           || utype_has_flag(utype, UTYF_SPY))
-          && !utype_has_flag(utype, UTYF_SUPERSPY)) {
-        CATLSTR(buf, bufsz,
-                _("  * Veterans have improved chances in diplomatic "
-                  "contests.\n"));
-        if (utype_has_flag(utype, UTYF_SPY)) {
-          CATLSTR(buf, bufsz,
-                  _("  * Veterans are more likely to survive missions.\n"));
-        }
-      }
-      if (utype_has_flag(utype, UTYF_SETTLERS)) {
-        CATLSTR(buf, bufsz,
-                _("  * Veterans work faster.\n"));
-      }
-    }
-  }
   if (strlen(buf) > 0) {
     CATLSTR(buf, bufsz, "\n");
-  }
-  if (can_be_veteran && utype->veteran) {
-    /* The case where the unit has only a single veteran level has already
-     * been handled above, so keep quiet here if that happens */
-    if (insert_veteran_help(buf, bufsz, utype->veteran,
-            _("This type of unit has its own veteran levels:"), NULL)) {
-      CATLSTR(buf, bufsz, "\n\n");
-    }
   }
   if (NULL != utype->helptext) {
     strvec_iterate(utype->helptext, text) {
@@ -1915,15 +1740,23 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
             _("* Increases the pollution generated by the population.\n"));
 
   if (advance_has_flag(i, TF_BRIDGE)
-      && role_units_translations(&astr, UTYF_SETTLERS, FALSE)) {
+      && role_units_translations(&astr, F_SETTLERS, FALSE)) {
     cat_snprintf(buf, bufsz,
                  /* TRANS: %s is list of units separated by "and". */
                  _("* Allows %s to build roads on river tiles.\n"),
                  astr_str(&astr));
   }
 
+  if (advance_has_flag(i, TF_RAILROAD)
+      && role_units_translations(&astr, F_SETTLERS, FALSE)) {
+    cat_snprintf(buf, bufsz,
+                 /* TRANS: %s is list of units separated by "and". */
+                 _("* Allows %s to upgrade roads to railroads.\n"),
+                 astr_str(&astr));
+  }
+
   if (advance_has_flag(i, TF_FARMLAND)
-      && role_units_translations(&astr, UTYF_SETTLERS, FALSE)) {
+      && role_units_translations(&astr, F_SETTLERS, FALSE)) {
     cat_snprintf(buf, bufsz,
                  /* TRANS: %s is list of units separated by "and". */
                  _("* Allows %s to upgrade irrigation to farmland.\n"),
@@ -1985,12 +1818,12 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, "\n");
   }
   if (terrain_has_flag(pterrain, TER_UNSAFE_COAST)
-      && terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+      && !terrain_has_flag(pterrain, TER_OCEANIC)) {
     CATLSTR(buf, bufsz,
 	    _("* The coastline of this terrain is unsafe."));
     CATLSTR(buf, bufsz, "\n");
   }
-  if (terrain_type_terrain_class(pterrain) == TC_OCEAN) {
+  if (terrain_has_flag(pterrain, TER_OCEANIC)) {
     CATLSTR(buf, bufsz,
 	    _("* Land units cannot travel on oceanic terrains."));
     CATLSTR(buf, bufsz, "\n");
@@ -2136,88 +1969,6 @@ void helptext_base(char *buf, size_t bufsz, struct player *pplayer,
 }
 
 /****************************************************************************
-  Append misc dynamic text for roads.
-  Assumes build time is handled in the GUI front-end.
-
-  pplayer may be NULL.
-****************************************************************************/
-void helptext_road(char *buf, size_t bufsz, struct player *pplayer,
-                   const char *user_text, struct road_type *proad)
-{
-  fc_assert_ret(NULL != buf && 0 < bufsz);
-  buf[0] = '\0';
-
-  if (!proad) {
-    log_error("Unknown road!");
-    return;
-  }
-
-  if (NULL != proad->helptext) {
-    strvec_iterate(proad->helptext, text) {
-      cat_snprintf(buf, bufsz, "%s\n\n", _(text));
-    } strvec_iterate_end;
-  }
-
-  /* XXX Non-zero requirement vector is not a good test of whether
-   * insert_requirement() will give any output. */
-  if (requirement_vector_size(&proad->reqs) > 0) {
-    if (proad->buildable) {
-      CATLSTR(buf, bufsz, _("Requirements to build:\n"));
-    }
-    requirement_vector_iterate(&proad->reqs, preq) {
-      (void) insert_requirement(buf, bufsz, pplayer, preq);
-    } requirement_vector_iterate_end;
-    CATLSTR(buf, bufsz, "\n");
-  }
-
-  {
-    const char *classes[uclass_count()];
-    int i = 0;
-
-    unit_class_iterate(uclass) {
-      if (is_native_road_to_uclass(proad, uclass)) {
-        classes[i++] = uclass_name_translation(uclass);
-      }
-    } unit_class_iterate_end;
-
-    if (0 < i) {
-      struct astring list = ASTRING_INIT;
-
-      /* TRANS: %s is a list of unit classes separated by "and". */
-      cat_snprintf(buf, bufsz, _("* Can be traveled by %s units.\n"),
-                   astr_build_and_list(&list, classes, i));
-      astr_free(&list);
-
-      if (road_has_flag(proad, RF_NATIVE_TILE)) {
-        CATLSTR(buf, bufsz,
-                _("  * Such units can move onto this tile even if it would "
-                  "not normally be suitable terrain.\n"));
-      }
-    }
-  }
-
-  if (!proad->buildable) {
-    CATLSTR(buf, bufsz, _("* Cannot be built.\n"));
-  }
-  if (proad->pillageable) {
-    CATLSTR(buf, bufsz,
-            _("* Can be pillaged by units.\n"));
-  }
-
-  if (road_has_flag(proad, RF_REQUIRES_BRIDGE)) {
-    /* TODO: List actual technologies. */
-    CATLSTR(buf, bufsz,
-            _("* Cannot be built to river tiles unless some technology "
-              "allowing bridge building is knowns.\n"));
-  }
-
-  if (user_text && user_text[0] != '\0') {
-    CATLSTR(buf, bufsz, "\n\n");
-    CATLSTR(buf, bufsz, user_text);
-  }
-}
-
-/****************************************************************************
   Append misc dynamic text for specialists.
   Assumes effects are described in the help text.
 
@@ -2293,7 +2044,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
     Output_type_id output_type = O_LAST;
     struct unit_class *unitclass = NULL;
     struct unit_type *unittype = NULL;
-    enum unit_type_flag_id unitflag = UTYF_LAST;
+    enum unit_flag_id unitflag = F_LAST;
     struct strvec *outputs = strvec_new();
     struct astring outputs_or = ASTRING_INIT;
     struct astring outputs_and = ASTRING_INIT;
@@ -2323,7 +2074,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
          }
          break;
        case VUT_UTFLAG:
-         if (unitflag == UTYF_LAST) {
+         if (unitflag == F_LAST) {
            /* FIXME: We should list all the unit flag requirements,
             *        not only first one. */
            unitflag = preq->source.value.unitflag;
@@ -2561,10 +2312,10 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
           cat_snprintf(buf, bufsz,
                        _("* Veteran %s units.\n"),
                        utype_name_translation(unittype));
-        } else if (unitflag != UTYF_LAST) {
+        } else if (unitflag != F_LAST) {
           cat_snprintf(buf, bufsz,
                        _("* Veteran %s units.\n"),
-                       unit_type_flag_rule_name(unitflag));
+                       unit_flag_rule_name(unitflag));
         } else {
           CATLSTR(buf, bufsz, _("* Veteran units.\n"));
         }
@@ -2733,132 +2484,14 @@ char *helptext_unit_upkeep_str(struct unit_type *utype)
 }
 
 /****************************************************************************
-  Returns nation legend and characteristics
+  Returns nation legend
 ****************************************************************************/
 void helptext_nation(char *buf, size_t bufsz, struct nation_type *pnation,
 		     const char *user_text)
 {
-  fc_assert_ret(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
   if (pnation->legend[0] != '\0') {
     sprintf(buf, "%s\n\n", _(pnation->legend));
-  }
-  
-  cat_snprintf(buf, bufsz,
-               _("Initial government is %s.\n"),
-               government_name_translation(pnation->init_government));
-  if (pnation->init_techs[0] != A_LAST) {
-    const char *tech_names[MAX_NUM_TECH_LIST];
-    int i;
-    struct astring list = ASTRING_INIT;
-    for (i = 0; i < MAX_NUM_TECH_LIST; i++) {
-      if (pnation->init_techs[i] == A_LAST) {
-        break;
-      }
-      tech_names[i] =
-        advance_name_translation(advance_by_number(pnation->init_techs[i]));
-    }
-    astr_build_and_list(&list, tech_names, i);
-    if (game.rgame.global_init_techs[0] != A_LAST) {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of techs */
-                   _("Starts with knowledge of %s in addition to the standard "
-                     "starting technologies.\n"), astr_str(&list));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of techs */
-                   _("Starts with knowledge of %s.\n"), astr_str(&list));
-    }
-    astr_free(&list);
-  }
-  if (pnation->init_units[0]) {
-    const struct unit_type *utypes[MAX_NUM_UNIT_LIST];
-    int count[MAX_NUM_UNIT_LIST];
-    int i, j, n = 0, total = 0;
-    /* Count how many of each type there is. */
-    for (i = 0; i < MAX_NUM_UNIT_LIST; i++) {
-      if (!pnation->init_units[i]) {
-        break;
-      }
-      for (j = 0; j < n; j++) {
-        if (pnation->init_units[i] == utypes[j]) {
-          count[j]++;
-          total++;
-          break;
-        }
-      }
-      if (j == n) {
-        utypes[n] = pnation->init_units[i];
-        count[n] = 1;
-        total++;
-        n++;
-      }
-    }
-    {
-      /* Construct the list of unit types and counts. */
-      struct astring utype_names[MAX_NUM_UNIT_LIST];
-      struct astring list = ASTRING_INIT;
-      for (i = 0; i < n; i++) {
-        astr_init(&utype_names[i]);
-        if (count[i] > 1) {
-          /* TRANS: a unit type followed by a count. For instance,
-           * "Fighter (2)" means two Fighters. Count is never 1. 
-           * Used in a list. */
-          astr_set(&utype_names[i], _("%s (%d)"),
-                   utype_name_translation(utypes[i]), count[i]);
-        } else {
-          astr_set(&utype_names[i], "%s", utype_name_translation(utypes[i]));
-        }
-      }
-      {
-        const char *utype_name_strs[MAX_NUM_UNIT_LIST];
-        for (i = 0; i < n; i++) {
-          utype_name_strs[i] = astr_str(&utype_names[i]);
-        }
-        astr_build_and_list(&list, utype_name_strs, n);
-      }
-      for (i = 0; i < n; i++) {
-        astr_free(&utype_names[i]);
-      }
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of unit types
-                    * possibly with counts. Plurality is in total number of
-                    * units represented. */
-                   PL_("Starts with the following additional unit: %s.\n",
-                       "Starts with the following additional units: %s.\n",
-                      total), astr_str(&list));
-      astr_free(&list);
-    }
-  }
-  if (pnation->init_buildings[0] != B_LAST) {
-    const char *impr_names[MAX_NUM_BUILDING_LIST];
-    int i;
-    struct astring list = ASTRING_INIT;
-    for (i = 0; i < MAX_NUM_BUILDING_LIST; i++) {
-      if (pnation->init_buildings[i] == B_LAST) {
-        break;
-      }
-      impr_names[i] =
-        improvement_name_translation(
-          improvement_by_number(pnation->init_buildings[i]));
-    }
-    astr_build_and_list(&list, impr_names, i);
-    if (game.rgame.global_init_buildings[0] != B_LAST) {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of improvements */
-                   _("First city will get %s for free in addition to the "
-                     "standard improvements.\n"), astr_str(&list));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: %s is an and-separated list of improvements */
-                   _("First city will get %s for free.\n"), astr_str(&list));
-    }
-    astr_free(&list);
-  }
-
-  if (user_text && user_text[0] != '\0') {
-    CATLSTR(buf, bufsz, "\n");
-    CATLSTR(buf, bufsz, user_text);
   }
 }

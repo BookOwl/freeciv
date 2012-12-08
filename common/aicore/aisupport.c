@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -44,11 +44,12 @@ struct player *player_leading_spacerace(void)
     return NULL;
   }
 
-  players_iterate_alive(pplayer) {
+  players_iterate(pplayer) {
     struct player_spaceship *ship = &pplayer->spaceship;
     int arrival = (int) ship->travel_time + ship->launch_year;
 
-    if (is_barbarian(pplayer) || ship->state == SSHIP_NONE) {
+    if (!pplayer->is_alive || is_barbarian(pplayer)
+        || ship->state == SSHIP_NONE) {
       continue;
     }
 
@@ -62,7 +63,7 @@ struct player *player_leading_spacerace(void)
       best_arrival = arrival;
       best = pplayer;
     }
-  } players_iterate_alive_end;
+  } players_iterate_end;
 
   return best;
 }
@@ -110,19 +111,19 @@ int city_gold_worth(struct city *pcity)
   struct player *pplayer = city_owner(pcity);
   int worth = 0, i;
   struct unit_type *u
-    = best_role_unit_for_player(city_owner(pcity), UTYF_CITIES);
+    = best_role_unit_for_player(city_owner(pcity), F_CITIES);
 
   if (u) {
     worth += utype_buy_gold_cost(u, 0); /* cost of settler */
   }
-  for (i = 1; i < city_size_get(pcity); i++) {
+  for (i = 1; i < pcity->size; i++) {
     worth += city_granary_size(i); /* cost of growing city */
   }
   output_type_iterate(o) {
     worth += pcity->prod[o] * 10;
   } output_type_iterate_end;
   unit_list_iterate(pcity->units_supported, punit) {
-    if (same_pos(unit_tile(punit), pcity->tile)) {
+    if (same_pos(punit->tile, pcity->tile)) {
       struct unit_type *punittype = unit_type(punit)->obsoleted_by;
 
       if (punittype && can_city_build_unit_direct(pcity, punittype)) {
@@ -144,3 +145,4 @@ int city_gold_worth(struct city *pcity)
   }
   return worth;
 }
+

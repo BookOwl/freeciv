@@ -2,10 +2,9 @@
 
 name=_("English")
 plural=_("?plural:English")
-groups="Medieval", "Early Modern", "European", "Core"
-; /* TRANS: Legend for nation in "core" set */
+groups="Medieval", "Early Modern", "European"
 legend=_("England was unified by Alfred the Great of Wessex in the late\
- 9th century, only to be conquered by William of Normandy a century\
+ 9th century AD, only to be conquered by William of Normandy a century\
  later, in the last successful invasion of the country.")
 
 leaders = {
@@ -23,10 +22,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
- "Anarchy",         _("Pretender %s"),      _("?female:Pretender %s")
- "Despotism",       _("Lord %s"),         _("Lady %s")
- "Fundamentalism",  _("Bishop %s"),         _("?female:Bishop %s")
- "Republic",        _("Lord Protector %s"), _("Lady Protector %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
+ "Fundamentalism",  _("Lord Protector %s"), _("Lady Protector %s")
 }
 
 flag="england"
@@ -35,6 +32,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "cornish", "british", "northumbrian"
 

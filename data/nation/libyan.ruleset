@@ -20,51 +20,40 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",      "female_title"
- "Despotism",        _("%s Dey"),         _("?female:%s Dey")
+ "Republic",        _("%s Dey"),         _("?female:%s Dey")
+ "Communism",       _("Colonel %s"),     _("?female:Colonel %s")
 }
 
 flag ="libya"
-flag_alt = "libya_old"
+flag_alt = "-"
 city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "cyrenaican"
+civilwar_nations = "egyptian arab", "tunisian"
 
 cities =
  "Tarabulus",	; Also known as "Tripoli"
- "Binghazi",
- "Tubruq",
- "Zuwara",
+ "Tobruk",
+ "Banghazi",
+ "Zuwarah",
  "Surt",
  "Ra's Lanuf",
- "Al-Bayda",
- "Al-Burayqa",
- "Darna",
+ "Al Bayda",
+ "Al Burayqah",
+ "Darnah",
  "Sabha",
- "Al-Jawf",
+ "Al Jawf",
  "Ghadamis",
- "Al-Marj",
- "Igdabiya",
+ "Al Marj",
+ "Ajdabiya",
  "Waddan",
  "Bani Walid",
- "Mishrata",
- "Al-Khums",
+ "Misratah",
+ "Al Khums",
  "Gharyan",
- "Az-Zawiya",
- "Yifrin",
- "Awbari",
- "Al-'Aziziya",
- "Al-Khums",
- "Darna",
- "Nalut",
- "Murzuq",
- "Adri",
- "Hun",
- "Ghat",
- "Tarhuna",
- "Tajura",
- "Al-Abyar",
- "Al-Quba",
- "Mizda"
+ "Az Zawiyah",
+ "Yafran",
+ "Awbari"

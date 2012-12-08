@@ -39,9 +39,10 @@ city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="chiapanec", "mayan", "belizean"
+civilwar_nations="salvadoran", "mayan"
 
 cities =
   "Guatemala (mountains, hills)", 

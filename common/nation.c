@@ -16,7 +16,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -31,7 +31,6 @@
 #include "government.h"
 #include "player.h"
 #include "tech.h"
-#include "traits.h"
 
 #include "nation.h"
 
@@ -46,9 +45,6 @@ struct nation_group {
 
       /* How much the AI will try to select a nation in the same group */
       int match;
-
-      /* Whether to treat the group as a self-contained subset */
-      bool set;
     } server;
 
     struct {
@@ -70,8 +66,7 @@ static struct nation_group nation_groups[MAX_NUM_NATION_GROUPS];
 #define NATION_CHECK(pnation, action)                                       \
     fc_assert_action(nation_check(pnation,                                  \
                                   log_do_output_for_level(LOG_ERROR),       \
-                                  __FILE__, __FUNCTION__, __FC_LINE__),     \
-                                  action)
+                                  __FILE__, __FUNCTION__, __LINE__), action)
 #else
 #define NATION_CHECK(pnation, action) /* Do Nothing. */
 #endif /* DEBUG */
@@ -570,8 +565,6 @@ static void nation_init(struct nation_type *pnation)
     pnation->server.civilwar_nations = nation_list_new();
     pnation->server.parent_nations = nation_list_new();
     pnation->server.conflicts_with = nation_list_new();
-    /* server.rgb starts out NULL */
-    pnation->server.traits = fc_calloc(TRAIT_COUNT, sizeof(int));
   }
 }
 
@@ -589,8 +582,6 @@ static void nation_free(struct nation_type *pnation)
     nation_list_destroy(pnation->server.civilwar_nations);
     nation_list_destroy(pnation->server.parent_nations);
     nation_list_destroy(pnation->server.conflicts_with);
-    rgbcolor_destroy(pnation->server.rgb);
-    FC_FREE(pnation->server.traits);
   }
 
   memset(pnation, 0, sizeof(*pnation));
@@ -641,16 +632,6 @@ int city_style_of_nation(const struct nation_type *pnation)
 }
 
 /****************************************************************************
-  Returns nation's player color preference, or NULL if none.
-  Server only function.
-****************************************************************************/
-const struct rgbcolor *nation_color(const struct nation_type *pnation)
-{
-  NATION_CHECK(pnation, return NULL);
-  return pnation->server.rgb;
-}
-
-/****************************************************************************
   Return the number of nation groups.
 ****************************************************************************/
 int nation_group_count(void)
@@ -683,7 +664,7 @@ struct nation_group *nation_group_new(const char *name)
   struct nation_group *pgroup;
 
   if (MAX_NUM_NATION_GROUPS <= num_nation_groups) {
-    log_error("Too many groups/sets of nations (%d is the maximum).",
+    log_error("Too many groups of nations (%d is the maximum).",
               MAX_NUM_NATION_GROUPS);
     return NULL;
   }
@@ -692,13 +673,12 @@ struct nation_group *nation_group_new(const char *name)
   pgroup = nation_groups + num_nation_groups;
   name_set(&pgroup->name, name);
   if (NULL != nation_group_by_rule_name(rule_name(&pgroup->name))) {
-    log_error("Duplicate nation group/set name %s.", rule_name(&pgroup->name));
+    log_error("Duplicate nation group name %s.", rule_name(&pgroup->name));
     return NULL;
   }
 
   if (is_server()) {
     pgroup->server.match = 0;
-    pgroup->server.set = FALSE;
   }
   num_nation_groups++;
 
@@ -745,28 +725,6 @@ void nation_group_set_match(struct nation_group *pgroup, int match)
   fc_assert_ret(is_server());
   fc_assert_ret(NULL != pgroup);
   pgroup->server.match = match;
-}
-
-/****************************************************************************
-  Set whether the group is considered a self-contained subset.
-  Server only function.
-****************************************************************************/
-void nation_group_set_set(struct nation_group *pgroup, bool is_set)
-{
-  fc_assert_ret(is_server());
-  fc_assert_ret(NULL != pgroup);
-  pgroup->server.set = is_set;
-}
-
-/****************************************************************************
-  Return whether the group is considered a self-contained subset.
-  Server only function.
-****************************************************************************/
-bool nation_group_is_a_set(const struct nation_group *pgroup)
-{
-  fc_assert_ret_val(is_server(), FALSE);
-  fc_assert_ret_val(NULL != pgroup, FALSE);
-  return pgroup->server.set;
 }
 
 /****************************************************************************
@@ -900,29 +858,6 @@ bool can_conn_edit_players_nation(const struct connection *pconn,
           || (game.info.is_new_game
 	      && ((!pconn->observer && pconn->playing == pplayer)
 	           || pconn->access_level >= ALLOW_CTRL)));
-}
-
-/****************************************************************************
-  Set the nation groups that random nation selection is allowed to pick from.
-  If NULL, there are no restrictions.
-  Ownership of plist is passed to this module. Any previous list is freed.
-****************************************************************************/
-static struct nation_group_list *allowed_nation_groups = NULL;
-void set_allowed_nation_groups(struct nation_group_list *plist)
-{
-  if (allowed_nation_groups) {
-    nation_group_list_destroy(allowed_nation_groups);
-  }
-  allowed_nation_groups = plist;
-}
-
-/****************************************************************************
-  Get the nation groups that random nation selection is allowed to pick from.
-  If NULL, there are no restrictions.
-****************************************************************************/
-const struct nation_group_list *get_allowed_nation_groups(void)
-{
-  return allowed_nation_groups;
 }
 
 /****************************************************************************

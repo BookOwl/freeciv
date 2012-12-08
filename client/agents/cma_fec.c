@@ -17,7 +17,7 @@
 **************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -89,7 +89,7 @@ void cmafec_init(void)
 }
 
 /**************************************************************************
-  Free resources allocated for presets system.
+ ...
 **************************************************************************/
 void cmafec_free(void)
 {
@@ -216,7 +216,7 @@ int cmafec_preset_num(void)
 }
 
 /**************************************************************************
-  Return short description of city governor preset
+...
 **************************************************************************/
 const char *cmafec_get_short_descr_of_city(const struct city *pcity)
 {
@@ -246,7 +246,7 @@ const char *cmafec_get_short_descr(const struct cm_parameter *const
 }
 
 /**************************************************************************
-  Return string describing when city is assumed to grow.
+...
 **************************************************************************/
 static const char *get_city_growth_string(struct city *pcity, int surplus)
 {
@@ -259,7 +259,7 @@ static const char *get_city_growth_string(struct city *pcity, int surplus)
   }
 
   stock = pcity->food_stock;
-  cost = city_granary_size(city_size_get(pcity));
+  cost = city_granary_size(pcity->size);
 
   stock += surplus;
 
@@ -280,7 +280,7 @@ static const char *get_city_growth_string(struct city *pcity, int surplus)
 }
 
 /**************************************************************************
-  Return string describing when city is assumed to finish current production
+...
 **************************************************************************/
 static const char *get_prod_complete_string(struct city *pcity, int surplus)
 {
@@ -317,7 +317,7 @@ static const char *get_prod_complete_string(struct city *pcity, int surplus)
 }
 
 /**************************************************************************
-  Return string describing result
+...
 **************************************************************************/
 const char *cmafec_get_result_descr(struct city *pcity,
                                     const struct cm_result *result,
@@ -343,7 +343,7 @@ const char *cmafec_get_result_descr(struct city *pcity,
     } output_type_iterate_end;
 
     fc_snprintf(buf[6], BUFFER_SIZE, "%d/%s%s",
-                city_size_get(pcity) - cm_result_specialists(result),
+                pcity->size - cm_result_specialists(result),
                 specialists_string(result->specialists),
                 result->happy ? _(" happy") : "");
 

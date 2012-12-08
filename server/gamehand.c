@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h> /* for remove() */ 
@@ -29,7 +29,6 @@
 #include "support.h"
 
 /* common */
-#include "ai.h"
 #include "events.h"
 #include "game.h"
 #include "improvement.h"
@@ -37,7 +36,6 @@
 #include "packets.h"
 
 /* server */
-#include "citytools.h"
 #include "connecthand.h"
 #include "ggzserver.h"
 #include "maphand.h"
@@ -45,9 +43,6 @@
 #include "plrhand.h"
 #include "srv_main.h"
 #include "unittools.h"
-
-/* server/advisors */
-#include "advdata.h"
 
 #include "gamehand.h"
 
@@ -164,7 +159,7 @@ static struct tile *place_starting_unit(struct tile *starttile,
   if (utype != NULL) {
     /* We cannot currently handle sea units as start units.
      * TODO: remove this code block when we can. */
-    if (utype_move_type(utype) == UMT_SEA) {
+    if (utype_move_type(utype) == SEA_MOVING) {
       log_error("Sea moving start units are not yet supported, "
                 "%s not created.",
                 utype_rule_name(utype));
@@ -192,9 +187,10 @@ static struct tile *find_dispersed_position(struct player *pplayer,
   int x, y;
 
   do {
-    index_to_map_pos(&x, &y, tile_index(pcenter));
-    x += fc_rand(2 * game.server.dispersion + 1) - game.server.dispersion;
-    y += fc_rand(2 * game.server.dispersion + 1) - game.server.dispersion;
+    x = pcenter->x + fc_rand(2 * game.server.dispersion + 1) 
+        - game.server.dispersion;
+    y = pcenter->y + fc_rand(2 * game.server.dispersion + 1)
+        - game.server.dispersion;
   } while (!((ptile = map_pos_to_tile(x, y))
              && tile_continent(pcenter) == tile_continent(ptile)
              && !is_ocean_tile(ptile)
@@ -380,19 +376,9 @@ void init_new_game(void)
 
   /* Loop over all players, creating their initial units... */
   players_iterate(pplayer) {
-    /* We have to initialise the advisor and ai here as we could make contact
-     * to other nations at this point. */
-    adv_data_phase_init(pplayer, FALSE);
-    CALL_PLR_AI_FUNC(phase_begin, pplayer, pplayer, FALSE);
-
     struct tile *ptile = player_startpos[player_index(pplayer)];
 
     fc_assert_action(NULL != ptile, continue);
-
-    /* Place first city */
-    if (game.server.start_city) {
-      create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile));
-    }
 
     /* Place the first unit. */
     if (place_starting_unit(ptile, pplayer,
@@ -424,24 +410,21 @@ void init_new_game(void)
 
     /* Place nation specific start units (not role based!) */
     i = 0;
-    while (NULL != nation->init_units[i] && MAX_NUM_UNIT_LIST > i) {
+    while (NULL != nation->server.init_units[i] && MAX_NUM_UNIT_LIST > i) {
       struct tile *rand_tile = find_dispersed_position(pplayer, ptile);
 
-      create_unit(pplayer, rand_tile, nation->init_units[i], FALSE, 0, 0);
+      create_unit(pplayer, rand_tile, nation->server.init_units[i], FALSE, 0, 0);
       placed_units[player_index(pplayer)]++;
       i++;
     }
   } players_iterate_end;
 
+#ifndef NDEBUG
   players_iterate(pplayer) {
-    /* Close the active phase for advisor and ai for all players; it was
-     * opened in the first loop above. */
-    adv_data_phase_done(pplayer);
-    CALL_PLR_AI_FUNC(phase_finished, pplayer, pplayer);
-
     fc_assert_msg(0 < placed_units[player_index(pplayer)],
                   _("No units placed for %s!"), player_name(pplayer));
   } players_iterate_end;
+#endif /* NDEBUG */
 
   shuffle_players();
 }
@@ -495,12 +478,15 @@ void send_game_info(struct conn_list *dest)
      * but the server's timer is only ever reset at the start of a phase
      * (and game.info.seconds_to_phasedone is relative to this).
      * Account for the difference. */
-    ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
+    ginfo.seconds_to_phasedone2 =
+      ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
         - read_timer_seconds(game.server.phase_timer);
   } else {
     /* unused but at least initialized */
-    ginfo.seconds_to_phasedone = -1.0;
+    ginfo.seconds_to_phasedone2 = ginfo.seconds_to_phasedone = -1.0;
   }
+
+  ginfo.trademindist_old = ginfo.trademindist_new;
 
   conn_list_iterate(dest, pconn) {
     send_packet_game_info(pconn, &ginfo);

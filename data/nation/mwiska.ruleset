@@ -21,19 +21,17 @@ leaders = {
 "Tundama",              "Male"
 "Aquimin",              "Male"
 }
-ruler_titles = {
- "government",      "male_title",      "female_title"
- "Despotism",       _("Cacique %s"),   _("?female:Cacique %s")
-}
+
 flag = "mwiska" 
 flag_alt = "-" 
 city_style = "Tropical" 
 
 init_techs="" 
 init_buildings="" 
+init_government="Despotism" 
 init_units="" 
 conflicts_with="colombian"
-civilwar_nations="tairona", "inca", "kuna"
+civilwar_nations="tairona", "inca" 
 
 cities = 
 "Mequetá", 

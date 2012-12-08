@@ -24,6 +24,7 @@ struct editbar {
   /* The widget holding the entire edit bar. */
   GtkWidget *widget;
 
+  GtkTooltips *tooltips;
   GtkSizeGroup *size_group;
 
   GtkWidget *mode_buttons[NUM_EDITOR_TOOL_MODES];
@@ -43,6 +44,8 @@ gboolean handle_edit_key_release(GdkEventKey *ev);
 
 struct editinfobox {
   GtkWidget *widget;
+
+  GtkTooltips *tooltips;
 
   GtkWidget *mode_image;
   GtkWidget *mode_label;

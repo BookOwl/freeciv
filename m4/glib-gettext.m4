@@ -29,7 +29,7 @@
 # We need this here as well, since someone might use autoconf-2.5x
 # to configure GLib then an older version to configure a package
 # using AM_GLIB_GNU_GETTEXT
-AC_PREREQ([2.58])
+AC_PREREQ(2.53)
 
 dnl
 dnl We go to great lengths to make sure that aclocal won't 
@@ -49,9 +49,10 @@ glib_DEFUN([GLIB_LC_MESSAGES],
   [AC_CHECK_HEADERS([locale.h])
     if test $ac_cv_header_locale_h = yes; then
     AC_CACHE_CHECK([for LC_MESSAGES], am_cv_val_LC_MESSAGES,
-      [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <locale.h>]], [[return LC_MESSAGES]])],[am_cv_val_LC_MESSAGES=yes],[am_cv_val_LC_MESSAGES=no])])
+      [AC_TRY_LINK([#include <locale.h>], [return LC_MESSAGES],
+       am_cv_val_LC_MESSAGES=yes, am_cv_val_LC_MESSAGES=no)])
     if test $am_cv_val_LC_MESSAGES = yes; then
-      AC_DEFINE([HAVE_LC_MESSAGES], [1],
+      AC_DEFINE(HAVE_LC_MESSAGES, 1,
         [Define if your <locale.h> file defines LC_MESSAGES.])
     fi
   fi])
@@ -118,16 +119,22 @@ glib_DEFUN([GLIB_WITH_NLS],
       # First check in libc
       #
       AC_CACHE_CHECK([for ngettext in libc], gt_cv_func_ngettext_libc,
-        [AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+        [AC_TRY_LINK([
 #include <libintl.h>
-]], [[return !ngettext ("","", 1)]])],[gt_cv_func_ngettext_libc=yes],[gt_cv_func_ngettext_libc=no])
+],
+         [return !ngettext ("","", 1)],
+	  gt_cv_func_ngettext_libc=yes,
+          gt_cv_func_ngettext_libc=no)
         ])
   
       if test "$gt_cv_func_ngettext_libc" = "yes" ; then
 	      AC_CACHE_CHECK([for dgettext in libc], gt_cv_func_dgettext_libc,
-        	[AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+        	[AC_TRY_LINK([
 #include <libintl.h>
-]], [[return !dgettext ("","")]])],[gt_cv_func_dgettext_libc=yes],[gt_cv_func_dgettext_libc=no])
+],
+	          [return !dgettext ("","")],
+		  gt_cv_func_dgettext_libc=yes,
+	          gt_cv_func_dgettext_libc=no)
         	])
       fi
   
@@ -191,7 +198,7 @@ glib_DEFUN([GLIB_WITH_NLS],
       fi
   
       if test "$gt_cv_have_gettext" = "yes"; then
-	AC_DEFINE([HAVE_GETTEXT], [1],
+	AC_DEFINE(HAVE_GETTEXT,1,
 	  [Define if the GNU gettext() function is already present or preinstalled.])
 	GLIB_PATH_PROG_WITH_TEST(MSGFMT, msgfmt,
 	  [test -z "`$ac_dir/$ac_word -h 2>&1 | grep 'dv '`"], no)dnl
@@ -216,9 +223,11 @@ msgstr ""
 	  AC_PATH_PROG(GMSGFMT, gmsgfmt, $MSGFMT)
 	  GLIB_PATH_PROG_WITH_TEST(XGETTEXT, xgettext,
 	    [test -z "`$ac_dir/$ac_word -h 2>&1 | grep '(HELP)'`"], :)
-	  AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[extern int _nl_msg_cat_cntr;
-			 return _nl_msg_cat_cntr]])],[CATOBJEXT=.gmo 
-             DATADIRNAME=share],[case $host in
+	  AC_TRY_LINK(, [extern int _nl_msg_cat_cntr;
+			 return _nl_msg_cat_cntr],
+	    [CATOBJEXT=.gmo 
+             DATADIRNAME=share],
+	    [case $host in
 	    *-*-solaris*)
 	    dnl On Solaris, if bind_textdomain_codeset is in libc,
 	    dnl GNU format message catalog is always supported,
@@ -245,7 +254,7 @@ msgstr ""
     ])
 
     if test "$gt_cv_have_gettext" = "yes" ; then
-      AC_DEFINE([ENABLE_NLS], [1],
+      AC_DEFINE(ENABLE_NLS, 1,
         [always defined to indicate that i18n is enabled])
     fi
 
@@ -265,9 +274,10 @@ msgstr ""
     # We need to process the po/ directory.
     POSUB=po
 
-    AC_CONFIG_COMMANDS([default-1],[[case "$CONFIG_FILES" in *po/Makefile.in*)
+    AC_OUTPUT_COMMANDS(
+      [case "$CONFIG_FILES" in *po/Makefile.in*)
         sed -e "/POTFILES =/r po/POTFILES" po/Makefile.in > po/Makefile
-      esac]],[[]])
+      esac])
 
     dnl These rules are solely for the distribution goal.  While doing this
     dnl we only have to keep exactly one list of the available catalogs
@@ -393,7 +403,7 @@ fi
 prefix="$glib_save_prefix"
 exec_prefix="$glib_save_exec_prefix"
 datarootdir="$glib_save_datarootdir"
-AC_DEFINE_UNQUOTED([$1], ["$localedir"],
+AC_DEFINE_UNQUOTED($1, "$localedir",
   [Define the location where the catalogs will be installed])
 ])
 

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -720,7 +720,7 @@ static void help_update_unit_type(const struct help_item *pitem,
     SetWindowText(help_ulabel[0][4], buf);
     sprintf(buf, "%d", utype->defense_strength);
     SetWindowText(help_ulabel[1][1], buf);
-    sprintf(buf, "%s", move_points_text(utype->move_rate, NULL, NULL, FALSE));
+    sprintf(buf, "%d", utype->move_rate/3);
     SetWindowText(help_ulabel[1][4], buf);
     sprintf(buf, "%d", utype->firepower);
     SetWindowText(help_ulabel[2][1], buf);

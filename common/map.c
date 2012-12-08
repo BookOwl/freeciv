@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 #include <string.h>             /* strlen */
 
@@ -31,7 +31,6 @@
 #include "movement.h"
 #include "nation.h"
 #include "packets.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -95,7 +94,7 @@ static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
   Return a bitfield of the specials on the tile that are infrastructure.
 ****************************************************************************/
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
-                                       int *pcount)
+					  int *pcount)
 {
   bv_special pspresent;
   int i, count = 0;
@@ -134,48 +133,6 @@ bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount)
     *pcount = count;
   }
   return bspresent;
-}
-
-/****************************************************************************
-  Return a bitfield of the pillageable roads on the tile.
-****************************************************************************/
-bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount)
-{
-  bv_roads rspresent;
-  int count = 0;
-
-  BV_CLR_ALL(rspresent);
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)) {
-      if (proad->pillageable) {
-        struct tile *roadless = tile_virtual_new(ptile);
-        bool dependency = FALSE;
-
-        tile_remove_road(roadless, proad);
-        road_type_iterate(pdependant) {
-          if (tile_has_road(ptile, pdependant)) {
-            if (!are_reqs_active(NULL, NULL, NULL, roadless,
-                                 NULL, NULL, NULL,
-                                 &pdependant->reqs, RPT_POSSIBLE)) {
-              dependency = TRUE;
-              break;
-            }
-          }
-        } road_type_iterate_end;
-
-        tile_virtual_destroy(roadless);
-
-        if (!dependency) {
-          BV_SET(rspresent, road_index(proad));
-          count++;
-        }
-      }
-    }
-  } road_type_iterate_end;
-  if (pcount) {
-    *pcount = count;
-  }
-  return rspresent;
 }
 
 /***************************************************************
@@ -372,7 +329,7 @@ void map_init_topology(bool set_sizes)
 }
 
 /***************************************************************
-  Initialize tile structure
+...
 ***************************************************************/
 static void tile_init(struct tile *ptile)
 {
@@ -380,7 +337,6 @@ static void tile_init(struct tile *ptile)
 
   tile_clear_all_specials(ptile);
   BV_CLR_ALL(ptile->bases);
-  BV_CLR_ALL(ptile->roads);
   ptile->resource = NULL;
   ptile->terrain  = T_UNKNOWN;
   ptile->units    = unit_list_new();
@@ -396,19 +352,17 @@ static void tile_init(struct tile *ptile)
 ****************************************************************************/
 struct tile *mapstep(const struct tile *ptile, enum direction8 dir)
 {
-  int dx, dy, tile_x, tile_y;
+  int x, y;
 
   if (!is_valid_dir(dir)) {
     return NULL;
   }
 
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile)); 
-  DIRSTEP(dx, dy, dir);
+  DIRSTEP(x, y, dir);
+  x += ptile->x;
+  y += ptile->y;
 
-  tile_x += dx;
-  tile_y += dy;
-
-  return map_pos_to_tile(tile_x, tile_y);
+  return map_pos_to_tile(x, y);
 }
 
 /****************************************************************************
@@ -484,20 +438,14 @@ struct tile *index_to_tile(int index)
 }
 
 /***************************************************************
-  Free memory associated with one tile.
+...
 ***************************************************************/
 static void tile_free(struct tile *ptile)
 {
   unit_list_destroy(ptile->units);
-
   if (ptile->spec_sprite) {
     free(ptile->spec_sprite);
     ptile->spec_sprite = NULL;
-  }
-
-  if (ptile->label) {
-    FC_FREE(ptile->label);
-    ptile->label = NULL;
   }
 }
 
@@ -518,7 +466,12 @@ void map_allocate(void)
    * better to do a manual loop here. */
   whole_map_iterate(ptile) {
     ptile->index = ptile - map.tiles;
+    index_to_map_pos(&ptile->x, &ptile->y, tile_index(ptile));
+    index_to_native_pos(&ptile->nat_x, &ptile->nat_y, tile_index(ptile));
     CHECK_INDEX(tile_index(ptile));
+    CHECK_MAP_POS(ptile->x, ptile->y);
+    CHECK_NATIVE_POS(ptile->nat_x, ptile->nat_y);
+
     tile_init(ptile);
   } whole_map_iterate_end;
 
@@ -624,7 +577,7 @@ int map_vector_to_sq_distance(int dx, int dy)
 }
 
 /***************************************************************
-  Return real distance between two tiles.
+...
 ***************************************************************/
 int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -635,7 +588,7 @@ int real_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return squared distance between two tiles.
+...
 ***************************************************************/
 int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -648,7 +601,7 @@ int sq_map_distance(const struct tile *tile0, const struct tile *tile1)
 }
 
 /***************************************************************
-  Return Manhattan distance between two tiles.
+...
 ***************************************************************/
 int map_distance(const struct tile *tile0, const struct tile *tile1)
 {
@@ -667,7 +620,7 @@ int map_distance(const struct tile *tile0, const struct tile *tile1)
 *************************************************************************/
 bool is_cardinally_adj_to_ocean(const struct tile *ptile)
 {
-  return is_terrain_class_card_near(ptile, TC_OCEAN);
+  return count_terrain_flag_near_tile(ptile, TRUE, FALSE, TER_OCEANIC) > 0;
 }
 
 /****************************************************************************
@@ -685,11 +638,9 @@ bool is_safe_ocean(const struct tile *ptile)
 }
 
 /***************************************************************
-  Can tile be irrigated by given unit? Unit can be NULL to check if
-  any settler type unit of any player can irrigate.
+...
 ***************************************************************/
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit)
+bool is_water_adjacent_to_tile(const struct tile *ptile)
 {
   struct terrain* pterrain = tile_terrain(ptile);
 
@@ -697,7 +648,27 @@ bool can_be_irrigated(const struct tile *ptile,
     return FALSE;
   }
 
-  return get_tile_bonus(ptile, punit, EFT_IRRIG_POSSIBLE) > 0;
+  if (tile_has_special(ptile, S_RIVER)
+   || tile_has_special(ptile, S_IRRIGATION)
+   || terrain_has_flag(pterrain, TER_OCEANIC)) {
+    return TRUE;
+  }
+
+  cardinal_adjc_iterate(ptile, tile1) {
+    struct terrain* pterrain1 = tile_terrain(tile1);
+
+    if (T_UNKNOWN == pterrain1) {
+      continue;
+    }
+
+    if (tile_has_special(tile1, S_RIVER)
+     || tile_has_special(tile1, S_IRRIGATION)
+     || terrain_has_flag(pterrain1, TER_OCEANIC)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
@@ -707,8 +678,7 @@ a sufficient number of adjacent tiles that are not ocean.
 **************************************************************************/
 bool can_reclaim_ocean(const struct tile *ptile)
 {
-  int land_tiles = 100 - count_terrain_class_near_tile(ptile, FALSE, TRUE,
-                                                       TC_OCEAN);
+  int land_tiles = 100 - count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return land_tiles >= terrain_control.ocean_reclaim_requirement_pct;
 }
@@ -720,7 +690,7 @@ a sufficient number of adjacent tiles that are ocean.
 **************************************************************************/
 bool can_channel_land(const struct tile *ptile)
 {
-  int ocean_tiles = count_terrain_class_near_tile(ptile, FALSE, TRUE, TC_OCEAN);
+  int ocean_tiles = count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return ocean_tiles >= terrain_control.land_channel_requirement_pct;
 }
@@ -741,9 +711,6 @@ static int tile_move_cost_ptrs(const struct unit *punit,
   bool cardinal_move;
   struct unit_class *pclass = NULL;
   bool native = TRUE;
-  int road_cost = -1;
-  int river_cost = -1;
-  int cost;
 
   if (punit) {
     pclass = unit_class(punit);
@@ -766,34 +733,24 @@ static int tile_move_cost_ptrs(const struct unit *punit,
     return SINGLE_MOVE;
   }
 
-  /* Railroad check has to be before UTYF_IGTER check so that UTYF_IGTER
-   * units are not penalized. UTYF_IGTER affects also entering and
-   * leaving ships, so UTYF_IGTER check has to be before native terrain
+  /* Railroad check has to be before F_IGTER check so that F_IGTER
+   * units are not penalized. F_IGTER affects also entering and
+   * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
-  if (!restrict_infra(pplayer, t1, t2)) {
-    road_type_iterate(proad) {
-      if ((!punit || is_native_road_to_uclass(proad, pclass))
-          && tile_has_road(t1, proad) && tile_has_road(t2, proad)) {
-        if (!road_has_flag(proad, RF_CARDINAL_ONLY)
-            || is_move_cardinal(t1, t2)) {
-          if (road_cost == -1 || road_cost > proad->move_cost) {
-            road_cost = proad->move_cost;
-          }
-        }
-      }
-    } road_type_iterate_end;
+  if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
+      && native && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_RAIL;
   }
-
-  if (road_cost >= 0 && road_cost < MOVE_COST_IGTER) {
-    return road_cost;
-  }
-
-  if (punit && unit_has_type_flag(punit, UTYF_IGTER)) {
-    return MOVE_COST_IGTER;
+  if (punit && unit_has_type_flag(punit, F_IGTER)) {
+    return SINGLE_MOVE/3;
   }
   if (!native) {
     /* Loading to transport or entering port */
     return SINGLE_MOVE;
+  }
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
+      && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_ROAD;
   }
 
   if (tile_has_special(t1, S_RIVER) && tile_has_special(t2, S_RIVER)) {
@@ -802,35 +759,22 @@ static int tile_move_cost_ptrs(const struct unit *punit,
     case RMV_NORMAL:
       break;
     case RMV_FAST_STRICT:
-      if (cardinal_move) {
-        river_cost = MOVE_COST_RIVER;
-      }
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
       break;
     case RMV_FAST_RELAXED:
-      if (cardinal_move) {
-	river_cost = MOVE_COST_RIVER;
-      } else {
-	river_cost = 2 * MOVE_COST_RIVER;
-      }
-      break;
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
+      else
+	return 2 * MOVE_COST_RIVER;
     case RMV_FAST_ALWAYS:
-      river_cost = MOVE_COST_RIVER;
-      break;
+      return MOVE_COST_RIVER;
     default:
       break;
     }
   }
 
-  cost = tile_terrain(t2)->movement_cost * SINGLE_MOVE;
-
-  if (road_cost >= 0) {
-    cost = MIN(cost, road_cost);
-  }
-  if (river_cost >= 0) {
-    cost = MIN(cost, river_cost);
-  }
-
-  return cost;
+  return tile_terrain(t2)->movement_cost * SINGLE_MOVE;
 }
 
 /****************************************************************************
@@ -914,7 +858,7 @@ int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
 {
   return tile_move_cost_ptrs(punit, unit_owner(punit),
-                             unit_tile(punit), ptile);
+                             punit->tile, ptile);
 }
 
 /***************************************************************
@@ -927,7 +871,7 @@ int map_move_cost(const struct player *pplayer,
 }
 
 /***************************************************************
-  Are two tiles adjacent to each other.
+...
 ***************************************************************/
 bool is_tiles_adjacent(const struct tile *tile0, const struct tile *tile1)
 {
@@ -944,9 +888,6 @@ bool same_pos(const struct tile *tile1, const struct tile *tile2)
   return (tile1 == tile2);
 }
 
-/***************************************************************
-  Is given position real position
-***************************************************************/
 bool is_real_map_pos(int x, int y)
 {
   return normalize_map_pos(&x, &y);
@@ -979,7 +920,8 @@ bool normalize_map_pos(int *x, int *y)
   struct tile *ptile = map_pos_to_tile(*x, *y);
 
   if (ptile) {
-    index_to_map_pos(x, y, tile_index(ptile)); 
+    *x = ptile->x;
+    *y = ptile->y;
     return TRUE;
   } else {
     return FALSE;
@@ -1069,14 +1011,11 @@ void base_map_distance_vector(int *dx, int *dy,
     -map.ysize   <  dy <  map.ysize
 ****************************************************************************/
 void map_distance_vector(int *dx, int *dy,
-                         const struct tile *tile0,
-                         const struct tile *tile1)
+			 const struct tile *tile0,
+			 const struct tile *tile1)
 {
-  int tx0, ty0, tx1, ty1;
-
-  index_to_map_pos(&tx0, &ty0, tile_index(tile0));
-  index_to_map_pos(&tx1, &ty1, tile_index(tile1)); 
-  base_map_distance_vector(dx, dy, tx0, ty0, tx1, ty1);
+  base_map_distance_vector(dx, dy,
+			   tile0->x, tile0->y, tile1->x, tile1->y);
 }
 
 /**************************************************************************
@@ -1363,10 +1302,7 @@ bool is_move_cardinal(const struct tile *start_tile,
 ****************************************************************************/
 bool is_singular_tile(const struct tile *ptile, int dist)
 {
-  int tile_x, tile_y;
-
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile)); 
-  do_in_natural_pos(ntl_x, ntl_y, tile_x, tile_y) {
+  do_in_natural_pos(ntl_x, ntl_y, ptile->x, ptile->y) {
     /* Iso-natural coordinates are doubled in scale. */
     dist *= MAP_IS_ISOMETRIC ? 2 : 1;
 
@@ -1704,21 +1640,4 @@ struct iterator *map_startpos_iter_init(struct map_startpos_iter *iter)
 {
   return startpos_hash_value_iter_init((struct startpos_hash_iter *) iter,
                                        map.startpos_table);
-}
-
-/****************************************************************************
-  Return random direction that is valid in current map.
-****************************************************************************/
-enum direction8 rand_direction(void)
-{
-  return map.valid_dirs[fc_rand(map.num_valid_dirs)];
-}
-
-
-/****************************************************************************
-  Return direction that is opposite to given one.
-****************************************************************************/
-enum direction8 opposite_direction(enum direction8 dir)
-{
-  return direction8_max() - dir;
 }

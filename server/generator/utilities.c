@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -171,9 +171,6 @@ void adjust_int_map_filtered(int *int_map, int int_map_max, void *data,
   }
 }
 
-/****************************************************************************
-  Is given native position normal position
-****************************************************************************/
 bool is_normal_nat_pos(int x, int y)
 {
   NATIVE_TO_MAP_POS(&x, &y, x, y);
@@ -260,8 +257,7 @@ static void recalculate_lake_surrounders(void)
     if (T_UNKNOWN == pterrain) {
       continue;
     }
-
-    if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+    if (!terrain_has_flag(pterrain, TER_OCEANIC)) {
       adjc_iterate(ptile, tile2) {
         Continent_id cont2 = tile_continent(tile2);
 	if (is_ocean_tile(tile2)) {
@@ -295,7 +291,7 @@ static void assign_continent_flood(struct tile *ptile, bool is_land, int nr)
   /* Check if the initial tile is a valid tile for continent / ocean. */
   fc_assert_ret(tile_continent(ptile) == 0
                 && T_UNKNOWN != pterrain
-                && XOR(is_land, terrain_type_terrain_class(pterrain) == TC_OCEAN));
+                && XOR(is_land, terrain_has_flag(pterrain, TER_OCEANIC)));
 
   /* Create tile list and insert the initial tile. */
   tlist = tile_list_new();
@@ -311,7 +307,7 @@ static void assign_continent_flood(struct tile *ptile, bool is_land, int nr)
         /* Check if it is a valid tile for continent / ocean. */
         if (tile_continent(ptile3) != 0
             || T_UNKNOWN == pterrain
-            || !XOR(is_land, terrain_type_terrain_class(pterrain) == TC_OCEAN)) {
+            || !XOR(is_land, terrain_has_flag(pterrain, TER_OCEANIC))) {
           continue;
         }
 
@@ -369,7 +365,7 @@ void regenerate_lakes(tile_knowledge_cb knowledge_cb)
       if (T_UNKNOWN == pterrain) {
         continue;
       }
-      if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+      if (!terrain_has_flag(pterrain, TER_OCEANIC)) {
         continue;
       }
       if (0 < lake_surrounders[-here]) {
@@ -443,7 +439,7 @@ void assign_continent_numbers(void)
       continue; /* Can't assign this. */
     }
 
-    if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+    if (!terrain_has_flag(pterrain, TER_OCEANIC)) {
       map.num_continents++;
       continent_sizes = fc_realloc(continent_sizes,
 		       (map.num_continents + 1) * sizeof(*continent_sizes));
@@ -500,8 +496,8 @@ struct terrain *pick_ocean(int depth)
   int best_match = TERRAIN_OCEAN_DEPTH_MAXIMUM;
 
   terrain_type_iterate(pterrain) {
-    if (terrain_type_terrain_class(pterrain) == TC_OCEAN
-        &&  TERRAIN_OCEAN_DEPTH_MINIMUM <= pterrain->property[MG_OCEAN_DEPTH]) {
+    if (terrain_has_flag(pterrain, TER_OCEANIC)
+      &&  TERRAIN_OCEAN_DEPTH_MINIMUM <= pterrain->property[MG_OCEAN_DEPTH]) {
       int match = abs(depth - pterrain->property[MG_OCEAN_DEPTH]);
 
       if (best_match > match) {
@@ -520,7 +516,7 @@ struct terrain *pick_ocean(int depth)
 static int real_distance_to_land(const struct tile *ptile, int max)
 {
   square_dxy_iterate(ptile, max, atile, dx, dy) {
-    if (terrain_type_terrain_class(tile_terrain(atile)) != TC_OCEAN) {
+    if (!terrain_has_flag(tile_terrain(atile), TER_OCEANIC)) {
       return map_vector_to_real_distance(dx, dy);
     }
   } square_dxy_iterate_end;
@@ -537,7 +533,7 @@ static struct terrain *most_adjacent_ocean_type(const struct tile *ptile)
   int count;
 
   terrain_type_iterate(pterrain) {
-    if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+    if (!terrain_has_flag(pterrain, TER_OCEANIC)) {
       continue;
     }
 
@@ -566,7 +562,7 @@ void smooth_water_depth(void)
 
   /* First, improve the coasts. */
   whole_map_iterate(ptile) {
-    if (terrain_type_terrain_class(tile_terrain(ptile)) != TC_OCEAN) {
+    if (!terrain_has_flag(tile_terrain(ptile), TER_OCEANIC)) {
       continue;
     }
 
@@ -587,7 +583,7 @@ void smooth_water_depth(void)
 
   /* Now, try to have something more continuous. */
   whole_map_iterate(ptile) {
-    if (terrain_type_terrain_class(tile_terrain(ptile)) != TC_OCEAN) {
+    if (!terrain_has_flag(tile_terrain(ptile), TER_OCEANIC)) {
       continue;
     }
 

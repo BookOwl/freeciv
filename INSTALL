@@ -4,7 +4,7 @@ Installing Freeciv:
 
 This file describes how to compile and install Freeciv. Last time we
 made sure this file is up to date was 16-Jul-06.
-Last minor update was 08-Jul-12.
+Last minor update was 07-Aug-11.
 
 There may be a localized version of this file in the ./doc directory,
 named INSTALL.<locale> (e.g., INSTALL.de).
@@ -12,11 +12,9 @@ named INSTALL.<locale> (e.g., INSTALL.de).
 This document contains sections and subsections as follows:
      0. Prerequisites:
      1. Prerequisites for the clients:
-          1a. Prerequisites for the Gtk2 client:
-          1b. Prerequisites for the Gtk3 client:
-          1c. Prerequisites for the SDL client:
-          1d. Prerequisites for the Xaw client:
-          1e. Prerequisites for the Qt client:
+          1a. Prerequisites for the Gtk+ client:
+          1b. Prerequisites for the SDL client:
+          1c. Prerequisites for the Xaw client:
      2. Generating Makefiles
           2a. Generating the Makefile for svn versions:
           2b. Generating the Makefile for release versions:
@@ -93,7 +91,7 @@ contains the generated files.
 
    Autoconf is required to create configure from configure.ac.
 
- - GNU automake version 1.8 or better
+ - GNU automake version 1.7 or better
 
    Automake is required to create the various Makefile.in from
    Makefile.am.
@@ -103,11 +101,9 @@ contains the generated files.
 
 The Freeciv client comes in the following forms:
 * Gtk+ 2.0 widget library ("Gtk+ 2.0").
-* Gtk+ 3.0 widget library ("Gtk+ 3.0").
 * Native Microsoft Windows Common Controls ("Win32").
 * X Athena Widgets library ("Xaw").
 * SDL
-* Qt
 
 These forms have different prerequisites, explained separately below.
 
@@ -161,6 +157,9 @@ will need to have the appropriate "development" packages installed.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
+   "Gtk+" is the default client. If you don't specify any client with
+   "--enable-client" to configure, you will get "Gtk+" client.
+
    The "Gtk+" library comes with two companion libraries:
 
      "Gdk":
@@ -170,7 +169,7 @@ will need to have the appropriate "development" packages installed.
      "GdkPixbuf":
        Provides image loading/saving facilities.
 
-   Freeciv requires a version of "Gtk+" greater or equal to 2.12.0.
+   Freeciv requires a version of "Gtk+" greater or equal to 2.6.0.
 
    If the Freeciv configure process tells you that you don't have the
    Gtk+ library installed, then it may be obtained from here:
@@ -182,73 +181,7 @@ will need to have the appropriate "development" packages installed.
 If you are going to make these yourself, build and install them in the
 following order: pkg-config, Glib, Atk, Pango, Gtk+.
 
-1b. Prerequisites for the Gtk+ 3.0 client:
-==========================================
-
- - "pkg-config".
-
-   "pkg-config" is a system for managing library compile/link flags that
-   works with automake and autoconf. You may obtain it at:
-
-      http://pkgconfig.freedesktop.org/releases/pkg-config-0.26.tar.gz
-
- - The "Glib" utility library.
-
-   The "Glib" utility library provides non-graphical functions used by the
-   "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
-
-   Freeciv requires a version of "Glib" greater or equal to 2.32
-
-   If the Freeciv configure process tells you that you don't have the
-   Glib library installed, then it may be obtained from here:
-
-     http://ftp.gnome.org/pub/gnome/sources/glib/2.30/glib-2.32.3.tar.bz2
-
- - The "Atk" accessibility library.
-
-   The "Atk" library provides a set of interfaces for accessibility.
-   It allows people with disabilities to utilize all the functionality
-   provided by Gtk+ apps. You may obtain it at:
-
-     http://ftp.gnome.org/pub/gnome/sources/atk/2.0/atk-2.0.1.tar.bz2
-
- - The "Pango" text layout and rendering library.
-
-   "Pango" is library for layout and rendering of text, with an emphasis
-   on internationalization. You may obtain it at:
-
-     http://ftp.acc.umu.se/pub/gnome/sources/pango/1.28/pango-1.28.4.tar.bz2
-
- - The "Gtk+" widget library.
-
-   The "Gtk+" widget library was designed for the GIMP graphics program.
-   Since then it has gained popularity as an easy to program, free toolkit.
-
-   "Gtk+ 3" is the default client. If you don't specify any client with
-   "--enable-client" to configure, you will get "Gtk+ 3" client.
-
-   The "Gtk+" library comes with two companion libraries:
-
-     "Gdk":
-       Provides an abstraction layer over X-Windows/LinuxFB/Win32 to implement
-       basic drawing functions, windows, clipping, etc.
-
-     "GdkPixbuf":
-       Provides image loading/saving facilities.
-
-   Freeciv requires a version of "Gtk+" greater or equal to 3.4.0.
-
-   If the Freeciv configure process tells you that you don't have the
-   Gtk+ library installed, then it may be obtained from here:
-
-     http://ftp.acc.umu.se/pub/gnome/sources/gtk+/3.2/gtk+-3.4.3.tar.xz
-
-   "Gtk+" depends on the "Glib", "Atk" and "Pango" libraries.
-
-If you are going to make these yourself, build and install them in the
-following order: pkg-config, Glib, Atk, Pango, Gtk+.
-
-1c. Prerequisites for the SDL client:
+1b. Prerequisites for the SDL client:
 =====================================
 
  - The "SDL" library.
@@ -282,7 +215,7 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    http://download.savannah.gnu.org/releases/freetype/freetype-2.3.2.tar.gz
    
  
-1d. Prerequisites for the Xaw client:
+1c. Prerequisites for the Xaw client:
 =====================================
 
  - X-Windows.
@@ -340,16 +273,6 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    If you have problems installing libXpm on Solaris, or don't want to
    install it as root, see Reinier's libXpm Solaris Installation Notes
    section near the end of this file.
-
-1e. Prerequisites for the Qt client:
-====================================
-
- - C++ compiler.
-
-   Qt-client is written in C++, so you need appropriate compiler.
-   In Freeciv development, g++ has been used.
-
- - QtCore & QtGui libraries and headers
 
 
 2. Generating Makefiles
@@ -469,10 +392,10 @@ After compilation, the important results are:
   - The "client/freeciv-<GUI>" and "server/freeciv-server" binaries.
   - The "data/" directory, which contains the graphics and scenarios.
   - The "po/" directory, which contains the localization files.
-  - The "fcgui" and "fcser" scripts.
+  - The "civ" and "ser" scripts.
 
 It's perfectly feasible to play Freeciv in this directory, without
-installing it.  If you do this, the "fcgui" and "fcser" scripts may be
+installing it.  If you do this, the "civ" and "ser" scripts may be
 useful, although they are not as necessary as they used to be.
 
 See the README file for more information.

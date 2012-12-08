@@ -22,6 +22,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",          "female_title"
+ "Democracy",      _("Prime Minister %s"), _("?female:Prime Minister %s")
  "Fundamentalism", _("Bishop %s"),         _("?female:Bishop %s")
 }
 
@@ -32,6 +33,7 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "taino", "grenadian"
 

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -85,9 +85,9 @@ static bool science_report_combo_get_active(GtkComboBox *combo,
                                             const char **name);
 static void science_report_combo_set_active(GtkComboBox *combo,
                                             Tech_type_id tech);
-static gboolean science_diagram_button_release_callback(GtkWidget *widget,
-                                                        GdkEventButton *event,
-                                                        gpointer data);
+static void science_diagram_button_release_callback(GtkWidget *widget,
+                                                    GdkEventButton *event,
+                                                    gpointer data);
 static void science_diagram_update(GtkWidget *widget, gpointer data);
 static GtkWidget *science_diagram_new(void);
 static void science_diagram_data(GtkWidget *widget, bool reachable);
@@ -190,14 +190,15 @@ static void science_report_combo_set_active(GtkComboBox *combo,
 /****************************************************************************
   Change tech goal, research or open help dialog.
 ****************************************************************************/
-static gboolean science_diagram_button_release_callback(GtkWidget *widget,
-    GdkEventButton *event, gpointer data)
+static void science_diagram_button_release_callback(GtkWidget *widget,
+                                                    GdkEventButton *event,
+                                                    gpointer data)
 {
   struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
   Tech_type_id tech = get_tech_on_reqtree(reqtree, event->x, event->y);
 
   if (tech == A_NONE) {
-    return TRUE;
+    return;
   }
 
   if (event->button == 3) {
@@ -219,7 +220,6 @@ static gboolean science_diagram_button_release_callback(GtkWidget *widget,
       }
     }
   }
-  return TRUE;
 }
 
 /****************************************************************************
@@ -826,8 +826,7 @@ static void economy_report_update(struct economy_report *preport)
   for (i = 0; i < entries_used; i++) {
     struct unit_entry *pentry = unit_entries + i;
     struct unit_type *putype = pentry->type;
-    struct sprite *sprite = get_unittype_sprite(tileset, putype,
-                                                direction8_invalid());
+    struct sprite *sprite = get_unittype_sprite(tileset, putype);
     cid cid = cid_encode_unit(putype);
 
     gtk_list_store_append(store, &iter);
@@ -1494,7 +1493,7 @@ static void units_report_command_callback(struct gui_dialog *pdialog,
       if (ACTIVITY_IDLE == punit->activity
           || ACTIVITY_SENTRY == punit->activity) {
         if (can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-          unit_focus_set_and_select(punit);
+          set_unit_focus_and_select(punit);
         }
       }
     }
@@ -1714,10 +1713,11 @@ endgame_report_column_name(enum endgame_report_columns col)
 }
 
 /****************************************************************************
-  Fill a final report with statistics for each player.
+  Initialize a final report to be filled with statistics for each player.
 ****************************************************************************/
-static void endgame_report_update(struct endgame_report *preport,
-                                  const struct packet_endgame_report *packet)
+static void endgame_report_update_new(struct endgame_report *preport,
+                                      const struct packet_endgame_report_new
+                                      *packet)
 {
   const size_t col_num = packet->category_num + FRD_COL_NUM;
   GType col_types[col_num];
@@ -1775,6 +1775,43 @@ static void endgame_report_update(struct endgame_report *preport,
   preport->player_count = packet->player_num;
   preport->players_received = 0;
 }
+
+/****************************************************************************
+  Fill a final report with statistics for each player.
+****************************************************************************/
+static void endgame_report_update_old(struct endgame_report *preport,
+                                      const struct packet_endgame_report_old
+                                      *packet)
+{
+  struct packet_endgame_report_new np;
+  int i;
+
+  np.category_num = packet->category_num;
+
+  for (i = 0; i < packet->category_num; i++) {
+    strcpy(np.category_name[i], packet->category_name[i]);
+  }
+
+  np.player_num = packet->player_num;
+
+  endgame_report_update_new(preport, &np);
+
+  for (i = 0; i < packet->player_num; i++) {
+    struct packet_endgame_player npp;
+    int j;
+
+    npp.category_num = packet->category_num;
+    npp.player_id = packet->player_id[i];
+    npp.score = packet->score[i];
+
+    for (j = 0; j < packet->category_num; j++) {
+      npp.category_score[j] = packet->category_score[j][i];
+    }
+
+    endgame_report_dialog_player(&npp);
+  }
+}
+
 
 /****************************************************************************
   Handle endgame report information about one player.
@@ -1839,10 +1876,22 @@ static void endgame_report_init(struct endgame_report *preport)
 /****************************************************************************
   Start building a dialog with player statistics at endgame.
 ****************************************************************************/
-void endgame_report_dialog_start(const struct packet_endgame_report *packet)
+void endgame_report_dialog_start(const struct packet_endgame_report_new *packet)
 {
   if (NULL == endgame_report.shell) {
     endgame_report_init(&endgame_report);
   }
-  endgame_report_update(&endgame_report, packet);
+  endgame_report_update_new(&endgame_report, packet);
+}
+
+/****************************************************************************
+  Show a dialog with player statistics at endgame.
+****************************************************************************/
+void endgame_report_dialog_popup(const struct packet_endgame_report_old *packet)
+{
+  if (NULL == endgame_report.shell) {
+    endgame_report_init(&endgame_report);
+  }
+  endgame_report_update_old(&endgame_report, packet);
+  gui_dialog_present(endgame_report.shell);
 }

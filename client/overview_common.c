@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* floor */
@@ -394,12 +394,9 @@ static void put_overview_tile_area(struct canvas *pcanvas,
 **************************************************************************/
 void overview_update_tile(struct tile *ptile)
 {
-  int tile_x, tile_y;
-
   /* Base overview positions are just like natural positions, but scaled to
    * the overview tile dimensions. */
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
-  do_in_natural_pos(ntl_x, ntl_y, tile_x, tile_y) {
+  do_in_natural_pos(ntl_x, ntl_y, ptile->x, ptile->y) {
     int overview_y = ntl_y * OVERVIEW_TILE_SIZE;
     int overview_x = ntl_x * OVERVIEW_TILE_SIZE;
 

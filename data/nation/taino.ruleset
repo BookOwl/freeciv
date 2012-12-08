@@ -2,9 +2,8 @@
 
 name=_("Taino")
 plural=_("?plural:Taino")
-groups="American", "Core"
+groups="American"
 
-; /* TRANS: Legend for nation in "core" set */
 legend=_("Native inhabitants of the Bahamas, Cuba, Hispaniola, Puerto Rico,\
  Jamaica, and other Caribbean islands who gave us the root words for\
  hurricane, tobacco, potato, canoe, barbeque, hammock, and yucca. They were\
@@ -26,16 +25,14 @@ leaders = {
  "Loquillo",    "Male"
  "Hatuey",      "Male"
 }
-ruler_titles = {
- "government",      "male_title",            "female_title"
- "Monarchy",        _("Great Chief %s"),     _("?female:Great Chief %s")
-}
+
 flag         = "taino"
 flag_alt     = "-"
 city_style   = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with = "cuban", "haitian", "dominicano", "puerto rican"

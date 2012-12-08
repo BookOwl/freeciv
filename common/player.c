@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -26,14 +26,12 @@
 /* common */
 #include "city.h"
 #include "fc_interface.h"
-#include "featured_text.h"
 #include "game.h"
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
 #include "map.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
@@ -89,7 +87,7 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
   }
   if (player_diplstate_get(p1, p2)->has_reason_to_cancel == 0
       && get_player_bonus(p1, EFT_HAS_SENATE) > 0
-      && get_player_bonus(p1, EFT_NO_ANARCHY) == 0) {
+      && get_player_bonus(p1, EFT_ANY_GOVERNMENT) == 0) {
     return DIPL_SENATE_BLOCKING;
   }
   return DIPL_OK;
@@ -109,16 +107,17 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
 static bool is_valid_alliance(const struct player *p1, 
                               const struct player *p2)
 {
-  players_iterate_alive(pplayer) {
+  players_iterate(pplayer) {
     enum diplstate_type ds = player_diplstate_get(p1, pplayer)->type;
 
     if (pplayer != p1
         && pplayer != p2
+        && pplayers_allied(p2, pplayer)
         && ds == DS_WAR /* do not count 'never met' as war here */
-        && pplayers_allied(p2, pplayer)) {
+        && pplayer->is_alive) {
       return FALSE;
     }
-  } players_iterate_alive_end;
+  } players_iterate_end;
 
   return TRUE;
 }
@@ -231,8 +230,7 @@ bool player_can_invade_tile(const struct player *pplayer,
 }
 
 /****************************************************************************
-  Allocate new diplstate structure for tracking state between given two
-  players.
+  ...
 ****************************************************************************/
 static void player_diplstate_new(const struct player *plr1,
                                  const struct player *plr2)
@@ -252,7 +250,7 @@ static void player_diplstate_new(const struct player *plr1,
 }
 
 /****************************************************************************
-  Set diplstate between given two players to default values.
+  ...
 ****************************************************************************/
 static void player_diplstate_defaults(const struct player *plr1,
                                       const struct player *plr2)
@@ -288,7 +286,7 @@ struct player_diplstate *player_diplstate_get(const struct player *plr1,
 }
 
 /****************************************************************************
-  Free resources used by diplstate between given two players.
+  ...
 ****************************************************************************/
 static void player_diplstate_destroy(const struct player *plr1,
                                      const struct player *plr2)
@@ -325,7 +323,7 @@ void player_slots_init(void)
 }
 
 /***************************************************************
-  Return whether player slots are already initialized.
+  ...
 ***************************************************************/
 bool player_slots_initialised(void)
 {
@@ -494,7 +492,7 @@ struct player *player_new(struct player_slot *pslot)
 }
 
 /****************************************************************************
-  Set player structure to its default values.
+  ...
 ****************************************************************************/
 static void player_defaults(struct player *pplayer)
 {
@@ -545,7 +543,6 @@ static void player_defaults(struct player *pplayer)
   player_slots_iterate(pslot) {
     pplayer->ai_common.love[player_slot_index(pslot)] = 1;
   } player_slots_iterate_end;
-  pplayer->ai_common.traits = NULL;
 
   pplayer->ai = NULL;
   pplayer->was_created = FALSE;
@@ -565,27 +562,10 @@ static void player_defaults(struct player *pplayer)
   pplayer->tile_known.vec = NULL;
   pplayer->tile_known.bits = 0;
 
-  pplayer->rgb = NULL;
-
   /* pplayer->server is initialised in
       ./server/plrhand.c:server_player_init()
      and pplayer->client in
       ./client/climisc.c:client_player_init() */
-}
-
-/****************************************************************************
-  Set the player's color.
-****************************************************************************/
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor)
-{
-  fc_assert_ret(prgbcolor != NULL);
-
-  if (pplayer->rgb != NULL) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
-
-  pplayer->rgb = rgbcolor_copy(prgbcolor);
 }
 
 /****************************************************************************
@@ -613,13 +593,6 @@ void player_clear(struct player *pplayer, bool full)
 
   /* Clears units and cities. */
   unit_list_iterate(pplayer->units, punit) {
-    /* Unload all cargos. */
-    unit_list_iterate(unit_transport_cargo(punit), pcargo) {
-      unit_transport_unload(pcargo);
-    } unit_list_iterate_end;
-    /* Unload the unit. */
-    unit_transport_unload(punit);
-
     game_remove_unit(punit);
   } unit_list_iterate_end;
 
@@ -670,11 +643,6 @@ void player_destroy(struct player *pplayer)
     }
   } players_iterate_end;
   free(pplayer->diplstates);
-
-  /* Clear player color. */
-  if (pplayer->rgb) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
 
   dbv_free(&pplayer->tile_known);
 
@@ -746,7 +714,7 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 }
 
 /***************************************************************
-  Find player by given name.
+...
 ***************************************************************/
 struct player *player_by_name(const char *name)
 {
@@ -841,7 +809,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   /* Don't show non-allied units that are in transports.  This is logical
    * because allied transports can also contain our units.  Shared vision
    * isn't taken into account. */
-  if (unit_transported(punit) && unit_owner(punit) != pplayer
+  if (punit->transported_by != -1 && unit_owner(punit) != pplayer
       && !pplayers_allied(pplayer, unit_owner(punit))) {
     return FALSE;
   }
@@ -873,7 +841,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
 bool can_player_see_unit(const struct player *pplayer,
 			 const struct unit *punit)
 {
-  return can_player_see_unit_at(pplayer, punit, unit_tile(punit));
+  return can_player_see_unit_at(pplayer, punit, punit->tile);
 }
 
 /****************************************************************************
@@ -1060,9 +1028,9 @@ bool player_knows_techs_with_flag(const struct player *pplayer,
 }
 
 /**************************************************************************
-  Locate the player capital city, (NULL Otherwise) 
+Locate the city where the players palace is located, (NULL Otherwise) 
 **************************************************************************/
-struct city *player_capital(const struct player *pplayer)
+struct city *player_palace(const struct player *pplayer)
 {
   if (!pplayer) {
     /* The client depends on this behavior in some places. */
@@ -1271,9 +1239,6 @@ bool players_on_same_team(const struct player *pplayer1,
   return (pplayer1->team && pplayer1->team == pplayer2->team);
 }
 
-/**************************************************************************
-  Return TRUE iff player is any kind of barbarian
-**************************************************************************/
 bool is_barbarian(const struct player *pplayer)
 {
   return pplayer->ai_common.barbarian_type != NOT_A_BARBARIAN;
@@ -1317,7 +1282,7 @@ int player_in_territory(const struct player *pplayer,
    * to see if they're owned by the enemy. */
   unit_list_iterate(pplayer2->units, punit) {
     /* Get the owner of the tile/territory. */
-    struct player *owner = tile_owner(unit_tile(punit));
+    struct player *owner = tile_owner(punit->tile);
 
     if (owner == pplayer && can_player_see_unit(pplayer, punit)) {
       /* Found one! */
@@ -1426,21 +1391,4 @@ int number_of_ai_levels(void)
   }
 
   return count;
-}
-
-/**************************************************************************
-  Return pointer to ai data of given player and ai type.
-**************************************************************************/
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai)
-{
-  return pplayer->server.ais[ai_type_number(ai)];
-}
-
-/**************************************************************************
-  Attach ai data to player
-**************************************************************************/
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data)
-{
-  pplayer->server.ais[ai_type_number(ai)] = data;
 }

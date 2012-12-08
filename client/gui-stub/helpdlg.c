@@ -12,14 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
 #include "fcintl.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "helpdlg.h"
 

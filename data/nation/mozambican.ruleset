@@ -22,9 +22,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="Swazi", "Swahili", "Zulu"
+civilwar_nations="Swazi", "Tanzanian", "Zulu", "Malawian", "Zimbabwean"
 
 cities =
  "Maputo",

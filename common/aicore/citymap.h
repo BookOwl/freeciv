@@ -13,6 +13,7 @@
 #ifndef FC__CITYMAP_H
 #define FC__CITYMAP_H
 
+#include "fcintl.h"
 #include "fc_types.h"
 
 #include "support.h"            /* bool type */

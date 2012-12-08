@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -31,9 +31,9 @@
 /* server */
 #include "gamehand.h"
 #include "ggzserver.h"
-#include "maphand.h"
 #include "plrhand.h"
 #include "report.h"
+#include "savegame2.h"  /* saveversion_name() */
 #include "settings.h"
 #include "srv_main.h"
 #include "stdinhand.h"
@@ -159,11 +159,6 @@ struct setting {
   bool locked;
 };
 
-static struct {
-  bool init;
-  struct setting_list *level[OLEVELS_NUM];
-} setting_sorted = { .init = FALSE };
-
 static void setting_set_to_default(struct setting *pset);
 static bool setting_ruleset_one(struct section_file *file,
                                 const char *name, const char *path);
@@ -171,18 +166,10 @@ static void setting_game_set(struct setting *pset, bool init);
 static void setting_game_free(struct setting *pset);
 static void setting_game_restore(struct setting *pset);
 
-static void settings_list_init(void);
-static void settings_list_free(void);
-int settings_list_cmp(const struct setting *const *pset1,
-                      const struct setting *const *pset2);
-
 #define settings_snprintf(_buf, _buf_len, format, ...)                      \
   if (_buf != NULL) {                                                       \
     fc_snprintf(_buf, _buf_len, format, ## __VA_ARGS__);                    \
   }
-
-static bool set_enum_value(struct setting *pset, int val);
-static int read_enum_value(const struct setting *pset);
 
 /****************************************************************************
   Enumerator name accessors.
@@ -270,25 +257,12 @@ static const struct sset_val_name *startpos_name(int startpos)
 static const struct sset_val_name *killcitizen_name(int killcitizen_bit)
 {
   switch (killcitizen_bit) {
-  NAME_CASE(UMT_LAND, "LAND", N_("Land moving units"));
-  NAME_CASE(UMT_SEA, "SEA", N_("Sea moving units"));
-  NAME_CASE(UMT_BOTH, "BOTH",
+  NAME_CASE(LAND_MOVING, "LAND", N_("Land moving units"));
+  NAME_CASE(SEA_MOVING, "SEA", N_("Sea moving units"));
+  NAME_CASE(BOTH_MOVING, "BOTH",
             N_("Units able to move both on land and sea"));
-  };
-
-  return NULL;
-}
-
-/****************************************************************************
-  Autosaves setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *autosaves_name(int autosaves_bit)
-{
-  switch (autosaves_bit) {
-  NAME_CASE(AS_TURN, "TURN", N_("New turn"));
-  NAME_CASE(AS_GAME_OVER, "GAMEOVER", N_("Game over"));
-  NAME_CASE(AS_QUITIDLE, "QUITIDLE", N_("No player connections"));
-  NAME_CASE(AS_INTERRUPT, "INTERRUPT", N_("Server interrupted"));
+  case MOVETYPE_LAST:
+    break;
   };
 
   return NULL;
@@ -306,21 +280,6 @@ static const struct sset_val_name *borders_name(int borders)
             N_("See everything inside borders"));
   NAME_CASE(BORDERS_EXPAND, "EXPAND",
             N_("Borders expand to unknown, revealing tiles"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
-  Player colors configuration setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *plrcol_name(int plrcol)
-{
-  switch (plrcol) {
-  NAME_CASE(PLRCOL_PLR_ORDER,    "PLR_ORDER",    N_("Per-player, in order"));
-  NAME_CASE(PLRCOL_PLR_RANDOM,   "PLR_RANDOM",   N_("Per-player, random"));
-  NAME_CASE(PLRCOL_PLR_SET,      "PLR_SET",      N_("Set manually"));
-  NAME_CASE(PLRCOL_TEAM_ORDER,   "TEAM_ORDER",   N_("Per-team, in order"));
-  NAME_CASE(PLRCOL_NATION_ORDER, "NATION_ORDER", N_("Per-nation, in order"));
   }
   return NULL;
 }
@@ -371,18 +330,6 @@ static const struct sset_val_name *barbarians_name(int barbarians)
 }
 
 /****************************************************************************
-  Revealmap setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *revealmap_name(int bit)
-{
-  switch (1 << bit) {
-  NAME_CASE(REVEAL_MAP_START, "START", N_("Reveal map at game start"));
-  NAME_CASE(REVEAL_MAP_DEAD, "DEAD", N_("Unfog map for dead players"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
   Airlifting style setting names accessor.
 ****************************************************************************/
 static const struct sset_val_name *airliftingstyle_name(int bit)
@@ -428,9 +375,6 @@ compresstype_name(enum fz_method compresstype)
 #ifdef HAVE_LIBBZ2
   NAME_CASE(FZ_BZIP2, "BZIP2", N_("Using bzip2"));
 #endif
-#ifdef HAVE_LIBLZMA
-  NAME_CASE(FZ_XZ, "XZ", N_("Using xz"));
-#endif
   }
   return NULL;
 }
@@ -472,22 +416,6 @@ static void scorelog_action(const struct setting *pset)
 static void aifill_action(const struct setting *pset)
 {
   aifill(*pset->integer.pvalue);
-}
-
-/*************************************************************************
-  Clear any user-set player colors in modes other than PLRCOL_PLR_SET.
-*************************************************************************/
-static void plrcol_action(const struct setting *pset)
-{
-  if (!game_was_started()) {
-    if (read_enum_value(pset) != PLRCOL_PLR_SET) {
-      players_iterate(pplayer) {
-        server_player_set_color(pplayer, NULL);
-      } players_iterate_end;
-    }
-    /* Update clients with new color scheme. */
-    send_player_info_c(NULL, NULL);
-  }
 }
 
 /*************************************************************************
@@ -661,11 +589,17 @@ static bool startunits_callback(const char *value,
                                 size_t reject_msg_len)
 {
   int len = strlen(value), i;
+  bool have_founder = FALSE;
 
   /* We check each character individually to see if it's valid, and
    * also make sure there is at least one city founder. */
 
   for (i = 0; i < len; i++) {
+    /* Check for a city founder */
+    if (value[i] == 'c') {
+      have_founder = TRUE;
+      continue;
+    }
     /* TODO: add 'f' back in here when we can support ferry units */
     if (strchr("cwxksdDaA", value[i])) {
       continue;
@@ -676,6 +610,13 @@ static bool startunits_callback(const char *value,
                       _("Starting units string validation failed at "
                         "character '%c'. Try \"help startunits\"."),
                       value[i]);
+    return FALSE;
+  }
+
+  if (!have_founder) {
+    settings_snprintf(reject_msg, reject_msg_len,
+                      _("No city founder ('c') within the starting units "
+                        "string: '%s'. Try \"help startunits\"."), value);
     return FALSE;
   }
 
@@ -713,7 +654,7 @@ static bool maxplayers_callback(int value, struct connection *caller,
                       _("Cannot change maxplayers in GGZ mode."));
     return FALSE;
   }
-#endif /* GGZ_SERVER */
+#endif
   if (value < player_count()) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("Number of players (%d) is higher than requested "
@@ -817,7 +758,7 @@ static bool mapsize_callback(int value, struct connection *caller,
 }
 
 /*************************************************************************
-  xsize setting validation callback.
+ ...
 *************************************************************************/
 static bool xsize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
@@ -842,7 +783,7 @@ static bool xsize_callback(int value, struct connection *caller,
 }
 
 /*************************************************************************
-  ysize setting validation callback.
+  ...
 *************************************************************************/
 static bool ysize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
@@ -891,28 +832,6 @@ static bool topology_callback(unsigned value, struct connection *caller,
     return FALSE;
   }
 
-  return TRUE;
-}
-
-/*************************************************************************
-  Validate that the player color mode can be used.
-*************************************************************************/
-static bool plrcol_validate(int value, struct connection *caller,
-                            char *reject_msg, size_t reject_msg_len)
-{
-  enum plrcolor_mode mode = value;
-  if (mode == PLRCOL_NATION_ORDER) {
-    nations_iterate(pnation) {
-      if (nation_color(pnation)) {
-        /* At least one nation has a color. Allow this mode. */
-        return TRUE;
-      }
-    } nations_iterate_end;
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("No nations in the currently loaded ruleset have "
-                        "associated colors."));
-    return FALSE;
-  }
   return TRUE;
 }
 
@@ -1342,13 +1261,6 @@ static struct setting settings[] = {
 		"    A   = Strong attack unit (eg., Catapult)\n"),
              startunits_callback, NULL, GAME_DEFAULT_START_UNITS)
 
-  GEN_BOOL("startcity", game.server.start_city,
-           SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-           N_("Whether player starts with a city"),
-           N_("If this is set, game will start with player's first "
-              "city already founded to starting location."),
-           NULL, NULL, GAME_DEFAULT_START_CITY)         
-
   GEN_INT("dispersion", game.server.dispersion,
 	  SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Area where initial units are located"),
@@ -1457,17 +1369,6 @@ static struct setting settings[] = {
           NULL, NULL,
 	  GAME_MIN_FREECOST, GAME_MAX_FREECOST, GAME_DEFAULT_FREECOST)
 
-  GEN_INT("techlossforgiveness", game.server.techloss_forgiveness,
-	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-	  N_("Negative bulbs allowed before losing tech"),
-          N_("When your number of bulbs gets negative value lower than "
-             "this percentage of current research cost, you lose one "
-             "tech and number of bulbs is restored to 0. Special value -1 "
-             "disables tech loss completely."),
-          NULL, NULL,
-	  GAME_MIN_TECHLOSSFG, GAME_MAX_TECHLOSSFG,
-	  GAME_DEFAULT_TECHLOSSFG)
-
   GEN_INT("foodbox", game.info.foodbox,
 	  SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Food required for a city to grow"),
@@ -1533,7 +1434,8 @@ static struct setting settings[] = {
 	  N_("When a player attempts to found a new city, there may be "
 	     "no other city in this distance. For example, when "
 	     "this value is 3, there have to be at least two empty "
-	     "fields between two cities in every direction."),
+	     "fields between two cities in every direction. If set "
+	     "to 0 (default), the ruleset value will be used."),
           NULL, NULL,
 	  GAME_MIN_CITYMINDIST, GAME_MAX_CITYMINDIST,
 	  GAME_DEFAULT_CITYMINDIST)
@@ -1559,7 +1461,7 @@ static struct setting settings[] = {
               "is not allowed."), NULL, NULL,
            GAME_DEFAULT_TRADING_CITY)
 
-  GEN_INT("trademindist", game.info.trademindist,
+  GEN_INT("trademindist", game.info.trademindist_new,
           SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
           N_("Minimum distance for trade routes"),
           N_("In order for two cities in the same civilization to establish "
@@ -1579,14 +1481,6 @@ static struct setting settings[] = {
           NULL, NULL,
           GAME_MIN_RAPTUREDELAY, GAME_MAX_RAPTUREDELAY,
           GAME_DEFAULT_RAPTUREDELAY)
-
-  GEN_INT("disasters", game.info.disasters,
-          SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Frequency of disasters"),
-          N_("Sets frequency of disasters occurring to cities."),
-          NULL, NULL,
-          GAME_MIN_DISASTERS, GAME_MAX_DISASTERS,
-          GAME_DEFAULT_DISASTERS)
 
   GEN_INT("razechance", game.server.razechance,
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -1673,39 +1567,6 @@ static struct setting settings[] = {
               "for their nation also."),
            NULL, NULL, citynames_name, GAME_DEFAULT_ALLOWED_CITY_NAMES)
 
-  GEN_ENUM("plrcolormode", game.server.plrcolormode,
-           SSET_RULES, SSET_INTERNAL, SSET_RARE, SSET_TO_CLIENT,
-           N_("How to pick player colors"),
-           /* TRANS: The strings between double quotes are also translated
-            * separately (they must match!). The strings between single quotes
-            * are setting names and shouldn't be translated. The strings
-            * between parentheses and in uppercase must not be translated. */
-           N_("This setting determines how player colors are chosen. Player "
-              "colors are used in the Nations report, for national borders on "
-              "the map, and so on.\n"
-              "- \"Per-player, in order\" (PLR_ORDER): colors are assigned to "
-              "individual players in order from a list defined by the "
-              "ruleset.\n"
-              "- \"Per-player, random\" (PLR_RANDOM): colors are assigned "
-              "to invididual players randomly from the set defined by the "
-              "ruleset.\n"
-              "- \"Set manually\" (PLR_SET): colors can be set with the "
-              "'playercolor' command before the game starts; these are not "
-              "restricted to the ruleset colors. Any players for which no "
-              "color is set when the game starts get a random color from the "
-              "ruleset.\n"
-              "- \"Per-team, in order\" (TEAM_ORDER): colors are assigned to "
-              "teams from the list in the ruleset. Every player on the same "
-              "team gets the same color.\n"
-              "- \"Per-nation, in order\" (NATION_ORDER): if the ruleset "
-              "defines a color for a player's nation, the player takes that "
-              "color. Any players whose nations don't have associated colors "
-              "get a random color from the list in the ruleset.\n"
-              "Regardless of this setting, individual player colors can be "
-              "changed after the game starts with the 'playercolor' command."),
-           plrcol_validate, plrcol_action, plrcol_name,
-           GAME_DEFAULT_PLRCOLORMODE)
-
   /* Flexible rules: these can be changed after the game has started.
    *
    * The distinction between "rules" and "flexible rules" is not always
@@ -1789,7 +1650,7 @@ static struct setting settings[] = {
           SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_SITUATIONAL,
           SSET_TO_CLIENT,
           N_("Base chance for diplomats and spies to succeed"),
-          N_("The base chance of a spy returning from a successful mission and "
+          N_("The chance of a spy returning from a successful mission and "
              "the base chance of success for diplomats and spies."),
           NULL, NULL,
           GAME_MIN_DIPLCHANCE, GAME_MAX_DIPLCHANCE, GAME_DEFAULT_DIPLCHANCE)
@@ -2027,23 +1888,6 @@ static struct setting settings[] = {
           endturn_callback, NULL,
           GAME_MIN_END_TURN, GAME_MAX_END_TURN, GAME_DEFAULT_END_TURN)
 
-  GEN_BITWISE("revealmap", game.server.revealmap, SSET_GAME_INIT,
-              SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-              N_("Reveal the map"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parentheses and in uppercase must not be
-               * translated. */
-              N_("If \"Reveal map at game start\" (START) is set, the "
-                 "initial state of the entire map will be known to all "
-                 "players from the start of the game, although it may "
-                 "still be fogged (depending on the 'fogofwar' setting). "
-                 "If \"Unfog map for dead players\" (DEAD) is set, dead "
-                 "players can see the entire map, if they are alone in "
-                 "their team."),
-             NULL, NULL, revealmap_name, GAME_DEFAULT_REVEALMAP)
-
   GEN_INT("timeout", game.info.timeout,
           SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
           N_("Maximum seconds per turn"),
@@ -2057,23 +1901,9 @@ static struct setting settings[] = {
              "debugging, a timeout of -1 sets the autogame test mode. "
              "Only connections with hack level access may set the "
              "timeout to lower than 30 seconds. Use this with the "
-             "command \"timeoutincrease\" to have a dynamic timer. "
-             "The first turn is treated as a special case and is controlled "
-             "by the 'first_timeout' setting."),
+             "command \"timeoutincrease\" to have a dynamic timer."),
           timeout_callback, timeout_action,
           GAME_MIN_TIMEOUT, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUT)
-
-  GEN_INT("first_timeout", game.server.first_timeout,
-          SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-          N_("First turn timeout"),
-          /* TRANS: The strings between single quotes are setting names and
-           * should not be translated. */
-          N_("If greater than 0, T0 will last for 'first_timeout' seconds.\n"
-             "If set to 0, T0 will not have a timeout.\n"
-             "If set to -1, the special treatment of T0 will be disabled.\n"
-             "See also 'timeout'."),
-          NULL, NULL, GAME_MIN_FIRST_TIMEOUT, GAME_MAX_FIRST_TIMEOUT,
-          GAME_DEFAULT_FIRST_TIMEOUT)
 
   GEN_INT("timeaddenemymove", game.server.timeoutaddenemymove,
 	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
@@ -2193,26 +2023,8 @@ static struct setting settings[] = {
           /* TRANS: The string between single quotes is a setting name and
            * should not be translated. */
 	  N_("The game will be automatically saved per this number of "
-             "turns. See also setting 'autosaves'."), NULL, NULL,
+             "turns. Zero means never auto-save."), NULL, NULL,
           GAME_MIN_SAVETURNS, GAME_MAX_SAVETURNS, GAME_DEFAULT_SAVETURNS)
-
-  GEN_BITWISE("autosaves", game.server.autosaves,
-              SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
-              N_("Which savegames are generated automatically"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parantheses and in uppercase must stay as
-               * untranslated. */
-              N_("This setting controls which autosave types get generated:\n"
-                 "- \"New turn\" (TURN): Save when turn begins, once every "
-                 "'saveturns' turns.\n"
-                 "- \"Game over\" (GAMEOVER): Final save when game ends.\n"
-                 "- \"No player connections\" (QUITIDLE): "
-                 "Save before server restarts due to lack of players.\n"
-                 "- \"Server interrupted\" (INTERRUPT): Save when server "
-                 "quits due to interrupt."),
-              NULL, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
 
   GEN_INT("compress", game.server.save_compress_level,
           SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
@@ -2229,6 +2041,14 @@ static struct setting settings[] = {
            N_("Savegame compression algorithm"),
            N_("Compression library to use for savegames."),
            NULL, NULL, compresstype_name, GAME_DEFAULT_COMPRESS_TYPE)
+
+  GEN_ENUM("saveversion", game.server.saveversion,
+           SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
+           N_("Save using the given savegame version"),
+           N_("Create a savegame which can be loaded by the given version "
+              "of Freeciv. Note that some features will not be "
+              "saved/restored for older versions."),
+           NULL, NULL, saveversion_name, GAME_DEFAULT_SAVEVERSION)
 
   GEN_STRING("savename", game.server.save_name,
              SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
@@ -2315,9 +2135,7 @@ struct setting *setting_by_number(int id)
 ****************************************************************************/
 struct setting *setting_by_name(const char *name)
 {
-  fc_assert_ret_val(name, NULL);
-
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     if (0 == strcmp(name, pset->name)) {
       return pset;
     }
@@ -3256,7 +3074,7 @@ bool settings_ruleset(struct section_file *file, const char *section)
   int j;
 
   /* Unlock all settings. */
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_lock_set(pset, FALSE);
     setting_set_to_default(pset);
   } settings_iterate_end;
@@ -3281,7 +3099,7 @@ bool settings_ruleset(struct section_file *file, const char *section)
 
   /* Execute all setting actions to consider actions due to the 
    * default values. */
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_action(pset);
   } settings_iterate_end;
 
@@ -3301,7 +3119,7 @@ static bool setting_ruleset_one(struct section_file *file,
   char reject_msg[256], buf[256];
   bool lock;
 
-  settings_iterate(SSET_ALL, pset_check) {
+  settings_iterate(pset_check) {
     if (0 == fc_strcasecmp(setting_name(pset_check), name)) {
       pset = pset_check;
       break;
@@ -3588,7 +3406,7 @@ static void setting_game_restore(struct setting *pset)
 **************************************************************************/
 void settings_game_start(void)
 {
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_game_set(pset, FALSE);
   } settings_iterate_end;
 
@@ -3603,7 +3421,7 @@ void settings_game_save(struct section_file *file, const char *section)
 {
   int set_count = 0;
 
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     secfile_insert_str(file, setting_name(pset),
                        "%s.set%d.name", section, set_count);
     switch (setting_type(pset)) {
@@ -3658,7 +3476,6 @@ void settings_game_load(struct section_file *file, const char *section)
   const char *name;
   char reject_msg[256], buf[256];
   int i, set_count;
-  int oldcitymindist = game.info.citymindist; /* backwards compat, see below */
 
   if (!secfile_lookup_int(file, &set_count, "%s.set_count", section)) {
     /* Old savegames and scenarios doesn't contain this, not an error. */
@@ -3674,7 +3491,7 @@ void settings_game_load(struct section_file *file, const char *section)
   for (i = 0; i < set_count; i++) {
     name = secfile_lookup_str(file, "%s.set%d.name", section, i);
 
-    settings_iterate(SSET_ALL, pset) {
+    settings_iterate(pset) {
       if (fc_strcasecmp(setting_name(pset), name) != 0) {
         continue;
       }
@@ -3850,17 +3667,7 @@ void settings_game_load(struct section_file *file, const char *section)
     } settings_iterate_end;
   }
 
-  /* Backwards compatibility for pre-2.4 savegames: citymindist=0 used to mean
-   * take from ruleset min_dist_bw_cities, but that no longer exists.
-   * This is here rather than in savegame2.c compat functions, as we need
-   * to have loaded the relevant ruleset to know what to set it to (the
-   * ruleset and any 'citymindist' setting it contains will have been loaded
-   * before this function was called). */
-  if (game.info.citymindist == 0) {
-    game.info.citymindist = oldcitymindist;
-  }
-
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     /* Have to do this at the end due to dependencies ('aifill' and
      * 'maxplayer'). */
     setting_action(pset);
@@ -3877,7 +3684,7 @@ bool settings_game_reset(void)
     return FALSE;
   }
 
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_game_restore(pset);
   } settings_iterate_end;
 
@@ -3889,16 +3696,12 @@ bool settings_game_reset(void)
 **************************************************************************/
 void settings_init(void)
 {
-  settings_list_init();
-
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_lock_set(pset, FALSE);
     setting_set_to_default(pset);
     setting_game_set(pset, TRUE);
     setting_action(pset);
   } settings_iterate_end;
-
-  settings_list_update();
 }
 
 /********************************************************************
@@ -3906,7 +3709,7 @@ void settings_init(void)
 *********************************************************************/
 void settings_reset(void)
 {
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     if (setting_is_changeable(pset, NULL, NULL, 0)) {
       setting_set_to_default(pset);
       setting_action(pset);
@@ -3928,11 +3731,9 @@ void settings_turn(void)
 **************************************************************************/
 void settings_free(void)
 {
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting_game_free(pset);
   } settings_iterate_end;
-
-  settings_list_free();
 }
 
 /****************************************************************************
@@ -4063,7 +3864,7 @@ void send_server_setting(struct conn_list *dest, const struct setting *pset)
 ****************************************************************************/
 void send_server_settings(struct conn_list *dest)
 {
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     send_server_setting(dest, pset);
   } settings_iterate_end;
 }
@@ -4074,7 +3875,7 @@ void send_server_settings(struct conn_list *dest)
 ****************************************************************************/
 void send_server_hack_level_settings(struct conn_list *dest)
 {
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     if (!pset->to_client) {
       send_server_setting(dest, pset);
     }
@@ -4104,7 +3905,7 @@ void send_server_setting_control(struct connection *pconn)
   send_packet_server_setting_control(pconn, &control);
 
   /* Send the constant and common part of the settings. */
-  settings_iterate(SSET_ALL, pset) {
+  settings_iterate(pset) {
     setting.id = setting_number(pset);
     sz_strlcpy(setting.name, setting_name(pset));
     /* Send untranslated strings to client */
@@ -4114,133 +3915,4 @@ void send_server_setting_control(struct connection *pconn)
 
     send_packet_server_setting_const(pconn, &setting);
   } settings_iterate_end;
-}
-
-/*****************************************************************************
-  Initialise sorted settings.
-*****************************************************************************/
-static void settings_list_init(void)
-{
-  struct setting *pset;
-  int i;
-
-  fc_assert_ret(setting_sorted.init == FALSE);
-
-  /* Do it for all values of enum sset_level. */
-  for (i = 0; i < OLEVELS_NUM; i++) {
-    setting_sorted.level[i] = setting_list_new();
-  }
-
-  for (i = 0; (pset = setting_by_number(i)); i++) {
-    /* Add the setting to the list of all settings. */
-    setting_list_append(setting_sorted.level[SSET_ALL], pset);
-
-    switch (setting_level(pset)) {
-    case SSET_NONE:
-      /* No setting should be in this level. */
-      fc_assert_msg(setting_level(pset) != SSET_NONE,
-                    "No setting level defined for '%s'.", setting_name(pset));
-      break;
-    case SSET_ALL:
-      /* Done above - list of all settings. */
-      break;
-    case SSET_VITAL:
-      setting_list_append(setting_sorted.level[SSET_VITAL], pset);
-      break;
-    case SSET_SITUATIONAL:
-      setting_list_append(setting_sorted.level[SSET_SITUATIONAL], pset);
-      break;
-    case SSET_RARE:
-      setting_list_append(setting_sorted.level[SSET_RARE], pset);
-      break;
-    case SSET_CHANGED:
-    case SSET_LOCKED:
-      /* This is done in settings_list_update. */
-      break;
-    case OLEVELS_NUM:
-      /* No setting should be in this level. */
-      fc_assert_msg(setting_level(pset) != OLEVELS_NUM,
-                    "Invalid setting level for '%s' (%s).",
-                    setting_name(pset), sset_level_name(setting_level(pset)));
-      break;
-    }
-  }
-
-  /* Sort the lists. */
-  for (i = 0; i < OLEVELS_NUM; i++) {
-    setting_list_sort(setting_sorted.level[i], settings_list_cmp);
-  }
-
-  setting_sorted.init = TRUE;
-}
-
-/*****************************************************************************
-  Update sorted settings (changed and locked values).
-*****************************************************************************/
-void settings_list_update(void)
-{
-  struct setting *pset;
-  int i;
-
-  fc_assert_ret(setting_sorted.init == TRUE);
-
-  /* Clear the lists for changed and locked values. */
-  setting_list_clear(setting_sorted.level[SSET_CHANGED]);
-  setting_list_clear(setting_sorted.level[SSET_LOCKED]);
-
-  /* Refill them. */
-  for (i = 0; (pset = setting_by_number(i)); i++) {
-    if (setting_changed(pset)) {
-      setting_list_append(setting_sorted.level[SSET_CHANGED], pset);
-    }
-    if (setting_locked(pset)) {
-      setting_list_append(setting_sorted.level[SSET_LOCKED], pset);
-    }
-  }
-
-  /* Sort them. */
-  setting_list_sort(setting_sorted.level[SSET_CHANGED], settings_list_cmp);
-  setting_list_sort(setting_sorted.level[SSET_LOCKED], settings_list_cmp);
-}
-
-/*****************************************************************************
-  Update sorted settings (changed and locked values).
-*****************************************************************************/
-int settings_list_cmp(const struct setting *const *ppset1,
-                      const struct setting *const *ppset2)
-{
-  const struct setting *pset1 = *ppset1;
-  const struct setting *pset2 = *ppset2;
-
-  return fc_strcasecmp(setting_name(pset1), setting_name(pset2));
-}
-
-/*****************************************************************************
-  Get a settings list of a certain level. Call settings_list_update() before
-  if something was changed.
-*****************************************************************************/
-struct setting_list *settings_list_get(enum sset_level level)
-{
-  fc_assert_ret_val(setting_sorted.init == TRUE, NULL);
-  fc_assert_ret_val(setting_sorted.level[level] != NULL, NULL);
-  fc_assert_ret_val(sset_level_is_valid(level), NULL);
-
-  return setting_sorted.level[level];
-}
-
-/*****************************************************************************
-  Free sorted settings.
-*****************************************************************************/
-static void settings_list_free(void)
-{
-  int i;
-
-  fc_assert_ret(setting_sorted.init == TRUE);
-
-  /* Free the lists. */
-  for (i = 0; i < OLEVELS_NUM; i++) {
-    setting_list_destroy(setting_sorted.level[i]);
-  }
-
-  setting_sorted.init = FALSE;
 }

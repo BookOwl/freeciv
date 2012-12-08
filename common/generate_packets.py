@@ -41,12 +41,12 @@ lazy_overwrite=0
 
 def verbose(s):
     if len(sys.argv)>1 and sys.argv[1]=="-v":
-        print(s)
+        print s
         
 def prefix(prefix,str):
-    lines=str.split("\n")
+    lines=string.split(str,"\n")
     lines=map(lambda x,prefix=prefix: prefix+x,lines)
-    return "\n".join(lines)
+    return string.join(lines,"\n")
 
 def write_disclaimer(f):
     f.write('''
@@ -100,7 +100,7 @@ def parse_fields(str, types):
     arr=[]
     for i in mo.groups():
         if i:
-            arr.append(i.strip())
+            arr.append(string.strip(i))
         else:
             arr.append("")
     type,fields_,flags=arr
@@ -129,12 +129,11 @@ def parse_fields(str, types):
 
     # analyze fields
     fields=[]
-    for i in fields_.split(","):
-        i=i.strip()
+    for i in map(string.strip,string.split(fields_,",")):
         t={}
 
         def f(x):
-            arr=x.split(":")
+            arr=string.split(x,":")
             if len(arr)==1:
                 return [x,x,x]
             else:
@@ -162,8 +161,8 @@ def parse_fields(str, types):
 
     # analyze flags
     flaginfo={}
-    arr=list(item.strip() for item in flags.split(","))
-    arr=list(filter(lambda x:len(x)>0,arr))
+    arr=map(string.strip,string.split(flags,","))
+    arr=filter(lambda x:len(x)>0,arr)
     flaginfo["is_key"]=("key" in arr)
     if flaginfo["is_key"]: arr.remove("key")
     flaginfo["diff"]=("diff" in arr)
@@ -358,8 +357,7 @@ class Field:
         if self.dataio_type in ["memory"]:
             return "  dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s, %(array_size_u)s);"%self.__dict__
         
-        arr_types=["string","bit_string","city_map","tech_list",
-                   "unit_list","building_list"]
+        arr_types=["string","bit_string","city_map","tech_list"]
         if (self.dataio_type in arr_types and self.is_array==1) or \
            (self.dataio_type not in arr_types and self.is_array==0):
             return "  dio_put_%(dataio_type)s(&dout, real_packet->%(name)s);"%self.__dict__
@@ -455,7 +453,7 @@ class Field:
             return "dio_get_%(dataio_type)s(&din, real_packet->%(name)s, sizeof(real_packet->%(name)s));"%self.__dict__
         if self.is_struct and self.is_array==0:
             return "dio_get_%(dataio_type)s(&din, &real_packet->%(name)s);"%self.__dict__
-        if self.dataio_type in ["tech_list","unit_list","building_list"]:
+        if self.dataio_type in ["tech_list"]:
             return "dio_get_%(dataio_type)s(&din, real_packet->%(name)s);"%self.__dict__
         if not self.is_array:
             if self.struct_type=="bool":
@@ -591,15 +589,15 @@ class Variant:
                 return '(has_capability("%s", pc->capability) && has_capability("%s", our_capability))'%(cap,cap)
             t=(map(lambda x,f=f: f(x),self.poscaps)+
                map(lambda x,f=f: '!'+f(x),self.negcaps))
-            self.condition=" && ".join(t)
+            self.condition=string.join(t," && ")
         else:
             self.condition="TRUE"
-        self.key_fields=list(filter(lambda x:x.is_key,self.fields))
-        self.other_fields=list(filter(lambda x:not x.is_key,self.fields))
+        self.key_fields=filter(lambda x:x.is_key,self.fields)
+        self.other_fields=filter(lambda x:not x.is_key,self.fields)
         self.bits=len(self.other_fields)
-        self.keys_format=", ".join(["%d"]*len(self.key_fields))
-        self.keys_arg=", ".join(map(lambda x:"real_packet->"+x.name,
-                                      self.key_fields))
+        self.keys_format=string.join(["%d"]*len(self.key_fields),", ")
+        self.keys_arg=string.join(map(lambda x:"real_packet->"+x.name,
+                                      self.key_fields),", ")
         if self.keys_arg:
             self.keys_arg=",\n    "+self.keys_arg
 
@@ -607,14 +605,14 @@ class Variant:
             self.delta=0
             self.no_packet=1
 
-        if len(self.fields)>5 or self.name.split("_")[1]=="ruleset":
+        if len(self.fields)>5 or string.split(self.name,"_")[1]=="ruleset":
             self.handle_via_packet=1
 
         self.extra_send_args=""
         self.extra_send_args2=""
-        self.extra_send_args3=", ".join(
+        self.extra_send_args3=string.join(
             map(lambda x:"%s%s"%(x.get_handle_type(), x.name),
-                self.fields))
+                self.fields),", ")
         if self.extra_send_args3:
             self.extra_send_args3=", "+self.extra_send_args3
 
@@ -640,7 +638,7 @@ class Variant:
     # statistical counters of this packet.
     def get_stats(self):
         names=map(lambda x:'"'+x.name+'"',self.other_fields)
-        names=", ".join(names)
+        names=string.join(names,", ")
 
         return '''static int stats_%(name)s_sent;
 static int stats_%(name)s_discarded;
@@ -698,7 +696,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
 
 '''%self.__dict__
 
-            keys=list(map(lambda x:"key->"+x.name,self.key_fields))
+            keys=map(lambda x:"key->"+x.name,self.key_fields)
             if len(keys)==1:
                 a=keys[0]
             elif len(keys)==2:
@@ -810,7 +808,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
         for i in range(2):
             for k,v in vars().items():
                 if type(v)==type(""):
-                    temp=temp.replace("<%s>"%k,v)
+                    temp=string.replace(temp,"<%s>"%k,v)
         return temp%self.get_dict(vars())
 
     # '''
@@ -923,15 +921,15 @@ static char *stats_%(name)s_names[] = {%(names)s};
         for i in range(2):
             for k,v in vars().items():
                 if type(v)==type(""):
-                    temp=temp.replace("<%s>"%k,v)
+                    temp=string.replace(temp,"<%s>"%k,v)
         return temp%self.get_dict(vars())
 
     # Helper for get_receive()
     def get_delta_receive_body(self):
         key1=map(lambda x:"    %s %s = real_packet->%s;"%(x.struct_type,x.name,x.name),self.key_fields)
         key2=map(lambda x:"    real_packet->%s = %s;"%(x.name,x.name),self.key_fields)
-        key1="\n".join(key1)
-        key2="\n".join(key2)
+        key1=string.join(key1,"\n")
+        key2=string.join(key2,"\n")
         if key1: key1=key1+"\n\n"
         if key2: key2="\n\n"+key2
         if self.gen_log:
@@ -984,21 +982,21 @@ class Packet:
         self.log_macro=use_log_macro
         self.gen_stats=generate_stats
         self.gen_log=generate_logs
-        str=str.strip()
-        lines=str.split("\n")
+        str=string.strip(str)
+        lines=string.split(str,"\n")
         
         mo=re.search("^\s*(\S+)\s*=\s*(\d+)\s*;\s*(.*?)\s*$",lines[0])
         assert mo,repr(lines[0])
 
         self.type=mo.group(1)
-        self.name=self.type.lower()
+        self.name=string.lower(self.type)
         self.type_number=int(mo.group(2))
-        assert 0<=self.type_number<=65535
+        assert 0<=self.type_number<=255
         dummy=mo.group(3)
 
         del lines[0]
 
-        arr=list(item.strip() for item in dummy.split(",") if item)
+        arr=filter(lambda x:x,map(string.strip,string.split(dummy,",")))
 
         self.dirs=[]
 
@@ -1073,12 +1071,12 @@ class Packet:
         self.fields=[]
         for i in lines:
             self.fields=self.fields+parse_fields(i,types)
-        self.key_fields=list(filter(lambda x:x.is_key,self.fields))
-        self.other_fields=list(filter(lambda x:not x.is_key,self.fields))
+        self.key_fields=filter(lambda x:x.is_key,self.fields)
+        self.other_fields=filter(lambda x:not x.is_key,self.fields)
         self.bits=len(self.other_fields)
-        self.keys_format=", ".join(["%d"]*len(self.key_fields))
-        self.keys_arg=", ".join(map(lambda x:"real_packet->"+x.name,
-                                      self.key_fields))
+        self.keys_format=string.join(["%d"]*len(self.key_fields),", ")
+        self.keys_arg=string.join(map(lambda x:"real_packet->"+x.name,
+                                      self.key_fields),", ")
         if self.keys_arg:
             self.keys_arg=",\n    "+self.keys_arg
 
@@ -1090,14 +1088,14 @@ class Packet:
             self.no_packet=1
             assert not self.want_dsend,"dsend for a packet without fields isn't useful"
 
-        if len(self.fields)>5 or self.name.split("_")[1]=="ruleset":
+        if len(self.fields)>5 or string.split(self.name,"_")[1]=="ruleset":
             self.handle_via_packet=1
 
         self.extra_send_args=""
         self.extra_send_args2=""
-        self.extra_send_args3=", ".join(
+        self.extra_send_args3=string.join(
             map(lambda x:"%s%s"%(x.get_handle_type(), x.name),
-                self.fields))
+                self.fields),", ")
         if self.extra_send_args3:
             self.extra_send_args3=", "+self.extra_send_args3
 
@@ -1333,7 +1331,7 @@ class Packet:
     # dsend function.
     def get_dsend(self):
         if not self.want_dsend: return ""
-        fill="\n".join(map(lambda x:x.get_fill(),self.fields))
+        fill=string.join(map(lambda x:x.get_fill(),self.fields),"\n")
         return '''%(dsend_prototype)s
 {
   struct %(name)s packet, *real_packet = &packet;
@@ -1349,7 +1347,7 @@ class Packet:
     # dlsend function.
     def get_dlsend(self):
         if not (self.want_lsend and self.want_dsend): return ""
-        fill="\n".join(map(lambda x:x.get_fill(),self.fields))
+        fill=string.join(map(lambda x:x.get_fill(),self.fields),"\n")
         return '''%(dlsend_prototype)s
 {
   struct %(name)s packet, *real_packet = &packet;
@@ -1465,11 +1463,11 @@ def get_enum_packet(packets):
 
     mapping={}
     for p in packets:
-        if p.type_number in mapping :
-            print(p.name,mapping[p.type_number].name)
+        if mapping.has_key(p.type_number):
+            print p.name,mapping[p.type_number].name
             assert 0
         mapping[p.type_number]=p
-    sorted=list(mapping.keys())
+    sorted=mapping.keys()
     sorted.sort()
 
     last=-1
@@ -1499,8 +1497,8 @@ def strip_c_comment(s):
   # doesn't work with python version 2.2 and 2.3.
   # Do it by hand then.
   result=""
-  for i in filter(lambda x:x,s.split("/*")):
-      l=i.split("*/",1)
+  for i in filter(lambda x:x,string.split(s,"/*")):
+      l=string.split(i,"*/",1)
       assert len(l)==2,repr(i)
       result=result+l[1]
   return result  
@@ -1521,7 +1519,7 @@ def main():
 
     content=open(input_name).read()
     content=strip_c_comment(content)
-    lines=content.split("\n")
+    lines=string.split(content,"\n")
     lines=map(lambda x: re.sub("#.*$","",x),lines)
     lines=map(lambda x: re.sub("//.*$","",x),lines)
     lines=filter(lambda x:not re.search("^\s*$",x),lines)
@@ -1535,8 +1533,8 @@ def main():
             lines2.append(i)
 
     packets=[]
-    for str in re.split("(?m)^end$","\n".join(lines2)):
-        str=str.strip()
+    for str in re.split("(?m)^end$",string.join(lines2,"\n")):
+        str=string.strip(str)
         if str:
             packets.append(Packet(str,types))
 
@@ -1549,16 +1547,6 @@ def main():
         output_h=my_open(output_h_name+".tmp")
     else:
         output_h=my_open(output_h_name)
-
-    output_h.write('''
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-/* common */
-#include "disaster.h"
-
-''')
 
     # write structs
     for p in packets:
@@ -1573,10 +1561,6 @@ extern "C" {
 void delta_stats_report(void);
 void delta_stats_reset(void);
 void *get_packet_from_connection_helper(struct connection *pc, enum packet_type type);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 ''')
     output_h.close()
 
@@ -1589,7 +1573,7 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
 
     output_c.write('''
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -1684,10 +1668,10 @@ bool server_handle_packet(enum packet_type type, const void *packet,
     for p in packets:
         if "cs" in p.dirs and not p.no_handle:
             a=p.name[len("packet_"):]
-            type=a.split("_")[0]
+            type=string.split(a,"_")[0]
             b=p.fields
             b=map(lambda x:"%s%s"%(x.get_handle_type(), x.name),b)
-            b=", ".join(b)
+            b=string.join(b,", ")
             if b:
                 b=", "+b
             if p.handle_via_packet:
@@ -1711,10 +1695,6 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "shared.h"
 
@@ -1731,7 +1711,7 @@ bool client_handle_packet(enum packet_type type, const void *packet);
         b=p.fields
         #print len(p.fields),p.name
         b=map(lambda x:"%s%s"%(x.get_handle_type(), x.name),b)
-        b=", ".join(b)
+        b=string.join(b,", ")
         if not b:
             b="void"
         if p.handle_via_packet:
@@ -1740,10 +1720,6 @@ bool client_handle_packet(enum packet_type type, const void *packet);
         else:
             f.write('void handle_%s(%s);\n'%(a,b))
     f.write('''
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif /* FC__PACKHAND_GEN_H */
 ''')
     f.close()
@@ -1752,7 +1728,7 @@ bool client_handle_packet(enum packet_type type, const void *packet);
     f.write('''
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -1776,7 +1752,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
             if x.dataio_type=="worklist":
                 y="&"+y
             b.append(y)
-        b=",\n      ".join(b)
+        b=string.join(b,",\n      ")
         if b:
             b=",\n      "+b
 
@@ -1808,7 +1784,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
     f.write('''
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -1831,7 +1807,7 @@ bool client_handle_packet(enum packet_type type, const void *packet)
             if x.dataio_type=="worklist":
                 y="&"+y
             b.append(y)
-        b=",\n      ".join(b)
+        b=string.join(b,",\n      ")
         if b:
             b="\n      "+b
 

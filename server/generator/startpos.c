@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* sqrt, HUGE_VAL */
@@ -21,14 +21,12 @@
 #include "fcintl.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 
 /* server */
 #include "maphand.h"
 
-/* server/generator */
 #include "mapgen_topology.h"
 #include "startpos.h"
 #include "temperature_map.h"
@@ -51,7 +49,6 @@ static int get_tile_value(struct tile *ptile)
 {
   struct terrain *old_terrain;
   bv_special old_special;
-  bv_roads old_roads;
   int value, irrig_bonus, mine_bonus;
 
   /* Give one point for each food / shield / trade produced. */
@@ -62,21 +59,8 @@ static int get_tile_value(struct tile *ptile)
 
   old_terrain = ptile->terrain;
   old_special = ptile->special;
-  old_roads   = ptile->roads;
 
-  if (num_role_units(L_SETTLERS) > 0) {
-    struct unit_type *start_worker = get_role_unit(L_SETTLERS, 0);
-
-    road_type_iterate(proad) {
-      if (road_can_be_built(proad, ptile)
-          && are_reqs_active(NULL, NULL, NULL, ptile,
-                             start_worker, NULL, NULL, &proad->reqs,
-                             RPT_CERTAIN)) {
-        tile_add_road(ptile, proad);
-      }
-    } road_type_iterate_end;
-  }
-
+  tile_set_special(ptile, S_ROAD);
   tile_apply_activity(ptile, ACTIVITY_IRRIGATE);
   irrig_bonus = -value;
   output_type_iterate(o) {
@@ -85,9 +69,7 @@ static int get_tile_value(struct tile *ptile)
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
-
-  /* Same set of roads used with mine as with irrigation. */
-
+  tile_set_special(ptile, S_ROAD);
   tile_apply_activity(ptile, ACTIVITY_MINE);
   mine_bonus = -value;
   output_type_iterate(o) {
@@ -96,7 +78,6 @@ static int get_tile_value(struct tile *ptile)
 
   ptile->terrain = old_terrain;
   ptile->special = old_special;
-  ptile->roads   = old_roads;
 
   value += MAX(0, MAX(mine_bonus, irrig_bonus)) / 2;
 
@@ -143,10 +124,6 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
 
   /* Has to be native tile for initial unit */
   if (!is_native_tile(pdata->initial_unit, ptile)) {
-    return FALSE;
-  }
-
-  if (game.server.start_city && terrain_has_flag(tile_terrain(ptile), TER_NO_CITIES)) {
     return FALSE;
   }
 
@@ -413,14 +390,17 @@ bool create_start_positions(enum map_startpos mode,
     } else {
       data.min_value *= 0.95;
       if (data.min_value <= 10) {
-        log_normal(_("The server appears to have gotten into an infinite "
-                     "loop in the allocation of starting positions.\nMaybe "
-                     "the number of players is too high for this map."));
+        log_error(_("The server appears to have gotten into an infinite "
+                    "loop in the allocation of starting positions.\nMaybe "
+                    "the number of players is too high for this map."));
+        /* TRANS: No full stop after the URL, could cause confusion. */
+        log_error(_("Please report this message at %s"), BUG_URL);
         failure = TRUE;
         break;
       }
     }
   }
+  fc_assert(player_count() == map_startpos_count());
 
   free(islands);
   free(islands_index);

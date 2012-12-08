@@ -22,13 +22,13 @@ function default_hut_get_gold(unit, gold)
   notify.event(owner, unit.tile, E.HUT_GOLD, PL_("You found %d gold.",
                                                  "You found %d gold.", gold),
                gold)
-  owner:change_gold(gold)
+  change_gold(owner, gold)
 end
 
 -- Get a tech from entering a hut.
 function default_hut_get_tech(unit)
   local owner = unit.owner
-  local tech = owner:give_technology(nil, "hut")
+  local tech = give_technology(owner, nil, "hut")
 
   if tech then
     notify.event(owner, unit.tile, E.HUT_TECH,
@@ -56,7 +56,7 @@ function default_hut_get_mercenaries(unit)
   if type then
     notify.event(owner, unit.tile, E.HUT_MERC,
                  _("A band of friendly mercenaries joins your cause."))
-    owner:create_unit(unit.tile, type, 0, unit:get_homecity(), -1)
+    create_unit(owner, unit.tile, type, 0, unit:get_homecity(), -1)
     return true
   else
     return false
@@ -69,35 +69,33 @@ function default_hut_get_city(unit)
   local settlers = find.role_unit_type('Cities', owner)
 
   if unit:is_on_possible_city_tile() then
-    owner:create_city(unit.tile, "")
+    create_city(owner, unit.tile, "")
     notify.event(owner, unit.tile, E.HUT_CITY,
                  _("You found a friendly city."))
   else
     if settlers then
       notify.event(owner, unit.tile, E.HUT_SETTLER,
                    _("Friendly nomads are impressed by you, and join you."))
-      owner:create_unit(unit.tile, settlers, 0, unit:get_homecity(), -1)
+      create_unit(owner, unit.tile, settlers, 0, unit:get_homecity(), -1)
     end
   end
 end
 
--- Get barbarians from hut, unless close to a city, king enters, or
--- barbarians are disabled
+-- Get barbarians from hut, unless close to a city or king enters
 -- Unit may die: returns true if unit is alive
 function default_hut_get_barbarians(unit)
   local tile = unit.tile
   local type = unit.utype
   local owner = unit.owner
 
-  if server.setting.get("barbarians") == "DISABLED"
-    or unit.tile:city_exists_within_max_city_map(true)
+  if unit.tile:city_exists_within_max_city_map(true)
     or type:has_flag('Gameloss') then
-      notify.event(owner, unit.tile, E.HUT_BARB_CITY_NEAR,
-                   _("An abandoned village is here."))
+    notify.event(owner, unit.tile, E.HUT_BARB_CITY_NEAR,
+                 _("An abandoned village is here."))
     return true
   end
   
-  local alive = tile:unleash_barbarians()
+  local alive = unleash_barbarians(tile)
   if alive then
     notify.event(owner, tile, E.HUT_BARB,
                   _("You have unleashed a horde of barbarians!"));
@@ -169,7 +167,7 @@ function default_make_partisans_callback(city, loser, winner)
   if partisans > 8 then
     partisans = 8
   end
-  city.tile:place_partisans(loser, partisans, city:map_sq_radius())
+  place_partisans(city.tile, loser, partisans, city:map_sq_radius())
   notify.event(loser, city.tile, E.CITY_LOST,
       _("The loss of %s has inspired partisans!"), city.name)
   notify.event(winner, city.tile, E.UNIT_WIN_ATT,

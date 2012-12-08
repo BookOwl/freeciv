@@ -158,14 +158,14 @@ SectionGroup "Additional languages"
 
 EOF
 
-cat ../../bootstrap/langnames.txt |
-sort -k 2 |
-while read -r code name
+find $1/share/locale -mindepth 1 -maxdepth 1 -type d -printf %f\\n |
+sort |
+while read -r name
 do
-if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-echo "  Section \"$name ($code)\""
-echo "  SetOutPath \$INSTDIR\\share\\locale\\$code"
-echo "  File /r $1\\share\\locale\\$code\*.*"
+if test -e $1/share/locale/$name/LC_MESSAGES/freeciv.mo; then
+echo "  Section \"$name\""
+echo "  SetOutPath \$INSTDIR\\share\\locale\\$name"
+echo "  File /r $1\\share\\locale\\$name\*.*"
 echo "  SetOutPath \$INSTDIR"
 echo "  SectionEnd"
 echo
@@ -217,12 +217,12 @@ Start Menu shortcut properties."
   \${NSD_CB_SelectString} \$DefaultLanguageDropList "auto"
 EOF
 
-  cat ../../bootstrap/langnames.txt |
-  sort -k 2 |
-  while read -r code name
+  find $1/share/locale -mindepth 1 -maxdepth 1 -type d -printf %f\\n |
+  sort |
+  while read -r name
   do
-  if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$code\""
+  if test -e $1/share/locale/$name/LC_MESSAGES/freeciv.mo; then
+  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$name\""
   fi
   done
 

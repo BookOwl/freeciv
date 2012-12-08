@@ -11,10 +11,10 @@
 .\"
 .TH FREECIV 6 "December 10th 2011"
 .SH NAME
-freeciv-gtk2, freeciv-gtk3, freeciv-sdl, freeciv-xaw \
+freeciv-gtk2, freeciv-sdl, freeciv-xaw \
 \- The clients for the Freeciv game
 .SH SYNOPSIS
-.B freeciv-gtk2|freeciv-gtk3|freeciv-sdl|freeciv-xaw \
+.B freeciv-gtk2|freeciv-sdl|freeciv-xaw \
 [ \-A|\-\-Announce \fIprotocol\fP ] \
 [ \-a|\-\-autoconnect ] \
 [ \-d|\-\-debug \fIlevel_number\fP ] \
@@ -33,10 +33,8 @@ freeciv-gtk2, freeciv-gtk3, freeciv-sdl, freeciv-xaw \
 [ \-\- \fIclient-specific-parameters\fP ]
 
 .B freeciv-gtk2
-and
-.B freeciv-gtk3
-accept the standard Gtk parameters following \fB\-\-\fP; see the Gtk
-documentation. They also accept
+accepts the standard Gtk parameters following \fB\-\-\fP; see the Gtk
+documentation. It also accepts
 .B [ \-h|\-\-help ]
 
 .B freeciv-sdl
@@ -65,12 +63,12 @@ easily one of the most fun and addictive network games out there!
 
 This is the client program used to connect to a Freeciv server - see also
 .IR freeciv-server (6)
-\&. \fBfreeciv-gtk2\fP, \fBfreeciv-gtk3\fP, and \fBfreeciv-sdl\fP can also
-spawn their own local server for single-player games.
+\&. \fBfreeciv-gtk2\fP and \fBfreeciv-sdl\fP can also spawn their own local
+server for single-player games.
 
 This manual page only lists the command line arguments. For more details
-about using \fBfreeciv-gtk2\fP, \fBfreeciv-gtk3\fP, \fBfreeciv-sdl\fP, or
-\fBfreeciv-xaw\fP, see the Client Manual which can be found at
+about using \fBfreeciv-gtk2\fP, \fBfreeciv-sdl\fP, or \fBfreeciv-xaw\fP,
+see the Client Manual which can be found at
 .UR @WIKI_URL@
 the Freeciv website
 .UE
@@ -78,7 +76,7 @@ as well as the documentation which is part of the Freeciv distribution.
 .SH OPTIONS
 The following options are accepted by all clients. They may not
 be combined; that is, "\-np caesar 5557" will not work, instead you
-would need to enter "\-n caesar \-p 5557". All options have a short
+ would need to enter "\-n caesar \-p 5557". All options have a short
 form (single hyphen and single letter) and a long form (double hyphen
 and a complete word); their effects are identical.
 .TP
@@ -128,7 +126,7 @@ to the log instead.
 Specifies the \fIURL\fP of the metaserver to connect to. A metaserver is a
 place where Freeciv servers can publish their presence. Freeciv clients consult
 the metaserver to offer users a selection of games to join. By default, the 
-standard metaserver run by the Freeciv maintainers will be used. 
+standard metaserver run by the Freeciv maintainers will be used.
 .TP
 .BI "\-n \fIname\fP, \-\-name \fIname\fP"
 Specifies the user name (\fIname\fP) to use to connect to the server. This
@@ -170,9 +168,6 @@ section). Currently the following tilespecs are distributed with Freeciv:
 .I amplio2.tilespec
 
 \(bu
-.I cimpletoon.tilespec
-
-\(bu
 .I hex2t.tilespec
 
 \(bu
@@ -202,12 +197,12 @@ Starts the client in full screen mode.  Only implemented in the
 .BI "\-\- \-h, \-\- \-\-help"
 Print the client-specific parameter help.
 .TP
-.BI "\-\- \-t \fItheme\fP, \-\- \-\-theme \fItheme\fP"
+.BI "\-\- \-t \fIstring\fP, \-\- \-\-theme \fIstring\fP"
 Use a particular GUI theme.  Only implemented in the \fBfreeciv-sdl\fP client.
 .SH "EXAMPLES"
 .TP
-.B "freeciv-gtk3 \-\-name ""King Richard"" \-\-server io.daimi.aau.dk"
-Starts the GTK3 client using the name \fIKing Richard\fP and connecting
+.B "freeciv-gtk2 \-\-name ""King Richard"" \-\-server io.daimi.aau.dk"
+Starts the GTK2 client using the name \fIKing Richard\fP and connecting
 to the server at \fIio.daimi.aau.dk\fP.
 .TP
 .B freeciv-sdl \-a \-t trident
@@ -288,7 +283,7 @@ is used instead, looking also in "saves" potential subdirectories.
 A colon separated list of directories pointing to the
 .B freeciv
 data directories. By default freeciv looks in the following directories,
-in order, for any data files: the current directory; the "data/scenarios"
+in order, for any data files: the current directory; the "data/scenario"
 subdirectory of the current directory; the subdirectory ".freeciv/scenarios"
 in the user's home directory; and the directory where the files are placed
 by running "make install".  If not set,

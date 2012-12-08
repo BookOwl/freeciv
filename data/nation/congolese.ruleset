@@ -35,9 +35,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with = "kongo"
-civilwar_nations = "katangan", "rwandan", "burundian"
+civilwar_nations = "kongo", "rwandan", "burundian"
 
 cities =
  "Kinshasa (river)",

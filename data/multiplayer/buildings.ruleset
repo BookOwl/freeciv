@@ -11,7 +11,7 @@
 
 [datafile]
 description="Multiplayer buildings data for Freeciv"
-options="+Freeciv-ruleset-Devel-2012.Feb.28"
+options="+Freeciv-2.3-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -990,6 +990,7 @@ Together with a Library, a University increases the science\
 [building_apollo_program]
 name		= _("Apollo Program")
 genus		= "SmallWonder"
+flags		= "SaveSmallWonder"
 reqs	=
     { "type", "name", "range"
       "Tech", "Space Flight", "Player"

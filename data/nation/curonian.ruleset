@@ -26,9 +26,9 @@ leaders = {
 
 ruler_titles = {
  "government",     "male_title",          "female_title"
- "Despotism",      _("Duke %s"),          _("Duchess %s")
+ "Despotism",      _("Master %s"),        _("Mistress %s")
  "Fundamentalism", _("Bishop %s"),        _("Mother Superior %s")
- "Monarchy",       _("Grand Duke %s"),    _("Grand Duchess %s")
+ "Monarchy",       _("Duke %s"),          _("Duchess %s")
 }
 
 flag= "courland" 
@@ -37,13 +37,11 @@ city_style = "European"
 
 init_techs="" 
 init_buildings="" 
+init_government="Despotism" 
 init_units="" 
 
 conflicts_with="latvian", "indonesian" ;latter because of similar flag
-civilwar_nations="teutonic", "latvian",
-
-;colonies
-"gambian", "trinidadian and tobagonian"
+civilwar_nations="teutonic", "latvian"
 
 cities=
   "Mitau",

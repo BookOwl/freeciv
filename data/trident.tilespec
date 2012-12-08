@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2012.Aug.04"
+options = "+Freeciv-2.3-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "Trident"
@@ -18,8 +18,11 @@ small_tile_width   = 15
 small_tile_height  = 20
 
 ; Basic tile style.
-type = "overview"
 is_hex = 0
+is_isometric = 0
+
+; Use roadstyle 1 (old non-iso style)
+roadstyle = 1
 
 ; Was fogstyle 0 (old iso style)
 fogstyle = 2
@@ -40,9 +43,6 @@ unit_offset_y = 0
 ; offset the city bar text by this amount (from the city tile origin)
 citybar_offset_y = 27
 
-; offset the tile label text by this amount
-tilelabel_offset_y = 10
-
 ; Font size (points) to use to draw city names and productions:
 city_names_font_size = 10
 city_productions_font_size = 10
@@ -56,7 +56,8 @@ minimap_intro_file = "misc/radar"
 ; the data path. Order may be important for color allocation on 
 ; low-color systems, and if there are any duplicate tags (lattermost
 ; tag is used).
-files =
+files = 
+  "misc/colors.spec",
   "misc/overlays.spec",
   "misc/citybar.spec",
   "trident/tiles.spec",
@@ -181,10 +182,3 @@ is_blended = 0
 num_layers = 1
 layer0_match_type = "tundra"
 layer0_match_with = "tundra"
-
-[roads]
-styles =
-    { "name", "style"
-      "road", 1
-      "rail", 1
-    }

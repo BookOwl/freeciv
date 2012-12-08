@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <assert.h>
@@ -673,7 +673,7 @@ static int number_of_rows(int n)
 /**************************************************************************
 
 **************************************************************************/     
-static void unit_select_dialog_popdown(void)
+static void popdown_unit_select_dialog(void)
 {
   if (unit_select_main)
     DestroyWindow(unit_select_main);
@@ -690,7 +690,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
   switch(message)
     {
     case WM_CLOSE:
-      unit_select_dialog_popdown();
+      popdown_unit_select_dialog();
       return TRUE;
       break;
     case WM_DESTROY:
@@ -710,7 +710,7 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	    struct unit *punit = player_find_unit_by_id(client.conn.playing,
 							unit_select_ids[i]);
 	    if(punit) {
-	      unit_focus_set(punit);
+	      set_unit_focus(punit);
 	    }
 	  }  
 	  break;
@@ -721,12 +721,12 @@ static LONG APIENTRY unitselect_proc(HWND hWnd, UINT message,
 	      struct unit *punit = player_find_unit_by_id(client.conn.playing,
 							  unit_select_ids[id]);
 	      if (NULL != punit && unit_owner(punit) == client.conn.playing) {
-		unit_focus_set(punit);
+		set_unit_focus(punit);
 	      }   
 	    }
 	  break;
 	}
-      unit_select_dialog_popdown();
+      popdown_unit_select_dialog();
       break;
     default:
       return DefWindowProc(hWnd,message,wParam,lParam);
@@ -768,7 +768,7 @@ BOOL unitselect_init(HINSTANCE hInstance)
 
 **************************************************************************/
 void
-unit_select_dialog_popup(struct tile *ptile)
+popup_unit_select_dialog(struct tile *ptile)
 {
   int i,n,r,c;
   int max_width,max_height;
@@ -787,7 +787,7 @@ unit_select_dialog_popup(struct tile *ptile)
   
   /* unit select box might already be open; if so, close it */
   if (unit_select_main) {
-    unit_select_dialog_popdown ();
+    popdown_unit_select_dialog ();
   }
   
   GetCursorPos(&pt);
@@ -921,14 +921,6 @@ unit_select_dialog_popup(struct tile *ptile)
   MoveWindow(unit_select_main,rc.left,rc.top,win_width,win_height,TRUE);
   ShowWindow(unit_select_main,SW_SHOWNORMAL);
   
-}
-
-/**************************************************************************
-  Update the dialog window to select units on a particular tile.
-**************************************************************************/
-void unit_select_dialog_update_real(void)
-{
-  /* PORTME */
 }
 
 /**************************************************************************

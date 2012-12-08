@@ -20,7 +20,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",            "female_title"
- "Democracy",       _("Chief Minister %s"),  _("?female:Chief Minister %s")
+ "Democracy",       _("Prime Minister %s"),  _("?female:Prime Minister %s")
  "Fundamentalism",  _("Bishop %s"),          _("?female:Bishop %s")
  "Republic",        _("Governor %s"),        _("?female:Governor %s")
 }
@@ -31,18 +31,15 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-conflicts_with = "antiguan and barbudan", "barbadian", "dominican", "grenadian",
- "jamaican", "kittitian and nevisian", "saint lucian", "trinidadian and tobagonian",
- "vincentian"
-civilwar_nations = "antiguan and barbudan", "barbadian", "dominican", "grenadian",
- "jamaican", "kittitian and nevisian", "saint lucian", "trinidadian and tobagonian",
- "vincentian"
+conflicts_with = "dominican", "grenadian", "jamaican", "vincentian"
+civilwar_nations = "dominican", "grenadian", "jamaican", "vincentian"
 
 cities =
  "Chaguaramas",
  "Kingston",
- "Port of Spain (ocean)",
+ "Port-of-Spain (ocean)",
  "Bridgetown",
  "Castries",
  "Kingstown",

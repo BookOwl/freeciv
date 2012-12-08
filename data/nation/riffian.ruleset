@@ -16,10 +16,9 @@ leaders = {
 }
 
 ruler_titles = {
- "government",     "male_title",         "female_title"
- "Fundamentalism", _("Imam %s"),            _("Imama %s")
- "Monarchy",       _("Emir %s"),            _("Emira %s")
- "Despotism",      _("%s Pasha"),           _("?female:%s Pasha")
+ "government", "male_title",         "female_title"
+ "Monarchy",   _("Emir %s"),            _("Emira %s")
+ "Republic",   _("%s Basha"),           _("?female:%s Basha")
 }
 
 flag="rif"
@@ -28,6 +27,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Spanish", "French", "Moroccan"

@@ -13,10 +13,6 @@
 #ifndef FC__COMBAT_H
 #define FC__COMBAT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "unittype.h"
 
@@ -74,13 +70,4 @@ struct unit *get_attacker(const struct unit *defender,
 			  const struct tile *ptile);
 
 bool is_stack_vulnerable(const struct tile *ptile);
-
-int combat_bonus_against(const struct combat_bonus_list *list,
-                         const struct unit_type *enemy,
-                         enum combat_bonus_type type);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif /* FC__COMBAT_H */

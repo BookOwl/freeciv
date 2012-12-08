@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -44,27 +44,20 @@ static struct unit_class unit_classes[UCL_LAST];
    client/packhand.c (for the client)
 */
 
-static const char *type_flag_names[] = {
+static const char *flag_names[] = {
   "TradeRoute", "HelpWonder", "IgZOC", "NonMil", "IgTer", 
-  "OneAttack", "IgWall", "FieldUnit",
-  "Marines", "Partial_Invis", "Settlers", "Diplomat",
-  "Trireme", "Nuclear", "Spy", "Paratroopers",
-  "Cities", "Only_Native_Attack",
+  "OneAttack", "Pikemen", "Horse", "IgWall", "FieldUnit", 
+  "AEGIS", "Marines", "Partial_Invis", "Settlers", "Diplomat",
+  "Trireme", "Nuclear", "Spy", "Transform", "Paratroopers",
+  "Cities", "No_Land_Attack",
   "AddToCity", "Fanatic", "GameLoss", "Unique", "Unbribable", 
   "Undisbandable", "SuperSpy", "NoHome", "NoVeteran", "Bombarder",
   "CityBuster", "NoBuild", "BadWallAttacker", "BadCityDefender",
-  "BarbarianOnly", "Shield2Gold",
+  "Helicopter", "AirUnit", "Fighter", "BarbarianOnly", "Shield2Gold",
   "Capturable", "Capturer"
 };
-
-struct user_unit_type_flag
-{
-  char *name;
-  char *helptxt;
-};
-
-static struct user_unit_type_flag user_type_flags[MAX_NUM_USER_UNIT_FLAGS];
-
+static char *user_flag_names[MAX_NUM_USER_UNIT_FLAGS]
+  = { NULL, NULL, NULL, NULL };
 static const char *role_names[] = {
   "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
   "DefendOk", "DefendGood", "AttackFast", "AttackStrong",
@@ -158,7 +151,7 @@ int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
   int val = ut->upkeep[otype], gold_upkeep_factor;
 
   if (get_player_bonus(pplayer, EFT_FANATICS)
-      && BV_ISSET(ut->flags, UTYF_FANATIC)) {
+      && BV_ISSET(ut->flags, F_FANATIC)) {
     /* Special case: fanatics have no upkeep under fanaticism. */
     return 0;
   }
@@ -166,11 +159,11 @@ int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
   /* switch shield upkeep to gold upkeep if
      - the effect 'EFT_SHIELD2GOLD_FACTOR' is non-zero (it gives the
        conversion factor in percent) and
-     - the unit has the corresponding flag set (UTYF_SHIELD2GOLD)
+     - the unit has the corresponding flag set (F_SHIELD2GOLD)
      FIXME: Should the ai know about this? */
   gold_upkeep_factor = get_player_bonus(pplayer, EFT_SHIELD2GOLD_FACTOR);
   gold_upkeep_factor = (gold_upkeep_factor > 0) ? gold_upkeep_factor : 0;
-  if (gold_upkeep_factor > 0 && utype_has_flag(ut, UTYF_SHIELD2GOLD)) {
+  if (gold_upkeep_factor > 0 && utype_has_flag(ut, F_SHIELD2GOLD)) {
     switch (otype) {
       case O_GOLD:
         val = ceil((0.01 * gold_upkeep_factor) * ut->upkeep[O_SHIELD]);
@@ -214,14 +207,14 @@ bool uclass_has_flag(const struct unit_class *punitclass,
 **************************************************************************/
 bool utype_has_flag(const struct unit_type *punittype, int flag)
 {
-  fc_assert_ret_val(flag >= 0 && flag < UTYF_LAST, FALSE);
+  fc_assert_ret_val(flag >= 0 && flag < F_LAST, FALSE);
   return BV_ISSET(punittype->flags, flag);
 }
 
 /**************************************************************************
   Return whether the unit has the given flag.
 **************************************************************************/
-bool unit_has_type_flag(const struct unit *punit, enum unit_type_flag_id flag)
+bool unit_has_type_flag(const struct unit *punit, enum unit_flag_id flag)
 {
   return utype_has_flag(unit_type(punit), flag);
 }
@@ -258,7 +251,7 @@ bool unit_can_take_over(const struct unit *punit)
 bool utype_can_take_over(const struct unit_type *punittype)
 {
   return (uclass_has_flag(utype_class(punittype), UCF_CAN_OCCUPY_CITY)
-          && !utype_has_flag(punittype, UTYF_CIVILIAN));
+          && !utype_has_flag(punittype, F_CIVILIAN));
 }
 
 /****************************************************************************
@@ -312,7 +305,7 @@ int unit_disband_shields(const struct unit *punit)
 }
 
 /**************************************************************************
-  How much city shrinks when it builds unit of this type.
+...
 **************************************************************************/
 int utype_pop_value(const struct unit_type *punittype)
 {
@@ -320,7 +313,7 @@ int utype_pop_value(const struct unit_type *punittype)
 }
 
 /**************************************************************************
-  How much population is put to building this unit.
+...
 **************************************************************************/
 int unit_pop_value(const struct unit *punit)
 {
@@ -380,29 +373,29 @@ const char *unit_rule_name(const struct unit *punit)
 }
 
 /**************************************************************************
-  Return string describing unit type values.
-  String is static buffer that gets reused when function is called again.
+...
 **************************************************************************/
 const char *utype_values_string(const struct unit_type *punittype)
 {
   static char buffer[256];
 
-  /* Print in two parts as move_points_text() returns a static buffer */
-  fc_snprintf(buffer, sizeof(buffer), "%d/%d/%s",
-              punittype->attack_strength,
-              punittype->defense_strength,
-              move_points_text(punittype->move_rate, NULL, NULL, FALSE));
   if (utype_fuel(punittype)) {
-    cat_snprintf(buffer, sizeof(buffer), "(%s)",
-                 move_points_text(punittype->move_rate * utype_fuel(punittype),
-                                  NULL, NULL, FALSE));
+    fc_snprintf(buffer, sizeof(buffer), "%d/%d/%d(%d)",
+                punittype->attack_strength,
+                punittype->defense_strength,
+                punittype->move_rate / 3,
+                punittype->move_rate / 3 * utype_fuel(punittype));
+  } else {
+    fc_snprintf(buffer, sizeof(buffer), "%d/%d/%d",
+                punittype->attack_strength,
+                punittype->defense_strength,
+                punittype->move_rate / 3);
   }
   return buffer;
 }
 
 /**************************************************************************
-  Return string with translated unit name and list of its values.
-  String is static buffer that gets reused when function is called again.
+...
 **************************************************************************/
 const char *utype_values_translation(const struct unit_type *punittype)
 {
@@ -557,95 +550,62 @@ struct unit_class *unit_class_by_rule_name(const char *s)
 }
 
 /**************************************************************************
-  Initialize user unit type flags.
-**************************************************************************/
-void user_unit_type_flags_init(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
-    user_type_flags[i].name = NULL;
-    user_type_flags[i].helptxt = NULL;
-  }
-}
-
-/**************************************************************************
   Sets user defined name for unit flag.
 **************************************************************************/
-void set_user_unit_type_flag_name(enum unit_type_flag_id id, const char *name,
-                                  const char *helptxt)
+void set_user_unit_flag_name(enum unit_flag_id id, const char *name)
 {
-  int ufid = id - UTYF_USER_FLAG_1;
+  int ufid = id - F_USER_FLAG_1;
 
-  fc_assert_ret(id >= UTYF_USER_FLAG_1 && id < UTYF_LAST);
+  fc_assert_ret(id >= F_USER_FLAG_1 && id < F_LAST);
 
-  if (user_type_flags[ufid].name != NULL) {
-    free(user_type_flags[ufid].name);
-    user_type_flags[ufid].name = NULL;
+  if (user_flag_names[ufid] != NULL) {
+    free(user_flag_names[ufid]);
+    user_flag_names[ufid] = NULL;
   }
 
   if (name && name[0] != '\0') {
-    user_type_flags[ufid].name = fc_strdup(name);
-  }
-
-  if (user_type_flags[ufid].helptxt != NULL) {
-    free(user_type_flags[ufid].helptxt);
-    user_type_flags[ufid].helptxt = NULL;
-  }
-
-  if (helptxt && helptxt[0] != '\0') {
-    user_type_flags[ufid].helptxt = fc_strdup(helptxt);
+    user_flag_names[ufid] = fc_strdup(name);
   }
 }
 
 /**************************************************************************
   Convert flag names to enum; case insensitive;
-  returns UTYF_LAST if can't match.
+  returns F_LAST if can't match.
 **************************************************************************/
-enum unit_type_flag_id unit_flag_by_rule_name(const char *s)
+enum unit_flag_id unit_flag_by_rule_name(const char *s)
 {
-  enum unit_type_flag_id i;
+  enum unit_flag_id i;
 
-  fc_assert_ret_val(ARRAY_SIZE(type_flag_names) == UTYF_USER_FLAG_1, UTYF_LAST);
+  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, F_LAST);
 
-  for (i = 0; i < UTYF_USER_FLAG_1; i++) {
-    if (fc_strcasecmp(type_flag_names[i], s) == 0) {
+  for (i = 0; i < F_USER_FLAG_1; i++) {
+    if (fc_strcasecmp(flag_names[i], s) == 0) {
       return i;
     }
   }
   for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
-    if (user_type_flags[i].name != NULL
-        && fc_strcasecmp(user_type_flags[i].name, s) == 0) {
-      return i + UTYF_USER_FLAG_1;
+    if (user_flag_names[i] != NULL
+        && fc_strcasecmp(user_flag_names[i], s) == 0) {
+      return i + F_USER_FLAG_1;
     }
   }
 
-  return UTYF_LAST;
+  return F_LAST;
 }
 
 /**************************************************************************
   Return the (untranslated) rule name of the unit flag.
 **************************************************************************/
-const char *unit_type_flag_rule_name(enum unit_type_flag_id id)
+const char *unit_flag_rule_name(enum unit_flag_id id)
 {
-  fc_assert_ret_val(ARRAY_SIZE(type_flag_names) == UTYF_USER_FLAG_1, NULL);
-  fc_assert_ret_val(id >= 0 && id < UTYF_LAST, NULL);
+  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, NULL);
+  fc_assert_ret_val(id >= 0 && id < F_LAST, NULL);
 
-  if (id < UTYF_USER_FLAG_1) {
-    return type_flag_names[id];
+  if (id < F_USER_FLAG_1) {
+    return flag_names[id];
   }
 
-  return user_type_flags[id - UTYF_USER_FLAG_1].name;
-}
-
-/**************************************************************************
-  Return the (untranslated) helptxt of the user unit flag.
-**************************************************************************/
-const char *unit_type_flag_helptxt(enum unit_type_flag_id id)
-{
-  fc_assert(id >= UTYF_USER_FLAG_1 && id < UTYF_LAST);
-
-  return user_type_flags[id - UTYF_USER_FLAG_1].helptxt;
+  return user_flag_names[id - F_USER_FLAG_1];
 }
 
 /**************************************************************************
@@ -693,15 +653,15 @@ bool can_player_build_unit_direct(const struct player *p,
     return FALSE;
   }
 
-  if (utype_has_flag(punittype, UTYF_NUCLEAR)
+  if (utype_has_flag(punittype, F_NUCLEAR)
       && !get_player_bonus(p, EFT_ENABLE_NUKE) > 0) {
     return FALSE;
   }
-  if (utype_has_flag(punittype, UTYF_NOBUILD)) {
+  if (utype_has_flag(punittype, F_NOBUILD)) {
     return FALSE;
   }
 
-  if (utype_has_flag(punittype, UTYF_BARBARIAN_ONLY)
+  if (utype_has_flag(punittype, F_BARBARIAN_ONLY)
       && !is_barbarian(p)) {
     /* Unit can be built by barbarians only and this player is
      * not barbarian */
@@ -741,7 +701,7 @@ bool can_player_build_unit_direct(const struct player *p,
     }
     
   }
-  if (utype_has_flag(punittype, UTYF_UNIQUE)) {
+  if (utype_has_flag(punittype, F_UNIQUE)) {
     /* FIXME: This could be slow if we have lots of units. We could
      * consider keeping an array of unittypes updated with this info 
      * instead. */
@@ -803,7 +763,7 @@ bool can_player_build_unit_later(const struct player *p,
                                  const struct unit_type *punittype)
 {
   fc_assert_ret_val(NULL != punittype, FALSE);
-  if (utype_has_flag(punittype, UTYF_NOBUILD)) {
+  if (utype_has_flag(punittype, F_NOBUILD)) {
     return FALSE;
   }
   while ((punittype = punittype->obsoleted_by) != U_NOT_OBSOLETED) {
@@ -883,10 +843,10 @@ void role_unit_precalcs(void)
     role_unit_precalcs_free();
   }
 
-  for (i = 0; i < UTYF_LAST; i++) {
+  for(i=0; i<F_LAST; i++) {
     precalc_one(i, utype_has_flag);
   }
-  for (i = L_FIRST; i < L_LAST; i++) {
+  for(i=L_FIRST; i<L_LAST; i++) {
     precalc_one(i, utype_has_role);
   }
   first_init = FALSE;
@@ -897,7 +857,7 @@ How many unit types have specified role/flag.
 **************************************************************************/
 int num_role_units(int role)
 {
-  fc_assert_ret_val((role >= 0 && role < UTYF_LAST)
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
                     || (role >= L_FIRST && role < L_LAST), -1);
   fc_assert_ret_val(!first_init, -1);
   return n_with_role[role];
@@ -909,7 +869,7 @@ Index -1 means (n-1), ie last one.
 **************************************************************************/
 struct unit_type *get_role_unit(int role, int index)
 {
-  fc_assert_ret_val((role >= 0 && role < UTYF_LAST)
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
                     || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
   if (index==-1) {
@@ -928,7 +888,7 @@ struct unit_type *best_role_unit(const struct city *pcity, int role)
   struct unit_type *u;
   int j;
 
-  fc_assert_ret_val((role >= 0 && role < UTYF_LAST)
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
                     || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
@@ -952,7 +912,7 @@ struct unit_type *best_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role < UTYF_LAST)
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
                     || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
@@ -976,7 +936,7 @@ struct unit_type *first_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role < UTYF_LAST)
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
                     || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
@@ -1002,8 +962,6 @@ void unit_types_init(void)
    * num_unit_types isn't known yet. */
   for (i = 0; i < ARRAY_SIZE(unit_types); i++) {
     unit_types[i].item_number = i;
-    unit_types[i].veteran = NULL;
-    unit_types[i].bonuses = combat_bonus_list_new();
   }
 }
 
@@ -1015,11 +973,6 @@ static void unit_type_free(struct unit_type *punittype)
   if (NULL != punittype->helptext) {
     strvec_destroy(punittype->helptext);
     punittype->helptext = NULL;
-    veteran_system_destroy(punittype->veteran);
-    combat_bonus_list_iterate(punittype->bonuses, pbonus) {
-      FC_FREE(pbonus);
-    } combat_bonus_list_iterate_end;
-    combat_bonus_list_destroy(punittype->bonuses);
   }
 }
 
@@ -1036,18 +989,14 @@ void unit_types_free(void)
 /***************************************************************
   Frees the memory associated with all unit type flags
 ***************************************************************/
-void unit_type_flags_free(void)
+void unit_flags_free(void)
 {
   int i;
 
   for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
-    if (user_type_flags[i].name != 0) {
-      free(user_type_flags[i].name);
-      user_type_flags[i].name = NULL;
-    }
-    if (user_type_flags[i].helptxt != 0) {
-      free(user_type_flags[i].helptxt);
-      user_type_flags[i].helptxt = NULL;
+    if (user_flag_names[i] != 0) {
+      free(user_flag_names[i]);
+      user_flag_names[i] = NULL;
     }
   }
 }
@@ -1143,148 +1092,4 @@ void unit_classes_init(void)
   for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
     unit_classes[i].item_number = i;
   }
-}
-
-/****************************************************************************
-  Return veteran system used for this unit type.
-****************************************************************************/
-const struct veteran_system *
-  utype_veteran_system(const struct unit_type *punittype)
-{
-  fc_assert_ret_val(punittype != NULL, NULL);
-
-  if (punittype->veteran) {
-    return punittype->veteran;
-  }
-
-  fc_assert_ret_val(game.veteran != NULL, NULL);
-  return game.veteran;
-}
-
-/****************************************************************************
-  Return veteran level properties of given unit in given veterancy level.
-****************************************************************************/
-const struct veteran_level *
-  utype_veteran_level(const struct unit_type *punittype, int level)
-{
-  const struct veteran_system *vsystem = utype_veteran_system(punittype);
-
-  fc_assert_ret_val(vsystem != NULL, NULL);
-  fc_assert_ret_val(vsystem->definitions != NULL, NULL);
-  fc_assert_ret_val(vsystem->levels > level, NULL);
-
-  return (vsystem->definitions + level);
-}
-
-/****************************************************************************
-  Return translated name of the given veteran level.
-  NULL if this unit type doesn't have different veteran levels.
-****************************************************************************/
-const char *utype_veteran_name_translation(const struct unit_type *punittype,
-                                           int level)
-{
-  if (utype_has_flag(punittype, UTYF_NO_VETERAN)
-      || utype_veteran_levels(punittype) <= 1) {
-    return NULL;
-  } else {
-    const struct veteran_level *vlvl = utype_veteran_level(punittype, level);
-    return name_translation(&vlvl->name);
-  }
-}
-
-/****************************************************************************
-  Return veteran levels of the given unit type.
-****************************************************************************/
-int utype_veteran_levels(const struct unit_type *punittype)
-{
-  const struct veteran_system *vsystem = utype_veteran_system(punittype);
-
-  fc_assert_ret_val(vsystem != NULL, 1);
-
-  return vsystem->levels;
-}
-
-/****************************************************************************
-  Return whether this unit type's veteran system, if any, confers a power
-  factor bonus at any level (it could just add extra moves).
-****************************************************************************/
-bool utype_veteran_has_power_bonus(const struct unit_type *punittype)
-{
-  int i, initial_power_fact = utype_veteran_level(punittype, 0)->power_fact;
-  for (i = 1; i < utype_veteran_levels(punittype); i++) {
-    if (utype_veteran_level(punittype, i)->power_fact > initial_power_fact) {
-      return TRUE;
-    }
-  }
-  return FALSE;
-}
-
-/****************************************************************************
-  Allocate new veteran system structure with given veteran level count.
-****************************************************************************/
-struct veteran_system *veteran_system_new(int count)
-{
-  struct veteran_system *vsystem;
-
-  /* There must be at least one level. */
-  fc_assert_ret_val(count > 0, NULL);
-
-  vsystem = fc_calloc(1, sizeof(*vsystem));
-  vsystem->levels = count;
-  vsystem->definitions = fc_calloc(vsystem->levels,
-                                   sizeof(*vsystem->definitions));
-
-  return vsystem;
-}
-
-/****************************************************************************
-  Free veteran system
-****************************************************************************/
-void veteran_system_destroy(struct veteran_system *vsystem)
-{
-  if (vsystem) {
-    if (vsystem->definitions) {
-      free(vsystem->definitions);
-    }
-    free(vsystem);
-  }
-}
-
-/****************************************************************************
-  Fill veteran level in given veteran system with given information.
-****************************************************************************/
-void veteran_system_definition(struct veteran_system *vsystem, int level,
-                               const char *vlist_name, int vlist_power,
-                               int vlist_move, int vlist_raise,
-                               int vlist_wraise)
-{
-  struct veteran_level *vlevel;
-
-  fc_assert_ret(vsystem != NULL);
-  fc_assert_ret(vsystem->levels > level);
-
-  vlevel = vsystem->definitions + level;
-
-  names_set(&vlevel->name, vlist_name, NULL);
-  vlevel->power_fact = vlist_power;
-  vlevel->move_bonus = vlist_move;
-  vlevel->raise_chance = vlist_raise;
-  vlevel->work_raise_chance = vlist_wraise;
-}
-
-/**************************************************************************
-  Return pointer to ai data of given unit type and ai type.
-**************************************************************************/
-void *utype_ai_data(const struct unit_type *ptype, const struct ai_type *ai)
-{
-  return ptype->ais[ai_type_number(ai)];
-}
-
-/**************************************************************************
-  Attach ai data to unit type
-**************************************************************************/
-void utype_set_ai_data(struct unit_type *ptype, const struct ai_type *ai,
-                       void *data)
-{
-  ptype->ais[ai_type_number(ai)] = data;
 }

@@ -34,6 +34,7 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations = "thai", "cambodian", "burmese", "vietnamese"
