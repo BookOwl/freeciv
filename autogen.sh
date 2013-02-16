@@ -232,15 +232,15 @@ cd "$SRCDIR"
 }
 
 # autoconf and autoheader version numbers must be kept in sync
-real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 61 || DIE=1
+real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 59 || DIE=1
 AUTOCONF=$REALPKGNAME
-real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 61 || DIE=1
+real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 59 || DIE=1
 AUTOHEADER=$REALPKGNAME
 
 # automake and aclocal version numbers must be kept in sync
-real_package_name "automake" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 8 || DIE=1
+real_package_name "automake" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 7 || DIE=1
 AUTOMAKE=$REALPKGNAME
-real_package_name "aclocal" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 8 || DIE=1
+real_package_name "aclocal" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 7 || DIE=1
 ACLOCAL=$REALPKGNAME
 real_package_name "libtoolize" "ftp://ftp.gnu.org/pub/gnu/libtool/" 1 4 3 || DIE=1
 LIBTOOLIZE=$REALPKGNAME

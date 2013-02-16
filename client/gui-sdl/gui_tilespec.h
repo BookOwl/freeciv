@@ -211,7 +211,7 @@ SDL_Color * get_tech_color(Tech_type_id tech_id);
 
 /**************************************************************************
   Return a surface for the given citizen.  The citizen's type is given,
-  as well as their index (in the range [0..city_size_get(pcity))).
+  as well as their index (in the range [0..pcity->size)).
 **************************************************************************/
 static inline SDL_Surface *get_citizen_surface(enum citizen_category type,
                                                int citizen_index)
@@ -241,8 +241,7 @@ static inline SDL_Surface *get_building_surface(struct impr_type *pimprove)
 
 static inline SDL_Surface *get_unittype_surface(const struct unit_type *punittype)
 {
-  return GET_SURF(get_unittype_sprite(tileset, punittype,
-                                      direction8_invalid()));
+  return GET_SURF(get_unittype_sprite(tileset, punittype));
 }
 
 static inline SDL_Surface *get_tax_surface(Output_type_id otype)

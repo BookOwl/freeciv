@@ -12,8 +12,7 @@
 ; 'generate' = means replace this node with generated list of game
 ;	       elements; current categories are: 
 ;	          "Units", "Improvements", "Wonders", "Techs", 
-;		  "Terrain", "Bases", "Roads", "Specialists",
-;                 "Governments", "Ruleset", "Nations"
+;		  "Terrain", "Governments", "Ruleset", "Nations"
 ;              As for 'name', the number of spaces before the category
 ;              name indicates nesting level for display.
 ;
@@ -399,9 +398,6 @@ Engineers is highly vulnerable to enemy attacks.\
 $TerrainAlterations\
 "
 
-[help_gen_roads]
-generate = "  Roads"
-
 [help_gen_bases]
 generate = "  Bases"
 
@@ -710,21 +706,6 @@ just grown and adjust the role in which the new citizen has been \
 placed. You can set different priorities for a city with the Citizen \
 Governor; see its help section.\
 "), _("\
-In the default ruleset, citizens always consider their nationality to \
-be that of their home city. However, in some rulesets, citizens' \
-nationality can differ from that of the state they inhabit. When a \
-city grows due to food surplus, new citizens take the nationality of \
-the city's current owner, but when a city is conquered or otherwise \
-transferred, its citizens retain their original nationality, as do any \
-immigrants. Citizens of another nationality will work in your cities \
-just the same as your own, and behave the same in most respects, but \
-their presence makes it cheaper for agents of their associated state \
-to incite a revolt in your cities, and if migration is enabled, they \
-have an increased tendency to migrate to their state's cities. Over \
-time, citizens may be assimilated into their home city, depending on \
-ruleset settings. If nationality is enabled, you can see the cultural \
-makeup of your cities in the City dialog, on the Happiness tab.\
-"), _("\
 Cities may be enhanced with a wide variety of buildings, which can \
 improve their productivity, their military strength, or give them \
 new abilities. See the sections on City Improvements and Wonders of \
@@ -915,9 +896,6 @@ plague can spread via trade routes (without regard for nationality); \
 after a city has been struck by plague, it will remain infectious to \
 its trade partners for several turns, increasing the risk of plague in \
 those cities by a factor depending on the size of both cities.\
-"), _("\
-If migration is enabled, citizens will tend to prefer cities with a \
-lower risk of plague.\
 ")
 
 [help_migration]
@@ -946,9 +924,6 @@ without a compelling reason.)\
  - The number of happy citizens. (To a lesser extent, unhappy and \
 angry citizens reduce the desirability of a city.)\
 "), _("\
- - In rulesets where nationality is enabled, citizens have a strong \
-preference to move to cities of their own nationality.\
-"), _("\
  - The presence of any wonder in a city will greatly increase its \
 desirability (further wonders do not contribute except by the lesser \
 effect of their build cost).\
@@ -956,8 +931,6 @@ effect of their build cost).\
  - Capital cities are more attractive than other cities, all other \
 factors being equal; in addition, citizens will never migrate out of a \
 capital city.\
-"), _("\
- - A high risk of plague reduces a city's attractiveness.\
 "), _("\
  - Food surplus. (A food deficit reduces the desirability of a city.)\
 "), _("\
@@ -1082,9 +1055,7 @@ be built as veteran by means of certain city improvements or other \
 influences; once built, units can also become veteran through \
 experience (such as surviving combat), which may provide further \
 levels of bonuses beyond those available from their initial training.\
-"), "\
-$VeteranLevels\
-", _("\
+"), _("\
 Units which have been damaged in combat will regain hit points each \
 turn in which they are not moved. Normally, a unit which has not \
 moved will regain one hit point per turn. Units which are fortified \

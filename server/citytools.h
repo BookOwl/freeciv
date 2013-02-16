@@ -31,8 +31,8 @@
 #define COOLING_FACTOR WARMING_FACTOR
 
 int build_points_left(struct city *pcity);
-int do_make_unit_veteran(struct city *pcity,
-			 const struct unit_type *punittype);
+bool do_make_unit_veteran(struct city *pcity,
+                          const struct unit_type *punittype);
 
 void transfer_city_units(struct player *pplayer, struct player *pvictim, 
 			 struct unit_list *units, struct city *pcity,
@@ -66,7 +66,7 @@ void remove_dumb_city(struct player *pplayer, struct tile *ptile);
 void city_build_free_buildings(struct city *pcity);
 
 void create_city(struct player *pplayer, struct tile *ptile,
-		 const char *name, struct player *nationality);
+		 const char *name);
 void remove_city(struct city *pcity);
 
 void establish_trade_route(struct city *pc1, struct city *pc2);
@@ -102,7 +102,7 @@ bool city_map_update_tile_now(struct tile *ptile);
 void city_map_update_all(struct city *pcity);
 void city_map_update_all_cities_for_player(struct player *pplayer);
 
-bool city_map_update_radius_sq(struct city *pcity);
+bool city_map_update_radius_sq(struct city *pcity, bool arrange_workers);
 
 void city_landlocked_sell_coastal_improvements(struct tile *ptile);
 void city_refresh_vision(struct city *pcity);

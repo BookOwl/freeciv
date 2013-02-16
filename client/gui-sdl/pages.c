@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -137,7 +137,6 @@ static void show_main_page(void)
   SDL_Surface *pBackground;
   int h = 0;
   SDL_Rect area;
-  char verbuf[200];
     
   /* create dialog */
   pStartMenu = fc_calloc(1, sizeof(struct SMALL_DLG));
@@ -147,11 +146,9 @@ static void show_main_page(void)
   pStartMenu->pEndWidgetList = pWindow;
 
   area = pWindow->area;
-
+  
   /* Freeciv version */
-  /* TRANS: Freeciv 2.4.0, gui-sdl client */
-  fc_snprintf(verbuf, sizeof(verbuf), _("Freeciv %s, %s client"), VERSION_STRING, client_string);
-  pWidget = create_iconlabel_from_chars(NULL, pWindow->dst, verbuf,
+  pWidget = create_iconlabel_from_chars(NULL, pWindow->dst, "Freeciv "VERSION,
             adj_font(12),
             (WF_SELLECT_WITHOUT_BAR|WF_RESTORE_BACKGROUND|WF_FREE_DATA));
 
@@ -368,7 +365,7 @@ void real_set_client_page(enum client_pages page)
       show_game_page();
       enable_main_widgets();
       update_info_label();
-      unit_focus_update();
+      update_unit_focus();
       update_unit_info_label(get_units_in_focus());
       update_turn_done_button_state();
       refresh_overview();

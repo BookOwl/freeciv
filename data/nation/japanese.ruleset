@@ -2,10 +2,9 @@
 
 name=_("Japanese")
 plural=_("?plural:Japanese")
-groups="Medieval", "Early Modern", "Modern", "Asian", "Core"
-; /* TRANS: Legend for nation in "core" set */
+groups="Medieval", "Early Modern", "Modern", "Asian"
 legend=_("According to traditional Japanese mythology, Japan was founded\
- in the 7th century BCE by the ancestral Emperor Jimmu.")
+ in the 7th century BC by the ancestral Emperor Jimmu.")
 
 leaders = {
  "name",                "sex"
@@ -14,13 +13,13 @@ leaders = {
  "Hirohito",            "Male"
  "Oda Nobunaga",        "Male"
  "Tokugawa Ieyasu",     "Male"
- "Suiko",               "Female"
 }
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
  "Monarchy",        _("Emperor %s"),        _("Empress %s")
  "Republic",        _("Shogun %s"),         _("?female:Shogun %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="japan"
@@ -29,6 +28,7 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="ryukyuan", "ainu"
 

@@ -19,10 +19,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",       "female_title"
- "Democracy",       _("Minister-President %s"), _("?female:Minister-President %s")
- "Despotism",       _("Margrave %s"),   _("Margravine %s")
- "Fundamentalism",  _("Bishop %s"),     _("Mother Superior %s")
  "Monarchy",        _("Grand Duke %s"), _("Grand Duchess %s")
+ "Republic",  _("Minister-President %s"), _("?female:Minister-President %s")
 }
 
 flag="baden"
@@ -31,9 +29,10 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "wuerttembergian", "palatinate", "alsatian"
+civilwar_nations = "wuerttembergian", "palatinate", "swiss"
 
 cities =
  "Baden",

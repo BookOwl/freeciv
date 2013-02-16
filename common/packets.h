@@ -13,10 +13,6 @@
 #ifndef FC__PACKETS_H
 #define FC__PACKETS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 struct connection;
 struct data_in;
 
@@ -31,7 +27,6 @@ struct data_in;
 #include "shared.h"		/* MAX_LEN_ADDR */
 #include "spaceship.h"
 #include "team.h"
-#include "traderoutes.h"
 #include "unittype.h"
 #include "worklist.h"
 
@@ -79,8 +74,7 @@ enum authentication_type {
 
 #include "packets_gen.h"
 
-void *get_packet_from_connection(struct connection *pc,
-                                 enum packet_type *ptype);
+void *get_packet_from_connection(struct connection *pc, enum packet_type *ptype, bool *presult);
 void remove_packet_from_buffer(struct socket_packet_buffer *buffer);
 
 void send_attribute_block(const struct player *pplayer,
@@ -96,24 +90,13 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 					    struct packet_player_attribute_chunk
 					    *packet);
 
-#ifdef DEBUG
-#define PACKET_TYPE_SANITY(_type_) \
-  if (((_type_ & 0xff00) >> 8) == PACKET_SERVER_JOIN_REQ) { \
-    log_error("Packet type %s (%d) has upper byte matching old PACKET_SERVER_JOIN_REQ.", \
-              packet_name(_type_), _type_); \
-  }
-#else  /* DEBUG */
-#define PACKET_TYPE_SANITY(_type_)
-#endif /* DEBUG */
-
 #define SEND_PACKET_START(type) \
   unsigned char buffer[MAX_LEN_PACKET]; \
   struct data_out dout; \
   \
   dio_output_init(&dout, buffer, sizeof(buffer)); \
   dio_put_uint16(&dout, 0); \
-  dio_put_uint16(&dout, type); \
-  PACKET_TYPE_SANITY(type)
+  dio_put_uint8(&dout, type);
 
 #define SEND_PACKET_END \
   { \
@@ -127,7 +110,7 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
 
 #define RECEIVE_PACKET_START(type, result) \
   struct data_in din; \
-  struct type packet_buf, *result = &packet_buf; \
+  struct type *result = fc_malloc(sizeof(*result)); \
   \
   dio_input_init(&din, pc->buffer->data, 2); \
   { \
@@ -136,23 +119,16 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
     dio_get_uint16(&din, &size); \
     dio_input_init(&din, pc->buffer->data, MIN(size, pc->buffer->ndata)); \
   } \
-  dio_input_skip(&din, 4);
+  dio_get_uint16(&din, NULL); \
+  dio_get_uint8(&din, NULL);
 
 #define RECEIVE_PACKET_END(result) \
-  if (!packet_check(&din, pc)) { \
-    return NULL; \
-  } \
+  check_packet(&din, pc); \
   remove_packet_from_buffer(pc->buffer); \
-  real_packet = fc_malloc(sizeof(*result)); \
-  *result = packet_buf; \
   return result;
 
-#define RECEIVE_PACKET_FIELD_ERROR(field, ...) \
-  log_packet("Error on field '" #field "'" __VA_ARGS__); \
-  return NULL
-
 int send_packet_data(struct connection *pc, unsigned char *data, int len);
-bool packet_check(struct data_in *din, struct connection *pc);
+void check_packet(struct data_in *din, struct connection *pc);
 
 /* Utilities to exchange strings and string vectors. */
 #define PACKET_STRVEC_SEPARATOR '\3'
@@ -169,9 +145,5 @@ bool packet_check(struct data_in *din, struct connection *pc);
   } else {                                                                  \
     strvec = NULL;                                                          \
   }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PACKETS_H */

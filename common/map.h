@@ -13,10 +13,6 @@
 #ifndef FC__MAP_H
 #define FC__MAP_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <math.h> /* sqrt */
 
 /* utility */
@@ -227,16 +223,12 @@ struct iterator *map_startpos_iter_init(struct map_startpos_iter *iter);
 #define CHECK_INDEX(index) ((void)0)
 #endif
 
-#define native_pos_to_index(nat_x, nat_y)                                    \
-  (CHECK_NATIVE_POS((nat_x), (nat_y)),                                       \
+#define native_pos_to_index(nat_x, nat_y)                                   \
+  (CHECK_NATIVE_POS((nat_x), (nat_y)),					    \
    (nat_x) + (nat_y) * map.xsize)
-#define index_to_native_pos(pnat_x, pnat_y, index)                           \
-  (*(pnat_x) = index_to_native_pos_x(index),                                 \
-   *(pnat_y) = index_to_native_pos_y(index))
-#define index_to_native_pos_x(index)                                         \
-  ((index) % map.xsize) 
-#define index_to_native_pos_y(index)                                         \
-  ((index) / map.xsize)
+#define index_to_native_pos(pnat_x, pnat_y, index)                          \
+  (*(pnat_x) = (index) % map.xsize,                                         \
+   *(pnat_y) = (index) / map.xsize)
 
 /* Obscure math.  See explanation in doc/HACKING. */
 #define NATIVE_TO_MAP_POS(pmap_x, pmap_y, nat_x, nat_y)                     \
@@ -306,7 +298,7 @@ struct iterator *map_startpos_iter_init(struct map_startpos_iter *iter);
   (MAP_IS_ISOMETRIC ? (map.xsize + map.ysize / 2) : map.xsize)
 #define MAP_HEIGHT \
   (MAP_IS_ISOMETRIC ? (map.xsize + map.ysize / 2) : map.ysize)
-
+  
 static inline int map_pos_to_index(int map_x, int map_y);
 
 /* index_to_map_pos(int *, int *, int) inverts map_pos_to_index */
@@ -314,8 +306,6 @@ static inline int map_pos_to_index(int map_x, int map_y);
   (CHECK_INDEX(index),                          \
    index_to_native_pos(pmap_x, pmap_y, index),  \
    NATIVE_TO_MAP_POS(pmap_x, pmap_y, *(pmap_x), *(pmap_y)))
-static inline int index_to_map_pos_x(int index);
-static inline int index_to_map_pos_y(int index);
 
 #define DIRSTEP(dest_x, dest_y, dir)	\
 (    (dest_x) = DIR_DX[(dir)],      	\
@@ -354,8 +344,7 @@ struct tile *rand_map_pos_filtered(void *data,
 				   bool (*filter)(const struct tile *ptile,
 						  const void *data));
 
-bool can_be_irrigated(const struct tile *ptile,
-                      const struct unit *punit);
+bool is_water_adjacent_to_tile(const struct tile *ptile);
 bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
@@ -369,7 +358,6 @@ bool is_cardinally_adj_to_ocean(const struct tile *ptile);
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
 					  int *count);
 bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount);
-bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount);
 
 bool can_channel_land(const struct tile *ptile);
 bool can_reclaim_ocean(const struct tile *ptile);
@@ -386,13 +374,12 @@ extern struct terrain_misc terrain_control;
  * See also iterate_outward() */
 #define iterate_outward_dxy(start_tile, max_dist, _tile, _x, _y)	    \
 {									    \
-  int _x, _y, _tile##_x, _tile##_y, _start##_x, _start##_y;                 \
+  int _x, _y, _tile##_x, _tile##_y;					    \
   struct tile *_tile;							    \
   const struct tile *_tile##_start = (start_tile);			    \
   int _tile##_max = (max_dist);						    \
   bool _tile##_is_border = is_border_tile(_tile##_start, _tile##_max);	    \
   int _tile##_index = 0;						    \
-  index_to_map_pos(&_start##_x, &_start##_y, tile_index(_tile##_start));    \
   for (;								    \
        _tile##_index < map.num_iterate_outwards_indices;		    \
        _tile##_index++) { 						    \
@@ -401,8 +388,8 @@ extern struct terrain_misc terrain_control;
     }									    \
     _x = map.iterate_outwards_indices[_tile##_index].dx;		    \
     _y = map.iterate_outwards_indices[_tile##_index].dy;		    \
-    _tile##_x = _x + _start##_x;                                            \
-    _tile##_y = _y + _start##_y;                                            \
+    _tile##_x = _x + _tile##_start->x;					    \
+    _tile##_y = _y + _tile##_start->y;					    \
     if (_tile##_is_border && !normalize_map_pos(&_tile##_x, &_tile##_y)) {  \
       continue;								    \
     }									    \
@@ -488,13 +475,6 @@ extern struct terrain_misc terrain_control;
 
 #define adjc_dir_iterate_end adjc_dirlist_iterate_end
 
-#define adjc_dir_base_iterate(center_tile, dir_itr)                            \
-  adjc_dirlist_base_iterate(center_tile, dir_itr,                              \
-                            map.valid_dirs, map.num_valid_dirs)
-
-#define adjc_dir_base_iterate_end                                              \
-  adjc_dirlist_base_iterate_end
-
 #define cardinal_adjc_iterate(center_tile, itr_tile)			    \
   adjc_dirlist_iterate(center_tile, itr_tile, _dir_itr,			    \
 		       map.cardinal_dirs, map.num_cardinal_dirs)
@@ -507,24 +487,6 @@ extern struct terrain_misc terrain_control;
 
 #define cardinal_adjc_dir_iterate_end adjc_dirlist_iterate_end
 
-#define cardinal_adjc_dir_base_iterate(center_tile, dir_itr)                   \
-  adjc_dirlist_base_iterate(center_tile, dir_itr,                              \
-                            map.cardinal_dirs, map.num_cardinal_dirs)
-
-#define cardinal_adjc_dir_base_iterate_end                                     \
-  adjc_dirlist_base_iterate_end
-
-/* Iterate through all tiles cardinally adjacent to both tile1 and tile2 */
-#define cardinal_between_iterate(tile1, tile2, between)                        \
-  cardinal_adjc_iterate(tile1, between) {                                      \
-    cardinal_adjc_iterate(between, second) {                                   \
-    if (same_pos(second, tile2)) {
-
-#define cardinal_between_iterate_end                                           \
-      }                                                                        \
-    } cardinal_adjc_iterate_end;                                               \
-  } cardinal_adjc_iterate_end;
-
 /* Iterate through all tiles adjacent to a tile using the given list of
  * directions.  _dir is the directional value, (center_x, center_y) is
  * the center tile (which must be normalized).
@@ -535,19 +497,18 @@ extern struct terrain_misc terrain_control;
 			     dirlist, dircount)				    \
 {									    \
   enum direction8 _dir;							    \
-  int _tile##_x, _tile##_y, _center##_x, _center##_y;                       \
+  int _tile##_x, _tile##_y;						    \
   struct tile *_tile;							    \
   const struct tile *_tile##_center = (center_tile);			    \
   bool _tile##_is_border = is_border_tile(_tile##_center, 1);		    \
   int _tile##_index = 0;						    \
-  index_to_map_pos(&_center##_x, &_center##_y, tile_index(_tile##_center)); \
   for (;								    \
        _tile##_index < (dircount);					    \
        _tile##_index++) {						    \
     _dir = dirlist[_tile##_index];					    \
     DIRSTEP(_tile##_x, _tile##_y, _dir);				    \
-    _tile##_x += _center##_x;                                               \
-    _tile##_y += _center##_y;                                               \
+    _tile##_x += _tile##_center->x;					    \
+    _tile##_y += _tile##_center->y;					    \
     if (_tile##_is_border && !normalize_map_pos(&_tile##_x, &_tile##_y)) {  \
       continue;								    \
     }									    \
@@ -555,30 +516,6 @@ extern struct terrain_misc terrain_control;
 
 #define adjc_dirlist_iterate_end					    \
     }									    \
-}
-
-/* Same as above but without setting the tile. */
-#define adjc_dirlist_base_iterate(center_tile, _dir, dirlist, dircount)        \
-{                                                                              \
-  enum direction8 _dir;                                                        \
-  int _tile##_x, _tile##_y, _center##_x, _center##_y;                          \
-  const struct tile *_tile##_center = (center_tile);                           \
-  bool _tile##_is_border = is_border_tile(_tile##_center, 1);                  \
-  int _tile##_index = 0;                                                       \
-  index_to_map_pos(&_center##_x, &_center##_y, tile_index(_tile##_center));    \
-  for (;                                                                       \
-       _tile##_index < (dircount);                                             \
-       _tile##_index++) {                                                      \
-    _dir = dirlist[_tile##_index];                                             \
-    DIRSTEP(_tile##_x, _tile##_y, _dir);                                       \
-    _tile##_x += _center##_x;                                                  \
-    _tile##_y += _center##_y;                                                  \
-    if (_tile##_is_border && !normalize_map_pos(&_tile##_x, &_tile##_y)) {     \
-      continue;                                                                \
-    }
-
-#define adjc_dirlist_base_iterate_end                                          \
-  }                                                                            \
 }
 
 /* Iterate over all positions on the globe.
@@ -620,14 +557,11 @@ extern const int DIR_DY[8];
 #define MAP_DEFAULT_MAPSIZE     MAPSIZE_FULLSIZE
 
 /* Size of the map in thousands of tiles. If MAP_MAX_SIZE is increased, 
- * MAX_DBV_LENGTH in bitvector.c must be checked; see the static assertion
- * below. */
+ * MAX_DBV_LENGTH in bitvector.c must be checked. The following equation must
+ * be valid: MAP_MAX_SIZE * 1000 <= MAX_DBV_LENGTH! */
 #define MAP_DEFAULT_SIZE         4
 #define MAP_MIN_SIZE             0
-#define MAP_MAX_SIZE             2048
-
-FC_STATIC_ASSERT(MAP_MAX_SIZE * 1000 <= MAX_DBV_LENGTH,
-                 map_too_big_for_bitvector);
+#define MAP_MAX_SIZE             128
 
 #define MAP_DEFAULT_TILESPERPLAYER      100
 #define MAP_MIN_TILESPERPLAYER            1
@@ -635,9 +569,7 @@ FC_STATIC_ASSERT(MAP_MAX_SIZE * 1000 <= MAX_DBV_LENGTH,
 
 /* This defines the maximum linear size in _map_ coordinates. */
 #define MAP_DEFAULT_LINEAR_SIZE  64
-/* 32 * 1024 is 2^15; thus, x*y is <= 2^15 * 2^15 = 2^30. This can be
- * represented by an signed int as required by the network protocol. */
-#define MAP_MAX_LINEAR_SIZE      (32 * 1024)
+#define MAP_MAX_LINEAR_SIZE      512
 #define MAP_MIN_LINEAR_SIZE      16
 
 #define MAP_ORIGINAL_TOPO        TF_WRAPX
@@ -698,24 +630,6 @@ static inline int map_pos_to_index(int map_x, int map_y)
   return native_pos_to_index(nat_x, nat_y);
 }
 
-static inline int index_to_map_pos_x(int index)
-{
-  /* Note: writing this as a macro is hard; it needs temp variables. */
-  int map_x, map_y;
-
-  index_to_map_pos(&map_x, &map_y, index);
-  return map_x;
-}
-
-static inline int index_to_map_pos_y(int index)
-{
-  /* Note: writing this as a macro is hard; it needs temp variables. */
-  int map_x, map_y;
-
-  index_to_map_pos(&map_x, &map_y, index);
-  return map_y;
-}
-
 /****************************************************************************
   A "border position" is any map position that _may have_ positions within
   real map distance dist that are non-normal.  To see its correctness,
@@ -728,21 +642,11 @@ static inline bool is_border_tile(const struct tile *ptile, int dist)
    * one tile away. */
   int xdist = dist;
   int ydist = (MAP_IS_ISOMETRIC ? (2 * dist) : dist);
-  int nat_x, nat_y;
 
-  index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
-
-  return (nat_x < xdist 
-          || nat_y < ydist
-          || nat_x >= map.xsize - xdist
-          || nat_y >= map.ysize - ydist);
+  return (ptile->nat_x < xdist 
+	  || ptile->nat_y < ydist
+	  || ptile->nat_x >= map.xsize - xdist
+	  || ptile->nat_y >= map.ysize - ydist);
 }
-
-enum direction8 rand_direction(void);
-enum direction8 opposite_direction(enum direction8 dir);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__MAP_H */

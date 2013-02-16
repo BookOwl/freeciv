@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -267,7 +267,8 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
     int value_length;
     struct data_out dout;
 
-    if (!dio_get_uint32(&din, &value_length)) {
+    dio_get_uint32(&din, &value_length);
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 value_length dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -289,10 +290,12 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
                   "uint32 %lu value_length", (long unsigned) value_length);
 
     /* next 12 bytes */
-    if (!dio_get_uint32(&din, &key.key)
-        || !dio_get_uint32(&din, &key.id)
-        || !dio_get_sint16(&din, &key.x)
-        || !dio_get_sint16(&din, &key.y)) {
+    dio_get_uint32(&din, &key.key);
+    dio_get_uint32(&din, &key.id);
+    dio_get_sint16(&din, &key.x);
+    dio_get_sint16(&din, &key.y);
+
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 key dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -440,7 +443,7 @@ size_t attribute_get(int key, int id, int x, int y, size_t max_data_length,
 }
 
 /****************************************************************************
-  Set unit related attribute
+...
 *****************************************************************************/
 void attr_unit_set(enum attr_unit what, int unit_id, size_t data_length,
 		   const void *const data)
@@ -449,7 +452,7 @@ void attr_unit_set(enum attr_unit what, int unit_id, size_t data_length,
 }
 
 /****************************************************************************
-  Get unit related attribute
+...
 *****************************************************************************/
 size_t attr_unit_get(enum attr_unit what, int unit_id, size_t max_data_length,
 		  void *data)
@@ -458,7 +461,7 @@ size_t attr_unit_get(enum attr_unit what, int unit_id, size_t max_data_length,
 }
 
 /****************************************************************************
-  Set unit related integer attribute
+...
 *****************************************************************************/
 void attr_unit_set_int(enum attr_unit what, int unit_id, int data)
 {
@@ -466,7 +469,7 @@ void attr_unit_set_int(enum attr_unit what, int unit_id, int data)
 }
 
 /****************************************************************************
-  Get unit related integer attribute
+...
 *****************************************************************************/
 size_t attr_unit_get_int(enum attr_unit what, int unit_id, int *data)
 {
@@ -474,7 +477,7 @@ size_t attr_unit_get_int(enum attr_unit what, int unit_id, int *data)
 }
 
 /****************************************************************************
-  Set city related attribute
+...
 *****************************************************************************/
 void attr_city_set(enum attr_city what, int city_id, size_t data_length,
 		   const void *const data)
@@ -483,7 +486,7 @@ void attr_city_set(enum attr_city what, int city_id, size_t data_length,
 }
 
 /****************************************************************************
-  Get city related attribute
+...
 *****************************************************************************/
 size_t attr_city_get(enum attr_city what, int city_id, size_t max_data_length,
 		  void *data)
@@ -492,7 +495,7 @@ size_t attr_city_get(enum attr_city what, int city_id, size_t max_data_length,
 }
 
 /****************************************************************************
-  Set city related integer attribute
+...
 *****************************************************************************/
 void attr_city_set_int(enum attr_city what, int city_id, int data)
 {
@@ -500,7 +503,7 @@ void attr_city_set_int(enum attr_city what, int city_id, int data)
 }
 
 /****************************************************************************
-  Get city related integer attribute
+...
 *****************************************************************************/
 size_t attr_city_get_int(enum attr_city what, int city_id, int *data)
 {
@@ -508,7 +511,7 @@ size_t attr_city_get_int(enum attr_city what, int city_id, int *data)
 }
 
 /****************************************************************************
-  Set player related attribute
+...
 *****************************************************************************/
 void attr_player_set(enum attr_player what, int player_id, size_t data_length,
 		     const void *const data)
@@ -517,7 +520,7 @@ void attr_player_set(enum attr_player what, int player_id, size_t data_length,
 }
 
 /****************************************************************************
-  Get player related attribute
+...
 *****************************************************************************/
 size_t attr_player_get(enum attr_player what, int player_id,
 		    size_t max_data_length, void *data)
@@ -526,7 +529,7 @@ size_t attr_player_get(enum attr_player what, int player_id,
 }
 
 /****************************************************************************
-  Set tile related attribute
+...
 *****************************************************************************/
 void attr_tile_set(enum attr_tile what, int x, int y, size_t data_length,
 		   const void *const data)
@@ -535,7 +538,7 @@ void attr_tile_set(enum attr_tile what, int x, int y, size_t data_length,
 }
 
 /****************************************************************************
-  Get tile related attribute
+...
 *****************************************************************************/
 size_t attr_tile_get(enum attr_tile what, int x, int y, size_t max_data_length,
 		  void *data)

@@ -13,16 +13,13 @@
 #ifndef FC__MOVEMENT_H
 #define FC__MOVEMENT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 #include "tile.h"
 
 #define SINGLE_MOVE     3
-#define MOVE_COST_IGTER 1
 #define MOVE_COST_RIVER 1
+#define MOVE_COST_RAIL  0
+#define MOVE_COST_ROAD  1
 
 struct unit_type;
 struct terrain;
@@ -64,12 +61,10 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile);
 bool is_native_terrain(const struct unit_type *punittype,
                        const struct terrain *pterrain,
-                       bv_special special, bv_bases bases,
-                       bv_roads roads);
+                       bv_special special, bv_bases bases);
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_special special, bv_bases bases,
-                        bv_roads roads);
+                        bv_special special, bv_bases bases);
 bool is_native_near_tile(const struct unit_class *uclass, const struct tile *ptile);
 bool can_exist_at_tile(const struct unit_type *utype,
                        const struct tile *ptile);
@@ -99,11 +94,6 @@ int unit_class_transporter_capacity(const struct tile *ptile,
                                     const struct unit_class *pclass);
 struct unit *transport_from_tile(struct unit *punit, struct tile *ptile);
 
-const char *move_points_text(int mp, const char *prefix, const char *none,
-                             bool align);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
+enum unit_move_type move_type_from_str(const char *s);
 
 #endif  /* FC__MOVEMENT_H */

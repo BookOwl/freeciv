@@ -15,13 +15,12 @@ EXTRA_DIST =			\
 	README.cma		\
 	README.delta		\
 	README.effects		\
-	README.fcdb		\
+	README.ftwl		\
 	README.graphics		\
 	README.nations		\
 	README.packaging	\
 	README.ruleset_experimental \
 	README.ruleset_multiplayer \
-	README.ruleset_civ2civ3	\
 	README.rulesets		\
 	README.scorelog		\
 	README.SDLClient	\

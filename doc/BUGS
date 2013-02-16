@@ -2,7 +2,7 @@
 BUGS
 ====
 
-Freeciv 2.4.99 is an alpha release and will contain bugs.  Much of the
+Freeciv 2.2.99 is an alpha release and will contain bugs.  Much of the
 following text applies to the upcoming stable release!  Please report all
 bugs to http://gna.org/bugs/?func=additem&group=freeciv.
 
@@ -41,7 +41,7 @@ Here's what to do:
 
    - Describe the problem, including any messages that were displayed.
 
-   - Indicate which client(s) you are using (gtk2, gtk3, SDL, Xaw, or Qt).
+   - Indicate which client(s) you are using (GTK+, SDL, Win32, or Xaw).
 
    - Tell us the name and version of:
 

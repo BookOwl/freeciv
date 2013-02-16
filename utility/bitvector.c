@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -38,6 +38,11 @@
                by the player (map known bitvectors). This bitvectors are
                given as 'struct dbv' and the information can be accessed
                using the functions dbv_*(). They uses the BV_* macros. */
+
+/* Maximal size of a dynamic bitvector; for the map known bitvector it must
+   be larger than the biggest possible map size (approx. MAP_MAX_SIZE * 1000)
+   Use a large value to be on the save side (512kbits = 64kb). */
+#define MAX_DBV_LENGTH 512 * 1024
 
 /***************************************************************************
   Initialize a dynamic bitvector of size 'bits'. 'bits' must be greater
@@ -243,8 +248,7 @@ bool bv_check_mask(const unsigned char *vec1, const unsigned char *vec2,
 }
 
 /***************************************************************************
-  Compares elements of two bitvectors. Both vectors are expected to have
-  same number of elements, i.e. , size1 must be equal to size2.
+  ...
 ***************************************************************************/
 bool bv_are_equal(const unsigned char *vec1, const unsigned char *vec2,
                   size_t size1, size_t size2)

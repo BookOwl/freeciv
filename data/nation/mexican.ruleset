@@ -59,8 +59,9 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations="texan", "californian", "yucatecan", "central american", "chiapanec"
+civilwar_nations="texan", "californian", "yucatecan", "central american"
 
 cities =
  "Ciudad de México (mountains, swamp, lake)",

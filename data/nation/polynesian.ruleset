@@ -2,8 +2,7 @@
 
 name=_("Polynesian")
 plural=_("?plural:Polynesian")
-groups= "Oceanian", "Core"
-; /* TRANS: Legend for nation in "core" set */
+groups= "Oceanian"
 legend=_("Polynesian culture stretches from Hawaii to New Zealand to\
  Easter Island and covers all the islands in between.")
 
@@ -29,24 +28,24 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-conflicts_with = "hawaiian", "fijian", "maori", "rapa nui", "samoan",
- "tahitian", "tongan"
-civilwar_nations = "hawaiian", "fijian", "maori", "rapa nui", "samoan",
- "tahitian", "tongan"
+conflicts_with = "maori", "hawaiian", "fijian", "tongan"
+civilwar_nations = "maori", "hawaiian", "fijian", "tongan"
 
 cities =
  "Apia",	; Samoa
  "Nuku'alofa",	; Tonga
  "Lautoka",	; Fiji
- "Pape'ete",	; Tahiti, French Polynesia
- "Hanga Roa",	; Easter Island
+ "Papeete",	; Tahiti, French Polynesia
+ "Hanga Roa",	; Easter Islands
  "Honolulu",	; Hawaii
  "Hilo",	; Hawaii
  "Lihue",	; Hawaii
  "Hookena",	; Hawaii
  "Fongafale",	; Tuvalu
+ "Honiara",	; Solomon Islands
 ; Islands
  "Kapingamarangi",
  "Anuta",

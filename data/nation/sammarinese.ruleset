@@ -5,7 +5,7 @@ plural = _("?plural:Sammarinese")
 groups="European", "Modern", "Early Modern", "Medieval"
 legend=_("San Marino is a tiny landlocked country on the Italian Peninsula.\
  It is the oldest independent republic in the world. According to legend,\
- it was founded by Saint Marinus in 301 CE.")
+ it was founded by Saint Marinus in 301 AD.")
 
 leaders = {
  "name",                        "sex"
@@ -23,6 +23,7 @@ ruler_titles = {
  "Communism",       _("Chairman %s"),       _("Chairwoman %s")
  "Democracy",       _("Councillor %s"),     _("?female:Councillor %s")
  "Fundamentalism",  _("Abbot %s"),          _("Mother Superior %s")
+ "Monarchy",        _("Duke %s"),           _("Duchess %s")
  "Republic",        _("Captain-Regent %s"), _("?female:Captain-Regent %s")
 }
 
@@ -32,6 +33,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Italian", "Papal"

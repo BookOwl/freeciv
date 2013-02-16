@@ -2296,7 +2296,7 @@ Freeciv*caravandialog.*.button2.fromHoriz: button1
 !
 ! diplomat dialog
 !
-Freeciv*diplomatdialog.title: _("Choose Your Covert Strategy")
+Freeciv*diplomatdialog.title: _("Choose Your Diplomat's Strategy")
 Freeciv*diplomatdialog.dform.*.justify: Center
 Freeciv*diplomatdialog.dform.*.width:       160
 Freeciv*diplomatdialog.dform.dlabel.width:  320
@@ -2322,7 +2322,7 @@ Freeciv*diplomatdialog.*.button6.fromVert:  button4
 !
 ! Spy Dialog
 !
-Freeciv*spydialog.title: _("Choose Your Covert Strategy")
+Freeciv*spydialog.title: _("Choose Your Spy's Strategy")
 Freeciv*spydialog.dform.*.justify: Center
 Freeciv*spydialog.dform.*.width:   170
 Freeciv*spydialog.dform.dlabel.width:       340
@@ -2883,7 +2883,6 @@ Freeciv*mapcanvas.translations:\
    Shift Ctrl<Key>3:  key-unit-assign-battlegroup3()   \n\
    Shift Ctrl<Key>4:  key-unit-assign-battlegroup4()   \n\
    Ctrl<Key>b:        key-map-borders-toggle()         \n\
-   Shift Ctrl<Key>n:  key-map-native-toggle()          \n\
    Ctrl<Key>g:        key-map-grid-toggle()            \n\
    Ctrl<Key>n:        key-city-names-toggle()          \n\
    Ctrl<Key>p:        key-city-productions-toggle()    \n\

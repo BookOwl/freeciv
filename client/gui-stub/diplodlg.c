@@ -12,11 +12,8 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "diplodlg.h"
 

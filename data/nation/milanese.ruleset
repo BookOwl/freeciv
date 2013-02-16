@@ -13,8 +13,8 @@ leaders = {
  "Alberto da Giussano",         "Male"
  "Matteo I Visconti",           "Male"
  "Gian Galeazzo Visconti",      "Male"
- "Beatrice d'Este",             "Female"
- "Francesco Sforza",            "Male"
+ "Beatrice d'Este",             "Male"
+ "Francesco Sforza",            "Female"
  "Ludovico il Moro",            "Male"
  "Francesco Maria Sforza",      "Male"
  "Giuseppe Radetzky",           "Male"
@@ -23,9 +23,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",         "female_title"
- "Despotism",       _("Condottiere %s"),  _("Condottiera %s")
- "Fundamentalism",  _("Fra %s"),          _("Mother Superior %s")
- "Monarchy",        _("Grand Duke %s"),   _("Grand Duchess %s")
+ "Fundamentalism",  _("Friar %s"),        _("Mother Superior %s")
+ "Monarchy",        _("Duke %s"),         _("Duchess %s")
  "Republic",        _("Captain %s"),      _("?female:Captain %s")
 }
 
@@ -35,6 +34,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="piedmontese", "venetian", "swiss"

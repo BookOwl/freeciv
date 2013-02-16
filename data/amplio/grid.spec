@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -31,7 +31,6 @@ tiles = { "row", "column", "tag"
   0, 2, "grid.worked.we"
   1, 2, "grid.worked.ns"
   0, 3, "grid.unavailable"
-  1, 3, "grid.nonnative"
   0, 4, "grid.selected.we"
   1, 4, "grid.selected.ns"
   0, 5, "grid.coastline.we"

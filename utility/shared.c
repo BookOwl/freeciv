@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef HAVE_SYS_TYPES_H
@@ -79,7 +79,7 @@
 #ifndef DEFAULT_SCENARIO_PATH
 #define DEFAULT_SCENARIO_PATH                          \
   "." PATH_SEPARATOR                                   \
-  "data/scenarios" PATH_SEPARATOR                      \
+  "data/scenario" PATH_SEPARATOR                       \
   "~/.freeciv/" DATASUBDIR "/scenarios" PATH_SEPARATOR \
   "~/.freeciv/scenarios"
 #endif /* DEFAULT_SCENARIO_PATH */
@@ -220,8 +220,7 @@ char *get_option_malloc(const char *option_name,
 }
 
 /***************************************************************
-  Is option some form of option_name. option_name must be
-  full length long version such as "--help"
+...
 ***************************************************************/
 bool is_option(const char *option_name,char *option)
 {
@@ -729,7 +728,7 @@ char *user_home_dir(void)
 {
 #ifdef AMIGA
   return "PROGDIR:";
-#else  /* AMIGA */
+#else
   static bool init = FALSE;
   static char *home_dir = NULL;
 
@@ -782,16 +781,16 @@ char *user_home_dir(void)
         log_error("Could not find home directory "
                   "(SHGetSpecialFolderLocation() failed).");
       }
-#else  /* WIN32_NATIVE */
+#else
       log_error("Could not find home directory (HOME is not set).");
       home_dir = NULL;
-#endif /* WIN32_NATIVE */
+#endif
     }
     init = TRUE;
   }
 
   return home_dir;
-#endif /* AMIGA */
+#endif
 }
 
 /***************************************************************************
@@ -836,7 +835,7 @@ char *user_username(char *buf, size_t bufsz)
       }
     }
   }
-#endif /* HAVE_GETPWUID */
+#endif
 
 #ifdef WIN32_NATIVE
   /* On win32 the GetUserName function will give us the login name. */
@@ -852,7 +851,7 @@ char *user_username(char *buf, size_t bufsz)
       }
     }
   }
-#endif /* WIN32_NATIVE */
+#endif
 
 #ifdef ALWAYS_ROOT
   fc_strlcpy(buf, "name", bufsz);
@@ -1476,7 +1475,7 @@ void init_nls(void)
     fc_snprintf(envstr, sizeof(envstr), "LANG=%s", langname);
     putenv(envstr);
   }
-#endif /* WIN32_NATIVE */
+#endif
 
   (void) setlocale(LC_ALL, "");
   (void) bindtextdomain(PACKAGE, LOCALEDIR);
@@ -1513,7 +1512,7 @@ void init_nls(void)
     free(grouping_sep);
     grouping_sep = fc_strdup(lc->thousands_sep);
   }
-#endif /* ENABLE_NLS */
+#endif
 }
 
 /***************************************************************************
@@ -1548,7 +1547,7 @@ void dont_run_as_root(const char *argv0, const char *fallback)
     fc_fprintf(stderr, _("Use a non-privileged account instead.\n"));
     exit(EXIT_FAILURE);
   }
-#endif /* ALWAYS_ROOT */
+#endif
 }
 
 /***************************************************************************
@@ -1796,11 +1795,11 @@ bool path_is_absolute(const char *filename)
   if (strchr(filename, ':')) {
     return TRUE;
   }
-#else  /* WIN32_NATIVE */
+#else
   if (filename[0] == '/') {
     return TRUE;
   }
-#endif /* WIN32_NATIVE */
+#endif
 
   return FALSE;
 }

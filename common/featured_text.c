@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -85,7 +85,6 @@ const struct ft_color ftc_game_start    = FT_COLOR("#00FF00",   "#115511");
 const struct ft_color ftc_chat_public   = FT_COLOR("#00008B",   NULL);
 const struct ft_color ftc_chat_ally     = FT_COLOR("#551166",   NULL);
 const struct ft_color ftc_chat_private  = FT_COLOR("#A020F0",   NULL);
-const struct ft_color ftc_chat_luaconsole = FT_COLOR("#006400", NULL);
 
 const struct ft_color ftc_vote_public   = FT_COLOR("#FFFFFF",   "#AA0000");
 const struct ft_color ftc_vote_team     = FT_COLOR("#FFFFFF",   "#5555CC");
@@ -94,12 +93,6 @@ const struct ft_color ftc_vote_failed   = FT_COLOR("#8B0000",   "#FFAAAA");
 const struct ft_color ftc_vote_yes      = FT_COLOR("#000000",   "#C8FFD5");
 const struct ft_color ftc_vote_no       = FT_COLOR("#000000",   "#FFD2D2");
 const struct ft_color ftc_vote_abstain  = FT_COLOR("#000000",   "#E8E8E8");
-
-const struct ft_color ftc_luaconsole_input   = FT_COLOR("#2B008B", NULL);
-const struct ft_color ftc_luaconsole_error   = FT_COLOR("#FF0000", NULL);
-const struct ft_color ftc_luaconsole_normal  = FT_COLOR("#006400", NULL);
-const struct ft_color ftc_luaconsole_verbose = FT_COLOR("#B8B8B8", NULL);
-const struct ft_color ftc_luaconsole_debug   = FT_COLOR("#B87676", NULL);
 
 /**************************************************************************
   Return the long name of the text tag type.
@@ -1130,3 +1123,4 @@ const char *unit_tile_link(const struct unit *punit)
               SEQ_START, SEQ_END, tag_name, SEQ_STOP);
   return buf;
 }
+

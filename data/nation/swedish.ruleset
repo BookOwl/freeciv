@@ -2,10 +2,9 @@
 
 name=_("Swedish")
 plural=_("?plural:Swedes")
-groups="Medieval", "Early Modern", "Modern", "European", "Core"
-; /* TRANS: Legend for nation in "core" set */
+groups="Medieval", "Early Modern", "Modern", "European"
 legend=_("The Kingdom of Sweden was christianized and consolidated as a\
- political entity by the 12th century CE. The country rose to prominence as\
+ political entity by the 12th century AD. The country rose to prominence as\
  one of the great powers of Europe in the 17th century, following\
  substantial military conquests by the so called Warrior Kings. However,\
  due to a worsening economy and several disastrous defeats to Russia, Sweden\
@@ -30,7 +29,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
- "Despotism",       _("Earl %s"),           _("?female:Earl %s")
+ "Despotism",       _("%s Jarl"),           _("?female:%s Jarl")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="sweden"
@@ -39,8 +39,9 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "viking", "danish", "norwegian", "sami", "scanian", "western pomeranian"
+civilwar_nations = "viking", "danish", "norwegian", "sami", "western pomeranian"
 
 ; /* <-- avoid gettext warnings
 ;

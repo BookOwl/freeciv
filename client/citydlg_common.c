@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -26,7 +26,6 @@
 #include "specialist.h"
 #include "unitlist.h"
 
-/* client/include */
 #include "citydlg_g.h"
 #include "mapview_g.h"
 
@@ -65,7 +64,7 @@ void generate_citydlg_dimensions(void)
   int min_x = 0, max_x = 0, min_y = 0, max_y = 0;
 
   /* use maximum possible squared city radius. */
-  city_map_iterate_without_index(CITY_MAP_MAX_RADIUS_SQ, city_x, city_y) {
+  city_map_iterate(CITY_MAP_MAX_RADIUS_SQ, city_index, city_x, city_y) {
     int canvas_x, canvas_y;
 
     map_to_gui_vector(tileset, &canvas_x, &canvas_y, CITY_ABS2REL(city_x),
@@ -75,7 +74,7 @@ void generate_citydlg_dimensions(void)
     max_x = MAX(canvas_x, max_x);
     min_y = MIN(canvas_y, min_y);
     max_y = MAX(canvas_y, max_y);
-  } city_map_iterate_without_index_end;
+  } city_map_iterate_end;
 
   citydlg_map_width = max_x - min_x + tileset_tile_width(tileset);
   citydlg_map_height = max_y - min_y + tileset_tile_height(tileset);
@@ -151,18 +150,18 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
  * painter's algorithm and can be used for drawing. */
 #define citydlg_iterate(pcity, ptile, pedge, pcorner, _x, _y)		\
 {									\
-  int _x##_0, _y##_0, _tile_x, _tile_y;                                 \
+  int _x##_0, _y##_0;							\
   const int _x##_w = get_citydlg_canvas_width();			\
   const int _y##_h = get_citydlg_canvas_height();			\
-  index_to_map_pos(&_tile_x, &_tile_y, tile_index((pcity)->tile));      \
 									\
-  map_to_gui_vector(tileset, &_x##_0, &_y##_0, _tile_x, _tile_y);       \
+  map_to_gui_vector(tileset, &_x##_0, &_y##_0,				\
+		    (pcity)->tile->x, (pcity)->tile->y);		\
   _x##_0 -= (_x##_w - tileset_tile_width(tileset)) / 2;			\
   _y##_0 -= (_y##_h - tileset_tile_height(tileset)) / 2;		\
   log_debug("citydlg: %d,%d + %dx%d",					\
 	    _x##_0, _y##_0, _x##_w, _y##_h);				\
 									\
-  gui_rect_iterate_coord(_x##_0, _y##_0, _x##_w, _y##_h,		\
+  gui_rect_iterate(_x##_0, _y##_0, _x##_w, _y##_h,			\
 		   ptile, pedge, pcorner, _x##_g, _y##_g) {		\
     const int _x = _x##_g - _x##_0;					\
     const int _y = _y##_g - _y##_0;					\
@@ -170,7 +169,7 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
 
 #define citydlg_iterate_end						\
     }									\
-  } gui_rect_iterate_coord_end;						\
+  } gui_rect_iterate_end;						\
 }
 
 /****************************************************************************
@@ -193,7 +192,7 @@ void city_dialog_redraw_map(struct city *pcity,
       struct city *pcity_draw = ptile ? tile_city(ptile) : NULL;
 
       put_one_element(pcanvas, layer, ptile, pedge, pcorner,
-                      punit, pcity_draw, canvas_x, canvas_y, pcity, NULL);
+		      punit, pcity_draw, canvas_x, canvas_y, pcity);
     } citydlg_iterate_end;
   } mapview_layer_iterate_end;
 }
@@ -387,7 +386,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
 	} else if (is_small_wonder(pimprove)) {
 	  if (improvement_obsolete(pplayer, pimprove)) {
 	    state = _("Obsolete");
-          } else if (wonder_is_built(pplayer, target.value.building)) {
+          } else if (city_from_small_wonder(pplayer, target.value.building)) {
 	    state = _("Built");
           } else {
             state = _("Small Wonder");
@@ -462,7 +461,7 @@ void get_city_dialog_output_text(const struct city *pcity,
   if (otype == O_TRADE) {
     int i;
 
-    for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    for (i = 0; i < NUM_TRADE_ROUTES; i++) {
       if (pcity->trade[i] != 0) {
         /* There have been bugs causing the trade city to not be sent
          * properly to the client.  If this happens we trust the
@@ -650,10 +649,10 @@ int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
     }
   } specialist_type_iterate_end;
 
-  if (city_size_get(pcity) != i) {
+  if (pcity->size != i) {
     log_error("get_city_citizen_types() %d citizens "
               "not equal %d city size in \"%s\".",
-              i, city_size_get(pcity), city_name(pcity));
+              i, pcity->size, city_name(pcity));
   }
   return i;
 }
@@ -703,7 +702,7 @@ void activate_all_units(struct tile *ptile)
   } unit_list_iterate_end;
   if (pmyunit) {
     /* Put the focus on one of the activated units. */
-    unit_focus_set(pmyunit);
+    set_unit_focus(pmyunit);
   }
 }
 

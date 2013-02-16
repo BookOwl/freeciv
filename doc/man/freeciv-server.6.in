@@ -16,7 +16,6 @@ freeciv-server \- The server for the Freeciv game
 .B freeciv-server \
 [ \-A|\-\-Announce \fIprotocol\fP ] \
 [ \-b|\-\-bind \fIaddress\fP ] \
-[ \-B|\-\-Bind\-meta \fIaddress\fP ] \
 [ \-d|\-\-debug \fIlevel_number\fP ] \
 [ \-e|\-\-exit\-on\-end ] \
 [ \-F|\-\-Fatal [ \fIsignal_number\fP ] ] \
@@ -27,6 +26,7 @@ freeciv-server \- The server for the Freeciv game
 [ \-M|\-\-Metaserver \fIaddress\fP ] \
 [ \-m|\-\-meta ] \
 [ \-p|\-\-port \fIport\fP ] \
+[ \-P|\-\-Ppm ] \
 [ \-q|\-\-quitidle \fItime\fP ] \
 [ \-R|\-\-Ranklog \fIfilename\fP ] \
 [ \-r|\-\-read \fIfilename\fP ] \
@@ -36,13 +36,9 @@ freeciv-server \- The server for the Freeciv game
 [ \-v|\-\-version ]
 
 Auth aware servers have additional parameters:
-.B [ \-a|\-\-auth ] \
-[ \-D|\-\-Database \fIfile\fP ] \
+.B [ \-a|\-\-auth \fIfilename\fP ] \
 [ \-G|\-\-Guests ] \
 [ \-N|\-\-Newusers ]
-
-Servers with AI module support have an additional parameter:
-.B [ \-L|\-\-LoadAI \fImodule\fP ]
 
 .SH DESCRIPTION
 Freeciv is a free turn-based multiplayer strategy game, in which each player
@@ -85,20 +81,15 @@ Possible values for \fIprotocol\fP are:
 \fBnone\fP
 
 .TP
-.BI "\-a, \-\-auth"
+.BI "\-a \fIfilename\fP, \-\-auth \fIfilename\fP"
 Enables server authentication and allows access to registered players only.
-Requires the
-.I \-\-Database
-option to be specified.
+\fIfilename\fP contains details of the database to store authentication
+information. (This file, and the database itself, can be set up with the
+.I scripts/setup_auth_server.sh
+shell script in the Freeciv distribution.)
 .TP
 .BI "\-b \fIaddress\fP, \-\-bind \fIaddress\fP"
 Sets the \fIaddress\fP on which the server will listen for clients.
-.TP
-.BI "\-B \fIaddress\fP, \-\-Bind\-meta \fIaddress\fP"
-Sets the \fIaddress\fP which request to metaserver are sent from. Defaults to
-address given by
-.I \-b
-option.
 .TP
 .BI "\-d \fIlevel_number\fP, \-\-debug \fIlevel_number\fP"
 Sets the amount of debugging information to be logged in the file named by the
@@ -113,11 +104,6 @@ option. Acceptable values for the \fIlevel_number\fP are:
 
 \fB3\fP    for fatal, error, normal, and verbose messages.
 
-.TP
-.BI "\-D \fIfilename\fP, \-\-Database \fIfilename\fP"
-Specifies a database configuration file for authentication. This file
-specifies the details of the database. See README.fcdb in the Freeciv
-distribution for details of its format.
 .TP
 .BI "\-e, \-\-exit\-on\-end"
 When a game ends, exit instead of restarting.
@@ -144,16 +130,12 @@ Prints out a description of the command line options and exits.
 Reports the \fIaddress\fP to the metaserver.  Then, the metaserver will use
 this address to redirect the users.
 .TP
-.BI "\-L \fImodule\fP, \-\-LoadAI \fImodule\fP"
-Loads AI module. This option can appear multiple times to load different
-modules.
-.TP
 .BI "\-l \fIfilename\fP, \-\-log \fIfilename\fP"
 Defines a log file, \fIfilename\fP, to be produced during processing. Use the
 .I \-d
 option to set how much is logged.  By default, fatal, error, and normal
-messages are printed to standard output.  With a log file, such messages go
-to the log instead.
+messages are printed to standard output.  With a log file, such messages go to
+the log instead.
 .TP
 .BI "\-M \fIaddress\fP, \-\-Metaserver \fIaddress\fP"
 Specifies the \fIaddress\fP of the metaserver to send your server's information
@@ -176,6 +158,9 @@ Specifies the TCP \fIport\fP number to which clients will connect; players must 
 this number to be able to connect if they are not to use the default of 5556
 decimal. You may need to use this if 5556 is not available for your use on your
 system, or if you would like to run multiple servers on the same system.
+.TP
+.BI "\-P, \-\-Ppm"
+Automatically save PPM files showing the map alongside autosaves.
 .TP
 .BI "\-q \fItime\fP, \-\-quitidle \fItime\fP"
 Quits if no players are present for the specified \fItime\fP, in seconds, and 
@@ -204,7 +189,7 @@ system, as it inhibits your servers from clobbering other's save game files.
 .BI "\-\-scenarios \fIdirectory\fP"
 Specifies the \fIdirectory\fP where scenarios are searched for.
 The distribution comes with several scenarios, typically stored in
-\fI/usr/local/share/freeciv/scenarios\fP, for example:
+\fI/usr/local/share/freeciv/scenario\fP, for example:
 
 .IP
 \(bu
@@ -240,7 +225,7 @@ Starts a server on port \fI2244\fP, loading the save game file
 logging information is written to \fIlogfile\fP. When the server starts, it 
 immediately executes the commands contained in \fIscript\fP.
 .TP
-.B freeciv-server -m -a -D fc_auth.conf -q 60 -p 2244 -d 2 -l logfile -r script -s ~/saves
+.B freeciv-server -m -a fc_auth.conf -q 60 -p 2244 -d 2 -l logfile -r script -s ~/saves
 Starts a server on port \fI2244\fP with authentication enabled and communicates 
 its existence to the standard Freeciv metaserver. Fatal, error, and normal 
 messages are written to \fIlogfile\fP. When the server starts it immediately 

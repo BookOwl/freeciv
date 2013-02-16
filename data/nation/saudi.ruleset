@@ -24,7 +24,6 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",      "female_title"
  "Fundamentalism",  _("Caliph %s"),    _("Calipha %s")
- "Republic",        _("Vizier %s"),    _("?female:Vizier %s")
 }
 
 flag="saudi_arabia"
@@ -33,67 +32,68 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "emirati", "bahraini"
+civilwar_nations = "emirati", "iraqi"
 cities =
- "Ar-Riyadh",	;Riyadh
- "Makka",	;Mecca
- "Al-Madina",	;Medina
- "Jidda",	;Jeddah
- "Ad-Dammam",
- "At-Ta'if",
+ "ar-Riyad",	;Riyadh
+ "Makkah",	;Mecca
+ "al-Madinah",	;Medina
+ "Jiddah",	;Jeddah
+ "ad-Dammam",
+ "at-Taif",
  "Tabuk",
  "Hamis Mushayt",
- "Burayda",
- "Al-Hufuf",
- "Al-Mubarraz",
+ "Buraydah",
+ "al-Hufuf",
+ "al-Mubarraz",
  "Najran",
  "Hail",
- "Al-Jubayl",
+ "al-Jubayl",
  "Hafar al-Batin",
  "Yanbu",
  "Abha",
- "Al-Harj",
+ "al-Harj",
  "Taqbah",
- "Al-Hubar",
+ "al-Hubar",
  "Araar",
  "Sakakah",
- "Al-Hawiya",
+ "al-Hawiyah",
  "Unayzah",
  "Jizan",
- "Al-Qurayyat",
- "Az-Zahran",
+ "al-Qurayyat",
+ "az-Zahran",
  "Tarut",
- "Al-Baha",
- "Al-Qatif",
+ "al-Bahah",
+ "al-Qatif",
  "Bishah",
- "Ar-Rass",
+ "ar-Rass",
  "Wadi ad-Dawasir",
- "Sharura",
+ "Sharurah",
  "Sayhat",
- "Bahra",
+ "Bahrah",
  "Sabya",
- "Ad-Dawadimi",
- "Az-Zulfi",
- "Al-Hafji",
- "Ahad Rafida",
+ "ad-Dawadimi",
+ "az-Zulfi",
+ "al-Hafji",
+ "Ahad Rafidah",
  "Abu Aris",
  "Muhail",
- "Rafha",
+ "Rafhah",
  "Safwa",
  "Afif",
  "Rabig",
- "Al-Majma'a",
+ "al-Majma'ah",
  "Turayf",
  "Tubarjal",
  "Baljurshi",
- "Al-Badai",
- "Rahima",
- "Ad-Diriya",
- "Ad-Dilam",
+ "al-Badai",
+ "Rahimah",
+ "ad-Diriyah",
+ "ad-Dilam",
  "Umm Lajj",
- "Al-Ula",
- "Al-Laila",
- "Al-Uyun",
+ "al-Ula",
+ "al-Laila",
+ "al-Uyun",
  "Tayma"

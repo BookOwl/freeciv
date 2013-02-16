@@ -14,10 +14,6 @@
 #ifndef FC__TOOLS_H
 #define FC__TOOLS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 
 /* See client/gui-gtk-2.0/editprop.c for instructions
@@ -37,7 +33,6 @@ enum editor_tool_type {
   ETT_TERRAIN = 0,
   ETT_TERRAIN_RESOURCE,
   ETT_TERRAIN_SPECIAL,
-  ETT_ROAD,
   ETT_MILITARY_BASE,
   ETT_UNIT,
   ETT_CITY,
@@ -141,7 +136,7 @@ void editor_apply_tool_to_selection(void);
 int editor_selection_count(void);
 const struct tile *editor_get_selection_center(void);
 
-struct unit *editor_unit_virtual_create(void);
+struct unit *editor_create_unit_virtual(void);
 
 
 /* These type flags determine what an edit buffer
@@ -189,9 +184,5 @@ do {\
 #define edit_buffer_type_iterate_end \
   }\
 } while (0)
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__TOOLS_H */

@@ -19,8 +19,7 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",      "female_title"
  "Fundamentalism",  _("Grand Mufti %s"),  _("?female:Grand Mufti %s")
- "Despotism",       _("Sheikh %s"),       _("Shaykha %s")
- "Communism",       _("Chairman %s"),     _("Chairwoman %s")
+ "Monarchy",        _("Sheikh %s"),       _("?female:Sheikh %s")
 }
 
 flag="palestine"
@@ -29,13 +28,14 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "israeli", "egyptian", "jordanian"
+civilwar_nations = "israeli", "egyptian"
 
 cities =
 ;claimed Palestinian capital
- "Al-Quds", ;Jerusalem
+ "al-Quds", ;Jerusalem
 
 ;de facto captials
  "Ghazza", ;Gaza
@@ -43,7 +43,7 @@ cities =
 
 ;other cities in Palestinian territories
  "Ariha", ;Jericho
- "Al-Halil", ;Hebron
+ "al-Halil", ;Hebron
  "Bayt Lahm", ;Betlehem
  "Nablus",
  "Khan Yunis",
@@ -54,33 +54,33 @@ cities =
  "Beit Lahia",
  "Tulkarem",
  "Yattah",
- "Al-Bireh",
+ "al-Bireh",
  "Bani Suheila",
  "Beit Hanoun",
- "Ad-Dhahiriya",
- "Al-Ramm",
+ "ad-Dhahiriya",
+ "al-Ramm",
  "Qabatiya",
  "Qalqilyah",
  "Halhul",
  "Dura",
- "Al-Eizariya",
+ "al-Eizariya",
  "Beit Jala",
  "Tubas",
  "Beit Sahour",
  "Abu Dis",
 
 ;Israeli cities with large Arab populations
- "An-Nasira", ;Nazareth
+ "an-Nasira", ;Nazareth
  "Umm al-Fahm",
  "Rahat",
  "Tayyibah", ;Tayibe
  "Shafa Amr",
  "Baqa-Jat",
- "Ash-Shaghur",
+ "ash-Shaghur",
  "Tamra",
  "Sakhnin",
  "Madinat al-Karmel", ;Carmel City
- "Al-Tira",
+ "al-Tira",
  "Arraba",
  "Maghar",
  "Kafr Kana",

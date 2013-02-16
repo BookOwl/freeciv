@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -29,12 +29,14 @@
 
 /* client */
 #include "client_main.h"
-#include "options.h"
 #include "tilespec.h"
-#include "reqtree.h"
 
 #include "colors_g.h"
 #include "sprite_g.h"
+
+#include "reqtree.h"
+#include "tilespec.h"
+#include "options.h"
 
 /*
  * Hierarchical directed draph drawing for Freeciv's technology tree
@@ -182,7 +184,7 @@ static void node_rectangle_minimum_size(struct tree_node *node,
         if (advance_number(unit->require_advance) != node->tech) {
           continue;
         }
-        sprite = get_unittype_sprite(tileset, unit, direction8_invalid());
+        sprite = get_unittype_sprite(tileset, unit);
         get_sprite_dimensions(sprite, &swidth, &sheight);
         max_icon_height = MAX(max_icon_height, sheight);
         icons_width_sum += swidth + 2;
@@ -1074,7 +1076,7 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
             if (advance_number(unit->require_advance) != node->tech) {
 	      continue;
 	    }
- 	    sprite = get_unittype_sprite(tileset, unit, DIR8_SOUTH);
+ 	    sprite = get_unittype_sprite(tileset, unit);
  	    get_sprite_dimensions(sprite, &swidth, &sheight);
  	    canvas_put_sprite_full(pcanvas,
  	                           icon_startx,

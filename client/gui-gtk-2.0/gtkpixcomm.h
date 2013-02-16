@@ -28,7 +28,7 @@
 #define __GTK_PIXCOMM_H__
 
 
-#include <gtk/gtk.h>
+#include <gtk/gtkmisc.h>
 
 #include "sprite.h"
 

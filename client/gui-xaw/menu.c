@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -74,6 +74,9 @@
 
 #define TEXT_ORDER_CITY_BUILD   0
 #define TEXT_ORDER_CITY_ADD_TO  1
+
+#define TEXT_ORDER_ROAD_ROAD      0
+#define TEXT_ORDER_ROAD_RAILROAD  1
 
 #define TEXT_ORDER_IRRIGATE_IRRIGATE   0
 #define TEXT_ORDER_IRRIGATE_FARMLAND   1
@@ -167,7 +170,8 @@ static struct MenuEntry view_menu_entries[]={
 static struct MenuEntry order_menu_entries[]={
     { { N_("Build City"),
         N_("Add to City"), 0          },     "b", MENU_ORDER_BUILD_CITY, 0 },
-    { { N_("Build Road"), 0           },     "r", MENU_ORDER_ROAD, 0 },
+    { { N_("Build Road"),
+        N_("Build Railroad"), 0       },     "r", MENU_ORDER_ROAD, 0 },
     { { N_("Build Irrigation"),
         N_("Build Farmland"),
         N_("Change to %s"), 0         },     "i", MENU_ORDER_IRRIGATE, 0 },
@@ -392,8 +396,6 @@ void real_menus_update(void)
       struct tile *ptile = NULL;
       bool can_build;
       struct unit_list *punits = get_units_in_focus();
-      bool road_conn_possible;
-      struct road_type *proad;
 
       XtSetSensitive(menus[MENU_ORDER]->button, True);
 
@@ -401,8 +403,10 @@ void real_menus_update(void)
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
                            can_units_do(punits, unit_can_add_or_build_city));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD,
-                           can_units_do_any_road(punits));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD, 
+			   can_units_do_activity(punits, ACTIVITY_ROAD)
+			   || can_units_do_activity(punits,
+						    ACTIVITY_RAILROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_IRRIGATE, 
 			   can_units_do_activity(punits, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_MINE, 
@@ -441,39 +445,15 @@ void real_menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONVERT,
 			   units_can_convert(punits));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
-			   units_have_type_flag(punits, UTYF_UNDISBANDABLE,
-                                                FALSE));
+			   units_have_flag(punits, F_UNDISBANDABLE, FALSE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
 			   can_units_do_activity(punits, ACTIVITY_EXPLORE));
-
-      proad = road_by_compat_special(ROCO_ROAD);
-      if (proad != NULL) {
-        struct act_tgt tgt = { .type = ATT_ROAD,
-                               .obj.road = road_number(proad) }; 
-
-        road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
-                                                  &tgt);
-      } else {
-        road_conn_possible = FALSE;
-      }
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_ROAD,
-			   road_conn_possible);
-
-      proad = road_by_compat_special(ROCO_RAILROAD);
-      if (proad != NULL) {
-        struct act_tgt tgt = { .type = ATT_ROAD,
-                               .obj.road = road_number(proad) }; 
-
-        road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
-                                                  &tgt);
-      } else {
-        road_conn_possible = FALSE;
-      }
+			   can_units_do_connect(punits, ACTIVITY_ROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_RAIL,
-                           road_conn_possible);
-
+			   can_units_do_connect(punits, ACTIVITY_RAILROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE,
-			   can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL));
+			   can_units_do_connect(punits, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_GOTO_CITY,
 			   any_cities);
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_WONDER,
@@ -486,18 +466,18 @@ void real_menus_update(void)
 			   can_units_do_diplomat_action(punits,
 							DIPLOMAT_ANY_ACTION));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
-                           units_have_type_flag(punits, UTYF_NUCLEAR, TRUE));
+                           units_have_flag(punits, F_NUCLEAR, TRUE));
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
-	ptile = unit_tile(punit);
+	ptile = punit->tile;
 	break;
       } unit_list_iterate_end;
 
       tinfo = tile_terrain(ptile);
       can_build = !(tile_city(ptile));
 
-      if (units_have_type_flag(punits, UTYF_CITIES, TRUE)) {
+      if (units_have_flag(punits, F_CITIES, TRUE)) {
 	if (!can_build) {
 	  menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_ADD_TO, NULL);
@@ -542,12 +522,20 @@ void real_menus_update(void)
 			  TEXT_ORDER_TRANSFORM_TERRAIN, NULL);
       }
 
-      if (units_have_type_flag(punits, UTYF_PARATROOPERS, TRUE)) {
+      if (units_have_flag(punits, F_PARATROOPERS, TRUE)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_POLLUTION,
 			  TEXT_ORDER_POLLUTION_PARADROP, NULL);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_POLLUTION,
 			  TEXT_ORDER_POLLUTION_POLLUTION, NULL);
+      }
+
+      if (tile_has_special(ptile, S_ROAD)) {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
+			  TEXT_ORDER_ROAD_RAILROAD, NULL);
+      } else {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
+			  TEXT_ORDER_ROAD_ROAD, NULL);
       }
     }
   }
@@ -779,31 +767,13 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_auto_explore();
     break;
   case MENU_ORDER_CONNECT_ROAD:
-    {
-      struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
-      if (proad != NULL) {
-        struct act_tgt tgt = { .type = ATT_ROAD,
-                               .obj.road = road_number(proad) }; 
-
-        key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
-      }
-    }
+    key_unit_connect(ACTIVITY_ROAD);
     break;
   case MENU_ORDER_CONNECT_RAIL:
-    {
-      struct road_type *proad = road_by_compat_special(ROCO_RAILROAD);
-
-      if (proad != NULL) {
-        struct act_tgt tgt = { .type = ATT_ROAD,
-                               .obj.road = road_number(proad) }; 
-
-        key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
-      }
-    }
+    key_unit_connect(ACTIVITY_RAILROAD);
     break;
   case MENU_ORDER_CONNECT_IRRIGATE:
-    key_unit_connect(ACTIVITY_IRRIGATE, NULL);
+    key_unit_connect(ACTIVITY_IRRIGATE);
     break;
   case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -839,7 +809,7 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_nuke();
     break;
   case MENU_ORDER_SELECT_SAME_TYPE:
-    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_WORLD);
+    request_unit_select(get_units_in_focus(), SELTYPE_SAME, SELLOC_ALL);
     break;
   case MENU_ORDER_WAIT:
     key_unit_wait();
@@ -1121,8 +1091,8 @@ void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var,
   char *item;
 
   for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
-    if (pmenu->entries[i].id == id) {
-      item = menu_entry_text(menu, i, var, terr);
+    if(pmenu->entries[i].id==id) {
+      item=menu_entry_text(menu, i, var, terr);
       XtVaSetValues(pmenu->entries[i].w, XtNlabel, item, NULL);
       return;
     }

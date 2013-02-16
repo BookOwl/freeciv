@@ -35,8 +35,6 @@ pkgdata_DATA =          	\
 	tiles.spec		\
 	units.png		\
 	units.spec		\
-	veterancy.png		\
-	veterancy.spec		\
 	water.png		\
 	water.spec
 

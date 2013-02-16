@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -46,12 +46,10 @@
 
 /* common */
 #include "capstr.h"
-#include "fc_cmdhelp.h"
 #include "game.h"
 #include "version.h"
 
 /* server */
-#include "aiiface.h"
 #include "console.h"
 #include "ggzserver.h"
 #include "meta.h"
@@ -71,7 +69,7 @@ static void Mac_options(int argc);  /* don't need argv */
 #ifdef USE_INTERRUPT_HANDLERS
 #define save_and_exit(sig)              \
 if (S_S_RUNNING == server_state()) {    \
-  save_game_auto(#sig, AS_INTERRUPT);   \
+  save_game_auto(#sig, "interrupted");  \
 }                                       \
 exit(EXIT_SUCCESS);
 
@@ -197,7 +195,6 @@ int main(int argc, char *argv[])
 
   /* no  we don't use GNU's getopt or even the "standard" getopt */
   /* yes we do have reasons ;)                                   */
-  /* FIXME: and that are? */
   inx = 1;
   while (inx < argc) {
     if ((option = get_option_malloc("--file", argv, &inx, argc))) {
@@ -220,7 +217,7 @@ int main(int argc, char *argv[])
         inx++;
         showhelp = TRUE;
       }
-#endif /* NDEBUG */
+#endif
     } else if ((option = get_option_malloc("--Ranklog", argv, &inx, argc))) {
       srvarg.ranklog_filename = option; /* Never freed. */
     } else if (is_option("--nometa", argv[inx])) {
@@ -246,8 +243,6 @@ int main(int argc, char *argv[])
       free(option);
     } else if ((option = get_option_malloc("--bind", argv, &inx, argc))) {
       srvarg.bind_addr = option; /* Never freed. */
-    } else if ((option = get_option_malloc("--Bind-meta", argv, &inx, argc))) {
-      srvarg.bind_meta_addr = option; /* Never freed. */
     } else if ((option = get_option_malloc("--read", argv, &inx, argc)))
       srvarg.script_filename = option; /* Never freed. */
     else if ((option = get_option_malloc("--quitidle", argv, &inx, argc))) {
@@ -264,17 +259,17 @@ int main(int argc, char *argv[])
         break;
       }
       free(option);
-#ifdef HAVE_FCDB
-    } else if ((option = get_option_malloc("--Database", argv, &inx, argc))) {
-      srvarg.fcdb_enabled = TRUE;
-      srvarg.fcdb_conf = option;
-    } else if (is_option("--auth", argv[inx])) {
+#ifdef HAVE_AUTH
+    } else if ((option = get_option_malloc("--auth", argv, &inx, argc))) {
       srvarg.auth_enabled = TRUE;
+      srvarg.auth_conf = option;
     } else if (is_option("--Guests", argv[inx])) {
       srvarg.auth_allow_guests = TRUE;
     } else if (is_option("--Newusers", argv[inx])) {
       srvarg.auth_allow_newusers = TRUE;
-#endif /* HAVE_FCDB */
+#endif
+    } else if (is_option("--Ppm", argv[inx])) {
+      srvarg.save_ppm = TRUE;
     } else if ((option = get_option_malloc("--Serverid", argv, &inx, argc))) {
       sz_strlcpy(srvarg.serverid, option);
       free(option);
@@ -297,14 +292,6 @@ int main(int argc, char *argv[])
         log_error(_("Illegal value \"%s\" for --Announce"), option);
       }
       free(option);
-#ifdef AI_MODULES
-    } else if ((option = get_option_malloc("--LoadAI", argv, &inx, argc))) {
-      if (!load_ai_module(option)) {
-        fc_fprintf(stderr, _("Failed to load AI module \"%s\"\n"), option);
-        exit(EXIT_FAILURE);
-      }
-      free(option);
-#endif /* AI_MODULES */
     } else {
       fc_fprintf(stderr, _("Error: unknown option '%s'\n"), argv[inx]);
       showhelp = TRUE;
@@ -323,125 +310,62 @@ int main(int argc, char *argv[])
 	    WIKI_URL);
 
   if (showhelp) {
-    struct cmdhelp *help = cmdhelp_new(argv[0]);
-
-    cmdhelp_add(help, "A",
-                /* TRANS: "Announce" is exactly what user must type, do not translate. */
-                _("Announce PROTO"),
-                _("Announce game in LAN using protocol PROTO "
-                  "(IPv4/IPv6/none)"));
-#ifdef HAVE_FCDB
-    cmdhelp_add(help, "D",
-                /* TRANS: "Database" is exactly what user must type, do not translate. */
-                _("Database FILE"),
-                _("Enable database connection with configuration from "
-                  "FILE."));
-    cmdhelp_add(help, "a", "auth",
-                _("Enable server authentication (requires --Database)."));
-    cmdhelp_add(help, "G", "Guests",
-                _("Allow guests to login if auth is enabled."));
-    cmdhelp_add(help, "N", "Newusers",
-                _("Allow new users to login if auth is enabled."));
-#endif /* HAVE_FCDB */
-    cmdhelp_add(help, "b",
-                /* TRANS: "bind" is exactly what user must type, do not translate. */
-                _("bind ADDR"),
-                _("Listen for clients on ADDR"));
-    cmdhelp_add(help, "B", "Bind-meta ADDR",
-                _("Connect to metaserver from this address"));
-#ifdef DEBUG
-    cmdhelp_add(help, "d",
-                /* TRANS: "debug" is exactly what user must type, do not translate. */
-                _("debug NUM"),
-                _("Set debug log level (%d to %d, or %d:file1,min,max:...)"),
-                LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
-#else  /* DEBUG */
-    cmdhelp_add(help, "d",
-                /* TRANS: "debug" is exactly what user must type, do not translate. */
-                _("debug NUM"),
-                _("Set debug log level (%d to %d)"), LOG_FATAL, LOG_VERBOSE);
-#endif /* DEBUG */
-#ifndef NDEBUG
-    cmdhelp_add(help, "F",
-                /* TRANS: "Fatal" is exactly what user must type, do not translate. */
-                _("Fatal [SIGNAL]"),
-                _("Raise a signal on failed assertion"));
+    fc_fprintf(stderr,
+	       _("Usage: %s [option ...]\nValid options are:\n"), argv[0]);
+    fc_fprintf(stderr, _("  -A  --Announce PROTO\tAnnounce game in LAN using protocol PROTO (IPv4/IPv6/none)\n"));
+#ifdef HAVE_AUTH
+    fc_fprintf(stderr, _("  -a  --auth FILE\tEnable server authentication "
+                         "with configuration from FILE.\n"));
+    fc_fprintf(stderr, _("  -G  --Guests\t\tAllow guests to "
+			 "login if auth is enabled.\n"));
+    fc_fprintf(stderr, _("  -N  --Newusers\tAllow new users to "
+			 "login if auth is enabled.\n"));
 #endif
-    cmdhelp_add(help, "f",
-                /* TRANS: "file" is exactly what user must type, do not translate. */
-                _("file FILE"),
-                _("Load saved game FILE"));
-    cmdhelp_add(help, "h", "help",
-                _("Print a summary of the options"));
-    cmdhelp_add(help, "i",
-                /* TRANS: "identity" is exactly what user must type, do not translate. */
-                _("identity ADDR"),
-                _("Be known as ADDR at metaserver"));
-    cmdhelp_add(help, "l",
-                /* TRANS: "log" is exactly what user must type, do not translate. */
-                _("log FILE"),
-                _("Use FILE as logfile"));
-    cmdhelp_add(help, "m", "meta",
-                _("Notify metaserver and send server's info"));
-    cmdhelp_add(help, "M",
-                /* TRANS: "Metaserver" is exactly what user must type, do not translate. */
-                _("Metaserver ADDR"),
-                _("Set ADDR as metaserver address"));
-    cmdhelp_add(help, "p",
-                /* TRANS: "port" is exactly what user must type, do not translate. */
-                _("port PORT"),
-                _("Listen for clients on port PORT"));
-    cmdhelp_add(help, "q",
-                /* TRANS: "quitidle" is exactly what user must type, do not translate. */
-                _("quitidle TIME"),
-                _("Quit if no players for TIME seconds"));
-    cmdhelp_add(help, "e", "exit-on-end",
-                _("When a game ends, exit instead of restarting"));
-    cmdhelp_add(help, "s",
-                /* TRANS: "saves" is exactly what user must type, do not translate. */
-                _("saves DIR"),
-                _("Save games to directory DIR"));
-    cmdhelp_add(help, NULL,
-                /* TRANS: "scenarios" is exactly what user must type, do not translate. */
-                _("scenarios DIR"),
-                _("Search for scenarios in directory DIR"));
-    cmdhelp_add(help, "S",
-                /* TRANS: "Serverid" is exactly what user must type, do not translate. */
-                _("Serverid ID"),
-                _("Sets the server id to ID"));
-    cmdhelp_add(help, "r",
-                /* TRANS: "read" is exactly what user must type, do not translate. */
-                _("read FILE"),
-                _("Read startup script FILE"));
-    cmdhelp_add(help, "R",
-                /* TRANS: "Ranklog" is exactly what user must type, do not translate. */
-                _("Ranklog FILE"),
-                _("Use FILE as ranking logfile"));
-#ifdef AI_MODULES
-    cmdhelp_add(help, "L",
-                /* TRANS: "LoadAI" is exactly what user must type, do not translate. */
-                _("LoadAI MODULE"),
-                _("Load ai module MODULE. Can appear multiple times"));
-#endif /* AI_MODULES */
-    cmdhelp_add(help, "v", "version",
-                _("Print the version number"));
+    fc_fprintf(stderr, _("  -b  --bind ADDR\tListen for clients on ADDR\n"));
+#ifdef DEBUG
+    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
+                         "%d, or %d:file1,min,max:...)\n"),
+               LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
+#else
+    fc_fprintf(stderr, _("  -d, --debug NUM\tSet debug log level (%d to "
+                         "%d)\n"), LOG_FATAL, LOG_VERBOSE);
+#endif
+#ifndef NDEBUG
+    fc_fprintf(stderr, _("  -F, --Fatal [SIGNAL]\t"
+                         "Raise a signal on failed assertion\n"));
+#endif
+    fc_fprintf(stderr, _("  -f, --file FILE\tLoad saved game FILE\n"));
+    fc_fprintf(stderr,
+	       _("  -h, --help\t\tPrint a summary of the options\n"));
+   fc_fprintf(stderr, _("  -i, --identity ADDR\tBe known as ADDR at metaserver\n"));
+    fc_fprintf(stderr, _("  -l, --log FILE\tUse FILE as logfile\n"));
+    fc_fprintf(stderr, _("  -m, --meta\t\tNotify metaserver and "
+			 "send server's info\n"));
+    fc_fprintf(stderr, _("  -M, --Metaserver ADDR\tSet ADDR "
+			 "as metaserver address\n"));
 
-    /* The function below prints a header and footer for the options.
-     * Furthermore, the options are sorted. */
-    cmdhelp_display(help, TRUE, FALSE, TRUE);
-    cmdhelp_destroy(help);
-
+    fc_fprintf(stderr, _("  -p, --port PORT\tListen for clients on "
+			 "port PORT\n"));
+    fc_fprintf(stderr, _("  -q, --quitidle TIME\tQuit if no players "
+			 "for TIME seconds\n"));
+    fc_fprintf(stderr, _("  -e, --exit-on-end\t"
+		      "When a game ends, exit instead of restarting\n"));
+    fc_fprintf(stderr,
+	       _("  -s, --saves DIR\tSave games to directory DIR\n"));
+    fc_fprintf(stderr,
+	       _("      --scenarios DIR\tSearch for scenarios in directory DIR\n"));
+    fc_fprintf(stderr,
+	       _("  -S, --Serverid ID\tSets the server id to ID\n"));
+    fc_fprintf(stderr,
+	     _("  -P, --Ppm\t\tSave ppms of the map when saving the game.\n"));
+    fc_fprintf(stderr, _("  -r, --read FILE\tRead startup script FILE\n"));
+    fc_fprintf(stderr,
+	       _("  -R, --Ranklog FILE\tUse FILE as ranking logfile\n"));
+    fc_fprintf(stderr, _("  -v, --version\t\tPrint the version number\n"));
+    /* TRANS: No full stop after the URL, could cause confusion. */
+    fc_fprintf(stderr, _("Report bugs at %s\n"), BUG_URL);
     exit(EXIT_SUCCESS);
   }
-
-#ifdef HAVE_FCDB
-  if (srvarg.auth_enabled && !srvarg.fcdb_enabled) {
-    fc_fprintf(stderr,
-               _("Requested authentication with --auth, "
-                 "but no --Database given\n"));
-    exit(EXIT_FAILURE);
-  }
-#endif /* HAVE_FCDB */
 
   /* disallow running as root -- too dangerous */
   dont_run_as_root(argv[0], "freeciv_server");

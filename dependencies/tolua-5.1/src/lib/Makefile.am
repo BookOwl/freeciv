@@ -1,10 +1,10 @@
-noinst_LTLIBRARIES = libtolua.la
+noinst_LIBRARIES = libtolua.a
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/dependencies/tolua-5.1/include \
 	$(LUA_CFLAGS)
 
-libtolua_la_SOURCES = \
+libtolua_a_SOURCES = \
 	tolua_event.c \
 	tolua_event.h \
 	tolua_is.c \

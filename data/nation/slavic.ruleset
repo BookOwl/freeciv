@@ -29,8 +29,10 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",         "female_title"
+ "Despotism",       _("Prince %s"),       _("Princess %s")
  "Monarchy",        _("Grand Prince %s"), _("Grand Princess %s")
- "Despotism",       _("Voivode %s"),      _("?female:Voivode %s")
+ "Republic",        _("Voivode %s"),      _("?female:Voivode %s")
+ "Fundamentalism",  _("Patriarch %s"),    _("Matriarch %s")
 }
 
 flag="slavic"
@@ -39,21 +41,20 @@ city_style="Celtic"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with="Ruthenian", "Russian", "Belarusian", "Ukrainian",
  "Cossack", "Slovakian", "Moravian", "Czech", "Lendian", "Polish",
  "Western Pomeranian", "Sorbian", "Slovenian", "Croatian", "Serbian",
  "Bosnian-Herzegovinian", "Montenegrin", "Macedonian", "Bulgarian",
- "Silesian", "Greater Polish", "Mazovian", "Yugoslav", "Soviet",
- "Czechoslovakian", "Muscovite", "Vistulan", "Chrobatian", "Veletian",
- "Kashubian", "Novgorodian" ; Polabian
+ "Silesian", "Greater Polish", "Mazovian", "Yugoslav", "Soviet"
+ ; Kashubian Polabian Novgorodian
 civilwar_nations="Ruthenian", "Russian", "Belarusian", "Ukrainian",
  "Cossack", "Slovakian", "Moravian", "Czech", "Lendian", "Polish",
  "Western Pomeranian", "Sorbian", "Slovenian", "Croatian", "Serbian",
  "Bosnian-Herzegovinian", "Montenegrin", "Macedonian", "Bulgarian",
- "Silesian", "Greater Polish", "Mazovian", "Muscovite", "Vistulan",
- "Chrobatian", "Veletian", "Kashubian", "Novgorodian" ; Polabian
+ "Silesian", "Greater Polish", "Mazovian" ; Kashubian Polabian Novgorodian
 
 cities=
 

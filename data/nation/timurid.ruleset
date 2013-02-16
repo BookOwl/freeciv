@@ -24,7 +24,8 @@ ruler_titles = {
  "government",      "male_title",      "female_title"
  "Despotism",       _("%s Khan"),      _("%s Khatan")
  "Monarchy",        _("Emir %s"),      _("Emira %s")
- "Fundamentalism",  _("Caliph %s"),    _("Calipha %s")
+ "Republic",        _("Sultan %s"),    _("Sultana %s")
+ "Communism",       _("Caliph %s"),    _("Calipha %s")
 }
 
 flag="timur"
@@ -33,6 +34,7 @@ city_style="Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Uzbek", "Tajik", "Iranian", "Afghani", "Mughal"

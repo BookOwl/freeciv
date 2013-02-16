@@ -64,21 +64,13 @@ def make_documentation(file):
  * - SPECENUM_ZERO: can be defined only if SPECENUM_BITWISE was also defined.
  * It defines a 0 value.  Note that if you don't declare this value, 0 passed
  * to the 'foo_is_valid()' function will return 0.
- * - SPECENUM_COUNT: a name for the maximum enumeration number plus 1. For
- * enums where every element from 0 to the maximum is defined, this is the
- * number of elements in the enum. This value is suitable to size an array
- * indexed by the enum. It can not be used in combination with
- * SPECENUM_BITWISE. SPECENUM_is_valid() will return the invalid element
- * for it.
+ * - SPECENUM_COUNT: The number of elements in the enum for use in static
+ * structs. It can not be used in combination with SPECENUM_BITWISE.
+ * SPECENUM_is_valid() will return the invalid element for it.
  *
  * SPECENUM_VALUE%dNAME, SPECENUM_ZERONAME, SPECENUM_COUNTNAME: Can be used
- * to bind a string to the particular enumerator to be returned by
- * SPECENUM_name(), etc. If not defined, the default name for 'FOO_FIRST'
- * is '"FOO_FIRST"'.
- *
- * SPECENUM_NAMEOVERRIDE: call callback function foo_name_cb(enum foo),
- * defined by specnum user, to get name of the enum value. If the function
- * returns NULL, compiled in names are used.
+ * to bind the name of the particular enumerator.  If not defined, the
+ * default name for 'FOO_FIRST' is '"FOO_FIRST"'.
  *
  * Assuming SPECENUM_NAME were 'foo', including this file would provide
  * the definition for the enumeration type 'enum foo', and prototypes for
@@ -142,10 +134,6 @@ def make_documentation(file):
 
 def make_macros(file):
     file.write('''
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "log.h"        /* fc_assert. */
 #include "support.h"    /* bool type. */
 
@@ -162,7 +150,7 @@ extern "C" {
 #define SPECENUM_FOO(suffix) SPECENUM_PASTE(SPECENUM_NAME, suffix)
 
 #ifndef SPECENUM_INVALID
-#define SPECENUM_INVALID ((enum SPECENUM_NAME) -1)
+#define SPECENUM_INVALID (-1)
 #endif
 
 #ifdef SPECENUM_BITWISE
@@ -192,7 +180,6 @@ extern "C" {
     macros.append("SPECENUM_ZERO")
     macros.append("SPECENUM_MIN_VALUE")
     macros.append("SPECENUM_MAX_VALUE")
-    macros.append("SPECENUM_NAMEOVERRIDE")
 
 def make_enum(file):
     file.write('''
@@ -340,9 +327,9 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 {
   do {
 #ifdef SPECENUM_BITWISE
-    e = (enum SPECENUM_NAME)(e << 1);
+    e <<= 1;
 #else
-    e = (enum SPECENUM_NAME)(e + 1);
+    e++;
 #endif
 
     if (e > SPECENUM_FOO(_max)()) {
@@ -357,23 +344,11 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 
 def make_name(file):
     file.write('''
-#ifdef SPECENUM_NAMEOVERRIDE
-char *SPECENUM_FOO(_name_cb)(enum SPECENUM_NAME value);
-#endif /* SPECENUM_NAMEOVERRIDE */
-
 /**************************************************************************
   Returns the name of the enumerator.
 **************************************************************************/
 static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
 {
-#ifdef SPECENUM_NAMEOVERRIDE
-  char *name = SPECENUM_FOO(_name_cb)(enumerator);
-
-  if (name != NULL) {
-    return name;
-  }
-#endif /* SPECENUM_NAMEOVERRIDE */
-
   switch (enumerator) {
 #ifdef SPECENUM_ZERO
   case SPECENUM_ZERO:
@@ -468,12 +443,6 @@ def main():
     make_name(output)
     make_by_name(output)
     make_undef(output)
-
-    output.write('''
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-''')
 
     output.close()
 

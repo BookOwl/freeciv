@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -226,7 +226,7 @@ void voteinfo_gui_update(void)
   int vote_count, index;
   struct voteinfo_bar *vib = NULL;
   struct voteinfo *vi = NULL;
-  char buf[1024], status[1024], ordstr[128], color[32];
+  char buf[512], status[128], ordstr[128], color[32];
   bool running, need_scroll;
   gchar *escaped_desc, *escaped_user;
 

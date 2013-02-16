@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -33,7 +33,6 @@
 #include "version.h"
 
 /* server */
-#include "aiiface.h"
 #include "auth.h"
 #include "diplhand.h"
 #include "edithand.h"
@@ -128,7 +127,6 @@ void establish_new_connection(struct connection *pconn)
   struct packet_server_join_reply packet;
   struct packet_chat_msg connect_info;
   char hostname[512];
-  bool delegation_error = FALSE;
 
   /* zero out the password */
   memset(pconn->server.password, 0, sizeof(pconn->server.password));
@@ -145,10 +143,6 @@ void establish_new_connection(struct connection *pconn)
   /* "establish" the connection */
   pconn->established = TRUE;
   pconn->server.status = AS_ESTABLISHED;
-
-  pconn->server.delegation.status = FALSE;
-  pconn->server.delegation.playing = NULL;
-  pconn->server.delegation.observer = FALSE;
 
   conn_list_append(game.est_connections, pconn);
   if (conn_list_size(game.est_connections) == 1) {
@@ -182,45 +176,26 @@ void establish_new_connection(struct connection *pconn)
   send_scenario_info(dest);
   send_game_info(dest);
 
-  if ((pplayer = player_by_user_delegated(pconn->username))) {
-    /* Force our control over the player. */
-    struct connection *pdelegate = conn_by_user(pplayer->server.delegate_to);
+  if ((pplayer = player_by_user(pconn->username))
+      && connection_attach_real(pconn, pplayer, FALSE, TRUE)) {
+    /* a player has already been created for this user, reconnect */
 
-    if (pdelegate && connection_delegate_restore(pdelegate)) {
-        notify_conn(pdelegate->self, NULL, E_CONNECTION, ftc_server,
-                    _("Player '%s' did reconnect. Restore player state."),
-                    player_name(pplayer));
-    } else {
-      notify_conn(dest, NULL, E_CONNECTION, ftc_server,
-                  _("Couldn't get control from delegation to %s."),
-                  pdelegate->username);
-      log_verbose("%s can't take control over its player %s from delegation.",
-                  pconn->username, player_name(pplayer));
-      delegation_error = TRUE;
-    }
-  }
-
-  if (!delegation_error) {
-    if ((pplayer = player_by_user(pconn->username))
-        && connection_attach_real(pconn, pplayer, FALSE, TRUE)) {
-      /* a player has already been created for this user, reconnect */
-
-      if (S_S_INITIAL == server_state()) {
-        send_player_info_c(NULL, dest);
-      }
-    } else {
-      if (!game_was_started()) {
-        if (!connection_attach(pconn, NULL, FALSE)) {
-          notify_conn(dest, NULL, E_CONNECTION, ftc_server,
-                      _("Couldn't attach your connection to new player."));
-          log_verbose("%s is not attached to a player", pconn->username);
-        }
-      }
+    if (S_S_INITIAL == server_state()) {
       send_player_info_c(NULL, dest);
     }
-  }
+    send_conn_info(game.est_connections, dest);
 
-  send_conn_info(game.est_connections, dest);
+  } else {
+    if (!game_was_started()) {
+      if (!connection_attach(pconn, NULL, FALSE)) {
+        notify_conn(dest, NULL, E_CONNECTION, ftc_server,
+                    _("Couldn't attach your connection to new player."));
+        log_verbose("%s is not attached to a player", pconn->username);
+      }
+    }
+    send_player_info_c(NULL, dest);
+    send_conn_info(game.est_connections, dest);
+  }
 
   send_pending_events(pconn, TRUE);
   send_running_votes(pconn, FALSE);
@@ -248,9 +223,6 @@ void establish_new_connection(struct connection *pconn)
                 player_name(pconn->playing));
   }
 
-  /* Send information about delegation(s). */
-  send_delegation_info(pconn);
-
   /* Notify the *other* established connections that you are connected, and
    * add the info for all in event cache. Note we must to do it after we
    * sent the pending events to pconn (from this function and also
@@ -274,8 +246,9 @@ void establish_new_connection(struct connection *pconn)
 
   /* if need be, tell who we're waiting on to end the game.info.turn */
   if (S_S_RUNNING == server_state() && game.server.turnblock) {
-    players_iterate_alive(cplayer) {
-      if (!cplayer->ai_controlled
+    players_iterate(cplayer) {
+      if (cplayer->is_alive
+          && !cplayer->ai_controlled
           && !cplayer->phase_done
           && cplayer != pconn->playing) {  /* skip current player */
         notify_conn(dest, NULL, E_CONNECTION, ftc_any,
@@ -283,7 +256,7 @@ void establish_new_connection(struct connection *pconn)
 		      "waiting on %s to finish turn..."),
                     player_name(cplayer));
       }
-    } players_iterate_alive_end;
+    } players_iterate_end;
   }
 
   if (game.info.is_edit_mode) {
@@ -410,7 +383,7 @@ bool handle_login_request(struct connection *pconn,
   }
 
   if (srvarg.auth_enabled) {
-    return auth_user(pconn, req->username);
+    return authenticate_user(pconn, req->username);
   } else {
     sz_strlcpy(pconn->username, req->username);
     establish_new_connection(pconn);
@@ -558,15 +531,13 @@ static bool connection_attach_real(struct connection *pconn,
           return FALSE;
         }
         /* add new player, or not */
-        pplayer = server_create_player(-1, default_ai_type_name(), NULL);
+        pplayer = server_create_player(-1);
         if (!pplayer) {
           return FALSE;
         }
-      } else {
-        team_remove_player(pplayer);
       }
+      team_remove_player(pplayer);
       server_player_init(pplayer, FALSE, TRUE);
-
       /* Make it human! */
       pplayer->ai_controlled = FALSE;
     }
@@ -647,8 +618,6 @@ static bool connection_attach_real(struct connection *pconn,
       /* Those will be sent later in establish_new_connection(). */
       send_pending_events(pconn, FALSE);
       send_running_votes(pconn, TRUE);
-      /* Send information about delegation(s). */
-      send_delegation_info(pconn);
     }
     break;
   }
@@ -743,112 +712,4 @@ void connection_detach(struct connection *pconn)
   send_updated_vote_totals(NULL);
 
   send_conn_info(pconn->self, game.est_connections);
-}
-
-/*****************************************************************************
- Use a delegation to get control over another player.
-*****************************************************************************/
-bool connection_delegate_take(struct connection *pconn,
-                              struct player *pplayer)
-{
-  fc_assert_ret_val(pconn->server.delegation.status == FALSE, FALSE);
-
-  /* Save the original player of this connection and the original username of
-   * the player. */
-  pconn->server.delegation.status = TRUE;
-  pconn->server.delegation.playing = conn_get_player(pconn);
-  pconn->server.delegation.observer = pconn->observer;
-  if (conn_get_player(pconn) != NULL) {
-    struct player *plr = conn_get_player(pconn);
-    fc_assert_ret_val(strlen(plr->server.orig_username) == 0, FALSE);
-    sz_strlcpy(plr->server.orig_username, plr->username);
-  }
-  fc_assert_ret_val(strlen(pplayer->server.orig_username) == 0, FALSE);
-  sz_strlcpy(pplayer->server.orig_username, pplayer->username);
-
-  /* Detach the current connection. */
-  if (NULL != pconn->playing || pconn->observer) {
-    connection_detach(pconn);
-  }
-
-  /* Try to attach to the new player */
-  if (!connection_attach(pconn, pplayer, FALSE)) {
-
-    /* Restore original connection. */
-    fc_assert_ret_val(connection_attach(pconn,
-                                        pconn->server.delegation.playing,
-                                        pconn->server.delegation.observer),
-                      FALSE);
-
-    /* Reset all changes done above. */
-    pconn->server.delegation.status = FALSE;
-    pconn->server.delegation.playing = NULL;
-    pconn->server.delegation.observer = FALSE;
-    if (conn_get_player(pconn) != NULL) {
-      struct player *plr = conn_get_player(pconn);
-      plr->server.orig_username[0] = '\0';
-    }
-    pplayer->server.orig_username[0] = '\0';
-
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/*****************************************************************************
- Restore the original status after using a delegation.
-*****************************************************************************/
-bool connection_delegate_restore(struct connection *pconn)
-{
-  struct player *pplayer;
-
-  if (!pconn->server.delegation.status) {
-    return FALSE;
-  }
-
-  /* Save the current player. */
-  pplayer = conn_get_player(pconn);
-
-  /* There should be a player connected to pconn. */
-  fc_assert_ret_val(pplayer, FALSE);
-
-  /* Detach the current connection. */
-  if (NULL != pconn->playing || pconn->observer) {
-    connection_detach(pconn);
-  }
-
-  /* Try to attach to the original player */
-  if (!connection_attach(pconn, pconn->server.delegation.playing,
-                         pconn->server.delegation.observer)) {
-    return FALSE;
-  }
-
-  /* Reset data. */
-  pconn->server.delegation.status = FALSE;
-  pconn->server.delegation.playing = NULL;
-  pconn->server.delegation.observer = FALSE;
-  if (conn_get_player(pconn) != NULL) {
-    struct player *plr = conn_get_player(pconn);
-    plr->server.orig_username[0] = '\0';
-  }
-
-  /* Restore the username of the player which delegated control. */
-  sz_strlcpy(pplayer->username, pplayer->server.orig_username);
-  pplayer->server.orig_username[0] = '\0';
-  /* Send updated username to all connections. */
-  send_player_info_c(pplayer, NULL);
-
-  return TRUE;
-}
-
-/*****************************************************************************
- Close a connection. Use this in the server to take care of delegation stuff
- (reset the username of the controlled connection).
-*****************************************************************************/
-void connection_close_server(struct connection *pconn, const char *reason)
-{
-  /* Restore possible delegations before the connection is closed. */
-  connection_delegate_restore(pconn);
-  connection_close(pconn, reason);
 }

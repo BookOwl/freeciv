@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -30,7 +30,6 @@
 #include "base.h"
 #include "city.h"
 #include "connection.h"
-#include "disaster.h"
 #include "government.h"
 #include "idex.h"
 #include "map.h"
@@ -41,8 +40,6 @@
 #include "spaceship.h"
 #include "specialist.h"
 #include "tech.h"
-#include "terrain.h"
-#include "traderoutes.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -116,7 +113,7 @@ int civ_population(const struct player *pplayer)
 
 
 /**************************************************************************
-  Find city with given name from any player.
+...
 **************************************************************************/
 struct city *game_city_by_name(const char *name)
 {
@@ -171,7 +168,7 @@ void game_remove_unit(struct unit *punit)
 
     log_debug("game_remove_unit()"
               " at (%d,%d) unit %d, %s %s home (%d,%d) city %d, %s %s",
-              TILE_XY(unit_tile(punit)),
+              TILE_XY(punit->tile),
               punit->id, 
               nation_rule_name(nation_of_unit(punit)),
               unit_rule_name(punit),
@@ -181,21 +178,21 @@ void game_remove_unit(struct unit *punit)
               city_name(pcity));
   } else if (IDENTITY_NUMBER_ZERO == punit->homecity) {
     log_debug("game_remove_unit() at (%d,%d) unit %d, %s %s home %d",
-              TILE_XY(unit_tile(punit)),
+              TILE_XY(punit->tile),
               punit->id, 
               nation_rule_name(nation_of_unit(punit)),
               unit_rule_name(punit),
               punit->homecity);
   } else {
     log_error("game_remove_unit() at (%d,%d) unit %d, %s %s home %d invalid",
-              TILE_XY(unit_tile(punit)),
+              TILE_XY(punit->tile),
               punit->id, 
               nation_rule_name(nation_of_unit(punit)),
               unit_rule_name(punit),
               punit->homecity);
   }
 
-  unit_list_remove(unit_tile(punit)->units, punit);
+  unit_list_remove(punit->tile->units, punit);
   unit_list_remove(unit_owner(punit)->units, punit);
 
   idex_unregister_unit(punit);
@@ -203,11 +200,11 @@ void game_remove_unit(struct unit *punit)
   if (game.callbacks.unit_deallocate) {
     (game.callbacks.unit_deallocate)(punit->id);
   }
-  unit_virtual_destroy(punit);
+  destroy_unit_virtual(punit);
 }
 
 /**************************************************************************
-  Remove city from game.
+...
 **************************************************************************/
 void game_remove_city(struct city *pcity)
 {
@@ -252,13 +249,11 @@ static void game_defaults(void)
   game.control.government_count        = 0;
   game.control.nation_count            = 0;
   game.control.num_base_types          = 0;
-  game.control.num_road_types          = 0;
   game.control.num_impr_types          = 0;
   game.control.num_specialist_types    = 0;
   game.control.num_tech_types          = 0;
   game.control.num_unit_classes        = 0;
   game.control.num_unit_types          = 0;
-  game.control.num_disaster_types      = 0;
   game.control.prefered_tileset[0]     = '\0';
   game.control.resource_count          = 0;
   game.control.styles_count            = 0;
@@ -294,7 +289,6 @@ static void game_defaults(void)
   game.info.heating          = 0;
   game.info.is_edit_mode     = FALSE;
   game.info.is_new_game      = TRUE;
-  game.info.killstack        = GAME_DEFAULT_KILLSTACK;
   game.info.killcitizen      = GAME_DEFAULT_KILLCITIZEN;
   game.info.negative_year_label[0] = '\0';
   game.info.notradesize      = GAME_DEFAULT_NOTRADESIZE;
@@ -311,7 +305,7 @@ static void game_defaults(void)
   game.info.team_pooled_research = GAME_DEFAULT_TEAM_POOLED_RESEARCH;
   game.info.tech             = GAME_DEFAULT_TECHLEVEL;
   game.info.timeout          = GAME_DEFAULT_TIMEOUT;
-  game.info.trademindist     = GAME_DEFAULT_TRADEMINDIST;
+  game.info.trademindist_new = GAME_DEFAULT_TRADEMINDIST;
   game.info.trading_city     = GAME_DEFAULT_TRADING_CITY;
   game.info.trading_gold     = GAME_DEFAULT_TRADING_GOLD;
   game.info.trading_tech     = GAME_DEFAULT_TRADING_TECH;
@@ -325,12 +319,6 @@ static void game_defaults(void)
   game.scenario.is_scenario = FALSE;
   game.scenario.name[0] = '\0';
   game.scenario.players = TRUE;
-
-  /* Veteran system. */
-  game.veteran = NULL;
-
-  /* player colors */
-  game.plr_bg_color = NULL;
 
   if (is_server()) {
     /* All settings only used by the server (./server/ and ./ai/ */
@@ -377,7 +365,6 @@ static void game_defaults(void)
     game.server.migration         = GAME_DEFAULT_MIGRATION;
     game.server.min_players       = GAME_DEFAULT_MIN_PLAYERS;
     game.server.natural_city_names = GAME_DEFAULT_NATURALCITYNAMES;
-    game.server.plrcolormode      = GAME_DEFAULT_PLRCOLORMODE;
     game.server.netwait           = GAME_DEFAULT_NETWAIT;
     game.server.occupychance      = GAME_DEFAULT_OCCUPYCHANCE;
     game.server.onsetbarbarian    = GAME_DEFAULT_ONSETBARBARIAN;
@@ -385,12 +372,12 @@ static void game_defaults(void)
     game.server.pingtime          = GAME_DEFAULT_PINGTIME;
     game.server.pingtimeout       = GAME_DEFAULT_PINGTIMEOUT;
     game.server.razechance        = GAME_DEFAULT_RAZECHANCE;
-    game.server.revealmap         = GAME_DEFAULT_REVEALMAP;
     game.server.revolution_length = GAME_DEFAULT_REVOLUTION_LENGTH;
     sz_strlcpy(game.server.rulesetdir, GAME_DEFAULT_RULESETDIR);
     game.server.save_compress_level = GAME_DEFAULT_COMPRESS_LEVEL;
     game.server.save_compress_type = GAME_DEFAULT_COMPRESS_TYPE;
     sz_strlcpy(game.server.save_name, GAME_DEFAULT_SAVE_NAME);
+    game.server.saveversion       = GAME_DEFAULT_SAVEVERSION;
     game.server.save_nturns       = GAME_DEFAULT_SAVETURNS;
     game.server.save_options.save_known = TRUE;
     game.server.save_options.save_private_map = TRUE;
@@ -414,7 +401,6 @@ static void game_defaults(void)
     game.server.timeoutintinc     = GAME_DEFAULT_TIMEOUTINTINC;
     game.server.turnblock         = GAME_DEFAULT_TURNBLOCK;
     game.server.unitwaittime      = GAME_DEFAULT_UNITWAITTIME;
-    game.server.plr_colors        = NULL;
   }
 
   terrain_control.river_help_text[0] = '\0';
@@ -460,7 +446,6 @@ void game_free(void)
   map_free();
   idex_free();
   team_slots_free();
-  set_allowed_nation_groups(NULL);
   game_ruleset_free();
   cm_free();
 }
@@ -495,18 +480,13 @@ void game_ruleset_init(void)
 {
   nation_groups_init();
   ruleset_cache_init();
-  disaster_types_init();
-  trade_route_types_init();
   terrains_init();
   base_types_init();
-  road_types_init();
   improvements_init();
   techs_init();
   unit_classes_init();
   unit_types_init();
   specialists_init();
-  user_unit_type_flags_init();
-  user_terrain_flags_init();
 }
 
 /***************************************************************
@@ -514,32 +494,24 @@ void game_ruleset_init(void)
 ***************************************************************/
 void game_ruleset_free(void)
 {
-  CALL_FUNC_EACH_AI(units_ruleset_close);
-
   specialists_free();
   techs_free();
   governments_free();
   nations_free();
   unit_types_free();
-  unit_type_flags_free();
+  unit_flags_free();
   role_unit_precalcs_free();
   improvements_free();
   base_types_free();
-  road_types_free();
   city_styles_free();
-  disaster_types_free();
   terrains_free();
-  user_terrain_flags_free();
   ruleset_cache_free();
   nation_groups_free();
-
-  /* Destroy the default veteran system. */
-  veteran_system_destroy(game.veteran);
-  game.veteran = NULL;
 }
 
+
 /***************************************************************
-  Initialize wonder information.
+...
 ***************************************************************/
 void initialize_globals(void)
 {
@@ -652,15 +624,30 @@ bool is_player_phase(const struct player *pplayer, int phase)
 
 /****************************************************************************
   Return a prettily formatted string containing the population text.  The
-  population is passed in as the number of citizens, in unit
-  (tens/hundreds/thousands...) defined in cities.ruleset.
+  population is passed in as the number of citizens, in thousands.
 ****************************************************************************/
 const char *population_to_text(int thousand_citizen)
 {
   /* big_int_to_text can't handle negative values, and in any case we'd
    * better not have a negative population. */
   fc_assert_ret_val(thousand_citizen >= 0, NULL);
-  return big_int_to_text(thousand_citizen, game.info.pop_report_zeroes - 1);
+  return big_int_to_text(thousand_citizen, 3);
+}
+
+/****************************************************************************
+  Returns gui name string
+****************************************************************************/
+const char *gui_name(enum gui_type gui)
+{
+  /* This must be in same order as enum gui_type in fc_types.h */
+  const char *gui_names[] = {
+    "stub", "gtk2", "sdl", "xaw", "win32", "ftwl" };
+
+  if (gui < GUI_LAST) {
+    return gui_names[gui];
+  } else {
+    return "Unknown";
+  }
 }
 
 /****************************************************************************
@@ -735,11 +722,11 @@ int generate_save_name(const char *format, char *buf, int buflen,
                        const char *reason)
 {
   struct cf_sequence sequences[] = {
-    cf_str_seq('R', (reason == NULL) ? "auto" : reason),
-    cf_str_seq('S', year_suffix()),
-    cf_int_seq('T', game.info.turn),
-    cf_int_seq('Y', game.info.year),
-    cf_end()
+    CF_STR_SEQ('R', (reason == NULL) ? "auto" : reason),
+    CF_STR_SEQ('S', year_suffix()),
+    CF_INT_SEQ('T', game.info.turn),
+    CF_INT_SEQ('Y', game.info.year),
+    CF_END
   };
 
   fc_vsnprintcf(buf, buflen, format, sequences, -1);
@@ -757,28 +744,4 @@ int generate_save_name(const char *format, char *buf, int buflen,
   log_debug("save name generated from '%s': %s", format, buf);
 
   return strlen(buf);
-}
-
-/**************************************************************************
-  Initialize user flag.
-**************************************************************************/
-void user_flag_init(struct user_flag *flag)
-{
-  flag->name = NULL;
-  flag->helptxt = NULL;
-}
-
-/**************************************************************************
-  Free user flag.
-**************************************************************************/
-void user_flag_free(struct user_flag *flag)
-{
-  if (flag->name != NULL) {
-    FC_FREE(flag->name);
-    flag->name = NULL;
-  }
-  if (flag->helptxt != NULL) {
-    FC_FREE(flag->helptxt);
-    flag->helptxt = NULL;
-  }
 }

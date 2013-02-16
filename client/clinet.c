@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -101,7 +101,7 @@
 /* In autoconnect mode, try to connect 100 times */
 #define MAX_AUTOCONNECT_ATTEMPTS	100
 
-static struct fc_sockaddr_list *list = NULL;
+static union fc_sockaddr names[2];
 static int name_count;
 
 /*************************************************************************
@@ -160,31 +160,29 @@ static void client_conn_close_callback(struct connection *pconn)
 static int get_server_address(const char *hostname, int port,
                               char *errbuf, int errbufsize)
 {
-  if (port == 0) {
+  if (port == 0)
     port = DEFAULT_SOCK_PORT;
-  }
 
   /* use name to find TCP/IP address of server */
-  if (!hostname) {
+  if (!hostname)
     hostname = "localhost";
-  }
 
-  if (list != NULL) {
-    fc_sockaddr_list_destroy(list);
-  }
-
-#ifdef IPV6_SUPPORT
-  list = net_lookup_service(hostname, port, FC_ADDR_ANY);
-#else  /* IPV6_SUPPORT */
-  list = net_lookup_service(hostname, port, FC_ADDR_IPV4);
-#endif /* IPV6_SUPPORT */
-
-  name_count = fc_sockaddr_list_size(list);
-
-  if (name_count <= 0) {
+  if (!net_lookup_service(hostname, port, &names[0], FALSE)) {
     (void) fc_strlcpy(errbuf, _("Failed looking up host."), errbufsize);
     return -1;
   }
+  name_count = 1;
+#ifdef IPV6_SUPPORT
+  if (names[0].saddr.sa_family == AF_INET6) {
+    /* net_lookup_service() prefers IPv6 address.
+     * Check if there is also IPv4 address.
+     * TODO: This would be easier using getaddrinfo() */
+    if (net_lookup_service(hostname, port,
+                           &names[1], TRUE /* force IPv4 */)) {
+      name_count = 2;
+    }
+  }
+#endif
 
   return 0;
 }
@@ -202,6 +200,7 @@ static int get_server_address(const char *hostname, int port,
 **************************************************************************/
 static int try_to_connect(const char *username, char *errbuf, int errbufsize)
 {
+  int i;
   int sock = -1;
 
   connections_set_close_callback(client_conn_close_callback);
@@ -214,14 +213,14 @@ static int try_to_connect(const char *username, char *errbuf, int errbufsize)
 
   /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */
   sock = -1;
-  fc_sockaddr_list_iterate(list, paddr) {
-    if ((sock = socket(paddr->saddr.sa_family, SOCK_STREAM, 0)) == -1) {
+  for (i = 0; i < name_count; i++) {
+    if ((sock = socket(names[i].saddr.sa_family, SOCK_STREAM, 0)) == -1) {
       /* Probably EAFNOSUPPORT or EPROTONOSUPPORT. */
       continue;
     }
 
-    if (fc_connect(sock, &paddr->saddr,
-                   sockaddr_size(paddr)) == -1) {
+    if (fc_connect(sock, &names[i].saddr,
+                   sockaddr_size(&names[i])) == -1) {
       fc_closesocket(sock);
       sock = -1;
       continue;
@@ -229,7 +228,7 @@ static int try_to_connect(const char *username, char *errbuf, int errbufsize)
       /* We have a connection! */
       break;
     }
-  } fc_sockaddr_list_iterate_end;
+  }
 
   client.conn.sock = sock;
   if (client.conn.sock == -1) {
@@ -297,8 +296,7 @@ void make_connection(int socket, const char *username)
 }
 
 /**************************************************************************
-  Get rid of server connection. This also kills internal server if it's
-  used.
+...
 **************************************************************************/
 void disconnect_from_server(void)
 {
@@ -412,12 +410,16 @@ void input_from_server(int fd)
 
     agents_freeze_hint();
     while (client.conn.used) {
-      void *packet = get_packet_from_connection(&client.conn, &type);
+      bool result;
+      void *packet = get_packet_from_connection(&client.conn,
+						&type, &result);
 
-      if (NULL != packet) {
+      if (result) {
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
       } else {
+        fc_assert(packet == NULL);
 	break;
       }
     }
@@ -453,11 +455,15 @@ void input_from_server_till_request_got_processed(int fd,
       enum packet_type type;
 
       while (TRUE) {
-	void *packet = get_packet_from_connection(&client.conn, &type);
-	if (NULL == packet) {
+	bool result;
+	void *packet = get_packet_from_connection(&client.conn,
+						  &type, &result);
+	if (!result) {
+          fc_assert(packet == NULL);
 	  break;
 	}
 
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
 
@@ -498,7 +504,7 @@ double try_to_autoconnect(void)
   if (!autoconnecting) {
     return FC_INFINITY;
   }
-
+  
   count++;
 
   if (count >= MAX_AUTOCONNECT_ATTEMPTS) {
@@ -524,7 +530,7 @@ double try_to_autoconnect(void)
     }
     /* Try again in 0.5 seconds */
     return 0.001 * AUTOCONNECT_INTERVAL;
-#endif /* WIN32_NATIVE */
+#endif
   default:			/* All other errors are fatal */
     log_fatal(_("Error contacting server \"%s\" at port %d "
                 "as \"%s\":\n %s\n"),

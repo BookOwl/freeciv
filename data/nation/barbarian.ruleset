@@ -2,8 +2,6 @@
 
 name=_("Barbarian")
 plural=_("?plural:Barbarians")
-groups="Core"
-; /* TRANS: Legend for nation in "core" set */
 legend=_("Since the dawn of civilization, barbarians have been a threat to\
  cultured peoples everywhere.")
 
@@ -23,6 +21,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 cities = "Barbaricum"

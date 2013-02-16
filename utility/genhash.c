@@ -59,7 +59,7 @@
 ****************************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -162,7 +162,7 @@ void genhash_str_free_func(void *vkey)
 ***************************************************************************/
 genhash_val_t genhash_ptr_val_func(const void *vkey, size_t num_buckets)
 {
-  intptr_t result = ((intptr_t) vkey);
+  unsigned long result = ((unsigned long) vkey);
   return (result % num_buckets);
 }
 
