@@ -32,7 +32,7 @@ cities =
  "Port Royal", 
  "Tortuga"
 
-is_playable = FALSE
+is_playable = 0
 barbarian_type = "Sea"
 
 ; nothing more needed for barbarians

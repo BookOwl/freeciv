@@ -13,17 +13,12 @@
 
 [datafile]
 description="Civ2-equivalent nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.Apr.23"
+options="+Freeciv-2.4-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
 ; have it explicitly defined
 default_government = "Despotism"
-
-[default_traits]
-;expansionist = 50
-;trader = 50
-aggressive = 150
 
 ; Descriptions of nation groups
 ; name 		= name of the group
@@ -178,12 +173,12 @@ init_buildings=""
 init_units=""
 
 cities =
- "Mexihco Tenochtitlan (swamp, mountains)",
+ "Mexihco Tenochtitlan (swamp, mountains, lake)",
  "Tetzcoco (mountains)",
- "Tlacopan (mountains, hills)",
- "Tlatelulco (swamp)",
+ "Tlacopan (mountains, hills, lake)",
+ "Tlatelulco (swamp, lake)",
  "Azcapotzalco (hills)",
- "Iztapallapan (hills)",
+ "Iztapallapan (lake, hills)",
  "Cuauhnanahuac (mountains, hills, forest, !ocean)",
  "Tlachco (mountains)",
  "Tollocan (mountains, plains)",

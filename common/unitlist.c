@@ -123,22 +123,6 @@ bool can_units_do_activity(const struct unit_list *punits,
 }
 
 /****************************************************************************
-  Returns TRUE if any of the units can build any road.
-****************************************************************************/
-bool can_units_do_any_road(const struct unit_list *punits)
-{
-  unit_list_iterate(punits, punit) {
-    road_type_iterate(proad) {
-      if (can_build_road(proad, punit, unit_tile(punit))) {
-        return TRUE;
-      }
-    } road_type_iterate_end;
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
   Returns TRUE if any of the units can do the base building activity
 ****************************************************************************/
 bool can_units_do_base(const struct unit_list *punits,
@@ -146,21 +130,6 @@ bool can_units_do_base(const struct unit_list *punits,
 {
   unit_list_iterate(punits, punit) {
     if (can_unit_do_activity_base(punit, base)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns TRUE if any of the units can do the road building activity
-****************************************************************************/
-bool can_units_do_road(const struct unit_list *punits,
-                       Road_type_id road)
-{
-  unit_list_iterate(punits, punit) {
-    if (can_unit_do_activity_road(punit, road)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -209,8 +178,8 @@ bool can_units_do_diplomat_action(const struct unit_list *punits,
   If has_flag is false, returns true iff any of the units don't have the
   flag.
 ****************************************************************************/
-bool units_have_type_flag(const struct unit_list *punits,
-                          enum unit_type_flag_id flag, bool has_flag)
+bool units_have_flag(const struct unit_list *punits, enum unit_flag_id flag,
+		     bool has_flag)
 {
   unit_list_iterate(punits, punit) {
     if (EQ(has_flag, unit_has_type_flag(punit, flag))) {

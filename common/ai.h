@@ -22,7 +22,9 @@ extern "C" {
 
 /* Update this capability string when ever there is changes to ai_type
    structure below */
-#define FC_AI_MOD_CAPSTR "+Freeciv-ai-module-2013.Apr.11"
+#define FC_AI_MOD_CAPSTR "+Freeciv-2.4-ai-module-2013.Feb.13"
+
+#define FC_AI_LAST 3
 
 /* Timers for all AI activities. Define it to get statistics about the AI. */
 #ifdef DEBUG
@@ -68,7 +70,7 @@ struct ai_type
                         int plrno);
 
     /* Called for every AI type for each player in game when game loaded. */
-    void (*player_load)(struct player *pplayer, const struct section_file *file,
+    void (*player_load)(struct player *pplayer, struct section_file *file,
                         int plrno);
 
     /* Called for AI type that gains control of player. */
@@ -121,9 +123,6 @@ struct ai_type
 
     /* Called for every AI type when unit ruleset has been loaded. */
     void (*units_ruleset_init)(void);
-
-    /* Called for every AI type before unit ruleset gets reloaded. */
-    void (*units_ruleset_close)(void);
 
     /* Called for every AI type when new unit is added to game. */
     void (*unit_alloc)(struct unit *punit);
@@ -219,14 +218,10 @@ struct ai_type
     /* Called for player AI to decide if city can be chosen to act as wonder city
      * for building advisor. */
     void (*consider_wonder_city)(struct city *pcity, bool *result);
-
-    /* Called for player AI type with short internval */
-    void (*refresh)(struct player *pplayer);
   } funcs;
 };
 
 struct ai_type *ai_type_alloc(void);
-void ai_type_dealloc(void);
 struct ai_type *get_ai_type(int id);
 int ai_type_number(const struct ai_type *ai);
 void init_ai(struct ai_type *ai);

@@ -91,11 +91,11 @@
 /**************************************************************************
  handle spaceship related stuff
 **************************************************************************/
-static void dai_manage_spaceship(struct player *pplayer)
+static void ai_manage_spaceship(struct player *pplayer)
 {
   if (game.info.spacerace) {
     if (pplayer->spaceship.state == SSHIP_STARTED) {
-      dai_spaceship_autoplace(pplayer, &pplayer->spaceship);
+      ai_spaceship_autoplace(pplayer, &pplayer->spaceship);
       /* if we have built the best possible spaceship  -- AJS 19990610 */
       if ((pplayer->spaceship.structurals == NUM_SS_STRUCTURALS) &&
         (pplayer->spaceship.components == NUM_SS_COMPONENTS) &&
@@ -109,8 +109,8 @@ static void dai_manage_spaceship(struct player *pplayer)
   Returns the total amount of trade generated (trade) and total amount of
   gold needed as upkeep (expenses).
 ***************************************************************************/
-void dai_calc_data(const struct player *pplayer, int *trade, int *expenses,
-                   int *income)
+void ai_calc_data(const struct player *pplayer, int *trade, int *expenses,
+                  int *income)
 {
   if (NULL != trade) {
     *trade = 0;
@@ -198,7 +198,7 @@ enum celebration {
   At the end the remaining is divided on science/gold/luxury depending on the
   AI settings.
 *****************************************************************************/
-static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
+static void ai_manage_taxes(struct player *pplayer)
 {
   int maxrate = (ai_handicap(pplayer, H_RATES)
                  ? get_player_bonus(pplayer, EFT_MAX_RATES) : 100);
@@ -235,8 +235,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
   }
 
 #ifdef DEBUG_TIMERS
-  taxtimer = timer_new(TIMER_CPU, TIMER_DEBUG);
-  timer_start(taxtimer);
+  taxtimer= new_timer_start(TIMER_CPU, TIMER_DEBUG);
 #endif
 
   /* City parameters needed for celebrations. */
@@ -262,7 +261,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
            rates_save[AI_RATE_LUX], rates_save[AI_RATE_TAX]);
 
   /* Get some data for the AI player. */
-  dai_calc_data(pplayer, &trade, &expenses, &income);
+  ai_calc_data(pplayer, &trade, &expenses, &income);
 
   /* Get the estimates for tax with the current rates. */
   distribute(trade, AI_RATE_COUNT, rates_save, result);
@@ -297,7 +296,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
   while(rates[AI_RATE_TAX] <= maxrate
         && rates[AI_RATE_SCI] >= 0
         && rates[AI_RATE_LUX] >= 0) {
-    bool refill_coffers = pplayer->economic.gold < dai_gold_reserve(pplayer);
+    bool refill_coffers = pplayer->economic.gold < ai_gold_reserve(pplayer);
     int balance_tax, balance_tax_min;
 
     distribute(trade, AI_RATE_COUNT, rates, result);
@@ -461,7 +460,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
     /* Check if we celebrate - the city state must be restored at the end! */
     city_list_iterate(pplayer->cities, pcity) {
       struct cm_result *cmr = cm_result_new(pcity);
-      struct ai_city *city_data = def_ai_city_data(pcity, ait);
+      struct ai_city *city_data = def_ai_city_data(pcity);
 
       cm_clear_cache(pcity);
       cm_query_result(pcity, &cmp, cmr); /* burn some CPU */
@@ -563,7 +562,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
                rates[AI_RATE_LUX], rates[AI_RATE_TAX]);
     } else {
       /* We need more trade to get a positive gold and science balance. */
-      if (!adv_wants_science(pplayer) || dai_on_war_footing(ait, pplayer)) {
+      if (!adv_wants_science(pplayer) || ai_on_war_footing(pplayer)) {
         /* Go for gold (improvements and units) and risk the loss of a
          * tech. */
         rates[AI_RATE_TAX] = maxrate;
@@ -587,7 +586,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
   }
 
   /* Put the remaining to tax or science. */
-  if (!adv_wants_science(pplayer) || dai_on_war_footing(ait, pplayer)) {
+  if (!adv_wants_science(pplayer) || ai_on_war_footing(pplayer)) {
     rates[AI_RATE_TAX] = MIN(maxrate, rates[AI_RATE_TAX]
                                       + RATE_REMAINS(rates));
     rates[AI_RATE_LUX] = MIN(maxrate, rates[AI_RATE_LUX]
@@ -633,7 +632,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
     city_list_iterate(pplayer->cities, pcity) {
       struct cm_result *cmr = cm_result_new(pcity);
 
-      if (def_ai_city_data(pcity, ait)->celebrate == TRUE) {
+      if (def_ai_city_data(pcity)->celebrate == TRUE) {
         log_base(LOGLEVEL_TAX, "setting %s to celebrate", city_name(pcity));
         cm_query_result(pcity, &cmp, cmr);
         if (cmr->found_a_valid) {
@@ -660,11 +659,11 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
   send_player_info_c(pplayer, pplayer->connections);
 
 #ifdef DEBUG_TIMERS
-  timer_stop(taxtimer);
+  stop_timer(taxtimer);
   log_base(LOGLEVEL_TAX, "Tax calculation for %s (player %d) in %.3f "
                          "seconds.", player_name(pplayer),
-           player_index(pplayer), timer_read_seconds(taxtimer));
-  timer_destroy(taxtimer);
+           player_index(pplayer), read_timer_seconds(taxtimer));
+  free_timer(taxtimer);
 #endif /* DEBUG_TIMERS */
 }
 #undef RATE_NOT_SET
@@ -674,7 +673,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
 /**************************************************************************
   Change the government form, if it can and there is a good reason.
 **************************************************************************/
-static void dai_manage_government(struct player *pplayer)
+static void ai_manage_government(struct player *pplayer)
 {
   struct adv_data *ai = adv_data_get(pplayer);
 
@@ -683,7 +682,7 @@ static void dai_manage_government(struct player *pplayer)
   }
 
   if (ai->goal.revolution != government_of_player(pplayer)) {
-    dai_government_change(pplayer, ai->goal.revolution); /* change */
+    ai_government_change(pplayer, ai->goal.revolution); /* change */
   }
 
   /* Crank up tech want */
@@ -713,16 +712,16 @@ static void dai_manage_government(struct player *pplayer)
   Activities to be done by AI _before_ human turn.  Here we just move the
   units intelligently.
 **************************************************************************/
-void dai_do_first_activities(struct ai_type *ait, struct player *pplayer)
+void dai_do_first_activities(struct player *pplayer)
 {
   TIMING_LOG(AIT_ALL, TIMER_START);
-  dai_assess_danger_player(ait, pplayer);
+  dai_assess_danger_player(pplayer);
   /* TODO: Make assess_danger save information on what is threatening
    * us and make ai_mange_units and Co act upon this information, trying
    * to eliminate the source of danger */
 
   TIMING_LOG(AIT_UNITS, TIMER_START);
-  dai_manage_units(ait, pplayer);
+  ai_manage_units(pplayer); 
   TIMING_LOG(AIT_UNITS, TIMER_STOP);
   /* STOP.  Everything else is at end of turn. */
 
@@ -739,21 +738,21 @@ void dai_do_first_activities(struct ai_type *ait, struct player *pplayer)
   We do _not_ move units here, otherwise humans complain that AI moves 
   twice.
 **************************************************************************/
-void dai_do_last_activities(struct ai_type *ait, struct player *pplayer)
+void dai_do_last_activities(struct player *pplayer)
 {
   TIMING_LOG(AIT_ALL, TIMER_START);
 
-  dai_manage_government(pplayer);
+  ai_manage_government(pplayer);
   TIMING_LOG(AIT_TAXES, TIMER_START);
-  dai_manage_taxes(ait, pplayer);
+  ai_manage_taxes(pplayer);
   TIMING_LOG(AIT_TAXES, TIMER_STOP);
   TIMING_LOG(AIT_CITIES, TIMER_START);
-  dai_manage_cities(ait, pplayer);
+  ai_manage_cities(pplayer);
   TIMING_LOG(AIT_CITIES, TIMER_STOP);
   TIMING_LOG(AIT_TECH, TIMER_START);
-  dai_manage_tech(pplayer); 
+  ai_manage_tech(pplayer); 
   TIMING_LOG(AIT_TECH, TIMER_STOP);
-  dai_manage_spaceship(pplayer);
+  ai_manage_spaceship(pplayer);
 
   TIMING_LOG(AIT_ALL, TIMER_STOP);
 }

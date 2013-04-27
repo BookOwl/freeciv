@@ -41,7 +41,11 @@ extern "C" {
 
 #else /* No pthreads nor winthreads */
 
-#error "No working thread implementation"
+/* Dummy */
+/* These must be real types with size instead of 'void' */
+#define fc_thread      char
+#define fc_mutex       char
+#define fc_thread_cond char
 
 #endif /* HAVE_PTHREAD */
 
@@ -58,6 +62,7 @@ void fc_thread_cond_destroy(fc_thread_cond *cond);
 void fc_thread_cond_wait(fc_thread_cond *cond, fc_mutex *mutex);
 void fc_thread_cond_signal(fc_thread_cond *cond);
 
+bool has_thread_impl(void);
 bool has_thread_cond_impl(void);
 
 #ifdef __cplusplus

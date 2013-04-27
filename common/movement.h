@@ -21,7 +21,9 @@ extern "C" {
 #include "tile.h"
 
 #define SINGLE_MOVE     3
-#define MOVE_COST_IGTER 1
+#define MOVE_COST_RIVER 1
+#define MOVE_COST_RAIL  0
+#define MOVE_COST_ROAD  1
 
 struct unit_type;
 struct terrain;
@@ -31,7 +33,7 @@ enum unit_move_result {
   MR_DEATH,
   MR_PAUSE,
   MR_BAD_TYPE_FOR_CITY_TAKE_OVER,
-  MR_BAD_TYPE_FOR_CITY_TAKE_OVER_FROM_NON_NATIVE,
+  MR_BAD_TYPE_FOR_CITY_TAKE_OVER_FROM_SEA,
   MR_NO_WAR,    /* Can't move here without declaring war. */
   MR_PEACE,     /* Can't move here because of a peace treaty. */
   MR_ZOC,
@@ -42,7 +44,6 @@ enum unit_move_result {
   MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT,
   MR_NO_TRANSPORTER_CAPACITY,
   MR_TRIREME,
-  MR_CANNOT_DISEMBARK,
 };
 
 int unit_move_rate(const struct unit *punit);
@@ -64,10 +65,10 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile);
 bool is_native_terrain(const struct unit_type *punittype,
                        const struct terrain *pterrain,
-                       bv_bases bases, bv_roads roads);
+                       bv_special special, bv_bases bases);
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_bases bases, bv_roads roads);
+                        bv_special special, bv_bases bases);
 bool is_native_near_tile(const struct unit_class *uclass, const struct tile *ptile);
 bool can_exist_at_tile(const struct unit_type *utype,
                        const struct tile *ptile);
@@ -83,7 +84,8 @@ bool unit_can_move_to_tile(const struct unit *punit,
                            const struct tile *ptile,
                            bool igzoc);
 enum unit_move_result
-unit_move_to_tile_test(const struct unit *punit,
+unit_move_to_tile_test(const struct unit_type *punittype,
+                       const struct player *unit_owner,
                        enum unit_activity activity,
                        const struct tile *src_tile,
                        const struct tile *dst_tile,

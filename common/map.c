@@ -31,7 +31,6 @@
 #include "movement.h"
 #include "nation.h"
 #include "packets.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -95,7 +94,7 @@ static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
   Return a bitfield of the specials on the tile that are infrastructure.
 ****************************************************************************/
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
-                                       int *pcount)
+					  int *pcount)
 {
   bv_special pspresent;
   int i, count = 0;
@@ -134,48 +133,6 @@ bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount)
     *pcount = count;
   }
   return bspresent;
-}
-
-/****************************************************************************
-  Return a bitfield of the pillageable roads on the tile.
-****************************************************************************/
-bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount)
-{
-  bv_roads rspresent;
-  int count = 0;
-
-  BV_CLR_ALL(rspresent);
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)) {
-      if (proad->pillageable) {
-        struct tile *roadless = tile_virtual_new(ptile);
-        bool dependency = FALSE;
-
-        tile_remove_road(roadless, proad);
-        road_type_iterate(pdependant) {
-          if (tile_has_road(ptile, pdependant)) {
-            if (!are_reqs_active(NULL, NULL, NULL, roadless,
-                                 NULL, NULL, NULL,
-                                 &pdependant->reqs, RPT_POSSIBLE)) {
-              dependency = TRUE;
-              break;
-            }
-          }
-        } road_type_iterate_end;
-
-        tile_virtual_destroy(roadless);
-
-        if (!dependency) {
-          BV_SET(rspresent, road_index(proad));
-          count++;
-        }
-      }
-    }
-  } road_type_iterate_end;
-  if (pcount) {
-    *pcount = count;
-  }
-  return rspresent;
 }
 
 /***************************************************************
@@ -380,7 +337,6 @@ static void tile_init(struct tile *ptile)
 
   tile_clear_all_specials(ptile);
   BV_CLR_ALL(ptile->bases);
-  BV_CLR_ALL(ptile->roads);
   ptile->resource = NULL;
   ptile->terrain  = T_UNKNOWN;
   ptile->units    = unit_list_new();
@@ -660,6 +616,16 @@ int map_distance(const struct tile *tile0, const struct tile *tile1)
   return map_vector_to_distance(dx, dy);
 }
 
+/*************************************************************************
+  This is used in mapgen for rivers going into ocen.  The name is 
+  intentionally made awkward to prevent people from using it in place of
+  is_ocean_near_tile
+*************************************************************************/
+bool is_cardinally_adj_to_ocean(const struct tile *ptile)
+{
+  return count_terrain_flag_near_tile(ptile, TRUE, FALSE, TER_OCEANIC) > 0;
+}
+
 /****************************************************************************
   Return TRUE if this ocean terrain is adjacent to a safe coastline.
 ****************************************************************************/
@@ -697,8 +663,7 @@ a sufficient number of adjacent tiles that are not ocean.
 **************************************************************************/
 bool can_reclaim_ocean(const struct tile *ptile)
 {
-  int land_tiles = 100 - count_terrain_class_near_tile(ptile, FALSE, TRUE,
-                                                       TC_OCEAN);
+  int land_tiles = 100 - count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return land_tiles >= terrain_control.ocean_reclaim_requirement_pct;
 }
@@ -710,7 +675,7 @@ a sufficient number of adjacent tiles that are ocean.
 **************************************************************************/
 bool can_channel_land(const struct tile *ptile)
 {
-  int ocean_tiles = count_terrain_class_near_tile(ptile, FALSE, TRUE, TC_OCEAN);
+  int ocean_tiles = count_ocean_near_tile(ptile, FALSE, TRUE);
 
   return ocean_tiles >= terrain_control.land_channel_requirement_pct;
 }
@@ -725,99 +690,76 @@ bool can_channel_land(const struct tile *ptile)
   tests are not done (for unit-independent results).
 ***************************************************************/
 static int tile_move_cost_ptrs(const struct unit *punit,
-                               const struct unit_class *pclass,
                                const struct player *pplayer,
 			       const struct tile *t1, const struct tile *t2)
 {
-  bool native = TRUE;
-  int cost = tile_terrain(t2)->movement_cost * SINGLE_MOVE;
   bool cardinal_move;
-  bool ri;
-
-  fc_assert(punit == NULL || pclass == NULL || unit_class(punit) == pclass);
+  struct unit_class *pclass = NULL;
+  bool native = TRUE;
 
   if (punit) {
     pclass = unit_class(punit);
-    native = is_native_tile_to_class(pclass, t2);
+    native = is_native_tile(unit_type(punit), t2);
   }
 
   if (game.info.slow_invasions
-      && pclass
+      && punit
       && tile_city(t1) == NULL
-      && !is_native_tile_to_class(pclass, t1)
-      && native) {
+      && !is_native_tile(unit_type(punit), t1)
+      && is_native_tile(unit_type(punit), t2)) {
     /* If "slowinvasions" option is turned on, units moving from
      * non-native terrain (from transport) to native terrain lose all their
      * movement.
      * e.g. ground units moving from sea to land */
-    if (punit != NULL) {
-      return punit->moves_left;
-    }
-    /* TODO: Could we return something like FC_INFINITY here, or would
-     * some caller then assume that move is not possible at all? */
+    return punit->moves_left;
   }
 
-  if (pclass && !uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
+  if (punit && !uclass_has_flag(pclass, UCF_TERRAIN_SPEED)) {
     return SINGLE_MOVE;
   }
 
-  /* Railroad check has to be before UTYF_IGTER check so that UTYF_IGTER
-   * units are not penalized. UTYF_IGTER affects also entering and
-   * leaving ships, so UTYF_IGTER check has to be before native terrain
+  /* Railroad check has to be before F_IGTER check so that F_IGTER
+   * units are not penalized. F_IGTER affects also entering and
+   * leaving ships, so F_IGTER check has to be before native terrain
    * check. We want to give railroad bonus only to native units. */
-  ri = restrict_infra(pplayer, t1, t2);
-  cardinal_move = is_move_cardinal(t1, t2);
-
-  road_type_iterate(proad) {
-    if (proad->move_mode != RMM_NO_BONUS
-        && (!ri || road_has_flag(proad, RF_NATURAL))) {
-      if ((!pclass || is_native_road_to_uclass(proad, pclass))
-          && tile_has_road(t1, proad) && tile_has_road(t2, proad)) {
-        if (cost > proad->move_cost) {
-          switch (proad->move_mode) {
-          case RMM_CARDINAL:
-            if (cardinal_move) {
-              cost = proad->move_cost;
-            }
-            break;
-          case RMM_RELAXED:
-            if (cardinal_move) {
-              cost = proad->move_cost;
-            } else {
-              if (cost > proad->move_cost * 2) {
-                cardinal_between_iterate(t1, t2, between) {
-                  if (tile_has_road(between, proad)) {
-                  /* TODO: Should we restrict this more?
-                   * Should we check against enemy cities on between tile?
-                   * Should we check against non-native terrain on between tile?
-                   */
-                  cost = proad->move_cost * 2;
-                  }
-                } cardinal_between_iterate_end;
-              }
-            }
-            break;
-          case RMM_FAST_ALWAYS:
-            cost = proad->move_cost;
-            break;
-          case RMM_NO_BONUS:
-            fc_assert(proad->move_mode != RMM_NO_BONUS);
-            break;
-          }
-        }
-      }
-    }
-  } road_type_iterate_end;
-
-  if (punit && unit_has_type_flag(punit, UTYF_IGTER)) {
-    return MIN(cost, MOVE_COST_IGTER);
+  if (tile_has_special(t1, S_RAILROAD) && tile_has_special(t2, S_RAILROAD)
+      && native && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_RAIL;
+  }
+  if (punit && unit_has_type_flag(punit, F_IGTER)) {
+    return SINGLE_MOVE/3;
   }
   if (!native) {
     /* Loading to transport or entering port */
     return SINGLE_MOVE;
   }
+  if (tile_has_special(t1, S_ROAD) && tile_has_special(t2, S_ROAD)
+      && !restrict_infra(pplayer, t1, t2)) {
+    return MOVE_COST_ROAD;
+  }
 
-  return cost;
+  if (tile_has_special(t1, S_RIVER) && tile_has_special(t2, S_RIVER)) {
+    cardinal_move = is_move_cardinal(t1, t2);
+    switch (terrain_control.river_move_mode) {
+    case RMV_NORMAL:
+      break;
+    case RMV_FAST_STRICT:
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
+      break;
+    case RMV_FAST_RELAXED:
+      if (cardinal_move)
+	return MOVE_COST_RIVER;
+      else
+	return 2 * MOVE_COST_RIVER;
+    case RMV_FAST_ALWAYS:
+      return MOVE_COST_RIVER;
+    default:
+      break;
+    }
+  }
+
+  return tile_terrain(t2)->movement_cost * SINGLE_MOVE;
 }
 
 /****************************************************************************
@@ -856,9 +798,7 @@ static bool restrict_infra(const struct player *pplayer, const struct tile *t1,
   FIXME: this function can't be used for air units because it returns
   sea<->land moves as impossible.
 ****************************************************************************/
-int map_move_cost_ai(const struct player *pplayer,
-                     const struct unit_class *pclass,
-                     const struct tile *tile0,
+int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
                      const struct tile *tile1)
 {
   const int maxcost = 72; /* Arbitrary. */
@@ -893,7 +833,7 @@ int map_move_cost_ai(const struct player *pplayer,
     return maxcost;
   }
 
-  return tile_move_cost_ptrs(NULL, pclass, pplayer, tile0, tile1);
+  return tile_move_cost_ptrs(NULL, pplayer, tile0, tile1);
 }
 
 /***************************************************************
@@ -902,17 +842,17 @@ int map_move_cost_ai(const struct player *pplayer,
 ***************************************************************/
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile)
 {
-  return tile_move_cost_ptrs(punit, NULL, unit_owner(punit),
+  return tile_move_cost_ptrs(punit, unit_owner(punit),
                              unit_tile(punit), ptile);
 }
 
 /***************************************************************
   Move cost between two tiles
 ***************************************************************/
-int map_move_cost(const struct player *pplayer, const struct unit_class *pclass,
+int map_move_cost(const struct player *pplayer,
                   const struct tile *src_tile, const struct tile *dst_tile)
 {
-  return tile_move_cost_ptrs(NULL, pclass, pplayer, src_tile, dst_tile);
+  return tile_move_cost_ptrs(NULL, pplayer, src_tile, dst_tile);
 }
 
 /***************************************************************

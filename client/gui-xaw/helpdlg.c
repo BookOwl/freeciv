@@ -1008,11 +1008,15 @@ static void help_update_terrain(const struct help_item *pitem,
     }
     xaw_set_label(help_terrain_resources, buf);
 
-    sprintf(buf, "%d%%/%d%%/%d%% / %d",
-            pterrain->road_output_incr_pct[O_FOOD],
-            pterrain->road_output_incr_pct[O_SHIELD],
-            pterrain->road_output_incr_pct[O_TRADE],
-            pterrain->road_time);
+    if (pterrain->road_trade_incr > 0) {
+      sprintf(buf, _("+%d Trade / %d"),
+	      pterrain->road_trade_incr,
+	      pterrain->road_time);
+    } else if (pterrain->road_time > 0) {
+      sprintf(buf, _("no extra / %d"), pterrain->road_time);
+    } else {
+      strcpy(buf, _("n/a"));
+    }
     xaw_set_label(help_terrain_road_result_time_data, buf);
 
     strcpy(buf, _("n/a"));
@@ -1090,33 +1094,6 @@ static void help_update_base(const struct help_item *pitem,
     strcat(buf, "\n\n");
     helptext_base(buf + strlen(buf), sizeof(buf) - strlen(buf),
                   client.conn.playing, pitem->text, pbase);
-  }
-  create_help_page(HELP_TEXT);
-  set_title_topic(pitem);
-  XtVaSetValues(help_text, XtNstring, buf, NULL);
-}
-
-/**************************************************************************
-  Help page for roads.
-**************************************************************************/
-static void help_update_road(const struct help_item *pitem,
-                             char *title)
-{
-  char buf[4096];
-  struct road_type *proad = road_type_by_translated_name(title);
-
-  if (!proad) {
-    strcat(buf, pitem->text);
-  } else {
-    /* FIXME use actual widgets */
-    buf[0] = '\0';
-    if (proad->buildable) {
-      /* TRANS: Build cost for bases in help. "MP" = movement points */
-      sprintf(buf, _("Build: %d MP\n"), proad->build_time);
-    }
-    strcat(buf, "\n\n");
-    helptext_road(buf + strlen(buf), sizeof(buf) - strlen(buf),
-                  client.conn.playing, pitem->text, proad);
   }
   create_help_page(HELP_TEXT);
   set_title_topic(pitem);
@@ -1211,9 +1188,6 @@ static void help_update_dialog(const struct help_item *pitem)
     break;
   case HELP_BASE:
     help_update_base(pitem, top);
-    break;
-  case HELP_ROAD:
-    help_update_road(pitem, top);
     break;
   case HELP_SPECIALIST:
     help_update_specialist(pitem, top);

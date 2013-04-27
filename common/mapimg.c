@@ -1347,10 +1347,8 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
   }
 
 #ifdef DEBUG
-  timer_cpu = timer_new(TIMER_CPU, TIMER_ACTIVE);
-  timer_start(timer_cpu);
-  timer_user = timer_new(TIMER_USER, TIMER_ACTIVE);
-  timer_start(timer_user);
+  timer_cpu = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
+  timer_user = new_timer_start(TIMER_USER, TIMER_ACTIVE);
 #endif
 
   /* create map */
@@ -1402,11 +1400,11 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
 
 #ifdef DEBUG
   log_debug("Image generation time: %g seconds (%g apparent)",
-            timer_read_seconds(timer_cpu),
-            timer_read_seconds(timer_user));
+            read_timer_seconds(timer_cpu),
+            read_timer_seconds(timer_user));
 
-  timer_destroy(timer_cpu);
-  timer_destroy(timer_user);
+  free_timer(timer_cpu);
+  free_timer(timer_user);
 #endif
 
   return ret;

@@ -46,7 +46,6 @@
 #include "map.h"
 #include "packets.h"
 #include "player.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -531,9 +530,10 @@ void popup_revolution_dialog(struct government *pgovernment)
 		       NULL);
 }
 
-/**************************************************************************
-  User requested closing of pillage dialog.
-**************************************************************************/
+
+/****************************************************************
+...
+*****************************************************************/
 static void pillage_callback(Widget w, XtPointer client_data, 
 			     XtPointer call_data)
 {
@@ -545,22 +545,16 @@ static void pillage_callback(Widget w, XtPointer client_data,
   if (client_data) {
     struct unit *punit = game_unit_by_number(unit_to_use_to_pillage);
     if (punit) {
-      struct act_tgt target;
+      Base_type_id pillage_base = -1;
       int what = XTPOINTER_TO_INT(client_data);
 
-      if (what >= S_LAST + game.control.num_base_types) {
-        target.type = ATT_ROAD;
-        target.obj.road = what - S_LAST - game.control.num_base_types;
-      } else if (what >= S_LAST) {
-        target.type = ATT_BASE;
-        target.obj.base = what - S_LAST;
-      } else {
-        target.type = ATT_SPECIAL;
-        target.obj.spe = what;
+      if (what > S_LAST) {
+        pillage_base = what - S_LAST - 1;
+        what = S_LAST;
       }
 
       request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                         &target);
+					 what, pillage_base);
     }
   }
 
@@ -568,17 +562,15 @@ static void pillage_callback(Widget w, XtPointer client_data,
   is_showing_pillage_dialog = FALSE;
 }
 
-/**************************************************************************
-  Popup a dialog asking the unit which improvement they would like to
-  pillage.
-**************************************************************************/
+/****************************************************************
+...
+*****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special spe,
-                          bv_bases bases,
-                          bv_roads roads)
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   Widget shell, form, dlabel, button, prev;
-  struct act_tgt tgt;
+  int what;
 
   if (is_showing_pillage_dialog) {
     return;
@@ -594,45 +586,34 @@ void popup_pillage_dialog(struct unit *punit,
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while (get_preferred_pillage(&tgt, spe, bases, roads)) {
-    bv_special what_spe;
+  while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    bv_special what_bv;
     bv_bases what_base;
-    bv_roads what_road;
-    int what = S_LAST;
 
-    BV_CLR_ALL(what_spe);
+    BV_CLR_ALL(what_bv);
     BV_CLR_ALL(what_base);
-    BV_CLR_ALL(what_road);
 
-    switch (tgt.type) {
-      case ATT_SPECIAL:
-        BV_SET(what_spe, tgt.obj.spe);
-        what = tgt.obj.spe;
-        clear_special(&spe, tgt.obj.spe);
-        break;
-      case ATT_BASE:
-        BV_SET(what_base, tgt.obj.base);
-        what = tgt.obj.base + S_LAST;
-        BV_CLR(bases, tgt.obj.base);
-        break;
-      case ATT_ROAD:
-        BV_SET(what_road, tgt.obj.road);
-        what = tgt.obj.road + S_LAST + game.control.num_base_types;
-        BV_CLR(roads, tgt.obj.road);
-        break;
+    if (what > S_LAST) {
+      BV_SET(what_base, what % (S_LAST + 1));
+    } else {
+      BV_SET(what_bv, what);
     }
 
     button =
       XtVaCreateManagedWidget ("button", commandWidgetClass, form,
                                XtNfromVert, prev,
                                XtNlabel,
-                               (XtArgVal)(get_infrastructure_text(what_spe,
-                                                                  what_base,
-                                                                  what_road)),
+                               (XtArgVal)(get_infrastructure_text(what_bv,
+                                                                  what_base)),
                                NULL);
     XtAddCallback(button, XtNcallback, pillage_callback,
                   INT_TO_XTPOINTER(what));
 
+    if (what > S_LAST) {
+      BV_CLR(bases, what - S_LAST - 1);
+    } else {
+      clear_special(&may_pillage, what);
+    }
     prev = button;
   }
   button =
@@ -659,7 +640,7 @@ static void unitdisband_callback_yes(Widget w, XtPointer client_data, XtPointer 
   }
 
   unit_list_iterate(punits, punit) {
-    if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       request_unit_disband(punit);
     }
   } unit_list_iterate_end;
@@ -1670,14 +1651,6 @@ void popup_tileset_suggestion_dialog(void)
 {
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -1701,12 +1674,4 @@ void popdown_all_game_dialogs(void)
   units_report_dialog_popdown();
   popdown_players_dialog();
   popdown_notify_dialog();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
 }

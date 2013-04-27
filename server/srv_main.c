@@ -200,10 +200,6 @@ void srv_init(void)
   /* NLS init */
   init_nls();
 
-  /* This is before ai module initializations so that if ai module
-   * wants to use registry files, it can. */
-  registry_module_init();
-
   /* This must be before command line argument parsing.
      This allocates default ai, and we want that to take place before
      loading additional ai modules from command line. */
@@ -247,9 +243,6 @@ void srv_init(void)
 
   /* Initialize callbacks. */
   game.callbacks.unit_deallocate = identity_number_release;
-
-  /* Initialize global mutexes */
-  fc_init_mutex(&game.server.mutexes.city_list);
 
   /* done */
   return;
@@ -770,7 +763,7 @@ static void kill_dying_players(void)
         && 0 == unit_list_size(pplayer->units)) {
       player_status_add(pplayer, PSTATUS_DYING);
     }
-    /* also UTYF_GAMELOSS in unittools server_remove_unit() */
+    /* also F_GAMELOSS in unittools server_remove_unit() */
     if (player_status_check(pplayer, PSTATUS_DYING)) {
       /* Can't get more dead than this. */
       voter_died = voter_died || pplayer->is_connected;
@@ -952,9 +945,8 @@ static void begin_phase(bool is_new_phase)
   } else {
     game.info.seconds_to_phasedone = (double)game.info.timeout;
   }
-  game.server.phase_timer = timer_renew(game.server.phase_timer,
-                                        TIMER_USER, TIMER_ACTIVE);
-  timer_start(game.server.phase_timer);
+  game.server.phase_timer = renew_timer_start(game.server.phase_timer,
+                                              TIMER_USER, TIMER_ACTIVE);
   send_game_info(NULL);
 
   if (game.server.num_phases == 1) {
@@ -1083,7 +1075,7 @@ static void end_turn(void)
       continue;
     }
     unit_list_iterate(pplayer->units, punit) {
-      if (unit_has_type_flag(punit, UTYF_CITIES)) {
+      if (unit_has_type_flag(punit, F_CITIES)) {
         settlers++;
       }
     } unit_list_iterate_end;
@@ -1107,8 +1099,6 @@ static void end_turn(void)
     log_debug("Season of migrations");
     check_city_migrations();
   }
-
-  check_disasters();
 
   if (game.info.global_warming) {
     update_environmental_upset(S_POLLUTION, &game.info.heating,
@@ -1204,10 +1194,8 @@ void save_game(const char *orig_filename, const char *save_reason,
                        sizeof(filepath) + filepath - filename, "manual");
   }
 
-  timer_cpu = timer_new(TIMER_CPU, TIMER_ACTIVE);
-  timer_start(timer_cpu);
-  timer_user = timer_new(TIMER_USER, TIMER_ACTIVE);
-  timer_start(timer_user);
+  timer_cpu = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
+  timer_user = new_timer_start(TIMER_USER, TIMER_ACTIVE);
 
   /* Allowing duplicates shouldn't be allowed. However, it takes very too
    * long time for huge game saving... */
@@ -1282,11 +1270,11 @@ void save_game(const char *orig_filename, const char *save_reason,
 
 #ifdef LOG_TIMERS
   log_verbose("Save time: %g seconds (%g apparent)",
-              timer_read_seconds(timer_cpu), timer_read_seconds(timer_user));
+              read_timer_seconds(timer_cpu), read_timer_seconds(timer_user));
 #endif
 
-  timer_destroy(timer_cpu);
-  timer_destroy(timer_user);
+  free_timer(timer_cpu);
+  free_timer(timer_user);
 
   ggz_game_saved(filepath);
 }
@@ -1385,8 +1373,6 @@ void server_quit(void)
   edithand_free();
   voting_free();
   close_connections_and_socket();
-  registry_module_close();
-  fc_destroy_mutex(&game.server.mutexes.city_list);
   free_nls();
   con_log_close();
   exit(EXIT_SUCCESS);
@@ -2234,8 +2220,7 @@ static void srv_running(void)
   log_verbose("srv_running() mostly redundant send_server_settings()");
   send_server_settings(NULL);
 
-  eot_timer = timer_new(TIMER_CPU, TIMER_ACTIVE);
-  timer_start(eot_timer);
+  eot_timer = new_timer_start(TIMER_CPU, TIMER_ACTIVE);
 
   /* 
    * This will freeze the reports and agents at the client.
@@ -2287,7 +2272,7 @@ static void srv_running(void)
 #ifdef LOG_TIMERS
       /* Before sniff (human player activites), report time to now: */
       log_verbose("End/start-turn server/ai activities: %g seconds",
-                  timer_read_seconds(eot_timer));
+                  read_timer_seconds(eot_timer));
 #endif
 
       /* Do auto-saves just before starting server_sniff_all_input(), so that
@@ -2322,8 +2307,7 @@ static void srv_running(void)
       }
 
       /* After sniff, re-zero the timer: (read-out above on next loop) */
-      timer_clear(eot_timer);
-      timer_start(eot_timer);
+      clear_timer_start(eot_timer);
 
       conn_list_do_buffer(game.est_connections);
 
@@ -2365,7 +2349,7 @@ static void srv_running(void)
   /* This will thaw the reports and agents at the client.  */
   lsend_packet_thaw_client(game.est_connections);
 
-  timer_destroy(eot_timer);
+  free_timer(eot_timer);
 }
 
 /**************************************************************************
@@ -2438,7 +2422,7 @@ static void srv_prepare(void)
    || !load_command(NULL, srvarg.load_filename, FALSE)) {
     /* Rulesets are loaded on game initialization, but may be changed later
      * if /load or /rulesetdir is done. */
-    load_rulesets(NULL);
+    load_rulesets();
   }
 
   maybe_automatic_meta_message(default_meta_message_string());
@@ -2526,7 +2510,6 @@ static void srv_ready(void)
 
   if (game.info.is_new_game) {
     game.info.year = game.server.start_year;
-    /* Must come before assign_player_colors() */
     generate_players();
     final_ruleset_adjustments();
   }
@@ -2574,10 +2557,6 @@ static void srv_ready(void)
        /* TRANS: No full stop after the URL, could cause confusion. */
       log_error(_("Please report this message at %s"), BUG_URL);
       exit(EXIT_FAILURE);
-    }
-
-    if (map.server.generator != MAPGEN_SCENARIO) {
-      script_server_signal_emit("map_generated", 0);
     }
     game_map_init();
   }
@@ -2643,9 +2622,7 @@ static void srv_ready(void)
     } players_iterate_end;
 
     /* Assign colors from the ruleset for any players who weren't
-     * explicitly assigned colors during the pregame.
-     * This must come after generate_players() since it can depend on
-     * assigned nations. */
+     * explicitly assigned colors during the pregame. */
     assign_player_colors();
 
     /* Save all settings for the 'reset game' command. */
@@ -2803,7 +2780,7 @@ void srv_main(void)
     server_game_free();
     server_game_init();
     mapimg_reset();
-    load_rulesets(NULL);
+    load_rulesets();
     game.info.is_new_game = TRUE;
   } while (TRUE);
 

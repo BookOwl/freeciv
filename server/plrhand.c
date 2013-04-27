@@ -44,7 +44,6 @@
 
 /* server */
 #include "aiiface.h"
-#include "barbarian.h"
 #include "citytools.h"
 #include "cityturn.h"
 #include "connecthand.h"
@@ -68,10 +67,6 @@
 
 /* server/scripting */
 #include "script_server.h"
-
-/* ai */
-#include "aitraits.h"
-
 
 struct rgbcolor;
 
@@ -112,7 +107,6 @@ static int player_info_frozen_level = 0;
 void kill_player(struct player *pplayer)
 {
   bool palace;
-  struct player *barbarians = NULL;
 
   pplayer->is_alive = FALSE;
 
@@ -153,75 +147,17 @@ void kill_player(struct player *pplayer)
       transfer_city(pcity->original, pcity, 3, TRUE, TRUE, TRUE);
     }
   } city_list_iterate_end;
-  game.server.savepalace = palace;
-
-  /* let there be civil war */
-  if (game.info.gameloss_style & GAMELOSS_STYLE_CWAR) {
-    if (city_list_size(pplayer->cities) >= 2 + MIN(GAME_MIN_CIVILWARSIZE, 2)) {
-      struct player *prebelplayer;
-
-      log_verbose("Civil war strikes the remaining empire of %s",
-                  pplayer->name);
-      /* out of sheer cruelty we reanimate the player 
-       * so he can behold what happens to his empire */
-      pplayer->is_alive = TRUE;
-
-      prebelplayer = civil_war(pplayer);
-      if (prebelplayer) {
-        struct city *prebelcapital = player_capital(prebelplayer);
-
-        if (prebelcapital) {
-          give_midgame_initial_units(prebelplayer, city_tile(prebelcapital));
-        }
-      } 
-    } else {
-      log_verbose("The empire of %s is too small for civil war.",
-                  pplayer->name);
-    }
-  }
-  pplayer->is_alive = FALSE;
-
-  if (game.info.gameloss_style & GAMELOSS_STYLE_BARB) {
-    /* if parameter, create a barbarian, if possible */
-    barbarians = create_barbarian_player(LAND_BARBARIAN);
-  }
-
-  /* if there are barbarians around, they will take the remaining cities */
-  /* vae victis! */
-  if (barbarians) {
-    log_verbose("Barbarians take the empire of %s", pplayer->name);
-    adv_data_phase_init(barbarians, TRUE);
-      
-    /* Transfer any remaining cities */
-    city_list_iterate(pplayer->cities, pcity) {
-      transfer_city(barbarians, pcity, -1, FALSE, FALSE, FALSE);
-    } city_list_iterate_end;
-      
-    resolve_unit_stacks(pplayer, barbarians, FALSE);
-      
-    /* Choose a capital (random). */
-    if (!player_capital(barbarians)) {
-      const int size = city_list_size(barbarians->cities);
-      const int idx = fc_rand(size);
-      struct city *pbarbcity =
-        city_list_get(barbarians->cities, idx);
-
-      if (pbarbcity) {
-        log_debug("New barbarian capital is %s", city_name(pbarbcity));
-        city_build_free_buildings(pbarbcity);
-      }
-    }
-  } else {
-    /* Destroy any remaining cities */
-    city_list_iterate(pplayer->cities, pcity) {
-      remove_city(pcity);
-    } city_list_iterate_end;
-  }
 
   /* Remove all units that are still ours */
   unit_list_iterate_safe(pplayer->units, punit) {
     wipe_unit(punit, ULR_PLAYER_DIED, NULL);
   } unit_list_iterate_safe_end;
+
+  /* Destroy any remaining cities */
+  city_list_iterate(pplayer->cities, pcity) {
+    remove_city(pcity);
+  } city_list_iterate_end;
+  game.server.savepalace = palace;
 
   /* Remove ownership of tiles */
   whole_map_iterate(ptile) {
@@ -550,6 +486,10 @@ static void maybe_claim_base(struct tile *ptile, struct player *new_owner,
 {
   bool claim = FALSE;
 
+  if (BORDERS_DISABLED == game.info.borders) {
+    return;
+  }
+
   unit_list_iterate(ptile->units, punit) {
     if (unit_owner(punit) == new_owner
         && tile_has_claimable_base(ptile, unit_type(punit))) {
@@ -559,9 +499,15 @@ static void maybe_claim_base(struct tile *ptile, struct player *new_owner,
   } unit_list_iterate_end;
 
   if (claim) {
-    base_type_iterate(pbase) {
-      map_claim_base(ptile, pbase, new_owner, old_owner);
-    } base_type_iterate_end;
+    map_claim_ownership(ptile, new_owner, ptile);
+
+    /* Clear borders from old owner. New owner may not know all those
+     * tiles and thus does not claim them when borders mode is less
+     * than EXPAND. */
+    map_clear_border(ptile);
+    map_claim_border(ptile, new_owner);
+    city_thaw_workers_queue();
+    city_refresh_queue_processing();
   }
 }
 
@@ -572,7 +518,7 @@ void enter_war(struct player *pplayer, struct player *pplayer2)
 {
   /* Claim bases where units are already standing */
   whole_map_iterate(ptile) {
-    struct player *old_owner = base_owner(ptile);
+    struct player *old_owner = tile_owner(ptile);
 
     if (old_owner == pplayer2) {
       maybe_claim_base(ptile, pplayer, old_owner);
@@ -942,9 +888,9 @@ static void package_player_common(struct player *plr,
   packet->playerno = player_number(plr);
   sz_strlcpy(packet->name, player_name(plr));
   sz_strlcpy(packet->username, plr->username);
-  packet->nation = plr->nation ? nation_number(plr->nation) : NATION_NONE;
+  packet->nation = plr->nation ? nation_number(plr->nation) : -1;
   packet->is_male=plr->is_male;
-  packet->team = plr->team ? team_number(plr->team) : team_count();
+  packet->team = plr->team ? team_number(plr->team) : -1;
   packet->is_ready = plr->is_ready;
   packet->was_created = plr->was_created;
   if (city_styles != NULL) {
@@ -1043,7 +989,7 @@ static void package_player_info(struct player *plr,
     packet->gold = 0;
     pgov = game.government_during_revolution;
   }
-  packet->government = pgov ? government_number(pgov) : government_count();
+  packet->government = pgov ? government_number(pgov) : -1;
    
   /* Send diplomatic status of the player to everyone they are in
    * contact with. */
@@ -1052,7 +998,7 @@ static void package_player_info(struct player *plr,
           && player_diplstate_get(receiver, plr)->contact_turns_left > 0)) {
     packet->target_government = plr->target_government
                                 ? government_number(plr->target_government)
-                                : government_count();
+                                : -1;
     memset(&packet->real_embassy, 0, sizeof(packet->real_embassy));
     players_iterate(pother) {
       packet->real_embassy[player_index(pother)] =
@@ -1282,8 +1228,6 @@ void server_player_init(struct player *pplayer, bool initmap,
   /* No delegation. */
   pplayer->server.delegate_to[0] = '\0';
   pplayer->server.orig_username[0] = '\0';
-
-  ai_traits_init(pplayer);
 }
 
 /****************************************************************************
@@ -1298,14 +1242,7 @@ const struct rgbcolor *player_preferred_color(struct player *pplayer)
   } else if (playercolor_count() == 0) {
     /* If a ruleset isn't loaded, there are no colors to choose from. */
     return NULL;
-  } else if (game.server.plrcolormode == PLRCOL_NATION_ORDER) {
-    if (pplayer->nation != NO_NATION_SELECTED) {
-      return nation_color(nation_of_player(pplayer)); /* may be NULL */
-    } else {
-      return NULL; /* don't know nation, hence don't know color */
-    }
   } else {
-    /* Modes indexing into game-defined player colors */
     int colorid;
     switch (game.server.plrcolormode) {
     case PLRCOL_PLR_SET: /* player color (set) */
@@ -1363,25 +1300,8 @@ void assign_player_colors(void)
     return;
   }
 
-  if (game.server.plrcolormode == PLRCOL_NATION_ORDER) {
-    /* Additionally, try to avoid color clashes with certain nations not
-     * yet in play (barbarians). */
-    nations_iterate(pnation) {
-      const struct rgbcolor *ncol = nation_color(pnation);
-      if (ncol && nation_barbarian_type(pnation) != NOT_A_BARBARIAN) {
-        /* Don't use this color. */
-        rgbcolor_list_iterate(spare_colors, prgbcolor) {
-          if (rgbcolors_are_equal(ncol, prgbcolor)) {
-            rgbcolor_list_remove(spare_colors, ncol);
-          }
-        } rgbcolor_list_iterate_end;
-      }
-    } nations_iterate_end;
-  }
-
   fc_assert(game.server.plrcolormode == PLRCOL_PLR_RANDOM
-            || game.server.plrcolormode == PLRCOL_PLR_SET
-            || game.server.plrcolormode == PLRCOL_NATION_ORDER);
+            || game.server.plrcolormode == PLRCOL_PLR_SET);
 
   if (needed > rgbcolor_list_size(spare_colors)) {
     log_verbose("Not enough unique colors for all players; there will be "
@@ -1465,27 +1385,6 @@ const char *player_color_ftstr(struct player *pplayer)
 }
 
 /********************************************************************** 
-  Gives units that every player should have. Usually called for
-  players created midgame.
-***********************************************************************/
-void give_midgame_initial_units(struct player *pplayer, struct tile *ptile)
-{
-  int sucount = strlen(game.server.start_units);
-  int i;
-
-  for (i = 0; i < sucount; i++) {
-    if (game.server.start_units[i] == 'k') {
-      /* Every player should have king */
-      struct unit_type *utype = crole_to_unit_type('k', pplayer);
-
-      if (utype != NULL) {
-        create_unit(pplayer, ptile, utype, 0, 0, -1);
-      }
-    }
-  }
-}
-
-/********************************************************************** 
   Creates a new, uninitialized, used player slot. You should probably
   call server_player_init() to initialize it, and send_player_info_c()
   later to tell clients about it.
@@ -1524,7 +1423,10 @@ struct player *server_create_player(int player_id, const char *ai_type,
 
   if (prgbcolor) {
     player_set_color(pplayer, prgbcolor);
-  } /* else caller must ensure a color is assigned if game has started */
+  } else if (game_was_started()) {
+    /* Find a color for the new player. */
+    assign_player_colors();
+  }
 
   return pplayer;
 }
@@ -1603,7 +1505,6 @@ void server_remove_player(struct player *pplayer)
   /* Destroy advisor and ai data. */
   CALL_FUNC_EACH_AI(player_free, pplayer);
 
-  ai_traits_close(pplayer);
   adv_data_close(pplayer);
   player_destroy(pplayer);
 
@@ -2209,9 +2110,6 @@ static struct player *split_player(struct player *pplayer)
        TRUE, FALSE, NOT_A_BARBARIAN));
   server_player_set_name(cplayer,
                          pick_random_player_name(nation_of_player(cplayer)));
-  fc_assert(game_was_started());
-  /* Find a color for the new player. */
-  assign_player_colors();
 
   /* Send information about the used player slot to all connections. */
   send_player_info_c(cplayer, NULL);
@@ -2334,13 +2232,7 @@ static struct player *split_player(struct player *pplayer)
 bool civil_war_possible(struct player *pplayer, bool conquering_city,
                         bool honour_server_option)
 {
-  int n;
-
-  if (!game.info.civil_war_enabled) {
-    return FALSE;
-  }
-
-  n = city_list_size(pplayer->cities);
+  int n = city_list_size(pplayer->cities);
 
   if (n - (conquering_city?1:0) < GAME_MIN_CIVILWARSIZE) {
     return FALSE;
@@ -2381,22 +2273,24 @@ if a civil war is triggered.
 bool civil_war_triggered(struct player *pplayer)
 {
   /* Get base probabilities */
+
   int dice = fc_rand(100); /* Throw the dice */
   int prob = get_player_bonus(pplayer, EFT_CIVIL_WAR_CHANCE);
 
   /* Now compute the contribution of the cities. */
-  city_list_iterate(pplayer->cities, pcity) {
+  
+  city_list_iterate(pplayer->cities, pcity)
     if (city_unhappy(pcity)) {
       prob += 5;
     }
     if (city_celebrating(pcity)) {
       prob -= 5;
     }
-  } city_list_iterate_end;
+  city_list_iterate_end;
 
   log_verbose("Civil war chance for %s: prob %d, dice %d",
               player_name(pplayer), prob, dice);
-
+  
   return (dice < prob);
 }
 
@@ -2432,7 +2326,6 @@ struct player *civil_war(struct player *pplayer)
 {
   int i, j;
   struct player *cplayer;
-  struct city *capital;
 
   /* It is possible that this function gets called after pplayer
    * died. Player pointers are safe even after death. */
@@ -2523,9 +2416,7 @@ struct player *civil_war(struct player *pplayer)
   fc_assert(i > 0); /* rebels should have got at least one city */
 
   /* Choose a capital (random). */
-  capital = city_list_get(cplayer->cities, fc_rand(i));
-  city_build_free_buildings(capital);
-  give_midgame_initial_units(cplayer, city_tile(capital));
+  city_build_free_buildings(city_list_get(cplayer->cities, fc_rand(i)));
 
   notify_player(NULL, NULL, E_CIVIL_WAR, ftc_server,
                 /* TRANS: ... Danes ... Poles ... <7> cities. */

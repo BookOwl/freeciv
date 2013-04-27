@@ -6,15 +6,9 @@ else
 aimodule_LTLIBRARIES = fc_ai_threaded.la
 endif
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common \
--I$(top_srcdir)/common/aicore -I$(top_srcdir)/server/advisors \
--I$(top_srcdir)/ai/default
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common
 
 da_sources = \
-	taicity.c		\
-	taicity.h		\
-	taimsg.c		\
-	taimsg.h		\
 	taiplayer.c		\
 	taiplayer.h		\
 	threadedai.c

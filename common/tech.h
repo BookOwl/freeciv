@@ -41,7 +41,7 @@ typedef int Tech_type_id;
  */
 #define A_NONE 0
 #define A_FIRST 1
-#define A_LAST MAX_NUM_ITEMS /* Used in the network protocol. */
+#define A_LAST MAX_NUM_ITEMS
 #define A_UNSET (A_LAST-1)
 #define A_FUTURE (A_LAST-2)
 #define A_UNKNOWN (A_LAST-3)
@@ -78,23 +78,23 @@ typedef int Tech_type_id;
 /* "Settler" unit types can build bridges over rivers */
 #define SPECENUM_VALUE1 TF_BRIDGE
 #define SPECENUM_VALUE1NAME "Bridge"
+/* "Settler" unit types can build rail roads */
+#define SPECENUM_VALUE2 TF_RAILROAD
+#define SPECENUM_VALUE2NAME "Railroad"
 /* Increase the pollution factor created by population by one */
-#define SPECENUM_VALUE2 TF_POPULATION_POLLUTION_INC
-#define SPECENUM_VALUE2NAME "Population_Pollution_Inc"
+#define SPECENUM_VALUE3 TF_POPULATION_POLLUTION_INC
+#define SPECENUM_VALUE3NAME "Population_Pollution_Inc"
 /* "Settler" unit types can build farmland */
-#define SPECENUM_VALUE3 TF_FARMLAND
-#define SPECENUM_VALUE3NAME "Farmland"
+#define SPECENUM_VALUE4 TF_FARMLAND
+#define SPECENUM_VALUE4NAME "Farmland"
 /* Player can build air units */
-#define SPECENUM_VALUE4 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE4NAME "Build_Airborne"
-/* Player can claim ocean tiles non-adjacent to border source */ 
-#define SPECENUM_VALUE5 TF_CLAIM_OCEAN
-#define SPECENUM_VALUE5NAME "Claim_Ocean"
+#define SPECENUM_VALUE5 TF_BUILD_AIRBORNE
+#define SPECENUM_VALUE5NAME "Build_Airborne"
 /* Keep this last. */
 #define SPECENUM_COUNT TF_COUNT
 #include "specenum_gen.h"
 
-BV_DEFINE(bv_tech_flags, TF_COUNT); /* Used in the network protocol. */
+BV_DEFINE(bv_tech_flags, TF_COUNT);
 
 /* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
  * requirements are fulfilled; all others (including those which can never 

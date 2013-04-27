@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2013.Feb.04"
+options = "+Freeciv-2.4-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "cimpletoon"
@@ -18,8 +18,14 @@ small_tile_width   = 15
 small_tile_height  = 20
 
 ; Basic tile style.
-type = "isometric"
-is_hex = FALSE
+is_hex = 0
+is_isometric = 1
+
+; Do not blend hills and mountains together.
+is_mountainous = 0
+
+; Use roadstyle 0 (old iso style)
+roadstyle = 0
 
 ; Fogstyle 2, darkness_style 4 : blended fog
 fogstyle = 2
@@ -107,14 +113,14 @@ match_types = "water", "ice"
 ; Water graphics referenced by terrain.ruleset
 ;
 [tile_lake]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "shallow"
 layer0_match_with = "land"
 layer0_sprite_type = "corner"
 
 [tile_coast]
-blend_layer = 1
+is_blended = 1
 num_layers = 2
 layer0_match_type = "shallow"
 layer0_match_with = "deep", "land"
@@ -124,7 +130,7 @@ layer1_match_with = "ice"
 layer1_sprite_type = "corner"
 
 [tile_floor]
-blend_layer = 0
+is_blended = 0
 num_layers = 2
 layer0_match_type = "deep"
 layer0_match_with = "shallow", "land"
@@ -137,7 +143,7 @@ layer1_sprite_type = "corner"
 ;
 [tile_arctic]
 ; treated as water for ice cliffs
-blend_layer = 0
+is_blended = 0
 num_layers = 3
 layer0_match_type = "shallow"
 layer1_match_type = "ice"
@@ -145,25 +151,25 @@ layer2_match_type = "ice"
 mine_sprite = "tx.oil_mine"
 
 [tile_desert]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "land"
 mine_sprite = "tx.oil_mine"
 
 [tile_forest]
-blend_layer = 1
+is_blended = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
 
 [tile_grassland]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "land"
 
 [tile_hills]
-blend_layer = 1
+is_blended = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "hills"
@@ -171,41 +177,33 @@ layer1_match_with = "hills"
 mine_sprite = "tx.mine"
 
 [tile_jungle]
-blend_layer = 1
+is_blended = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
 
 [tile_mountains]
-blend_layer = 1
+is_blended = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "hills"
 layer1_match_with = "hills"
-layer1_is_tall = TRUE
+layer1_is_tall = 1
 layer1_offset_y = 6
 mine_sprite = "tx.mine"
 
 [tile_plains]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "land"
 
 [tile_swamp]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "land"
 
 [tile_tundra]
-blend_layer = 1
+is_blended = 1
 num_layers = 1
 layer0_match_type = "land"
-
-[roads]
-styles =
-    { "name",  "style"
-      "road",  "AllSeparate"
-      "rail",  "AllSeparate"
-      "river", "River"
-    }

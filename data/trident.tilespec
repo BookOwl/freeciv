@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2013.Feb.04"
+options = "+Freeciv-2.4-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "Trident"
@@ -18,8 +18,11 @@ small_tile_width   = 15
 small_tile_height  = 20
 
 ; Basic tile style.
-type = "overview"
-is_hex = FALSE
+is_hex = 0
+is_isometric = 0
+
+; Use roadstyle 1 (old non-iso style)
+roadstyle = 1
 
 ; Was fogstyle 0 (old iso style)
 fogstyle = 2
@@ -97,7 +100,7 @@ match_types = "water"
 ; Water graphics referenced by terrain.ruleset
 ;
 [tile_coast]
-blend_layer = 0
+is_blended = 0
 num_layers = 3
 layer0_match_type = "water"
 layer1_match_type = "water"
@@ -107,7 +110,7 @@ layer2_match_with = "water"
 layer2_sprite_type = "corner"
 
 [tile_floor]
-blend_layer = 0
+is_blended = 0
 num_layers = 3
 layer0_match_type = "water"
 layer1_match_type = "water"
@@ -119,73 +122,65 @@ layer2_sprite_type = "corner"
 ; Land graphics referenced by terrain.ruleset
 ;
 [tile_arctic]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "arctic"
 layer0_match_with = "arctic"
 mine_sprite = "tx.oil_mine"
 
 [tile_desert]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "desert"
 layer0_match_with = "desert"
 mine_sprite = "tx.oil_mine"
 
 [tile_forest]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "forest"
 layer0_match_with = "forest"
 
 [tile_grassland]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "grassland"
 layer0_match_with = "grassland"
 
 [tile_hills]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "hills"
 layer0_match_with = "hills"
 mine_sprite = "tx.mine"
 
 [tile_jungle]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "jungle"
 layer0_match_with = "jungle"
 
 [tile_mountains]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "mountains"
 layer0_match_with = "mountains"
 mine_sprite = "tx.mine"
 
 [tile_plains]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "plains"
 layer0_match_with = "plains"
 
 [tile_swamp]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "swamp"
 layer0_match_with = "swamp"
 
 [tile_tundra]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "tundra"
 layer0_match_with = "tundra"
-
-[roads]
-styles =
-    { "name", "style"
-      "road", "ParityCombined"
-      "rail", "ParityCombined"
-      "river", "River"
-    }

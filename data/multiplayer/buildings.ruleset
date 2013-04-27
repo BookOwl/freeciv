@@ -11,7 +11,7 @@
 
 [datafile]
 description="Multiplayer buildings data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.Apr.23"
+options="+Freeciv-2.4-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -378,7 +378,7 @@ reqs	=
     { "type", "name", "range"
       "Tech", "Electronics", "Player"
       "Building", "Factory", "City"
-      "Road", "River", "Adjacent"
+      "Special", "River", "Adjacent"
     }
 graphic	= "b.hydro_plant"
 graphic_alt	= "-"
@@ -1201,7 +1201,7 @@ genus		= "SmallWonder"
 reqs	=
     { "type", "name", "range"
       "Tech", "Electronics", "Player"
-      "Road", "River", "Adjacent"
+      "Special", "River", "Adjacent"
     }
 graphic	= "b.hoover_dam"
 graphic_alt	= "-"

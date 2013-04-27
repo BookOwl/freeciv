@@ -82,9 +82,10 @@ static void check_specials(const char *file, const char *function, int line)
     const struct terrain *pterrain = tile_terrain(ptile);
     bv_special special = tile_specials(ptile);
 
-    if (contains_special(special, S_FARMLAND)) {
+    if (contains_special(special, S_RAILROAD))
+      SANITY_TILE(ptile, contains_special(special, S_ROAD));
+    if (contains_special(special, S_FARMLAND))
       SANITY_TILE(ptile, contains_special(special, S_IRRIGATION));
-    }
 
     if (contains_special(special, S_MINE)) {
       SANITY_TILE(ptile, pterrain->mining_result == pterrain);
@@ -426,11 +427,6 @@ static void check_units(const char *file, const char *function, int line)
         /* Transporter capacity will be checked when transporter itself
          * is checked */
       }
-
-      /* Check that cargo is marked as transported with this unit */
-      unit_list_iterate(unit_transport_cargo(punit), pcargo) {
-        SANITY_CHECK(unit_transport_get(pcargo) == punit);
-      } unit_list_iterate_end;
     } unit_list_iterate_end;
   } players_iterate_end;
 }

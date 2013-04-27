@@ -9,7 +9,7 @@
 
 [datafile]
 description="Multiplayer technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.Apr.23"
+options="+Freeciv-2.4-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -49,12 +49,11 @@ options="+Freeciv-ruleset-Devel-2013.Apr.23"
 ;
 ; "Bonus_Tech" = player gets extra tech if rearched first
 ; "Bridge"   = "Settler" unit types can build bridges over rivers
+; "Railroad" = "Settler" unit types can build rail roads
 ; "Farmland" = "Settler" unit types can build farmland
 ; "Population_Pollution_Inc" = Increase the pollution factor created by
 ;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
-; "Claim_Ocean"    = Player claims ocean tiles even if they are not
-;                    adjacent to border source
 ;
 ; */ <-- avoid gettext warnings
 
@@ -593,7 +592,7 @@ helptext = _("Allows Workers and Engineers to build airbases and buoys.")
 name     = _("Railroad")
 req1     = "Steam Engine"
 req2     = "Bridge Building"
-flags    = ""
+flags    = "Railroad"
 graphic     = "a.railroad"
 graphic_alt = "-"
 

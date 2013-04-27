@@ -15,12 +15,8 @@
 #include <fc_config.h>
 #endif
 
-/* common */
 #include "game.h"
 #include "government.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "dialogs.h"
 
@@ -167,7 +163,7 @@ void popup_sabotage_dialog(struct city *pcity)
   pillage.
 **************************************************************************/
 void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
-                          bv_bases bases, bv_roads roads)
+                          bv_bases bases)
 {
   /* PORTME */
 }
@@ -185,15 +181,6 @@ void popup_disband_dialog(struct unit_list *punits)
   user and load.
 **************************************************************************/
 void popup_tileset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
 {
   /* PORTME */
 }
@@ -238,14 +225,6 @@ void close_diplomat_dialog(void)
   Updates caravan dialog
 ****************************************************************/
 void caravan_dialog_update(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
 {
   /* PORTME */
 }

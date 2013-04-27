@@ -7,16 +7,11 @@
 ; command "rulesetdir <mysubdir>" in the server to have freeciv
 ; use your new customized file.
 
-; See data/classic/units.ruleset for more information.
+; See data/default/units.ruleset for more information.
 
 [datafile]
 description="Civ1-style unit_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.Apr.23"
-
-[control]
-; Names for custom unit type flags.
-; flags =
-;   { "name", "helptxt" }
+options="+Freeciv-2.4-ruleset"
 
 [veteran_system]
 ; What are the names of the levels?
@@ -66,8 +61,6 @@ veteran_move_bonus = 0, 0
 ;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or airbase
-; non_native_def_pct = Defense power percentage applying when defending on
-;                      non-native terrain (such as ship in harbour)
 ; hut_behavior  = What happens to huts when unit enters tile: "Normal", "Nothing" or
 ;                 "Frighten"
 ; flags         = List of unit class flags
@@ -79,6 +72,8 @@ veteran_move_bonus = 0, 0
 ; "DamageSlows"   = Damages units are slowed down
 ; "CanOccupyCity" = Military units of this class can occupy enemy cities
 ; "Missile"       = Unit is destroyed when it attacks
+; "RoadNative"    = Road tiles are always considered native terrain
+; "RiverNative"   = River tiles are always considered native terrain
 ; "BuildAnywhere" = Unit can be built even in the middle of non-native terrain
 ; "Unreachable"   = Unit can be attacked only by units explicitly listing this class as target
 ;                   or on city or airbase
@@ -89,14 +84,6 @@ veteran_move_bonus = 0, 0
 ; "CanPillage"    = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
-; "AttackNonNative"   = Unit can attack units on non-native tiles. Unit type flag
-;                       "Only_Native_Attack" can override this
-; "AttFromNonNative"  = Unit can launch attach from non-native tile (against native one)
-;                       This applies for both attacking from transport or cities. If only
-;                       some unit types of the class should get this property, use type flag
-;                       "Marines"
-; "KillCitizen"       = Upon successful attack against a city unit kills one citizen.
-;                       There's server setting, as well as effects, to disable this.
 ;
 ; */ <-- avoid gettext warnings
 
@@ -107,14 +94,14 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
                 "CollectRansom", "ZOC", "CanFortify", "CanPillage",
-                "TerrainDefense", "KillCitizen"
+                "TerrainDefense"
 
 [unitclass_sea]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Sea")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "DamageSlows", "AttackNonNative", "AttFromNonNative"
+flags         = "DamageSlows"
 
 [unitclass_air]
 ; /* TRANS: Unit class: used adjectivally */
@@ -163,7 +150,6 @@ flags         = "Missile", "Unreachable", "DoesntOccupyTile"
 ;                 "None" => available from start
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; convert_to    = can be converted to another type of unit by name
-; convert_time  = time it takes to convert to another unit type
 ; class         = One of the classes listed above
 ; transport_cap = Number of units (ground, or air/missiles, depending on flags)
 ; fuel          = number of turns air units can fly before they crash. For
@@ -173,14 +159,6 @@ flags         = "Missile", "Unreachable", "DoesntOccupyTile"
 ; city_size     = Initial size of the cities Settlers type unit builds
 ; targets       = list of unit classes this unit can attack against even
 ;                 if they have Unreachable unit class flag
-; embarks       = list of unit classes this unit may embark upon even if they
-;                 have Unreachable unit class flag and are not in native base
-; disembarks    = list of unit classes this unit may disembark from even if they
-;                 have Unreachable unit class flag and are not in native base
-; bonuses       = definitions of combat bonuses against specific other units
-; bonuses.flag  = flag of the unit that bonus applies against
-; bonuses.type  = type of the bonus. See below
-; bonuses.value = value of the bonus. Sum of these is used if multiple apply.
 ; flags         = special flag strings
 ;
 ; veteran_names = Special veteran level for this unit. See the definitions in
@@ -200,19 +178,6 @@ flags         = "Missile", "Unreachable", "DoesntOccupyTile"
 ;		   supported in client
 ; helptext	= optional help text string; should escape all raw newlines 
 ;		  so that xgettext parsing works
-;
-;
-; ** Bonuses **
-;
-; "DefenseMultiplier" = Multiply defense value (1 + 'value') times.
-;                       Value of 1 means multiplication by 2, value 2 by 3...
-;                       Bonus is defined in defenders entry.
-; "DefenseDivider"    = Divide defense value with (1 + 'value').
-;                       Bonus is defined in attackers entry.
-; "FirePower1"        = Defender firepower is reduced to value 1 when
-;                       ever this has non-zero value.
-;                       Bonus is defined in attackers entry.
-;
 ;
 ; Following flag strings require extra fields:  (but do not appear in Civ1)
 ;  "Paratroopers"
@@ -719,7 +684,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 targets       = "Air", "Missile"
-flags         = "FieldUnit"
+flags         = "FieldUnit", "Fighter", "AirUnit"
 roles         = ""
 helptext      = _("\
 Fighters are your first airborne units. They can\
@@ -751,7 +716,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack"
+flags         = "FieldUnit", "OneAttack", "AirUnit"
 roles         = ""
 helptext      = _("\
 Bombers are specialized airborne units that may\
@@ -982,7 +947,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Partial_Invis", "Only_Native_Attack"
+flags         = "Partial_Invis", "No_Land_Attack"
 roles         = "Hunter"
 helptext      = _("\
 Traveling under the surface of the ocean, Submarines have\
@@ -1084,7 +1049,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "Nuclear"
+flags         = "FieldUnit", "OneAttack", "Nuclear", "AirUnit"
 roles         = ""
 helptext      = _("\
 You can build Nuclear units when you have the required advance, and\

@@ -35,7 +35,6 @@
 #include "log.h"
 #include "mem.h"
 #include "rand.h"
-#include "registry.h"
 #include "support.h"
 #include "timing.h"
 
@@ -324,7 +323,6 @@ int client_main(int argc, char *argv[])
   }
 
   init_nls();
-  registry_module_init();
   audio_init();
   init_character_encodings(gui_character_encoding, gui_use_transliteration);
 
@@ -628,7 +626,6 @@ void client_exit(void)
   conn_list_destroy(game.all_connections);
   conn_list_destroy(game.est_connections);
 
-  registry_module_close();
   free_nls();
 
   backtrace_deinit();
@@ -952,8 +949,8 @@ void set_seconds_to_turndone(double seconds)
 {
   if (game.info.timeout > 0) {
     seconds_to_turndone = seconds;
-    turndone_timer = timer_renew(turndone_timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(turndone_timer);
+    turndone_timer = renew_timer_start(turndone_timer, TIMER_USER,
+				       TIMER_ACTIVE);
 
     /* Maybe we should do an update_timeout_label here, but it doesn't
      * seem to be necessary. */
@@ -1010,7 +1007,7 @@ double real_timer_callback(void)
   /* It is possible to have game.info.timeout > 0 but !turndone_timer, in the
    * first moments after the timeout is set. */
   if (game.info.timeout > 0 && turndone_timer) {
-    double seconds = seconds_to_turndone - timer_read_seconds(turndone_timer);
+    double seconds = seconds_to_turndone - read_timer_seconds(turndone_timer);
     int iseconds = ceil(seconds) + 0.1; /* Turn should end right on 0. */
 
     if (iseconds < seconds_shown_to_turndone) {

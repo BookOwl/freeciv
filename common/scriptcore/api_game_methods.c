@@ -16,7 +16,6 @@
 #endif
 
 /* common */
-#include "citizens.h"
 #include "game.h"
 #include "government.h"
 #include "improvement.h"
@@ -163,47 +162,6 @@ Tile *api_methods_city_tile_get(lua_State *L, City *pcity)
   LUASCRIPT_CHECK_SELF(L, pcity, NULL);
 
   return pcity->tile;
-}
-
-/**************************************************************************
-  How much city inspires partisans for a player.
-**************************************************************************/
-int api_methods_city_inspire_partisans(lua_State *L, City *self, Player *inspirer)
-{
-  bool inspired = FALSE;
-
-  if (!game.info.citizen_nationality) {
-    if (self->original == inspirer) {
-      inspired = TRUE;
-    }
-  } else {
-    if (game.info.citizen_partisans_pct > 0) {
-      int own = citizens_nation_get(self, inspirer->slot);
-      int total = 0;
-
-      /* Not citizens_foreign_iterate() as city has already changed hands.
-       * old owner would be considered foreign and new owner not. */
-      citizens_iterate(self, pslot, nat) {
-        total += nat;
-      } citizens_iterate_end;
-
-      if ((own * 100 / total) >= game.info.citizen_partisans_pct) {
-        inspired = TRUE;
-      }
-    } else if (self->original == inspirer) {
-      inspired = TRUE;
-    }
-  }
-
-  if (inspired) {
-    /* Cannot use get_city_bonus() as it would use city's current owner
-     * instead of inspirer. */
-    return get_target_bonus_effects(NULL, inspirer, self, NULL,
-                                    city_tile(self), NULL, NULL,
-                                    NULL, EFT_INSPIRE_PARTISANS);
-  }
-
-  return 0;
 }
 
 /*****************************************************************************
@@ -384,6 +342,7 @@ const char *api_methods_tech_type_name_translation(lua_State *L,
   return advance_name_translation(ptech);
 }
 
+
 /*****************************************************************************
   Return rule name for Terrain
 *****************************************************************************/
@@ -405,29 +364,6 @@ const char *api_methods_terrain_name_translation(lua_State *L,
   LUASCRIPT_CHECK_SELF(L, pterrain, NULL);
 
   return terrain_name_translation(pterrain);
-}
-
-/*****************************************************************************
-  Return rule name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_rule_name(lua_State *L, Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_rule_name(pdis);
-}
-
-/*****************************************************************************
-  Return translated name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_name_translation(lua_State *L,
-                                                  Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_name_translation(pdis);
 }
 
 /*****************************************************************************
@@ -613,6 +549,7 @@ int api_methods_tile_sq_distance(lua_State *L, Tile *ptile1, Tile *ptile2)
   return sq_map_distance(ptile1, ptile2);
 }
 
+
 /*****************************************************************************
   Can punit found a city on its tile?
 *****************************************************************************/
@@ -652,17 +589,17 @@ Direction api_methods_unit_orientation_get(lua_State *L, Unit *punit)
 bool api_methods_unit_type_has_flag(lua_State *L, Unit_Type *punit_type,
                                     const char *flag)
 {
-  enum unit_type_flag_id id;
+  enum unit_flag_id id;
 
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_SELF(L, punit_type, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, flag, 3, string, FALSE);
 
-  id = unit_type_flag_id_by_name(flag, fc_strcasecmp);
-  if (unit_type_flag_id_is_valid(id)) {
+  id = unit_flag_by_rule_name(flag);
+  if (id != F_LAST) {
     return utype_has_flag(punit_type, id);
   } else {
-    luascript_error(L, "Unit type flag \"%s\" does not exist", flag);
+    luascript_error(L, "Unit flag \"%s\" does not exist", flag);
     return FALSE;
   }
 }
@@ -679,8 +616,8 @@ bool api_methods_unit_type_has_role(lua_State *L, Unit_Type *punit_type,
   LUASCRIPT_CHECK_SELF(L, punit_type, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, role, 3, string, FALSE);
 
-  id = unit_role_id_by_name(role, fc_strcasecmp);
-  if (unit_role_id_is_valid(id)) {
+  id = unit_role_by_rule_name(role);
+  if (id != L_LAST) {
     return utype_has_role(punit_type, id);
   } else {
     luascript_error(L, "Unit role \"%s\" does not exist", role);

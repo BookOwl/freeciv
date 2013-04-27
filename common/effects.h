@@ -25,9 +25,7 @@ extern "C" {
 struct requirement;
 
 /* Type of effects. Add new values via SPECENUM_VALUE%d and
- * SPECENUM_VALUE%dNAME at the end of the list.
- * Used in the network protocol.
- */
+ * SPECENUM_VALUE%dNAME at the end of the list. */
 #define SPECENUM_NAME effect_type
 #define SPECENUM_VALUE0 EFT_TECH_PARASITE
 #define SPECENUM_VALUE0NAME "Tech_Parasite"
@@ -226,24 +224,8 @@ struct requirement;
 #define SPECENUM_VALUE83NAME "City_Image"
 #define SPECENUM_VALUE84 EFT_IRRIG_POSSIBLE
 #define SPECENUM_VALUE84NAME "Irrig_Possible"
-#define SPECENUM_VALUE85 EFT_MAX_TRADE_ROUTES
-#define SPECENUM_VALUE85NAME "Max_Trade_Routes"
-#define SPECENUM_VALUE86 EFT_GOV_CENTER
-#define SPECENUM_VALUE86NAME "Gov_Center"
-#define SPECENUM_VALUE87 EFT_TRANSFORM_POSSIBLE
-#define SPECENUM_VALUE87NAME "Transform_Possible"
-#define SPECENUM_VALUE88 EFT_MINING_POSSIBLE
-#define SPECENUM_VALUE88NAME "Mining_Possible"
-#define SPECENUM_VALUE89 EFT_IRRIG_TF_POSSIBLE
-#define SPECENUM_VALUE89NAME "Irrig_TF_Possible"
-#define SPECENUM_VALUE90 EFT_MINING_TF_POSSIBLE
-#define SPECENUM_VALUE90NAME "Mining_TF_Possible"
-#define SPECENUM_VALUE91 EFT_NOT_TECH_SOURCE
-#define SPECENUM_VALUE91NAME "Not_Tech_Source"
-#define SPECENUM_VALUE92 EFT_ENEMY_CITIZEN_UNHAPPY_PCT
-#define SPECENUM_VALUE92NAME "Enemy_Citizen_Unhappy_Pct"
 /* keep this last */
-#define SPECENUM_VALUE93 EFT_LAST
+#define SPECENUM_VALUE85 EFT_LAST
 #include "specenum_gen.h"
 
 /* An effect is provided by a source.  If the source is present, and the
@@ -353,23 +335,16 @@ int get_city_bonus_effects(struct effect_list *plist,
 			   const struct output_type *poutput,
 			   enum effect_type effect_type);
 
-int get_target_bonus_effects(struct effect_list *plist,
-                             const struct player *target_player,
-                             const struct city *target_city,
-                             const struct impr_type *target_building,
-                             const struct tile *target_tile,
-                             const struct unit_type *target_unittype,
-                             const struct output_type *target_output,
-                             const struct specialist *target_specialist,
-                             enum effect_type effect_type);
-
 bool building_has_effect(const struct impr_type *pimprove,
 			 enum effect_type effect_type);
 int get_current_construction_bonus(const struct city *pcity,
 				   enum effect_type effect_type,
                                    const enum req_problem_type prob_type);
 
-struct effect_list *get_effects(enum effect_type effect_type);
+Impr_type_id ai_find_source_building(struct city *pcity,
+				     enum effect_type effect_type,
+                                     struct unit_class *uclass,
+                                     enum unit_move_type move);
 
 typedef bool (*iec_cb)(const struct effect*);
 bool iterate_effect_cache(iec_cb cb);

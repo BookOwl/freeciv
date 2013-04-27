@@ -52,6 +52,7 @@
 #undef TECH_UPKEEP_DEBUGGING
 
 static Tech_type_id pick_random_tech_researched(struct player* plr);
+static Tech_type_id pick_random_tech(struct player* plr);
 static void player_tech_lost(struct player* plr, Tech_type_id tech);
 static void forget_tech_transfered(struct player *pplayer, Tech_type_id tech);
 
@@ -203,12 +204,13 @@ static void update_player_after_tech_researched(struct player* plr,
   player_research_update(plr);
 
   remove_obsolete_buildings(plr);
-
-  /* Give free bridges or railroads in every city */
-  if (tech_found != A_FUTURE) {
-    upgrade_all_city_roads(plr, was_discovery);  
+  
+  /* Give free rails in every city */
+  if (tech_found != A_FUTURE
+   && advance_has_flag(tech_found, TF_RAILROAD)) {
+    upgrade_city_rails(plr, was_discovery);  
   }
-
+  
   /* Enhance vision of units if a player-ranged effect has changed.  Note
    * that world-ranged effects will not be updated immediately. */
   unit_list_refresh_vision(plr->units);
@@ -398,6 +400,8 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
   }
 
   if (bonus_tech_hack) {
+    int saved_bulbs;
+
     if (advance_by_number(tech_found)->bonus_message) {
       notify_research(plr, E_TECH_GAIN, ftc_server,
                       "%s", _(advance_by_number(tech_found)->bonus_message));
@@ -407,8 +411,17 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
                         "world join your civilization: you get "
                         "an immediate advance."));
     }
-
-    give_immediate_free_tech(plr);
+    
+    if (research->researching == A_UNSET) {
+      choose_random_tech(plr);
+    }
+    do_free_cost(plr, research->researching);
+    /* Save current number of bulbs so we can ignore changes made
+     * by tech_researched(). This is supposed to be free tech, not
+     * something having full cost. */
+    saved_bulbs = research->bulbs_researched;
+    tech_researched(plr);
+    research->bulbs_researched = saved_bulbs;
   }
 
   /*
@@ -423,7 +436,8 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
    * techs aren't researched that often.
    */
   cities_iterate(pcity) {
-    /* Refresh the city data; this als updates the squared city radius. */
+    /* update squared city radius */
+    city_map_update_radius_sq(pcity, TRUE);
     city_refresh(pcity);
     send_city_info(city_owner(pcity), pcity);
   } cities_iterate_end;
@@ -440,37 +454,6 @@ void found_new_tech(struct player *plr, Tech_type_id tech_found,
       } players_iterate_end;
     }
   } players_iterate_end;
-
-  conn_list_iterate(plr->connections, pconn) {
-    dsend_packet_tech_gained(pconn, tech_found);
-  } conn_list_iterate_end;
-}
-
-/****************************************************************************
-  Is player about to lose tech?
-****************************************************************************/
-static bool lose_tech(struct player *plr)
-{
-  struct player_research *research;
-
-  if (game.server.techloss_forgiveness < 0) {
-    /* Tech loss disabled */
-    return FALSE;
-  }
-
-  research = player_research_get(plr);
-
-  if (research->techs_researched == 0 && research->future_tech == 0) {
-    /* No tech to lose */
-    return FALSE;
-  }
-
-  if (research->bulbs_researched <
-      -total_bulbs_required(plr) * game.server.techloss_forgiveness / 100) {
-    return TRUE;
-  }
-
-  return FALSE;
 }
 
 /****************************************************************************
@@ -495,7 +478,8 @@ bool update_bulbs(struct player *plr, int bulbs, bool check_tech)
    * - try to reduce the number of future techs
    * - or lose one random tech
    * after that the number of bulbs available is set to zero */
-  if (lose_tech(plr)) {
+  if (game.info.tech_upkeep_style > 0 && research->bulbs_researched < 0
+      && (research->techs_researched > 0 || research->future_tech > 0)) {
     if (research->future_tech > 0) {
       notify_player(plr, NULL, E_TECH_GAIN, ftc_server,
                     _("Insufficient science output. We lost Future Tech. %d."),
@@ -645,14 +629,18 @@ static void player_tech_lost(struct player* plr, Tech_type_id tech)
   } governments_iterate_end;
 
   /* check all settlers for valid activities */
-  unit_list_iterate(plr->units, punit) {
-    if (!can_unit_continue_current_activity(punit)) {
-      log_debug("lost technology for activity of unit %s of %s (%d, %d)",
-                unit_name_translation(punit), player_name(plr),
-                TILE_XY(unit_tile(punit)));
-      set_unit_activity(punit, ACTIVITY_IDLE);
-    }
-  } unit_list_iterate_end;
+  if (advance_has_flag(tech, TF_BRIDGE)
+      || advance_has_flag(tech, TF_RAILROAD)
+      || advance_has_flag(tech, TF_FARMLAND)) {
+    unit_list_iterate(plr->units, punit) {
+      if (!can_unit_continue_current_activity(punit)) {
+        log_debug("lost technology for activity of unit %s of %s (%d, %d)",
+                  unit_name_translation(punit), player_name(plr),
+                  TILE_XY(unit_tile(punit)));
+        set_unit_activity(punit, ACTIVITY_IDLE);
+      }
+    } unit_list_iterate_end;
+  }
 
   /* check city production */
   city_list_iterate(plr->cities, pcity) {
@@ -696,7 +684,7 @@ static void player_tech_lost(struct player* plr, Tech_type_id tech)
   Returns random researchable tech or A_FUTURE.
   No side effects
 ****************************************************************************/
-Tech_type_id pick_random_tech(struct player* plr) 
+static Tech_type_id pick_random_tech(struct player* plr) 
 {
   int chosen, researchable = 0;
 
@@ -720,54 +708,6 @@ Tech_type_id pick_random_tech(struct player* plr)
   } advance_index_iterate_end;
   log_error("Failed to pick a random tech.");
   return A_FUTURE;
-}
-
-/****************************************************************************
-  Returns cheapest researchable tech, random among equal cost ones.
-****************************************************************************/
-Tech_type_id pick_cheapest_tech(struct player* plr)
-{
-  int cheapest_cost = -1;
-  int cheapest_amount = 0;
-  Tech_type_id cheapest = A_NONE;
-  int chosen;
-
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr, i) == TECH_PREREQS_KNOWN) {
-      int cost = base_total_bulbs_required(plr, i);
-
-      if (cost < cheapest_cost || cheapest_cost == -1) {
-        cheapest_cost = cost;
-        cheapest_amount = 1;
-        cheapest = i;
-      } else if (cost == cheapest_cost) {
-        cheapest_amount++;
-      }
-    }
-  } advance_index_iterate_end;
-  if (cheapest_cost == -1) {
-    return A_FUTURE;
-  }
-  if (cheapest_amount == 1) {
-    /* No need to get random one among the 1 cheapest */
-    return cheapest;
-  }
-
-  chosen = fc_rand(cheapest_amount) + 1;
-
-  advance_index_iterate(A_FIRST, i) {
-    if (player_invention_state(plr, i) == TECH_PREREQS_KNOWN
-        && base_total_bulbs_required(plr, i) == cheapest_cost) {
-      chosen--;
-      if (chosen == 0) {
-        return i;
-      }
-    }
-  } advance_index_iterate_end;
-
-  fc_assert(FALSE);
-
-  return A_NONE;
 }
 
 /****************************************************************************
@@ -996,14 +936,10 @@ Tech_type_id give_random_initial_tech(struct player *pplayer)
   Returns the stolen tech or A_NONE if no tech was found.
 ****************************************************************************/
 Tech_type_id steal_a_tech(struct player *pplayer, struct player *victim,
-                          Tech_type_id preferred)
+            	        Tech_type_id preferred)
 {
   Tech_type_id stolen_tech = A_NONE;
-
-  if (get_player_bonus(victim, EFT_NOT_TECH_SOURCE) > 0) {
-    return A_NONE;
-  }
-
+  
   if (preferred == A_UNSET) {
     int j = 0;
     advance_index_iterate(A_FIRST, i) {
@@ -1153,7 +1089,7 @@ void handle_player_tech_goal(struct player *pplayer, int tech_goal)
 Tech_type_id give_random_free_tech(struct player* pplayer)
 {
   Tech_type_id tech;
-
+  
   tech = pick_random_tech(pplayer);
   do_free_cost(pplayer, tech);
   found_new_tech(pplayer, tech, FALSE, TRUE);
@@ -1166,15 +1102,10 @@ Tech_type_id give_random_free_tech(struct player* pplayer)
 Tech_type_id give_immediate_free_tech(struct player* pplayer)
 {
   Tech_type_id tech;
-
-  if (game.info.free_tech_method == FTM_CHEAPEST) {
-    tech = pick_cheapest_tech(pplayer);
-  } else if (player_research_get(pplayer)->researching == A_UNSET
-      || game.info.free_tech_method == FTM_RANDOM) {
+  if (player_research_get(pplayer)->researching == A_UNSET) {
     return give_random_free_tech(pplayer);
-  } else {
-    tech = player_research_get(pplayer)->researching;
   }
+  tech = player_research_get(pplayer)->researching;
   do_free_cost(pplayer, tech);
   found_new_tech(pplayer, tech, FALSE, TRUE);
   return tech;

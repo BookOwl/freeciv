@@ -40,10 +40,8 @@
 #include "player.h"
 #include "research.h"
 #include "rgbcolor.h"
-#include "road.h"
 #include "spaceship.h"
 #include "specialist.h"
-#include "traderoutes.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "worklist.h"
@@ -111,7 +109,7 @@ static struct {
 };
 
 /****************************************************************************
-  Called below, and by client/client_main.c client_game_free()
+  Called below, and by client/civclient.c client_game_free()
 ****************************************************************************/
 void packhand_free(void)
 {
@@ -166,7 +164,6 @@ static struct unit *unpackage_unit(const struct packet_unit_info *packet)
 
   /* Owner, veteran, and type fields are already filled in by
    * unit_virtual_create. */
-  punit->nationality = player_by_number(packet->nationality);
   punit->id = packet->id;
   unit_tile_set(punit, index_to_tile(packet->tile));
   punit->facing = packet->facing;
@@ -177,31 +174,20 @@ static struct unit *unpackage_unit(const struct packet_unit_info *packet)
   punit->moves_left = packet->movesleft;
   punit->hp = packet->hp;
   punit->activity = packet->activity;
-  punit->activity_count = packet->activity_count;
-
-  punit->activity_target.type = ATT_SPECIAL;
-  punit->activity_target.obj.spe = packet->activity_tgt_spe;
-  if (packet->activity_tgt_base != BASE_NONE) {
-    punit->activity_target.type = ATT_BASE;
-    punit->activity_target.obj.base = packet->activity_tgt_base;
-  } else if (packet->activity_tgt_road != ROAD_NONE) {
-    punit->activity_target.type = ATT_ROAD;
-    punit->activity_target.obj.road = packet->activity_tgt_road;
-  }
-
+  punit->activity_target = packet->activity_target;
+  punit->activity_base = packet->activity_base;
   punit->changed_from = packet->changed_from;
-  punit->changed_from_count = packet->changed_from_count;
-
-  punit->changed_from_target.type = ATT_SPECIAL;
-  punit->changed_from_target.obj.spe = packet->changed_from_tgt_spe;
-  if (packet->changed_from_tgt_base != BASE_NONE) {
-    punit->changed_from_target.type = ATT_BASE;
-    punit->changed_from_target.obj.base = packet->changed_from_tgt_base;
-  } else if (packet->changed_from_tgt_road != ROAD_NONE) {
-    punit->changed_from_target.type = ATT_ROAD;
-    punit->changed_from_target.obj.road = packet->changed_from_tgt_road;
+  punit->changed_from_target = packet->changed_from_target;
+  punit->changed_from_base = packet->changed_from_base;
+  if (has_capability("actcount_range", client.conn.capability)) {
+    /* 16-bit range */
+    punit->activity_count = packet->activity_count_new;
+    punit->changed_from_count = packet->changed_from_count_new;
+  } else {
+    /* 8-bit range, insufficient but backward compatible */
+    punit->activity_count = packet->activity_count_old;
+    punit->changed_from_count = packet->changed_from_count_old;
   }
-
   punit->ai_controlled = packet->ai;
   punit->fuel = packet->fuel;
   punit->goto_tile = index_to_tile(packet->goto_tile);
@@ -232,7 +218,6 @@ static struct unit *unpackage_unit(const struct packet_unit_info *packet)
       punit->orders.list[i].dir = packet->orders_dirs[i];
       punit->orders.list[i].activity = packet->orders_activities[i];
       punit->orders.list[i].base = packet->orders_bases[i];
-      punit->orders.list[i].road = packet->orders_roads[i];
     }
   }
 
@@ -263,20 +248,10 @@ unpackage_short_unit(const struct packet_unit_short_info *packet)
   punit->id = packet->id;
   unit_tile_set(punit, index_to_tile(packet->tile));
   punit->facing = packet->facing;
-  punit->nationality = NULL;
   punit->veteran = packet->veteran;
   punit->hp = packet->hp;
   punit->activity = packet->activity;
-
-  punit->activity_target.type = ATT_SPECIAL;
-  punit->activity_target.obj.spe = S_LAST;
-  if (packet->activity_tgt_base != BASE_NONE) {
-    punit->activity_target.type = ATT_BASE;
-    punit->activity_target.obj.base = packet->activity_tgt_base;
-  } else if (packet->activity_tgt_road != ROAD_NONE) {
-    punit->activity_target.type = ATT_ROAD;
-    punit->activity_target.obj.road = packet->activity_tgt_road;
-  }
+  punit->activity_base = packet->activity_base;
 
   /* Transporter / transporting information. */
   punit->client.occupied = packet->occupied;
@@ -674,7 +649,7 @@ void handle_city_info(const struct packet_city_info *packet)
 
   pcity->city_options = packet->city_options;
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     pcity->trade[i] = packet->trade[i];
     pcity->trade_value[i] = packet->trade_value[i];
   }
@@ -782,7 +757,6 @@ void handle_city_info(const struct packet_city_info *packet)
   }
 
   pcity->client.walls = packet->walls;
-  pcity->client.city_image = packet->city_image;
 
   pcity->client.happy = city_happy(pcity);
   pcity->client.unhappy = city_unhappy(pcity);
@@ -1026,7 +1000,6 @@ void handle_city_short_info(const struct packet_city_short_info *packet)
     }
   }
   pcity->client.walls = packet->walls;
-  pcity->client.city_image = packet->city_image;
 
   pcity->client.happy = packet->happy;
   pcity->client.unhappy = packet->unhappy;
@@ -1313,7 +1286,8 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
     }
 
     if (punit->activity != packet_unit->activity
-        || cmp_act_tgt(&punit->activity_target, &packet_unit->activity_target)
+	|| punit->activity_target != packet_unit->activity_target
+        || punit->activity_base != packet_unit->activity_base
         || punit->client.transported_by != packet_unit->client.transported_by
         || punit->client.occupied != packet_unit->client.occupied
 	|| punit->has_orders != packet_unit->has_orders
@@ -1350,6 +1324,7 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
 
       punit->activity = packet_unit->activity;
       punit->activity_target = packet_unit->activity_target;
+      punit->activity_base = packet_unit->activity_base;
 
       if (punit->client.transported_by
           != packet_unit->client.transported_by) {
@@ -1578,6 +1553,10 @@ static bool handle_unit_packet_common(struct unit *packet_unit)
       pcity->client.occupied = TRUE;
     }
 
+    if (punit->client.transported_by != -1) {
+      punit->client.transported_by = packet_unit->client.transported_by;
+    }
+
     need_units_report_update = TRUE;
   } /*** End of Create new unit ***/
 
@@ -1750,7 +1729,7 @@ void handle_game_info(const struct packet_game_info *pinfo)
   if (game.info.is_edit_mode != pinfo->is_edit_mode) {
     popdown_all_city_dialogs();
     /* Clears the current goto command. */
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, NULL, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
   }
 
   game.info = *pinfo;
@@ -1778,6 +1757,9 @@ void handle_game_info(const struct packet_game_info *pinfo)
      * timer. */
     set_seconds_to_turndone(pinfo->seconds_to_phasedone);
   }
+  if (!has_capability("trademindist_size", client.conn.capability)) {
+    game.info.trademindist_new = game.info.trademindist_old;
+  }
   if (boot_help) {
     boot_help_texts(client.conn.playing); /* reboot, after setting game.spacerace */
   }
@@ -1787,7 +1769,7 @@ void handle_game_info(const struct packet_game_info *pinfo)
   if (update_aifill_button) {
     update_start_page();
   }
-  
+
   if (can_client_change_view()) {
     update_info_label();
   }
@@ -2121,19 +2103,6 @@ void handle_player_info(const struct packet_player_info *pinfo)
   editgui_refresh();
   editgui_notify_object_changed(OBJTYPE_PLAYER, player_number(pplayer),
                                 FALSE);
-}
-
-/****************************************************************************
-  Player gained new tech.
-****************************************************************************/
-void handle_tech_gained(int tech)
-{
-  if (tech != A_FUTURE && !valid_advance_by_number(tech)) {
-    log_error("Received illegal gained tech %d", tech);
-    return;
-  }
-
-  show_tech_gained_dialog(tech);
 }
 
 /****************************************************************************
@@ -2565,10 +2534,6 @@ void handle_tile_info(const struct packet_tile_info *packet)
     ptile->bases = packet->bases;
     tile_changed = TRUE;
   }
-  if (!BV_ARE_EQUAL(ptile->roads, packet->roads)) {
-    ptile->roads = packet->roads;
-    tile_changed = TRUE;
-  }
 
   tile_changed = tile_changed || (tile_resource(ptile) != presource);
 
@@ -2772,8 +2737,6 @@ void handle_ruleset_control(const struct packet_ruleset_control *packet)
   VALIDATE(num_impr_types,	B_LAST,			"improvements");
   VALIDATE(num_tech_types,	A_LAST_REAL,		"advances");
   VALIDATE(num_base_types,	MAX_BASE_TYPES,		"bases");
-  VALIDATE(num_road_types,      MAX_ROAD_TYPES,         "roads");
-  VALIDATE(num_disaster_types,  MAX_DISASTER_TYPES,     "disasters");
 
   /* game.control.government_count, game.control.nation_count and
    * game.control.styles_count are allocated dynamically, and does
@@ -2800,18 +2763,6 @@ void handle_ruleset_control(const struct packet_ruleset_control *packet)
       }
     }
   }
-
-  if (packet->prefered_soundset[0] != '\0') {
-    /* There is soundset suggestion */
-    if (strcmp(packet->prefered_soundset, sound_set_name)) {
-      /* It's not currently in use */
-      if (autoaccept_soundset_suggestion) {
-        audio_restart(game.control.prefered_soundset);
-      } else {
-        popup_soundset_suggestion_dialog();
-      }
-    }
-  }
 }
 
 /****************************************************************************
@@ -2819,16 +2770,6 @@ void handle_ruleset_control(const struct packet_ruleset_control *packet)
 ****************************************************************************/
 void handle_rulesets_ready(void)
 {
-  /* Setup road hiders caches */
-  road_type_iterate(proad) {
-    proad->hiders = road_type_list_new();
-    road_type_iterate(phider) {
-      if (BV_ISSET(proad->hidden_by, road_index(phider))) {
-        road_type_list_append(proad->hiders, phider);
-      }
-    } road_type_iterate_end;
-  } road_type_iterate_end;
-
   /* We are not going to crop any more sprites from big sprites, free them. */
   finish_loading_sprites(tileset);
 }
@@ -2883,7 +2824,6 @@ void handle_ruleset_unit(const struct packet_ruleset_unit *p)
   u->firepower          = p->firepower;
   u->obsoleted_by       = utype_by_number(p->obsoleted_by);
   u->converted_to       = utype_by_number(p->converted_to);
-  u->convert_time       = p->convert_time;
   u->fuel               = p->fuel;
   u->flags              = p->flags;
   u->roles              = p->roles;
@@ -2898,8 +2838,6 @@ void handle_ruleset_unit(const struct packet_ruleset_unit *p)
   u->city_size          = p->city_size;
   u->cargo              = p->cargo;
   u->targets            = p->targets;
-  u->embarks            = p->embarks;
-  u->disembarks         = p->disembarks;
 
   if (p->veteran_levels == 0) {
     u->veteran = NULL;
@@ -2915,50 +2853,6 @@ void handle_ruleset_unit(const struct packet_ruleset_unit *p)
   PACKET_STRVEC_EXTRACT(u->helptext, p->helptext);
 
   tileset_setup_unit_type(tileset, u);
-}
-
-/****************************************************************************
-  Packet ruleset_unit_bonus handler.
-****************************************************************************/
-void handle_ruleset_unit_bonus(const struct packet_ruleset_unit_bonus *p)
-{
-  struct unit_type *u = utype_by_number(p->unit);
-  struct combat_bonus *bonus;
-
-  fc_assert_ret_msg(NULL != u, "Bad unit_type %d.", p->unit);
-
-  bonus = malloc(sizeof(*bonus));
-
-  bonus->flag  = p->flag;
-  bonus->type  = p->type;
-  bonus->value = p->value;
-
-  combat_bonus_list_append(u->bonuses, bonus);
-}
-
-/****************************************************************************
-  Packet ruleset_unit_flag handler.
-****************************************************************************/
-void handle_ruleset_unit_flag(const struct packet_ruleset_unit_flag *p)
-{
-  const char *flagname;
-  const char *helptxt;
-
-  fc_assert_ret_msg(p->id >= UTYF_USER_FLAG_1 && p->id <= UTYF_LAST_USER_FLAG, "Bad user flag %d.", p->id);
-
-  if (p->name[0] == '\0') {
-    flagname = NULL;
-  } else {
-    flagname = p->name;
-  }
-
-  if (p->helptxt[0] == '\0') {
-    helptxt = NULL;
-  } else {
-    helptxt = p->helptxt;
-  }
-
-  set_user_unit_type_flag_name(p->id, flagname, helptxt);
 }
 
 /****************************************************************************
@@ -3095,7 +2989,6 @@ void handle_ruleset_terrain(const struct packet_ruleset_terrain *p)
 
   fc_assert_ret_msg(NULL != pterrain, "Bad terrain %d.", p->id);
 
-  pterrain->tclass = p->tclass;
   pterrain->native_to = p->native_to;
   names_set(&pterrain->name, p->name, p->rule_name);
   sz_strlcpy(pterrain->graphic_str, p->graphic_str);
@@ -3122,12 +3015,8 @@ void handle_ruleset_terrain(const struct packet_ruleset_terrain *p)
   }
   pterrain->resources[p->num_resources] = NULL;
 
-  output_type_iterate(o) {
-    pterrain->road_output_incr_pct[o] = p->road_output_incr_pct[o];
-  } output_type_iterate_end;
-
-  pterrain->base_time = p->base_time;
   pterrain->road_time = p->road_time;
+  pterrain->road_trade_incr = p->road_trade_incr;
   pterrain->irrigation_result = terrain_by_number(p->irrigation_result);
   pterrain->irrigation_food_incr = p->irrigation_food_incr;
   pterrain->irrigation_time = p->irrigation_time;
@@ -3136,6 +3025,7 @@ void handle_ruleset_terrain(const struct packet_ruleset_terrain *p)
   pterrain->mining_time = p->mining_time;
   pterrain->transform_result = terrain_by_number(p->transform_result);
   pterrain->transform_time = p->transform_time;
+  pterrain->rail_time = p->rail_time;
   pterrain->clean_pollution_time = p->clean_pollution_time;
   pterrain->clean_fallout_time = p->clean_fallout_time;
 
@@ -3147,31 +3037,6 @@ void handle_ruleset_terrain(const struct packet_ruleset_terrain *p)
   PACKET_STRVEC_EXTRACT(pterrain->helptext, p->helptext);
 
   tileset_setup_tile_type(tileset, pterrain);
-}
-
-/****************************************************************************
-  Packet ruleset_terrain_flag handler.
-****************************************************************************/
-void handle_ruleset_terrain_flag(const struct packet_ruleset_terrain_flag *p)
-{
-  const char *flagname;
-  const char *helptxt;
-
-  fc_assert_ret_msg(p->id >= TER_USER_1 && p->id <= TER_USER_LAST, "Bad user flag %d.", p->id);
-
-  if (p->name[0] == '\0') {
-    flagname = NULL;
-  } else {
-    flagname = p->name;
-  }
-
-  if (p->helptxt[0] == '\0') {
-    helptxt = NULL;
-  } else {
-    helptxt = p->helptxt;
-  }
-
-  set_user_terrain_flag_name(p->id, flagname, helptxt);
 }
 
 /****************************************************************************
@@ -3208,7 +3073,6 @@ void handle_ruleset_base(const struct packet_ruleset_base *p)
   sz_strlcpy(pbase->graphic_str, p->graphic_str);
   sz_strlcpy(pbase->graphic_alt, p->graphic_alt);
   sz_strlcpy(pbase->activity_gfx, p->activity_gfx);
-  sz_strlcpy(pbase->act_gfx_alt, p->act_gfx_alt);
   pbase->buildable = p->buildable;
   pbase->pillageable = p->pillageable;
 
@@ -3232,86 +3096,6 @@ void handle_ruleset_base(const struct packet_ruleset_base *p)
   PACKET_STRVEC_EXTRACT(pbase->helptext, p->helptext);
 
   tileset_setup_base(tileset, pbase);
-}
-
-/****************************************************************************
-  Handle a packet about a particular road type.
-****************************************************************************/
-void handle_ruleset_road(const struct packet_ruleset_road *p)
-{
-  struct road_type *proad = road_by_number(p->id);
-  int i;
-
-  fc_assert_ret_msg(NULL != proad, "Bad road %d.", p->id);
-
-  names_set(&proad->name, p->name, p->rule_name);
-  sz_strlcpy(proad->graphic_str, p->graphic_str);
-  sz_strlcpy(proad->graphic_alt, p->graphic_alt);
-  sz_strlcpy(proad->activity_gfx, p->activity_gfx);
-  sz_strlcpy(proad->act_gfx_alt, p->act_gfx_alt);
-
-  proad->move_cost = p->move_cost;
-  proad->move_mode = p->move_mode;
-  proad->build_time = p->build_time;
-  proad->defense_bonus = p->defense_bonus;
-  proad->buildable = p->buildable;
-  proad->pillageable = p->pillageable;
-
-  output_type_iterate(o) {
-    proad->tile_incr_const[o] = p->tile_incr_const[o];
-    proad->tile_incr[o] = p->tile_incr[o];
-    proad->tile_bonus[o] = p->tile_bonus[o];
-  } output_type_iterate_end;
-
-  for (i = 0; i < p->reqs_count; i++) {
-    requirement_vector_append(&proad->reqs, p->reqs[i]);
-  }
-  fc_assert(proad->reqs.size == p->reqs_count);
-
-  proad->compat = p->compat;
-
-  proad->native_to = p->native_to;
-  proad->hidden_by = p->hidden_by;
-  proad->flags = p->flags;
-
-  PACKET_STRVEC_EXTRACT(proad->helptext, p->helptext);
-
-  tileset_setup_road(tileset, proad);
-}
-
-/****************************************************************************
-  Handle a packet about a particular disaster type.
-****************************************************************************/
-void handle_ruleset_disaster(const struct packet_ruleset_disaster *p)
-{
-  struct disaster_type *pdis = disaster_by_number(p->id);
-  int i;
-
-  fc_assert_ret_msg(NULL != pdis, "Bad disaster %d.", p->id);
-
-  names_set(&pdis->name, p->name, p->rule_name);
-
-  for (i = 0; i < p->reqs_count; i++) {
-    requirement_vector_append(&pdis->reqs, p->reqs[i]);
-  }
-  fc_assert(pdis->reqs.size == p->reqs_count);
-
-  pdis->frequency = p->frequency;
-
-  pdis->effects = p->effects;
-}
-
-/****************************************************************************
-  Handle a packet about a particular trade route type.
-****************************************************************************/
-void handle_ruleset_trade(const struct packet_ruleset_trade *p)
-{
-  struct trade_route_settings *pset = trade_route_settings_by_type(p->id);
-
-  if (pset != NULL) {
-    pset->trade_pct  = p->trade_pct;
-    pset->cancelling = p->cancelling;
-  }
 }
 
 /****************************************************************************

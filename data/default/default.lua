@@ -158,7 +158,10 @@ signal.connect("hut_enter", "default_hut_enter_callback")
 ]]--
 
 function default_make_partisans_callback(city, loser, winner)
-  if city:inspire_partisans(loser) <= 0 then
+  if city.original ~= loser then
+    return
+  end
+  if effects.player_bonus(loser, "Inspire_Partisans") <= 0 then
     return
   end
 

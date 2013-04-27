@@ -9,7 +9,7 @@ To use different graphics with Freeciv, use the '--tiles' argument to
 the Freeciv client. Eg, to use the 'engels' graphics, start the
 client as:
   
-    freeciv-gtk3 --tiles engels
+    freeciv-gtk2 --tiles engels
 
 What Freeciv actually does in this case is look for a file called
 'engels.tilespec' somewhere in your Freeciv data path. (See the file
@@ -71,9 +71,6 @@ options include:
   ------------------------
   options               : A capability string, currently "+tilespec4"
   name                  : the name of the tileset
-  type                  : general type of tileset, different types have
-                          quite different format. Supported types are
-                          "overview" and "isometric"
   city_names_font       : an X font string
   city_productions_font : an X font string
   main_intro_file       : GFX file for the intro graphics
@@ -97,6 +94,16 @@ options include:
                           height in isometric tileset
   small_tile_width      : the width of icon sprites
   small_tile_height     : the height of icon sprites
+  roadstyle             : Specifies how roads and rail are drawn.
+                          0 : A single sprite is drawn for every connection
+                              the tile has; only 8 sprites are needed.
+                          1 : A single sprite is drawn for all cardinal
+                              connections and a second sprite is drawn
+                              for all diagonal connections; 32 sprites are
+                              needed.
+                          2 : One sprite is drawn to show roads in all
+                              directions. There are thus 256 road and 256
+                              rail sprites (64 for a hex tileset).
   fogstyle              : Specifies how fog is drawn.
                           0 : Code automatically adds fog.
                           1 : A single fog sprite is drawn on top of all
@@ -144,6 +151,7 @@ options include:
 
   Booleans (0 or 1)
   -----------------
+  is_isometric          : set to 1 for an iso-view tileset
   is_hex                : set to 1 for a hexagonal tileset. If is_isometric
                           is also specified then you have an iso-hex tileset.
                           Hex tilesets should be used with topologies 8-11 and
@@ -169,7 +177,7 @@ file under the graphc and graphic_alt flags.)
 
   [tile_XXX] options
   ----------------
-  blend_layer           : If non-zero, given layer of this terrain will be
+  is_blended            : If non-zero, given layer of this terrain will be
                           blended with adjacent terrains. Blending is done
                           civ2-style with a dither mask. Only iso-view
                           currently supports blending. Only the base graphic
@@ -217,27 +225,6 @@ more than 3 layers (either in this section or in the [tile_XXX] sections).
                            used by terrains for this layer.
                            First letter of the match_type must be unique
                            within layer.
-
-  Road options
-  ------------
-
-  Tilespec should define style of road graphics for each road type in
-  section [roads] like:
-
-  [roads]
-  styles =
-      { "name", "style"
-        "road", "AllSeparate"
-        "rail", "AllSeparate"
-      }
-
-  AllSeparate    : A single sprite is drawn for every connection the tile has;
-                   only 8 sprites are needed.
-  ParityCombined : A single sprite is drawn for all cardinal connections and
-                   a second sprite is drawn for all diagonal connections;
-                   32 sprites are needed.
-  AllCombined    : One sprite is drawn to show roads in all directions.
-                   There are thus 256 sprites (64 for a hex tileset).
 
 ----------------------------------------------------------------------
 Individual spec files:
@@ -408,8 +395,8 @@ sprites.
     ; This specifies a civ2-like grassland tile. A single sprite
     ; t.grassland is needed; it will be drawn blended.
     [terrain_grassland]
-    blend_layer = 1
-    num_layers  = 1
+    is_blended = 1
+    num_layers = 1
     layer0_match_type = 0
 
     ; This specifies a civ1-like mountain tile. 16 sprites
@@ -417,8 +404,8 @@ sprites.
     ; will be drawn to match the adjacent tiles. Assuming only mountains
     ; has this match_type, adjacent mountains will match.
     [terrain_mountains]
-    blend_layer = 0
-    num_layers  = 1
+    is_blended = 0
+    num_layers = 1
     layer0_match_type = 7
 
     ; This specifies a civ2-like hills tile. A base sprite t.hills will be
@@ -427,16 +414,16 @@ sprites.
     ; drawn on top. (In most civ2 tilesets the base sprite is the grassland
     ; sprite).
     [terrain_hills]
-    blend_layer = 1
-    num_layers  = 2
+    is_blended = 1
+    num_layers = 2
     layer0_match_type = 0
     layer1_match_type = 8
 
     ; This specifies a civ2-like ocean tile. Ocean is drawn via a cell-based
     ; system as explained above.
     [terrain_ocean]
-    blend_layer = 1
-    num_layers  = 1
+    is_blended = 1
+    num_layers = 1
     layer0_match_type = 6
     layer0_cell_type = "rect"
 

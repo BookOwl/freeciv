@@ -24,15 +24,15 @@ struct ai_data;
 struct ai_plr;
 struct tile_data_cache;
 
-void dai_auto_settler_init(struct ai_plr *ai);
-void dai_auto_settler_free(struct ai_plr *ai);
+void ai_auto_settler_init(struct ai_plr *ai);
+void ai_auto_settler_free(struct ai_plr *ai);
 
-void dai_auto_settler_reset(struct ai_type *ait, struct player *pplayer);
-void dai_auto_settler_run(struct ai_type *ait, struct player *pplayer,
-                          struct unit *punit, struct settlermap *state);
-void dai_auto_settler_cont(struct ai_type *ait, struct player *pplayer,
-                           struct unit *punit, struct settlermap *state);
+void dai_auto_settler_reset(struct player *pplayer);
+void dai_auto_settler_run(struct player *pplayer, struct unit *punit,
+                          struct settlermap *state);
+void dai_auto_settler_cont(struct player *pplayer, struct unit *punit,
+                           struct settlermap *state);
 
-void contemplate_new_city(struct ai_type *ait, struct city *pcity);
+void contemplate_new_city(struct city *pcity);
 
 #endif /* FC__AISETTLER_H */

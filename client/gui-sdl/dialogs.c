@@ -1263,12 +1263,9 @@ const char *sdl_get_tile_defense_info_text(struct tile *ptile)
   static char buffer[64];
   int bonus = (tile_terrain(ptile)->defense_bonus - 10) * 10;    
   
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)
-        && road_has_flag(proad, RF_NATURAL)) {
-      bonus += proad->defense_bonus;
-    }
-  } road_type_iterate_end;
+  if(tile_has_special(ptile, S_RIVER)) {
+    bonus += terrain_control.river_defense_bonus;
+  }
 
   fc_snprintf(buffer, sizeof(buffer), _("Terrain Defense Bonus: +%d%% "), bonus);
 
@@ -2163,21 +2160,15 @@ static int pillage_callback(struct widget *pWidget)
 
     if (pUnit)
     {
-      struct act_tgt target;
+      Base_type_id pillage_base = -1;
 
-      if (what >= S_LAST + game.control.num_base_types) {
-        target.type = ATT_ROAD;
-        target.obj.road = what - S_LAST - game.control.num_base_types;
-      } else if (what >= S_LAST) {
-        target.type = ATT_BASE;
-        target.obj.base = what - S_LAST;
-      } else {
-        target.type = ATT_SPECIAL;
-        target.obj.spe = what;
+      if (what > S_LAST) {
+        pillage_base = what - S_LAST - 1;
+        what = S_LAST;
       }
 
-      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE,
-                                         &target);
+      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE, what,
+                                         pillage_base);
     }
   }  
   return -1;
@@ -2214,14 +2205,13 @@ static void popdown_pillage_dialog(void)
   pillage.
 **************************************************************************/
 void popup_pillage_dialog(struct unit *pUnit,
-			  bv_special spe,
-                          bv_bases bases,
-                          bv_roads roads)
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
+  int what;
   SDL_Rect area;
-  struct act_tgt tgt;
 
   if (pPillage_Dlg) {
     return;
@@ -2260,32 +2250,24 @@ void popup_pillage_dialog(struct unit *pUnit,
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
 
-  while (get_preferred_pillage(&tgt, spe, bases, roads)) {
-    const char *name = NULL;
-    int what = S_LAST;
+  while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    const char *name;
 
-    switch (tgt.type) {
-      case ATT_SPECIAL:
-        name = special_name_translation(tgt.obj.spe);
-        clear_special(&spe, tgt.obj.spe);
-        what = tgt.obj.spe;
-        break;
-      case ATT_BASE:
-        name = base_name_translation(base_by_number(tgt.obj.base));
-        BV_CLR(bases, tgt.obj.base);
-        what = tgt.obj.base + S_LAST;
-        break;
-      case ATT_ROAD:
-        name = road_name_translation(road_by_number(tgt.obj.road));
-        BV_CLR(roads, tgt.obj.road);
-        what = tgt.obj.road + S_LAST + game.control.num_base_types;
-        break;
+    if (what > S_LAST) {
+      struct base_type *pbase = base_by_number(what - S_LAST - 1);
+      name = base_name_translation(pbase);
+    } else {
+      name = special_name_translation(what);
     }
-
-    fc_assert(name != NULL);
 
     create_active_iconlabel(pBuf, pWindow->dst, pStr,
                             (char *) name, pillage_callback);
+
+    if (what > S_LAST) {
+      BV_CLR(bases, what - S_LAST - 1);
+    } else {
+      clear_special(&may_pillage, what);
+    }
 
     pBuf->data.unit = pUnit;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -3587,14 +3569,6 @@ void popup_tileset_suggestion_dialog(void)
 {
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -3603,12 +3577,4 @@ bool popup_theme_suggestion_dialog(const char *theme_name)
 {
   /* Don't load */
   return FALSE;
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
 }

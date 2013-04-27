@@ -23,12 +23,9 @@ extern "C" {
 #include <sys/time.h>
 #endif
 
-/* utility */
-#include "fcthread.h"
 #include "shared.h"
 #include "timing.h"
 
-/* common */
 #include "connection.h"		/* struct conn_list */
 #include "fc_types.h"
 #include "player.h"
@@ -59,12 +56,6 @@ enum autosave_type {
   AS_GAME_OVER,
   AS_QUITIDLE,
   AS_INTERRUPT
-};
-
-struct user_flag
-{
-  char *name;
-  char *helptxt;
 };
 
 #define CONTAMINATION_POLLUTION 1
@@ -158,15 +149,14 @@ struct civ_game {
       int revolution_length;
       int save_compress_level;
       enum fz_method save_compress_type;
+      int saveversion; /* save game version to use */
       int save_nturns;
       unsigned autosaves; /* FIXME: char would be enough, but current settings.c code wants to
                              write sizeof(unsigned) bytes */
       bool savepalace;
       bool homecaughtunits;
       char start_units[MAX_LEN_STARTUNIT];
-      bool start_city;
       int start_year;
-      int techloss_forgiveness;
       int techlost_donor;
       int techlost_recv;
       int tcptimeout;
@@ -232,10 +222,6 @@ struct civ_game {
         char user_message[256];
       } meta_info;
 
-      struct {
-        fc_mutex city_list;
-      } mutexes;
-
       int first_timeout;
     } server;
   };
@@ -280,9 +266,6 @@ const char *textyear(int year);
 int generate_save_name(const char *format, char *buf, int buflen,
                        const char *reason);
 
-void user_flag_init(struct user_flag *flag);
-void user_flag_free(struct user_flag *flag);
-
 extern struct civ_game game;
 
 #define GAME_DEFAULT_SEED        0
@@ -294,7 +277,6 @@ extern struct civ_game game;
 #define GAME_MAX_GOLD            50000
 
 #define GAME_DEFAULT_START_UNITS  "ccwwx"
-#define GAME_DEFAULT_START_CITY  FALSE
 
 #define GAME_DEFAULT_DISPERSION  0
 #define GAME_MIN_DISPERSION      0
@@ -363,10 +345,6 @@ extern struct civ_game game;
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
 
-#define GAME_DEFAULT_TECHLOSSFG      -1
-#define GAME_MIN_TECHLOSSFG          -1
-#define GAME_MAX_TECHLOSSFG          200
-
 #define GAME_DEFAULT_CITYMINDIST     2
 #define GAME_MIN_CITYMINDIST         1
 #define GAME_MAX_CITYMINDIST         9
@@ -387,10 +365,6 @@ extern struct civ_game game;
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
 #define GAME_MAX_RAPTUREDELAY        99 /* 99 practicaly disables rapturing */
-
-#define GAME_DEFAULT_DISASTERS       10
-#define GAME_MIN_DISASTERS           0
-#define GAME_MAX_DISASTERS           1000
  
 #define GAME_DEFAULT_SAVEPALACE      TRUE
 
@@ -425,8 +399,7 @@ extern struct civ_game game;
 #define GAME_MIN_AQUEDUCTLOSS        0
 #define GAME_MAX_AQUEDUCTLOSS        100
 
-#define GAME_DEFAULT_KILLSTACK       TRUE
-#define GAME_DEFAULT_KILLCITIZEN     TRUE
+#define GAME_DEFAULT_KILLCITIZEN     (1 << UMT_LAND)
 
 #define GAME_DEFAULT_KILLUNHOMED     0
 #define GAME_MIN_KILLUNHOMED         0
@@ -531,12 +504,9 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_AUTOATTACK      FALSE
 
-#ifdef FREECIV_WEB
-#define GAME_DEFAULT_RULESETDIR      "fcweb"
-#else  /* FREECIV_WEB */
-#define GAME_DEFAULT_RULESETDIR      "classic"
-#endif /* FREECIV_WEB */
+#define GAME_DEFAULT_RULESETDIR      "default"
 
+#define GAME_DEFAULT_SAVEVERSION     0
 #define GAME_DEFAULT_SAVE_NAME       "freeciv"
 #define GAME_DEFAULT_SAVETURNS       1
 #define GAME_MIN_SAVETURNS           1
@@ -698,6 +668,8 @@ extern struct civ_game game;
 #define RS_DEFAULT_SLOW_INVASIONS                TRUE
 
 #define RS_DEFAULT_TIRED_ATTACK                  FALSE
+
+#define RS_DEFAULT_KILLSTACK                     TRUE
 
 #define RS_DEFAULT_BASE_BRIBE_COST               750
 #define RS_MIN_BASE_BRIBE_COST                   0

@@ -36,8 +36,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
  * full number of improvement types.
  *
  * B_NEVER is the pointer equivalent replacement for B_LAST flag value.
- *
- * Used in the network protocol.
  */
 #define B_LAST MAX_NUM_ITEMS
 
@@ -57,7 +55,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_COUNT IF_COUNT
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME impr_genus_id
 #define SPECENUM_VALUE0 IG_GREAT_WONDER
 #define SPECENUM_VALUE0NAME "GreatWonder"
@@ -69,7 +66,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_VALUE3NAME "Special"
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 BV_DEFINE(bv_imprs, B_LAST);
 BV_DEFINE(bv_impr_flags, IF_COUNT);
 

@@ -37,7 +37,6 @@
 #include "packets.h"
 
 /* server */
-#include "citytools.h"
 #include "connecthand.h"
 #include "ggzserver.h"
 #include "maphand.h"
@@ -389,12 +388,6 @@ void init_new_game(void)
 
     fc_assert_action(NULL != ptile, continue);
 
-    /* Place first city */
-    if (game.server.start_city) {
-      create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile),
-                  NULL);
-    }
-
     /* Place the first unit. */
     if (place_starting_unit(ptile, pplayer,
                             game.server.start_units[0]) != NULL) {
@@ -497,11 +490,13 @@ void send_game_info(struct conn_list *dest)
      * (and game.info.seconds_to_phasedone is relative to this).
      * Account for the difference. */
     ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
-        - timer_read_seconds(game.server.phase_timer);
+        - read_timer_seconds(game.server.phase_timer);
   } else {
     /* unused but at least initialized */
     ginfo.seconds_to_phasedone = -1.0;
   }
+
+  ginfo.trademindist_old = ginfo.trademindist_new;
 
   conn_list_iterate(dest, pconn) {
     send_packet_game_info(pconn, &ginfo);
@@ -591,7 +586,7 @@ int update_timeout(void)
 void increase_timeout_because_unit_moved(void)
 {
   if (game.info.timeout > 0 && game.server.timeoutaddenemymove > 0) {
-    double maxsec = (timer_read_seconds(game.server.phase_timer)
+    double maxsec = (read_timer_seconds(game.server.phase_timer)
 		     + (double) game.server.timeoutaddenemymove);
 
     if (maxsec > game.info.seconds_to_phasedone) {

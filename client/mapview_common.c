@@ -26,7 +26,6 @@
 #include "featured_text.h"
 #include "game.h"
 #include "map.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client/include */
@@ -150,7 +149,7 @@ void refresh_unit_mapcanvas(struct unit *punit, struct tile *ptile,
 {
   if (full_refresh && draw_native) {
     queue_mapview_update(UPDATE_MAP_CANVAS_VISIBLE);
-  } else if (full_refresh && unit_has_type_flag(punit, UTYF_CITIES)) {
+  } else if (full_refresh && unit_has_type_flag(punit, F_CITIES)) {
     queue_mapview_tile_update(ptile, TILE_UPDATE_CITYMAP);
   } else {
     queue_mapview_tile_update(ptile, TILE_UPDATE_UNIT);
@@ -629,8 +628,7 @@ void set_mapview_origin(int gui_x0, int gui_y0)
 
     gui_distance_vector(tileset,
 			&diff_x, &diff_y, start_x, start_y, gui_x0, gui_y0);
-    anim_timer = timer_renew(anim_timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(anim_timer);
+    anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
     unqueue_mapview_updates(TRUE);
 
@@ -642,7 +640,7 @@ void set_mapview_origin(int gui_x0, int gui_y0)
        * frame's position is calculated from the expected time when the
        * frame will complete, rather than the time when the frame drawing
        * is started. */
-      currtime = timer_read_seconds(anim_timer);
+      currtime = read_timer_seconds(anim_timer);
       currtime += total_time / total_frames;
 
       mytime = MIN(currtime, timing_sec);
@@ -653,7 +651,7 @@ void set_mapview_origin(int gui_x0, int gui_y0)
       frames++;
     } while (currtime < timing_sec);
 
-    currtime = timer_read_seconds(anim_timer);
+    currtime = read_timer_seconds(anim_timer);
     total_frames += frames;
     total_time += currtime;
     log_debug("Got %d frames in %f seconds: %f FPS (avg %f).",
@@ -1232,14 +1230,21 @@ static void draw_trade_route_line(const struct tile *ptile1,
 **************************************************************************/
 static void draw_trade_routes_for_city(const struct city *pcity_src)
 {
+  int i;
+  const struct city *pcity_dest;
+
   if (!pcity_src) {
     return;
   }
 
-  trade_routes_iterate(pcity_src, pcity_dest) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    pcity_dest = game_city_by_number(pcity_src->trade[i]);
+    if (!pcity_dest) {
+      continue;
+    }
     draw_trade_route_line(city_tile(pcity_src), city_tile(pcity_dest),
                           COLOR_MAPVIEW_TRADE_ROUTE_LINE);
-  } trade_routes_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -2072,8 +2077,7 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
   while (punit0->hp > hp0 || punit1->hp > hp1) {
     const int diff0 = punit0->hp - hp0, diff1 = punit1->hp - hp1;
 
-    anim_timer = timer_renew(anim_timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(anim_timer);
+    anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
     if (fc_rand(diff0 + diff1) < diff0) {
       punit0->hp--;
@@ -2086,7 +2090,7 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
     unqueue_mapview_updates(TRUE);
     gui_flush();
 
-    timer_usleep_since_start(anim_timer, smooth_combat_step_msec * 1000ul);
+    usleep_since_timer_start(anim_timer, smooth_combat_step_msec * 1000ul);
   }
 
   if (num_tiles_explode_unit > 0
@@ -2103,8 +2107,7 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
       struct sprite *sprite = *sprite_vector_get(anim, i);
 
       get_sprite_dimensions(sprite, &w, &h);
-      anim_timer = timer_renew(anim_timer, TIMER_USER, TIMER_ACTIVE);
-      timer_start(anim_timer);
+      anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
       /* We first draw the explosion onto the unit and draw draw the
        * complete thing onto the map canvas window. This avoids
@@ -2121,7 +2124,7 @@ void decrease_unit_hp_smooth(struct unit *punit0, int hp0,
       flush_dirty();
       gui_flush();
 
-      timer_usleep_since_start(anim_timer,
+      usleep_since_timer_start(anim_timer,
                                smooth_combat_step_msec * 2 * 1000ul);
     }
   }
@@ -2150,7 +2153,7 @@ void move_unit_map_canvas(struct unit *punit,
   }
 
   if (unit_is_in_focus(punit) && hover_state != HOVER_NONE) {
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, NULL, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
     update_unit_info_label(get_units_in_focus());
   }
 
@@ -2182,13 +2185,12 @@ void move_unit_map_canvas(struct unit *punit,
     unqueue_mapview_updates(FALSE);
 
     /* Start the timer (AFTER the unqueue above). */
-    anim_timer = timer_renew(anim_timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(anim_timer);
+    anim_timer = renew_timer_start(anim_timer, TIMER_USER, TIMER_ACTIVE);
 
     do {
       int new_x, new_y;
 
-      mytime = MIN(timer_read_seconds(anim_timer), timing_sec);
+      mytime = MIN(read_timer_seconds(anim_timer), timing_sec);
 
       new_x = start_x + canvas_dx * (mytime / timing_sec);
       new_y = start_y + canvas_dy * (mytime / timing_sec);
@@ -2294,7 +2296,7 @@ struct city *find_city_or_settler_near_tile(const struct tile *ptile,
     unit_list_iterate(tile1->units, psettler) {
       if ((NULL == client.conn.playing
            || unit_owner(psettler) == client.conn.playing)
-          && unit_has_type_flag(psettler, UTYF_CITIES)
+          && unit_has_type_flag(psettler, F_CITIES)
           && city_can_be_built_here(unit_tile(psettler), psettler)) {
         if (!closest_settler) {
           closest_settler = psettler;
@@ -2383,7 +2385,6 @@ void get_city_mapview_trade_routes(struct city *pcity,
                                    enum color_std *pcolor)
 {
   int num_trade_routes = 0, i;
-  int max_routes;
 
   if (!trade_routes_buffer || trade_routes_buffer_len <= 0) {
     return;
@@ -2397,7 +2398,7 @@ void get_city_mapview_trade_routes(struct city *pcity,
     return;
   }
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     if (pcity->trade[i] <= 0) {
       /* NB: pcity->trade_value[i] == 0 is a valid case. */
       continue;
@@ -2405,13 +2406,11 @@ void get_city_mapview_trade_routes(struct city *pcity,
     num_trade_routes++;
   }
 
-  max_routes = max_trade_routes(pcity);
-
   fc_snprintf(trade_routes_buffer, trade_routes_buffer_len,
-              "%d/%d", num_trade_routes, max_routes);
+              "%d/%d", num_trade_routes, NUM_TRADE_ROUTES);
 
   if (pcolor) {
-    if (num_trade_routes == max_routes) {
+    if (num_trade_routes == NUM_TRADE_ROUTES) {
       *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_ALL_BUILT;
     } else if (num_trade_routes == 0) {
       *pcolor = COLOR_MAPVIEW_TRADE_ROUTES_NO_BUILT;

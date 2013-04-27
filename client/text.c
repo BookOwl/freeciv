@@ -27,14 +27,12 @@
 #include "support.h"
 
 /* common */
-#include "citizens.h"
 #include "combat.h"
 #include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "government.h"
 #include "map.h"
 #include "research.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -280,7 +278,7 @@ const char *popup_info_text(struct tile *ptile)
     unit_list_iterate(get_units_in_focus(), pfocus_unit) {
       struct city *hcity = game_city_by_number(pfocus_unit->homecity);
 
-      if (unit_has_type_flag(pfocus_unit, UTYF_TRADE_ROUTE)
+      if (unit_has_type_flag(pfocus_unit, F_TRADE_ROUTE)
 	  && can_cities_trade(hcity, pcity)
 	  && can_establish_trade_route(hcity, pcity)) {
 	/* TRANS: "Trade from Warsaw: 5" */
@@ -292,8 +290,7 @@ const char *popup_info_text(struct tile *ptile)
   }
   {
     const char *infratext = get_infrastructure_text(ptile->special,
-                                                    ptile->bases,
-                                                    ptile->roads);
+                                                    ptile->bases);
     if (*infratext != '\0') {
       astr_add_line(&str, _("Infrastructure: %s"), infratext);
     }
@@ -415,8 +412,6 @@ const char *concat_tile_activity_text(struct tile *ptile)
   int activity_units[ACTIVITY_LAST];
   int base_total[MAX_BASE_TYPES];
   int base_units[MAX_BASE_TYPES];
-  int road_total[MAX_ROAD_TYPES];
-  int road_units[MAX_ROAD_TYPES];
   int num_activities = 0;
   int pillaging = 0;
   int remains, turns, i;
@@ -428,20 +423,14 @@ const char *concat_tile_activity_text(struct tile *ptile)
   memset(activity_units, 0, sizeof(activity_units));
   memset(base_total, 0, sizeof(base_total));
   memset(base_units, 0, sizeof(base_units));
-  memset(road_total, 0, sizeof(road_total));
-  memset(road_units, 0, sizeof(road_units));
 
   unit_list_iterate(ptile->units, punit) {
     if (punit->activity == ACTIVITY_PILLAGE) {
       pillaging = 1;
     } else if (punit->activity == ACTIVITY_BASE) {
-      base_total[punit->activity_target.obj.base] += punit->activity_count;
-      base_total[punit->activity_target.obj.base] += get_activity_rate_this_turn(punit);
-      base_units[punit->activity_target.obj.base] += get_activity_rate(punit);
-    } else if (punit->activity == ACTIVITY_GEN_ROAD) {
-      road_total[punit->activity_target.obj.road] += punit->activity_count;
-      road_total[punit->activity_target.obj.road] += get_activity_rate_this_turn(punit);
-      road_units[punit->activity_target.obj.road] += get_activity_rate(punit);
+      base_total[punit->activity_base] += punit->activity_count;
+      base_total[punit->activity_base] += get_activity_rate_this_turn(punit);
+      base_units[punit->activity_base] += get_activity_rate(punit);
     } else {
       activity_total[punit->activity] += punit->activity_count;
       activity_total[punit->activity] += get_activity_rate_this_turn(punit);
@@ -450,14 +439,11 @@ const char *concat_tile_activity_text(struct tile *ptile)
   } unit_list_iterate_end;
 
   if (pillaging) {
-    bv_special pillage_spe = get_unit_tile_pillage_set(ptile);
+    bv_special pillage_targets = get_unit_tile_pillage_set(ptile);
     bv_bases pillage_bases = get_unit_tile_pillage_base_set(ptile);
-    bv_roads pillage_roads = get_unit_tile_pillage_road_set(ptile);
-    if (BV_ISSET_ANY(pillage_spe)
-        || BV_ISSET_ANY(pillage_bases)
-        || BV_ISSET_ANY(pillage_roads)) {
+    if (BV_ISSET_ANY(pillage_targets) || BV_ISSET_ANY(pillage_bases)) {
       astr_add(&str, "%s(%s)", _("Pillage"),
-               get_infrastructure_text(pillage_spe, pillage_bases, pillage_roads));
+               get_infrastructure_text(pillage_targets, pillage_bases));
     } else {
       /* Untargeted pillaging is happening. */
       astr_add(&str, "%s", _("Pillage"));
@@ -484,24 +470,6 @@ const char *concat_tile_activity_text(struct tile *ptile)
 	  num_activities++;
 	}
       } base_type_iterate_end;
-    } else if (i == ACTIVITY_GEN_ROAD) {
-      road_type_iterate(rp) {
-        Road_type_id r = road_index(rp);
-	if (road_units[r] > 0) {
-	  remains = tile_activity_road_time(ptile, r) - road_total[r];
-	  if (remains > 0) {
-	    turns = 1 + (remains + road_units[r] - 1) / road_units[r];
-	  } else {
-	    /* road will be finished this turn */
-	    turns = 1;
-	  }
-	  if (num_activities > 0) {
-	    astr_add(&str, "/");
-	  }
-	  astr_add(&str, "%s(%d)", road_name_translation(rp), turns);
-	  num_activities++;
-	}
-      } road_type_iterate_end;
     } else if (is_build_or_clean_activity(i) && activity_units[i] > 0) {
       if (num_activities > 0) {
 	astr_add(&str, "/");
@@ -563,10 +531,8 @@ const char *get_nearest_city_text(struct city *pcity, int sq_dist)
 const char *unit_description(struct unit *punit)
 {
   int pcity_near_dist;
-  struct player *owner = unit_owner(punit);
-  struct player *nationality = unit_nationality(punit);
   struct city *pcity =
-      player_city_by_number(owner, punit->homecity);
+      player_city_by_number(unit_owner(punit), punit->homecity);
   struct city *pcity_near = get_nearest_city(punit, &pcity_near_dist);
   struct unit_type *ptype = unit_type(punit);
   static struct astring str = ASTRING_INIT;
@@ -584,7 +550,7 @@ const char *unit_description(struct unit *punit)
     }
   }
 
-  if (pplayer == owner) {
+  if (pplayer == unit_owner(punit)) {
     unit_upkeep_astr(punit, &str);
   }
   astr_add(&str, "\n");
@@ -595,14 +561,6 @@ const char *unit_description(struct unit *punit)
     astr_add_line(&str, _("from %s"), city_name(pcity));
   } else {
     astr_add(&str, "\n");
-  }
-  if (game.info.citizen_nationality) {
-    if (nationality != NULL && owner != nationality) {
-      /* TRANS: Nationality of the soldiers in unit, can be different from owner. */
-      astr_add(&str, _("%s people"), nation_adjective_for_player(nationality));
-    } else {
-      astr_add(&str, "\n");
-    }
   }
 
   astr_add_line(&str, "%s",
@@ -1128,11 +1086,10 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     astr_add_line(&str, _("No units selected."));
   }
 
-  /* Lines 2, 3, 4, and possible 5 vary. */
+  /* Lines 2, 3, and 4 vary. */
   if (count == 1) {
     struct unit *punit = unit_list_get(punits, 0);
-    struct player *owner = unit_owner(punit);
-    struct city *pcity = player_city_by_number(owner,
+    struct city *pcity = player_city_by_number(unit_owner(punit),
                                                punit->homecity);
 
     astr_add_line(&str, "%s", tile_get_info_text(unit_tile(punit),
@@ -1140,8 +1097,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     {
       const char *infratext
         = get_infrastructure_text(unit_tile(punit)->special,
-                                  unit_tile(punit)->bases,
-                                  unit_tile(punit)->roads);
+                                  unit_tile(punit)->bases);
       if (*infratext != '\0') {
         astr_add_line(&str, "%s", infratext);
       } else {
@@ -1153,18 +1109,6 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     } else {
       astr_add_line(&str, " ");
     }
-
-    if (game.info.citizen_nationality) {
-      struct player *nationality = unit_nationality(punit);
-
-      /* Line 5, nationality text */
-      if (nationality != NULL && owner != nationality) {
-        astr_add(&str, _("%s people"), nation_adjective_for_player(nationality));
-      } else {
-        astr_add(&str, " ");
-      }
-    }
-
   } else if (count > 1) {
     int mil = 0, nonmil = 0;
     int types_count[U_LAST], i;
@@ -1172,7 +1116,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     memset(types_count, 0, sizeof(types_count));
     unit_list_iterate(punits, punit) {
-      if (unit_has_type_flag(punit, UTYF_CIVILIAN)) {
+      if (unit_has_type_flag(punit, F_CIVILIAN)) {
 	nonmil++;
       } else {
 	mil++;
@@ -1202,7 +1146,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     for (i = 0; i < 2; i++) {
       if (top[i] && types_count[utype_index(top[i])] > 0) {
-	if (utype_has_flag(top[i], UTYF_CIVILIAN)) {
+	if (utype_has_flag(top[i], F_CIVILIAN)) {
 	  nonmil -= types_count[utype_index(top[i])];
 	} else {
 	  mil -= types_count[utype_index(top[i])];
@@ -1228,21 +1172,13 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     } else {
       astr_add_line(&str, " ");
     }
-
-    if (game.info.citizen_nationality) {
-      astr_add_line(&str, " ");
-    }
   } else {
     astr_add_line(&str, " ");
     astr_add_line(&str, " ");
     astr_add_line(&str, " ");
-
-    if (game.info.citizen_nationality) {
-      astr_add_line(&str, " ");
-    }
   }
 
-  /* Line 5/6. Debug text. */
+  /* Line 5. Debug text. */
 #ifdef DEBUG
   if (count == 1) {
     astr_add_line(&str, "(Unit ID %d)", unit_list_get(punits, 0)->id);
@@ -1331,7 +1267,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
     fc_snprintf(buf, bufsz, _("No units to disband!"));
     return FALSE;
   } else if (unit_list_size(punits) == 1) {
-    if (unit_has_type_flag(unit_list_front(punits), UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(unit_list_front(punits), F_UNDISBANDABLE)) {
       fc_snprintf(buf, bufsz, _("%s refuses to disband!"),
                   unit_name_translation(unit_list_front(punits)));
       return FALSE;
@@ -1344,7 +1280,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
   } else {
     int count = 0;
     unit_list_iterate(punits, punit) {
-      if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+      if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
         count++;
       }
     } unit_list_iterate_end;
@@ -1705,44 +1641,6 @@ const char *text_happiness_buildings(const struct city *pcity)
 
   /* Add line breaks after 80 characters. */
   astr_break_lines(&str, 80);
-
-  return astr_str(&str);
-}
-
-/****************************************************************************
-  Describing nationality effects that affect happiness.
-****************************************************************************/
-const char *text_happiness_nationality(const struct city *pcity)
-{
-  static struct astring str = ASTRING_INIT;
-  int enemies = 0;
-
-  astr_clear(&str);
-
-  astr_add_line(&str, _("Nationality: "));
-
-  if (game.info.citizen_nationality) {
-    if (get_city_bonus(pcity, EFT_ENEMY_CITIZEN_UNHAPPY_PCT) > 0) {
-      struct player *owner = city_owner(pcity);
-
-      citizens_foreign_iterate(pcity, pslot, nationality) {
-        if (pplayers_at_war(owner, player_slot_get_player(pslot))) {
-          enemies += nationality;
-        }
-      } citizens_foreign_iterate_end;
-
-      if (enemies > 0) {
-        astr_add(&str, PL_("%d enemy nationalist", "%d enemy nationalists", enemies),
-                 enemies);
-      }
-    }
-
-    if (enemies == 0) {
-      astr_add(&str, _("None. "));
-    }
-  } else {
-    astr_add(&str, _("Disabled. "));
-  }
 
   return astr_str(&str);
 }

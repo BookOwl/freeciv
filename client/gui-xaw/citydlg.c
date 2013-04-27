@@ -49,7 +49,6 @@
 #include "packets.h"
 #include "player.h"
 #include "specialist.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -1393,7 +1392,7 @@ void present_units_callback(Widget w, XtPointer client_data,
 	|| !can_unit_do_activity(punit, ACTIVITY_FORTIFYING)) {
       XtSetSensitive(XtNameToWidget(wd, "*button3"), FALSE);
     }
-    if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       XtSetSensitive(XtNameToWidget(wd, "*button4"), FALSE);
     }
     if (punit->homecity == pcity->id) {
@@ -1468,7 +1467,7 @@ void trade_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	      city_name(pdialog->pcity));
   bptr = end_of_strn(bptr, &nleft);
   
-  for (i = 0; i < MAX_TRADE_ROUTES; i++)
+  for (i = 0; i < NUM_TRADE_ROUTES; i++)
     if(pdialog->pcity->trade[i]) {
       struct city *pcity;
       x=1;
@@ -1660,7 +1659,7 @@ static void support_units_callback(Widget w, XtPointer client_data,
 			     disband_callback, punit->id, 1,
 			     present_units_cancel_callback, 0, 0,
 			     NULL);
-        if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+        if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
           XtSetSensitive(XtNameToWidget(wd, "*button3"), FALSE);
         }
       }

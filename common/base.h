@@ -26,7 +26,6 @@ extern "C" {
 
 struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME base_gui_type
 #define SPECENUM_VALUE0 BASE_GUI_FORTRESS
 #define SPECENUM_VALUE0NAME "Fortress"
@@ -36,7 +35,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_VALUE2NAME "Other"
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME base_flag_id
 /* Unit inside are not considered aggressive if base is close to city */
 #define SPECENUM_VALUE0 BF_NOT_AGGRESSIVE
@@ -53,13 +51,10 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 /* Makes tile native terrain for units */
 #define SPECENUM_VALUE4 BF_NATIVE_TILE
 #define SPECENUM_VALUE4NAME "NativeTile"
-/* Owner's flag is displayed next to base */
-#define SPECENUM_VALUE5 BF_SHOW_FLAG
-#define SPECENUM_VALUE5NAME "ShowFlag"
 #define SPECENUM_COUNT BF_COUNT
 #include "specenum_gen.h"
 
-BV_DEFINE(bv_base_flags, BF_COUNT); /* Used in the network protocol. */
+BV_DEFINE(bv_base_flags, BF_COUNT);
 
 struct base_type {
   Base_type_id item_number;
@@ -69,7 +64,6 @@ struct base_type {
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
   char activity_gfx[MAX_LEN_NAME];
-  char act_gfx_alt[MAX_LEN_NAME];
   struct requirement_vector reqs;
   enum base_gui_type gui_type;
   int build_time;
@@ -118,9 +112,6 @@ bool is_native_tile_to_base(const struct base_type *pbase,
 /* Ancillary functions */
 bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                     const struct tile *ptile);
-bool player_can_build_base(const struct base_type *pbase,
-                           const struct player *pplayer,
-                           const struct tile *ptile);
 
 struct base_type *get_base_by_gui_type(enum base_gui_type type,
                                        const struct unit *punit,
@@ -129,7 +120,6 @@ struct base_type *get_base_by_gui_type(enum base_gui_type type,
 bool can_bases_coexist(const struct base_type *base1, const struct base_type *base2);
 
 bool territory_claiming_base(const struct base_type *pbase);
-struct player *base_owner(const struct tile *ptile);
 
 /* Initialization and iteration */
 void base_types_init(void);
@@ -147,17 +137,6 @@ const struct base_type *base_array_last(void);
 #define base_type_iterate_end						\
     }									\
   }									\
-}
-
-#define base_deps_iterate(_reqs, _dep)                                  \
-{                                                                       \
-  requirement_vector_iterate(_reqs, preq) {                             \
-    if (preq->source.kind == VUT_BASE) {                                \
-      struct base_type *_dep = preq->source.value.base;
-
-#define base_deps_iterate_end                                           \
-    }                                                                   \
-  } requirement_vector_iterate_end;                                     \
 }
 
 #ifdef __cplusplus

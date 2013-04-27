@@ -30,7 +30,6 @@
 #include "base.h"
 #include "city.h"
 #include "connection.h"
-#include "disaster.h"
 #include "government.h"
 #include "idex.h"
 #include "map.h"
@@ -41,8 +40,6 @@
 #include "spaceship.h"
 #include "specialist.h"
 #include "tech.h"
-#include "terrain.h"
-#include "traderoutes.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -252,13 +249,11 @@ static void game_defaults(void)
   game.control.government_count        = 0;
   game.control.nation_count            = 0;
   game.control.num_base_types          = 0;
-  game.control.num_road_types          = 0;
   game.control.num_impr_types          = 0;
   game.control.num_specialist_types    = 0;
   game.control.num_tech_types          = 0;
   game.control.num_unit_classes        = 0;
   game.control.num_unit_types          = 0;
-  game.control.num_disaster_types      = 0;
   game.control.prefered_tileset[0]     = '\0';
   game.control.resource_count          = 0;
   game.control.styles_count            = 0;
@@ -294,7 +289,6 @@ static void game_defaults(void)
   game.info.heating          = 0;
   game.info.is_edit_mode     = FALSE;
   game.info.is_new_game      = TRUE;
-  game.info.killstack        = GAME_DEFAULT_KILLSTACK;
   game.info.killcitizen      = GAME_DEFAULT_KILLCITIZEN;
   game.info.negative_year_label[0] = '\0';
   game.info.notradesize      = GAME_DEFAULT_NOTRADESIZE;
@@ -311,7 +305,7 @@ static void game_defaults(void)
   game.info.team_pooled_research = GAME_DEFAULT_TEAM_POOLED_RESEARCH;
   game.info.tech             = GAME_DEFAULT_TECHLEVEL;
   game.info.timeout          = GAME_DEFAULT_TIMEOUT;
-  game.info.trademindist     = GAME_DEFAULT_TRADEMINDIST;
+  game.info.trademindist_new = GAME_DEFAULT_TRADEMINDIST;
   game.info.trading_city     = GAME_DEFAULT_TRADING_CITY;
   game.info.trading_gold     = GAME_DEFAULT_TRADING_GOLD;
   game.info.trading_tech     = GAME_DEFAULT_TRADING_TECH;
@@ -391,6 +385,7 @@ static void game_defaults(void)
     game.server.save_compress_level = GAME_DEFAULT_COMPRESS_LEVEL;
     game.server.save_compress_type = GAME_DEFAULT_COMPRESS_TYPE;
     sz_strlcpy(game.server.save_name, GAME_DEFAULT_SAVE_NAME);
+    game.server.saveversion       = GAME_DEFAULT_SAVEVERSION;
     game.server.save_nturns       = GAME_DEFAULT_SAVETURNS;
     game.server.save_options.save_known = TRUE;
     game.server.save_options.save_private_map = TRUE;
@@ -416,6 +411,8 @@ static void game_defaults(void)
     game.server.unitwaittime      = GAME_DEFAULT_UNITWAITTIME;
     game.server.plr_colors        = NULL;
   }
+
+  terrain_control.river_help_text[0] = '\0';
 }
 
 /****************************************************************************
@@ -493,18 +490,13 @@ void game_ruleset_init(void)
 {
   nation_groups_init();
   ruleset_cache_init();
-  disaster_types_init();
-  trade_route_types_init();
   terrains_init();
   base_types_init();
-  road_types_init();
   improvements_init();
   techs_init();
   unit_classes_init();
   unit_types_init();
   specialists_init();
-  user_unit_type_flags_init();
-  user_terrain_flags_init();
 }
 
 /***************************************************************
@@ -512,8 +504,6 @@ void game_ruleset_init(void)
 ***************************************************************/
 void game_ruleset_free(void)
 {
-  CALL_FUNC_EACH_AI(units_ruleset_close);
-
   /* Clear main structures which can points to the ruleset dependent
    * structures. */
   players_iterate(pplayer) {
@@ -526,15 +516,12 @@ void game_ruleset_free(void)
   governments_free();
   nations_free();
   unit_types_free();
-  unit_type_flags_free();
+  unit_flags_free();
   role_unit_precalcs_free();
   improvements_free();
   base_types_free();
-  road_types_free();
   city_styles_free();
-  disaster_types_free();
   terrains_free();
-  user_terrain_flags_free();
   ruleset_cache_free();
   nation_groups_free();
 
@@ -657,15 +644,14 @@ bool is_player_phase(const struct player *pplayer, int phase)
 
 /****************************************************************************
   Return a prettily formatted string containing the population text.  The
-  population is passed in as the number of citizens, in unit
-  (tens/hundreds/thousands...) defined in cities.ruleset.
+  population is passed in as the number of citizens, in thousands.
 ****************************************************************************/
 const char *population_to_text(int thousand_citizen)
 {
   /* big_int_to_text can't handle negative values, and in any case we'd
    * better not have a negative population. */
   fc_assert_ret_val(thousand_citizen >= 0, NULL);
-  return big_int_to_text(thousand_citizen, game.info.pop_report_zeroes - 1);
+  return big_int_to_text(thousand_citizen, 3);
 }
 
 /****************************************************************************
@@ -762,28 +748,4 @@ int generate_save_name(const char *format, char *buf, int buflen,
   log_debug("save name generated from '%s': %s", format, buf);
 
   return strlen(buf);
-}
-
-/**************************************************************************
-  Initialize user flag.
-**************************************************************************/
-void user_flag_init(struct user_flag *flag)
-{
-  flag->name = NULL;
-  flag->helptxt = NULL;
-}
-
-/**************************************************************************
-  Free user flag.
-**************************************************************************/
-void user_flag_free(struct user_flag *flag)
-{
-  if (flag->name != NULL) {
-    FC_FREE(flag->name);
-    flag->name = NULL;
-  }
-  if (flag->helptxt != NULL) {
-    FC_FREE(flag->helptxt);
-    flag->helptxt = NULL;
-  }
 }

@@ -28,25 +28,21 @@ extern "C" {
  * Nothing in this file should require anything else from the common/
  * directory! */
 
-#define MAX_NUM_PLAYER_SLOTS 128 /* Used in the network protocol. */
+#define MAX_NUM_PLAYER_SLOTS 128
 #define MAX_NUM_BARBARIANS   2
 #define MAX_NUM_PLAYERS      MAX_NUM_PLAYER_SLOTS - MAX_NUM_BARBARIANS
-/* Used in the network protocol. */
 #define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYER_SLOTS))
-/* e.g. unit_types. Used in the network protocol. */
-#define MAX_NUM_ITEMS   200
-#define MAX_NUM_TECH_LIST 10 /* Used in the network protocol. */
-#define MAX_NUM_UNIT_LIST 10 /* Used in the network protocol. */
-#define MAX_NUM_BUILDING_LIST 10 /* Used in the network protocol. */
+#define MAX_NUM_ITEMS   200     /* eg, unit_types */
+#define MAX_NUM_TECH_LIST 10
+#define MAX_NUM_UNIT_LIST 10
+#define MAX_NUM_BUILDING_LIST 10
 #define MAX_LEN_VET_SHORT_NAME 8
-/* Used in the network protocol. See diplomat_success_vs_defender() */
-#define MAX_VET_LEVELS 20
-#define MAX_BASE_TYPES 32 /* Used in the network protocol. */
-#define MAX_ROAD_TYPES 8 /* Used in the network protocol. */
-#define MAX_DISASTER_TYPES 10
-#define MAX_NUM_LEADERS MAX_NUM_ITEMS /* Used in the network protocol. */
-#define MAX_NUM_NATION_GROUPS 128 /* Used in the network protocol. */
-#define MAX_NUM_STARTPOS_NATIONS 1024 /* Used in the network protocol. */
+#define MAX_VET_LEVELS 20 /* see diplomat_success_vs_defender() */
+#define MAX_BASE_TYPES 32
+#define MAX_NUM_USER_UNIT_FLAGS 4
+#define MAX_NUM_LEADERS MAX_NUM_ITEMS
+#define MAX_NUM_NATION_GROUPS 128
+#define MAX_NUM_STARTPOS_NATIONS 1024
 
 /* Changing these will probably break network compatability. */
 #define MAX_LEN_NAME     48
@@ -63,7 +59,7 @@ extern "C" {
 /* symbol to flag missing numbers for better debugging */
 #define IDENTITY_NUMBER_ZERO (0)
 
-/* A bitvector for all player slots. Used in the network protocol. */
+/* A bitvector for all player slots. */
 BV_DEFINE(bv_player, MAX_NUM_PLAYER_SLOTS);
 
 /* Changing this breaks network compatibility. */
@@ -75,13 +71,13 @@ enum output_type_id {
 enum unit_activity {
   ACTIVITY_IDLE = 0,
   ACTIVITY_POLLUTION = 1,
-  ACTIVITY_OLD_ROAD = 2,               /* savegame compatibility */
+  ACTIVITY_ROAD = 2,
   ACTIVITY_MINE = 3,
   ACTIVITY_IRRIGATE = 4,
   ACTIVITY_FORTIFIED = 5,
   ACTIVITY_FORTRESS = 6,
   ACTIVITY_SENTRY = 7,
-  ACTIVITY_OLD_RAILROAD = 8,            /* savegame compatibility */
+  ACTIVITY_RAILROAD = 8,
   ACTIVITY_PILLAGE = 9,
   ACTIVITY_GOTO = 10,
   ACTIVITY_EXPLORE = 11,
@@ -92,8 +88,6 @@ enum unit_activity {
   ACTIVITY_FALLOUT = 16,
   ACTIVITY_PATROL_UNUSED = 17,		/* savegame compatability. */
   ACTIVITY_BASE = 18,			/* building base */
-  ACTIVITY_GEN_ROAD = 19,
-  ACTIVITY_CONVERT = 20,
   ACTIVITY_LAST   /* leave this one last */
 };
 
@@ -111,7 +105,6 @@ typedef int Nation_type_id;
 typedef int Unit_type_id;
 typedef int Base_type_id;
 typedef int Road_type_id;
-typedef int Disaster_type_id;
 typedef unsigned char citizens;
 
 struct advance;
@@ -132,12 +125,12 @@ struct unit;
 #define SP_MAX 20
 #define MAX_NUM_REQS 10
 
-#define MAX_NUM_RULESETS 16 /* Used in the network protocol. */
-#define MAX_RULESET_NAME_LENGTH 64 /* Used in the network protocol. */
+#define MAX_NUM_RULESETS 16
+#define MAX_RULESET_NAME_LENGTH 64
 #define RULESET_SUFFIX ".serv"
 
 /* Unit Class List, also 32-bit vector? */
-#define UCL_LAST 32 /* Used in the network protocol. */
+#define UCL_LAST 32
 typedef int Unit_Class_id;
 
 /* This has to be put here for now, otherwise movement.h and unittype.h
@@ -185,16 +178,6 @@ typedef int Unit_Class_id;
 #define SPECENUM_VALUE7NAME "Southeast"
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
-#define SPECENUM_NAME free_tech_method
-#define SPECENUM_VALUE0 FTM_GOAL
-#define SPECENUM_VALUE0NAME "Goal"
-#define SPECENUM_VALUE1 FTM_RANDOM
-#define SPECENUM_VALUE1NAME "Random"
-#define SPECENUM_VALUE2 FTM_CHEAPEST
-#define SPECENUM_VALUE2NAME "Cheapest"
-#include "specenum_gen.h"
-
 /* Some code requires compile time value for number of directions, and
  * cannot use specenum function call direction8_max(). */
 #define DIR8_MAGIC_MAX 8
@@ -223,8 +206,6 @@ enum barbarian_type {
   SEA_BARBARIAN = 2
 };
 
-#define FC_AI_LAST 3
-
 /*
  * Citytile requirement types. 
  */
@@ -247,20 +228,17 @@ enum req_problem_type {
 
 /* Originally in requirements.h, bumped up and revised to unify with
  * city_production and worklists.  Functions remain in requirements.c
- * Used in the network protocol. */
+ */
 typedef union {
   struct advance *advance;
   struct government *govern;
   struct impr_type *building;
   struct nation_type *nation;
-  struct nation_type *nationality;
   struct specialist *specialist;
   struct terrain *terrain;
   struct unit_class *uclass;
   struct unit_type *utype;
   struct base_type *base;
-  struct road_type *road;
-  struct resource *resource;
 
   enum ai_level ai_level;
   enum citytile_type citytile;
@@ -272,11 +250,9 @@ typedef union {
   int special;				/* enum tile_special_type */
   int unitclassflag;			/* enum unit_class_flag_id */
   int unitflag;				/* enum unit_flag_id */
-  int terrainflag;                      /* enum terrain_flag_id */
 } universals_u;
 
-/* The kind of universals_u (value_union_type was req_source_type).
- * Used in the network protocol. */
+/* The kind of universals_u (value_union_type was req_source_type). */
 #define SPECENUM_NAME universals_n
 #define SPECENUM_VALUE0 VUT_NONE
 #define SPECENUM_VALUE0NAME "None"
@@ -324,18 +300,9 @@ typedef union {
 #define SPECENUM_VALUE19 VUT_CITYTILE
 #define SPECENUM_VALUE19NAME "CityTile"
 /* Keep this last. */
-#define SPECENUM_VALUE20 VUT_ROAD
-#define SPECENUM_VALUE20NAME "Road"
-#define SPECENUM_VALUE21 VUT_RESOURCE
-#define SPECENUM_VALUE21NAME "Resource"
-#define SPECENUM_VALUE22 VUT_TERRFLAG
-#define SPECENUM_VALUE22NAME "TerrainFlag"
-#define SPECENUM_VALUE23 VUT_NATIONALITY
-#define SPECENUM_VALUE23NAME "Nationality"
 #define SPECENUM_COUNT VUT_COUNT
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 struct universal {
   universals_u value;
   enum universals_n kind;		/* formerly .type and .is_unit */
@@ -343,12 +310,9 @@ struct universal {
 
 struct ai_choice;			/* incorporates universals_u */
 
-/* Used in the network protocol. */
 BV_DEFINE(bv_bases, MAX_BASE_TYPES);
-BV_DEFINE(bv_roads, MAX_ROAD_TYPES);
 BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME gui_type
 /* Used for options which do not belong to any gui. */
 #define SPECENUM_VALUE0 GUI_STUB
@@ -365,11 +329,10 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 #define SPECENUM_VALUE5NAME "qt"
 #define SPECENUM_VALUE6 GUI_WIN32
 #define SPECENUM_VALUE6NAME "win32"
-#define SPECENUM_VALUE7 GUI_WEB
-#define SPECENUM_VALUE7NAME "web"
+#define SPECENUM_VALUE7 GUI_FTWL
+#define SPECENUM_VALUE7NAME "ftwl"
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME airlifting_style
 #define SPECENUM_BITWISE
 /* Like classical Freeciv.  One unit per turn. */
@@ -396,31 +359,12 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 #define SPECENUM_VALUE1 REVEAL_MAP_DEAD
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
-#define SPECENUM_NAME gameloss_style
-#define SPECENUM_BITWISE
-/* Like classical Freeciv. No special effects. */
-#define SPECENUM_ZERO   GAMELOSS_STYLE_CLASSICAL
-/* Remaining cities are taken by barbarians. */
-#define SPECENUM_VALUE0 GAMELOSS_STYLE_BARB
-#define SPECENUM_VALUE0NAME "Barbarians"
-/* Try civil war. */
-#define SPECENUM_VALUE1 GAMELOSS_STYLE_CWAR
-#define SPECENUM_VALUE1NAME "CivilWar"
-/* Do some looting */
-#define SPECENUM_VALUE2 GAMELOSS_STYLE_LOOT
-#define SPECENUM_VALUE2NAME "Loot"
-#include "specenum_gen.h"
-
-
-/* Used in the network protocol. */
 enum phase_mode_types {
   PMT_CONCURRENT = 0,
   PMT_PLAYERS_ALTERNATE,
   PMT_TEAMS_ALTERNATE
 };
 
-/* Used in the network protocol. */
 enum borders_mode {
   BORDERS_DISABLED = 0,
   BORDERS_ENABLED,
@@ -428,7 +372,6 @@ enum borders_mode {
   BORDERS_EXPAND,
 };
 
-/* Used in the network protocol. */
 enum diplomacy_mode {
   DIPLO_FOR_ALL,
   DIPLO_FOR_HUMANS,
@@ -437,24 +380,22 @@ enum diplomacy_mode {
   DIPLO_DISABLED,
 };
 
-/* Used in the network protocol. */
 enum tile_special_type {
+  S_ROAD,
   S_IRRIGATION,
+  S_RAILROAD,
   S_MINE,
   S_POLLUTION,
   S_HUT,
+  S_OLD_FORTRESS,
+  S_RIVER,
   S_FARMLAND,
+  S_OLD_AIRBASE,
   S_FALLOUT,
 
   /* internal values not saved */
   S_LAST,
   S_RESOURCE_VALID = S_LAST,
-
-  S_OLD_FORTRESS,
-  S_OLD_AIRBASE,
-  S_OLD_ROAD,
-  S_OLD_RAILROAD,
-  S_OLD_RIVER
 };
 
 #ifdef __cplusplus
@@ -466,28 +407,5 @@ enum test_result {
   TR_OTHER_FAILURE,
   TR_ALREADY_SOLD
 };
-
-enum act_tgt_type { ATT_SPECIAL, ATT_BASE, ATT_ROAD };
-
-union act_tgt_obj {
-  enum tile_special_type spe;
-  Base_type_id base;
-  Road_type_id road;
-};
-
-struct act_tgt {
-  enum act_tgt_type type;
-  union act_tgt_obj obj;
-};
-
-/* Road type compatibility with old specials based roads.
- * Used in the network protocol. */
-enum road_compat { ROCO_ROAD, ROCO_RAILROAD, ROCO_RIVER, ROCO_NONE };
-
-/*
- * Maximum number of trade routes a city can have in any situation.
- * Changing this changes network protocol.
- */
-#define MAX_TRADE_ROUTES        5
 
 #endif /* FC__FC_TYPES_H */

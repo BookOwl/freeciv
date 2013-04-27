@@ -25,7 +25,6 @@ extern "C" {
 #include "base.h"
 #include "fc_types.h"
 #include "player.h"
-#include "road.h"
 #include "terrain.h"
 #include "unitlist.h"
 
@@ -50,10 +49,6 @@ struct tile {
   Continent_id continent;
   bv_special special;
   bv_bases bases;
-  /* We're in transition from storing roads in specials to storing roads
-   * in roads vector. Roads vector does not yet always contain correct
-   * information. */
-  bv_roads roads;
   struct resource *resource;		/* NULL for no resource */
   struct terrain *terrain;		/* NULL for unknown tiles */
   struct unit_list *units;
@@ -121,7 +116,6 @@ void tile_clear_special(struct tile *ptile, enum tile_special_type spe);
 void tile_clear_all_specials(struct tile *ptile);
 
 bv_bases tile_bases(const struct tile *ptile);
-bv_roads tile_roads(const struct tile *ptile);
 void tile_set_bases(struct tile *ptile, bv_bases bases);
 bool tile_has_base(const struct tile *ptile, const struct base_type *pbase);
 bool tile_has_any_bases(const struct tile *ptile);
@@ -135,17 +129,8 @@ bool tile_has_native_base(const struct tile *ptile,
                           const struct unit_type *punittype);
 bool tile_has_claimable_base(const struct tile *ptile,
                              const struct unit_type *punittype);
-int tile_extras_defense_bonus(const struct tile *ptile,
-                              const struct unit_type *punittype);
-int tile_extras_class_defense_bonus(const struct tile *ptile,
-                                    const struct unit_class *pclass);
-
-bool tile_has_road(const struct tile *ptile, const struct road_type *proad);
-void tile_add_road(struct tile *ptile, const struct road_type *proad);
-void tile_remove_road(struct tile *ptile, const struct road_type *proad);
-int tile_roads_output_incr(const struct tile *ptile, enum output_type_id o);
-int tile_roads_output_bonus(const struct tile *ptile, enum output_type_id o);
-bool tile_has_river(const struct tile *tile);
+int tile_bases_defense_bonus(const struct tile *ptile,
+                             const struct unit_type *punittype);
 
 /* Vision related */
 enum known_type tile_get_known(const struct tile *ptile,
@@ -159,8 +144,6 @@ int tile_activity_time(enum unit_activity activity,
 		       const struct tile *ptile);
 int tile_activity_base_time(const struct tile *ptile,
                             Base_type_id base);
-int tile_activity_road_time(const struct tile *ptile,
-                            Road_type_id road);
 
 /* These are higher-level functions that handle side effects on the tile. */
 void tile_change_terrain(struct tile *ptile, struct terrain *pterrain);

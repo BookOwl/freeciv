@@ -32,12 +32,10 @@ void auto_settler_setup_work(struct player *pplayer, struct unit *punit,
                              struct pf_path *path,
                              struct tile *best_tile,
                              enum unit_activity best_act,
-                             struct act_tgt *best_target,
                              int completion_time);
 
 int settler_evaluate_improvements(struct unit *punit,
                                   enum unit_activity *best_act,
-                                  struct act_tgt *best_target,
                                   struct tile **best_tile,
                                   struct pf_path **path,
                                   struct settlermap *state);
@@ -47,7 +45,5 @@ void adv_unit_new_task(struct unit *punit, enum adv_unit_task task,
 
 bool adv_settler_safe_tile(const struct player *pplayer, struct unit *punit,
                            struct tile *ptile);
-
-int adv_settlers_road_bonus(struct tile *ptile, struct road_type *proad);
 
 #endif   /* FC__AUTOSETTLERS_H */

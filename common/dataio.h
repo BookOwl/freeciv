@@ -26,25 +26,16 @@ struct requirement;
 struct data_in {
   const void *src;
   size_t src_size, current;
+  bool too_short;		/* set to 1 if try to read past end */
+  bool bad_boolean;		/* set to 1 if received bad boolean */
+  bool bad_string;		/* set to 1 if received too-long string */
+  bool bad_bit_string;		/* set to 1 if received bad bit-string */
 };
 
 struct data_out {
   void *dest;
   size_t dest_size, used, current;
   bool too_short;		/* set to 1 if try to read past end */
-};
-
-/* Used for dio_<put|get>_type() methods.
- * NB: we only support integer handling currently. */
-enum data_type {
-  DIOT_UINT8,
-  DIOT_UINT16,
-  DIOT_UINT32,
-  DIOT_SINT8,
-  DIOT_SINT16,
-  DIOT_SINT32,
-
-  DIOT_LAST
 };
 
 /* network string conversion */
@@ -66,11 +57,7 @@ void dio_input_rewind(struct data_in *din);
 size_t dio_input_remaining(struct data_in *din);
 bool dio_input_skip(struct data_in *din, size_t size);
 
-size_t data_type_size(enum data_type type);
-
 /* gets */
-bool dio_get_type(struct data_in *din, enum data_type type, int *dest)
-    fc__attribute((nonnull (3)));
 
 bool dio_get_uint8(struct data_in *din, int *dest)
     fc__attribute((nonnull (2)));
@@ -83,14 +70,12 @@ bool dio_get_sint8(struct data_in *din, int *dest)
     fc__attribute((nonnull (2)));
 bool dio_get_sint16(struct data_in *din, int *dest)
     fc__attribute((nonnull (2)));
-bool dio_get_sint32(struct data_in *din, int *dest)
-    fc__attribute((nonnull (2)));
+#define dio_get_sint32(d,v) dio_get_uint32(d,v)
+
 
 bool dio_get_bool8(struct data_in *din, bool *dest)
     fc__attribute((nonnull (2)));
 bool dio_get_bool32(struct data_in *din, bool *dest)
-    fc__attribute((nonnull (2)));
-bool dio_get_float(struct data_in *din, float *dest, int float_factor)
     fc__attribute((nonnull (2)));
 bool dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
     fc__attribute((nonnull (2)));
@@ -120,19 +105,16 @@ bool dio_get_uint16_vec8(struct data_in *din, int **values, int stop_value)
   dio_get_memory((pdin), (bv).vec, sizeof((bv).vec))
 
 /* puts */
-void dio_put_type(struct data_out *dout, enum data_type type, int value);
-
 void dio_put_uint8(struct data_out *dout, int value);
 void dio_put_uint16(struct data_out *dout, int value);
 void dio_put_uint32(struct data_out *dout, int value);
 
-void dio_put_sint8(struct data_out *dout, int value);
-void dio_put_sint16(struct data_out *dout, int value);
-void dio_put_sint32(struct data_out *dout, int value);
+#define dio_put_sint8(d,v) dio_put_uint8(d,v)
+#define dio_put_sint16(d,v) dio_put_uint16(d,v)
+#define dio_put_sint32(d,v) dio_put_uint32(d,v)
 
 void dio_put_bool8(struct data_out *dout, bool value);
 void dio_put_bool32(struct data_out *dout, bool value);
-void dio_put_float(struct data_out *dout, float value, int float_factor);
 
 void dio_put_memory(struct data_out *dout, const void *value, size_t size);
 void dio_put_string(struct data_out *dout, const char *value);

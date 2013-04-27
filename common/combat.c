@@ -314,16 +314,16 @@ void get_modified_firepower(const struct unit *attacker,
   *def_fp = unit_type(defender)->firepower;
 
   /* Check CityBuster flag */
-  if (unit_has_type_flag(attacker, UTYF_CITYBUSTER) && pcity) {
+  if (unit_has_type_flag(attacker, F_CITYBUSTER) && pcity) {
     *att_fp *= 2;
   }
 
   /*
-   * UTYF_BADWALLATTACKER sets the firepower of the attacking unit to 1 if
+   * F_BADWALLATTACKER sets the firepower of the attacking unit to 1 if
    * an EFT_DEFEND_BONUS applies (such as a land unit attacking a city with
    * city walls).
    */
-  if (unit_has_type_flag(attacker, UTYF_BADWALLATTACKER)
+  if (unit_has_type_flag(attacker, F_BADWALLATTACKER)
       && get_unittype_bonus(unit_owner(defender), unit_tile(defender),
                             unit_type(attacker), EFT_DEFEND_BONUS) > 0) {
     *att_fp = 1;
@@ -331,7 +331,7 @@ void get_modified_firepower(const struct unit *attacker,
 
   /* pearl harbour - defender's firepower is reduced to one, 
    *                 attacker's is multiplied by two         */
-  if (unit_has_type_flag(defender, UTYF_BADCITYDEFENDER)
+  if (unit_has_type_flag(defender, F_BADCITYDEFENDER)
       && tile_city(unit_tile(defender))) {
     *att_fp *= 2;
     *def_fp = 1;
@@ -341,8 +341,8 @@ void get_modified_firepower(const struct unit *attacker,
    * When attacked by fighters, helicopters have their firepower
    * reduced to 1.
    */
-  if (combat_bonus_against(unit_type(attacker)->bonuses, unit_type(defender),
-                           CBONUS_FIREPOWER1)) {
+  if (unit_has_type_flag(defender, F_HELICOPTER)
+      && unit_has_type_flag(attacker, F_FIGHTER)) {
     *def_fp = 1;
   }
 
@@ -449,22 +449,17 @@ int base_get_defense_power(const struct unit *punit)
 
 /**************************************************************************
   Returns the defense power, modified by terrain and veteran status.
-  Note that rivers as special road types are not handled here as
-  terrain property.
 **************************************************************************/
-static int get_defense_power(const struct unit *punit)
+int get_defense_power(const struct unit *punit)
 {
   int db, power = base_get_defense_power(punit);
-  struct tile *ptile = unit_tile(punit);
-  struct unit_class *pclass = unit_class(punit);
 
   if (uclass_has_flag(unit_class(punit), UCF_TERRAIN_DEFENSE)) {
-    db = 10 + tile_terrain(ptile)->defense_bonus / 10;
+    db = 10 + tile_terrain(unit_tile(punit))->defense_bonus / 10;
+    if (tile_has_special(unit_tile(punit), S_RIVER)) {
+      db += (db * terrain_control.river_defense_bonus) / 100;
+    }
     power = (power * db) / 10;
-  }
-
-  if (!is_native_tile_to_class(pclass, ptile)) {
-    power = power * pclass->non_native_def_pct / 100;
   }
 
   return power;
@@ -504,26 +499,32 @@ static int defense_multiplication(const struct unit_type *att_type,
   fc_assert_ret_val(NULL != def_type, 0);
 
   if (NULL != att_type) {
-    int defense_divider;
-    int defense_multiplier = 1 + combat_bonus_against(def_type->bonuses, att_type,
-                                                      CBONUS_DEFENSE_MULTIPLIER);
+    if (utype_has_flag(def_type, F_PIKEMEN)
+	&& utype_has_flag(att_type, F_HORSE)) {
+      defensepower *= 2;
+    }
 
-    defensepower *= defense_multiplier;
+    if (utype_has_flag(def_type, F_AEGIS)
+        && utype_has_flag(att_type, F_AIRUNIT)) {
+      defensepower *= 5;
+    }
 
-    if (!utype_has_flag(att_type, UTYF_IGWALL)) {
+    if (!utype_has_flag(att_type, F_IGWALL)) {
       /* This applies even if pcity is NULL. */
       mod = 100 + get_unittype_bonus(def_player, ptile,
 				     att_type, EFT_DEFEND_BONUS);
       defensepower = MAX(0, defensepower * mod / 100);
     }
 
-    defense_divider = 1 + combat_bonus_against(att_type->bonuses, def_type,
-                                               CBONUS_DEFENSE_DIVIDER);
-    defensepower /= defense_divider;
+    if (utype_has_flag(att_type, F_FIGHTER) && utype_has_flag(def_type, F_HELICOPTER)) {
+      defensepower /= 2;
+    }
   }
 
-  defensepower +=
-    defensepower * tile_extras_defense_bonus(ptile, def_type) / 100;
+  if (!pcity) {
+    defensepower +=
+      defensepower * tile_bases_defense_bonus(ptile, def_type) / 100;
+  }
 
   if ((pcity || fortified)
       && uclass_has_flag(utype_class(def_type), UCF_CAN_FORTIFY)) {
@@ -546,7 +547,6 @@ int get_virtual_defense_power(const struct unit_type *att_type,
   int defensepower = def_type->defense_strength;
   int db;
   const struct veteran_level *vlevel;
-  struct unit_class *defclass;
 
   fc_assert_ret_val(def_type != NULL, 0);
 
@@ -558,17 +558,15 @@ int get_virtual_defense_power(const struct unit_type *att_type,
   vlevel = utype_veteran_level(def_type, veteran);
   fc_assert_ret_val(vlevel != NULL, 0);
 
-  defclass = utype_class(def_type);
-
   db = POWER_FACTOR;
-  if (uclass_has_flag(defclass, UCF_TERRAIN_DEFENSE)) {
+  if (uclass_has_flag(utype_class(def_type), UCF_TERRAIN_DEFENSE)) {
     db += tile_terrain(ptile)->defense_bonus / (100 / POWER_FACTOR);
+    if (tile_has_special(ptile, S_RIVER)) {
+      db += (db * terrain_control.river_defense_bonus) / 100;
+    }
   }
   defensepower *= db;
   defensepower *= vlevel->power_fact / 100;
-  if (!is_native_tile_to_class(defclass, ptile)) {
-    defensepower = defensepower * defclass->non_native_def_pct / 100;
-  }
 
   return defense_multiplication(att_type, def_type, def_player,
                                 ptile, defensepower,
@@ -664,7 +662,7 @@ struct unit *get_defender(const struct unit *attacker,
 
       fc_assert_action(0 <= unit_def, continue);
 
-      if (unit_has_type_flag(defender, UTYF_GAMELOSS)
+      if (unit_has_type_flag(defender, F_GAMELOSS)
           && !is_stack_vulnerable(unit_tile(defender))) {
         unit_def = -1; /* then always use leader as last defender. */
         /* FIXME: multiple gameloss units with varying defense value
@@ -733,22 +731,4 @@ bool is_stack_vulnerable(const struct tile *ptile)
   return (game.info.killstack
           && !tile_has_base_flag(ptile, BF_NO_STACK_DEATH)
           && NULL == tile_city(ptile));
-}
-
-/**************************************************************************
-  Get bonus value against given unit type from bonus list.
-**************************************************************************/
-int combat_bonus_against(const struct combat_bonus_list *list,
-                         const struct unit_type *enemy,
-                         enum combat_bonus_type type)
-{
-  int value = 0;
-
-  combat_bonus_list_iterate(list, pbonus) {
-    if (pbonus->type == type && utype_has_flag(enemy, pbonus->flag)) {
-      value += pbonus->value;
-    }
-  } combat_bonus_list_iterate_end;
-
-  return value;
 }

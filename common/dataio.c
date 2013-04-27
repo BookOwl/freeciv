@@ -123,7 +123,12 @@ static bool enough_space(struct data_out *dout, size_t size)
 **************************************************************************/
 static bool enough_data(struct data_in *din, size_t size)
 {
-  return dio_input_remaining(din) >= size;
+  if (dio_input_remaining(din) < size) {
+    din->too_short = TRUE;
+    return FALSE;
+  } else {
+    return TRUE;
+  }
 }
 
 /**************************************************************************
@@ -166,6 +171,10 @@ void dio_input_init(struct data_in *din, const void *src, size_t src_size)
   din->src = src;
   din->src_size = src_size;
   din->current = 0;
+  din->too_short = FALSE;
+  din->bad_boolean = FALSE;
+  din->bad_string = FALSE;
+  din->bad_bit_string = FALSE;
 }
 
 /**************************************************************************
@@ -186,29 +195,6 @@ size_t dio_input_remaining(struct data_in *din)
 }
 
 /**************************************************************************
-  Return the size of the data_type in bytes.
-**************************************************************************/
-size_t data_type_size(enum data_type type)
-{
-  switch (type) {
-  case DIOT_UINT8:
-  case DIOT_SINT8:
-    return 1;
-  case DIOT_UINT16:
-  case DIOT_SINT16:
-    return 2;
-  case DIOT_UINT32:
-  case DIOT_SINT32:
-    return 4;
-  case DIOT_LAST:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "data_type %d not handled.", type);
-  return 0;
-}
-
-/**************************************************************************
    Skips 'n' bytes.
 **************************************************************************/
 bool dio_input_skip(struct data_in *din, size_t size)
@@ -226,14 +212,10 @@ bool dio_input_skip(struct data_in *din, size_t size)
 **************************************************************************/
 void dio_put_uint8(struct data_out *dout, int value)
 {
-  if (value < 0x00 || 0xff < value) {
-    log_error("Trying to put %d into 8 bits", value);
-  }
-
   if (enough_space(dout, 1)) {
     uint8_t x = value;
 
-    FC_STATIC_ASSERT(sizeof(x) == 1, uint8_not_1_byte);
+    fc_assert(sizeof(x) == 1);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 1);
     dout->current++;
   }
@@ -244,91 +226,27 @@ void dio_put_uint8(struct data_out *dout, int value)
 **************************************************************************/
 void dio_put_uint16(struct data_out *dout, int value)
 {
-  if (value < 0x0000 || 0xffff < value) {
-    log_error("Trying to put %d into 16 bits", value);
-  }
-
   if (enough_space(dout, 2)) {
     uint16_t x = htons(value);
 
-    FC_STATIC_ASSERT(sizeof(x) == 2, uint16_not_2_bytes);
+    fc_assert(sizeof(x) == 2);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 2);
     dout->current += 2;
   }
 }
 
 /**************************************************************************
-  Insert value using 32 bits. May overflow.
+  Insert value using 16 bits.
 **************************************************************************/
 void dio_put_uint32(struct data_out *dout, int value)
 {
-  if (sizeof(value) > 4 && (value < 0x00000000 || 0xffffffff < value)) {
-    log_error("Trying to put %d into 32 bits", value);
-  }
-
   if (enough_space(dout, 4)) {
     uint32_t x = htonl(value);
 
-    FC_STATIC_ASSERT(sizeof(x) == 4, uint32_not_4_bytes);
+    fc_assert(sizeof(x) == 4);
     memcpy(ADD_TO_POINTER(dout->dest, dout->current), &x, 4);
     dout->current += 4;
   }
-}
-
-/**************************************************************************
-  Insert value using 'size' bits. May overflow.
-**************************************************************************/
-void dio_put_type(struct data_out *dout, enum data_type type, int value)
-{
-  switch (type) {
-  case DIOT_UINT8:
-    dio_put_uint8(dout, value);
-    return;
-  case DIOT_UINT16:
-    dio_put_uint16(dout, value);
-    return;
-  case DIOT_UINT32:
-    dio_put_uint32(dout, value);
-    return;
-  case DIOT_SINT8:
-    dio_put_sint8(dout, value);
-    return;
-  case DIOT_SINT16:
-    dio_put_sint16(dout, value);
-    return;
-  case DIOT_SINT32:
-    dio_put_sint32(dout, value);
-    return;
-  case DIOT_LAST:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "data_type %d not handled.", type);
-}
-
-/**************************************************************************
-  Insert value using 8 bits. May overflow.
-**************************************************************************/
-void dio_put_sint8(struct data_out *dout, int value)
-{
-  dio_put_uint8(dout, 0 <= value ? value : value + 0x100);
-}
-
-/**************************************************************************
-  Insert value using 16 bits. May overflow.
-**************************************************************************/
-void dio_put_sint16(struct data_out *dout, int value)
-{
-  dio_put_uint16(dout, 0 <= value ? value : value + 0x10000);
-}
-
-/**************************************************************************
-  Insert value using 32 bits. May overflow.
-**************************************************************************/
-void dio_put_sint32(struct data_out *dout, int value)
-{
-  dio_put_uint32(dout, (0 <= value || sizeof(value) == 4
-                        ? value : value + 0x100000000));
 }
 
 /**************************************************************************
@@ -355,15 +273,6 @@ void dio_put_bool32(struct data_out *dout, bool value)
   }
 
   dio_put_uint32(dout, value ? 1 : 0);
-}
-
-/**************************************************************************
-  Insert a float number, which is multiplied by 'float_factor' before
-  being encoded into a uint32.
-**************************************************************************/
-void dio_put_float(struct data_out *dout, float value, int float_factor)
-{
-  dio_put_uint32(dout, value * float_factor);
 }
 
 /**************************************************************************
@@ -456,7 +365,8 @@ void dio_put_bit_string(struct data_out *dout, const char *value)
   size_t max = (unsigned short)(-1);
 
   if (bits > max) {
-    log_error("Bit string too long: %lu bits.", (unsigned long) bits);
+    fc_assert_msg(FALSE, "Bit string too long: %lu bits.",
+                  (unsigned long) bits);
     bits = max;
   }
   bytes = (bits + 7) / 8;
@@ -551,14 +461,11 @@ bool dio_get_uint8(struct data_in *din, int *dest)
 {
   uint8_t x;
 
-  FC_STATIC_ASSERT(sizeof(x) == 1, uint8_not_byte);
-
   if (!enough_data(din, 1)) {
-    log_packet("Packet too short to read 1 byte");
-
     return FALSE;
   }
 
+  fc_assert(sizeof(x) == 1);
   memcpy(&x, ADD_TO_POINTER(din->src, din->current), 1);
   *dest = x;
   din->current++;
@@ -572,14 +479,11 @@ bool dio_get_uint16(struct data_in *din, int *dest)
 {
   uint16_t x;
 
-  FC_STATIC_ASSERT(sizeof(x) == 2, uint16_not_2_bytes);
-
   if (!enough_data(din, 2)) {
-    log_packet("Packet too short to read 2 bytes");
-
     return FALSE;
   }
 
+  fc_assert(sizeof(x) == 2);
   memcpy(&x, ADD_TO_POINTER(din->src, din->current), 2);
   *dest = ntohs(x);
   din->current += 2;
@@ -593,44 +497,15 @@ bool dio_get_uint32(struct data_in *din, int *dest)
 {
   uint32_t x;
 
-  FC_STATIC_ASSERT(sizeof(x) == 4, uint32_not_4_bytes);
-
   if (!enough_data(din, 4)) {
-    log_packet("Packet too short to read 4 bytes");
-
     return FALSE;
   }
 
+  fc_assert(sizeof(x) == 4);
   memcpy(&x, ADD_TO_POINTER(din->src, din->current), 4);
   *dest = ntohl(x);
   din->current += 4;
   return TRUE;
-}
-
-/**************************************************************************
-  Receive value using 'size' bits to dest.
-**************************************************************************/
-bool dio_get_type(struct data_in *din, enum data_type type, int *dest)
-{
-  switch (type) {
-  case DIOT_UINT8:
-    return dio_get_uint8(din, dest);
-  case DIOT_UINT16:
-    return dio_get_uint16(din, dest);
-  case DIOT_UINT32:
-    return dio_get_uint32(din, dest);
-  case DIOT_SINT8:
-    return dio_get_sint8(din, dest);
-  case DIOT_SINT16:
-    return dio_get_sint16(din, dest);
-  case DIOT_SINT32:
-    return dio_get_sint32(din, dest);
-  case DIOT_LAST:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "data_type %d not handled.", type);
-  return FALSE;
 }
 
 /**************************************************************************
@@ -645,7 +520,7 @@ bool dio_get_bool8(struct data_in *din, bool *dest)
   }
 
   if (ival != 0 && ival != 1) {
-    log_packet("Got a bad boolean: %d", ival);
+    din->bad_boolean = TRUE;
     return FALSE;
   }
 
@@ -665,27 +540,11 @@ bool dio_get_bool32(struct data_in *din, bool * dest)
   }
 
   if (ival != 0 && ival != 1) {
-    log_packet("Got a bad boolean: %d", ival);
+    din->bad_boolean = TRUE;
     return FALSE;
   }
 
   *dest = (ival != 0);
-  return TRUE;
-}
-
-/**************************************************************************
-  Get a float number, which have been multiplied by 'float_factor' and
-  encoded into a uint32 by dio_put_float().
-**************************************************************************/
-bool dio_get_float(struct data_in *din, float *dest, int float_factor)
-{
-  int ival;
-
-  if (!dio_get_uint32(din, &ival)) {
-    return FALSE;
-  }
-
-  *dest = (float) ival / float_factor;
   return TRUE;
 }
 
@@ -712,7 +571,7 @@ bool dio_get_sint8(struct data_in *din, int *dest)
 **************************************************************************/
 bool dio_get_sint16(struct data_in *din, int *dest)
 {
-  int tmp;
+  int tmp = 0;
 
   if (!dio_get_uint16(din, &tmp)) {
     return FALSE;
@@ -726,30 +585,11 @@ bool dio_get_sint16(struct data_in *din, int *dest)
 }
 
 /**************************************************************************
-  Take value from 32 bits.
-**************************************************************************/
-bool dio_get_sint32(struct data_in *din, int *dest)
-{
-  int tmp;
-
-  if (!dio_get_uint32(din, &tmp)) {
-    return FALSE;
-  }
-
-  if (tmp > 0x7fffffff) {
-    tmp -= 0x100000000;
-  }
-  *dest = tmp;
-  return TRUE;
-}
-
-/**************************************************************************
   Take memory block directly.
 **************************************************************************/
 bool dio_get_memory(struct data_in *din, void *dest, size_t dest_size)
 {
   if (!enough_data(din, dest_size)) {
-    log_packet("Got too short memory");
     return FALSE;
   }
 
@@ -769,7 +609,6 @@ bool dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   fc_assert(max_dest_size > 0);
 
   if (!enough_data(din, 1)) {
-    log_packet("Got a bad string");
     return FALSE;
   }
 
@@ -782,12 +621,13 @@ bool dio_get_string(struct data_in *din, char *dest, size_t max_dest_size)
   }
 
   if (offset >= remaining) {
-    log_packet("Got a too short string");
+    din->too_short = TRUE;
+    din->bad_string = TRUE;
     return FALSE;
   }
 
   if (!(*get_conv_callback) (dest, max_dest_size, c, offset)) {
-    log_packet("Got a bad encoded string");
+    din->bad_string = TRUE;
     return FALSE;
   }
 
@@ -807,13 +647,14 @@ bool dio_get_bit_string(struct data_in *din, char *dest,
   fc_assert(max_dest_size > 0);
 
   if (!dio_get_uint16(din, &npack)) {
-    log_packet("Got a bad bit string");
+    din->bad_bit_string = TRUE;
     return FALSE;
   }
 
   if (npack >= max_dest_size) {
-    log_packet("Have size for %lu, got %d",
-               (unsigned long) max_dest_size, npack);
+      log_error("Have size for %lu, got %d",
+                (unsigned long) max_dest_size, npack);
+    din->bad_bit_string = TRUE;
     return FALSE;
   }
 
@@ -821,7 +662,7 @@ bool dio_get_bit_string(struct data_in *din, char *dest,
     int bit, byte_value;
 
     if (!dio_get_uint8(din, &byte_value)) {
-      log_packet("Got a too short bit string");
+      din->bad_bit_string = TRUE;
       return FALSE;
     }
     for (bit = 0; bit < 8 && i < npack; bit++, i++) {
@@ -847,7 +688,6 @@ bool dio_get_tech_list(struct data_in *din, int *dest)
 
   for (i = 0; i < MAX_NUM_TECH_LIST; i++) {
     if (!dio_get_uint8(din, &dest[i])) {
-      log_packet("Got a too short tech list");
       return FALSE;
     }
     if (dest[i] == A_LAST) {
@@ -872,7 +712,6 @@ bool dio_get_unit_list(struct data_in *din, int *dest)
 
   for (i = 0; i < MAX_NUM_UNIT_LIST; i++) {
     if (!dio_get_uint8(din, &dest[i])) {
-      log_packet("Got a too short unit list");
       return FALSE;
     }
     if (dest[i] == U_LAST) {
@@ -897,7 +736,6 @@ bool dio_get_building_list(struct data_in *din, int *dest)
 
   for (i = 0; i < MAX_NUM_BUILDING_LIST; i++) {
     if (!dio_get_uint8(din, &dest[i])) {
-      log_packet("Got a too short building list");
       return FALSE;
     }
     if (dest[i] == B_LAST) {
@@ -923,7 +761,6 @@ bool dio_get_worklist(struct data_in *din, struct worklist *pwl)
   worklist_init(pwl);
 
   if (!dio_get_uint8(din, &length)) {
-    log_packet("Got a bad worklist");
     return FALSE;
   }
 
@@ -933,13 +770,9 @@ bool dio_get_worklist(struct data_in *din, struct worklist *pwl)
 
     if (!dio_get_uint8(din, &kind)
         || !dio_get_uint8(din, &identifier)) {
-      log_packet("Got a too short worklist");
       return FALSE;
     }
 
-    /*
-     * FIXME: the value returned by universal_by_number() should be checked!
-     */
     worklist_append(pwl, universal_by_number(kind, identifier));
   }
 
@@ -1010,13 +843,9 @@ bool dio_get_requirement(struct data_in *din, struct requirement *preq)
       || !dio_get_uint8(din, &range)
       || !dio_get_bool8(din, &survives)
       || !dio_get_bool8(din, &negated)) {
-    log_packet("Got a bad requirement");
     return FALSE;
   }
 
-  /*
-   * FIXME: the value returned by req_from_values() should be checked!
-   */
   *preq = req_from_values(type, range, survives, negated, value);
 
   return TRUE;

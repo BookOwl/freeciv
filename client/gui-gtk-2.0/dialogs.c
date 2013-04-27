@@ -316,21 +316,15 @@ static void pillage_callback(GtkWidget *w, gpointer data)
 
   punit = game_unit_by_number(unit_to_use_to_pillage);
   if (punit) {
-    struct act_tgt target;
+    Base_type_id pillage_base = -1;
 
-    if (what >= S_LAST + game.control.num_base_types) {
-      target.type = ATT_ROAD;
-      target.obj.road = what - S_LAST - game.control.num_base_types;
-    } else if (what >= S_LAST) {
-      target.type = ATT_BASE;
-      target.obj.base = what - S_LAST;
-    } else {
-      target.type = ATT_SPECIAL;
-      target.obj.spe = what;
+    if (what > S_LAST) {
+      pillage_base = what - S_LAST - 1;
+      what = S_LAST;
     }
 
     request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                       &target);
+                                       what, pillage_base);
   }
 }
 
@@ -346,15 +340,13 @@ static void pillage_destroy_callback(GtkWidget *w, gpointer data)
   Opens pillage dialog listing possible pillage targets.
 *****************************************************************/
 void popup_pillage_dialog(struct unit *punit,
-			  bv_special spe,
-                          bv_bases bases,
-                          bv_roads roads)
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   GtkWidget *shl;
+  int what;
 
   if (!is_showing_pillage_dialog) {
-    struct act_tgt tgt;
-
     is_showing_pillage_dialog = TRUE;
     unit_to_use_to_pillage = punit->id;
 
@@ -362,36 +354,27 @@ void popup_pillage_dialog(struct unit *punit,
 			       _("What To Pillage"),
 			       _("Select what to pillage:"));
 
-    while (get_preferred_pillage(&tgt, spe, bases, roads)) {
-      int what = S_LAST;
-      bv_special what_spe;
+    while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+      bv_special what_bv;
       bv_bases what_base;
-      bv_roads what_road;
 
-      BV_CLR_ALL(what_spe);
+      BV_CLR_ALL(what_bv);
       BV_CLR_ALL(what_base);
-      BV_CLR_ALL(what_road);
 
-      switch (tgt.type) {
-        case ATT_SPECIAL:
-          BV_SET(what_spe, tgt.obj.spe);
-          what = tgt.obj.spe;
-          clear_special(&spe, tgt.obj.spe);
-          break;
-        case ATT_BASE:
-          BV_SET(what_base, tgt.obj.base);
-          what = tgt.obj.base + S_LAST;
-          BV_CLR(bases, tgt.obj.base);
-          break;
-        case ATT_ROAD:
-          BV_SET(what_road, tgt.obj.road);
-          what = tgt.obj.road + S_LAST + game.control.num_base_types;
-          BV_CLR(roads, tgt.obj.road);
-          break;
+      if (what > S_LAST) {
+        BV_SET(what_base, what % (S_LAST + 1));
+      } else {
+        BV_SET(what_bv, what);
       }
 
-      choice_dialog_add(shl, get_infrastructure_text(what_spe, what_base, what_road),
+      choice_dialog_add(shl, get_infrastructure_text(what_bv, what_base),
                         G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
+
+      if (what > S_LAST) {
+        BV_CLR(bases, what % (S_LAST + 1));
+      } else {
+        clear_special(&may_pillage, what);
+      }
     }
 
     choice_dialog_add(shl, GTK_STOCK_CANCEL, 0, 0);
@@ -1142,7 +1125,7 @@ void popup_disband_dialog(struct unit_list *punits)
 
     if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
       unit_list_iterate(punits, punit) {
-        if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+        if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
           request_unit_disband(punit);
         }
       } unit_list_iterate_end;
@@ -1160,16 +1143,4 @@ void popdown_all_game_dialogs(void)
   gui_dialog_destroy_all();
   property_editor_popdown(editprop_get_property_editor());
   unit_select_dialog_popdown();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  if (gui_gtk2_popup_tech_help == GUI_POPUP_TECH_HELP_ENABLED
-      || (gui_gtk2_popup_tech_help == GUI_POPUP_TECH_HELP_RULESET
-          && game.control.popup_tech_help)) {
-    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, tech), HELP_TECH);
-  }
 }

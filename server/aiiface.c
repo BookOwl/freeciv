@@ -29,8 +29,8 @@
 /* server/advisors */
 #include "autosettlers.h"
 
-/* ai/classic */
-#include "classicai.h"
+/* ai/default */
+#include "defaultai.h"
 
 #include "aiiface.h"
 
@@ -140,7 +140,7 @@ void ai_init(void)
     /* First search ai modules under directory ai/<module> under
        current directory. This allows us to run freeciv without
        installing it. */
-    const char *moduledirs[] = { "classic", "threaded", "stub", NULL };
+    const char *moduledirs[] = { "default", "threaded", "stub", NULL };
     int i;
 
     for (i = 0; moduledirs[i] != NULL ; i++) {
@@ -156,45 +156,38 @@ void ai_init(void)
   }
 #endif /* AI_MODULES */
 
-#ifdef AI_MOD_STATIC_CLASSIC
-  ai = ai_type_alloc();
-  if (ai != NULL) {
-    init_ai(ai);
-    if (!fc_ai_classic_setup(ai)) {
-      log_error(_("Failed to setup \"%s\" AI module"), "classic");
-      ai_type_dealloc();
-    }
+#if defined(AI_MODULES) && !defined(AI_MOD_STATIC_CLASSIC)
+
+  if (!failure && !load_ai_module("classic")) {
+    failure = TRUE;
   }
+
+#else  /* AI_MOD_STATIC_CLASSIC */
+
+  ai = ai_type_alloc();
+  init_ai(ai);
+  if (!fc_ai_classic_setup(ai)) {
+    failure = TRUE;
+  }
+
 #endif /* AI_MOD_STATIC_CLASSIC */
+
+  if (failure) {
+    log_fatal(_("Failed to setup default AI module, cannot continue."));
+    exit(EXIT_FAILURE);
+  }
+
+  default_ai = ai;
 
 #ifdef AI_MOD_STATIC_THREADED
   ai = ai_type_alloc();
   if (ai != NULL) {
     init_ai(ai);
     if (!fc_ai_threaded_setup(ai)) {
-      log_error(_("Failed to setup \"%s\" AI module"), "threaded");
-      ai_type_dealloc();
+      log_error(_("Failed to setup threaded AI module"));
     }
   }
 #endif /* AI_MOD_STATIC_THREADED */
-
-  default_ai = ai_type_by_name(AI_MOD_DEFAULT);
-#ifdef AI_MODULES
-  if (default_ai == NULL) {
-    /* Wasn't among statically linked. Try to load dynamic module. */
-    if (!failure && !load_ai_module(AI_MOD_DEFAULT)) {
-      failure = TRUE;
-    }
-    if (!failure) {
-      default_ai = ai_type_by_name(AI_MOD_DEFAULT);
-    }
-  }
-#endif /* AI_MODULES */
-  if (default_ai == NULL || failure) {
-    log_error(_("Failed to setup default AI module \"%s\", cannot continue."),
-              AI_MOD_DEFAULT);
-    exit(EXIT_FAILURE);
-  }
 }
 
 /**************************************************************************
@@ -204,16 +197,6 @@ void call_incident(enum incident_type type, struct player *violator,
                    struct player *victim)
 {
   CALL_PLR_AI_FUNC(incident, victim, type, violator, victim);
-}
-
-/****************************************************************************
-  Call ai refresh() callback for all players.
-****************************************************************************/
-void call_ai_refresh(void)
-{
-  players_iterate(pplayer) {
-    CALL_PLR_AI_FUNC(refresh, pplayer, pplayer);
-  } players_iterate_end;
 }
 
 /**************************************************************************

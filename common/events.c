@@ -70,7 +70,6 @@ static const char *event_sections[] = {
 /*
  * Holds information about all event types. The entries don't have
  * to be sorted.
- * Every E_* event defined in common/events.h should have an entry here.
  */
 static struct {
   const char *enum_name;
@@ -112,7 +111,6 @@ static struct {
   GEN_EV(E_CITY_RADIUS_SQ,	E_S_CITY,	N_("City Map changed")),
   GEN_EV(E_WORKLIST,		E_S_CITY,	N_("Worklist Events")),
   GEN_EV(E_CITY_PRODUCTION_CHANGED, E_S_CITY,	N_("Production changed")),
-  GEN_EV(E_DISASTER,            E_S_CITY,       N_("Disaster")),
   GEN_EV(E_MY_DIPLOMAT_BRIBE,		E_S_D_ME,	N_("Bribe")),
   GEN_EV(E_DIPLOMATIC_INCIDENT,		E_S_D_ME,	N_("Caused Incident")),
   GEN_EV(E_MY_DIPLOMAT_ESCAPE,		E_S_D_ME,	N_("Escape")),

@@ -12,8 +12,7 @@
 ; 'generate' = means replace this node with generated list of game
 ;	       elements; current categories are: 
 ;	          "Units", "Improvements", "Wonders", "Techs", 
-;		  "Terrain", "Bases", "Roads", "Specialists",
-;                 "Governments", "Ruleset", "Nations"
+;		  "Terrain", "Governments", "Ruleset", "Nations"
 ;              As for 'name', the number of spaces before the category
 ;              name indicates nesting level for display.
 ;
@@ -399,9 +398,6 @@ Engineers is highly vulnerable to enemy attacks.\
 $TerrainAlterations\
 "
 
-[help_gen_roads]
-generate = "  Roads"
-
 [help_gen_bases]
 generate = "  Bases"
 
@@ -720,10 +716,9 @@ immigrants. Citizens of another nationality will work in your cities \
 just the same as your own, and behave the same in most respects, but \
 their presence makes it cheaper for agents of their associated state \
 to incite a revolt in your cities, and if migration is enabled, they \
-have an increased tendency to migrate to their state's cities. Over \
-time, citizens may be assimilated into their home city, depending on \
-ruleset settings. If nationality is enabled, you can see the cultural \
-makeup of your cities in the City dialog, on the Happiness tab.\
+have an increased tendency to migrate to their state's cities. If \
+nationality is enabled, you can see the cultural makeup of your cities \
+in the City dialog, on the Happiness tab.\
 "), _("\
 Cities may be enhanced with a wide variety of buildings, which can \
 improve their productivity, their military strength, or give them \

@@ -194,9 +194,7 @@ void api_edit_create_city(lua_State *L, Player *pplayer, Tile *ptile,
   if (!name || name[0] == '\0') {
     name = city_name_suggestion(pplayer, ptile);
   }
-
-  /* TODO: Allow initial citizen to be of nationality other than owner */
-  create_city(pplayer, ptile, name, pplayer);
+  create_city(pplayer, ptile, name);
 }
 
 /*****************************************************************************
@@ -263,16 +261,10 @@ Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
   if (ptech) {
     id = advance_number(ptech);
   } else {
-    /* Can't just call give_immediate_free_tech() here as we want
-     * to pass correct reason to emitted signal. */
-    if (game.info.free_tech_method == FTM_CHEAPEST) {
-      id = pick_cheapest_tech(pplayer);
-    } else if (player_research_get(pplayer)->researching == A_UNSET
-               || game.info.free_tech_method == FTM_RANDOM) {
-      id = pick_random_tech(pplayer);
-    } else {
-      id = player_research_get(pplayer)->researching;
+    if (player_research_get(pplayer)->researching == A_UNSET) {
+      choose_random_tech(pplayer);
     }
+    id = player_research_get(pplayer)->researching;
   }
 
   if (player_invention_state(pplayer, id) != TECH_KNOWN) {
@@ -287,23 +279,6 @@ Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
   } else {
     return NULL;
   }
-}
-
-/*****************************************************************************
-  Modify player's trait value.
-*****************************************************************************/
-bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
-                        const int mod)
-{
-  enum trait tr = trait_by_name(trait_name, fc_strcasecmp);
-
-  if (!trait_is_valid(tr)) {
-    return FALSE;
-  }
-
-  pplayer->ai_common.traits[tr].mod += mod;
-
-  return TRUE;
 }
 
 /*****************************************************************************
@@ -326,39 +301,6 @@ void api_edit_create_base(lua_State *L, Tile *ptile, const char *name,
   if (pbase) {
     create_base(ptile, pbase, pplayer);
   }
-}
-
-/*****************************************************************************
-  Add a new road.
-*****************************************************************************/
-void api_edit_create_road(lua_State *L, Tile *ptile, const char *name)
-{
-  struct road_type *proad;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
-
-  if (!name) {
-    return;
-  }
-
-  proad = road_type_by_rule_name(name);
-
-  if (proad) {
-    tile_add_road(ptile, proad);
-  }
-}
-
-/*****************************************************************************
-  Set tile label text.
-*****************************************************************************/
-void api_edit_tile_set_label(lua_State *L, Tile *ptile, const char *label)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, ptile);
-  LUASCRIPT_CHECK_ARG_NIL(L, label, 3, string);
-
-  tile_set_label(ptile, label);
 }
 
 /*****************************************************************************

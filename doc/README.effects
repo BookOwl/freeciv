@@ -36,47 +36,20 @@ Requirement range may be one of: "None", "Local",
 certain ranges; this is not yet documented. In particular, at present, 
 "Continent" effects can affect only cities and units in cities.
 
-A requirement may have a 'survives' field, and if this 'TRUE', the effect
+A requirement may have a 'survives' field, and if this is '1', the effect 
 survives destruction (wonders only, at world or player range only).
 
-A requirement may have a 'negated' field, and if this is 'TRUE', the
-requirement is negated.  If this is 'FALSE', the requirement is not negated.
+A requirement may have a 'negated' field, and if this is '1', the requirement
+is negated.
 
+A requirement type is the type of the requirement and can be one of "None",
+"Tech", "Gov", "Building", "Special", "Base", "Terrain", "UnitType", 
+"UnitFlag", "UnitClass", "UnitClassFlag", "Nation", "OutputType", "MinYear",
+"MinSize", "AI", "TerrainClass", "TerrainAlter", or "CityTile". MinSize is the
+minimum size of a city required. AI is ai player difficulty level. TerrainClass
+is either "Land" or "Oceanic". Only "Center" is supported as CityTile type.
 
-Requirement types and supported ranges
-======================================
-
-Tech:          World, Player
-Gov:           Player
-Building:      World, Player, Continent, City, Local
-Special:       Local, Adjacent, CAdjacent, City
-Base:          Local, Adjacent, CAdjacent, City
-Road:          Local, Adjacent, CAdjacent, City
-Terrain:       Local, Adjacent, CAdjacent, City
-Resource:      Local, Adjacent, CAdjacent, City
-UnitType:      Local
-UnitFlag:      Local
-UnitClass:     Local
-UnitClassFlag: Local
-Nation:        World, Player
-Nationality:   City
-OutputType:    Local
-Specialist:    Local
-MinYear:       World
-MinSize:       City
-AI:            Player
-TerrainClass:  Local, Adjacent, CAdjacent, City
-TerrainFlag:   Local, Adjacent, CAdjacent, City
-TerrainAlter:  Local
-CityTile:      Local, Adjacent, CAdjacent
-
-MinSize is the minimum size of a city required.
-AI is ai player difficulty level.
-TerrainClass is either "Land" or "Oceanic".
-Only "Center" is supported as CityTile type.
-
-
-Effect types
+Effect types 
 ============
 
 Tech_Parasite
@@ -92,10 +65,6 @@ Any_Government
 
 Capital_City
     The city with this effect is the capital city.
-
-Gov_Center
-    The city with this effect is governmental center. Corruption and
-    waste depends on distance to nearest such city.
 
 Enable_Nuke
     Allows the production of nuclear weapons.
@@ -153,10 +122,6 @@ content.
 
 Make_Happy
     Make amount citizens happy.
-
-Enemy_Citizen_Unhappy_Pct
-    There will be one extra unhappy citizen for each value/100 citizens
-    of enemy nationality in the city.
 
 No_Anarchy
     No period of anarchy between government changes. (This also neuters
@@ -308,21 +273,11 @@ cities are taken.
 Happiness_To_Gold
     Make all Make_Content and Force_Content effects instead generate gold.
 
-Max_Trade_Routes
-    Number of trade routes that city can establish.
-    This is forced on trade route creation only. Existing trade routes
-    are never removed due to reduction of effect value. This is to
-    avoid micro-management, need to create same trade routes again
-    after their max number has been temporarily down.
-
 Fanatics
-    Units with "Fanatics" flag incur no upkeep.
+    Special case for Fanatics unit only.
 
 No_Diplomacy
     Cannot use any diplomacy.
-
-Not_Tech_Source
-    Tech cannot be received from this player by any means.
 
 Trade_Revenue_Bonus
     Trade revenue is multiplied by pow(2, amount/1000). The amount value is 
@@ -373,27 +328,8 @@ Tile_Workable
     If value != 0, city can work target tile.
 
 Irrig_Possible
-    If value > 0, unit can build irrigation to target tile. In addition to
-    requirements given to this effect, unit must also have Settlers flag.
-
-Mining_Possible
-    If value > 0, unit can build mine to target tile. In addition to
-    requirements given to this effect, terrain type must be one to which mine
-    can be built.
-
-Transform_Possible
-    If value > 0, unit can transform target tile. In addition to requirements
-    given to this effect, terrain type needs to be one that can be transformed.
-
-Irrig_TF_Possible
-    If value > 0, unit can transform target tile terrain to another by irrigating.
-    In addition to requirements given to this effect, terrain must be one that
-    can be transformed by irrigating.
-
-Mining_TF_Possible
-    If value > 0, unit can transform target tile terrain to another by mining.
-    In addition to requirements given to this effect, terrain must be one that
-    can be transformed by mining.
+    If value > 0, unit can irrigate target tile. In addition to requirements given
+    to this effect, unit must also have Settlers flag.
 
 Migration_Pct
     Increase the calculated migration score for the a city by amount in

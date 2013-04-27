@@ -1494,30 +1494,19 @@ static struct city_dialog *create_city_dialog(struct city *pcity)
 *****************************************************************/
 static void city_dialog_update_title(struct city_dialog *pdialog)
 {
-  gchar *buf;
+  char buf[512];
   const gchar *now;
 
-  if (city_unhappy(pdialog->pcity)) {
-    /* TRANS: city dialog title */
-    buf = g_strdup_printf(_("<b>%s</b> - %s citizens - DISORDER"),
-			  city_name(pdialog->pcity),
-			  population_to_text(city_population(pdialog->pcity)));
-  } else if (city_celebrating(pdialog->pcity)) {
-    /* TRANS: city dialog title */
-    buf = g_strdup_printf(_("<b>%s</b> - %s citizens - celebrating"),
-			  city_name(pdialog->pcity),
-			  population_to_text(city_population(pdialog->pcity)));
-  } else if (city_happy(pdialog->pcity)) {
-    /* TRANS: city dialog title */
-    buf = g_strdup_printf(_("<b>%s</b> - %s citizens - happy"),
-			  city_name(pdialog->pcity),
-			  population_to_text(city_population(pdialog->pcity)));
-  } else {
-    /* TRANS: city dialog title */
-    buf = g_strdup_printf(_("<b>%s</b> - %s citizens"),
-			  city_name(pdialog->pcity),
-			  population_to_text(city_population(pdialog->pcity)));
+  fc_snprintf(buf, sizeof(buf), _("<b>%s</b> - %s citizens"),
+              city_name(pdialog->pcity),
+              population_to_text(city_population(pdialog->pcity)));
 
+  if (city_unhappy(pdialog->pcity)) {
+    fc_strlcat(buf, _(" - DISORDER"), sizeof(buf));
+  } else if (city_celebrating(pdialog->pcity)) {
+    fc_strlcat(buf, _(" - celebrating"), sizeof(buf));
+  } else if (city_happy(pdialog->pcity)) {
+    fc_strlcat(buf, _(" - happy"), sizeof(buf));
   }
 
   now = gtk_label_get_text(GTK_LABEL(pdialog->name_label));
@@ -1525,8 +1514,6 @@ static void city_dialog_update_title(struct city_dialog *pdialog)
     gtk_window_set_title(GTK_WINDOW(pdialog->shell), city_name(pdialog->pcity));
     gtk_label_set_markup(GTK_LABEL(pdialog->name_label), buf);
   }
-
-  g_free(buf);
 }
 
 /****************************************************************
@@ -1621,15 +1608,12 @@ static void city_dialog_update_information(GtkWidget **info_ebox,
 
   granaryturns = city_turns_to_grow(pcity);
   if (granaryturns == 0) {
-    /* TRANS: city growth is blocked.  Keep short. */
     fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("blocked"));
   } else if (granaryturns == FC_INFINITY) {
-    /* TRANS: city is not growing.  Keep short. */
     fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]), _("never"));
   } else {
     /* A negative value means we'll have famine in that many turns.
        But that's handled down below. */
-    /* TRANS: city growth turns.  Keep short. */
     fc_snprintf(buf[GROWTH], sizeof(buf[GROWTH]),
                 PL_("%d turn", "%d turns", abs(granaryturns)),
                 abs(granaryturns));
@@ -1870,7 +1854,7 @@ static void city_dialog_update_supported_units(struct city_dialog *pdialog)
   struct unit_list *units;
   struct unit_node_vector *nodes;
   int n, m, i;
-  gchar *buf;
+  char buf[30];
   int free_unhappy = get_city_bonus(pdialog->pcity, EFT_MAKE_CONTENT_MIL);
 
   if (NULL != client.conn.playing
@@ -1964,9 +1948,8 @@ static void city_dialog_update_supported_units(struct city_dialog *pdialog)
     i++;
   } unit_list_iterate_end;
 
-  buf = g_strdup_printf(_("Supported units %d"), n);
+  fc_snprintf(buf, sizeof(buf), _("Supported units %d"), n);
   gtk_frame_set_label(GTK_FRAME(pdialog->overview.supported_units_frame), buf);
-  g_free(buf);
 }
 
 /****************************************************************
@@ -1977,7 +1960,7 @@ static void city_dialog_update_present_units(struct city_dialog *pdialog)
   struct unit_list *units;
   struct unit_node_vector *nodes;
   int n, m, i;
-  gchar *buf;
+  char buf[30];
 
   if (NULL != client.conn.playing
       && city_owner(pdialog->pcity) != client.conn.playing) {
@@ -2067,9 +2050,8 @@ static void city_dialog_update_present_units(struct city_dialog *pdialog)
     i++;
   } unit_list_iterate_end;
 
-  buf = g_strdup_printf(_("Present units %d"), n);
+  fc_snprintf(buf, sizeof(buf), _("Present units %d"), n);
   gtk_frame_set_label(GTK_FRAME(pdialog->overview.present_units_frame), buf);
-  g_free(buf);
 }
 
 /****************************************************************
@@ -2212,7 +2194,7 @@ static gboolean supported_unit_callback(GtkWidget * w, GdkEventButton * ev,
       GINT_TO_POINTER(punit->id));
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 
-    if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       gtk_widget_set_sensitive(item, FALSE);
     }
 
@@ -2313,7 +2295,7 @@ static gboolean present_unit_callback(GtkWidget * w, GdkEventButton * ev,
       GINT_TO_POINTER(punit->id));
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 
-    if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       gtk_widget_set_sensitive(item, FALSE);
     }
 

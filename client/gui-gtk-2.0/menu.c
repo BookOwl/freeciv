@@ -1035,7 +1035,7 @@ static void build_city_callback(GtkAction *action, gpointer data)
        get an eventual error message from the server if we try. */
     if (unit_can_add_or_build_city(punit)) {
       request_unit_build_city(punit);
-    } else if (unit_has_type_flag(punit, UTYF_HELP_WONDER)) {
+    } else if (unit_has_type_flag(punit, F_HELP_WONDER)) {
       request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
     }
   } unit_list_iterate_end;
@@ -1065,21 +1065,11 @@ static void build_road_callback(GtkAction *action, gpointer data)
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct road_type *proad = next_road_for_tile(unit_tile(punit),
-                                                 unit_owner(punit),
-                                                 punit);
-    bool building_road = FALSE;
-
-    if (proad != NULL) {
-      struct act_tgt tgt = { .type = ATT_ROAD, .obj.road = road_number(proad) };
-
-      if (can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, &tgt)) {
-        request_new_unit_activity_road(punit, proad);
-        building_road = TRUE;
-      }
-    }
-
-    if (!building_road && unit_can_est_trade_route_here(punit)) {
+    if (can_unit_do_activity(punit, ACTIVITY_ROAD)) {
+      request_new_unit_activity(punit, ACTIVITY_ROAD);
+    } else if (can_unit_do_activity(punit, ACTIVITY_RAILROAD)) {
+      request_new_unit_activity(punit, ACTIVITY_RAILROAD);
+    } else if (unit_can_est_trade_route_here(punit)) {
       request_unit_caravan_action(punit, PACKET_UNIT_ESTABLISH_TRADE);
     }
   } unit_list_iterate_end;
@@ -1106,14 +1096,7 @@ static void build_mine_callack(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_road_callback(GtkAction *action, gpointer data)
 {
-  struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
-  if (proad != NULL) {
-    struct act_tgt tgt = { .type = ATT_ROAD,
-                           .obj.road = road_number(proad) };
-
-    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
-  }
+  key_unit_connect(ACTIVITY_ROAD);
 }
 
 /****************************************************************
@@ -1121,14 +1104,7 @@ static void connect_road_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_rail_callback(GtkAction *action, gpointer data)
 {
-  struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
-
-  if (prail != NULL) {
-    struct act_tgt tgt = { .type = ATT_ROAD,
-                           .obj.road = road_number(prail) };
-
-    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
-  }
+  key_unit_connect(ACTIVITY_RAILROAD);
 }
 
 /****************************************************************
@@ -1136,7 +1112,7 @@ static void connect_rail_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void connect_irrigation_callack(GtkAction *action, gpointer data)
 {
-  key_unit_connect(ACTIVITY_IRRIGATE, NULL);
+  key_unit_connect(ACTIVITY_IRRIGATE);
 }
 
 /****************************************************************
@@ -1249,18 +1225,6 @@ static void base_callback(GtkMenuItem *item, gpointer data)
 
   unit_list_iterate(get_units_in_focus(), punit) {
     request_new_unit_activity_base(punit, pbase);
-  } unit_list_iterate_end;
-}
-
-/****************************************************************************
-  The player has chosen a road to build from the menu.
-****************************************************************************/
-static void road_callback(GtkMenuItem *item, gpointer data)
-{
-  struct road_type *proad = data;
-
-  unit_list_iterate(get_units_in_focus(), punit) {
-    request_new_unit_activity_road(punit, proad);
   } unit_list_iterate_end;
 }
 
@@ -1579,7 +1543,6 @@ static GtkActionGroup *get_unit_group(void)
       {"MENU_WORK", NULL, _("_Work"), NULL, NULL, NULL},
       {"MENU_COMBAT", NULL, _("_Combat"), NULL, NULL, NULL},
       {"MENU_BUILD_BASE", NULL, _("Build _Base"), NULL, NULL, NULL},
-      {"MENU_BUILD_PATH", NULL, _("Build _Path"), NULL, NULL, NULL}
     };
 
     const GtkActionEntry action_entries[] = {
@@ -1998,8 +1961,6 @@ void real_menus_update(void)
   GtkMenu *menu;
   char acttext[128], irrtext[128], mintext[128], transtext[128];
   struct terrain *pterrain;
-  bool road_conn_possible;
-  struct road_type *proad;
 
   if (NULL == ui_manager && !can_client_change_view()) {
     return;
@@ -2044,22 +2005,15 @@ void real_menus_update(void)
 
   {
     char road_buf[500];
-    struct road_type *proad;
 
-    proad = road_by_compat_special(ROCO_ROAD);
-    if (proad != NULL) {
-      /* TRANS: Connect with some road type (Road/Railroad) */
-      snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "CONNECT_ROAD", road_buf);
-    }
+    /* TRANS: Connect with some road type (Road/Railroad) */  
+    snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
+             road_name_translation(road_by_number(ROAD_ROAD)));
+    menus_rename(unit_group, "CONNECT_ROAD", road_buf);
 
-    proad = road_by_compat_special(ROCO_RAILROAD);
-    if (proad != NULL) {
-      snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "CONNECT_RAIL", road_buf);
-    }
+    snprintf(road_buf, sizeof(road_buf), _("Connect With %s"),
+             road_name_translation(road_by_number(ROAD_RAILROAD)));
+    menus_rename(unit_group, "CONNECT_RAIL", road_buf);
   }
 
   if (!can_client_issue_orders()) {
@@ -2106,32 +2060,16 @@ void real_menus_update(void)
     g_list_free(list);
   }
 
-  /* Set road sensitivity. */
-  if ((menu = find_action_menu(unit_group, "MENU_BUILD_PATH"))) {
-    GList *list, *iter;
-    struct road_type *proad;
-
-    list = gtk_container_get_children(GTK_CONTAINER(menu));
-    for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      proad = g_object_get_data(G_OBJECT(iter->data), "road");
-      if (NULL != proad) {
-        gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
-                                 can_units_do_road(punits,
-                                                   road_number(proad)));
-      }
-    }
-    g_list_free(list);
-  }
-
   /* Enable the button for adding to a city in all cases, so we
    * get an eventual error message from the server if we try. */
   menus_set_sensitive(unit_group, "BUILD_CITY",
             (can_units_do(punits, unit_can_add_or_build_city)
              || can_units_do(punits, unit_can_help_build_wonder_here)));
   menus_set_sensitive(unit_group, "GO_BUILD_CITY",
-                      units_have_type_flag(punits, UTYF_CITIES, TRUE));
+                      units_have_flag(punits, F_CITIES, TRUE));
   menus_set_sensitive(unit_group, "BUILD_ROAD",
-                      (can_units_do_any_road(punits)
+                      (can_units_do_activity(punits, ACTIVITY_ROAD)
+                       || can_units_do_activity(punits, ACTIVITY_RAILROAD)
                        || can_units_do(punits,
                                        unit_can_est_trade_route_here)));
   menus_set_sensitive(unit_group, "BUILD_IRRIGATION",
@@ -2158,7 +2096,7 @@ void real_menus_update(void)
   menus_set_sensitive(unit_group, "DO_PILLAGE",
                       can_units_do_activity(punits, ACTIVITY_PILLAGE));
   menus_set_sensitive(unit_group, "UNIT_DISBAND",
-                      units_have_type_flag(punits, UTYF_UNDISBANDABLE, FALSE));
+                      units_have_flag(punits, F_UNDISBANDABLE, FALSE));
   menus_set_sensitive(unit_group, "UNIT_UPGRADE",
                       units_can_upgrade(punits));
   /* "UNIT_CONVERT" dealt with below */
@@ -2177,40 +2115,19 @@ void real_menus_update(void)
                       can_units_do(punits, can_unit_do_autosettlers));
   menus_set_sensitive(unit_group, "UNIT_EXPLORE",
                       can_units_do_activity(punits, ACTIVITY_EXPLORE));
-
-  proad = road_by_compat_special(ROCO_ROAD);
-  if (proad != NULL) {
-    struct act_tgt tgt = { .type = ATT_ROAD,
-                           .obj.road = road_number(proad) }; 
-
-    road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
-                                              &tgt);
-  } else {
-    road_conn_possible = FALSE;
-  }
-  menus_set_sensitive(unit_group, "CONNECT_ROAD", road_conn_possible);
-
-  proad = road_by_compat_special(ROCO_RAILROAD);
-  if (proad != NULL) {
-    struct act_tgt tgt = { .type = ATT_ROAD,
-                           .obj.road = road_number(proad) }; 
-
-    road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
-                                              &tgt);
-  } else {
-    road_conn_possible = FALSE;
-  }
-  menus_set_sensitive(unit_group, "CONNECT_RAIL", road_conn_possible);
-
+  menus_set_sensitive(unit_group, "CONNECT_ROAD",
+                      can_units_do_connect(punits, ACTIVITY_ROAD));
+  menus_set_sensitive(unit_group, "CONNECT_RAIL",
+                      can_units_do_connect(punits, ACTIVITY_RAILROAD));
   menus_set_sensitive(unit_group, "CONNECT_IRRIGATION",
-                      can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL));
+                      can_units_do_connect(punits, ACTIVITY_IRRIGATE));
   menus_set_sensitive(unit_group, "DIPLOMAT_ACTION",
                       can_units_do_diplomat_action(punits,
                                                    DIPLOMAT_ANY_ACTION));
   menus_set_sensitive(unit_group, "EXPLODE_NUKE",
-                      units_have_type_flag(punits, UTYF_NUCLEAR, TRUE));
+                      units_have_flag(punits, F_NUCLEAR, TRUE));
 
-  if (units_have_type_flag(punits, UTYF_HELP_WONDER, TRUE)) {
+  if (units_have_flag(punits, F_HELP_WONDER, TRUE)) {
     menus_rename(unit_group, "BUILD_CITY", _("Help _Build Wonder"));
   } else {
     bool city_on_tile = FALSE;
@@ -2224,7 +2141,7 @@ void real_menus_update(void)
       }
     } unit_list_iterate_end;
     
-    if (city_on_tile && units_have_type_flag(punits, UTYF_ADD_TO_CITY, TRUE)) {
+    if (city_on_tile && units_have_flag(punits, F_ADD_TO_CITY, TRUE)) {
       menus_rename(unit_group, "BUILD_CITY", _("Add to City"));
     } else {
       /* refresh default order */
@@ -2232,27 +2149,32 @@ void real_menus_update(void)
     }
   }
 
-  if (units_have_type_flag(punits, UTYF_TRADE_ROUTE, TRUE)) {
+  if (units_have_flag(punits, F_TRADE_ROUTE, TRUE)) {
     menus_rename(unit_group, "BUILD_ROAD", _("Establish Trade _Route"));
-  } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
+  } else if (units_have_flag(punits, F_SETTLERS, TRUE)) {
+    bool has_road = FALSE;
+    enum eroad rtype;
     char road_item[500];
-    struct road_type *proad = NULL;
 
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-     proad = next_road_for_tile(unit_tile(punit), unit_owner(punit), punit);
-     if (proad != NULL) {
+      if (tile_has_special(unit_tile(punit), S_ROAD)) {
+        has_road = TRUE;
         break;
       }
     } unit_list_iterate_end;
 
-    if (proad != NULL) {
-      /* TRANS: Build road of specific type (Road/Railroad) */
-      snprintf(road_item, sizeof(road_item), _("Build %s"),
-               road_name_translation(proad));
-      menus_rename(unit_group, "BUILD_ROAD", road_item);
+    if (has_road) {
+      rtype = ROAD_RAILROAD;
+    } else {
+      rtype = ROAD_ROAD;
     }
+
+    /* TRANS: Build road of specific type (Road/Railroad) */
+    snprintf(road_item, sizeof(road_item), _("Build %s"),
+             road_name_translation(road_by_number(rtype)));
+    menus_rename(unit_group, "BUILD_ROAD", road_item);
   } else {
     menus_rename(unit_group, "BUILD_ROAD", _("Build _Road"));
   }
@@ -2347,7 +2269,7 @@ void real_menus_update(void)
     menus_rename(unit_group, "BUILD_FORTRESS", _("Build Type A Base"));
   }
 
-  if (units_have_type_flag(punits, UTYF_PARATROOPERS, TRUE)) {
+  if (units_have_flag(punits, F_PARATROOPERS, TRUE)) {
     menus_rename(unit_group, "CLEAN_POLLUTION", _("Drop _Paratrooper"));
   } else {
     menus_rename(unit_group, "CLEAN_POLLUTION", _("Clean _Pollution"));
@@ -2463,27 +2385,6 @@ void real_menus_init(void)
         gtk_widget_show(item);
       }
     } base_type_iterate_end;
-  }
-
-  if ((menu = find_action_menu(unit_group, "MENU_BUILD_PATH"))) {
-    GList *list, *iter;
-    GtkWidget *item;
-
-    /* Remove previous road entries. */
-    list = gtk_container_get_children(GTK_CONTAINER(menu));
-    for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      gtk_widget_destroy(GTK_WIDGET(iter->data));
-    }
-    g_list_free(list);
-
-    /* Add new road entries. */
-    road_type_iterate(r) {
-      item = gtk_menu_item_new_with_label(road_name_translation(r));
-      g_object_set_data(G_OBJECT(item), "road", r);
-      g_signal_connect(item, "activate", G_CALLBACK(road_callback), r);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-      gtk_widget_show(item);
-    } road_type_iterate_end;
   }
 
   gtk_action_group_set_sensitive(safe_group, TRUE);

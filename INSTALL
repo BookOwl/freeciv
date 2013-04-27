@@ -88,7 +88,7 @@ contains the generated files.
    Especial the xgettext program is required to create the *.gmo
    files which aren't included in the svn tree.
 
- - GNU autoconf version 2.61 or better
+ - GNU autoconf version 2.59 or better
 
    Autoconf is required to create configure from configure.ac.
 
@@ -159,6 +159,9 @@ will need to have the appropriate "development" packages installed.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
+   "Gtk+ 2" is the default client. If you don't specify any client with
+   "--enable-client" to configure, you will get "Gtk+ 2" client.
+
    The "Gtk+" library comes with two companion libraries:
 
      "Gdk":
@@ -228,9 +231,6 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
 
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
-
-   "Gtk+ 3" is the default client. If you don't specify any client with
-   "--enable-client" to configure, you will get "Gtk+ 3" client.
 
    The "Gtk+" library comes with one companion libraries:
 

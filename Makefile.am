@@ -14,33 +14,50 @@ else
 SSUBDIRS =
 endif
 
+if SERVER
+if CLIENT
+MSUBDIRS = manual
+else
+MSUBDIRS = 
+endif
+else
+MSUBDIRS = 
+endif
+
 if MAKE_DATA
 DSUBDIRS = data
 else
 DSUBDIRS =
 endif
 
-SUBDIRS = $(DSUBDIRS) dependencies utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc tools
+if MODINST
+MODSUBDIRS = modinst
+else
+MODSUBDIRS =
+endif
+
+SUBDIRS = $(DSUBDIRS) dependencies utility common tests win32 $(SSUBDIRS) $(CSUBDIRS) po doc $(MSUBDIRS) $(MODSUBDIRS)
 
 ## Automake should distribute config.rpath automatically - and new
 ## versions probably do. We still support versions that do not, so
 ## it's in the list below.
 ## It should also install it automatically when running autogen.sh.
 EXTRA_DIST=	autogen.sh 			\
+		config.mac.h			\
 		configure.ac			\
 		diff_ignore			\
 		bootstrap/fcgui.in		\
 		bootstrap/fcser.in		\
-		bootstrap/fc_svnrev_gen.h.tmpl	\
+		bootstrap/fc_svnrev_gen.h.in	\
 		bootstrap/generate_svnrev.sh	\
 		bootstrap/freeciv.desktop.in	\
 		bootstrap/freeciv-server.desktop.in	\
 		bootstrap/freeciv-modpack.desktop.in	\
 		bootstrap/freeciv.spec.in	\
 		bootstrap/config.rpath		\
-		bootstrap/Makerules.mk		\
 		bootstrap/langnames.txt		\
 		m4/ac_path_lib.m4		\
+		m4/alsa.m4			\
 		m4/c99.m4			\
 		m4/codeset.m4			\
 		m4/compiler.m4			\
@@ -51,13 +68,17 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/freetype2.m4			\
 		m4/gettimeofday.m4		\
 		m4/ggz.m4			\
+		m4/glib-2.0.m4			\
+		m4/glibc21.m4			\
 		m4/glib-gettext.m4		\
+		m4/glib.m4			\
 		m4/gtk-2.0.m4			\
 		m4/gtk-3.0.m4			\
 		m4/gtk2-client.m4		\
 		m4/gtk3-client.m4		\
 		m4/iconv.m4			\
 		m4/imlib.m4			\
+		m4/isc-posix.m4			\
 		m4/lcmessage.m4			\
 		m4/lib-ld.m4			\
 		m4/lib-link.m4			\
@@ -71,7 +92,6 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/pkg.m4			\
 		m4/postgres.m4			\
 		m4/progtest.m4			\
-		m4/qt.m4			\
 		m4/qt-client.m4			\
 		m4/readline.m4			\
 		m4/sdl-client.m4		\
@@ -79,7 +99,6 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/sqlite3.m4			\
 		m4/sound.m4			\
 		m4/vsnprintf.m4			\
-		m4/web-client.m4		\
 		m4/xaw-client.m4		\
 		m4/x.m4				\
 		vms/config.h_vms		\
@@ -88,7 +107,8 @@ EXTRA_DIST=	autogen.sh 			\
 		vms/readme.vms			\
 		vms/vms_build.com		\
 		scripts/mapimg2anim		\
-		scripts/setup_auth_server.sh
+		scripts/setup_auth_server.sh	\
+		NEWS-2.4
 
 noinst_HEADERS= fc_version
 

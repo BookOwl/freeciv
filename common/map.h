@@ -360,18 +360,15 @@ bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
-int map_move_cost_ai(const struct player *pplayer,
-                     const struct unit_class *pclass,
-                     const struct tile *tile0,
+int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
                      const struct tile *tile1);
-int map_move_cost(const struct player *pplayer, const struct unit_class *pclass,
-                  const struct tile *src_tile,
+int map_move_cost(const struct player *pplayer, const struct tile *src_tile,
                   const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
+bool is_cardinally_adj_to_ocean(const struct tile *ptile);
 bv_special get_tile_infrastructure_set(const struct tile *ptile,
 					  int *count);
 bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount);
-bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount);
 
 bool can_channel_land(const struct tile *ptile);
 bool can_reclaim_ocean(const struct tile *ptile);
@@ -515,17 +512,6 @@ extern struct terrain_misc terrain_control;
 
 #define cardinal_adjc_dir_base_iterate_end                                     \
   adjc_dirlist_base_iterate_end
-
-/* Iterate through all tiles cardinally adjacent to both tile1 and tile2 */
-#define cardinal_between_iterate(tile1, tile2, between)                        \
-  cardinal_adjc_iterate(tile1, between) {                                      \
-    cardinal_adjc_iterate(between, second) {                                   \
-    if (same_pos(second, tile2)) {
-
-#define cardinal_between_iterate_end                                           \
-      }                                                                        \
-    } cardinal_adjc_iterate_end;                                               \
-  } cardinal_adjc_iterate_end;
 
 /* Iterate through all tiles adjacent to a tile using the given list of
  * directions.  _dir is the directional value, (center_x, center_y) is

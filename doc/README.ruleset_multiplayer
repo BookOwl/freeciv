@@ -3,18 +3,18 @@
 ----------------------------------------------------------------------
 
 The 'multiplayer' ruleset is intended to rectify some game balance
-issues encountered on multiplayer servers with the classic ruleset.
+issues encountered on multiplayer servers with the default ruleset.
 It is based on the 'rewonder' ruleset designed by Madeline Book for
 Freeciv 2.1.
 
 
 
-1. Changes compared to the classic ruleset
+1. Changes compared to the default ruleset
    ---------------------------------------
 
 The differences can be extracted by
 
-#> diff -ur data/classic data/multiplayer
+#> diff -ur data/default data/multiplayer
 
 Gameplay
 --------
@@ -109,12 +109,6 @@ Unit changes
 - Caravans cost 30 production (was 50); Freight remain at 50.
 - Elephants, Crusaders, and Fanatics added from the civ2 ruleset.
 
-Extras changes
---------------
-
-- Buoys cannot be built. Current freeciv does not fully support
-  bases like them when national borders are disabled.
-
 Default settings
 ----------------
 
@@ -130,7 +124,7 @@ map settings are used.
 To play a game with the multiplayer rules, start the server with:
        ./fcser -r data/multiplayer.serv
 or a single player game with
-       ./freeciv-gtk3 -r data/multiplayer.serv
+       ./freeciv-gtk2 -r data/multiplayer.serv
 (and any other command-line arguments you normally use; depending on
 how you have Freeciv installed you may have to give the installed
 data directory path instead of "data")

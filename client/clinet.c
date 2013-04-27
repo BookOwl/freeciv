@@ -173,8 +173,11 @@ static int get_server_address(const char *hostname, int port,
     fc_sockaddr_list_destroy(list);
   }
 
-  /* Any supported family will do */
+#ifdef IPV6_SUPPORT
   list = net_lookup_service(hostname, port, FC_ADDR_ANY);
+#else  /* IPV6_SUPPORT */
+  list = net_lookup_service(hostname, port, FC_ADDR_IPV4);
+#endif /* IPV6_SUPPORT */
 
   name_count = fc_sockaddr_list_size(list);
 
@@ -409,12 +412,16 @@ void input_from_server(int fd)
 
     agents_freeze_hint();
     while (client.conn.used) {
-      void *packet = get_packet_from_connection(&client.conn, &type);
+      bool result;
+      void *packet = get_packet_from_connection(&client.conn,
+						&type, &result);
 
-      if (NULL != packet) {
+      if (result) {
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
       } else {
+        fc_assert(packet == NULL);
 	break;
       }
     }
@@ -450,11 +457,15 @@ void input_from_server_till_request_got_processed(int fd,
       enum packet_type type;
 
       while (TRUE) {
-	void *packet = get_packet_from_connection(&client.conn, &type);
-	if (NULL == packet) {
+	bool result;
+	void *packet = get_packet_from_connection(&client.conn,
+						  &type, &result);
+	if (!result) {
+          fc_assert(packet == NULL);
 	  break;
 	}
 
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
 

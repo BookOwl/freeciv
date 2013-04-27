@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -85,7 +85,6 @@ sprites =
 		"f.shield.brittany", "flags/brittany-shield"
 		"f.shield.brunei", "flags/brunei-shield"
 		"f.shield.bulgaria", "flags/bulgaria-shield"
-		"f.shield.burgundic", "flags/burgundic-shield"
 		"f.shield.burgundy", "flags/burgundy-shield"
 		"f.shield.burkina_faso", "flags/burkina_faso-shield"
 		"f.shield.burundi", "flags/burundi-shield"
@@ -186,7 +185,6 @@ sprites =
 		"f.shield.gambia", "flags/gambia-shield"
 		"f.shield.gaul", "flags/gaul-shield"
 		"f.shield.georgia", "flags/georgia-shield"
-		"f.shield.gepid", "flags/gepid-shield"
 		"f.shield.germanic", "flags/germanic-shield"
 		"f.shield.germany", "flags/germany-shield"
 		"f.shield.ghana", "flags/ghana-shield"
@@ -266,18 +264,15 @@ sprites =
 		"f.shield.khwarezm", "flags/khwarezm-shield"
 		"f.shield.kiev", "flags/kiev-shield"
 		"f.shield.kiribati", "flags/kiribati-shield"
-		"f.shield.komi", "flags/komi-shield"
 		"f.shield.kongo", "flags/kongo-shield"
 		"f.shield.korea", "flags/korea-shield"
 		"f.shield.korea_ancient", "flags/korea_ancient-shield"
 		"f.shield.kosovo", "flags/kosovo-shield"
 		"f.shield.kuna_yala", "flags/kuna_yala-shield"
 		"f.shield.kurd", "flags/kurd-shield"
-		"f.shield.kushan", "flags/kushan-shield"
 		"f.shield.kuwait", "flags/kuwait-shield"
 		"f.shield.kyrgyzstan", "flags/kyrgyzstan-shield"
 		"f.shield.labarum", "flags/labarum-shield"
-		"f.shield.lombardy", "flags/lombardy-shield"
 		"f.shield.laos", "flags/laos-shield"
 		"f.shield.latin_empire", "flags/latin_empire-shield"
 		"f.shield.latvia", "flags/latvia-shield"
@@ -318,7 +313,6 @@ sprites =
 		"f.shield.mapuche", "flags/mapuche-shield"
 		"f.shield.marathi", "flags/marathi-shield"
 		"f.shield.mars", "flags/mars-shield"
-		"f.shield.marshall_islands", "flags/marshall_islands-shield"
 		"f.shield.mauritania", "flags/mauritania-shield"
 		"f.shield.mauritius", "flags/mauritius-shield"
 		"f.shield.maya", "flags/maya-shield"
@@ -370,7 +364,6 @@ sprites =
 		"f.shield.north_korea", "flags/north_korea-shield"
 		"f.shield.northumbria", "flags/northumbria-shield"
 		"f.shield.norway", "flags/norway-shield"
-		"f.shield.novgorod", "flags/novgorod-shield"
 		"f.shield.nubia", "flags/nubia-shield"
 		"f.shield.numidia", "flags/numidia-shield"
 		"f.shield.nunavut", "flags/nunavut-shield"
@@ -529,7 +522,6 @@ sprites =
 		"f.shield.united_kingdom", "flags/united_kingdom-shield"
 		"f.shield.united_nations", "flags/united_nations-shield"
 		"f.shield.unknown", "flags/unknown-shield"
-		"f.shield.urartu", "flags/urartu-shield"
 		"f.shield.uruguay", "flags/uruguay-shield"
 		"f.shield.usa", "flags/usa-shield"
 		"f.shield.uyghur", "flags/uyghur-shield"

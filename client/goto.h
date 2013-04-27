@@ -43,8 +43,7 @@ void send_goto_path(struct unit *punit, struct pf_path *path,
 bool send_goto_tile(struct unit *punit, struct tile *ptile);
 void send_patrol_route(void);
 void send_goto_route(void);
-void send_connect_route(enum unit_activity activity,
-                        struct act_tgt *tgt);
+void send_connect_route(enum unit_activity activity);
 
 struct pf_path *path_to_nearest_allied_city(struct unit *punit);
 

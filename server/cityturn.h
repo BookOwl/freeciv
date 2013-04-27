@@ -21,7 +21,7 @@
 struct conn_list;
 struct cm_result;
 
-bool city_refresh(struct city *pcity);          /* call if city has changed */
+void city_refresh(struct city *pcity);          /* call if city has changed */
 void city_refresh_for_player(struct player *pplayer); /* tax/govt changed */
 
 void city_refresh_queue_add(struct city *pcity);
@@ -30,8 +30,7 @@ void city_refresh_queue_processing(void);
 void auto_arrange_workers(struct city *pcity); /* will arrange the workers */
 void apply_cmresult_to_city(struct city *pcity, const struct cm_result *cmr);
 
-bool city_change_size(struct city *pcity, citizens new_size,
-                      struct player *nationality);
+bool city_change_size(struct city *pcity, citizens new_size);
 bool city_reduce_size(struct city *pcity, citizens pop_loss,
                       struct player *destroyer);
 void city_repair_size(struct city *pcity, int change);
@@ -47,7 +46,5 @@ void choose_build_target(struct player *pplayer, struct city *pcity);
 void nullify_prechange_production(struct city *pcity);
 
 void check_city_migrations(void);
-
-void check_disasters(void);
 
 #endif  /* FC__CITYTURN_H */

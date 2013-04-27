@@ -87,7 +87,7 @@ bool is_sea_barbarian(struct player *pplayer)
 
   Dead barbarians forget the map and lose the money.
 **************************************************************************/
-struct player *create_barbarian_player(enum barbarian_type type)
+static struct player *create_barbarian_player(enum barbarian_type type)
 {
   struct player *barbarians;
   struct nation_type *nation;
@@ -127,10 +127,6 @@ struct player *create_barbarian_player(enum barbarian_type type)
   nation = pick_a_nation(NULL, FALSE, TRUE, type);
   player_set_nation(barbarians, nation);
   sz_strlcpy(barbarians->name, pick_random_player_name(nation));
-  if (game_was_started()) {
-    /* Find a color for the new player. */
-    assign_player_colors();
-  }
 
   server.nbarbarians++;
 
@@ -591,7 +587,7 @@ static void try_summon_barbarians(void)
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
 
     if (is_native_tile(boat, utile)
-        && (!utype_has_flag(boat, UTYF_TRIREME) || is_safe_ocean(utile))) {
+        && (!utype_has_flag(boat, F_TRIREME) || is_safe_ocean(utile))) {
       int cap;
 
       ptrans = create_unit(barbarians, utile, boat, 0, 0, -1);
