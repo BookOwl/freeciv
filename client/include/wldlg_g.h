@@ -13,8 +13,6 @@
 #ifndef FC__WLDLG_G_H
 #define FC__WLDLG_G_H
 
-#include "gui_proto_constructor.h"
-
-GUI_FUNC_PROTO(void, update_worklist_report_dialog, void)
+void update_worklist_report_dialog(void);
 
 #endif  /* FC__WLDLG_G_H */

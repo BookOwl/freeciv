@@ -24,8 +24,7 @@ extern "C" {
 #include "terrain.h"
 #include "unittype.h"
 
-/* Range of requirements.
- * Used in the network protocol. */
+/* Range of requirements. */
 #define SPECENUM_NAME req_range
 #define SPECENUM_VALUE0 REQ_RANGE_LOCAL
 #define SPECENUM_VALUE0NAME "Local"
@@ -48,13 +47,12 @@ extern "C" {
  * may not be active on a target.  If it is active then something happens.
  * For instance units and buildings have requirements to be built, techs
  * have requirements to be researched, and effects have requirements to be
- * active.
- * Used in the network protocol. */
+ * active. */
 struct requirement {
   struct universal source;		/* requirement source */
   enum req_range range;			/* requirement range */
   bool survives; /* set if destroyed sources satisfy the req*/
-  bool present;	 /* set if the requirement is to be present */
+  bool negated;	 /* set if the requirement is to be negated */
 };
 
 #define SPECLIST_TAG requirement
@@ -73,14 +71,14 @@ struct requirement {
 
 /* General requirement functions. */
 struct requirement req_from_str(const char *type, const char *range,
-				bool survives, bool present,
+				bool survives, bool negated,
 				const char *value);
 
 void req_get_values(const struct requirement *req, int *type,
-		    int *range, bool *survives, bool *present,
+		    int *range, bool *survives, bool *negated,
 		    int *value);
 struct requirement req_from_values(int type, int range,
-				   bool survives, bool present, int value);
+				   bool survives, bool negated, int value);
 
 bool are_requirements_equal(const struct requirement *req1,
 			    const struct requirement *req2);

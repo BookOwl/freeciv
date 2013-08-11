@@ -1263,12 +1263,9 @@ const char *sdl_get_tile_defense_info_text(struct tile *ptile)
   static char buffer[64];
   int bonus = (tile_terrain(ptile)->defense_bonus - 10) * 10;    
   
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)
-        && road_has_flag(proad, RF_NATURAL)) {
-      bonus += proad->defense_bonus;
-    }
-  } road_type_iterate_end;
+  if(tile_has_special(ptile, S_RIVER)) {
+    bonus += terrain_control.river_defense_bonus;
+  }
 
   fc_snprintf(buffer, sizeof(buffer), _("Terrain Defense Bonus: +%d%% "), bonus);
 
@@ -1803,8 +1800,9 @@ void popup_advanced_terrain_dialog(struct tile *ptile, Uint16 pos_x, Uint16 pos_
     }
 #endif /* 0 */
 
-    /* FIXME: This logic seems to try to mirror do_paradrop() why? */
     if(can_unit_paradrop(pFocus_Unit) && client_tile_get_known(ptile) &&
+      !(is_ocean_tile(ptile) && is_ground_unit(pFocus_Unit)) &&
+      !(is_sailing_unit(pFocus_Unit) && (!is_ocean_tile(ptile) || !pCity)) &&
       !(((pCity && pplayers_non_attack(client.conn.playing, city_owner(pCity)))
       || is_non_attack_unit_tile(ptile, client.conn.playing))) &&
       (unit_type(pFocus_Unit)->paratroopers_range >=
@@ -2162,9 +2160,15 @@ static int pillage_callback(struct widget *pWidget)
 
     if (pUnit)
     {
-      struct extra_type *target = extra_by_number(what);
+      Base_type_id pillage_base = -1;
 
-      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE, target);
+      if (what > S_LAST) {
+        pillage_base = what - S_LAST - 1;
+        what = S_LAST;
+      }
+
+      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE, what,
+                                         pillage_base);
     }
   }  
   return -1;
@@ -2200,12 +2204,14 @@ static void popdown_pillage_dialog(void)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *pUnit, bv_extras extras)
+void popup_pillage_dialog(struct unit *pUnit,
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
+  int what;
   SDL_Rect area;
-  struct extra_type *tgt;
 
   if (pPillage_Dlg) {
     return;
@@ -2244,18 +2250,24 @@ void popup_pillage_dialog(struct unit *pUnit, bv_extras extras)
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
 
-  while ((tgt = get_preferred_pillage(extras))) {
-    const char *name = NULL;
-    int what;
+  while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    const char *name;
 
-    BV_CLR(extras, extra_index(tgt));
-    name = extra_name_translation(tgt);
-    what = extra_index(tgt);
-
-    fc_assert(name != NULL);
+    if (what > S_LAST) {
+      struct base_type *pbase = base_by_number(what - S_LAST - 1);
+      name = base_name_translation(pbase);
+    } else {
+      name = special_name_translation(what);
+    }
 
     create_active_iconlabel(pBuf, pWindow->dst, pStr,
                             (char *) name, pillage_callback);
+
+    if (what > S_LAST) {
+      BV_CLR(bases, what - S_LAST - 1);
+    } else {
+      clear_special(&may_pillage, what);
+    }
 
     pBuf->data.unit = pUnit;
     set_wstate(pBuf, FC_WS_NORMAL);
@@ -3557,14 +3569,6 @@ void popup_tileset_suggestion_dialog(void)
 {
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -3573,12 +3577,4 @@ bool popup_theme_suggestion_dialog(const char *theme_name)
 {
   /* Don't load */
   return FALSE;
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
 }

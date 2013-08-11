@@ -132,7 +132,6 @@ void tileset_init(struct tileset *t);
 void tileset_free(struct tileset *tileset);
 void tileset_load_tiles(struct tileset *t);
 void tileset_free_tiles(struct tileset *t);
-void tileset_ruleset_reset(struct tileset *t);
 
 void finish_loading_sprites(struct tileset *t);
 
@@ -150,8 +149,6 @@ void tileset_setup_tile_type(struct tileset *t,
 			     const struct terrain *pterrain);
 void tileset_setup_resource(struct tileset *t,
 			    const struct resource *presource);
-void tileset_setup_road(struct tileset *t,
-                        struct road_type *proad);
 void tileset_setup_base(struct tileset *t,
                         const struct base_type *pbase);
 void tileset_setup_government(struct tileset *t,
@@ -179,9 +176,6 @@ int fill_basic_terrain_layer_sprite_array(struct tileset *t,
                                           struct drawn_sprite *sprs,
                                           int layer,
                                           struct terrain *pterrain);
-int fill_basic_road_sprite_array(const struct tileset *t,
-                                 struct drawn_sprite *sprs,
-                                 const struct road_type *proad);
 int fill_basic_base_sprite_array(const struct tileset *t,
                                  struct drawn_sprite *sprs,
                                  const struct base_type *pbase);
@@ -263,7 +257,6 @@ struct editor_sprites {
     *vision,
     *territory,
     *properties,
-    *road,
     *military_base;
 };
 

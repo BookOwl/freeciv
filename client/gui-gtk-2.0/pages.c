@@ -89,8 +89,6 @@ static guint statusbar_timer = 0;
 
 static GtkWidget *ruleset_combo;
 
-static bool holding_srv_list_mutex = FALSE;
-
 static void connection_state_reset(void);
 
 /**************************************************************************
@@ -686,6 +684,7 @@ static void destroy_server_scans(void)
 static gboolean check_server_scan(gpointer data)
 {
   struct server_scan *scan = data;
+  const struct server_list *servers;
   enum server_scan_status stat;
 
   if (!scan) {
@@ -695,15 +694,9 @@ static gboolean check_server_scan(gpointer data)
   stat = server_scan_poll(scan);
   if (stat >= SCAN_STATUS_PARTIAL) {
     enum server_scan_type type;
-    struct srv_list *srvrs;
-
     type = server_scan_get_type(scan);
-    srvrs = server_scan_get_list(scan);
-    fc_allocate_mutex(&srvrs->mutex);
-    holding_srv_list_mutex = TRUE;
-    update_server_list(type, srvrs->servers);
-    holding_srv_list_mutex = FALSE;
-    fc_release_mutex(&srvrs->mutex);
+    servers = server_scan_get_list(scan);
+    update_server_list(type, servers);
   }
 
   if (stat == SCAN_STATUS_ERROR || stat == SCAN_STATUS_DONE) {
@@ -1047,21 +1040,13 @@ static void network_list_callback(GtkTreeSelection *select, gpointer data)
 
   if (select == meta_selection) {
     GtkTreePath *path;
-    struct srv_list *srvrs;
+    const struct server_list *servers;
 
-    srvrs = server_scan_get_list(meta_scan);
+    servers = server_scan_get_list(meta_scan);
     path = gtk_tree_model_get_path(model, &it);
-    if (!holding_srv_list_mutex) {
-      /* We are not yet inside mutex protected block */
-      fc_allocate_mutex(&srvrs->mutex);
-    }
-    if (srvrs->servers && path) {
+    if (servers && path) {
       gint pos = gtk_tree_path_get_indices(path)[0];
-      pserver = server_list_get(srvrs->servers, pos);
-    }
-    if (!holding_srv_list_mutex) {
-      /* We are not yet inside mutex protected block */
-      fc_release_mutex(&srvrs->mutex);
+      pserver = server_list_get(servers, pos);
     }
     gtk_tree_path_free(path);
   }
@@ -1659,7 +1644,7 @@ static void conn_menu_connection_command(GObject *object, gpointer data)
 static void show_conn_popup(struct player *pplayer, struct connection *pconn)
 {
   GtkWidget *popup;
-  char buf[4096] = "";
+  char buf[1024] = "";
 
   if (pconn) {
     cat_snprintf(buf, sizeof(buf), _("Connection name: %s"),
@@ -1706,15 +1691,14 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
 {
   GtkWidget *menu;
   GtkWidget *item;
-  gchar *buf;
+  char buf[128];
 
   menu = gtk_menu_new();
   object_put(G_OBJECT(menu), pplayer, pconn);
 
-  buf = g_strdup_printf(_("%s info"),
-                        pconn ? pconn->username : player_name(pplayer));
+  fc_snprintf(buf, sizeof(buf), _("%s info"),
+              pconn ? pconn->username : player_name(pplayer));
   item = gtk_menu_item_new_with_label(buf);
-  g_free(buf);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   g_signal_connect_swapped(item, "activate",
                            G_CALLBACK(conn_menu_info_chosen), menu);
@@ -1788,10 +1772,9 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     /* No item for hack access; that would be a serious security hole. */
     for (level = cmdlevel_min(); level < client.conn.access_level; level++) {
       /* TRANS: Give access level to a connection. */
-      buf = g_strdup_printf(_("Give %s access"),
-                            cmdlevel_name(level));
+      fc_snprintf(buf, sizeof(buf), _("Give %s access"),
+                  cmdlevel_name(level));
       item = gtk_menu_item_new_with_label(buf);
-      g_free(buf);
       gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
       g_object_set_data_full(G_OBJECT(item), "command",
                              g_strdup_printf("cmdlevel %s",
@@ -1843,10 +1826,9 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
       }
 
       /* TRANS: e.g., "Put on Team 5" */
-      buf = g_strdup_printf(_("Put on %s"),
-                            team_slot_name_translation(tslot));
+      fc_snprintf(buf, sizeof(buf), _("Put on %s"),
+                  team_slot_name_translation(tslot));
       item = gtk_menu_item_new_with_label(buf);
-      g_free(buf);
       gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
       object_put(G_OBJECT(item), pplayer, NULL);
       g_signal_connect(item, "activate", G_CALLBACK(conn_menu_team_chosen),

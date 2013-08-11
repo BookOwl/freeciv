@@ -17,9 +17,6 @@
 
 #include <stdlib.h>
 
-/* gui main header */
-#include "gui_stub.h"
-
 #include "mapctrl.h"
 
 /**************************************************************************

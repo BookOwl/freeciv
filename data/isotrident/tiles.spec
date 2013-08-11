@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -44,7 +44,6 @@ tiles = { "row", "column", "tag"
   3, 18, "unit.fortified"
   3, 19, "unit.fallout"
   4, 19, "unit.patrol"
-  1, 18, "unit.convert"
 
 ; Unit hit-point bars: approx percent of hp remaining
 

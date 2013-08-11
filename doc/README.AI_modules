@@ -29,8 +29,8 @@ that use that module can be created by giving "create" command AI type as
 second parameter
 > create Leonidas classic
 
-Players created any other way, such as by aifill will get the AI type
-that has been made the default freeciv build time.
+Players created any other way, such as by aifill will get the "classic"
+AI type.
 
 Information "list" command shows includes player's AI type:
 > list
@@ -46,19 +46,13 @@ built in to freeciv.
 
 To statically link some of the supplied AI modules to freeciv,
 use --enable-ai-static=<comma,separated,list>. Default value for this
-is just "classic". Order of the modules is important in that first of
-the modules will be the default AI type used for all the players for whom
-it's not explicitly set.
+is just "classic".
 
 To support dynamically loading additional modules, use
 --enable-aimodules. It requires that also --enable-shared has been used,
 which may not work on all platforms.
 Special value --enable-aimodules=experimental makes freeciv also to build
 all the modules in its source tree as dynamically loadable AI modules.
-
-In case you want to use some dynamically loadable module as the default
-AI type instead of first type listed for --enable-ai-static, you can
-explicitly set the default type with --with-default-ai=<type>.
 
 
 4. Coding new dynamic AI module

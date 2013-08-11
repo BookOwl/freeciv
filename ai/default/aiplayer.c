@@ -25,30 +25,48 @@
 
 #include "aiplayer.h"
 
+static struct ai_type *self = NULL;
+
+/**************************************************************************
+  Set pointer to ai type of the default ai.
+**************************************************************************/
+void default_ai_set_self(struct ai_type *ai)
+{
+  self = ai;
+}
+
+/**************************************************************************
+  Get pointer to ai type of the default ai.
+**************************************************************************/
+struct ai_type *default_ai_get_self(void)
+{
+  return self;
+}
+
 /**************************************************************************
   Initialize player for use with default AI. Note that this is called
   for all players, not just for those default AI is controlling.
 **************************************************************************/
-void dai_player_alloc(struct ai_type *ait, struct player *pplayer)
+void dai_player_alloc(struct player *pplayer)
 {
   struct ai_plr *player_data = fc_calloc(1, sizeof(struct ai_plr));
 
-  player_set_ai_data(pplayer, ait, player_data);
+  player_set_ai_data(pplayer, default_ai_get_self(), player_data);
 
-  dai_data_init(ait, pplayer);
+  ai_data_init(pplayer);
 }
 
 /**************************************************************************
   Free player from use with default AI.
 **************************************************************************/
-void dai_player_free(struct ai_type *ait, struct player *pplayer)
+void dai_player_free(struct player *pplayer)
 {
-  struct ai_plr *player_data = def_ai_player_data(pplayer, ait);
+  struct ai_plr *player_data = def_ai_player_data(pplayer);
 
-  dai_data_close(ait, pplayer);
+  ai_data_close(pplayer);
 
   if (player_data != NULL) {
-    player_set_ai_data(pplayer, ait, NULL);
+    player_set_ai_data(pplayer, default_ai_get_self(), NULL);
     FC_FREE(player_data);
   }
 }
@@ -56,14 +74,13 @@ void dai_player_free(struct ai_type *ait, struct player *pplayer)
 /**************************************************************************
   Store player specific data to savegame
 **************************************************************************/
-void dai_player_save(struct ai_type *ait, const char *aitstr,
-                     struct player *pplayer, struct section_file *file, int plrno)
+void dai_player_save(struct player *pplayer, struct section_file *file, int plrno)
 {
   players_iterate(aplayer) {
-    struct ai_dip_intel *adip = dai_diplomacy_get(ait, pplayer, aplayer);
+    struct ai_dip_intel *adip = ai_diplomacy_get(pplayer, aplayer);
     char buf[32];
 
-    fc_snprintf(buf, sizeof(buf), "player%d.%s%d", plrno, aitstr,
+    fc_snprintf(buf, sizeof(buf), "player%d.ai%d", plrno,
                 player_index(aplayer));
 
     secfile_insert_int(file, adip->spam,
@@ -88,15 +105,13 @@ void dai_player_save(struct ai_type *ait, const char *aitstr,
 /**************************************************************************
   Load player specific data from savegame
 **************************************************************************/
-void dai_player_load(struct ai_type *ait, const char *aitstr,
-                     struct player *pplayer, const struct section_file *file,
-                     int plrno)
+void dai_player_load(struct player *pplayer, struct section_file *file, int plrno)
 {
   players_iterate(aplayer) {
-    struct ai_dip_intel *adip = dai_diplomacy_get(ait, pplayer, aplayer);
+    struct ai_dip_intel *adip = ai_diplomacy_get(pplayer, aplayer);
     char buf[32];
 
-    fc_snprintf(buf, sizeof(buf), "player%d.%s%d", plrno, aitstr,
+    fc_snprintf(buf, sizeof(buf), "player%d.ai%d", plrno,
                 player_index(aplayer));
 
     adip->spam

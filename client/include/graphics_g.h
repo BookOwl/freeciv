@@ -19,14 +19,12 @@
 /* client/include */
 #include "sprite_g.h"
 
-#include "gui_proto_constructor.h"
+bool isometric_view_supported(void);
+bool overhead_view_supported(void);
 
-GUI_FUNC_PROTO(bool, isometric_view_supported, void)
-GUI_FUNC_PROTO(bool, overhead_view_supported, void)
+void load_intro_gfx(void);
+void load_cursors(void);
 
-GUI_FUNC_PROTO(void, load_intro_gfx, void)
-GUI_FUNC_PROTO(void, load_cursors, void)
-
-GUI_FUNC_PROTO(void, free_intro_radar_sprites, void)
+void free_intro_radar_sprites(void);
 
 #endif  /* FC__GRAPHICS_G_H */

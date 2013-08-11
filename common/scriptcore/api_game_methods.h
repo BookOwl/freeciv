@@ -47,7 +47,6 @@ bool api_methods_city_has_building(lua_State *L, City *pcity,
 int api_methods_city_map_sq_radius(lua_State *L, City *pcity);
 int api_methods_city_size_get(lua_State *L, City *pcity);
 Tile *api_methods_city_tile_get(lua_State *L, City *pcity);
-int api_methods_city_inspire_partisans(lua_State *L, City *self, Player *inspirer);
 
 /* Government */
 const char *api_methods_government_rule_name(lua_State *L,
@@ -87,11 +86,6 @@ const char *api_methods_tech_type_name_translation(lua_State *L,
 const char *api_methods_terrain_rule_name(lua_State *L, Terrain *pterrain);
 const char *api_methods_terrain_name_translation(lua_State *L,
                                                  Terrain *pterrain);
-
-/* Disaster */
-const char *api_methods_disaster_rule_name(lua_State *L, Disaster *pdis);
-const char *api_methods_disaster_name_translation(lua_State *L,
-                                                  Disaster *pdis);
 
 /* Tile */
 int api_methods_tile_nat_x(lua_State *L, Tile *ptile);
