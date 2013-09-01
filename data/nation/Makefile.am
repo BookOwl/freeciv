@@ -82,7 +82,6 @@ pkgdata_DATA = \
 		bruneian.ruleset \
 		bulgarian.ruleset \
 		burgundian.ruleset \
-		burgundic.ruleset \
 		burkinabe.ruleset \
 		burmese.ruleset \
 		burundi.ruleset \
@@ -186,7 +185,6 @@ pkgdata_DATA = \
 		gambian.ruleset \
 		genoese.ruleset \
 		georgian.ruleset \
-		gepid.ruleset \
 		german.ruleset \
 		germanbelgian.ruleset \
 		germanic.ruleset \
@@ -261,16 +259,13 @@ pkgdata_DATA = \
 		khwarezmian.ruleset \
 		kiribati.ruleset \
 		kittitian.ruleset \
-		komi.ruleset \
 		kongo.ruleset \
 		korean.ruleset \
 		kosovar.ruleset \
 		kuna.ruleset \
 		kurd.ruleset \
-		kushan.ruleset \
 		kuwaiti.ruleset \
 		kyrgyz.ruleset \
-		langobardic.ruleset \
 		lankese.ruleset \
 		laotian.ruleset \
 		latin.ruleset \
@@ -283,7 +278,6 @@ pkgdata_DATA = \
 		liburnian.ruleset \
 		libyan.ruleset \
 		liechtensteiner.ruleset \
-		ligurian.ruleset \
 		lippe.ruleset \
 		lipkatatar.ruleset \
 		lithuanian.ruleset \
@@ -308,7 +302,6 @@ pkgdata_DATA = \
 		maori.ruleset \
 		mapuche.ruleset \
 		marathi.ruleset \
-		marshallese.ruleset \
 		martian.ruleset \
 		mauritanian.ruleset \
 		mauritian.ruleset \
@@ -357,7 +350,6 @@ pkgdata_DATA = \
 		northkorean.ruleset \
 		northumbrian.ruleset \
 		norwegian.ruleset \
-		novgorodian.ruleset \
 		nubian.ruleset \
 		numidian.ruleset \
 		nuu-chah-nulth.ruleset \
@@ -408,7 +400,6 @@ pkgdata_DATA = \
 		roman.ruleset \
 		romansh.ruleset \
 		russian.ruleset \
-		rusyn.ruleset \
 		ruthenian.ruleset \
 		rwandan.ruleset \
 		ryukyuan.ruleset \
@@ -514,7 +505,6 @@ pkgdata_DATA = \
 		ugandan.ruleset \
 		ukrainian.ruleset \
 		un.ruleset \
-		urartian.ruleset \
 		uruguayan.ruleset \
 		uyghur.ruleset \
 		uzbek.ruleset \

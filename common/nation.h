@@ -23,7 +23,6 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 #include "name_translation.h"
-#include "rgbcolor.h"
 #include "terrain.h"            /* MAX_NUM_TERRAINS */
 
 #define NO_NATION_SELECTED (NULL)
@@ -127,11 +126,6 @@ struct nation_type {
       /* Nations which we don't want in the same game. For example,
        * British and English. */
       struct nation_list *conflicts_with;
-
-      /* Nation's associated player color (NULL if none). */
-      struct rgbcolor *rgb;
-
-      int *traits;
     } server;
 
     struct {
@@ -162,8 +156,6 @@ const char *nation_plural_translation(const struct nation_type *pnation);
 const char *nation_plural_for_player(const struct player *pplayer);
 
 int city_style_of_nation(const struct nation_type *nation);
-
-const struct rgbcolor *nation_color(const struct nation_type *pnation);
 
 /* Ancillary nation routines */
 bool is_nation_playable(const struct nation_type *nation);

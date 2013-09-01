@@ -11,10 +11,6 @@ AM_CPPFLAGS = \
 	$(MAPIMG_WAND_CFLAGS)
 
 libfreeciv_la_SOURCES = \
-		achievements.c	\
-		achievements.h	\
-		actions.c	\
-		actions.h	\
 		ai.c		\
 		ai.h		\
 		base.c		\
@@ -35,14 +31,10 @@ libfreeciv_la_SOURCES = \
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		disaster.c	\
-		disaster.h	\
 		effects.c	\
 		effects.h	\
 		events.c	\
 		events.h	\
-		extras.c	\
-		extras.h	\
 		featured_text.c	\
 		featured_text.h	\
 		fc_cmdhelp.c	\
@@ -95,25 +87,18 @@ libfreeciv_la_SOURCES = \
 		terrain.h	\
 		tile.c		\
 		tile.h		\
-		traderoutes.c	\
-		traderoutes.h	\
-		traits.h	\
 		unit.c		\
 		unit.h		\
 		unitlist.c	\
 		unitlist.h	\
 		unittype.c	\
 		unittype.h	\
-		version.c	\
-		version.h	\
-		victory.c	\
-		victory.h	\
 		vision.c	\
 		vision.h	\
-		workertask.c	\
-		workertask.h	\
 		worklist.c	\
-		worklist.h
+		worklist.h	\
+		version.c	\
+		version.h
 
 libfreeciv_la_DEPENDENCIES = \
 	$(top_builddir)/utility/libcivutility.la \

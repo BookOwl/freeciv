@@ -19,47 +19,33 @@
 /* common */
 #include "player.h"
 
-/* ai/default */
-#include "aidata.h"
-
-/* ai/threaded */
-#include "taimsg.h"
-
 struct player;
 
 struct tai_msgs
 {
   fc_thread_cond thr_cond;
   fc_mutex mutex;
-  struct taimsg_list *msglist;
-};
-
-struct tai_reqs
-{
-  struct taireq_list *reqlist;
+  bool exit_thread;
 };
 
 struct tai_plr
 {
-  struct ai_plr defai; /* Keep this first so default ai finds it */
+  struct tai_msgs msgs;
+  bool thread_running;
+  fc_thread ait;
 };
 
-void tai_init_threading(void);
+struct ai_type *tai_get_self(void);
+void tai_set_self(struct ai_type *ai);
 
-void tai_player_alloc(struct ai_type *ait, struct player *pplayer);
-void tai_player_free(struct ai_type *ait, struct player *pplayer);
-void tai_control_gained(struct ai_type *ait,struct player *pplayer);
-void tai_control_lost(struct ai_type *ait, struct player *pplayer);
-void tai_refresh(struct ai_type *ait, struct player *pplayer);
+void tai_player_alloc(struct player *pplayer);
+void tai_player_free(struct player *pplayer);
+void tai_control_gained(struct player *pplayer);
+void tai_control_lost(struct player *pplayer);
 
-void tai_msg_to_thr(struct tai_msg *msg);
-
-void tai_req_from_thr(struct tai_req *req);
-
-static inline struct tai_plr *tai_player_data(struct ai_type *ait,
-                                              const struct player *pplayer)
+static inline struct tai_plr *tai_player_data(const struct player *pplayer)
 {
-  return (struct tai_plr *)player_ai_data(pplayer, ait);
+  return (struct tai_plr *)player_ai_data(pplayer, tai_get_self());
 }
 
 #endif /* FC__TAIPLAYER_H */

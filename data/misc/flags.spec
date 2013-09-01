@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -85,7 +85,6 @@ artists = "
    Brittany		Lexicon
    Brunei		Gustav Broberg 
    Bulgaria		Daniel McRae
-   Burgundic		Andrzej G.
    Burgundy		Daniel Markstedt
    Burkina Faso		Gabbe (Wikimedia Commons)
    Burundi		Sebastian Koppehel
@@ -185,7 +184,6 @@ artists = "
    Gambia		J.M. Maalderink
    Gaul			Daniel Markstedt and Kilian Valkhof
    Georgia		Christian Schaller
-   Gepid		Andrzej G.
    Germanic		Andrzej G.
    Germany		Philipp Sadleder
    Ghana		J.M. Maalderink
@@ -265,14 +263,12 @@ artists = "
    Khwarezm		Dan Cottrell and Daniel Markstedt
    Kiev			Maxim (http://logograd.narod.ru/)
    Kiribati		Patricia Fidi
-   Komi			J.M. Maalderink
    Kongo		Daniel Markstedt
    Korea		Stephen Silver
    Korea (ancient)	Mysid
    Kosovo		Cradel (Wikimedia Commons)
    Kuna Yala		J.M. Maalderink
    Kurd			Denelson83
-   Kushan		Andrzej G.
    Kuwait		J.M. Maalderink
    Kyrgyzstan		-xfi-
    Labarum		J.M. Maalderink
@@ -290,11 +286,9 @@ artists = "
    Libya (old)		Cezary Biele
    Liechtenstein	Denelson83 and Flanker (Wikimedia Commons)
    Liguria		Flanker (Wikimedia Commons)
-   Ligurian		Andrzej G.
    Lippe		ludger1961 (Wikimedia Commons) and J.M. Maalderink
    Lipka Tatar		Aotearoa (Wikimedia Commons)
    Lithuania		Christian Schaller
-   Lombardy		Flanker (Wikimedia Commons)
    Lorraine		J.M. Maalderink
    Luna			Daniel Markstedt
    Lusatia		J.M. Maalderink
@@ -318,7 +312,6 @@ artists = "
    Mapuche		Guillermo Romero
    Marathi		Sankalp Dravid
    Mars			Vasco Alexandre Da Silva Costa
-   Marshall Islands	SKopp (Wikimedia Commons)
    Mauritania		Flad (Wikimedia Commons)
    Mauritius		J.M. Maalderink
    Maya			Daniel Markstedt
@@ -343,7 +336,7 @@ artists = "
    Moravia		Tlusťa (Wikimedia Commons) and J.M. Maalderink
    Mordovia		Fibonacci (Wikimedia Commons)
    Morocco		Xiquet, Flad (Wikimedia Commons)
-   Moscow		Oren neu dag (Wikimedia Commons)
+   Moscow		Oren neu dag (Wikimedia Commons
    Mozambique		Tobias Jakobs
    Mughal		Orange Tuesday (Wikimedia Commons)
    Muskogee		Daniel Markstedt
@@ -371,7 +364,6 @@ artists = "
    North Korea		Zachary Harden
    Northumbria		J.M. Maalderink
    Norway		Christian Schaller
-   Novgorod		Loginname (Wikimedia Commons)
    Nubia		Daniel Markstedt
    Numidia		Lexicon and Dan Cottrell
    Nunavut		James Leigh
@@ -530,7 +522,6 @@ artists = "
    United Kingdom	Daniel McRae
    United Nations	Tobias Jakobs
    Unknown		Jason Short
-   Urartu		Andrzej G.
    Uruguay		Guillermo Romero
    USA			Daniel McRae
    Uyghur		Daniel Markstedt
@@ -649,7 +640,6 @@ sprites =
 		"f.brittany", "flags/brittany"
 		"f.brunei", "flags/brunei"
 		"f.bulgaria", "flags/bulgaria"
-		"f.burgundic", "flags/burgundic"
 		"f.burgundy", "flags/burgundy"
 		"f.burkina_faso", "flags/burkina_faso"
 		"f.burundi", "flags/burundi"
@@ -750,7 +740,6 @@ sprites =
 		"f.gambia", "flags/gambia"
 		"f.gaul", "flags/gaul"
 		"f.georgia", "flags/georgia"
-		"f.gepid", "flags/gepid"
 		"f.germanic", "flags/germanic"
 		"f.germany", "flags/germany"
 		"f.ghana", "flags/ghana"
@@ -830,14 +819,12 @@ sprites =
 		"f.khwarezm", "flags/khwarezm"
 		"f.kiev", "flags/kiev"
 		"f.kiribati", "flags/kiribati"
-		"f.komi", "flags/komi"
 		"f.kongo", "flags/kongo"
 		"f.korea", "flags/korea"
 		"f.korea_ancient", "flags/korea_ancient"
 		"f.kosovo", "flags/kosovo"
 		"f.kuna_yala", "flags/kuna_yala"
 		"f.kurd", "flags/kurd"
-		"f.kushan", "flags/kushan"
 		"f.kuwait", "flags/kuwait"
 		"f.kyrgyzstan", "flags/kyrgyzstan"
 		"f.labarum", "flags/labarum"		; used by Western Roman
@@ -855,11 +842,9 @@ sprites =
 		"f.libya_old", "flags/libya_old"
 		"f.liechtenstein", "flags/liechtenstein"
 		"f.liguria", "flags/liguria"		; used by Genoese
-		"f.ligurian", "flags/ligurian"
 		"f.lipkatatar", "flags/lipkatatar"
 		"f.lippe", "flags/lippe"
 		"f.lithuania", "flags/lithuania"
-		"f.lombardy", "flags/lombardy"
 		"f.lorraine", "flags/lorraine"
 		"f.luna", "flags/luna"
 		"f.lusatia", "flags/lusatia"
@@ -883,7 +868,6 @@ sprites =
 		"f.mapuche", "flags/mapuche"
 		"f.marathi", "flags/marathi"
 		"f.mars", "flags/mars"
-		"f.marshall_islands", "flags/marshall_islands"
 		"f.mauritania", "flags/mauritania"
 		"f.mauritius", "flags/mauritius"
 		"f.maya", "flags/maya"
@@ -935,7 +919,6 @@ sprites =
 		"f.north_korea", "flags/north_korea"
 		"f.northumbria", "flags/northumbria"
 		"f.norway", "flags/norway"
-		"f.novgorod", "flags/novgorod"
 		"f.nubia", "flags/nubia"
 		"f.numidia", "flags/numidia"
 		"f.nunavut", "flags/nunavut"		; used by Inuit
@@ -986,7 +969,6 @@ sprites =
 		"f.romania", "flags/romania"
 		"f.rome", "flags/rome"			; Roman republic flag
 		"f.russia", "flags/russia"
-		"f.rusyn", "flags/rusyn"
 		"f.rvn", "flags/rvn"
 		"f.rwanda", "flags/rwanda"
 		"f.ryukyu", "flags/ryukyu"
@@ -1095,7 +1077,6 @@ sprites =
 		"f.united_kingdom", "flags/united_kingdom"
 		"f.united_nations", "flags/united_nations"
 		"f.unknown", "flags/unknown"		; hard-coded fallback
-		"f.urartu", "flags/urartu"
 		"f.uruguay", "flags/uruguay"
 		"f.usa", "flags/usa"
 		"f.uyghur", "flags/uyghur"

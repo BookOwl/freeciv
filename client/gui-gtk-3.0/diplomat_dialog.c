@@ -92,7 +92,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                                         client_player()->economic.gold),
               client_player()->economic.gold);
 
-  if (unit_has_type_flag(punit, UTYF_UNBRIBABLE)) {
+  if (unit_has_type_flag(punit, F_UNBRIBABLE)) {
     shell = popup_choice_dialog(GTK_WINDOW(toplevel), _("Ooops..."),
                                  _("This unit cannot be bribed!"),
                                  GTK_STOCK_OK, NULL, NULL, NULL);
@@ -670,18 +670,30 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
              unit_name_translation(punit),
              city_name(pcity));
 
-    if (!unit_has_type_flag(punit, UTYF_SPY)) {
+    if (!unit_has_type_flag(punit, F_SPY)){
       shl = popup_choice_dialog(GTK_WINDOW(toplevel),
         astr_str(&title), astr_str(&text),
 	_("Establish _Embassy"), diplomat_embassy_callback, NULL,
 	_("_Investigate City"), diplomat_investigate_callback, NULL,
-	_("_Poison City"), spy_poison_callback, NULL,
 	_("_Sabotage City"), diplomat_sabotage_callback, NULL,
 	_("Steal _Technology"), diplomat_steal_callback, NULL,
 	_("Incite a _Revolt"), diplomat_incite_callback, NULL,
 	_("_Keep moving"), diplomat_keep_moving_callback, NULL,
 	GTK_STOCK_CANCEL, diplomat_cancel_callback, NULL,
 	NULL);
+
+      if (!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 0, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 1, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 2, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 3, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 4, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 5, FALSE);
     } else {
        shl = popup_choice_dialog(GTK_WINDOW(toplevel),
         astr_str(&title), astr_str(&text),
@@ -694,29 +706,22 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 	_("_Keep moving"), diplomat_keep_moving_callback, NULL,
 	GTK_STOCK_CANCEL, diplomat_cancel_callback, NULL,
 	NULL);
-     }
 
-    if (!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 0, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 1, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, SPY_POISON, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 2, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 3, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 4, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 5, FALSE);
-    }
-    if (!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile)) {
-      choice_dialog_button_set_sensitive(shl, 6, FALSE);
-    }
+      if (!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 0, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 1, FALSE);
+      if (!diplomat_can_do_action(punit, SPY_POISON, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 2, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 3, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 4, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 5, FALSE);
+      if (!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	choice_dialog_button_set_sensitive(shl, 6, FALSE);
+     }
 
     diplomat_dialog = shl;
 

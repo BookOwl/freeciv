@@ -46,14 +46,9 @@ Player *api_edit_create_player(lua_State *L, const char *username,
 void api_edit_change_gold(lua_State *L, Player *pplayer, int amount);
 Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
                                     Tech_Type *ptech, const char *reason);
-bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
-                        const int mod);
 
 void api_edit_create_base(lua_State *L, Tile *ptile, const char *name,
                           struct player *pplayer);
-
-void api_edit_create_road(lua_State *L, Tile *ptile, const char *name);
-void api_edit_tile_set_label(lua_State *L, Tile *ptile, const char *label);
 
 void api_edit_climate_change(lua_State *L, enum climate_change_type type,
                              int effect);

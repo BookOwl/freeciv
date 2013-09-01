@@ -13,8 +13,6 @@
 #ifndef FC__FINDDLG_G_H
 #define FC__FINDDLG_G_H
 
-#include "gui_proto_constructor.h"
+void popup_find_dialog(void);
 
-GUI_FUNC_PROTO(void, popup_find_dialog, void)
-
-#endif  /* FC__FINDDLG_G_H */
+#endif				/* FC__FINDDLG_G_H */

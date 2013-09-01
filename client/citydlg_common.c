@@ -375,7 +375,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
 	const char *state = NULL;
 
 	if (is_great_wonder(pimprove)) {
-          if (improvement_obsolete(pplayer, pimprove, pcity)) {
+          if (improvement_obsolete(pplayer, pimprove)) {
             state = _("Obsolete");
           } else if (great_wonder_is_built(pimprove)) {
             state = _("Built");
@@ -385,7 +385,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
             state = _("Great Wonder");
           }
 	} else if (is_small_wonder(pimprove)) {
-	  if (improvement_obsolete(pplayer, pimprove, pcity)) {
+	  if (improvement_obsolete(pplayer, pimprove)) {
 	    state = _("Obsolete");
           } else if (wonder_is_built(pplayer, target.value.building)) {
 	    state = _("Built");
@@ -462,7 +462,7 @@ void get_city_dialog_output_text(const struct city *pcity,
   if (otype == O_TRADE) {
     int i;
 
-    for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    for (i = 0; i < NUM_TRADE_ROUTES; i++) {
       if (pcity->trade[i] != 0) {
         /* There have been bugs causing the trade city to not be sent
          * properly to the client.  If this happens we trust the

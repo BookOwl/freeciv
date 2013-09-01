@@ -28,7 +28,6 @@ extern "C" {
 #include "improvement.h"
 #include "unitlist.h"
 #include "vision.h"
-#include "workertask.h"
 #include "worklist.h"
 
 enum production_class_type {
@@ -42,17 +41,14 @@ enum production_class_type {
  * toggled by the user.  Each one defaults to off.  Adding new ones
  * will break network compatibility.  Reordering them will break savegame
  * compatibility.  If you want to remove one you should replace it with
- * a CITYO_UNUSED entry; new options can just be added at the end.
- *
- * Used in the network protocol.
- */
+ * a CITYO_UNUSED entry; new options can just be added at the end.*/
 enum city_options {
   CITYO_DISBAND,      /* If building a settler at size 1 disbands the city */
   CITYO_NEW_EINSTEIN, /* If new citizens are science specialists */
   CITYO_NEW_TAXMAN,   /* If new citizens are gold specialists */
   CITYO_LAST
 };
-BV_DEFINE(bv_city_options, CITYO_LAST); /* Used in the network protocol. */
+BV_DEFINE(bv_city_options, CITYO_LAST);
 
 /* Changing the max radius requires updating network capabilities and results
  * in incompatible savefiles. */
@@ -76,6 +72,11 @@ BV_DEFINE(bv_city_options, CITYO_LAST); /* Used in the network protocol. */
 #define CITY_MAP_MAX_SIZE (CITY_MAP_MAX_RADIUS * 2 + 1)
 
 #define INCITE_IMPOSSIBLE_COST (1000 * 1000 * 1000)
+
+/*
+ * Number of trade routes a city can have.
+ */
+#define NUM_TRADE_ROUTES        4
 
 /*
  * Size of the biggest possible city.
@@ -257,7 +258,6 @@ enum citizen_feeling {
   FEELING_BASE,		/* before any of the modifiers below */
   FEELING_LUXURY,	/* after luxury */
   FEELING_EFFECT,	/* after building effects */
-  FEELING_NATIONALITY,  /* after citizen nationality effects */
   FEELING_MARTIAL,	/* after units enforce martial order */
   FEELING_FINAL,	/* after wonders (final result) */
   FEELING_LAST
@@ -306,7 +306,7 @@ struct city {
   citizens *nationality;      /* Nationality of the citizens. */
 
   /* trade routes */
-  int trade[MAX_TRADE_ROUTES], trade_value[MAX_TRADE_ROUTES];
+  int trade[NUM_TRADE_ROUTES], trade_value[NUM_TRADE_ROUTES];
 
   /* Tile output, regardless of if the tile is actually worked. It is used
    * as cache for the output of the tiles within the city map.
@@ -398,8 +398,6 @@ struct city {
       void *ais[FC_AI_LAST];
 
       struct vision *vision;
-
-      struct worker_task task_req;
     } server;
 
     struct {
@@ -408,7 +406,6 @@ struct city {
       bool walls;
       bool happy;
       bool unhappy;
-      int  city_image;
 
       /* The color is an index into the city_colors array in mapview_common */
       bool colored;
@@ -549,7 +546,6 @@ bool city_can_use_specialist(const struct city *pcity,
 bool city_has_building(const struct city *pcity,
 		       const struct impr_type *pimprove);
 bool is_capital(const struct city *pcity);
-bool is_gov_center(const struct city *pcity);
 bool city_got_citywalls(const struct city *pcity);
 bool city_got_defense_effect(const struct city *pcity,
                              const struct unit_type *attacker);
@@ -616,6 +612,16 @@ bool city_can_be_built_here(const struct tile *ptile,
                             const struct unit *punit);
 enum city_build_result city_build_here_test(const struct tile *ptile,
                                             const struct unit *punit);
+
+/* trade functions */
+bool can_cities_trade(const struct city *pc1, const struct city *pc2);
+bool can_establish_trade_route(const struct city *pc1, const struct city *pc2);
+bool have_cities_trade_route(const struct city *pc1, const struct city *pc2);
+int trade_between_cities(const struct city *pc1, const struct city *pc2);
+int city_num_trade_routes(const struct city *pcity);
+int get_caravan_enter_city_trade_bonus(const struct city *pc1, 
+                                       const struct city *pc2);
+int get_city_min_trade_route(const struct city *pcity, int *slot);
 
 /* list functions */
 struct city *city_list_find_number(struct city_list *This, int id);

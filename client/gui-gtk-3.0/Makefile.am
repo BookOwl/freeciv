@@ -79,7 +79,6 @@ libgui_gtk3_la_SOURCES = \
 	ratesdlg.h	\
 	repodlgs.c	\
 	repodlgs.h	\
-	soundset_dlg.c	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
 	sprite.c	\

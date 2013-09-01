@@ -57,6 +57,7 @@ int get_attack_power(const struct unit *punit);
 int base_get_attack_power(const struct unit_type *punittype,
 			  int veteran, int moves_left);
 int base_get_defense_power(const struct unit *punit);
+int get_defense_power(const struct unit *punit);
 int get_total_defense_power(const struct unit *attacker,
 			    const struct unit *defender);
 int get_fortified_defense_power(const struct unit *attacker,
@@ -75,10 +76,6 @@ struct unit *get_attacker(const struct unit *defender,
 			  const struct tile *ptile);
 
 bool is_stack_vulnerable(const struct tile *ptile);
-
-int combat_bonus_against(const struct combat_bonus_list *list,
-                         const struct unit_type *enemy,
-                         enum combat_bonus_type type);
 
 #ifdef __cplusplus
 }
