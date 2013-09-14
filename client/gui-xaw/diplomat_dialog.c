@@ -32,7 +32,6 @@
 #include "log.h"
 
 /* common */
-#include "actions.h"
 #include "game.h"
 #include "improvement.h"
 #include "tech.h"
@@ -118,7 +117,7 @@ void popup_bribe_dialog(struct unit *punit, int cost)
                                           client_player()->economic.gold),
               client_player()->economic.gold);
 
-  if (unit_has_type_flag(punit, UTYF_UNBRIBABLE)) {
+  if (unit_has_type_flag(punit, F_UNBRIBABLE)) {
     popup_message_dialog(toplevel, "diplomatbribedialog",
                          _("This unit cannot be bribed!"),
                          diplomat_bribe_no_callback, 0, 0, NULL);
@@ -695,9 +694,8 @@ void popup_incite_dialog(struct city *pcity, int cost)
   Callback from diplomat/spy dialog for "keep moving".
   (This should only occur when entering allied city.)
 **************************************************************************/
-static void diplomat_keep_moving_callback_city(Widget w,
-                                               XtPointer client_data,
-                                               XtPointer call_data)
+static void diplomat_keep_moving_callback(Widget w, XtPointer client_data, 
+					  XtPointer call_data)
 {
   struct unit *punit;
   struct city *pcity;
@@ -709,30 +707,7 @@ static void diplomat_keep_moving_callback_city(Widget w,
       && (pcity = game_city_by_number(diplomat_target_id))
       && !same_pos(unit_tile(punit), city_tile(pcity))) {
     request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
-                            diplomat_target_id, ATK_CITY);
-  }
-  process_diplomat_arrival(NULL, 0);
-}
-
-/**************************************************************************
-  Callback from diplomat/spy dialog for "keep moving".
-  (This should only occur when entering the tile of an allied unit..)
-**************************************************************************/
-static void diplomat_keep_moving_callback_unit(Widget w,
-                                               XtPointer client_data,
-                                               XtPointer call_data)
-{
-  struct unit *punit;
-  struct unit *tunit;
-
-  destroy_message_dialog(w);
-  diplomat_dialog = NULL;
-
-  if ((punit = game_unit_by_number(diplomat_id))
-      && (tunit = game_unit_by_number(diplomat_target_id))
-      && !same_pos(unit_tile(punit), unit_tile(tunit))) {
-    request_diplomat_action(DIPLOMAT_MOVE, diplomat_id,
-                            diplomat_target_id, ATK_UNIT);
+                            diplomat_target_id, 0);
   }
   process_diplomat_arrival(NULL, 0);
 }
@@ -769,52 +744,57 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
              unit_name_translation(punit),
              city_name(pcity));
 
-    if (!unit_has_type_flag(punit, UTYF_SPY)) {
+    if (!unit_has_type_flag(punit, F_SPY)) {
       diplomat_dialog =
         popup_message_dialog(toplevel, "diplomatdialog", astr_str(&text),
 			       diplomat_embassy_callback, 0, 1,
 			       diplomat_investigate_callback, 0, 1,
-			       spy_poison_callback, 0, 1,
 			       diplomat_sabotage_callback, 0, 1,
 			       diplomat_steal_callback, 0, 1,
 			       diplomat_incite_callback, 0, 1,
-			       diplomat_keep_moving_callback_city, 0, 1,
+			       diplomat_keep_moving_callback, 0, 1,
 			       diplomat_cancel_callback, 0, 0,
 			       NULL);
+      
+      if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button0"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button1"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button2"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button3"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button4"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button5"), FALSE);
     } else {
       diplomat_dialog =
         popup_message_dialog(toplevel, "spydialog", astr_str(&text),
 			       diplomat_embassy_callback, 0,  1,
 			       diplomat_investigate_callback, 0, 1,
-			       spy_poison_callback, 0, 1,
+			       spy_poison_callback,0, 1,
 			       spy_request_sabotage_list, 0, 1,
 			       spy_steal_popup, 0, 1,
 			       diplomat_incite_callback, 0, 1,
-			       diplomat_keep_moving_callback_city, 0, 1,
+			       diplomat_keep_moving_callback, 0, 1,
 			       diplomat_cancel_callback, 0, 0,
 			       NULL);
-    }
       
-    if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button0"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button1"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, SPY_POISON, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button2"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button3"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button4"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button5"), FALSE);
-    }
-    if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile)) {
-      XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button6"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_EMBASSY, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button0"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INVESTIGATE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button1"), FALSE);
+      if(!diplomat_can_do_action(punit, SPY_POISON, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button2"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_SABOTAGE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button3"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_STEAL, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button4"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_INCITE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button5"), FALSE);
+      if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
+	XtSetSensitive(XtNameToWidget(diplomat_dialog, "*button6"), FALSE);
     }
   } else { 
     if ((ptunit = unit_list_get(dest_tile->units, 0))) {
@@ -832,7 +812,6 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 			       astr_str(&text),
 			       diplomat_bribe_callback, 0, 0,
 			       spy_sabotage_unit_callback, 0, 0,
-			       diplomat_keep_moving_callback_unit, 0, 1,
 			       diplomat_cancel_callback, 0, 0,
 			       NULL);
 	
@@ -840,8 +819,6 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *dest_tile)
 	XtSetSensitive(XtNameToWidget(shl, "*button0"), FALSE);
       if(!diplomat_can_do_action(punit, SPY_SABOTAGE_UNIT, dest_tile))
 	XtSetSensitive(XtNameToWidget(shl, "*button1"), FALSE);
-      if(!diplomat_can_do_action(punit, DIPLOMAT_MOVE, dest_tile))
-        XtSetSensitive(XtNameToWidget(shl, "*button2"), FALSE);
     }
   }
   astr_free(&text);

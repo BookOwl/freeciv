@@ -317,10 +317,15 @@ static void pillage_callback(GtkWidget *w, gpointer data)
 
   punit = game_unit_by_number(unit_to_use_to_pillage);
   if (punit) {
-    struct extra_type *target = extra_by_number(what);
+    Base_type_id pillage_base = -1;
+
+    if (what > S_LAST) {
+      pillage_base = what - S_LAST - 1;
+      what = S_LAST;
+    }
 
     request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                       target);
+                                       what, pillage_base);
   }
 }
 
@@ -335,13 +340,14 @@ static void pillage_destroy_callback(GtkWidget *w, gpointer data)
 /****************************************************************
   Opens pillage dialog listing possible pillage targets.
 *****************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras extras)
+void popup_pillage_dialog(struct unit *punit,
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   GtkWidget *shl;
+  int what;
 
   if (!is_showing_pillage_dialog) {
-    struct extra_type *tgt;
-
     is_showing_pillage_dialog = TRUE;
     unit_to_use_to_pillage = punit->id;
 
@@ -349,18 +355,27 @@ void popup_pillage_dialog(struct unit *punit, bv_extras extras)
 			       _("What To Pillage"),
 			       _("Select what to pillage:"));
 
-    while ((tgt = get_preferred_pillage(extras))) {
-      int what;
-      bv_extras what_extras;
+    while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+      bv_special what_bv;
+      bv_bases what_base;
 
-      BV_CLR_ALL(what_extras);
+      BV_CLR_ALL(what_bv);
+      BV_CLR_ALL(what_base);
 
-      what = extra_index(tgt);
-      BV_CLR(extras, what);
-      BV_SET(what_extras, what);
+      if (what > S_LAST) {
+        BV_SET(what_base, what % (S_LAST + 1));
+      } else {
+        BV_SET(what_bv, what);
+      }
 
-      choice_dialog_add(shl, get_infrastructure_text(what_extras),
+      choice_dialog_add(shl, get_infrastructure_text(what_bv, what_base),
                         G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
+
+      if (what > S_LAST) {
+        BV_CLR(bases, what % (S_LAST + 1));
+      } else {
+        clear_special(&may_pillage, what);
+      }
     }
 
     choice_dialog_add(shl, GTK_STOCK_CANCEL, 0, 0);
@@ -1117,7 +1132,7 @@ void popup_disband_dialog(struct unit_list *punits)
 
     if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
       unit_list_iterate(punits, punit) {
-        if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+        if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
           request_unit_disband(punit);
         }
       } unit_list_iterate_end;
@@ -1135,16 +1150,4 @@ void popdown_all_game_dialogs(void)
   gui_dialog_destroy_all();
   property_editor_popdown(editprop_get_property_editor());
   unit_select_dialog_popdown();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  if (gui_gtk3_popup_tech_help == GUI_POPUP_TECH_HELP_ENABLED
-      || (gui_gtk3_popup_tech_help == GUI_POPUP_TECH_HELP_RULESET
-          && game.control.popup_tech_help)) {
-    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, tech), HELP_TECH);
-  }
 }

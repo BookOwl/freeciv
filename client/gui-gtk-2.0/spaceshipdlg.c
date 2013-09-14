@@ -33,7 +33,6 @@
 #include "packets.h"
 #include "player.h"
 #include "spaceship.h"
-#include "victory.h"
 
 /* client */
 #include "client_main.h"
@@ -124,10 +123,10 @@ void refresh_spaceship_dialog(struct player *pplayer)
 
   pship=&(pdialog->pplayer->spaceship);
 
-  if (victory_enabled(VC_SPACERACE)
-      && pplayer == client.conn.playing
-      && pship->state == SSHIP_STARTED
-      && pship->success_rate > 0.0) {
+  if (game.info.spacerace
+     && pplayer == client.conn.playing
+     && pship->state == SSHIP_STARTED
+     && pship->success_rate > 0.0) {
     gui_dialog_set_response_sensitive(pdialog->shell,
 	GTK_RESPONSE_ACCEPT, TRUE);
   } else {

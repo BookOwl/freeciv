@@ -60,6 +60,4 @@ void fc_interface_init(void)
   fc_assert_exit(fc_funcs->gui_color_free);
 
   fc_funcs_defined = TRUE;
-
-  setup_real_activities_array();
 }

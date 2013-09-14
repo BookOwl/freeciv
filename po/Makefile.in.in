@@ -30,7 +30,7 @@ gettextsrcdir = $(datadir)/gettext/po
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 MKINSTALLDIRS = @MKINSTALLDIRS@
-mkinstalldirs = @MKDIR_P@
+mkinstalldirs = $(SHELL) `case "$(MKINSTALLDIRS)" in /*) echo "$(MKINSTALLDIRS)" ;; *) echo "$(top_builddir)/$(MKINSTALLDIRS)" ;; esac`
 
 CC = @CC@
 GMSGFMT = @GMSGFMT@
@@ -172,7 +172,7 @@ dist2: $(DISTFILES)
 
 # If you change following line, update also configure.ac where it
 # builds Makefile if NLS disabled.
-update-po: Makefile
+update-po: Makefile nb.po
 	$(MAKE) $(PACKAGE).pot
 	if test "$(PACKAGE)" = "gettext"; then PATH=`pwd`/../src:$$PATH; fi; \
 	cd $(srcdir); \
@@ -197,6 +197,11 @@ update-po: Makefile
 
 update-gmo: Makefile $(GMOFILES)
 	@:
+
+nb.po: no.po
+	cp $(srcdir)/no.po nb.po
+
+BUILT_SOURCES = nb.po
 
 Makefile: Makefile.in.in $(top_builddir)/config.status POTFILES.in
 	cd $(top_builddir) \

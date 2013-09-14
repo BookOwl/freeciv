@@ -48,9 +48,7 @@ void really_close_connection_dialog(void)
 **************************************************************************/
 void qtg_close_connection_dialog()
 {
-  if (gui()->current_page() != PAGE_NETWORK) {
-    qtg_real_set_client_page(PAGE_MAIN);
-  }
+  /* PORTME */
 }
 
 /**************************************************************************

@@ -34,13 +34,13 @@ void luaconsole_dialog_popup(bool raise)
 }
 
 /*****************************************************************************
-  Return true iff the lua console is open.
+  Return TRUE iff the lua console is open.
 *****************************************************************************/
 bool luaconsole_dialog_is_open(void)
 {
   /* PORTME */
 
-  return false;
+  return FALSE;
 }
 
 /*****************************************************************************

@@ -58,7 +58,6 @@ extern bool fullscreen_mode;
 
 /** Migrations **/
 extern bool gui_gtk3_migrated_from_gtk2;
-extern bool gui_sdl2_migrated_from_sdl;
 
 /** Local Options: **/
 
@@ -93,7 +92,6 @@ extern bool voteinfo_bar_hide_when_not_player;
 extern bool voteinfo_bar_new_at_front;
 
 extern bool autoaccept_tileset_suggestion;
-extern bool autoaccept_soundset_suggestion;
 
 extern bool draw_city_outlines;
 extern bool draw_city_output;
@@ -156,14 +154,6 @@ extern bool gui_gtk2_mouse_over_map_focus;
 extern bool gui_gtk2_chatline_autocompletion;
 extern int gui_gtk2_citydlg_xsize;
 extern int gui_gtk2_citydlg_ysize;
-enum {
-  /* Order must match strings in
-   * options.c:gui_popup_tech_help_name() */
-  GUI_POPUP_TECH_HELP_ENABLED,
-  GUI_POPUP_TECH_HELP_DISABLED,
-  GUI_POPUP_TECH_HELP_RULESET
-};
-extern int  gui_gtk2_popup_tech_help;
 extern char gui_gtk2_font_city_label[512];
 extern char gui_gtk2_font_notify_label[512];
 extern char gui_gtk2_font_spaceship_label[512];
@@ -197,7 +187,6 @@ extern bool gui_gtk3_mouse_over_map_focus;
 extern bool gui_gtk3_chatline_autocompletion;
 extern int gui_gtk3_citydlg_xsize;
 extern int gui_gtk3_citydlg_ysize;
-extern int  gui_gtk3_popup_tech_help;
 extern char gui_gtk3_font_city_label[512];
 extern char gui_gtk3_font_notify_label[512];
 extern char gui_gtk3_font_spaceship_label[512];
@@ -219,14 +208,6 @@ extern bool gui_sdl_fullscreen;
 extern struct video_mode gui_sdl_screen;
 extern bool gui_sdl_do_cursor_animation;
 extern bool gui_sdl_use_color_cursors;
-
-/* gui-sdl2 client specific options. */
-#define FC_SDL2_DEFAULT_THEME_NAME "human"
-extern char gui_sdl2_default_theme_name[512];
-extern bool gui_sdl2_fullscreen;
-extern struct video_mode gui_sdl2_screen;
-extern bool gui_sdl2_do_cursor_animation;
-extern bool gui_sdl2_use_color_cursors;
 
 #define SPECENUM_NAME option_type
 #define SPECENUM_VALUE0 OT_BOOLEAN

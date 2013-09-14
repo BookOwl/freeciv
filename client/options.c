@@ -80,7 +80,6 @@ bool fullscreen_mode = FALSE;
 
 /** Migrations **/
 bool gui_gtk3_migrated_from_gtk2 = FALSE;
-bool gui_sdl2_migrated_from_sdl = FALSE;
 
 /** Local Options: **/
 
@@ -114,7 +113,6 @@ bool voteinfo_bar_hide_when_not_player = FALSE;
 bool voteinfo_bar_new_at_front = FALSE;
 
 bool autoaccept_tileset_suggestion = FALSE;
-bool autoaccept_soundset_suggestion = FALSE;
 
 /* This option is currently set by the client - not by the user. */
 bool update_city_text_in_refresh_tile = TRUE;
@@ -180,7 +178,6 @@ bool gui_gtk2_mouse_over_map_focus = FALSE;
 bool gui_gtk2_chatline_autocompletion = TRUE;
 int gui_gtk2_citydlg_xsize = GUI_GTK2_CITYDLG_DEFAULT_XSIZE;
 int gui_gtk2_citydlg_ysize = GUI_GTK2_CITYDLG_DEFAULT_YSIZE;
-int  gui_gtk2_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET;
 char gui_gtk2_font_city_label[512] = "Monospace 8";
 char gui_gtk2_font_notify_label[512] = "Monospace Bold 9";
 char gui_gtk2_font_spaceship_label[512] = "Monospace 8";
@@ -213,7 +210,6 @@ bool gui_gtk3_mouse_over_map_focus = FALSE;
 bool gui_gtk3_chatline_autocompletion = TRUE;
 int gui_gtk3_citydlg_xsize = GUI_GTK3_CITYDLG_DEFAULT_XSIZE;
 int gui_gtk3_citydlg_ysize = GUI_GTK3_CITYDLG_DEFAULT_YSIZE;
-int  gui_gtk3_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET;
 char gui_gtk3_font_city_label[512] = "Monospace 8";
 char gui_gtk3_font_notify_label[512] = "Monospace Bold 9";
 char gui_gtk3_font_spaceship_label[512] = "Monospace 8";
@@ -234,28 +230,6 @@ bool gui_sdl_fullscreen = FALSE;
 struct video_mode gui_sdl_screen = VIDEO_MODE(640, 480);
 bool gui_sdl_do_cursor_animation = TRUE;
 bool gui_sdl_use_color_cursors = TRUE;
-
-/* gui-sdl2 client specific options. */
-char gui_sdl2_default_theme_name[512] = FC_SDL2_DEFAULT_THEME_NAME;
-bool gui_sdl2_fullscreen = FALSE;
-struct video_mode gui_sdl2_screen = VIDEO_MODE(640, 480);
-bool gui_sdl2_do_cursor_animation = TRUE;
-bool gui_sdl2_use_color_cursors = TRUE;
-
-/* gui-qt client specific options. */
-char gui_qt_font_city_label[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
-char gui_qt_font_notify_label[512] = "Monospace,8,-1,5,75,0,0,0,0,0";
-char gui_qt_font_spaceship_label[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
-char gui_qt_font_help_label[512] = "Sans Serif,10,-1,5,75,0,0,0,0,0";
-char gui_qt_font_help_link[512] = "Sans Serif,9,-1,5,50,0,0,0,0,0";
-char gui_qt_font_help_text[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
-char gui_qt_font_chatline[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
-char gui_qt_font_beta_label[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
-char gui_qt_font_small[512] = "Sans Serif,9,-1,5,50,0,0,0,0,0";
-char gui_qt_font_comment_label[512] = "Sans Serif,9,-1,5,50,1,0,0,0,0";
-char gui_qt_font_city_names[512] = "Sans Serif,10,-1,5,75,0,0,0,0,0";
-char gui_qt_font_city_productions[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
-char gui_qt_font_reqtree_text[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
 
 /* Set to TRUE after the first call to options_init(), to avoid the usage
  * of non-initialized datas when calling the changed callback. */
@@ -1694,26 +1668,6 @@ static const struct copt_val_name
           ? names + value : NULL);
 }
 
-/****************************************************************************
-  Popup tech help setting names accessor.
-****************************************************************************/
-static const struct copt_val_name
-  *gui_popup_tech_help_name(int value)
-{
-  /* Order must match enum GUI_POPUP_TECH_HELP_* */
-  static const struct copt_val_name names[] = {
-    /* TRANS: enum value for 'gui_popup_tech_help' */
-    { "ENABLED",   N_("Enabled") },
-    /* TRANS: enum value for 'gui_popup_tech_help' */
-    { "DISABLED",  N_("Disabled") },
-    /* TRANS: enum value for 'gui_popup_tech_help' */
-    { "RULESET",   N_("Ruleset") }
-  };
-
-  return (0 <= value && value < ARRAY_SIZE(names)
-          ? names + value : NULL);
-}
-
 /* Some changed callbacks. */
 static void reqtree_show_icons_callback(struct option *poption);
 static void view_option_changed_callback(struct option *poption);
@@ -1764,9 +1718,9 @@ static struct client_option client_options[] = {
                  N_("The chat log file"),
                  N_("The name of the chat log file."),
                  COC_INTERFACE, GUI_STUB, GUI_DEFAULT_CHAT_LOGFILE, NULL),
-  /* gui_gtk2/3_default_theme_name and gui_sdl/2_default_theme_name are
+  /* gui_gtk2/3_default_theme_name and gui_sdl_default_theme_name are
    * different settings to avoid client crash after loading the
-   * style for the other gui.  Keeps 4 different options! */
+   * style for the other gui.  Keeps 3 different options! */
   GEN_STR_LIST_OPTION(gui_gtk2_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
@@ -1781,11 +1735,6 @@ static struct client_option client_options[] = {
                       N_("By changing this option you change the "
                          "active theme."),
                       COC_GRAPHICS, GUI_SDL, FC_SDL_DEFAULT_THEME_NAME,
-                      get_themes_list, theme_reread_callback),
-  GEN_STR_LIST_OPTION(gui_sdl2_default_theme_name, N_("Theme"),
-                      N_("By changing this option you change the "
-                         "active theme."),
-                      COC_GRAPHICS, GUI_SDL2, FC_SDL2_DEFAULT_THEME_NAME,
                       get_themes_list, theme_reread_callback),
 
   /* It's important to give empty string instead of NULL as as default
@@ -2090,11 +2039,6 @@ static struct client_option client_options[] = {
                      "the ruleset is automatically used; otherwise you "
                      "are prompted to change tileset."),
                   COC_GRAPHICS, GUI_STUB, FALSE, NULL),
- GEN_BOOL_OPTION(autoaccept_soundset_suggestion,
-                  N_("Autoaccept soundset suggestions"),
-                  N_("If this option is enabled, soundset suggested by "
-                     "the ruleset is automatically taken in to use."),
-                  COC_SOUND, GUI_STUB, FALSE, NULL),
 
   GEN_BOOL_OPTION(overview.layers[OLAYER_BACKGROUND],
                   N_("Background layer"),
@@ -2301,14 +2245,6 @@ static struct client_option client_options[] = {
                  COC_INTERFACE, GUI_GTK2, GUI_GTK2_CITYDLG_DEFAULT_YSIZE,
                  GUI_GTK2_CITYDLG_MIN_YSIZE, GUI_GTK2_CITYDLG_MAX_YSIZE,
                  NULL),
-  GEN_ENUM_OPTION(gui_gtk2_popup_tech_help,
-                  N_("Popup tech help when gained"),
-                  N_("Controls if tech help should be opened when "
-                     "new tech has been gained.\n"
-                     "'Ruleset' means that behavior suggested by "
-                     "current ruleset is used."), COC_INTERFACE, GUI_GTK2,
-                  GUI_POPUP_TECH_HELP_RULESET,
-                  gui_popup_tech_help_name, NULL),
   GEN_FONT_OPTION(gui_gtk2_font_city_label, "city_label",
                   N_("City Label"),
                   N_("This font is used to display the city labels on city "
@@ -2511,14 +2447,6 @@ static struct client_option client_options[] = {
                  COC_INTERFACE, GUI_GTK3, GUI_GTK3_CITYDLG_DEFAULT_YSIZE,
                  GUI_GTK3_CITYDLG_MIN_YSIZE, GUI_GTK3_CITYDLG_MAX_YSIZE,
                  NULL),
-  GEN_ENUM_OPTION(gui_gtk3_popup_tech_help,
-                  N_("Popup tech help when gained"),
-                  N_("Controls if tech help should be opened when "
-                     "new tech has been gained.\n"
-                     "'Ruleset' means that behavior suggested by "
-                     "current ruleset is used."), COC_INTERFACE, GUI_GTK3,
-                  GUI_POPUP_TECH_HELP_RULESET,
-                  gui_popup_tech_help_name, NULL),
   GEN_FONT_OPTION(gui_gtk3_font_city_label, "city_label",
                   N_("City Label"),
                   N_("This font is used to display the city labels on city "
@@ -2615,105 +2543,6 @@ static struct client_option client_options[] = {
                   N_("If this option is disabled, the cursor will "
                      "always be displayed in black and white."),
                   COC_INTERFACE, GUI_SDL, TRUE, NULL),
-
-  /* gui-sdl2 client specific options. */
-  GEN_BOOL_OPTION(gui_sdl2_fullscreen, N_("Fullscreen"),
-                  N_("If this option is set the client will use the "
-                     "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_SDL2, FALSE, NULL),
-  GEN_VIDEO_OPTION(gui_sdl2_screen, N_("Screen resolution"),
-                   N_("This option controls the resolution of the "
-                      "selected screen."),
-                   COC_INTERFACE, GUI_SDL2, 640, 480, NULL),
-  GEN_BOOL_OPTION(gui_sdl2_do_cursor_animation, N_("Do cursor animation"),
-                  N_("If this option is disabled, the cursor will "
-                     "always be displayed as static."),
-                  COC_INTERFACE, GUI_SDL2, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_sdl2_use_color_cursors, N_("Use color cursors"),
-                  N_("If this option is disabled, the cursor will "
-                     "always be displayed in black and white."),
-                  COC_INTERFACE, GUI_SDL2, TRUE, NULL),
-
-  /* gui-qt client specific options. */
-  GEN_FONT_OPTION(gui_qt_font_city_label, "city_label",
-                  N_("City Label"),
-                  N_("This font is used to display the city labels on city "
-                     "dialogs."),
-                  COC_FONT, GUI_QT,
-                  "Monospace,8,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_notify_label, "notify_label",
-                  N_("Notify Label"),
-                  N_("This font is used to display server reports such "
-                     "as the demographic report or historian publications."),
-                  COC_FONT, GUI_QT,
-                  "Monospace,9,-1,5,75,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_spaceship_label, "spaceship_label",
-                  N_("Spaceship Label"),
-                  N_("This font is used to display the spaceship widgets."),
-                  COC_FONT, GUI_QT,
-                  "Monospace,8,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_help_label, "help_label",
-                  N_("Help Label"),
-                  N_("This font is used to display the help headers in the "
-                     "help window."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,75,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_help_link, "help_link",
-                  N_("Help Link"),
-                  N_("This font is used to display the help links in the "
-                     "help window."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,9,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_help_text, "help_text",
-                  N_("Help Text"),
-                  N_("This font is used to display the help body text in "
-                     "the help window."),
-                  COC_FONT, GUI_QT,
-                  "Monospace,8,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_chatline, "chatline",
-                  N_("Chatline Area"),
-                  N_("This font is used to display the text in the "
-                     "chatline area."),
-                  COC_FONT, GUI_QT,
-                  "Monospace,8,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_beta_label, "beta_label",
-                  N_("Beta Label"),
-                  N_("This font is used to display the beta label."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,50,1,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_small, "small_font",
-                  N_("Small Font"),
-                  N_("This font is used for any small font request.  For "
-                     "example, it is used for display the building lists "
-                     "in the city dialog, the Economy report or the Units "
-                     "report."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,9,-1,5,50,0,0,0,0,0", NULL),
-  GEN_FONT_OPTION(gui_qt_font_comment_label, "comment_label",
-                  N_("Comment Label"),
-                  N_("This font is used to display comment labels, such as "
-                     "in the governor page of the city dialogs."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,9,-1,5,50,1,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_city_names, "city_names",
-                  N_("City Names"),
-                  N_("This font is used to the display the city names "
-                     "on the map."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,75,0,0,0,0,0", NULL),
-  GEN_FONT_OPTION(gui_qt_font_city_productions, "city_productions",
-                  N_("City Productions"),
-                  N_("This font is used to the display the city production "
-                     "names on the map."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,50,1,0,0,0,0", NULL),
-  GEN_FONT_OPTION(gui_qt_font_reqtree_text, "reqtree_text",
-                  N_("Requirement Tree"),
-                  N_("This font is used to the display the requirement tree "
-                     "in the Research report."),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,50,1,0,0,0,0", NULL)
-
 };
 static const int client_options_num = ARRAY_SIZE(client_options);
 
@@ -4644,9 +4473,6 @@ static void save_cma_presets(struct section_file *file)
 /* The first version the new option name appeared (2.2). */
 #define FIRST_MAJOR_NEW_OPTION_FILE_NAME 2
 #define FIRST_MINOR_NEW_OPTION_FILE_NAME 2
-/* The first version the new boolean values appeared (2.3). */
-#define FIRST_MAJOR_NEW_BOOLEAN 2
-#define FIRST_MINOR_NEW_BOOLEAN 3
 /****************************************************************
   Returns pointer to static memory containing name of the current
   option file.  Usually used for saving.
@@ -4681,21 +4507,19 @@ static const char *get_current_option_file_name(void)
   return name_buffer;
 }
 
-/****************************************************************************
-  Check the last option file we saved. Usually used to load. Ie, based on
-  FREECIV_OPT env var, and home dir. (or a OPTION_FILE_NAME define defined
-  in config.h), or NULL if not found.
-
-  Set in allow_digital_boolean if we should look for old boolean values
-  (saved as 0 and 1), so if the rc file version is older than 2.3.0.
-****************************************************************************/
-static const char *get_last_option_file_name(bool *allow_digital_boolean)
+/****************************************************************
+  Check the last option file we saved.  Usually used to load.
+  Ie, based on FREECIV_OPT env var, and home dir. (or a
+  OPTION_FILE_NAME define defined in config.h)
+  Or NULL if not found.
+*****************************************************************/
+static const char *get_last_option_file_name(void)
 {
   static char name_buffer[256];
   const char *name;
 
-  *allow_digital_boolean = FALSE;
   name = getenv("FREECIV_OPT");
+
   if (name) {
     sz_strlcpy(name_buffer, name);
   } else {
@@ -4726,11 +4550,6 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
                        get_current_option_file_name() + strlen(name) + 1,
                        name_buffer + strlen(name) + 1);
           }
-          if (FIRST_MAJOR_NEW_BOOLEAN > major
-              || (FIRST_MAJOR_NEW_BOOLEAN == major
-                  && FIRST_MINOR_NEW_BOOLEAN > minor)) {
-            *allow_digital_boolean = TRUE;
-          }
           return name_buffer;
         }
       }
@@ -4744,7 +4563,6 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
                    "loading from '%s' instead."),
                  get_current_option_file_name() + strlen(name) + 1,
                  OLD_OPTION_FILE_NAME);
-      *allow_digital_boolean = TRUE;
       return name_buffer;
     } else {
       return NULL;
@@ -4758,8 +4576,6 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
 #undef NEW_OPTION_FILE_NAME
 #undef FIRST_MAJOR_NEW_OPTION_FILE_NAME
 #undef FIRST_MINOR_NEW_OPTION_FILE_NAME
-#undef FIRST_MAJOR_NEW_BOOLEAN
-#undef FIRST_MINOR_NEW_BOOLEAN
 
 
 /****************************************************************************
@@ -4965,6 +4781,8 @@ static bool settable_option_upgrade_value(const struct option *poption,
                "WRAPX|ISO|HEX", "WRAPY|ISO|HEX", "WRAPX|WRAPY|ISO|HEX");
   SETTING_CASE("generator", NULL, "RANDOM", "FRACTAL", "ISLAND");
   SETTING_CASE("startpos", "DEFAULT", "SINGLE", "2or3", "ALL", "VARIABLE");
+  SETTING_CASE("killcitizen", "", "LAND", "SEA", "LAND|SEA", "BOTH",
+               "LAND|BOTH", "SEA|BOTH", "LAND|SEA|BOTH");
   SETTING_CASE("borders", "DISABLED", "ENABLED", "SEE_INSIDE", "EXPAND");
   SETTING_CASE("diplomacy", "ALL", "HUMAN", "AI", "TEAM", "DISABLED");
   SETTING_CASE("citynames", "NO_RESTRICTIONS", "PLAYER_UNIQUE",
@@ -5195,12 +5013,11 @@ void options_dialogs_set(void)
 void options_load(void)
 {
   struct section_file *sf;
-  bool allow_digital_boolean;
   int i, num;
   const char *name;
   const char * const prefix = "client";
 
-  name = get_last_option_file_name(&allow_digital_boolean);
+  name = get_last_option_file_name();
   if (!name) {
     log_normal(_("Didn't find the option file."));
     options_fully_initialized = TRUE;
@@ -5226,7 +5043,6 @@ void options_load(void)
     options_fully_initialized = TRUE;
     return;
   }
-  secfile_allow_digital_boolean(sf, allow_digital_boolean);
 
   /* a "secret" option for the lazy. TODO: make this saveable */
   sz_strlcpy(password,
@@ -5243,9 +5059,6 @@ void options_load(void)
   gui_gtk3_migrated_from_gtk2 =
     secfile_lookup_bool_default(sf, gui_gtk3_migrated_from_gtk2,
                                 "%s.migration_gtk3_from_gtk2", prefix);
-  gui_sdl2_migrated_from_sdl =
-    secfile_lookup_bool_default(sf, gui_sdl2_migrated_from_sdl,
-                                "%s.migration_sdl2_from_sdl", prefix);
 
   /* Backwards compatibility for removed options replaced by entirely "new"
    * options. The equivalent "new" option will override these, if set. */
@@ -5325,8 +5138,6 @@ void options_save(void)
   /* Migrations */
   secfile_insert_bool(sf, gui_gtk3_migrated_from_gtk2,
                       "client.migration_gtk3_from_gtk2");
-  secfile_insert_bool(sf, gui_sdl2_migrated_from_sdl,
-                      "client.migration_sdl2_from_sdl");
 
   client_options_iterate_all(poption) {
     client_option_save(poption, sf);
