@@ -25,7 +25,6 @@
 #include "support.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 #include "packets.h"
@@ -124,12 +123,6 @@ static void tool_init(enum editor_tool_type ett, const char *name,
   tool->size = 1;
   tool->count = 1;
   tool->applied_player_no = 0;
-
-  if (ett == ETT_TERRAIN_SPECIAL) {
-    tool->value = S_IRRIGATION;
-  } else {
-    tool->value = 0;
-  }
 }
 
 /****************************************************************************
@@ -156,10 +149,6 @@ void editor_init(void)
             | ETF_HAS_SIZE | ETF_HAS_VALUE_ERASE,
             _("Modify tile specials.\nShortcut: s\n"
               "Select special type: shift+s or right-click here."));
-  tool_init(ETT_ROAD, _("Road"), ETF_HAS_VALUE
-            | ETF_HAS_SIZE | ETF_HAS_VALUE_ERASE,
-            _("Modify roads on tile.\nShortcut: p\n"
-              "Select road type: shift+p or right-click here."));
   tool_init(ETT_MILITARY_BASE, _("Military Base"), ETF_HAS_VALUE
             | ETF_HAS_SIZE | ETF_HAS_VALUE_ERASE,
             _("Create a military base.\nShortcut: m\n"
@@ -176,7 +165,7 @@ void editor_init(void)
             _("Place a start position which allows any nation to "
               "start at the tile. To allow only certain nations to "
               "start there, middle click on the start position on "
-              "the map and use the property editor.\nShortcut: b"));
+              "the map and use the property editor.\nShortcut: p"));
 
   tool_init(ETT_COPYPASTE, _("Copy/Paste"), ETF_HAS_SIZE,
             _("Copy and paste tiles.\n"
@@ -273,7 +262,7 @@ bool editor_is_active(void)
 }
 
 /****************************************************************************
-  Returns TRUE if the given tool should be made available to the user via
+  Returns TRUE if the given tool should be made availble to the user via
   the editor GUI. For example, this will return FALSE for ETT_MILITARY_BASE
   if there are no bases defined in the ruleset.
 
@@ -289,12 +278,13 @@ bool editor_tool_is_usable(enum editor_tool_type ett)
   switch (ett) {
   case ETT_MILITARY_BASE:
     return base_count() > 0;
-  case ETT_ROAD:
-    return road_count() > 0;
+    break;
   case ETT_TERRAIN_RESOURCE:
     return resource_count() > 0;
+    break;
   case ETT_UNIT:
     return utype_count() > 0;
+    break;
   default:
     break;
   }
@@ -335,7 +325,7 @@ int editor_tool_get_value(enum editor_tool_type ett)
       || !editor_tool_has_value(ett)) {
     return 0;
   }
-
+  
   return editor->tools[ett].value;
 }
 
@@ -368,17 +358,17 @@ static void editor_start_selection_rectangle(int canvas_x, int canvas_y)
 ****************************************************************************/
 static inline bool tile_really_has_any_specials(const struct tile *ptile)
 {
+  bv_special specials;
+
   if (!ptile) {
     return FALSE;
   }
 
-  extra_type_iterate(pextra) {
-    if (pextra->type == EXTRA_SPECIAL && tile_has_extra(ptile, pextra)) {
-      return TRUE;
-    }
-  } extra_type_iterate_end;
+  specials = tile_specials(ptile);
 
-  return FALSE;
+  BV_CLR(specials, S_RESOURCE_VALID);
+
+  return BV_ISSET_ANY(specials);
 }
 
 /****************************************************************************
@@ -420,7 +410,6 @@ static void editor_grab_tool(const struct tile *ptile)
 {
   int ett = -1, value = 0;
   struct base_type *first_base = NULL;
-  struct road_type *first_road = NULL;
 
   if (!editor) {
     return;
@@ -436,13 +425,6 @@ static void editor_grab_tool(const struct tile *ptile)
       break;
     }
   } base_type_iterate_end;
-
-  road_type_iterate(proad) {
-    if (tile_has_road(ptile, proad)) {
-      first_road = proad;
-      break;
-    }
-  } road_type_iterate_end;
 
   if (client_has_player()
       && tile_get_known(ptile, client_player()) == TILE_UNKNOWN) {
@@ -482,10 +464,6 @@ static void editor_grab_tool(const struct tile *ptile)
   } else if (first_base != NULL) {
     ett = ETT_MILITARY_BASE;
     value = base_number(first_base);
-
-  } else if (first_road != NULL) {
-    ett = ETT_ROAD;
-    value = road_number(first_road);
 
   } else if (tile_really_has_any_specials(ptile)) {
     int specials_array[S_LAST];
@@ -665,7 +643,7 @@ static void editor_end_selection_rectangle(int canvas_x, int canvas_y)
   gui_rect_iterate(mapview.gui_x0 + editor->selrect_x,
                    mapview.gui_y0 + editor->selrect_y,
                    editor->selrect_width, editor->selrect_height,
-                   ptile, pedge, pcorner, map_zoom) {
+                   ptile, pedge, pcorner) {
     if (ptile == NULL) {
       continue;
     }
@@ -881,17 +859,12 @@ void editor_apply_tool(const struct tile *ptile,
     break;
 
   case ETT_TERRAIN_RESOURCE:
-    dsend_packet_edit_tile_resource(my_conn, tile,
-                                    erase ? resource_count() : value,
+    dsend_packet_edit_tile_resource(my_conn, tile, erase ? -1 : value,
                                     size);
     break;
 
   case ETT_TERRAIN_SPECIAL:
     dsend_packet_edit_tile_special(my_conn, tile, value, erase, size);
-    break;
-
-  case ETT_ROAD:
-    dsend_packet_edit_tile_road(my_conn, tile, value, erase, size);
     break;
 
   case ETT_MILITARY_BASE:
@@ -1099,7 +1072,6 @@ const char *editor_tool_get_value_name(enum editor_tool_type emt, int value)
   struct resource *presource;
   struct unit_type *putype;
   struct base_type *pbase;
-  struct road_type *proad;
 
   if (!editor) {
     return "";
@@ -1120,14 +1092,10 @@ const char *editor_tool_get_value_name(enum editor_tool_type emt, int value)
     }
     return special_name_translation(value);
     break;
-  case ETT_ROAD:
-    proad = road_by_number(value);
-
-    return proad != NULL ? road_name_translation(proad) : "";
   case ETT_MILITARY_BASE:
     pbase = base_by_number(value);
-
     return pbase != NULL ? base_name_translation(pbase) : "";
+    break;
   case ETT_UNIT:
     putype = utype_by_number(value);
     return putype ? utype_name_translation(putype) : "";
@@ -1235,10 +1203,9 @@ struct sprite *editor_tool_get_sprite(enum editor_tool_type ett)
   case ETT_TERRAIN_SPECIAL:
     return sprites->terrain_special;
     break;
-  case ETT_ROAD:
-    return sprites->road;
   case ETT_MILITARY_BASE:
     return sprites->military_base;
+    break;
   case ETT_UNIT:
     return sprites->unit;
     break;
@@ -1476,30 +1443,17 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
       }
       break;
     case EBT_SPECIAL:
-      extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_SPECIAL
-            && tile_has_extra(ptile, pextra)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_iterate_end;
+      if (tile_has_any_specials(ptile)) {
+        tile_set_specials(vtile, tile_specials(ptile));
+        copied = TRUE;
+      }
       break;
     case EBT_BASE:
-     extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_BASE
-            && tile_has_extra(ptile, pextra)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_iterate_end;
-    case EBT_ROAD:
-     extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_ROAD
-            && tile_has_extra(ptile, pextra)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_iterate_end;
+      if (tile_has_any_bases(ptile)) {
+        tile_set_bases(vtile, tile_bases(ptile));
+        copied = TRUE;
+      }
+      break;
     case EBT_UNIT:
       unit_list_iterate(ptile->units, punit) {
         if (!punit) {
@@ -1559,17 +1513,14 @@ static void fill_tile_edit_packet(struct packet_edit_tile *packet,
     return;
   }
   packet->tile = tile_index(ptile);
-  packet->extras = tile_extras(ptile);
+  packet->specials = tile_specials(ptile);
+  packet->bases = tile_bases(ptile);
 
   presource = tile_resource(ptile);
-  packet->resource = presource
-                     ? resource_number(presource)
-                     : resource_count();
+  packet->resource = presource ? resource_number(presource) : -1;
 
   pterrain = tile_terrain(ptile);
-  packet->terrain = pterrain
-                    ? terrain_number(pterrain)
-                    : terrain_count();
+  packet->terrain = pterrain ? terrain_number(pterrain) : -1;
 }
 
 /****************************************************************************
@@ -1611,31 +1562,12 @@ static void paste_tile(struct edit_buffer *ebuf,
       dsend_packet_edit_tile_resource(my_conn, tile, value, 1);
       break;
     case EBT_SPECIAL:
-      extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_SPECIAL
-            && tile_has_extra(vtile, pextra)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_iterate_end;
+      tile_packet.specials = tile_specials(vtile);
+      send_edit_tile = TRUE;
       break;
     case EBT_BASE:
-      extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_BASE
-            && tile_has_extra(vtile, pextra)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_iterate_end;
-      break;
-    case EBT_ROAD:
-      extra_type_iterate(pextra) {
-        if (pextra->type == EXTRA_ROAD
-            && tile_has_extra(vtile, pextra)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_iterate_end;
+      tile_packet.bases = tile_bases(vtile);
+      send_edit_tile = TRUE;
       break;
     case EBT_UNIT:
       unit_list_iterate(vtile->units, vunit) {

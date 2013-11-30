@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -86,7 +86,6 @@ sprites =
 		"f.brittany", "flags/brittany-large"
 		"f.brunei", "flags/brunei-large"
 		"f.bulgaria", "flags/bulgaria-large"
-		"f.burgundic", "flags/burgundic-large"
 		"f.burgundy", "flags/burgundy-large"
 		"f.burkina_faso", "flags/burkina_faso-large"
 		"f.burundi", "flags/burundi-large"
@@ -187,7 +186,6 @@ sprites =
 		"f.gambia", "flags/gambia-large"
 		"f.gaul", "flags/gaul-large"
 		"f.georgia", "flags/georgia-large"
-		"f.gepid", "flags/gepid-large"
 		"f.germanic", "flags/germanic-large"
 		"f.germany", "flags/germany-large"
 		"f.ghana", "flags/ghana-large"
@@ -267,14 +265,12 @@ sprites =
 		"f.khwarezm", "flags/khwarezm-large"
 		"f.kiev", "flags/kiev-large"
 		"f.kiribati", "flags/kiribati-large"
-		"f.komi", "flags/komi-large"
 		"f.kongo", "flags/kongo-large"
 		"f.korea", "flags/korea-large"
 		"f.korea_ancient", "flags/korea_ancient-large"
 		"f.kosovo", "flags/kosovo-large"
 		"f.kuna_yala", "flags/kuna_yala-large"
 		"f.kurd", "flags/kurd-large"
-		"f.kushan", "flags/kushan-large"
 		"f.kuwait", "flags/kuwait-large"
 		"f.kyrgyzstan", "flags/kyrgyzstan-large"
 		"f.labarum", "flags/labarum-large"		; used by Western Roman
@@ -292,11 +288,9 @@ sprites =
 		"f.libya_old", "flags/libya_old-large"
 		"f.liechtenstein", "flags/liechtenstein-large"
 		"f.liguria", "flags/liguria-large"		; used by Genoese
-		"f.ligurian", "flags/ligurian-large"
 		"f.lippe", "flags/lippe-large"
 		"f.lipkatatar", "flags/lipkatatar-large"
 		"f.lithuania", "flags/lithuania-large"
-		"f.lombardy", "flags/lombardy-large"
 		"f.lorraine", "flags/lorraine-large"
 		"f.luna", "flags/luna-large"
 		"f.lusatia", "flags/lusatia-large"
@@ -320,7 +314,6 @@ sprites =
 		"f.mapuche", "flags/mapuche-large"
 		"f.marathi", "flags/marathi-large"
 		"f.mars", "flags/mars-large"
-		"f.marshall_islands", "flags/marshall_islands-large"
 		"f.mauritania", "flags/mauritania-large"
 		"f.mauritius", "flags/mauritius-large"
 		"f.maya", "flags/maya-large"
@@ -372,7 +365,6 @@ sprites =
 		"f.north_korea", "flags/north_korea-large"
 		"f.northumbria", "flags/northumbria-large"
 		"f.norway", "flags/norway-large"
-		"f.novgorod", "flags/novgorod-large"
 		"f.nubia", "flags/nubia-large"
 		"f.numidia", "flags/numidia-large"
 		"f.nunavut", "flags/nunavut-large"		; used by Inuit
@@ -423,7 +415,6 @@ sprites =
 		"f.romania", "flags/romania-large"
 		"f.rome", "flags/rome-large"			; Roman republic flag
 		"f.russia", "flags/russia-large"
-		"f.rusyn", "flags/rusyn-large"
 		"f.rvn", "flags/rvn-large"
 		"f.rwanda", "flags/rwanda-large"
 		"f.ryukyu", "flags/ryukyu-large"
@@ -532,7 +523,6 @@ sprites =
 		"f.united_kingdom", "flags/united_kingdom-large"
 		"f.united_nations", "flags/united_nations-large"
 		"f.unknown", "flags/unknown-large"		; hard-coded fallback
-		"f.urartu", "flags/urartu-large"
 		"f.uruguay", "flags/uruguay-large"
 		"f.usa", "flags/usa-large"
 		"f.uyghur", "flags/uyghur-large"

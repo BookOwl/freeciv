@@ -40,15 +40,12 @@
 #include "advtools.h"
 #include "infracache.h" /* adv_city */
 
-/* ai */
-#include "handicaps.h"
-
 #include "advbuilding.h"
 
 /**************************************************************************
   Calculate walking distance to nearest friendly cities from every city.
 
-  The hidden assumption here is that a UTYF_HELP_WONDER unit is like any
+  The hidden assumption here is that a F_HELP_WONDER unit is like any
   other unit that will use this data.
 
   pcity->server.adv->downtown is set to the number of cities within 4 turns of
@@ -64,13 +61,13 @@ static void calculate_city_clusters(struct player *pplayer)
     pcity->server.adv->downtown = 0;
   } city_list_iterate_end;
 
-  if (num_role_units(UTYF_HELP_WONDER) == 0) {
+  if (num_role_units(F_HELP_WONDER) == 0) {
     return; /* ruleset has no help wonder unit */
   }
 
-  punittype = best_role_unit_for_player(pplayer, UTYF_HELP_WONDER);
+  punittype = best_role_unit_for_player(pplayer, F_HELP_WONDER);
   if (!punittype) {
-    punittype = get_role_unit(UTYF_HELP_WONDER, 0); /* simulate future unit */
+    punittype = get_role_unit(F_HELP_WONDER, 0); /* simulate future unit */
   }
   ghost = unit_virtual_create(pplayer, NULL, punittype, 0);
   range = unit_move_rate(ghost) * 4;
@@ -82,7 +79,6 @@ static void calculate_city_clusters(struct player *pplayer)
 
     unit_tile_set(ghost, pcity->tile);
     pft_fill_unit_parameter(&parameter, ghost);
-    parameter.omniscience = !has_handicap(pplayer, H_MAP);
     pfm = pf_map_new(&parameter);
 
     pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
@@ -173,8 +169,6 @@ void building_advisor(struct player *pplayer)
   struct adv_data *adv = adv_data_get(pplayer);
   struct city *wonder_city = game_city_by_number(adv->wonder_city);
 
-  CALL_FUNC_EACH_AI(build_adv_init, pplayer);
-
   if (wonder_city && city_owner(wonder_city) != pplayer) {
     /* We lost it to the enemy! */
     adv->wonder_city = 0;
@@ -197,7 +191,7 @@ void building_advisor(struct player *pplayer)
     int best_candidate_value = 0;
     struct city *best_candidate = NULL;
     /* Whether ruleset has a help wonder unit type */
-    bool has_help = (num_role_units(UTYF_HELP_WONDER) > 0);
+    bool has_help = (num_role_units(F_HELP_WONDER) > 0);
 
     calculate_city_clusters(pplayer);
 
@@ -217,13 +211,13 @@ void building_advisor(struct player *pplayer)
         }
       }
 
-      if (is_terrain_class_near_tile(pcity->tile, TC_OCEAN)) {
+      if (is_ocean_near_tile(pcity->tile)) {
         value /= 2;
       }
       /* Downtown is the number of cities within a certain pf range.
        * These may be able to help with caravans. Also look at the whole
        * continent. */
-      if (first_role_unit_for_player(pplayer, UTYF_HELP_WONDER)) {
+      if (first_role_unit_for_player(pplayer, F_HELP_WONDER)) {
         value += city_data->downtown;
         value += adv->stats.cities[place] / 8;
       }

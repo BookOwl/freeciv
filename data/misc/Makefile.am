@@ -20,8 +20,6 @@ pkgdata_DATA =          \
 	editor.spec	\
 	flags-large.spec	\
 	flags.spec	\
-	governments.png \
-	governments.spec \
 	icons.spec	\
 	intro.png	\
 	mpicon.png	\

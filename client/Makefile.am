@@ -12,28 +12,21 @@ GUI_SUBDIRS += gui-sdl
 desktopfile_DATA += \
 	freeciv-sdl.desktop
 endif
-if CLIENT_GUI_SDL2
-GUI_SUBDIRS += gui-sdl2
-desktopfile_DATA += \
-	freeciv-sdl2.desktop
-endif
 if CLIENT_GUI_GTK_2_0
 GUI_SUBDIRS += gui-gtk-2.0
 desktopfile_DATA += \
-	freeciv-gtk2.desktop
+	freeciv.desktop
 endif
 if CLIENT_GUI_GTK_3_0
 GUI_SUBDIRS += gui-gtk-3.0
 desktopfile_DATA += \
-	freeciv.desktop
+	freeciv-gtk3.desktop
 endif
 if CLIENT_GUI_XAW
 GUI_SUBDIRS += gui-xaw
 endif
 if CLIENT_GUI_QT
 GUI_SUBDIRS += gui-qt
-desktopfile_DATA += \
-	freeciv-qt.desktop
 endif
 if CLIENT_GUI_STUB
 GUI_SUBDIRS += gui-stub
@@ -151,14 +144,6 @@ freeciv_client_src = $(AUDIO_SDL_FILES) \
 	audio_none.c    \
 	audio_none.h
 
-gui_interface_src = \
-	gui_interface.c \
-	gui_interface.h
-
-gui_cbs_src = \
-	gui_cbsetter.c \
-	gui_cbsetter.h
-
 # packhand_gen.c & packhand_gen.h are generated files, but as they are
 # generated outside this directory (when building common) there's no point in
 # setting them to BUILT_SOURCES.
@@ -226,23 +211,6 @@ freeciv_sdl_LDADD = \
  $(GUI_sdl_LIBS)
 endif
 
-if CLIENT_GUI_SDL2
-bin_PROGRAMS += freeciv-sdl2
-noinst_LTLIBRARIES += libfcgui-sdl2.la
-libfcgui_sdl2_la_SOURCES = $(freeciv_client_src)
-libfcgui_sdl2_la_LIBADD = gui-sdl2/libgui-sdl2.la $(clientlibs)
-freeciv_sdl2_SOURCES = dummy.c
-freeciv_sdl2_LDFLAGS = $(GUI_sdl2_LDFLAGS) $(GGZMOD_LDFLAGS)
-freeciv_sdl2_LDADD = \
- $(GUI_sdl2_LIBS) \
- libfcgui-sdl2.la \
- $(top_builddir)/common/libfreeciv.la \
- $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS) \
- $(MAPIMG_WAND_LIBS) \
- $(GUI_sdl2_LIBS)
-endif
-
 if CLIENT_GUI_XAW
 bin_PROGRAMS += freeciv-xaw
 noinst_LTLIBRARIES += libfcgui-xaw.la
@@ -264,7 +232,7 @@ bin_PROGRAMS += freeciv-qt
 noinst_LTLIBRARIES += libfcgui-qt.la
 libfcgui_qt_la_SOURCES = $(freeciv_client_src)
 libfcgui_qt_la_LIBADD = gui-qt/libgui-qt.la $(clientlibs)
-freeciv_qt_SOURCES = dummycxx.cpp $(gui_interface_src)
+freeciv_qt_SOURCES = dummycxx.cpp
 freeciv_qt_LDFLAGS = $(GUI_qt_LDFLAGS) $(GGZMOD_LDFLAGS)
 freeciv_qt_LDADD = \
  libfcgui-qt.la \
@@ -280,7 +248,7 @@ bin_PROGRAMS += freeciv-stub
 noinst_LTLIBRARIES += libfcgui-stub.la
 libfcgui_stub_la_SOURCES = $(freeciv_client_src)
 libfcgui_stub_la_LIBADD = gui-stub/libgui-stub.la $(clientlibs)
-freeciv_stub_SOURCES = $(gui_interface_src) $(gui_cbs_src)
+freeciv_stub_SOURCES = dummy.c
 freeciv_stub_LDFLAGS = $(GUI_stub_LDFLAGS) $(GGZMOD_LDFLAGS)
 freeciv_stub_LDADD = \
  libfcgui-stub.la \

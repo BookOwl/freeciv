@@ -31,7 +31,6 @@
 
 /* common */
 #include "city.h"
-#include "game.h"
 #include "government.h"
 #include "movement.h"
 #include "specialist.h"
@@ -74,7 +73,6 @@ static GtkWidget *help_wtable;
 static GtkWidget *help_utable;
 static GtkWidget *help_ttable;
 static GtkWidget *help_btable;
-static GtkWidget *help_rtable;
 static GtkWidget *help_tree;
 static GtkTreeStore *tstore;
 
@@ -87,7 +85,6 @@ static GtkWidget *help_wlabel[6];
 static GtkWidget *help_ulabel[5][5];
 static GtkWidget *help_tlabel[4][5];
 static GtkWidget *help_blabel[4];
-static GtkWidget *help_rlabel[2];
 
 static bool help_advances[A_LAST];
 
@@ -125,11 +122,6 @@ static const char *help_blabel_name[4] =
 /* TRANS: Base conflicts in help. Will be followed by a list of bases
  * that can't be built on the same tile as this one. */
   N_("Conflicts with:"), NULL };
-
-static const char *help_rlabel_name[2] =
-/* TRANS: Label for build cost for roads in help. Will be followed by
- * something like "3 MP" (where MP = Movement Points) */
-{ N_("Build:"), NULL };
 
 #define REQ_LABEL_NONE _("None")
 #define REQ_LABEL_NEVER _("(Never)")
@@ -182,7 +174,7 @@ void popup_help_dialog_typed(const char *item, enum help_page_type htype)
 
 
 /****************************************************************
-Not sure if this should call Q_(item) as it does, or whether all
+Not sure if this should call _(item) as it does, or whether all
 callers of this function should do so themselves... --dwp
 *****************************************************************/
 void popup_help_dialog_string(const char *item)
@@ -369,8 +361,7 @@ static void help_box_hide(void)
   gtk_widget_hide(help_utable);
   gtk_widget_hide(help_ttable);
   gtk_widget_hide(help_btable);
-  gtk_widget_hide(help_rtable);
- 
+  
   gtk_widget_hide(help_tile); /* FIXME: twice? */
 
   gtk_widget_hide(help_vbox);
@@ -626,23 +617,12 @@ static void create_help_dialog(void)
   help_btable = gtk_grid_new();
   gtk_container_add(GTK_CONTAINER(help_box), help_btable);
 
-  for (i = 0; i < 4; i++) {
+  for (i=0; i<4; i++) {
     help_blabel[i] =
       gtk_label_new(help_blabel_name[i] ? _(help_blabel_name[i]) : "");
     gtk_grid_attach(GTK_GRID(help_btable), help_blabel[i], i, 0, 1, 1);
     gtk_widget_set_name(help_blabel[i], "help_label");
     gtk_widget_show(help_blabel[i]);
-  }
-
-  help_rtable = gtk_grid_new();
-  gtk_container_add(GTK_CONTAINER(help_box), help_rtable);
-
-  for (i = 0; i < 2; i++) {
-    help_rlabel[i] =
-      gtk_label_new(help_rlabel_name[i] ? _(help_rlabel_name[i]) : "");
-    gtk_grid_attach(GTK_GRID(help_rtable), help_rlabel[i], i, 0, 1, 1);
-    gtk_widget_set_name(help_rlabel[i], "help_label");
-    gtk_widget_show(help_rlabel[i]);
   }
 
   help_vbox = gtk_grid_new();
@@ -821,14 +801,12 @@ static void help_update_wonder(const struct help_item *pitem,
       i++;
       break;
     } requirement_vector_iterate_end;
-    gtk_label_set_text(GTK_LABEL(help_wlabel[5]), REQ_LABEL_NEVER);
-    requirement_vector_iterate(&imp->obsolete_by, pobs) {
-      if (pobs->source.kind == VUT_ADVANCE) {
-        gtk_label_set_text(GTK_LABEL(help_wlabel[5]),
-                           advance_name_for_player(client.conn.playing, advance_number(pobs->source.value.advance)));
-        break;
-      }
-    } requirement_vector_iterate_end;
+    if (valid_advance(imp->obsolete_by)) {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[5]),
+			 advance_name_for_player(client.conn.playing, advance_number(imp->obsolete_by)));
+    } else {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[5]), REQ_LABEL_NEVER);
+    }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
@@ -908,7 +886,8 @@ static void help_update_unit_type(const struct help_item *pitem,
       gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(help_tile), sprite);
       gtk_widget_show(help_tile);
     }
-  } else {
+  }
+  else {
     gtk_label_set_text(GTK_LABEL(help_ulabel[0][1]), "0");
     gtk_label_set_text(GTK_LABEL(help_ulabel[0][4]), "0");
     gtk_label_set_text(GTK_LABEL(help_ulabel[1][1]), "0");
@@ -931,7 +910,7 @@ static void help_update_unit_type(const struct help_item *pitem,
 /**************************************************************************
   Cut str to at max len bytes in a utf8 friendly way
 **************************************************************************/
-static char *fc_chomp(char *str, size_t len)
+static char *my_chomp(char *str, size_t len)
 {
   gchar *i;
 
@@ -975,7 +954,7 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 
     helptext_advance(buf, sizeof(buf), client.conn.playing, pitem->text, i);
     len = strlen(buf);
-    fc_chomp(buf, len);
+    my_chomp(buf, len);
 
     if (get_tech_sprite(tileset, i)) {
       struct sprite *sprite = get_tech_sprite(tileset, i);
@@ -1025,21 +1004,18 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 	  gtk_widget_show_all(hbox);
 	}
       } requirement_vector_iterate_end;
-      requirement_vector_iterate(&pimprove->obsolete_by, pobs) {
-        if (pobs->source.kind == VUT_ADVANCE
-            && pobs->source.value.advance == padvance) {
-          hbox = gtk_grid_new();
-          gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
-          w = gtk_label_new(_("Obsoletes"));
-          gtk_container_add(GTK_CONTAINER(hbox), w);
-          w = help_slink_new(improvement_name_translation(pimprove),
-                             is_great_wonder(pimprove)
-                             ? HELP_WONDER
-                             : HELP_IMPROVEMENT);
-          gtk_container_add(GTK_CONTAINER(hbox), w);
-          gtk_widget_show_all(hbox);
-        }
-      } requirement_vector_iterate_end;
+      if (padvance == pimprove->obsolete_by) {
+        hbox = gtk_grid_new();
+        gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
+        w = gtk_label_new(_("Obsoletes"));
+        gtk_container_add(GTK_CONTAINER(hbox), w);
+        w = help_slink_new(improvement_name_translation(pimprove),
+			   is_great_wonder(pimprove)
+			   ? HELP_WONDER
+			   : HELP_IMPROVEMENT);
+        gtk_container_add(GTK_CONTAINER(hbox), w);
+        gtk_widget_show_all(hbox);
+      }
     } improvement_iterate_end;
 
     unit_type_iterate(punittype) {
@@ -1146,11 +1122,16 @@ static void help_update_terrain(const struct help_item *pitem,
     }
     gtk_label_set_text(GTK_LABEL(help_tlabel[1][1]), buf);
 
-    sprintf(buf, "%d%%/%d%%/%d%% / %d",
-            pterrain->road_output_incr_pct[O_FOOD],
-            pterrain->road_output_incr_pct[O_SHIELD],
-            pterrain->road_output_incr_pct[O_TRADE],
-            pterrain->road_time);
+    if (pterrain->road_trade_incr > 0) {
+      sprintf(buf, _("+%d Trade / %d"),
+	      pterrain->road_trade_incr,
+	      pterrain->road_time);
+    } else if (pterrain->road_time > 0) {
+      sprintf(buf, _("no extra / %d"),
+	      pterrain->road_time);
+    } else {
+      strcpy(buf, _("n/a"));
+    }
     gtk_label_set_text(GTK_LABEL(help_tlabel[2][1]), buf);
 
     strcpy(buf, _("n/a"));
@@ -1206,7 +1187,6 @@ static void help_update_base(const struct help_item *pitem, char *title)
 {
   char buf[8192];
   struct base_type *pbase = base_type_by_translated_name(title);
-  struct extra_type *pextra = base_extra_get(pbase);
 
   create_help_page(HELP_BASE);
 
@@ -1214,67 +1194,28 @@ static void help_update_base(const struct help_item *pitem, char *title)
     strcat(buf, pitem->text);
   } else {
     /* Cost to build */
-    if (pextra->buildable) {
-      if (pbase->build_time != 0) {
-        /* TRANS: "MP" = movement points */
-        sprintf(buf, _("%d MP"), pbase->build_time);
-      } else {
-        /* TRANS: Build time depends on terrain. */
-        sprintf(buf, _("Terrain specific"));
-      }
+    if (pbase->buildable) {
+      /* TRANS: "MP" = movement points */
+      sprintf(buf, _("%d MP"), pbase->build_time);
     } else {
       sprintf(buf, "-");
     }
     gtk_label_set_text(GTK_LABEL(help_blabel[1]), buf);
     /* Conflicting bases */
     buf[0] = '\0';
-    extra_type_iterate(pextra2) {
-      if (!can_extras_coexist(pextra, pextra2)) {
+    base_type_iterate(pbase2) {
+      if (!can_bases_coexist(pbase, pbase2)) {
         if (buf[0] != '\0') {
           strcat(buf, "/");
         }
-        strcat(buf, extra_name_translation(pextra2));
+        strcat(buf, base_name_translation(pbase2));
       }
-    } extra_type_iterate_end;
-    /* TRANS: "Conflicts with: (none)" (extras) */
+    } base_type_iterate_end;
+    /* TRANS: "Conflicts with: (none)" (bases) */
     gtk_label_set_text(GTK_LABEL(help_blabel[3]), buf[0] ? buf : _("(none)"));
     helptext_base(buf, sizeof(buf), client.conn.playing, pitem->text, pbase);
   }
   gtk_widget_show(help_btable);
-
-  gtk_text_buffer_set_text(help_text, buf, -1);
-  gtk_widget_show(help_text_sw);
-}
-
-/**************************************************************************
-  Help page for roads.
-**************************************************************************/
-static void help_update_road(const struct help_item *pitem, char *title)
-{
-  char buf[8192];
-  struct road_type *proad = road_type_by_translated_name(title);
-
-  create_help_page(HELP_ROAD);
-
-  if (!proad) {
-    strcat(buf, pitem->text);
-  } else {
-    /* Cost to build */
-    if (road_extra_get(proad)->buildable) {
-      if (proad->build_time != 0) {
-        /* TRANS: "MP" = movement points */
-        sprintf(buf, _("%d MP"), proad->build_time);
-      } else {
-        /* TRANS: Build time depends on terrain. */
-        sprintf(buf, _("Terrain specific"));
-      }
-    } else {
-      sprintf(buf, "-");
-    }
-    gtk_label_set_text(GTK_LABEL(help_rlabel[1]), buf);
-    helptext_road(buf, sizeof(buf), client.conn.playing, pitem->text, proad);
-  }
-  gtk_widget_show(help_rtable);
 
   gtk_text_buffer_set_text(help_text, buf, -1);
   gtk_widget_show(help_text_sw);
@@ -1372,9 +1313,6 @@ static void help_update_dialog(const struct help_item *pitem)
   case HELP_BASE:
     help_update_base(pitem, top);
     break;
-  case HELP_ROAD:
-    help_update_road(pitem, top);
-    break;
   case HELP_SPECIALIST:
     help_update_specialist(pitem, top);
     break;
@@ -1397,6 +1335,7 @@ static void help_update_dialog(const struct help_item *pitem)
 
   gtk_widget_show(help_box);
 }
+
 
 /**************************************************************************
   Add item at path to selection and scroll to its cell

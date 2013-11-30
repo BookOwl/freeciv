@@ -31,7 +31,6 @@
 #include "government.h"
 #include "player.h"
 #include "tech.h"
-#include "traits.h"
 
 #include "nation.h"
 
@@ -293,18 +292,6 @@ bool nation_leader_is_male(const struct nation_leader *pleader)
   return pleader->is_male;
 }
 
-/****************************************************************************
-  Return translated version of nation legend.
-****************************************************************************/
-const char *nation_legend_translation(const struct nation_type *pnation,
-                                      const char *legend)
-{
-  if (pnation->translation_domain == NULL) {
-    return _(legend);
-  }
-
-  return dgettext(pnation->translation_domain, legend);
-}
 
 /****************************************************************************
   Nation default cities. The nation_city structure holds information about
@@ -573,7 +560,6 @@ static void nation_init(struct nation_type *pnation)
   memset(pnation, 0, sizeof(*pnation));
 
   pnation->item_number = pnation - nations;
-  pnation->translation_domain = NULL;
   pnation->leaders = nation_leader_list_new_full(nation_leader_destroy);
   pnation->groups = nation_group_list_new();
 
@@ -583,8 +569,6 @@ static void nation_init(struct nation_type *pnation)
     pnation->server.civilwar_nations = nation_list_new();
     pnation->server.parent_nations = nation_list_new();
     pnation->server.conflicts_with = nation_list_new();
-    /* server.rgb starts out NULL */
-    pnation->server.traits = fc_calloc(TRAIT_COUNT, sizeof(int));
   }
 }
 
@@ -594,7 +578,6 @@ static void nation_init(struct nation_type *pnation)
 static void nation_free(struct nation_type *pnation)
 {
   free(pnation->legend);
-  FC_FREE(pnation->translation_domain);
   nation_leader_list_destroy(pnation->leaders);
   nation_group_list_destroy(pnation->groups);
 
@@ -603,8 +586,6 @@ static void nation_free(struct nation_type *pnation)
     nation_list_destroy(pnation->server.civilwar_nations);
     nation_list_destroy(pnation->server.parent_nations);
     nation_list_destroy(pnation->server.conflicts_with);
-    rgbcolor_destroy(pnation->server.rgb);
-    FC_FREE(pnation->server.traits);
   }
 
   memset(pnation, 0, sizeof(*pnation));
@@ -655,16 +636,6 @@ int city_style_of_nation(const struct nation_type *pnation)
 }
 
 /****************************************************************************
-  Returns nation's player color preference, or NULL if none.
-  Server only function.
-****************************************************************************/
-const struct rgbcolor *nation_color(const struct nation_type *pnation)
-{
-  NATION_CHECK(pnation, return NULL);
-  return pnation->server.rgb;
-}
-
-/****************************************************************************
   Return the number of nation groups.
 ****************************************************************************/
 int nation_group_count(void)
@@ -704,7 +675,7 @@ struct nation_group *nation_group_new(const char *name)
 
   /* Print the name and truncate if needed. */
   pgroup = nation_groups + num_nation_groups;
-  name_set(&pgroup->name, NULL, name);
+  name_set(&pgroup->name, name);
   if (NULL != nation_group_by_rule_name(rule_name(&pgroup->name))) {
     log_error("Duplicate nation group/set name %s.", rule_name(&pgroup->name));
     return NULL;

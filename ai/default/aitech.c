@@ -59,9 +59,9 @@ struct ai_tech_choice {
   of cities here.
   4. A tech isn't a requirement of itself.
 **************************************************************************/
-static void dai_select_tech(struct player *pplayer, 
-                            struct ai_tech_choice *choice,
-                            struct ai_tech_choice *goal)
+static void ai_select_tech(struct player *pplayer, 
+			   struct ai_tech_choice *choice,
+			   struct ai_tech_choice *goal)
 {
   Tech_type_id newtech, newgoal;
   int num_cities_nonzero = MAX(1, city_list_size(pplayer->cities));
@@ -195,7 +195,7 @@ static void dai_select_tech(struct player *pplayer,
   Key AI research function. Disable if we are in a team with human team
   mates in a research pool.
 **************************************************************************/
-void dai_manage_tech(struct player *pplayer)
+void ai_manage_tech(struct player *pplayer)
 {
   struct ai_tech_choice choice, goal;
   struct player_research *research = player_research_get(pplayer);
@@ -211,7 +211,7 @@ void dai_manage_tech(struct player *pplayer)
     }
   } players_iterate_end;
 
-  dai_select_tech(pplayer, &choice, &goal);
+  ai_select_tech(pplayer, &choice, &goal);
   if (choice.choice != research->researching) {
     /* changing */
     if ((choice.want - choice.current_want) > penalty &&
@@ -238,99 +238,6 @@ void dai_manage_tech(struct player *pplayer)
     choose_tech_goal(pplayer, goal.choice);
   }
 }
-/**************************************************************************
-  Returns the best defense multiplier unit we can build, or NULL if none.
-  Assigns tech wants for techs to get better units, but only for the
-  cheapest to research.
-**************************************************************************/
-struct unit_type *dai_wants_defender_against(struct player *pplayer,
-                                             struct city *pcity,
-                                             struct unit_type *att, int want)
-{
-  int best_avl_def = 0;
-  struct unit_type *best_avl = NULL;
-  int best_cost = FC_INFINITY;
-  struct advance *best_tech = A_NEVER;
-  struct unit_type *best_unit = NULL;
-  int def_values[U_LAST];
-
-  unit_type_iterate(deftype) {
-    int mp = combat_bonus_against(deftype->bonuses, att, CBONUS_DEFENSE_MULTIPLIER) + 1;
-    int div = combat_bonus_against(att->bonuses, deftype, CBONUS_DEFENSE_DIVIDER) + 1;
-    int def = deftype->defense_strength * mp / div;
-
-    def_values[utype_index(deftype)] = def;
-
-    if (can_city_build_unit_now(pcity, deftype)) {
-      if (def > best_avl_def) {
-        best_avl_def = def;
-        best_avl = deftype;
-      }
-    }
-  } unit_type_iterate_end;
-
-  unit_type_iterate(deftype) {
-    if (def_values[utype_index(deftype)] > best_avl_def
-        && !can_city_build_unit_now(pcity, deftype)
-        && can_city_build_unit_later(pcity, deftype)) {
-      /* It would be better than current best. Consider researching tech */
-      int cost = 0;
-      struct advance *itech = deftype->require_advance;
-
-      if (A_NEVER != itech
-          && player_invention_state(pplayer, advance_number(itech)) != TECH_KNOWN) {
-        /* See if we want to invent this. */
-        cost = total_bulbs_required_for_goal(pplayer, advance_number(itech));
-      }
-      if (deftype->need_improvement 
-          && !can_player_build_improvement_direct(pplayer, deftype->need_improvement)) {
-        struct impr_type *building = deftype->need_improvement;
-
-        requirement_vector_iterate(&building->reqs, preq) {
-          if (VUT_ADVANCE == preq->source.kind) {
-            int iimprtech = advance_number(preq->source.value.advance);
-
-            if (TECH_KNOWN != player_invention_state(pplayer, iimprtech)) {
-              int imprcost = total_bulbs_required_for_goal(pplayer, iimprtech);
-
-              if (imprcost < cost || cost == 0) {
-                /* If we already have the primary tech (cost == 0),
-                 * or the building's tech is cheaper,
-                 * go for the building's required tech. */
-                itech = preq->source.value.advance;
-                cost = 0;
-              }
-              cost += imprcost;
-            }
-          }
-        } requirement_vector_iterate_end;
-      }
-
-      if (cost < best_cost
-          && player_invention_reachable(pplayer, advance_number(itech), FALSE)) {
-        best_tech = itech;
-        best_cost = cost;
-        best_unit = deftype;
-      }
-    }
-  } unit_type_iterate_end;
-
-  if (A_NEVER != best_tech) {
-    /* Crank up chosen tech want */
-    if (best_avl != NULL
-        && def_values[utype_index(best_unit)] <= 1.5 * best_avl_def) {
-      /* We already have almost as good unit suitable for defending against this attacker */
-      want /= 2;
-    }
-    pplayer->ai_common.tech_want[advance_index(best_tech)] += want;
-    TECH_LOG(LOG_DEBUG, pplayer, best_tech,
-             "+ %d for %s by role",
-             want,
-             utype_rule_name(best_unit));
-  }
-
-  return best_avl;
-}
 
 /**************************************************************************
   Returns the best unit we can build, or NULL if none.  "Best" here
@@ -338,9 +245,9 @@ struct unit_type *dai_wants_defender_against(struct player *pplayer,
   wants for techs to get better units with given role, but only for the
   cheapest to research "next" unit up the "chain".
 **************************************************************************/
-struct unit_type *dai_wants_role_unit(struct player *pplayer,
-                                      struct city *pcity,
-                                      int role, int want)
+struct unit_type *ai_wants_role_unit(struct player *pplayer,
+				     struct city *pcity,
+				     int role, int want)
 {
   int i, n;
   int best_cost = FC_INFINITY;

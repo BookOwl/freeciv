@@ -37,7 +37,6 @@
 #include "packets.h"
 
 /* server */
-#include "citytools.h"
 #include "connecthand.h"
 #include "ggzserver.h"
 #include "maphand.h"
@@ -129,7 +128,6 @@ static struct tile *place_starting_unit(struct tile *starttile,
 {
   struct tile *ptile = NULL;
   struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-  bool hut_present = FALSE;
 
   if (utype != NULL) {
     iterate_outward(starttile, map.xsize + map.ysize, itertile) {
@@ -152,14 +150,8 @@ static struct tile *place_starting_unit(struct tile *starttile,
    * other cases, huts are avoided as start positions).  Remove any such hut,
    * and make sure to tell the client, since we may have already sent this
    * tile (with the hut) earlier: */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(ptile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
     log_verbose("Removed hut on start position for %s",
                 player_name(pplayer));
@@ -396,12 +388,6 @@ void init_new_game(void)
 
     fc_assert_action(NULL != ptile, continue);
 
-    /* Place first city */
-    if (game.server.start_city) {
-      create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile),
-                  NULL);
-    }
-
     /* Place the first unit. */
     if (place_starting_unit(ptile, pplayer,
                             game.server.start_units[0]) != NULL) {
@@ -504,11 +490,13 @@ void send_game_info(struct conn_list *dest)
      * (and game.info.seconds_to_phasedone is relative to this).
      * Account for the difference. */
     ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
-        - timer_read_seconds(game.server.phase_timer);
+        - read_timer_seconds(game.server.phase_timer);
   } else {
     /* unused but at least initialized */
     ginfo.seconds_to_phasedone = -1.0;
   }
+
+  ginfo.trademindist_old = ginfo.trademindist_new;
 
   conn_list_iterate(dest, pconn) {
     send_packet_game_info(pconn, &ginfo);
@@ -598,7 +586,7 @@ int update_timeout(void)
 void increase_timeout_because_unit_moved(void)
 {
   if (game.info.timeout > 0 && game.server.timeoutaddenemymove > 0) {
-    double maxsec = (timer_read_seconds(game.server.phase_timer)
+    double maxsec = (read_timer_seconds(game.server.phase_timer)
 		     + (double) game.server.timeoutaddenemymove);
 
     if (maxsec > game.info.seconds_to_phasedone) {

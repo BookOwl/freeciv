@@ -1,16 +1,11 @@
 ======================
-Welcome to Freeciv x.x
+Welcome to Freeciv 2.4
 ======================
 
 The most important changes between major releases are shown below.
-Not all changes are shown here. Those who are interested in seeing
-the detailed changes should check the ChangeLog file.
-
-
-MAJOR CHANGES FROM 2.4.x to 2.5.0
----------------------------------
-
-[TODO]
+Not all changes are shown here. To see detailed changes in the 2.4
+series, check NEWS-2.4. Those who are interested in seeing more
+detailed changes should check the ChangeLog file.
 
 
 MAJOR CHANGES FROM 2.3.x to 2.4.0

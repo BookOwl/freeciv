@@ -317,10 +317,15 @@ static void pillage_callback(GtkWidget *w, gpointer data)
 
   punit = game_unit_by_number(unit_to_use_to_pillage);
   if (punit) {
-    struct extra_type *target = extra_by_number(what);
+    Base_type_id pillage_base = -1;
+
+    if (what > S_LAST) {
+      pillage_base = what - S_LAST - 1;
+      what = S_LAST;
+    }
 
     request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                       target);
+                                       what, pillage_base);
   }
 }
 
@@ -335,13 +340,14 @@ static void pillage_destroy_callback(GtkWidget *w, gpointer data)
 /****************************************************************
   Opens pillage dialog listing possible pillage targets.
 *****************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras extras)
+void popup_pillage_dialog(struct unit *punit,
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   GtkWidget *shl;
+  int what;
 
   if (!is_showing_pillage_dialog) {
-    struct extra_type *tgt;
-
     is_showing_pillage_dialog = TRUE;
     unit_to_use_to_pillage = punit->id;
 
@@ -349,22 +355,30 @@ void popup_pillage_dialog(struct unit *punit, bv_extras extras)
 			       _("What To Pillage"),
 			       _("Select what to pillage:"));
 
-    while ((tgt = get_preferred_pillage(extras))) {
-      int what;
-      bv_extras what_extras;
+    while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+      bv_special what_bv;
+      bv_bases what_base;
 
-      BV_CLR_ALL(what_extras);
+      BV_CLR_ALL(what_bv);
+      BV_CLR_ALL(what_base);
 
-      what = extra_index(tgt);
-      BV_CLR(extras, what);
-      BV_SET(what_extras, what);
+      if (what > S_LAST) {
+        BV_SET(what_base, what % (S_LAST + 1));
+      } else {
+        BV_SET(what_bv, what);
+      }
 
-      choice_dialog_add(shl, get_infrastructure_text(what_extras),
-                        G_CALLBACK(pillage_callback), GINT_TO_POINTER(what),
-                        FALSE);
+      choice_dialog_add(shl, get_infrastructure_text(what_bv, what_base),
+                        G_CALLBACK(pillage_callback), GINT_TO_POINTER(what));
+
+      if (what > S_LAST) {
+        BV_CLR(bases, what % (S_LAST + 1));
+      } else {
+        clear_special(&may_pillage, what);
+      }
     }
 
-    choice_dialog_add(shl, GTK_STOCK_CANCEL, 0, 0, FALSE);
+    choice_dialog_add(shl, GTK_STOCK_CANCEL, 0, 0);
 
     choice_dialog_end(shl);
 
@@ -418,7 +432,6 @@ static GtkWidget* create_list_of_nations_in_group(struct nation_group* group,
   gtk_widget_set_hexpand(list, TRUE);
   gtk_widget_set_vexpand(list, TRUE);
   gtk_tree_view_set_search_column(GTK_TREE_VIEW(list), 3);
-  gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(list), FALSE);
   races_nation_list[index] = list;
   g_object_unref(store);
 
@@ -435,12 +448,13 @@ static GtkWidget* create_list_of_nations_in_group(struct nation_group* group,
   gtk_container_add(GTK_CONTAINER(sw), list);
  
   render = gtk_cell_renderer_pixbuf_new();
-  column = gtk_tree_view_column_new_with_attributes("Flag", render,
+  column = gtk_tree_view_column_new_with_attributes(_("Flag"), render,
       "pixbuf", 2, NULL);
   gtk_tree_view_append_column(GTK_TREE_VIEW(list), column);
   render = gtk_cell_renderer_text_new();
-  column = gtk_tree_view_column_new_with_attributes("Nation", render,
+  column = gtk_tree_view_column_new_with_attributes(_("Nation"), render,
       "text", 3, "strikethrough", 1, NULL);
+  gtk_tree_view_column_set_sort_column_id(column, 3);
   gtk_tree_view_append_column(GTK_TREE_VIEW(list), column);
   render = gtk_cell_renderer_text_new();
   g_object_set(render, "style", PANGO_STYLE_ITALIC, NULL);
@@ -501,24 +515,17 @@ static GtkWidget* create_nation_selection_list(void)
   gtk_grid_set_row_spacing(GTK_GRID(vbox), 2);
 
   nation_list = create_list_of_nations_in_group(NULL, 0);  
+  label = g_object_new(GTK_TYPE_LABEL,
+      "use-underline", TRUE,
+      "mnemonic-widget", nation_list,
+      "label", _("Nation _Groups:"),
+      "xalign", 0.0,
+      "yalign", 0.5,
+      NULL);
   notebook = gtk_notebook_new();
   gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_LEFT);  
-
-  /* Suppress notebook tabs if there will be only one ("All") */
-  if (nation_group_count() == 0) {
-    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), FALSE);
-  } else {
-    label = g_object_new(GTK_TYPE_LABEL,
-        "use-underline", TRUE,
-        "mnemonic-widget", nation_list,
-        "label", _("Nation _Groups:"),
-        "xalign", 0.0,
-        "yalign", 0.5,
-        NULL);
-    gtk_container_add(GTK_CONTAINER(vbox), label);
-    gtk_notebook_set_show_tabs(GTK_NOTEBOOK(notebook), TRUE);
-  }
   
+  gtk_container_add(GTK_CONTAINER(vbox), label);
   gtk_container_add(GTK_CONTAINER(vbox), notebook);
   
   for (i = 1; i <= nation_group_count(); i++) {
@@ -1125,7 +1132,7 @@ void popup_disband_dialog(struct unit_list *punits)
 
     if (gtk_dialog_run(GTK_DIALOG(shell)) == GTK_RESPONSE_YES) {
       unit_list_iterate(punits, punit) {
-        if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+        if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
           request_unit_disband(punit);
         }
       } unit_list_iterate_end;
@@ -1143,34 +1150,4 @@ void popdown_all_game_dialogs(void)
   gui_dialog_destroy_all();
   property_editor_popdown(editprop_get_property_editor());
   unit_select_dialog_popdown();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  if (gui_gtk3_popup_tech_help == GUI_POPUP_TECH_HELP_ENABLED
-      || (gui_gtk3_popup_tech_help == GUI_POPUP_TECH_HELP_RULESET
-          && game.control.popup_tech_help)) {
-    popup_help_dialog_typed(advance_name_for_player(client.conn.playing, tech), HELP_TECH);
-  }
-}
-
-/****************************************************************
-  Show tileset error dialog. It's blocking as client will
-  shutdown as soon as this function returns.
-*****************************************************************/
-void show_tileset_error(const char *msg)
-{
-  GtkWidget *dialog;
-
-  dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR,
-                                  GTK_BUTTONS_CLOSE,
-                                  _("Tileset problem, it's probably incompatible with the ruleset:\n%s"),
-                                    msg);
-
-  gtk_dialog_run(GTK_DIALOG(dialog));
-
-  gtk_widget_destroy(dialog);
 }

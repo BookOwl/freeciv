@@ -15,12 +15,10 @@
 
 #include "chatline_common.h"
 
-#include "gui_proto_constructor.h"
-
-GUI_FUNC_PROTO(void, real_output_window_append, const char *astring,
-               const struct text_tag_list *tags,
-               int conn_id)
-GUI_FUNC_PROTO(void, log_output_window, void)
-GUI_FUNC_PROTO(void, clear_output_window, void)
+void real_output_window_append(const char *astring,
+                               const struct text_tag_list *tags,
+                               int conn_id);
+void log_output_window(void);
+void clear_output_window(void);
 
 #endif  /* FC__CHATLINE_G_H */

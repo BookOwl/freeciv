@@ -37,9 +37,6 @@
 /* server/advisors */
 #include "advgoto.h"
 
-/* ai */
-#include "handicaps.h"
-
 #include "autoexplorer.h"
 
 
@@ -84,7 +81,7 @@ static bool player_may_explore(const struct tile *ptile,
                                const bv_unit_type_flags unit_flags)
 {
   /* Don't allow military units to cross borders. */
-  if (!BV_ISSET(unit_flags, UTYF_CIVILIAN)
+  if (!BV_ISSET(unit_flags, F_CIVILIAN)
       && !player_can_invade_tile(pplayer, ptile)) {
     return FALSE;
   }
@@ -126,10 +123,8 @@ static bool explorer_goto(struct unit *punit, struct tile *ptile)
   bool alive = TRUE;
   struct pf_map *pfm;
   struct pf_path *path;
-  struct player *pplayer = unit_owner(punit);
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   parameter.get_TB = explorer_tb;
   adv_avoid_risks(&parameter, &risk_cost, punit, NORMAL_STACKING_FEARFULNESS);
 
@@ -204,7 +199,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   /* First do some checks that would make a tile completely non-desirable.
    * If we're a barbarian and the tile has a hut, don't go there. */
-  if (is_barbarian(pplayer) && tile_has_cause_extra(ptile, EC_HUT)) {
+  if (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT)) {
     return 0;
   }
 
@@ -257,9 +252,9 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
     desirable = 0;
   }
 
-  if ((!pplayer->ai_controlled || !has_handicap(pplayer, H_HUTS))
+  if ((!pplayer->ai_controlled || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_cause_extra(ptile, EC_HUT)) {
+      && tile_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -309,7 +304,7 @@ enum unit_move_result manage_auto_explorer(struct unit *punit)
 
   UNIT_LOG(LOG_DEBUG, punit, "auto-exploring.");
 
-  if (pplayer->ai_controlled && unit_has_type_flag(punit, UTYF_GAMELOSS)) {
+  if (pplayer->ai_controlled && unit_has_type_flag(punit, F_GAMELOSS)) {
     UNIT_LOG(LOG_DEBUG, punit, "exploration too dangerous!");
     return MR_BAD_ACTIVITY; /* too dangerous */
   }

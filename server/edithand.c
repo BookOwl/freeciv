@@ -267,35 +267,6 @@ static bool edit_tile_resource_handling(struct tile *ptile,
 }
 
 /****************************************************************************
-  Base function to edit the extras property of a tile. Returns TRUE if
-  the extra state has changed.
-****************************************************************************/
-static bool edit_tile_extra_handling(struct tile *ptile,
-                                     struct extra_type *pextra,
-                                     bool remove_mode, bool send_tile_info)
-{
-  if (remove_mode) {
-    if (!tile_has_extra(ptile, pextra)) {
-      return FALSE;
-    }
-
-    if (!tile_extra_rm_apply(ptile, pextra)) {
-      return FALSE;
-    }
-  } else {
-    if (!tile_extra_apply(ptile, pextra)) {
-      return FALSE;
-    }
-  }
-
-  if (send_tile_info) {
-    update_tile_knowledge(ptile);
-  }
-
-  return TRUE;
-}
-
-/****************************************************************************
   Base function to edit the special property of a tile. Returns TRUE if
   the special state has changed.
 ****************************************************************************/
@@ -304,56 +275,23 @@ static bool edit_tile_special_handling(struct tile *ptile,
                                        bool remove_mode,
                                        bool send_tile_info)
 {
-  struct extra_type *pextra;
-
-  fc_assert_ret_val(special != S_OLD_FORTRESS && special != S_OLD_AIRBASE, FALSE);
-  fc_assert_ret_val(special != S_OLD_ROAD && special != S_OLD_RAILROAD, FALSE);
-
-  pextra = special_extra_get(special);
-
   if (remove_mode) {
-    if (!tile_has_extra(ptile, pextra)) {
+    if (!tile_has_special(ptile, special)) {
       return FALSE;
     }
 
-    tile_extra_rm_apply(ptile, pextra);
+    tile_remove_special(ptile, special);
 
-    terrain_changed(ptile);
+    /* RoadNative and RiverNative units may need bouncing */
+    bounce_units_on_terrain_change(ptile);
 
   } else {
-    if (tile_has_extra(ptile, pextra)
-        || !is_native_tile_to_extra(pextra, ptile)) {
+    if (tile_has_special(ptile, special)
+        || !is_native_tile_to_special(special, ptile)) {
       return FALSE;
     }
 
-    tile_extra_apply(ptile, pextra);
-  }
-
-  if (send_tile_info) {
-    update_tile_knowledge(ptile);
-  }
-
-  return TRUE;
-}
-
-/****************************************************************************
-  Base function to edit the road property of a tile. Returns TRUE if
-  the road state has changed.
-****************************************************************************/
-static bool edit_tile_road_handling(struct tile *ptile,
-                                    struct road_type *proad,
-                                    bool remove_mode, bool send_tile_info)
-{
-  if (remove_mode) {
-    if (!tile_has_road(ptile, proad)) {
-      return FALSE;
-    }
-
-    tile_extra_rm_apply(ptile, road_extra_get(proad));
-  } else {
-    if (!tile_extra_apply(ptile, road_extra_get(proad))) {
-      return FALSE;
-    }
+    tile_add_special(ptile, special);
   }
 
   if (send_tile_info) {
@@ -376,11 +314,14 @@ static bool edit_tile_base_handling(struct tile *ptile,
       return FALSE;
     }
 
-    tile_extra_rm_apply(ptile, base_extra_get(pbase));
+    tile_remove_base(ptile, pbase);
   } else {
-    if (!tile_extra_apply(ptile, base_extra_get(pbase))) {
+    if (tile_has_base(ptile, pbase)
+        || !is_native_tile_to_base(pbase, ptile)) {
       return FALSE;
     }
+
+    tile_add_base(ptile, pbase);
   }
 
   if (send_tile_info) {
@@ -490,41 +431,6 @@ void handle_edit_tile_special(struct connection *pc, int tile,
 }
 
 /****************************************************************************
-  Handle a request to change the road at one or more than one tile.
-****************************************************************************/
-void handle_edit_tile_road(struct connection *pc, int tile,
-                           Road_type_id id, bool remove, int size)
-{
-  struct tile *ptile_center;
-  struct road_type *proad;
-
-  ptile_center = index_to_tile(tile);
-  if (!ptile_center) {
-    notify_conn(pc->self, NULL, E_BAD_COMMAND, ftc_editor,
-                _("Cannot edit the tile because %d is not a valid "
-                  "tile index on this map!"), tile);
-    return;
-  }
-
-  proad = road_by_number(id);
-
-  if (!proad) {
-    notify_conn(pc->self, ptile_center, E_BAD_COMMAND, ftc_editor,
-                /* TRANS: ..." the tile <tile-coordinates> because"... */
-                _("Cannot modify road for the tile %s because "
-                  "%d is not a valid road type id."),
-                tile_link(ptile_center), id);
-    return;
-  }
-
-  conn_list_do_buffer(game.est_connections);
-  square_iterate(ptile_center, size - 1, ptile) {
-    edit_tile_road_handling(ptile, proad, remove, TRUE);
-  } square_iterate_end;
-  conn_list_do_unbuffer(game.est_connections);
-}
-
-/****************************************************************************
   Handle a request to change the military base at one or more than one tile.
 ****************************************************************************/
 void handle_edit_tile_base(struct connection *pc, int tile,
@@ -576,15 +482,23 @@ void handle_edit_tile(struct connection *pc,
     return;
   }
 
-  /* Handle changes in extras. */
-  if (!BV_ARE_EQUAL(packet->extras, ptile->extras)) {
-    extra_type_iterate(pextra) {
-      if (edit_tile_extra_handling(ptile, pextra,
-                                   !BV_ISSET(packet->extras, extra_number(pextra)),
-                                   FALSE)) {
-        changed = TRUE;
-      }
-    } extra_type_iterate_end;
+  /* Handle changes in specials. */
+  if (!BV_ARE_EQUAL(packet->specials, ptile->special)) {
+    tile_special_type_iterate(spe) {
+      edit_tile_special_handling(ptile, spe,
+                                 !BV_ISSET(packet->specials, spe), FALSE);
+    } tile_special_type_iterate_end;
+    changed = TRUE;
+  }
+
+  /* Handle changes in bases. */
+  if (!(BV_ARE_EQUAL(packet->bases, ptile->bases))) {
+    base_type_iterate(pbase) {
+      edit_tile_base_handling(ptile, pbase,
+                              !BV_ISSET(packet->bases, base_number(pbase)),
+                              FALSE);
+    } base_type_iterate_end;
+    changed = TRUE;
   }
 
   /* Handle changes in label */
@@ -813,7 +727,7 @@ void handle_edit_unit(struct connection *pc,
   }
 
   if (packet->veteran != punit->veteran
-      && !unit_has_type_flag(punit, UTYF_NO_VETERAN)) {
+      && !unit_has_type_flag(punit, F_NO_VETERAN)) {
     int v = packet->veteran;
     if (!utype_veteran_level(putype, v)) {
       notify_conn(pc->self, NULL, E_BAD_COMMAND, ftc_editor,
@@ -881,13 +795,12 @@ void handle_edit_city_create(struct connection *pc, int owner, int tile,
   conn_list_do_buffer(game.est_connections);
 
   map_show_tile(pplayer, ptile);
-  create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile),
-              pplayer);
+  create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile));
   pcity = tile_city(ptile);
 
   if (size > 1) {
     /* FIXME: Slow and inefficient for large size changes. */
-    city_change_size(pcity, CLIP(1, size, MAX_CITY_SIZE), pplayer);
+    city_change_size(pcity, CLIP(1, size, MAX_CITY_SIZE));
     send_city_info(NULL, pcity);
   }
 
@@ -945,7 +858,7 @@ void handle_edit_city(struct connection *pc,
                   packet->size, city_link(pcity));
     } else {
       /* FIXME: Slow and inefficient for large size changes. */
-      city_change_size(pcity, packet->size, NULL);
+      city_change_size(pcity, packet->size);
       changed = TRUE;
     }
   }
@@ -1099,10 +1012,6 @@ void handle_edit_player_create(struct connection *pc, int tag)
   server_player_init(pplayer, TRUE, TRUE);
 
   player_nation_defaults(pplayer, pnation, TRUE);
-  if (game_was_started()) {
-    /* Find a color for the new player. */
-    assign_player_colors();
-  }
   sz_strlcpy(pplayer->username, ANON_USER_NAME);
   pplayer->is_connected = FALSE;
   pplayer->government = pnation->init_government;

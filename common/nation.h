@@ -23,7 +23,6 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 #include "name_translation.h"
-#include "rgbcolor.h"
 #include "terrain.h"            /* MAX_NUM_TERRAINS */
 
 #define NO_NATION_SELECTED (NULL)
@@ -87,7 +86,6 @@ struct nation_type;
 /* Pointer values are allocated on load then freed in free_nations(). */
 struct nation_type {
   Nation_type_id item_number;
-  char *translation_domain;
   struct name_translation adjective;
   struct name_translation noun_plural;
   char flag_graphic_str[MAX_LEN_NAME];
@@ -128,11 +126,6 @@ struct nation_type {
       /* Nations which we don't want in the same game. For example,
        * British and English. */
       struct nation_list *conflicts_with;
-
-      /* Nation's associated player color (NULL if none). */
-      struct rgbcolor *rgb;
-
-      int *traits;
     } server;
 
     struct {
@@ -164,8 +157,6 @@ const char *nation_plural_for_player(const struct player *pplayer);
 
 int city_style_of_nation(const struct nation_type *nation);
 
-const struct rgbcolor *nation_color(const struct nation_type *pnation);
-
 /* Ancillary nation routines */
 bool is_nation_playable(const struct nation_type *nation);
 enum barbarian_type nation_barbarian_type(const struct nation_type *nation);
@@ -184,9 +175,6 @@ struct nation_leader *
 nation_leader_by_name(const struct nation_type *pnation, const char *name);
 const char *nation_leader_name(const struct nation_leader *pleader);
 bool nation_leader_is_male(const struct nation_leader *pleader);
-
-const char *nation_legend_translation(const struct nation_type *pnation,
-                                      const char *legend);
 
 /* General nation city accessor functions. */
 struct terrain;

@@ -29,7 +29,6 @@ extern "C" {
 #include "shared.h"
 #include "spaceship.h"
 #include "tech.h"
-#include "traits.h"
 #include "unitlist.h"
 #include "vision.h"
 
@@ -44,11 +43,31 @@ enum plrcolor_mode {
   PLRCOL_PLR_ORDER,
   PLRCOL_PLR_RANDOM,
   PLRCOL_PLR_SET,
-  PLRCOL_TEAM_ORDER,
-  PLRCOL_NATION_ORDER
+  PLRCOL_TEAM_ORDER
 };
 
 struct player_slot;
+
+enum handicap_type {
+  H_DIPLOMAT = 0,     /* Can't build offensive diplomats */
+  H_AWAY,             /* Away mode */
+  H_LIMITEDHUTS,      /* Can get only 25 gold and barbs from huts */
+  H_DEFENSIVE,        /* Build defensive buildings without calculating need */
+  H_EXPERIMENTAL,     /* Enable experimental AI features (for testing) */
+  H_RATES,            /* Can't set its rates beyond government limits */
+  H_TARGETS,          /* Can't target anything it doesn't know exists */
+  H_HUTS,             /* Doesn't know which unseen tiles have huts on them */
+  H_FOG,              /* Can't see through fog of war */
+  H_NOPLANES,         /* Doesn't build air units */
+  H_MAP,              /* Only knows map_is_known tiles */
+  H_DIPLOMACY,        /* Not very good at diplomacy */
+  H_REVOLUTION,       /* Cannot skip anarchy */
+  H_EXPANSION,        /* Don't like being much larger than human */
+  H_DANGER,           /* Always thinks its city is in danger */
+  H_LAST
+};
+
+BV_DEFINE(bv_handicap, H_LAST);
 
 struct player_economic {
   int gold;
@@ -102,7 +121,7 @@ struct player_ai {
   int maxbuycost;
   /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
-  void *handicaps;
+  bv_handicap handicaps;        /* sum of enum handicap_type */
   enum ai_level skill_level;   	/* 0-10 value for save/load/display */
   int fuzzy;			/* chance in 1000 to mis-decide */
   int expand;			/* percentage factor to value new cities */
@@ -112,8 +131,6 @@ struct player_ai {
   enum barbarian_type barbarian_type;
 
   int love[MAX_NUM_PLAYER_SLOTS];
-
-  struct ai_trait *traits;
 };
 
 /* Diplomatic states (how one player views another).
@@ -121,48 +138,16 @@ struct player_ai {
  *
  * Adding to or reordering this array will break many things.
  */
-#define SPECENUM_NAME diplstate_type
-#define SPECENUM_VALUE0 DS_ARMISTICE
-#define SPECENUM_VALUE0NAME N_("?diplomatic_state:Armistice")
-#define SPECENUM_VALUE1 DS_WAR
-#define SPECENUM_VALUE1NAME N_("?diplomatic_state:War")
-#define SPECENUM_VALUE2 DS_CEASEFIRE
-#define SPECENUM_VALUE2NAME N_("?diplomatic_state:Cease-fire")
-#define SPECENUM_VALUE3 DS_PEACE
-#define SPECENUM_VALUE3NAME N_("?diplomatic_state:Peace")
-#define SPECENUM_VALUE4 DS_ALLIANCE
-#define SPECENUM_VALUE4NAME N_("?diplomatic_state:Alliance")
-#define SPECENUM_VALUE5 DS_NO_CONTACT
-#define SPECENUM_VALUE5NAME N_("?diplomatic_state:Never met")
-#define SPECENUM_VALUE6 DS_TEAM
-#define SPECENUM_VALUE6NAME N_("?diplomatic_state:Team")
-  /* When adding or removing entries, note that first value
-   * of diplrel_asym should be next to last diplstate_type */
-#define SPECENUM_COUNT DS_LAST	/* leave this last */
-#include "specenum_gen.h"
-
-/* Asymmetric diplomatic relations.
- *
- * The first element here is numbered DS_LAST
- */
-#define SPECENUM_NAME diplrel_asym
-#define SPECENUM_VALUE7 DRA_GIVES_SHARED_VISION
-#define SPECENUM_VALUE7NAME N_("Gives shared vision")
-#define SPECENUM_VALUE8 DRA_RECEIVES_SHARED_VISION
-#define SPECENUM_VALUE8NAME N_("Receives shared vision")
-#define SPECENUM_VALUE9 DRA_HOSTS_EMBASSY
-#define SPECENUM_VALUE9NAME N_("Hosts embassy")
-#define SPECENUM_VALUE10 DRA_HAS_EMBASSY
-#define SPECENUM_VALUE10NAME N_("Has embassy")
-#define SPECENUM_VALUE11 DRA_HOSTS_REAL_EMBASSY
-#define SPECENUM_VALUE11NAME N_("Hosts real embassy")
-#define SPECENUM_VALUE12 DRA_HAS_REAL_EMBASSY
-#define SPECENUM_VALUE12NAME N_("Has real embassy")
-#define SPECENUM_VALUE13 DRA_HAS_CASUS_BELLI
-#define SPECENUM_VALUE13NAME N_("Has Casus Belli")
-#define SPECENUM_VALUE14 DRA_PROVIDED_CASUS_BELLI
-#define SPECENUM_VALUE14NAME N_("Provided Casus Belli")
-#include "specenum_gen.h"
+enum diplstate_type {
+  DS_ARMISTICE = 0,
+  DS_WAR,
+  DS_CEASEFIRE,
+  DS_PEACE,
+  DS_ALLIANCE,
+  DS_NO_CONTACT,
+  DS_TEAM,
+  DS_LAST	/* leave this last */
+};
 
 enum dipl_reason {
   DIPL_OK, DIPL_ERROR, DIPL_SENATE_BLOCKING,
@@ -211,8 +196,7 @@ struct player {
   struct nation_type *nation;
   struct team *team;
   bool is_ready; /* Did the player click "start" yet? */
-  bool phase_done;    /* Has human player finished */
-  bool ai_phase_done; /* Has AI type finished */
+  bool phase_done;
   int nturns_idle;
   bool is_alive;
 
@@ -364,8 +348,10 @@ int player_get_expected_income(const struct player *pplayer);
 
 struct city *player_capital(const struct player *pplayer);
 
+bool ai_handicap(const struct player *pplayer, enum handicap_type htype);
 bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
 
+const char *diplstate_text(const enum diplstate_type type);
 const char *love_text(const int love);
 
 struct player_diplstate *player_diplstate_get(const struct player *plr1,
@@ -395,14 +381,6 @@ int player_in_territory(const struct player *pplayer,
 bool is_barbarian(const struct player *pplayer);
 
 bool gives_shared_vision(const struct player *me, const struct player *them);
-
-bool is_diplrel_between(const struct player *player1,
-                        const struct player *player2,
-                        int diplrel);
-bool is_diplrel_to_other(const struct player *pplayer, int diplrel);
-int diplrel_by_rule_name(const char *value);
-const char *diplrel_rule_name(int value);
-const char *diplrel_name_translation(int value);
 
 /* iterate over all player slots */
 #define player_slots_iterate(_pslot)                                        \
