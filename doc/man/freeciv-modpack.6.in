@@ -16,9 +16,7 @@ freeciv-modpack \
 .SH SYNOPSIS
 .B freeciv-modpack \
 [ \-h|\-\-help ] \
-[ \-L|\-\-List \fIURL\fP ] \
-[ \-p|\-\-prefix \fIdirectory\fP ] \
-[ \-v|\-\-version ] \
+[ \-v|\-\-version ]
 
 .SH DESCRIPTION
 Freeciv is a free turn-based multiplayer strategy game, in which each player
@@ -60,22 +58,11 @@ and a complete word); their effects are identical.
 .BI "\-h, \-\-help"
 Prints a short summary of the command line options.
 .TP
-.BI "\-L \fIURL\fP, \-\-List \fIURL\fP"
-Gets modpack list from given URL, rather than the standard location on the
-Freeciv team's servers.
-.TP
-.BI "\-p \fIdirectory\fP, \-\-prefix \fIdirectory\fP"
-Installs modpacks under given directory hierarchy. 
-.TP
 .BI "\-v, \-\-version"
 Prints the version number and exits.
 .SH FILES
 .B freeciv-modpack
-installs files to the following subdirectories of the user's home directory
-(or another directory specified with \fI\-\-prefix\fP), as appropriate:
-
-\(bu
-.I .freeciv/scenarios/
+installs files to the following subdirectory of the user's home directory:
 
 \(bu
 .I .freeciv/@DATASUBDIR@/

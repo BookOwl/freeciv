@@ -22,15 +22,14 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-
-civilwar_nations = "tanganyikan", "zanzibari", "maasai"
-conflicts_with = "tanganyikan", "zanzibari"
+civilwar_nations="kenyan", "maasai"
 
 cities =
  "Dodoma (!ocean)",
  "Dar es Salaam (ocean)",
- "Zanzibar (ocean)",
+ "Zanzibar City (ocean)",
  "Mwanza",
  "Arusha",
  "Mbeya",
@@ -42,7 +41,6 @@ cities =
  "Songea",
  "Musoma",
  "Shinyanga",
- "Chake Chake",
  "Katumba",
  "Iringa",
  "Ushirombo",

@@ -28,7 +28,7 @@ ruler_titles = {
  "government",     "male_title",           "female_title"
  "Democracy",   _("Minister of State %s"), _("?female:Minister of State %s")
  "Fundamentalism", _("Bishop %s"),         _("Mother Superior %s")
- "Despotism",      _("Prince %s"),         _("Princess %s")
+ "Monarchy",       _("Prince %s"),         _("Princess %s")
 }
 
 flag = "monaco_alternative" 
@@ -37,6 +37,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="italian", "french"

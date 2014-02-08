@@ -13,10 +13,6 @@
 #ifndef FC__FEATURED_TEXT_H
 #define FC__FEATURED_TEXT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "support.h"            /* bool type. */
 
@@ -142,7 +138,7 @@ struct ft_color {
   const char *foreground;
   const char *background;
 };
-#define FT_COLOR(fg, bg) { fg, bg }
+#define FT_COLOR(fg, bg) { .foreground = fg, .background = bg }
 /**************************************************************************
   Constructor.
 **************************************************************************/
@@ -179,7 +175,6 @@ extern const struct ft_color ftc_game_start;
 extern const struct ft_color ftc_chat_public;
 extern const struct ft_color ftc_chat_ally;
 extern const struct ft_color ftc_chat_private;
-extern const struct ft_color ftc_chat_luaconsole;
 
 extern const struct ft_color ftc_vote_public;
 extern const struct ft_color ftc_vote_team;
@@ -188,12 +183,6 @@ extern const struct ft_color ftc_vote_failed;
 extern const struct ft_color ftc_vote_yes;
 extern const struct ft_color ftc_vote_no;
 extern const struct ft_color ftc_vote_abstain;
-
-extern const struct ft_color ftc_luaconsole_input;
-extern const struct ft_color ftc_luaconsole_error;
-extern const struct ft_color ftc_luaconsole_normal;
-extern const struct ft_color ftc_luaconsole_verbose;
-extern const struct ft_color ftc_luaconsole_debug;
 
 /* Main functions. */
 size_t featured_text_to_plain_text(const char *featured_text,
@@ -239,9 +228,5 @@ const char *city_tile_link(const struct city *pcity);
 const char *tile_link(const struct tile *ptile);
 const char *unit_link(const struct unit *punit);
 const char *unit_tile_link(const struct unit *punit);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__FEATURED_TEXT_H */

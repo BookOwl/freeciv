@@ -13,10 +13,6 @@
 #ifndef FC__CLINET_H
 #define FC__CLINET_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 int connect_to_server(const char *username, const char *hostname, int port,
 		      char *errbuf, int errbufsize);
 
@@ -29,9 +25,4 @@ void disconnect_from_server(void);
 
 double try_to_autoconnect(void);
 void start_autoconnecting_to_server(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__CLINET_H */

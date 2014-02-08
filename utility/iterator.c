@@ -12,10 +12,9 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
 #include "shared.h"
 
 #include "iterator.h"

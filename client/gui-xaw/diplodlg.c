@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -261,8 +261,9 @@ static int fill_diplomacy_tech_menu(Widget popupmenu,
 
   advance_index_iterate(A_FIRST, i) {
     if (player_invention_state(plr0, i) == TECH_KNOWN
-        && player_invention_gettable(plr1, i, game.info.tech_trade_allow_holes)
-        && player_invention_state(plr1, i) != TECH_KNOWN) {
+        && player_invention_reachable(plr1, i, FALSE)
+        && (player_invention_state(plr1, i) == TECH_UNKNOWN
+	    || player_invention_state(plr1, i) == TECH_PREREQS_KNOWN)) {
       Widget entry=
 	XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
 				smeBSBObjectClass,

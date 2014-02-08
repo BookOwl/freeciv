@@ -17,8 +17,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",           "female_title"
- "Despotism",       _("Colonel %s"),        _("?female:Colonel %s")
- "Fundamentalism",  _("Patriarch %s"),      _("Matriarch %s")
+ "Despotism",       _("Despot %s"),          _("?female:Despot %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="greece"
@@ -27,10 +27,11 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with = "greek", "byzantine"
-civilwar_nations = "cretan", "cypriot"
+civilwar_nations = "turkish", "cypriot"
 
 cities =
  "Athina",

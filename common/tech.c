@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>             /* exit */
@@ -34,10 +34,6 @@
 
 #include "tech.h"
 
-/* Define this for additional debug information about the tech status
- * (in player_research_update()). */
-#undef DEBUG_TECH
-
 /* the advances array is now setup in:
  * server/ruleset.c (for the server)
  * client/packhand.c (for the client)
@@ -49,8 +45,6 @@ struct advance advances[A_LAST];
 static double techcoststyle1[A_LAST];
 
 static int tech_upkeep_calc(const struct player *pplayer);
-
-static struct user_flag user_tech_flags[MAX_NUM_USER_TECH_FLAGS];
 
 /**************************************************************************
   Return the last item of advances/technologies.
@@ -139,7 +133,7 @@ enum tech_state player_invention_state(const struct player *pplayer,
 }
 
 /**************************************************************************
-  Set player knowledge about tech to given state.
+...
 **************************************************************************/
 enum tech_state player_invention_set(struct player *pplayer,
 				     Tech_type_id tech,
@@ -217,7 +211,7 @@ static void build_required_techs_helper(struct player *pplayer,
 {
   /* The is_tech_a_req_for_goal condition is true if the tech is
    * already marked */
-  if (!player_invention_reachable(pplayer, tech)
+  if (!player_invention_reachable(pplayer, tech, FALSE)
       || player_invention_state(pplayer, tech) == TECH_KNOWN
       || is_tech_a_req_for_goal(pplayer, tech, goal)) {
     return;
@@ -285,13 +279,15 @@ static void build_required_techs(struct player *pplayer, Tech_type_id goal)
 
 /**************************************************************************
   Returns TRUE iff the given tech is ever reachable by the given player
-  by checking tech tree limitations.
+  by checking tech tree limitations. If allow_prereqs is TRUE check if the
+  player can ever reach this tech.
 
   pplayer may be NULL in which case a simplified result is returned
   (used by the client).
 **************************************************************************/
 bool player_invention_reachable(const struct player *pplayer,
-                                const Tech_type_id tech)
+                                const Tech_type_id tech,
+                                bool allow_prereqs)
 {
   Tech_type_id root;
 
@@ -307,56 +303,28 @@ bool player_invention_reachable(const struct player *pplayer,
        * If you already know it, you can "reach" it; if not, not. (This case
        * is needed for descendants of this tech.) */
       return TECH_KNOWN == player_invention_state(pplayer, tech);
-    } else {
+    } else if (allow_prereqs) {
       /* Recursive check if the player can ever reach this tech (root tech
        * and both requirements). */
-      return (player_invention_reachable(pplayer, root)
+      return (player_invention_reachable(pplayer, root, TRUE)
               && player_invention_reachable(pplayer,
-                                            advance_required(tech, AR_ONE))
+                                            advance_required(tech, AR_ONE),
+                                            allow_prereqs)
               && player_invention_reachable(pplayer,
-                                            advance_required(tech, AR_TWO)));
+                                            advance_required(tech, AR_TWO),
+                                            allow_prereqs));
+    } else if (TECH_KNOWN != player_invention_state(pplayer, root)
+               || !player_invention_reachable(pplayer,
+                                              advance_required(tech, AR_ONE),
+                                              allow_prereqs)
+               || !player_invention_reachable(pplayer,
+                                              advance_required(tech, AR_TWO),
+                                              allow_prereqs)) {
+      /* This tech requires knowledge of another tech (root tech or recursive
+       * a root tech of a requirement) before being available. Prevents
+       * sharing of untransferable techs. */
+      return FALSE;
     }
-  }
-
-  return TRUE;
-}
-
-/**************************************************************************
-  Returns TRUE iff the given tech can be given to player immediately.
-
-  If reachable_ok is TRUE, any reachable tech is ok. If it's FALSE,
-  getting the tech must not leave holes to the known techs tree.
-**************************************************************************/
-bool player_invention_gettable(const struct player *pplayer,
-                               const Tech_type_id tech,
-                               bool reachable_ok)
-{
-  Tech_type_id req;
-
-  if (!valid_advance_by_number(tech)) {
-    return FALSE;
-  }
-
-  /* Tech with root req is immediately gettable only if root req is already
-   * known. */
-  req = advance_required(tech, AR_ROOT);
-
-  if (req != A_NONE && player_invention_state(pplayer, req) != TECH_KNOWN) {
-    return FALSE;
-  }
-
-  if (reachable_ok) {
-    /* Any recursively reachable tech is ok */
-    return TRUE;
-  }
-
-  req = advance_required(tech, AR_ONE);
-  if (req != A_NONE && player_invention_state(pplayer, req) != TECH_KNOWN) {
-    return FALSE;
-  }
-  req = advance_required(tech, AR_TWO);
-  if (req != A_NONE && player_invention_state(pplayer, req) != TECH_KNOWN) {
-    return FALSE;
   }
 
   return TRUE;
@@ -381,7 +349,7 @@ void player_research_update(struct player *pplayer)
   player_invention_set(pplayer, A_NONE, TECH_KNOWN);
 
   advance_index_iterate(A_FIRST, i) {
-    if (!player_invention_reachable(pplayer, i)) {
+    if (!player_invention_reachable(pplayer, i, FALSE)) {
       player_invention_set(pplayer, i, TECH_UNKNOWN);
     } else {
       if (player_invention_state(pplayer, i) == TECH_PREREQS_KNOWN) {
@@ -399,27 +367,7 @@ void player_research_update(struct player *pplayer)
     }
     build_required_techs(pplayer, i);
   } advance_index_iterate_end;
-
-#ifdef DEBUG_TECH
-  advance_index_iterate(A_FIRST, i) {
-    char buf[advance_count() + 1];
-
-    advance_index_iterate(A_NONE, j) {
-      if (BV_ISSET(research->inventions[i].required_techs, j)) {
-        buf[j] = '1';
-      } else {
-        buf[j] = '0';
-      }
-    } advance_index_iterate_end;
-    buf[advance_count()] = '\0';
-
-    log_debug("%s: [%3d] %-25s => %s", player_name(pplayer), i,
-              advance_rule_name(advance_by_number(i)),
-              tech_state_name(player_invention_state(pplayer, i)));
-    log_debug("%s: [%3d] %s", player_name(pplayer), i, buf);
-  } advance_index_iterate_end;
-#endif /* DEBUG */
-
+  
   /* No techs we can research? Mark A_FUTURE as researchable */
   if (researchable == 0) {
     player_invention_set(pplayer, A_FUTURE, TECH_PREREQS_KNOWN);
@@ -438,7 +386,7 @@ void player_research_update(struct player *pplayer)
   }
 
   /* calculate tech upkeep cost */
-  if (game.info.tech_upkeep_style != TECH_UPKEEP_NONE) {
+  if (game.info.tech_upkeep_style == 1) {
     /* upkeep activated in the ruleset */
     research->tech_upkeep = tech_upkeep_calc(pplayer);
 
@@ -472,7 +420,6 @@ static int tech_upkeep_calc(const struct player *pplayer)
     tech_bulb_sum += (double)t * (t + 1) / 2 * game.info.base_tech_cost;
     break;
   case 1:
-  case 3:
     advance_index_iterate(A_NONE, i) {
       if (player_invention_state(pplayer, i) == TECH_KNOWN) {
         tech_bulb_sum += techcoststyle1[i];
@@ -480,7 +427,6 @@ static int tech_upkeep_calc(const struct player *pplayer)
     } advance_index_iterate_end;
     break;
   case 2:
-  case 4:
     advance_index_iterate(A_NONE, i) {
       if (player_invention_state(pplayer, i) == TECH_KNOWN) {
         if (advances[i].preset_cost != -1) {
@@ -505,19 +451,7 @@ static int tech_upkeep_calc(const struct player *pplayer)
   tech_bulb_sum *= get_player_bonus(pplayer, EFT_TECH_COST_FACTOR);
   tech_bulb_sum *= (double)game.info.sciencebox / 100.0;
   tech_bulb_sum /= game.info.tech_upkeep_divider;
-
-  switch (game.info.tech_upkeep_style) {
-  case TECH_UPKEEP_BASIC:
-    tech_bulb_sum -= get_player_bonus(pplayer, EFT_TECH_UPKEEP_FREE);
-    break;
-  case TECH_UPKEEP_PER_CITY:
-    tech_bulb_sum -= get_player_bonus(pplayer, EFT_TECH_UPKEEP_FREE);
-    tech_bulb_sum *= (1 + city_list_size(pplayer->cities));
-    break;
-  case TECH_UPKEEP_NONE:
-    fc_assert(game.info.tech_upkeep_style != TECH_UPKEEP_NONE);
-    tech_bulb_sum = 0;
-  }
+  tech_bulb_sum -= get_player_bonus(pplayer, EFT_TECH_UPKEEP_FREE);
 
   return MAX((int)tech_bulb_sum, 0);
 }
@@ -531,7 +465,7 @@ Tech_type_id player_research_step(const struct player *pplayer,
 {
   Tech_type_id sub_goal;
 
-  if (!player_invention_reachable(pplayer, goal)) {
+  if (!player_invention_reachable(pplayer, goal, FALSE)) {
     return A_UNSET;
   }
   switch (player_invention_state(pplayer, goal)) {
@@ -655,15 +589,11 @@ int total_bulbs_required(const struct player *pplayer)
 
   tech_cost_style:
   0 - Civ (I|II) style. Every new tech adds N to the cost of the next tech.
-  1 - Cost of technology is:
+  1 - Cost of technology is 
         (1 + parents) * 10 * sqrt(1 + parents)
       where num_parents == number of requirement for tech (recursive).
   2 - Cost are read from tech.ruleset. Missing costs are generated by
       style 1.
-  3 - Cost of technology is:
-        cost = base * (reqs - 1)^2 / (1 + sqrt(sqrt(reqs))) - base/2
-  4 - Cost are read from tech.ruleset. Missing costs are generated by
-      style 3.
 
   tech_leakage:
   0 - No reduction of the technology cost.
@@ -703,11 +633,6 @@ int base_total_bulbs_required(const struct player *pplayer,
     tech_cost_style = 1;
   }
 
-  if (tech_cost_style == 4 && advances[tech].preset_cost == -1) {
-    /* No preset, using style 3 */
-    tech_cost_style = 3;
-  }
-
   switch (tech_cost_style) {
   case 0:
     if (pplayer) {
@@ -718,11 +643,9 @@ int base_total_bulbs_required(const struct player *pplayer,
     }
     break;
   case 1:
-  case 3:
     base_cost = techcoststyle1[tech];
     break;
   case 2:
-  case 4:
     base_cost = advances[tech].preset_cost;
     break;
   default:
@@ -742,13 +665,13 @@ int base_total_bulbs_required(const struct player *pplayer,
     {
       int players = 0, players_with_tech_and_embassy = 0;
 
-      players_iterate_alive(other) {
+      players_iterate(other) {
 	players++;
 	if (player_invention_state(other, tech) == TECH_KNOWN
 	    && pplayer && player_has_embassy(pplayer, other)) {
 	  players_with_tech_and_embassy++;
 	}
-      } players_iterate_alive_end;
+      } players_iterate_end;
 
       base_cost *= (double)(players - players_with_tech_and_embassy);
       base_cost /= (double)players;
@@ -759,12 +682,12 @@ int base_total_bulbs_required(const struct player *pplayer,
     {
       int players = 0, players_with_tech = 0;
 
-      players_iterate_alive(other) {
+      players_iterate(other) {
 	players++;
 	if (player_invention_state(other, tech) == TECH_KNOWN) {
 	  players_with_tech++;
 	}
-      } players_iterate_alive_end;
+      } players_iterate_end;
 
       base_cost *= (double)(players - players_with_tech);
       base_cost /= (double)players;
@@ -775,7 +698,7 @@ int base_total_bulbs_required(const struct player *pplayer,
     {
       int players = 0, players_with_tech = 0;
 
-      players_iterate_alive(other) {
+      players_iterate(other) {
 	if (is_barbarian(other)) {
 	  continue;
 	}
@@ -783,7 +706,7 @@ int base_total_bulbs_required(const struct player *pplayer,
 	if (player_invention_state(other, tech) == TECH_KNOWN) {
 	  players_with_tech++;
 	}
-      } players_iterate_alive_end;
+      } players_iterate_end;
 
       base_cost *= (double)(players - players_with_tech);
       base_cost /= (double)players;
@@ -861,8 +784,6 @@ static int precalc_tech_data_helper(Tech_type_id tech, bool *counted)
 
 /**************************************************************************
  Function to precalculate needed data for technologies.
- Styles 3 and 4 use the same table as styles 1 and 2 so we do not have to
- modify any function that reads it.
 **************************************************************************/
 void precalc_tech_data()
 {
@@ -874,26 +795,9 @@ void precalc_tech_data()
   } advance_index_iterate_end;
 
   advance_index_iterate(A_NONE, tech) {
-    /* FIXME: Why are we counting the current tech twice? */
     double reqs = advances[tech].num_reqs + 1;
-    double cost = 0;
-    const double base = game.info.base_tech_cost;
-
-    switch (game.info.tech_cost_style) {
-    case 0:
-      break;
-    case 1:
-    case 2:
-      cost = base * reqs * sqrt(reqs) / 2;
-      break;
-    case 3:
-    case 4:
-      cost = base * (reqs - 1) * (reqs - 1) / (1 + sqrt(sqrt(reqs))) - base/2;
-      break;
-    default:
-      log_error("Invalid tech_cost_style %d", game.info.tech_cost_style);
-      break;
-    }
+    const double base = game.info.base_tech_cost / 2;
+    const double cost = base * reqs * sqrt(reqs);
 
     techcoststyle1[tech] = MAX(cost, game.info.base_tech_cost);
   } advance_index_iterate_end;
@@ -1029,91 +933,14 @@ const char *advance_rule_name(const struct advance *padvance)
 }
 
 /**************************************************************************
-  Initialize user tech flags.
-**************************************************************************/
-void user_tech_flags_init(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_NUM_USER_TECH_FLAGS; i++) {
-    user_flag_init(&user_tech_flags[i]);
-  }
-}
-
-/***************************************************************
-  Frees the memory associated with all user tech flags
-***************************************************************/
-void user_tech_flags_free(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_NUM_USER_TECH_FLAGS; i++) {
-    user_flag_free(&user_tech_flags[i]);
-  }
-}
-
-/**************************************************************************
-  Sets user defined name for tech flag.
-**************************************************************************/
-void set_user_tech_flag_name(enum tech_flag_id id, const char *name,
-                             const char *helptxt)
-{
-  int tfid = id - TECH_USER_1;
-
-  fc_assert_ret(id >= TECH_USER_1 && id <= TECH_USER_LAST);
-
-  if (user_tech_flags[tfid].name != NULL) {
-    FC_FREE(user_tech_flags[tfid].name);
-    user_tech_flags[tfid].name = NULL;
-  }
-
-  if (name && name[0] != '\0') {
-    user_tech_flags[tfid].name = fc_strdup(name);
-  }
-
-  if (user_tech_flags[tfid].helptxt != NULL) {
-    FC_FREE(user_tech_flags[tfid].helptxt);
-    user_tech_flags[tfid].helptxt = NULL;
-  }
-
-  if (helptxt && helptxt[0] != '\0') {
-    user_tech_flags[tfid].helptxt = fc_strdup(helptxt);
-  }
-}
-
-/**************************************************************************
-  Tech flag name callback, called from specenum code.
-**************************************************************************/
-char *tech_flag_id_name_cb(enum tech_flag_id flag)
-{
-  if (flag < TECH_USER_1 || flag > TECH_USER_LAST) {
-    return NULL;
-  }
-
-  return user_tech_flags[flag-TECH_USER_1].name;
-}
-
-/**************************************************************************
-  Return the (untranslated) helptxt of the user tech flag.
-**************************************************************************/
-const char *tech_flag_helptxt(enum tech_flag_id id)
-{
-  fc_assert(id >= TECH_USER_1 && id <= TECH_USER_LAST);
-
-  return user_tech_flags[id - TECH_USER_1].helptxt;
-}
-
-/**************************************************************************
  Returns true if the costs for the given technology will stay constant
  during the game. False otherwise.
-
- Checking every tech_cost_style with fixed costs seems a waste of system
- resources, when we can check that it is not the one style without fixed
- costs.
 **************************************************************************/
 bool techs_have_fixed_costs()
 {
-  return (game.info.tech_leakage == 0 && game.info.tech_cost_style != 0);
+  return ((game.info.tech_cost_style == 1
+	   || game.info.tech_cost_style == 2)
+	  && game.info.tech_leakage == 0);
 }
 
 /****************************************************************************
@@ -1129,17 +956,17 @@ void techs_init(void)
 
   /* Initialize dummy tech A_NONE */
   /* TRANS: "None" tech */
-  name_set(&advances[A_NONE].name, NULL, N_("None"));
+  name_set(&advances[A_NONE].name, N_("None"));
 
   /* Initialize dummy tech A_UNSET */
-  name_set(&advances[A_UNSET].name, NULL, N_("None"));
+  name_set(&advances[A_UNSET].name, N_("None"));
 
   /* Initialize dummy tech A_FUTURE */
-  name_set(&advances[A_FUTURE].name, NULL, N_("Future Tech."));
+  name_set(&advances[A_FUTURE].name, N_("Future Tech."));
 
   /* Initialize dummy tech A_UNKNOWN */
   /* TRANS: "Unknown" advance/technology */
-  name_set(&advances[A_UNKNOWN].name, NULL, N_("(Unknown)"));
+  name_set(&advances[A_UNKNOWN].name, N_("(Unknown)"));
 }
 
 /***************************************************************

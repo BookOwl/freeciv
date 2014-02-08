@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -27,14 +27,12 @@
 #include "support.h"
 
 /* common */
-#include "citizens.h"
 #include "combat.h"
 #include "fc_types.h" /* LINE_BREAK */
 #include "game.h"
 #include "government.h"
 #include "map.h"
 #include "research.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -152,16 +150,12 @@ const char *popup_info_text(struct tile *ptile)
   static struct astring str = ASTRING_INIT;
   char username[MAX_LEN_NAME + 32];
   char nation[2 * MAX_LEN_NAME + 32];
-  int tile_x, tile_y, nat_x, nat_y;
-  bool first;
 
   astr_clear(&str);
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
   astr_add_line(&str, _("Location: (%d, %d) [%d]"),
-                tile_x, tile_y, tile_continent(ptile));
-  index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
+                ptile->x, ptile->y, tile_continent(ptile));
   astr_add_line(&str, _("Native coordinates: (%d, %d)"),
-                nat_x, nat_y);
+                ptile->nat_x, ptile->nat_y);
 
   if (client_tile_get_known(ptile) == TILE_UNKNOWN) {
     astr_add(&str, _("Unknown"));
@@ -170,17 +164,9 @@ const char *popup_info_text(struct tile *ptile)
   astr_add_line(&str, _("Terrain: %s"),  tile_get_info_text(ptile, 0));
   astr_add_line(&str, _("Food/Prod/Trade: %s"),
 		get_tile_output_text(ptile));
-  first = TRUE;
-  extra_type_iterate(pextra) {
-    if (pextra->category == ECAT_BONUS && tile_has_visible_extra(ptile, pextra)) {
-      if (!first) {
-        astr_add(&str, ",%s", extra_name_translation(pextra));
-      } else {
-        astr_add_line(&str, "%s", extra_name_translation(pextra));
-        first = FALSE;
-      }
-    }
-  } extra_type_iterate_end;
+  if (tile_has_special(ptile, S_HUT)) {
+    astr_add_line(&str, _("Minor Tribe Village"));
+  }
   if (BORDERS_DISABLED != game.info.borders && !pcity) {
     struct player *owner = tile_owner(ptile);
 
@@ -289,7 +275,7 @@ const char *popup_info_text(struct tile *ptile)
     unit_list_iterate(get_units_in_focus(), pfocus_unit) {
       struct city *hcity = game_city_by_number(pfocus_unit->homecity);
 
-      if (unit_has_type_flag(pfocus_unit, UTYF_TRADE_ROUTE)
+      if (unit_has_type_flag(pfocus_unit, F_TRADE_ROUTE)
 	  && can_cities_trade(hcity, pcity)
 	  && can_establish_trade_route(hcity, pcity)) {
 	/* TRANS: "Trade from Warsaw: 5" */
@@ -300,7 +286,8 @@ const char *popup_info_text(struct tile *ptile)
     } unit_list_iterate_end;
   }
   {
-    const char *infratext = get_infrastructure_text(ptile->extras);
+    const char *infratext = get_infrastructure_text(ptile->special,
+                                                    ptile->bases);
     if (*infratext != '\0') {
       astr_add_line(&str, _("Infrastructure: %s"), infratext);
     }
@@ -378,30 +365,14 @@ const char *popup_info_text(struct tile *ptile)
 
     /* TRANS: A is attack power, D is defense power, FP is firepower,
      * HP is hitpoints (current and max). */
-    astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d"),
-                  ptype->attack_strength, ptype->defense_strength,
-                  ptype->firepower, punit->hp, ptype->hp);
-    {
-      const char *veteran_name =
-        utype_veteran_name_translation(ptype, punit->veteran);
-      if (veteran_name) {
-        astr_add(&str, " (%s)", veteran_name);
-      }
-    }
-
-    if (unit_owner(punit) == client_player()
-        || client_is_global_observer()) {
-      /* Show bribe cost for own units. */
-      astr_add_line(&str, _("Probable bribe cost: %d"),
-                    unit_bribe_cost(punit, NULL));
-    } else {
-      /* We can only give an (lower) boundary for units of other players. */
-      astr_add_line(&str, _("Estimated bribe cost: > %d"),
-                    unit_bribe_cost(punit, client_player()));
-    }
+    astr_add_line(&str, _("A:%d D:%d FP:%d HP:%d/%d (%s)"),
+		  ptype->attack_strength, 
+		  ptype->defense_strength, ptype->firepower, punit->hp, 
+		  ptype->hp,
+                  name_translation(&ptype->veteran[punit->veteran].name));
 
     if ((NULL == client.conn.playing || owner == client.conn.playing)
-        && unit_list_size(ptile->units) >= 2) {
+	&& unit_list_size(ptile->units) >= 2) {
       /* TRANS: "5 more" units on this tile */
       astr_add(&str, _("  (%d more)"), unit_list_size(ptile->units) - 1);
     }
@@ -421,36 +392,27 @@ const char *concat_tile_activity_text(struct tile *ptile)
 {
   int activity_total[ACTIVITY_LAST];
   int activity_units[ACTIVITY_LAST];
-  int extra_total[MAX_EXTRA_TYPES];
-  int extra_units[MAX_EXTRA_TYPES];
-  int rmextra_total[MAX_EXTRA_TYPES];
-  int rmextra_units[MAX_EXTRA_TYPES];
+  int base_total[MAX_BASE_TYPES];
+  int base_units[MAX_BASE_TYPES];
   int num_activities = 0;
-  int remains, turns;
+  int pillaging = 0;
+  int remains, turns, i;
   static struct astring str = ASTRING_INIT;
 
   astr_clear(&str);
 
   memset(activity_total, 0, sizeof(activity_total));
   memset(activity_units, 0, sizeof(activity_units));
-  memset(extra_total, 0, sizeof(extra_total));
-  memset(extra_units, 0, sizeof(extra_units));
-  memset(rmextra_total, 0, sizeof(rmextra_total));
-  memset(rmextra_units, 0, sizeof(rmextra_units));
+  memset(base_total, 0, sizeof(base_total));
+  memset(base_units, 0, sizeof(base_units));
 
   unit_list_iterate(ptile->units, punit) {
-    if (is_clean_activity(punit->activity)) {
-     int eidx = extra_index(punit->activity_target);
-
-      rmextra_total[eidx] += punit->activity_count;
-      rmextra_total[eidx] += get_activity_rate_this_turn(punit);
-      rmextra_units[eidx] += get_activity_rate(punit);
-    } else if (is_build_activity(punit->activity, ptile)) {
-      int eidx = extra_index(punit->activity_target);
-
-      extra_total[eidx] += punit->activity_count;
-      extra_total[eidx] += get_activity_rate_this_turn(punit);
-      extra_units[eidx] += get_activity_rate(punit);
+    if (punit->activity == ACTIVITY_PILLAGE) {
+      pillaging = 1;
+    } else if (punit->activity == ACTIVITY_BASE) {
+      base_total[punit->activity_base] += punit->activity_count;
+      base_total[punit->activity_base] += get_activity_rate_this_turn(punit);
+      base_units[punit->activity_base] += get_activity_rate(punit);
     } else {
       activity_total[punit->activity] += punit->activity_count;
       activity_total[punit->activity] += get_activity_rate_this_turn(punit);
@@ -458,104 +420,53 @@ const char *concat_tile_activity_text(struct tile *ptile)
     }
   } unit_list_iterate_end;
 
-  activity_type_iterate(i) {
-    if (is_build_activity(i, ptile)) {
-      enum extra_cause cause = EC_NONE;
-
-      switch(i) {
-      case ACTIVITY_GEN_ROAD:
-        cause = EC_ROAD;
-        break;
-      case ACTIVITY_BASE:
-        cause = EC_BASE;
-        break;
-      case ACTIVITY_IRRIGATE:
-        cause = EC_IRRIGATION;
-        break;
-      case ACTIVITY_MINE:
-        cause = EC_MINE;
-        break;
-      default:
-        fc_assert(cause != EC_NONE);
-        break;
-      };
-
-      if (cause != EC_NONE) {
-        extra_type_by_cause_iterate(cause, ep) {
-          int ei = extra_index(ep);
-
-          if (extra_units[ei] > 0) {
-            remains = tile_activity_time(i, ptile, ep) - extra_total[ei];
-            if (remains > 0) {
-              turns = 1 + (remains + extra_units[ei] - 1) / extra_units[ei];
-            } else {
-              /* extra will be finished this turn */
-              turns = 1;
-            }
-            if (num_activities > 0) {
-              astr_add(&str, "/");
-            }
-            astr_add(&str, "%s(%d)", extra_name_translation(ep), turns);
-            num_activities++;
-          }
-        } extra_type_by_cause_iterate_end;
-      }
-    } else if (is_clean_activity(i)) {
-      enum extra_rmcause rmcause = ERM_NONE;
-
-      switch(i) {
-      case ACTIVITY_PILLAGE:
-        rmcause = ERM_PILLAGE;
-        break;
-      case ACTIVITY_POLLUTION:
-        rmcause = ERM_CLEANPOLLUTION;
-        break;
-      case ACTIVITY_FALLOUT:
-        rmcause = ERM_CLEANFALLOUT;
-        break;
-      default:
-        fc_assert(rmcause != ERM_NONE);
-        break;
-      };
-
-      if (rmcause != ERM_NONE) {
-        extra_type_by_rmcause_iterate(rmcause, ep) {
-          int ei = extra_index(ep);
-
-          if (rmextra_units[ei] > 0) {
-            remains = tile_activity_time(i, ptile, ep) - rmextra_total[ei];
-            if (remains > 0) {
-              turns = 1 + (remains + rmextra_units[ei] - 1) / rmextra_units[ei];
-            } else {
-              /* extra will be removed this turn */
-              turns = 1;
-            }
-            if (num_activities > 0) {
-              astr_add(&str, "/");
-            }
-            astr_add(&str, rmcause == ERM_PILLAGE ? _("Pillage %s(%d)") : _("Clean %s(%d)"),
-                     extra_name_translation(ep), turns);
-            num_activities++;
-          }
-        } extra_type_by_rmcause_iterate_end;
-      }
-    } else if (is_tile_activity(i)) {
-      if (activity_units[i] > 0) {
-        remains = tile_activity_time(i, ptile, NULL) - activity_total[i];
-        if (remains > 0) {
-          turns = 1 + (remains + activity_units[i] - 1) / activity_units[i];
-        } else {
-          /* activity will be finished this turn */
-          turns = 1;
-        }
-        if (num_activities > 0) {
-          astr_add(&str, "/");
-        }
-        astr_add(&str, "%s(%d)", get_activity_text(i), turns);
-        num_activities++;
-      }
+  if (pillaging) {
+    bv_special pillage_targets = get_unit_tile_pillage_set(ptile);
+    bv_bases pillage_bases = get_unit_tile_pillage_base_set(ptile);
+    if (BV_ISSET_ANY(pillage_targets) || BV_ISSET_ANY(pillage_bases)) {
+      astr_add(&str, "%s(%s)", _("Pillage"),
+               get_infrastructure_text(pillage_targets, pillage_bases));
+    } else {
+      /* Untargeted pillaging is happening. */
+      astr_add(&str, "%s", _("Pillage"));
     }
-  } activity_type_iterate_end;
+    num_activities++;
+  }
+
+  for (i = 0; i < ACTIVITY_LAST; i++) {
+    if (i == ACTIVITY_BASE) {
+      base_type_iterate(bp) {
+        Base_type_id b = base_index(bp);
+	if (base_units[b] > 0) {
+	  remains = tile_activity_base_time(ptile, b) - base_total[b];
+	  if (remains > 0) {
+	    turns = 1 + (remains + base_units[b] - 1) / base_units[b];
+	  } else {
+	    /* base will be finished this turn */
+	    turns = 1;
+	  }
+	  if (num_activities > 0) {
+	    astr_add(&str, "/");
+	  }
+	  astr_add(&str, "%s(%d)", base_name_translation(bp), turns);
+	  num_activities++;
+	}
+      } base_type_iterate_end;
+    } else if (is_build_or_clean_activity(i) && activity_units[i] > 0) {
+      if (num_activities > 0) {
+	astr_add(&str, "/");
+      }
+      remains = tile_activity_time(i, ptile) - activity_total[i];
+      if (remains > 0) {
+	turns = 1 + (remains + activity_units[i] - 1) / activity_units[i];
+      } else {
+	/* activity will be finished this turn */
+	turns = 1;
+      }
+      astr_add(&str, "%s(%d)", get_activity_text(i), turns);
+      num_activities++;
+    }
+  }
 
   return astr_str(&str);
 }
@@ -602,10 +513,8 @@ const char *get_nearest_city_text(struct city *pcity, int sq_dist)
 const char *unit_description(struct unit *punit)
 {
   int pcity_near_dist;
-  struct player *owner = unit_owner(punit);
-  struct player *nationality = unit_nationality(punit);
   struct city *pcity =
-      player_city_by_number(owner, punit->homecity);
+      player_city_by_number(unit_owner(punit), punit->homecity);
   struct city *pcity_near = get_nearest_city(punit, &pcity_near_dist);
   struct unit_type *ptype = unit_type(punit);
   static struct astring str = ASTRING_INIT;
@@ -615,15 +524,11 @@ const char *unit_description(struct unit *punit)
 
   astr_add(&str, "%s", utype_name_translation(ptype));
 
-  {
-    const char *veteran_name =
-      utype_veteran_name_translation(ptype, punit->veteran);
-    if (veteran_name) {
-      astr_add(&str, " (%s)", veteran_name);
-    }
+  if (rule_name(&ptype->veteran[punit->veteran].name)[0] != '\0') {
+    astr_add(&str, " (%s)", name_translation(&ptype->veteran[punit->veteran].name));
   }
 
-  if (pplayer == owner) {
+  if (pplayer == unit_owner(punit)) {
     unit_upkeep_astr(punit, &str);
   }
   astr_add(&str, "\n");
@@ -634,14 +539,6 @@ const char *unit_description(struct unit *punit)
     astr_add_line(&str, _("from %s"), city_name(pcity));
   } else {
     astr_add(&str, "\n");
-  }
-  if (game.info.citizen_nationality) {
-    if (nationality != NULL && owner != nationality) {
-      /* TRANS: Nationality of the soldiers in unit, can be different from owner. */
-      astr_add(&str, _("%s people"), nation_adjective_for_player(nationality));
-    } else {
-      astr_add(&str, "\n");
-    }
   }
 
   astr_add_line(&str, "%s",
@@ -777,14 +674,14 @@ static int get_bulbs_per_turn(int *pours, bool *pteam, int *ptheirs)
         ours += pcity->prod[O_SCIENCE];
       } city_list_iterate_end;
 
-      if (game.info.tech_upkeep_style != TECH_UPKEEP_NONE) {
+      if (game.info.tech_upkeep_style == 1) {
         ours -= player_research_get(pplayer)->tech_upkeep;
       }
     } else if (presearch == player_research_get(pplayer)) {
       team = TRUE;
       theirs += pplayer->bulbs_last_turn;
 
-      if (game.info.tech_upkeep_style != TECH_UPKEEP_NONE) {
+      if (game.info.tech_upkeep_style == 1) {
         theirs -= presearch->tech_upkeep;
       }
     }
@@ -810,7 +707,7 @@ const char *science_dialog_text(void)
   bool team;
   int ours, theirs, perturn, upkeep;
   static struct astring str = ASTRING_INIT;
-  struct astring ourbuf = ASTRING_INIT, theirbuf = ASTRING_INIT;
+  char ourbuf[1024] = "", theirbuf[1024] = "";
   struct player_research *research;
 
   astr_clear(&str);
@@ -849,21 +746,18 @@ const char *science_dialog_text(void)
       astr_add(&str, _("Progress: none"));
     }
   }
-  astr_set(&ourbuf, PL_("%d bulb/turn", "%d bulbs/turn", ours), ours);
+  fc_snprintf(ourbuf, sizeof(ourbuf),
+              PL_("%d bulb/turn", "%d bulbs/turn", ours), ours);
   if (team) {
     /* Techpool version */
-    astr_set(&theirbuf,
-             /* TRANS: This is appended to "%d bulb/turn" text */
-             PL_(", %d bulb/turn from team",
-                 ", %d bulbs/turn from team", theirs), theirs);
-  } else {
-    astr_clear(&theirbuf);
+    fc_snprintf(theirbuf, sizeof(theirbuf),
+                /* TRANS: This is appended to "%d bulb/turn" text */
+                PL_(", %d bulb/turn from team",
+                    ", %d bulbs/turn from team", theirs), theirs);
   }
-  astr_add(&str, " (%s%s)", astr_str(&ourbuf), astr_str(&theirbuf));
-  astr_free(&ourbuf);
-  astr_free(&theirbuf);
+  astr_add(&str, " (%s%s)", ourbuf, theirbuf);
 
-  if (game.info.tech_upkeep_style != TECH_UPKEEP_NONE) {
+  if (game.info.tech_upkeep_style == 1) {
     /* perturn is defined as: (bulbs produced) - upkeep */
     astr_add_line(&str, _("Bulbs produced per turn: %d"), perturn + upkeep);
     /* TRANS: keep leading space; appended to "Bulbs produced per turn: %d" */
@@ -935,11 +829,9 @@ const char *get_science_goal_text(Tech_type_id goal)
   int bulbs_needed = total_bulbs_required_for_goal(client.conn.playing, goal);
   int turns;
   int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
+  char buf1[256], buf2[256], buf3[256];
   struct player_research* research = player_research_get(client_player());
   static struct astring str = ASTRING_INIT;
-  struct astring buf1 = ASTRING_INIT,
-                 buf2 = ASTRING_INIT,
-                 buf3 = ASTRING_INIT;
 
   if (!research) {
     return "-";
@@ -953,22 +845,18 @@ const char *get_science_goal_text(Tech_type_id goal)
     bulbs_needed -= research->bulbs_researched;
   }
 
-  astr_set(&buf1,
-           PL_("%d step", "%d steps", steps), steps);
-  astr_set(&buf2,
-           PL_("%d bulb", "%d bulbs", bulbs_needed), bulbs_needed);
+  fc_snprintf(buf1, sizeof(buf1),
+              PL_("%d step", "%d steps", steps), steps);
+  fc_snprintf(buf2, sizeof(buf2),
+              PL_("%d bulb", "%d bulbs", bulbs_needed), bulbs_needed);
   if (perturn > 0) {
     turns = (bulbs_needed + perturn - 1) / perturn;
-    astr_set(&buf3,
-             PL_("%d turn", "%d turns", turns), turns);
+    fc_snprintf(buf3, sizeof(buf3),
+                PL_("%d turn", "%d turns", turns), turns);
   } else {
-    astr_set(&buf3, _("never"));
+    fc_snprintf(buf3, sizeof(buf3), _("never"));
   }
-  astr_add_line(&str, "(%s - %s - %s)",
-                astr_str(&buf1), astr_str(&buf2), astr_str(&buf3));
-  astr_free(&buf1);
-  astr_free(&buf2);
-  astr_free(&buf3);
+  astr_add_line(&str, "(%s - %s - %s)", buf1, buf2, buf3);
 
   return astr_str(&str);
 }
@@ -1043,9 +931,6 @@ const char *get_info_label_text_popup(void)
   astr_add_line(&str, _("Turn: %d"), game.info.turn);
 
   if (NULL != client.conn.playing) {
-    int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
-    int upkeep = player_research_get(client_player())->tech_upkeep;
-
     astr_add_line(&str, _("Gold: %d"),
 		  client.conn.playing->economic.gold);
     astr_add_line(&str, _("Net Income: %d"),
@@ -1058,13 +943,13 @@ const char *get_info_label_text_popup(void)
     astr_add_line(&str, _("Researching %s: %s"),
 		  advance_name_researching(client.conn.playing),
 		  get_science_target_text(NULL));
-    /* perturn is defined as: (bulbs produced) - upkeep */
-    if (game.info.tech_upkeep_style != TECH_UPKEEP_NONE) {
+    if (game.info.tech_upkeep_style == 1) {
+      int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
+      int upkeep = player_research_get(client_player())->tech_upkeep;
+
+      /* perturn is defined as: (bulbs produced) - upkeep */
       astr_add_line(&str, _("Bulbs per turn: %d - %d = %d"), perturn + upkeep,
                     upkeep, perturn);
-    } else {
-      fc_assert(upkeep == 0);
-      astr_add_line(&str, _("Bulbs per turn: %d"), perturn);
     }
   }
 
@@ -1167,18 +1052,16 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     astr_add_line(&str, _("No units selected."));
   }
 
-  /* Lines 2, 3, 4, and possible 5 vary. */
+  /* Lines 2, 3, and 4 vary. */
   if (count == 1) {
     struct unit *punit = unit_list_get(punits, 0);
-    struct player *owner = unit_owner(punit);
-    struct city *pcity = player_city_by_number(owner,
+    struct city *pcity = player_city_by_number(unit_owner(punit),
                                                punit->homecity);
 
-    astr_add_line(&str, "%s", tile_get_info_text(unit_tile(punit),
-                                                 linebreaks));
+    astr_add_line(&str, "%s", tile_get_info_text(punit->tile, linebreaks));
     {
-      const char *infratext = get_infrastructure_text(unit_tile(punit)->extras);
-
+      const char *infratext = get_infrastructure_text(punit->tile->special,
+                                                      punit->tile->bases);
       if (*infratext != '\0') {
         astr_add_line(&str, "%s", infratext);
       } else {
@@ -1190,18 +1073,6 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     } else {
       astr_add_line(&str, " ");
     }
-
-    if (game.info.citizen_nationality) {
-      struct player *nationality = unit_nationality(punit);
-
-      /* Line 5, nationality text */
-      if (nationality != NULL && owner != nationality) {
-        astr_add(&str, _("%s people"), nation_adjective_for_player(nationality));
-      } else {
-        astr_add(&str, " ");
-      }
-    }
-
   } else if (count > 1) {
     int mil = 0, nonmil = 0;
     int types_count[U_LAST], i;
@@ -1209,7 +1080,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     memset(types_count, 0, sizeof(types_count));
     unit_list_iterate(punits, punit) {
-      if (unit_has_type_flag(punit, UTYF_CIVILIAN)) {
+      if (unit_has_type_flag(punit, F_CIVILIAN)) {
 	nonmil++;
       } else {
 	mil++;
@@ -1239,7 +1110,7 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
 
     for (i = 0; i < 2; i++) {
       if (top[i] && types_count[utype_index(top[i])] > 0) {
-	if (utype_has_flag(top[i], UTYF_CIVILIAN)) {
+	if (utype_has_flag(top[i], F_CIVILIAN)) {
 	  nonmil -= types_count[utype_index(top[i])];
 	} else {
 	  mil -= types_count[utype_index(top[i])];
@@ -1265,28 +1136,20 @@ const char *get_unit_info_label_text2(struct unit_list *punits, int linebreaks)
     } else {
       astr_add_line(&str, " ");
     }
-
-    if (game.info.citizen_nationality) {
-      astr_add_line(&str, " ");
-    }
   } else {
     astr_add_line(&str, " ");
     astr_add_line(&str, " ");
     astr_add_line(&str, " ");
-
-    if (game.info.citizen_nationality) {
-      astr_add_line(&str, " ");
-    }
   }
 
-  /* Line 5/6. Debug text. */
+  /* Line 5. Debug text. */
 #ifdef DEBUG
   if (count == 1) {
     astr_add_line(&str, "(Unit ID %d)", unit_list_get(punits, 0)->id);
   } else {
     astr_add_line(&str, " ");
   }
-#endif /* DEBUG */
+#endif
 
   return astr_str(&str);
 }
@@ -1368,7 +1231,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
     fc_snprintf(buf, bufsz, _("No units to disband!"));
     return FALSE;
   } else if (unit_list_size(punits) == 1) {
-    if (unit_has_type_flag(unit_list_front(punits), UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(unit_list_front(punits), F_UNDISBANDABLE)) {
       fc_snprintf(buf, bufsz, _("%s refuses to disband!"),
                   unit_name_translation(unit_list_front(punits)));
       return FALSE;
@@ -1381,7 +1244,7 @@ bool get_units_disband_info(char *buf, size_t bufsz,
   } else {
     int count = 0;
     unit_list_iterate(punits, punit) {
-      if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+      if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
         count++;
       }
     } unit_list_iterate_end;
@@ -1416,36 +1279,11 @@ const char *get_bulb_tooltip(void)
     if (research->researching == A_UNSET) {
       astr_add_line(&str, _("no research target."));
     } else {
-      int turns = 0;
-      int perturn = get_bulbs_per_turn(NULL, NULL, NULL);
-      int done = research->bulbs_researched;
-      int total = total_bulbs_required(client_player());
-      struct astring buf1 = ASTRING_INIT, buf2 = ASTRING_INIT;
-
-      if (perturn > 0) {
-        turns = MAX(1, ceil((double) (total - done) / perturn));
-      } else if (perturn < 0 ) {
-        turns = ceil((double) done / -perturn);
-      }
-
-      if (turns == 0) {
-        astr_set(&buf1, _("No progress"));
-      } else {
-        astr_set(&buf1, PL_("%d turn", "%d turns", turns), turns);
-      }
-
-      /* TRANS: <perturn> bulbs/turn */
-      astr_set(&buf2, PL_("%d bulb/turn", "%d bulbs/turn", perturn), perturn);
-
       /* TRANS: <tech>: <amount>/<total bulbs> */
-      astr_add_line(&str, _("%s: %d/%d (%s, %s)."),
-                    advance_name_researching(client.conn.playing),
-                    research->bulbs_researched,
-                    total_bulbs_required(client.conn.playing),
-                    astr_str(&buf1), astr_str(&buf2));
-      
-      astr_free(&buf1);
-      astr_free(&buf2);
+      astr_add_line(&str, _("%s: %d/%d."),
+		    advance_name_researching(client.conn.playing),
+		    research->bulbs_researched,
+		    total_bulbs_required(client.conn.playing));
     }
   }
   return astr_str(&str);
@@ -1694,13 +1532,13 @@ const char *get_report_title(const char *report_name)
                   nation_adjective_for_player(pplayer),
                   government_name_for_player(pplayer));
 
-    /* TRANS: Just appending 2 strings, using the correct localized
+    /* TRANS: Just happending 2 strings, using the correct localized
      * syntax. */
     astr_add_line(&str, _("%s - %s"),
                   ruler_title_for_player(pplayer, buf, sizeof(buf)),
                   textyear(game.info.year));
   } else {
-    /* TRANS: "Observer - 1985 AD" */
+    /* TRANS: "Observer: 1985" */
     astr_add_line(&str, _("Observer - %s"),
 		  textyear(game.info.year));
   }
@@ -1742,44 +1580,6 @@ const char *text_happiness_buildings(const struct city *pcity)
 
   /* Add line breaks after 80 characters. */
   astr_break_lines(&str, 80);
-
-  return astr_str(&str);
-}
-
-/****************************************************************************
-  Describing nationality effects that affect happiness.
-****************************************************************************/
-const char *text_happiness_nationality(const struct city *pcity)
-{
-  static struct astring str = ASTRING_INIT;
-  int enemies = 0;
-
-  astr_clear(&str);
-
-  astr_add_line(&str, _("Nationality: "));
-
-  if (game.info.citizen_nationality) {
-    if (get_city_bonus(pcity, EFT_ENEMY_CITIZEN_UNHAPPY_PCT) > 0) {
-      struct player *owner = city_owner(pcity);
-
-      citizens_foreign_iterate(pcity, pslot, nationality) {
-        if (pplayers_at_war(owner, player_slot_get_player(pslot))) {
-          enemies += nationality;
-        }
-      } citizens_foreign_iterate_end;
-
-      if (enemies > 0) {
-        astr_add(&str, PL_("%d enemy nationalist", "%d enemy nationalists", enemies),
-                 enemies);
-      }
-    }
-
-    if (enemies == 0) {
-      astr_add(&str, _("None. "));
-    }
-  } else {
-    astr_add(&str, _("Disabled. "));
-  }
 
   return astr_str(&str);
 }

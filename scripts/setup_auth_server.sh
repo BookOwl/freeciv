@@ -21,7 +21,7 @@ then
 else
   PROGRAM_NAME="setup_auth_server.sh"
 fi
-PROGRAM_VERSION="0.9"
+PROGRAM_VERSION="0.6"
 
 #############################################################################
 #
@@ -163,20 +163,18 @@ fi
 echo "This script helps in setup of Freeciv server with player authentication."
 echo "Most users do not need player authentication."
 echo
-echo "As set up by this script, authentication uses a MySQL database to store"
-echo "player information."
-echo "Before running this script you should have a MySQL server running"
-echo "and that server should have:"
-echo " - a user account to be used by freeciv-server"
-echo " - an empty database, which this script will populate"
-echo "The password for that account will be stored in a Freeciv server"
-echo "config file, so you want to create special database user account just"
-echo "for freeciv-server use."
-echo "This script needs a MySQL user account that can create tables in to"
-echo "that database. The generated config file for the Freeciv server will"
-echo "contain the MySQL username used by this script, but it's easy to change"
+echo "Authentication uses MySQL database to store player information."
+echo "Before running this script you should have MySQL server running"
+echo "and that server should have"
+echo " - user account to be used by civserver"
+echo " - empty database this script will populate"
+echo "Password for that account will be stored to config file,"
+echo "so you want to create special user account just for civserver use."
+echo "This script needs MySQL user account that can create tables in to"
+echo "that database. Generated config file for Freeciv server will"
+echo "contain MySQL username used by this script, but it's easy to change"
 echo "afterwards if you don't want use same account from this script and"
-echo "later from the Freeciv server."
+echo "later from Freeciv server."
 
 if ask_yes_no "\nDo you want to continue with this script now?"
 then
@@ -185,7 +183,7 @@ then
 fi
 
 echo
-echo "First we populate the player database on the MySQL server"
+echo "First we populate player database at MySQL server"
 
 if ! which mysql >/dev/null
 then
@@ -253,7 +251,7 @@ do
   fi
 done
 
-echo "Next we select the database"
+echo "Next we select that database"
 
 MYSQL_DATABASE="Freeciv"
 DATABASE_SELECTED=no
@@ -285,7 +283,7 @@ do
   # Start lines with " -"
   echo "$DBLIST" | sed 's/^/ -/'
   echo
-  echo "Please select which one to use."
+  echo "Please tell which one to use."
   echo -n "($MYSQL_DATABASE_TMP)> "
   read MYSQL_DATABASE_NEW
 
@@ -317,8 +315,8 @@ do
 done
 
 # These are hardcoded here, and not prompted
-TABLE_USER="auth"
-TABLE_LOG="loginlog"
+TABLE_AUTH="auth"
+TABLE_LOGINLOG="loginlog"
 
 TABLELIST="$(make_query 'show tables' | grep -v '^Tables_in_')"
 
@@ -326,37 +324,37 @@ if test "x$TABLELIST" != "x"
 then
   echo "This database already contains some tables."
 
-  echo "$TABLELIST" | grep "$TABLE_USER" > /dev/null
+  echo "$TABLELIST" | grep "$TABLE_AUTH" > /dev/null
   GREPRESULT=$?
 
   if test $GREPRESULT -eq 0
   then
-    USER_TABLE_PRESENT=yes
+    AUTH_TABLE_PRESENT=yes
   else
-    USER_TABLE_PRESENT=no
+    AUTH_TABLE_PRESENT=no
   fi
 
-  echo "$TABLELIST" | grep "$TABLE_LOG" > /dev/null
+  echo "$TABLELIST" | grep "$TABLE_LOGINLOG" > /dev/null
   GREPRESULT=$?
 
   if test $GREPRESULT -eq 0
   then
-    LOG_TABLE_PRESENT=yes
+    LOGINLOG_TABLE_PRESENT=yes
   else
-    LOG_TABLE_PRESENT=no
+    LOGINLOG_TABLE_PRESENT=no
   fi
 
-  if test $LOG_TABLE_PRESENT = yes ||
-     test $USER_TABLE_PRESENT = yes
+  if test $LOGINLOG_TABLE_PRESENT = yes ||
+     test $AUTH_TABLE_PRESENT = yes
   then
-    echo "There are even tables with the names Freeciv would use."
-    if test $USER_TABLE_PRESENT = yes
+    echo "There is even tables with names Freeciv would use."
+    if test $AUTH_TABLE_PRESENT = yes
     then
-      echo " -$TABLE_USER"
+      echo " -$TABLE_AUTH"
     fi
-    if test $LOG_TABLE_PRESENT = yes
+    if test $LOGINLOG_TABLE_PRESENT = yes
     then
-      echo " -$TABLE_LOG"
+      echo " -$TABLE_LOGINLOG"
     fi
 
     echo "Maybe you have already attempted to create Freeciv tables?"
@@ -373,20 +371,20 @@ then
     fi
 
     # Drop tables
-    if test $USER_TABLE_PRESENT = yes
+    if test $AUTH_TABLE_PRESENT = yes
     then
-      if ! make_query "drop table $TABLE_USER"
+      if ! make_query "drop table $TABLE_AUTH"
       then
-        echo "Dropping table $TABLE_USER failed!"
+        echo "Dropping table $TABLE_AUTH failed!"
         echo "Aborting!"
         exit 1
       fi
     fi
-    if test $LOG_TABLE_PRESENT = yes
+    if test $LOGINLOG_TABLE_PRESENT = yes
     then
-      if ! make_query "drop table $TABLE_LOG"
+      if ! make_query "drop table $TABLE_LOGINLOG"
       then
-        echo "Dropping table $TABLE_LOG failed!"
+        echo "Dropping table $TABLE_AUTH failed!"
         echo "Aborting!"
         exit 1
       fi
@@ -419,11 +417,10 @@ echo "Now we create the Freeciv tables."
 
 # We have embedded table creation SQL to this script.
 # Maybe we should read it from separate file in the future.
-# The tables here are as the supplied data/database.lua expects to find them.
 (echo \
- "CREATE TABLE $TABLE_USER ( \
+ "CREATE TABLE $TABLE_AUTH ( \
    id int(11) NOT NULL auto_increment, \
-   name varchar(48) default NULL, \
+   name varchar(32) default NULL, \
    password varchar(32) default NULL, \
    email varchar(128) default NULL, \
    createtime int(11) default NULL, \
@@ -435,9 +432,9 @@ echo "Now we create the Freeciv tables."
    UNIQUE KEY name (name) \
  ) TYPE=MyISAM;"
  echo \
- "CREATE TABLE $TABLE_LOG ( \
+ "CREATE TABLE $TABLE_LOGINLOG ( \
    id int(11) NOT NULL auto_increment, \
-   name varchar(48) default NULL, \
+   name varchar(32) default NULL, \
    logintime int(11) default NULL, \
    address varchar(255) default NULL, \
    succeed enum('S','F') default 'S', \
@@ -475,12 +472,12 @@ do
   TRY_FILE=yes
   if test -e "$CONFIG_FILE"
   then
-    echo "$CONFIG_FILE already exists"
+    echo "$CONFIG_FILE already exist"
     # Default is not to test overwriting
     TRY_FILE=no
     if test -d "$CONFIG_FILE"
     then
-      echo "and it's a directory. Can't overwrite with file."
+      echo "and it's directory. Can't overwrite with file."
     else
       if ! ask_yes_no "\nOK to overwrite?"
       then
@@ -496,7 +493,7 @@ do
       ACCEPTABLE_FILE=yes
     else
       echo "Can't write to that file"
-      if ask_yes_no "\nRetry with another file?"
+      if ask_yes_no "\nRetry with other file?"
       then
         echo "Aborting!"
         exit 1
@@ -530,10 +527,8 @@ fi
  echo "; Configuration file for Freeciv server player authentication"
  echo "; Generated by \"$PROGRAM_NAME\" version $PROGRAM_VERSION"
  echo
- echo "[fcdb]"
- echo "; Use MySQL server"
- echo "backend=\"mysql\""
- echo "; How to connect to MySQL server"
+ echo "[auth]"
+ echo "; How to connect MySQL server"
  echo "host=\"$MYSQL_SERVER\""
  echo "port=\"$MYSQL_PORT\" ; This is handled as string!"
  echo "user=\"$MYSQL_USER\""
@@ -548,11 +543,9 @@ fi
  echo "database=\"$MYSQL_DATABASE\""
  echo
  echo "; Table names"
- echo "table_user=\"$TABLE_USER\""
- echo "table_log=\"$TABLE_LOG\""
+ echo "table=\"$TABLE_AUTH\""
+ echo "login_table=\"$TABLE_LOGINLOG\""
 ) > $CONFIG_FILE
 
 echo "Config file generated."
 echo "Auth server setup finished."
-echo "To use the newly created database, run"
-echo "  freeciv-server --Database $CONFIG_FILE --auth"

@@ -19,7 +19,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -118,7 +118,8 @@ static int ok_worklist_editor_callback(struct widget *pWidget)
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     int i, j;
     struct city *pCity = pEditor->pCity;
-
+    bool same_prod = TRUE;
+    
     /* remove duplicate entry of impv./wonder target from worklist */
     for(i = 0; i < worklist_length(&pEditor->worklist_copy); i++) {
   
@@ -148,6 +149,7 @@ static int ok_worklist_editor_callback(struct widget *pWidget)
       /* change production */
       if(!are_universals_equal(&pCity->production, &pEditor->currently_building)) {
         city_change_production(pCity, pEditor->currently_building);
+        same_prod = FALSE;
       }
       
       /* commit new city worklist */
@@ -1052,7 +1054,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   SDL_FillRect(pMain, NULL, map_rgba(pMain->format, bg_color));
   putframe(pMain,
            0, 0, pMain->w - 1, pMain->h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
     
   /* ---------------- */
   /* Create Main Window */
@@ -1339,7 +1341,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   pStr = create_string16(NULL, 0, adj_font(10));
   pStr->style |= (SF_CENTER|TTF_STYLE_BOLD);
   pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
-
+    
   improvement_iterate(pImprove) {
     can_build = can_player_build_improvement_now(client.conn.playing, pImprove);
     can_eventually_build =
@@ -1363,7 +1365,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
       pText_Name = create_text_surf_smaller_that_w(pStr, pIcon->w - 4);
   
       if (is_wonder(pImprove)) {
-        if (improvement_obsolete(client.conn.playing, pImprove, pCity)) {
+        if (improvement_obsolete(client.conn.playing, pImprove)) {
           state = _("Obsolete");
         } else if (is_great_wonder(pImprove)) {
           if (great_wonder_is_built(pImprove)) {
@@ -1519,28 +1521,25 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
         turns = city_turns_to_build(pCity, cid_production(cid_encode_unit(un)), TRUE);
         if (turns == FC_INFINITY) {
           fc_snprintf(cBuf, sizeof(cBuf),
-		    _("(%d/%d/%s)\n%d/%d %s\nnever"),
+		    _("(%d/%d/%d)\n%d/%d %s\nnever"),
 		    pUnit->attack_strength,
-                    pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
+		    pUnit->defense_strength, pUnit->move_rate / SINGLE_MOVE,
 		    pCity->shield_stock, utype_build_shield_cost(un),
 	  	    PL_("shield","shields", utype_build_shield_cost(un)));
         } else {
           fc_snprintf(cBuf, sizeof(cBuf),
-		    _("(%d/%d/%s)\n%d/%d %s\n%d %s"),
+		    _("(%d/%d/%d)\n%d/%d %s\n%d %s"),
 		    pUnit->attack_strength,
-                    pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
+		    pUnit->defense_strength, pUnit->move_rate / SINGLE_MOVE,
 		    pCity->shield_stock, utype_build_shield_cost(un), 
 	  	    PL_("shield","shields", utype_build_shield_cost(un)),
 		    turns, PL_("turn", "turns", turns));
         }
       } else {
         fc_snprintf(cBuf, sizeof(cBuf),
-		    _("(%d/%d/%s)\n%d %s"),
+		    _("(%d/%d/%d)\n%d %s"),
 		    pUnit->attack_strength,
-                    pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
+		    pUnit->defense_strength, pUnit->move_rate / SINGLE_MOVE,
 		    utype_build_shield_cost(un),
 		    PL_("shield","shields", utype_build_shield_cost(un)));
       }
@@ -1550,7 +1549,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   
       pText = create_text_surf_from_str16(pStr);
   
-      pZoom = adj_surf(get_unittype_surface(un, direction8_invalid()));
+      pZoom = adj_surf(get_unittype_surface(un));
       dst.x = (pIcon->w - pZoom->w)/2;
       dst.y = (pIcon->h/2 - pZoom->h)/2;
       alphablit(pZoom, NULL, pIcon, &dst);
@@ -1625,13 +1624,13 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   dst.h = adj_size(145);
   
   SDL_FillRect(pWindow->theme, &dst,
-    map_rgba(pWindow->theme->format, *get_theme_color(COLOR_THEME_BACKGROUND)));
+    map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_BACKGROUND)));
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   putframe(pWindow->theme,
            dst.x + 2, dst.y + 2, dst.x + dst.w - 3, dst.y + dst.h - 3,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   
   dst.x = area.x;
   dst.y += dst.h + adj_size(2);
@@ -1640,7 +1639,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   SDL_FillRectAlpha(pWindow->theme, &dst, &bg_color2);
   putframe(pWindow->theme,
            dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-           get_theme_color(COLOR_THEME_WLDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   
   if(pEditor->pGlobal) {
     dst.x = area.x;
@@ -1649,14 +1648,14 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
     dst.h = pWindow->size.h - dst.y - adj_size(4);
 
     SDL_FillRect(pWindow->theme, &dst,
-      map_rgba(pWindow->theme->format, *get_theme_color(COLOR_THEME_BACKGROUND)));
+      map_rgba(pWindow->theme->format, *get_game_colorRGB(COLOR_THEME_BACKGROUND)));
     putframe(pWindow->theme,
              dst.x, dst.y, dst.x + dst.w - 1, dst.y + dst.h - 1,
-             get_theme_color(COLOR_THEME_WLDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
     putframe(pWindow->theme,
              dst.x + adj_size(2), dst.y + adj_size(2),
              dst.x + dst.w - adj_size(3), dst.y + dst.h - adj_size(3),
-             get_theme_color(COLOR_THEME_WLDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_WLDLG_FRAME));
   }
 
   widget_set_position(pWindow,

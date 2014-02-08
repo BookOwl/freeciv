@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -46,7 +46,6 @@
 #include "map.h"
 #include "packets.h"
 #include "player.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -54,7 +53,7 @@
 #include "cityrep.h"    /* city_report_dialog_popdown() */
 #include "client_main.h"
 #include "climisc.h"
-#include "control.h" /* request_xxx and unit_focus_set */
+#include "control.h" /* request_xxx and set_unit_focus */
 #include "graphics.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -179,13 +178,10 @@ static void select_random_race(void)
   /* FIXME: this code should be done another way. -ev */
   while (1) {
     unsigned int race_toggle_index = fc_rand(nation_count());
-    const struct nation_type *pnation =
-      races_toggles_to_nations[race_toggle_index];
 
-    if (!pnation
-        || !is_nation_playable(pnation)
-        || !is_nation_pickable(pnation)
-        || pnation->player) {
+    if (!is_nation_playable(nation_by_number(race_toggle_index))
+	|| !nation_by_number(race_toggle_index)->is_available
+	|| nation_by_number(race_toggle_index)->player) {
       continue;
     }
     if (XtIsSensitive(races_toggles[race_toggle_index])) {
@@ -534,9 +530,10 @@ void popup_revolution_dialog(struct government *pgovernment)
 		       NULL);
 }
 
-/**************************************************************************
-  User requested closing of pillage dialog.
-**************************************************************************/
+
+/****************************************************************
+...
+*****************************************************************/
 static void pillage_callback(Widget w, XtPointer client_data, 
 			     XtPointer call_data)
 {
@@ -548,13 +545,16 @@ static void pillage_callback(Widget w, XtPointer client_data,
   if (client_data) {
     struct unit *punit = game_unit_by_number(unit_to_use_to_pillage);
     if (punit) {
-      struct extra_type *target;
+      Base_type_id pillage_base = -1;
       int what = XTPOINTER_TO_INT(client_data);
 
-      target = extra_by_number(what);
+      if (what > S_LAST) {
+        pillage_base = what - S_LAST - 1;
+        what = S_LAST;
+      }
 
       request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                         target);
+					 what, pillage_base);
     }
   }
 
@@ -562,14 +562,15 @@ static void pillage_callback(Widget w, XtPointer client_data,
   is_showing_pillage_dialog = FALSE;
 }
 
-/**************************************************************************
-  Popup a dialog asking the unit which improvement they would like to
-  pillage.
-**************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras extras)
+/****************************************************************
+...
+*****************************************************************/
+void popup_pillage_dialog(struct unit *punit,
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   Widget shell, form, dlabel, button, prev;
-  struct extra_type *tgt;
+  int what;
 
   if (is_showing_pillage_dialog) {
     return;
@@ -585,26 +586,34 @@ void popup_pillage_dialog(struct unit *punit, bv_extras extras)
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while ((tgt = get_preferred_pillage(extras))) {
-    int what;
-    bv_extras what_extras;
+  while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    bv_special what_bv;
+    bv_bases what_base;
 
-    BV_CLR_ALL(what_extras);
+    BV_CLR_ALL(what_bv);
+    BV_CLR_ALL(what_base);
 
-    what = extra_index(tgt);
-
-    BV_CLR(extras, what);
-    BV_SET(what_extras, what);
+    if (what > S_LAST) {
+      BV_SET(what_base, what % (S_LAST + 1));
+    } else {
+      BV_SET(what_bv, what);
+    }
 
     button =
       XtVaCreateManagedWidget ("button", commandWidgetClass, form,
                                XtNfromVert, prev,
                                XtNlabel,
-                               (XtArgVal)(get_infrastructure_text(what_extras)),
+                               (XtArgVal)(get_infrastructure_text(what_bv,
+                                                                  what_base)),
                                NULL);
     XtAddCallback(button, XtNcallback, pillage_callback,
                   INT_TO_XTPOINTER(what));
 
+    if (what > S_LAST) {
+      BV_CLR(bases, what - S_LAST - 1);
+    } else {
+      clear_special(&may_pillage, what);
+    }
     prev = button;
   }
   button =
@@ -631,7 +640,7 @@ static void unitdisband_callback_yes(Widget w, XtPointer client_data, XtPointer 
   }
 
   unit_list_iterate(punits, punit) {
-    if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       request_unit_disband(punit);
     }
   } unit_list_iterate_end;
@@ -765,7 +774,7 @@ static int number_of_rows(int n)
 /****************************************************************
 popup the dialog 10% inside the main-window 
 *****************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
   int i,n,r;
   char buffer[512];
@@ -826,7 +835,7 @@ void unit_select_dialog_popup(struct tile *ptile)
     XFillRectangle(display, unit_select_pixmaps[i], fill_bg_gc,
 		   0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
     store.pixmap = unit_select_pixmaps[i];
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
 
     nargs=0;
     XtSetArg(args[nargs], XtNbitmap, (XtArgVal)unit_select_pixmaps[i]);nargs++;
@@ -879,14 +888,6 @@ void unit_select_dialog_popup(struct tile *ptile)
 }
 
 /**************************************************************************
-  Update the dialog window to select units on a particular tile.
-**************************************************************************/
-void unit_select_dialog_update_real(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 void unit_select_all_callback(Widget w, XtPointer client_data, 
@@ -901,7 +902,7 @@ void unit_select_all_callback(Widget w, XtPointer client_data,
     struct unit *punit = player_unit_by_number(client_player(),
                                                unit_select_ids[i]);
     if(punit) {
-      unit_focus_set(punit);
+      set_unit_focus(punit);
     }
   }
 }
@@ -923,7 +924,7 @@ void unit_select_callback(Widget w, XtPointer client_data,
       struct unit *punit = player_unit_by_number(client_player(),
                                                  unit_select_ids[i]);
       if(punit) {
-	unit_focus_set(punit);
+	set_unit_focus(punit);
       }
       return;
     }
@@ -982,7 +983,7 @@ void create_races_dialog(struct player *pplayer)
   races_player = pplayer;
   maxracelen = 0;
   nations_iterate(pnation) {
-    if (is_nation_playable(pnation) && is_nation_pickable(pnation)) {
+    if (is_nation_playable(pnation)) {
       len = strlen(nation_adjective_translation(pnation));
       maxracelen = MAX(maxracelen, len);
     }
@@ -1025,7 +1026,7 @@ void create_races_dialog(struct player *pplayer)
   j = 0;
   index = 0;
   nations_iterate(pnation) {
-    if (!is_nation_playable(pnation) || !is_nation_pickable(pnation)) {
+    if (!is_nation_playable(pnation)) {
       continue;
     }
 
@@ -1329,15 +1330,6 @@ void racesdlg_key_ok(Widget w)
 }
 
 /**************************************************************************
-  The server has changed the set of selectable nations.
-**************************************************************************/
-void races_update_pickable(void)
-{ 
-  /* FIXME handle this properly */
-  popdown_races_dialog();
-}
-
-/**************************************************************************
 ...
 **************************************************************************/
 void races_toggles_set_sensitive(void)
@@ -1361,7 +1353,7 @@ void races_toggles_set_sensitive(void)
       continue;
     }
 
-    if (is_nation_pickable(nation) && !nation->player) {
+    if (nation->is_available && !nation->player) {
       continue;
     }
 
@@ -1651,14 +1643,6 @@ void popup_tileset_suggestion_dialog(void)
 {
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -1682,20 +1666,4 @@ void popdown_all_game_dialogs(void)
   units_report_dialog_popdown();
   popdown_players_dialog();
   popdown_notify_dialog();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Show tileset error dialog.
-*****************************************************************/
-void show_tileset_error(const char *msg)
-{
-  /* PORTME */
 }

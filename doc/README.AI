@@ -35,9 +35,10 @@ stupid?) enough to start from scratch, taking instead a small bite
 here and there, trying hard not to break much, to understand Syela's
 original design and only then to throw it away.  Or perfect it.
 
-Code that implements the AI is divided between ai/ and server/advisors.
-Latter is used also by human players for such automatic helpers
-as auto-settlers and auto-explorers.
+Not all code is residing in ai/, but it is also dissolved in little 
+chunks in the whole server/.  Aside that, server/settlers.c is only AI 
+stuff - the problem is, that most of it is used also for the 
+auto-settlers, so we can't separate it from the server.  
 
 
 CONTACTING THE CURRENT AI DEVELOPERS

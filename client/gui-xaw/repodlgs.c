@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -336,7 +336,7 @@ void create_science_dialog(bool make_modal)
 
     flag = 0;
     advance_index_iterate(A_FIRST, i) {
-      if (player_invention_reachable(client.conn.playing, i)
+      if (player_invention_reachable(client.conn.playing, i, FALSE)
 	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
 	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
 	      || i == research->tech_goal)) {
@@ -552,7 +552,7 @@ void real_science_report_dialog_update(void)
     
     flag=0;
     advance_index_iterate(A_FIRST, i) {
-      if (player_invention_reachable(client.conn.playing, i)
+      if (player_invention_reachable(client.conn.playing, i, FALSE)
 	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
 	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
 	      || i == research->tech_goal)) {
@@ -1173,7 +1173,7 @@ static int eg_players_received = 0;
   Show a dialog with player statistics at endgame.
   TODO: Display all statistics in packet_endgame_report.
 *****************************************************************/
-void endgame_report_dialog_start(const struct packet_endgame_report *packet)
+void endgame_report_dialog_start(const struct packet_endgame_report_new *packet)
 {
   eg_buffer[0] = '\0';
   eg_player_count = packet->player_num;
@@ -1200,5 +1200,27 @@ void endgame_report_dialog_player(const struct packet_endgame_player *packet)
     popup_notify_dialog(_("Final Report:"),
                         _("The Greatest Civilizations in the world."),
                         eg_buffer);
+  }
+}
+
+/****************************************************************
+  Show a dialog with player statistics at endgame.
+  TODO: Display all statistics in packet_endgame_report.
+*****************************************************************/
+void endgame_report_dialog_popup(const struct packet_endgame_report_old *packet)
+{
+  int i;
+
+  eg_buffer[0] = '\0';
+  eg_player_count = packet->player_num;
+  eg_players_received = 0;
+
+  for (i = 0; i < packet->player_num; i++) {
+    struct packet_endgame_player npp;
+
+    npp.player_id = packet->player_id[i];
+    npp.score = packet->score[i];
+
+    endgame_report_dialog_player(&npp);
   }
 }

@@ -11,7 +11,7 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
    GNU General Public License for more details.
 ***********************************************************************/ 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <fcntl.h>
@@ -36,7 +36,7 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 #include <sys/wait.h>
 #endif
 
-/* utility */
+/* common & utility */
 #include "capability.h"
 #include "fciconv.h"
 #include "fcintl.h"
@@ -167,7 +167,7 @@ void client_kill_server(bool force)
       kill(server_pid, SIGTERM);
       waitpid(server_pid, NULL, WUNTRACED);
       server_pid = -1;
-#endif /* WIN32_NATIVE || HAVE_WORKING_FORK */
+#endif
     }
   }
   client_has_hack = FALSE;
@@ -202,43 +202,21 @@ bool client_start_server(void)
   char scenscmdline[512];
 # endif /* WIN32_NATIVE */
 
-#ifdef IPV6_SUPPORT
-  /* We want port that is free in IPv4 even if we (the client) have
-   * IPv6 support. In the unlikely case that local server is IPv4-only
-   * (meaning that it has to be from different build than client) we
-   * have to give port that it can use. IPv6-enabled client would first
-   * try same port in IPv6 and if that fails, fallback to IPv4 too. */
-  enum fc_addr_family family = FC_ADDR_IPV4;
-#else
-  enum fc_addr_family family = FC_ADDR_IPV4;
-#endif /* IPV6_SUPPORT */
-
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
   client_kill_server(TRUE);
+  
+  output_window_append(ftc_client, _("Starting server..."));
 
-  output_window_append(ftc_client, _("Starting local server..."));
-
-  /* find a free port */
-  /* Mitigate the risk of ending up with the port already
-   * used by standalone server on Windows where this is known to be buggy
-   * by not starting from DEFAULT_SOCK_PORT but from one higher. */
-  internal_server_port = find_next_free_port(DEFAULT_SOCK_PORT + 1,
-                                             family, "localhost");
-
-  if (internal_server_port < 0) {
-    output_window_append(ftc_client, _("Couldn't start the server."));
-    output_window_append(ftc_client,
-                         _("You'll have to start one manually. Sorry..."));
-    return FALSE;
-  }
+  /* find a free port */ 
+  internal_server_port = find_next_free_port(DEFAULT_SOCK_PORT);
 
 # ifdef HAVE_WORKING_FORK
   server_pid = fork();
-
+  
   if (server_pid == 0) {
     int fd, argc = 0;
-    const int max_nargs = 18;
+    const int max_nargs = 16;
     char *argv[max_nargs + 1], port_buf[32];
 
     /* inside the child */
@@ -248,8 +226,6 @@ bool client_start_server(void)
     argv[argc++] = "freeciv-server";
     argv[argc++] = "-p";
     argv[argc++] = port_buf;
-    argv[argc++] = "--bind";
-    argv[argc++] = "localhost";
     argv[argc++] = "-q";
     argv[argc++] = "1";
     argv[argc++] = "-e";
@@ -257,8 +233,6 @@ bool client_start_server(void)
     argv[argc++] = "~/.freeciv/saves";
     argv[argc++] = "--scenarios";
     argv[argc++] = "~/.freeciv/scenarios";
-    argv[argc++] = "-A";
-    argv[argc++] = "none";
     if (logfile) {
       argv[argc++] = "--debug";
       argv[argc++] = "3";
@@ -302,7 +276,7 @@ bool client_start_server(void)
     /* Search under current directory (what ever that happens to be)
      * only in debug builds. This allows running freeciv directly from build
      * tree, but could be considered security risk in release builds. */
-    execvp("./fcser", argv);
+    execvp("./ser", argv);
     execvp("./server/freeciv-server", argv);
 #endif /* DEBUG */
     execvp(BINDIR "/freeciv-server", argv);
@@ -358,11 +332,10 @@ bool client_start_server(void)
   internal_to_local_string_buffer(scensdir, scenscmdline, sizeof(scenscmdline));
 
   fc_snprintf(options, sizeof(options),
-              "-p %d --bind localhost -q 1 -e%s%s --saves \"%s\" "
-              "--scenarios \"%s\" -A none",
+              "-p %d -q 1 -e%s%s --saves \"%s\" --scenarios \"%s\"",
               internal_server_port, logcmdline, scriptcmdline, savescmdline,
               scenscmdline);
-  fc_snprintf(cmdline1, sizeof(cmdline1), "./fcser %s", options);
+  fc_snprintf(cmdline1, sizeof(cmdline1), "./ser %s", options);
   fc_snprintf(cmdline2, sizeof(cmdline2),
               "./server/freeciv-server %s", options);
   fc_snprintf(cmdline3, sizeof(cmdline3),
@@ -542,7 +515,7 @@ void handle_single_want_hack_reply(bool you_have_hack)
     output_window_append(ftc_client,
                          _("Failed to obtain the required access "
                            "level to take control of the server. "
-                           "Attempting to shut down server."));
+                           "The server will now be shutdown."));
     client_kill_server(TRUE);
   }
 }
@@ -550,7 +523,7 @@ void handle_single_want_hack_reply(bool you_have_hack)
 /**************************************************************** 
 send server command to save game.
 *****************************************************************/ 
-void send_save_game(const char *filename)
+void send_save_game(char *filename)
 {   
   if (filename) {
     send_chat_printf("/save %s", filename);

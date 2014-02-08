@@ -12,12 +12,11 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
 #include "city.h"
-#include "game.h"
 #include "map.h"
 #include "player.h"
 #include "tile.h"
@@ -26,28 +25,33 @@
 #include "citytools.h"
 #include "maphand.h"
 
+/* ai */
+#include "aicity.h"
+#include "defaultai.h"
+
 #include "infracache.h"
 
 /* cache activities within the city map */
-struct worker_activity_cache {
+struct ai_activity_cache {
   int act[ACTIVITY_LAST];
-  int road[MAX_ROAD_TYPES];
-  int base[MAX_BASE_TYPES];
 };
 
-static int adv_calc_irrigate(const struct city *pcity,
+static int ai_calc_irrigate(const struct city *pcity,
+                            const struct tile *ptile);
+static int ai_calc_mine(const struct city *pcity, const struct tile *ptile);
+static int ai_calc_transform(const struct city *pcity,
                              const struct tile *ptile);
-static int adv_calc_mine(const struct city *pcity, const struct tile *ptile);
-static int adv_calc_transform(const struct city *pcity,
-                              const struct tile *ptile);
-static int adv_calc_pollution(const struct city *pcity,
-                              const struct tile *ptile, int best);
-static int adv_calc_fallout(const struct city *pcity,
-                            const struct tile *ptile, int best);
-static int adv_calc_road(const struct city *pcity, const struct tile *ptile,
-                         const struct road_type *proad);
-static int adv_calc_base(const struct city *pcity, const struct tile *ptile,
-                         const struct base_type *pbase);
+static int ai_calc_pollution(const struct city *pcity,
+                             const struct tile *ptile, int best);
+static int ai_calc_fallout(const struct city *pcity,
+                           const struct tile *ptile, int best);
+static int ai_calc_road(const struct city *pcity, const struct tile *ptile);
+static int ai_calc_railroad(const struct city *pcity,
+                            const struct tile *ptile);
+
+static bool is_wet(const struct player *pplayer, const struct tile *ptile);
+static bool is_wet_or_is_wet_cardinal_around(const struct player *pplayer,
+                                             const struct tile *ptile);
 
 /**************************************************************************
   Calculate the benefit of irrigating the given tile.
@@ -57,8 +61,8 @@ static int adv_calc_base(const struct city *pcity, const struct tile *ptile,
   city_tile_value(); note that this depends on the AI's weighting
   values).
 **************************************************************************/
-static int adv_calc_irrigate(const struct city *pcity,
-                             const struct tile *ptile)
+static int ai_calc_irrigate(const struct city *pcity,
+                            const struct tile *ptile)
 {
   int goodness;
   struct terrain *old_terrain, *new_terrain;
@@ -69,62 +73,43 @@ static int adv_calc_irrigate(const struct city *pcity,
   new_terrain = old_terrain->irrigation_result;
 
   if (new_terrain != old_terrain && new_terrain != T_NONE) {
-    struct tile *vtile;
-
     if (tile_city(ptile) && terrain_has_flag(new_terrain, TER_NO_CITIES)) {
       /* Not a valid activity. */
       return -1;
     }
-    /* Irrigation would change the terrain type, clearing conflicting
-     * extras in the process.  Calculate the benefit of doing so. */
-    vtile = tile_virtual_new(ptile);
-
+    /* Irrigation would change the terrain type, clearing the mine
+     * in the process.  Calculate the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
     tile_change_terrain(vtile, new_terrain);
+    tile_clear_special(vtile, S_MINE);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
-
     return goodness;
-  } else if (old_terrain == new_terrain) {
-    struct extra_type *pextra = next_extra_for_tile(ptile, EC_IRRIGATION,
-                                                    city_owner(pcity), NULL);
-
-    if (pextra != NULL) {
-      struct tile *vtile = tile_virtual_new(ptile);
-
-      /* Try to add extra, and to remove conflicting ones. */
-      if (tile_extra_apply(vtile, pextra)) {
-        struct extra_type *pextra2 = next_extra_for_tile(vtile, EC_IRRIGATION,
-                                                         city_owner(pcity), NULL);
-
-        goodness = city_tile_value(pcity, vtile, 0, 0);
-
-        if (pextra2 != NULL) {
-          struct tile *vtile2 = tile_virtual_new(vtile);
-
-          /* If the player can further irrigate to make farmland, consider the
-           * potentially greater benefit.  Note the hack: autosettler ordinarily
-           * discounts benefits by the time it takes to make them; farmland takes
-           * twice as long, so make it look half as good. */
-          if (tile_extra_apply(vtile2, pextra2)) {
-            int second_goodness = city_tile_value(pcity, vtile2, 0, 0);
-            int oldv = city_tile_value(pcity, ptile, 0, 0);
-
-            second_goodness = oldv + (second_goodness - oldv) / 2;
-
-            if (second_goodness > goodness) {
-              goodness = second_goodness;
-            }
-          }
-          tile_virtual_destroy(vtile2);
-        }
-        tile_virtual_destroy(vtile);
-
-        return goodness;
-      }
-    }
-
-    /* Cannot build irrigation extra */
-    return -1;
+  } else if (old_terrain == new_terrain
+             && !tile_has_special(ptile, S_IRRIGATION)
+             && is_wet_or_is_wet_cardinal_around(city_owner(pcity), ptile)) {
+    /* The tile is currently unirrigated; irrigating it would put an
+     * S_IRRIGATE on it replacing any S_MINE already there.  Calculate
+     * the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    tile_clear_special(vtile, S_MINE);
+    tile_set_special(vtile, S_IRRIGATION);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    return goodness;
+  } else if (old_terrain == new_terrain
+             && tile_has_special(ptile, S_IRRIGATION)
+             && !tile_has_special(ptile, S_FARMLAND)
+             && player_knows_techs_with_flag(city_owner(pcity), TF_FARMLAND)
+             && is_wet_or_is_wet_cardinal_around(city_owner(pcity), ptile)) {
+    /* The tile is currently irrigated; irrigating it more puts an
+     * S_FARMLAND on it.  Calculate the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    fc_assert(!tile_has_special(vtile, S_MINE));
+    tile_set_special(vtile, S_FARMLAND);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    return goodness;
   } else {
     return -1;
   }
@@ -138,7 +123,7 @@ static int adv_calc_irrigate(const struct city *pcity,
   city_tile_value(); note that this depends on the AI's weighting
   values).
 **************************************************************************/
-static int adv_calc_mine(const struct city *pcity, const struct tile *ptile)
+static int ai_calc_mine(const struct city *pcity, const struct tile *ptile)
 {
   int goodness;
   struct terrain *old_terrain, *new_terrain;
@@ -149,62 +134,31 @@ static int adv_calc_mine(const struct city *pcity, const struct tile *ptile)
   new_terrain = old_terrain->mining_result;
 
   if (old_terrain != new_terrain && new_terrain != T_NONE) {
-    struct tile *vtile;
-
     if (tile_city(ptile) && terrain_has_flag(new_terrain, TER_NO_CITIES)) {
       /* Not a valid activity. */
       return -1;
     }
-    /* Mining would change the terrain type, clearing conflicting
-     * extras in the process.  Calculate the benefit of doing so. */
-    vtile = tile_virtual_new(ptile);
-
+    /* Mining would change the terrain type, clearing the irrigation
+     * in the process.  Calculate the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
     tile_change_terrain(vtile, new_terrain);
+    tile_clear_special(vtile, S_IRRIGATION);
+    tile_clear_special(vtile, S_FARMLAND);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
-
     return goodness;
-  } else if (old_terrain == new_terrain) {
-    struct extra_type *pextra = next_extra_for_tile(ptile, EC_MINE,
-                                                    city_owner(pcity), NULL);
-
-    if (pextra != NULL) {
-      struct tile *vtile = tile_virtual_new(ptile);
-
-      /* Try to add extra, and to remove conflicting ones. */
-      if (tile_extra_apply(vtile, pextra)) {
-        struct extra_type *pextra2 = next_extra_for_tile(vtile, EC_MINE,
-                                                         city_owner(pcity), NULL);
-
-        goodness = city_tile_value(pcity, vtile, 0, 0);
-
-        if (pextra2 != NULL) {
-          struct tile *vtile2 = tile_virtual_new(vtile);
-
-          /* If the player can further mine, consider the
-           * potentially greater benefit.  Note the hack: autosettler ordinarily
-           * discounts benefits by the time it takes to make them; second level mine
-           * takes twice as long, so make it look half as good. */
-          if (tile_extra_apply(vtile2, pextra2)) {
-            int second_goodness = city_tile_value(pcity, vtile2, 0, 0);
-            int oldv = city_tile_value(pcity, ptile, 0, 0);
-
-            second_goodness = oldv + (second_goodness - oldv) / 2;
-
-            if (second_goodness > goodness) {
-              goodness = second_goodness;
-            }
-          }
-          tile_virtual_destroy(vtile2);
-        }
-        tile_virtual_destroy(vtile);
-
-        return goodness;
-      }
-    }
-
-    /* Cannot build mine extra */
-    return -1;
+  } else if (old_terrain == new_terrain
+             && !tile_has_special(ptile, S_MINE)) {
+    /* The tile is currently unmined; mining it would put an S_MINE on it
+     * replacing any S_IRRIGATION/S_FARMLAND already there.  Calculate
+     * the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    tile_clear_special(vtile, S_IRRIGATION);
+    tile_clear_special(vtile, S_FARMLAND);
+    tile_set_special(vtile, S_MINE);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    return goodness;
   } else {
     return -1;
   }
@@ -218,7 +172,7 @@ static int adv_calc_mine(const struct city *pcity, const struct tile *ptile)
   city_tile_value(); note that this depends on the AI's weighting
   values).
 **************************************************************************/
-static int adv_calc_transform(const struct city *pcity,
+static int ai_calc_transform(const struct city *pcity,
                              const struct tile *ptile)
 {
   int goodness;
@@ -265,32 +219,24 @@ static int adv_calc_transform(const struct city *pcity,
   city_tile_value(); note that this depends on the AI's weighting
   values).
 **************************************************************************/
-static int adv_calc_pollution(const struct city *pcity,
-                              const struct tile *ptile, int best)
+static int ai_calc_pollution(const struct city *pcity,
+                             const struct tile *ptile, int best)
 {
   int goodness;
   struct tile *vtile;
-  bool polluted = FALSE;
 
-  fc_assert_ret_val(ptile != NULL, -1);
+  fc_assert_ret_val(ptile != NULL, -1)
+
+  if (!tile_has_special(ptile, S_POLLUTION)) {
+    return -1;
+  }
 
   vtile = tile_virtual_new(ptile);
+  tile_clear_special(vtile, S_POLLUTION);
+  goodness = city_tile_value(pcity, vtile, 0, 0);
 
-  extra_type_by_rmcause_iterate(ERM_CLEANPOLLUTION, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      polluted = TRUE;
-      tile_remove_extra(vtile, pextra);
-    }
-  } extra_type_by_rmcause_iterate_end;
-
-  if (!polluted) {
-    goodness = -1;
-  } else {
-    goodness = city_tile_value(pcity, vtile, 0, 0);
-
-    /* FIXME: need a better way to guarantee pollution is cleaned up. */
-    goodness = (goodness + best + 50) * 2;
-  }
+  /* FIXME: need a better way to guarantee pollution is cleaned up. */
+  goodness = (goodness + best + 50) * 2;
 
   tile_virtual_destroy(vtile);
 
@@ -305,33 +251,25 @@ static int adv_calc_pollution(const struct city *pcity,
   city_tile_value(); note that this depends on the AI's weighting
   values).
 **************************************************************************/
-static int adv_calc_fallout(const struct city *pcity,
-                            const struct tile *ptile, int best)
+static int ai_calc_fallout(const struct city *pcity,
+                           const struct tile *ptile, int best)
 {
   int goodness;
   struct tile *vtile;
-  bool polluted = FALSE;
 
-  fc_assert_ret_val(ptile != NULL, -1);
+  fc_assert_ret_val(ptile != NULL, -1)
+
+  if (!tile_has_special(ptile, S_FALLOUT)) {
+    return -1;
+  }
 
   vtile = tile_virtual_new(ptile);
+  tile_clear_special(vtile, S_FALLOUT);
+  goodness = city_tile_value(pcity, vtile, 0, 0);
 
-  extra_type_by_rmcause_iterate(ERM_CLEANFALLOUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(vtile, pextra);
-      polluted = TRUE;
-    }
-  } extra_type_by_rmcause_iterate_end;
-
-  if (!polluted) {
-    goodness = -1;
-  } else {
-    goodness = city_tile_value(pcity, vtile, 0, 0);
-
-    /* FIXME: need a better way to guarantee fallout is cleaned up. */
-    if (!city_owner(pcity)->ai_controlled) {
-      goodness = (goodness + best + 50) * 2;
-    }
+  /* FIXME: need a better way to guarantee fallout is cleaned up. */
+  if (!city_owner(pcity)->ai_controlled) {
+    goodness = (goodness + best + 50) * 2;
   }
 
   tile_virtual_destroy(vtile);
@@ -351,17 +289,18 @@ static int adv_calc_fallout(const struct city *pcity,
   move units (i.e., of connecting the civilization).  See road_bonus() for
   that calculation.
 **************************************************************************/
-static int adv_calc_road(const struct city *pcity, const struct tile *ptile,
-                         const struct road_type *proad)
+static int ai_calc_road(const struct city *pcity, const struct tile *ptile)
 {
   int goodness = -1;
 
   fc_assert_ret_val(ptile != NULL, -1)
 
-  if (player_can_build_road(proad, city_owner(pcity), ptile)) {
+  if (!is_ocean_tile(ptile)
+      && (!tile_has_special(ptile, S_RIVER)
+          || player_knows_techs_with_flag(city_owner(pcity), TF_BRIDGE))
+      && !tile_has_special(ptile, S_ROAD)) {
     struct tile *vtile = tile_virtual_new(ptile);
-
-    tile_add_road(vtile, proad);
+    set_special(&vtile->special, S_ROAD);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
   }
@@ -370,40 +309,87 @@ static int adv_calc_road(const struct city *pcity, const struct tile *ptile,
 }
 
 /**************************************************************************
-  Calculate the benefit of building a base at the given tile.
+  Calculate the benefit of building a railroad at the given tile.
 
-  The return value is the goodness of the tile after the base is built.
+  The return value is the goodness of the tile after the railroad is built.
   This should be compared to the goodness of the tile currently (see
   city_tile_value(); note that this depends on the AI's weighting
   values).
 
-  This function does not calculate the benefit of tile defense bonus and
-  many other typical base propoerties, just bonuses it gives to city.
+  This function does not calculate the benefit of being able to quickly
+  move units (i.e., of connecting the civilization).  See road_bonus() for
+  that calculation.
 **************************************************************************/
-static int adv_calc_base(const struct city *pcity, const struct tile *ptile,
-                         const struct base_type *pbase)
+static int ai_calc_railroad(const struct city *pcity,
+                            const struct tile *ptile)
 {
   int goodness = -1;
 
   fc_assert_ret_val(ptile != NULL, -1)
 
-  if (player_can_build_base(pbase, city_owner(pcity), ptile)) {
+  if (!is_ocean_tile(ptile)
+      && player_knows_techs_with_flag(city_owner(pcity), TF_RAILROAD)
+      && !tile_has_special(ptile, S_RAILROAD)) {
     struct tile *vtile = tile_virtual_new(ptile);
-
-    tile_add_base(vtile, pbase);
-
-    extra_type_iterate(cextra) {
-      if (tile_has_extra(vtile, cextra)
-          && !can_extras_coexist(base_extra_get(pbase), cextra)) {
-        tile_remove_extra(vtile, cextra);
-      }
-    } extra_type_iterate_end;
-
+    set_special(&vtile->special, S_ROAD);
+    set_special(&vtile->special, S_RAILROAD);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
   }
 
   return goodness;
+}
+
+/**************************************************************************
+  Returns TRUE if tile at (map_x,map_y) is useful as a source of
+  irrigation.  This takes player vision into account, but allows the AI
+  to cheat.
+
+  This function should probably only be used by
+  is_wet_or_is_wet_cardinal_around, below.
+**************************************************************************/
+static bool is_wet(const struct player *pplayer, const struct tile *ptile)
+{
+  if (!(pplayer->ai_controlled && !ai_handicap(pplayer, H_MAP))
+      && !map_is_known(ptile, pplayer)) {
+    return FALSE;
+  }
+
+  if (is_ocean_tile(ptile)) {
+    /* TODO: perhaps salt water should not be usable for irrigation? */
+    return TRUE;
+  }
+
+  if (tile_has_special(ptile, S_RIVER)
+      || tile_has_special(ptile, S_IRRIGATION)) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**************************************************************************
+  Returns TRUE if there is an irrigation source adjacent to the given x, y
+  position.  This takes player vision into account, but allows the AI to
+  cheat. (See is_wet() for the definition of an irrigation source.)
+
+  This function exactly mimics is_water_adjacent_to_tile, except that it
+  checks vision.
+**************************************************************************/
+static bool is_wet_or_is_wet_cardinal_around(const struct player *pplayer,
+                                             const struct tile *ptile)
+{
+  if (is_wet(pplayer, ptile)) {
+    return TRUE;
+  }
+
+  cardinal_adjc_iterate(ptile, tile1) {
+    if (is_wet(pplayer, tile1)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
@@ -451,27 +437,23 @@ void initialize_infrastructure_cache(struct player *pplayer)
 
     city_tile_iterate_index(radius_sq, pcenter, ptile, cindex) {
       adv_city_worker_act_set(pcity, cindex, ACTIVITY_POLLUTION,
-                              adv_calc_pollution(pcity, ptile, best));
+                              ai_calc_pollution(pcity, ptile, best));
       adv_city_worker_act_set(pcity, cindex, ACTIVITY_FALLOUT,
-                              adv_calc_fallout(pcity, ptile, best));
+                              ai_calc_fallout(pcity, ptile, best));
       adv_city_worker_act_set(pcity, cindex, ACTIVITY_MINE,
-                              adv_calc_mine(pcity, ptile));
+                              ai_calc_mine(pcity, ptile));
       adv_city_worker_act_set(pcity, cindex, ACTIVITY_IRRIGATE,
-                              adv_calc_irrigate(pcity, ptile));
+                              ai_calc_irrigate(pcity, ptile));
       adv_city_worker_act_set(pcity, cindex, ACTIVITY_TRANSFORM,
-                              adv_calc_transform(pcity, ptile));
+                              ai_calc_transform(pcity, ptile));
 
       /* road_bonus() is handled dynamically later; it takes into
        * account settlers that have already been assigned to building
        * roads this turn. */
-      road_type_iterate(proad) {
-        adv_city_worker_road_set(pcity, cindex, proad,
-                                 adv_calc_road(pcity, ptile, proad));
-      } road_type_iterate_end;
-      base_type_iterate(pbase) {
-        adv_city_worker_base_set(pcity, cindex, pbase,
-                                 adv_calc_base(pcity, ptile, pbase));
-      } base_type_iterate_end;
+      adv_city_worker_act_set(pcity, cindex, ACTIVITY_ROAD,
+                              ai_calc_road(pcity, ptile));
+      adv_city_worker_act_set(pcity, cindex, ACTIVITY_RAILROAD,
+                              ai_calc_railroad(pcity, ptile));
     } city_tile_iterate_index_end;
   } city_list_iterate_end;
 }
@@ -521,7 +503,7 @@ void adv_city_worker_act_set(struct city *pcity, int city_tile_index,
               "%d to %d", city_name(pcity),
               pcity->server.adv->act_cache_radius_sq,
               city_map_radius_sq_get(pcity));
-    adv_city_update(pcity);
+    ai_city_update(pcity);
   }
 
   fc_assert_ret(NULL != pcity);
@@ -552,95 +534,9 @@ int adv_city_worker_act_get(const struct city *pcity, int city_tile_index,
 }
 
 /**************************************************************************
-  Set the value for road on tile 'city_tile_index' of
-  city 'pcity'.
-**************************************************************************/
-void adv_city_worker_road_set(struct city *pcity, int city_tile_index,
-                              const struct road_type *proad, int value)
-{
-  if (pcity->server.adv->act_cache_radius_sq
-      != city_map_radius_sq_get(pcity)) {
-    log_debug("update activity cache for %s: radius_sq changed from "
-              "%d to %d", city_name(pcity),
-              pcity->server.adv->act_cache_radius_sq,
-              city_map_radius_sq_get(pcity));
-    adv_city_update(pcity);
-  }
-
-  fc_assert_ret(NULL != pcity);
-  fc_assert_ret(NULL != pcity->server.adv);
-  fc_assert_ret(NULL != pcity->server.adv->act_cache);
-  fc_assert_ret(pcity->server.adv->act_cache_radius_sq
-                == city_map_radius_sq_get(pcity));
-  fc_assert_ret(city_tile_index < city_map_tiles_from_city(pcity));
-
-  (pcity->server.adv->act_cache[city_tile_index]).road[road_index(proad)] = value;
-}
-
-/**************************************************************************
-  Set the value for base on tile 'city_tile_index' of
-  city 'pcity'.
-**************************************************************************/
-void adv_city_worker_base_set(struct city *pcity, int city_tile_index,
-                              const struct base_type *pbase, int value)
-{
-  if (pcity->server.adv->act_cache_radius_sq
-      != city_map_radius_sq_get(pcity)) {
-    log_debug("update activity cache for %s: radius_sq changed from "
-              "%d to %d", city_name(pcity),
-              pcity->server.adv->act_cache_radius_sq,
-              city_map_radius_sq_get(pcity));
-    adv_city_update(pcity);
-  }
-
-  fc_assert_ret(NULL != pcity);
-  fc_assert_ret(NULL != pcity->server.adv);
-  fc_assert_ret(NULL != pcity->server.adv->act_cache);
-  fc_assert_ret(pcity->server.adv->act_cache_radius_sq
-                == city_map_radius_sq_get(pcity));
-  fc_assert_ret(city_tile_index < city_map_tiles_from_city(pcity));
-
-  (pcity->server.adv->act_cache[city_tile_index]).base[base_index(pbase)] = value;
-}
-
-/**************************************************************************
-  Return the value for road on tile 'city_tile_index' of
-  city 'pcity'.
-**************************************************************************/
-int adv_city_worker_road_get(const struct city *pcity, int city_tile_index,
-                             const struct road_type *proad)
-{
-  fc_assert_ret_val(NULL != pcity, 0);
-  fc_assert_ret_val(NULL != pcity->server.adv, 0);
-  fc_assert_ret_val(NULL != pcity->server.adv->act_cache, 0);
-  fc_assert_ret_val(pcity->server.adv->act_cache_radius_sq
-                     == city_map_radius_sq_get(pcity), 0);
-  fc_assert_ret_val(city_tile_index < city_map_tiles_from_city(pcity), 0);
-
-  return (pcity->server.adv->act_cache[city_tile_index]).road[road_index(proad)];
-}
-
-/**************************************************************************
-  Return the value for base on tile 'city_tile_index' of
-  city 'pcity'.
-**************************************************************************/
-int adv_city_worker_base_get(const struct city *pcity, int city_tile_index,
-                             const struct base_type *pbase)
-{
-  fc_assert_ret_val(NULL != pcity, 0);
-  fc_assert_ret_val(NULL != pcity->server.adv, 0);
-  fc_assert_ret_val(NULL != pcity->server.adv->act_cache, 0);
-  fc_assert_ret_val(pcity->server.adv->act_cache_radius_sq
-                     == city_map_radius_sq_get(pcity), 0);
-  fc_assert_ret_val(city_tile_index < city_map_tiles_from_city(pcity), 0);
-
-  return (pcity->server.adv->act_cache[city_tile_index]).base[base_index(pbase)];
-}
-
-/**************************************************************************
   Update the memory allocated for AI city handling.
 **************************************************************************/
-void adv_city_update(struct city *pcity)
+void ai_city_update(struct city *pcity)
 {
   int radius_sq = city_map_radius_sq_get(pcity);
 
@@ -673,7 +569,7 @@ void adv_city_alloc(struct city *pcity)
   pcity->server.adv->act_cache = NULL;
   pcity->server.adv->act_cache_radius_sq = -1;
   /* allocate memory for pcity->ai->act_cache */
-  adv_city_update(pcity);
+  ai_city_update(pcity);
 }
 
 /**************************************************************************

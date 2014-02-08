@@ -13,10 +13,6 @@
 #ifndef FC__TECH_H
 #define FC__TECH_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 #include "shared.h"
@@ -41,7 +37,7 @@ typedef int Tech_type_id;
  */
 #define A_NONE 0
 #define A_FIRST 1
-#define A_LAST MAX_NUM_ITEMS /* Used in the network protocol. */
+#define A_LAST MAX_NUM_ITEMS
 #define A_UNSET (A_LAST-1)
 #define A_FUTURE (A_LAST-2)
 #define A_UNKNOWN (A_LAST-3)
@@ -78,41 +74,32 @@ typedef int Tech_type_id;
 /* "Settler" unit types can build bridges over rivers */
 #define SPECENUM_VALUE1 TF_BRIDGE
 #define SPECENUM_VALUE1NAME "Bridge"
+/* "Settler" unit types can build rail roads */
+#define SPECENUM_VALUE2 TF_RAILROAD
+#define SPECENUM_VALUE2NAME "Railroad"
 /* Increase the pollution factor created by population by one */
-#define SPECENUM_VALUE2 TF_POPULATION_POLLUTION_INC
-#define SPECENUM_VALUE2NAME "Population_Pollution_Inc"
+#define SPECENUM_VALUE3 TF_POPULATION_POLLUTION_INC
+#define SPECENUM_VALUE3NAME "Population_Pollution_Inc"
+/* "Settler" unit types can build farmland */
+#define SPECENUM_VALUE4 TF_FARMLAND
+#define SPECENUM_VALUE4NAME "Farmland"
 /* Player can build air units */
-#define SPECENUM_VALUE3 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE3NAME "Build_Airborne"
-/* Player can claim ocean tiles non-adjacent to border source */ 
-#define SPECENUM_VALUE4 TF_CLAIM_OCEAN
-#define SPECENUM_VALUE4NAME "Claim_Ocean"
-#define SPECENUM_VALUE5 TECH_USER_1
-#define SPECENUM_VALUE6 TECH_USER_2
-#define SPECENUM_VALUE7 TECH_USER_3
-#define SPECENUM_VALUE8 TECH_USER_4
-#define SPECENUM_VALUE9 TECH_USER_5
-#define SPECENUM_VALUE10 TECH_USER_6
-#define SPECENUM_VALUE11 TECH_USER_7
-#define SPECENUM_VALUE12 TECH_USER_LAST
+#define SPECENUM_VALUE5 TF_BUILD_AIRBORNE
+#define SPECENUM_VALUE5NAME "Build_Airborne"
 /* Keep this last. */
 #define SPECENUM_COUNT TF_COUNT
-#define SPECENUM_BITVECTOR bv_tech_flags
-#define SPECENUM_NAMEOVERRIDE
 #include "specenum_gen.h"
 
-#define MAX_NUM_USER_TECH_FLAGS (TECH_USER_LAST - TECH_USER_1 + 1)
+BV_DEFINE(bv_tech_flags, TF_COUNT);
 
 /* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
  * requirements are fulfilled; all others (including those which can never 
  * be reached) are TECH_UNKNOWN */
-#define SPECENUM_NAME tech_state
-/* TECH_UNKNOWN must be 0 as the code does no special initialisation after
- * memset(0), See player_researches_init(). */
-#define SPECENUM_VALUE0 TECH_UNKNOWN
-#define SPECENUM_VALUE1 TECH_PREREQS_KNOWN
-#define SPECENUM_VALUE2 TECH_KNOWN
-#include "specenum_gen.h"
+enum tech_state {
+  TECH_UNKNOWN = 0,
+  TECH_PREREQS_KNOWN = 1,
+  TECH_KNOWN = 2,
+};
 
 enum tech_req {
   AR_ONE = 0,
@@ -173,11 +160,6 @@ const char *advance_name_researching(const struct player *pplayer);
 const char *advance_rule_name(const struct advance *padvance);
 const char *advance_name_translation(const struct advance *padvance);
 
-void user_tech_flags_init(void);
-void user_tech_flags_free(void);
-void set_user_tech_flag_name(enum tech_flag_id id, const char *name, const char *helptxt);
-const char *tech_flag_helptxt(enum tech_flag_id id);
-
 /* General advance/technology flag accessor routines */
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag);
 
@@ -191,10 +173,8 @@ enum tech_state player_invention_set(struct player *pplayer,
 				     Tech_type_id tech,
 				     enum tech_state value);
 bool player_invention_reachable(const struct player *pplayer,
-                                const Tech_type_id tech);
-bool player_invention_gettable(const struct player *pplayer,
-                               const Tech_type_id tech,
-                               bool reachable_ok);
+                                const Tech_type_id tech,
+                                bool allow_prereqs);
 
 Tech_type_id player_research_step(const struct player *pplayer,
 				  Tech_type_id goal);
@@ -248,9 +228,4 @@ const struct advance *advance_array_last(void);
     }									\
   }									\
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
 #endif  /* FC__TECH_H */

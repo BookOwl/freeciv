@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -26,14 +26,12 @@
 /* common */
 #include "city.h"
 #include "fc_interface.h"
-#include "featured_text.h"
 #include "game.h"
 #include "government.h"
 #include "idex.h"
 #include "improvement.h"
 #include "map.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "tech.h"
 #include "unit.h"
 #include "unitlist.h"
@@ -89,7 +87,7 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
   }
   if (player_diplstate_get(p1, p2)->has_reason_to_cancel == 0
       && get_player_bonus(p1, EFT_HAS_SENATE) > 0
-      && get_player_bonus(p1, EFT_NO_ANARCHY) == 0) {
+      && get_player_bonus(p1, EFT_ANY_GOVERNMENT) == 0) {
     return DIPL_SENATE_BLOCKING;
   }
   return DIPL_OK;
@@ -109,16 +107,17 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
 static bool is_valid_alliance(const struct player *p1, 
                               const struct player *p2)
 {
-  players_iterate_alive(pplayer) {
+  players_iterate(pplayer) {
     enum diplstate_type ds = player_diplstate_get(p1, pplayer)->type;
 
     if (pplayer != p1
         && pplayer != p2
+        && pplayers_allied(p2, pplayer)
         && ds == DS_WAR /* do not count 'never met' as war here */
-        && pplayers_allied(p2, pplayer)) {
+        && pplayer->is_alive) {
       return FALSE;
     }
-  } players_iterate_alive_end;
+  } players_iterate_end;
 
   return TRUE;
 }
@@ -231,8 +230,7 @@ bool player_can_invade_tile(const struct player *pplayer,
 }
 
 /****************************************************************************
-  Allocate new diplstate structure for tracking state between given two
-  players.
+  ...
 ****************************************************************************/
 static void player_diplstate_new(const struct player *plr1,
                                  const struct player *plr2)
@@ -252,7 +250,7 @@ static void player_diplstate_new(const struct player *plr1,
 }
 
 /****************************************************************************
-  Set diplstate between given two players to default values.
+  ...
 ****************************************************************************/
 static void player_diplstate_defaults(const struct player *plr1,
                                       const struct player *plr2)
@@ -288,7 +286,7 @@ struct player_diplstate *player_diplstate_get(const struct player *plr1,
 }
 
 /****************************************************************************
-  Free resources used by diplstate between given two players.
+  ...
 ****************************************************************************/
 static void player_diplstate_destroy(const struct player *plr1,
                                      const struct player *plr2)
@@ -325,7 +323,7 @@ void player_slots_init(void)
 }
 
 /***************************************************************
-  Return whether player slots are already initialized.
+  ...
 ***************************************************************/
 bool player_slots_initialised(void)
 {
@@ -494,7 +492,7 @@ struct player *player_new(struct player_slot *pslot)
 }
 
 /****************************************************************************
-  Set player structure to its default values.
+  ...
 ****************************************************************************/
 static void player_defaults(struct player *pplayer)
 {
@@ -537,6 +535,7 @@ static void player_defaults(struct player *pplayer)
   spaceship_init(&pplayer->spaceship);
 
   pplayer->ai_controlled = FALSE;
+  BV_CLR_ALL(pplayer->ai_common.handicaps);
   pplayer->ai_common.skill_level = 0;
   pplayer->ai_common.fuzzy = 0;
   pplayer->ai_common.expand = 100;
@@ -544,7 +543,6 @@ static void player_defaults(struct player *pplayer)
   player_slots_iterate(pslot) {
     pplayer->ai_common.love[player_slot_index(pslot)] = 1;
   } player_slots_iterate_end;
-  pplayer->ai_common.traits = NULL;
 
   pplayer->ai = NULL;
   pplayer->was_created = FALSE;
@@ -564,27 +562,10 @@ static void player_defaults(struct player *pplayer)
   pplayer->tile_known.vec = NULL;
   pplayer->tile_known.bits = 0;
 
-  pplayer->rgb = NULL;
-
   /* pplayer->server is initialised in
       ./server/plrhand.c:server_player_init()
      and pplayer->client in
       ./client/climisc.c:client_player_init() */
-}
-
-/****************************************************************************
-  Set the player's color.
-****************************************************************************/
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor)
-{
-  fc_assert_ret(prgbcolor != NULL);
-
-  if (pplayer->rgb != NULL) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
-
-  pplayer->rgb = rgbcolor_copy(prgbcolor);
 }
 
 /****************************************************************************
@@ -593,8 +574,6 @@ void player_set_color(struct player *pplayer,
 ****************************************************************************/
 void player_clear(struct player *pplayer, bool full)
 {
-  bool client = !is_server();
-
   if (pplayer == NULL) {
     return;
   }
@@ -614,19 +593,6 @@ void player_clear(struct player *pplayer, bool full)
 
   /* Clears units and cities. */
   unit_list_iterate(pplayer->units, punit) {
-    /* Unload all cargos. */
-    unit_list_iterate(unit_transport_cargo(punit), pcargo) {
-      unit_transport_unload(pcargo);
-      if (client) {
-        pcargo->client.transported_by = -1;
-      }
-    } unit_list_iterate_end;
-    /* Unload the unit. */
-    unit_transport_unload(punit);
-    if (client) {
-      punit->client.transported_by = -1;
-    }
-
     game_remove_unit(punit);
   } unit_list_iterate_end;
 
@@ -690,11 +656,6 @@ void player_destroy(struct player *pplayer)
   } players_iterate_end;
   free(pplayer->diplstates);
 
-  /* Clear player color. */
-  if (pplayer->rgb) {
-    rgbcolor_destroy(pplayer->rgb);
-  }
-
   dbv_free(&pplayer->tile_known);
 
   free(pplayer);
@@ -747,7 +708,6 @@ struct player *player_by_number(const int player_id)
 /****************************************************************************
   Set the player's nation to the given nation (may be NULL).  Returns TRUE
   iff there was a change.
-  Doesn't check if the nation is legal wrt nationset.
 ****************************************************************************/
 bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 {
@@ -767,7 +727,7 @@ bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 }
 
 /***************************************************************
-  Find player by given name.
+...
 ***************************************************************/
 struct player *player_by_name(const char *name)
 {
@@ -862,7 +822,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   /* Don't show non-allied units that are in transports.  This is logical
    * because allied transports can also contain our units.  Shared vision
    * isn't taken into account. */
-  if (unit_transported(punit) && unit_owner(punit) != pplayer
+  if (punit->transported_by != -1 && unit_owner(punit) != pplayer
       && !pplayers_allied(pplayer, unit_owner(punit))) {
     return FALSE;
   }
@@ -894,7 +854,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
 bool can_player_see_unit(const struct player *pplayer,
 			 const struct unit *punit)
 {
-  return can_player_see_unit_at(pplayer, punit, unit_tile(punit));
+  return can_player_see_unit_at(pplayer, punit, punit->tile);
 }
 
 /****************************************************************************
@@ -1081,9 +1041,9 @@ bool player_knows_techs_with_flag(const struct player *pplayer,
 }
 
 /**************************************************************************
-  Locate the player capital city, (NULL Otherwise) 
+Locate the city where the players palace is located, (NULL Otherwise) 
 **************************************************************************/
-struct city *player_capital(const struct player *pplayer)
+struct city *player_palace(const struct player *pplayer)
 {
   if (!pplayer) {
     /* The client depends on this behavior in some places. */
@@ -1095,6 +1055,20 @@ struct city *player_capital(const struct player *pplayer)
     }
   } city_list_iterate_end;
   return NULL;
+}
+
+/**************************************************************************
+  AI players may have handicaps - allowing them to cheat or preventing
+  them from using certain algorithms.  This function returns whether the
+  player has the given handicap.  Human players are assumed to have no
+  handicaps.
+**************************************************************************/
+bool ai_handicap(const struct player *pplayer, enum handicap_type htype)
+{
+  if (!pplayer->ai_controlled) {
+    return TRUE;
+  }
+  return BV_ISSET(pplayer->ai_common.handicaps, htype);
 }
 
 /**************************************************************************
@@ -1156,6 +1130,27 @@ const char *love_text(const int love)
     fc_assert(love > MAX_AI_LOVE * 90 / 100);
     return Q_("?attitude:Worshipful");
   }
+}
+
+/**************************************************************************
+  Return a diplomatic state as a human-readable string
+**************************************************************************/
+const char *diplstate_text(const enum diplstate_type type)
+{
+  static const char *ds_names[DS_LAST] = 
+  {
+    N_("?diplomatic_state:Armistice"),
+    N_("?diplomatic_state:War"), 
+    N_("?diplomatic_state:Cease-fire"),
+    N_("?diplomatic_state:Peace"),
+    N_("?diplomatic_state:Alliance"),
+    N_("?diplomatic_state:Never met"),
+    N_("?diplomatic_state:Team")
+  };
+
+  fc_assert_ret_val_msg(0 <= type && type < DS_LAST, NULL,
+                        "Bad diplstate_type: %d.", type);
+  return Q_(ds_names[type]);
 }
 
 /***************************************************************
@@ -1257,9 +1252,6 @@ bool players_on_same_team(const struct player *pplayer1,
   return (pplayer1->team && pplayer1->team == pplayer2->team);
 }
 
-/**************************************************************************
-  Return TRUE iff player is any kind of barbarian
-**************************************************************************/
 bool is_barbarian(const struct player *pplayer)
 {
   return pplayer->ai_common.barbarian_type != NOT_A_BARBARIAN;
@@ -1284,127 +1276,6 @@ bool are_diplstates_equal(const struct player_diplstate *pds1,
 	  && pds1->contact_turns_left == pds2->contact_turns_left);
 }
 
-/**************************************************************************
-  Return TRUE iff player1 has the diplomatic relation to player2
-**************************************************************************/
-bool is_diplrel_between(const struct player *player1,
-                        const struct player *player2,
-                        int diplrel)
-{
-  fc_assert(player1 != NULL);
-  fc_assert(player2 != NULL);
-
-  /* No relationship to it self. */
-  if (player1 == player2) {
-    return FALSE;
-  }
-
-  if (diplrel < DS_LAST) {
-    return player_diplstate_get(player1, player2)->type == diplrel;
-  }
-
-  switch (diplrel) {
-  case DRA_GIVES_SHARED_VISION:
-    return gives_shared_vision(player1, player2);
-  case DRA_RECEIVES_SHARED_VISION:
-    return gives_shared_vision(player2, player1);
-  case DRA_HOSTS_EMBASSY:
-    return player_has_embassy(player2, player1);
-  case DRA_HAS_EMBASSY:
-    return player_has_embassy(player1, player2);
-  case DRA_HOSTS_REAL_EMBASSY:
-    return player_has_real_embassy(player2, player1);
-  case DRA_HAS_REAL_EMBASSY:
-    return player_has_real_embassy(player1, player2);
-  case DRA_HAS_CASUS_BELLI:
-    return 0 < player_diplstate_get(player1, player2)->has_reason_to_cancel;
-  case DRA_PROVIDED_CASUS_BELLI:
-    return 0 < player_diplstate_get(player2, player1)->has_reason_to_cancel;
-  }
-
-  fc_assert_msg(FALSE, "diplrel_between(): invalid diplrel number %d.",
-                diplrel);
-
-  return FALSE;
-}
-
-/**************************************************************************
-  Return TRUE iff pplayer has the diplomatic relation to any living player
-**************************************************************************/
-bool is_diplrel_to_other(const struct player *pplayer, int diplrel)
-{
-  fc_assert(pplayer != NULL);
-
-  players_iterate_alive(oplayer) {
-    if (oplayer == pplayer) {
-      continue;
-    }
-    if (is_diplrel_between(pplayer, oplayer, diplrel)) {
-      return TRUE;
-    }
-  } players_iterate_alive_end;
-  return FALSE;
-}
-
-/**************************************************************************
-  Return the diplomatic relation that has the given (untranslated) rule
- name.
-**************************************************************************/
-int diplrel_by_rule_name(const char *value)
-{
-  /* Look for asymmetric diplomatic relations */
-  int diplrel = diplrel_asym_by_name(value, fc_strcasecmp);
-
-  if (diplrel != diplrel_asym_invalid()) {
-    return diplrel;
-  }
-
-  /* Look for symmetric diplomatic relations */
-  diplrel = diplstate_type_by_name(value, fc_strcasecmp);
-
-  /*
-   * Make sure DS_LAST isn't returned as DS_LAST is the first diplrel_asym.
-   *
-   * Can't happend now. This is in case that changes in the future. */
-  fc_assert_ret_val(diplrel != DS_LAST, diplrel_asym_invalid());
-
-  /*
-   * Make sure that diplrel_asym_invalid() is returned.
-   *
-   * Can't happend now. At the moment dpilrel_asym_invalid() is the same as
-   * diplstate_type_invalid(). This is in case that changes in the future.
-   */
-  if (diplrel != diplstate_type_invalid()) {
-    return diplrel;
-  }
-
-  return diplrel_asym_invalid();
-}
-
-/**************************************************************************
-  Return the (untranslated) rule name of the given diplomatic relation.
-**************************************************************************/
-const char *diplrel_rule_name(int value)
-{
-  if (value < DS_LAST) {
-    return diplstate_type_name(value);
-  } else {
-    return diplrel_asym_name(value);
-  }
-}
-
-/**************************************************************************
-  Return the translated name of the given diplomatic relation.
-**************************************************************************/
-const char *diplrel_name_translation(int value)
-{
-  if (value < DS_LAST) {
-    return diplstate_type_translated_name(value);
-  } else {
-    return _(diplrel_asym_name(value));
-  }
-}
-
 /***************************************************************************
   Return the number of pplayer2's visible units in pplayer's territory,
   from the point of view of pplayer.  Units that cannot be seen by pplayer
@@ -1424,7 +1295,7 @@ int player_in_territory(const struct player *pplayer,
    * to see if they're owned by the enemy. */
   unit_list_iterate(pplayer2->units, punit) {
     /* Get the owner of the tile/territory. */
-    struct player *owner = tile_owner(unit_tile(punit));
+    struct player *owner = tile_owner(punit->tile);
 
     if (owner == pplayer && can_player_see_unit(pplayer, punit)) {
       /* Found one! */
@@ -1533,21 +1404,4 @@ int number_of_ai_levels(void)
   }
 
   return count;
-}
-
-/**************************************************************************
-  Return pointer to ai data of given player and ai type.
-**************************************************************************/
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai)
-{
-  return pplayer->server.ais[ai_type_number(ai)];
-}
-
-/**************************************************************************
-  Attach ai data to player
-**************************************************************************/
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data)
-{
-  pplayer->server.ais[ai_type_number(ai)] = data;
 }

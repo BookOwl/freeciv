@@ -17,11 +17,4 @@
 
 int amortize(int benefit, int delay);
 
-/*
- * To prevent integer overflows the product "power * hp * firepower"
- * is divided by POWER_DIVIDER.
- *
- */
-#define POWER_DIVIDER 	(POWER_FACTOR * 3)
-
 #endif   /* FC__ADVTOOLS_H */

@@ -15,15 +15,17 @@
   This file includes the definition of a new savegame format introduced with
   2.3.0. It is defined by the mandatory option '+version2'. The main load
   function checks if this option is present. If not, the old (pre-2.3.0)
-  loading routines are used.
-  The format version is also saved in the settings section of the savefile, as an
+  loading routines are used. With regard to creating a savegame, the server
+  option 'saveversion' defines the format (version) of the savegame.
+  The version is also saved in the settings section of the savefile, as an
   integer (savefile.version). The integer is used to determine the version
   of the savefile.
   
   For each savefile format after 2.3.0, compatibility functions are defined
-  which translate secfile structures from previous version to that version;
-  all necessary compat functions are called in order to
-  translate between the file and current version. See sg_load_compat().
+  which translate secfile structures between that version and the next
+  older version; all necessary compat functions are called in order to
+  translate between the file and current version. See sg_load_compat() and
+  sg_save_compat().
  
   The integer version ID should be increased every time the format is changed.
   If the change is not backwards compatible, please state the changes in the
@@ -39,21 +41,13 @@
   current | (mapped to current savegame format)            | ----/--/-- |  0
           | first version (svn17538)                       | 2010/07/05 |  -
   2.3.0   | 2.3.0 release                                  | 2010/11/?? |  3
-  2.4.0   | 2.4.0 release                                  | 201./../.. | 10
-          | * player ai type                               |            |
-          | * delegation                                   |            |
-          | * citizens                                     |            |
-          | * save player color                            |            |
-          | * "known" info format change                   |            |
-  2.5.0   | 2.5.0 release                                  | 201./../.. | 20
-  2.6.0   | 2.6.0 release (development)                    | 201./../.. | 30
           |                                                |            |
 
   Structure of this file:
 
   - The main functions are savegame2_load() and savegame2_save(). Within
-    former function the savegame version is tested and the requested savegame version is
-    loaded.
+    these functions the savegame version or the setting of 'saveversion' are
+    tested and the requested savegame version is loaded / saved.
 
   - The real work is done by savegame2_load_real() and savegame2_save_real().
     This function call all submodules (settings, players, etc.)
@@ -93,7 +87,7 @@
 */
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <ctype.h>
@@ -115,27 +109,21 @@
 #include "timing.h"
 
 /* common */
-#include "achievements.h"
-#include "ai.h"
 #include "bitvector.h"
 #include "capability.h"
-#include "citizens.h"
 #include "city.h"
 #include "game.h"
 #include "government.h"
 #include "map.h"
-#include "mapimg.h"
 #include "movement.h"
 #include "packets.h"
 #include "research.h"
-#include "rgbcolor.h"
 #include "specialist.h"
 #include "unit.h"
 #include "unitlist.h"
 
 /* server */
 #include "barbarian.h"
-#include "citizenshand.h"
 #include "citytools.h"
 #include "cityturn.h"
 #include "diplhand.h"
@@ -144,8 +132,6 @@
 #include "notify.h"
 #include "plrhand.h"
 #include "ruleset.h"
-#include "sanitycheck.h"
-#include "savecompat.h"
 #include "savegame.h"
 #include "score.h"
 #include "settings.h"
@@ -165,11 +151,51 @@
 #include "utilities.h"
 
 /* server/scripting */
-#include "script_server.h"
+#include "script.h"
+
+/* ai */
+#include "aicity.h"
+#include "aiunit.h"
+#include "defaultai.h"
 
 #include "savegame2.h"
 
-extern bool sg_success;
+#define log_sg log_error
+
+static bool sg_success;
+
+#define sg_check_ret(...)                                                   \
+  if (!sg_success) {                                                        \
+    return;                                                                 \
+  }
+#define sg_check_ret_val(_val)                                              \
+  if (!sg_success) {                                                        \
+    return _val;                                                            \
+  }
+
+#define sg_warn_ret(condition, message, ...)                                \
+  if (!(condition)) {                                                       \
+    log_sg(message, ## __VA_ARGS__);                                        \
+    return;                                                                 \
+  }
+#define sg_warn_ret_val(condition, _val, message, ...)                      \
+  if (!(condition)) {                                                       \
+    log_sg(message, ## __VA_ARGS__);                                        \
+    return _val;                                                            \
+  }
+
+#define sg_failure_ret(condition, message, ...)                             \
+  if (!(condition)) {                                                       \
+    sg_success = FALSE;                                                     \
+    log_sg(message, ## __VA_ARGS__);                                        \
+    sg_check_ret();                                                         \
+  }
+#define sg_failure_ret_val(condition, _val, message, ...)                   \
+  if (!(condition)) {                                                       \
+    sg_success = FALSE;                                                     \
+    log_sg(message, ## __VA_ARGS__);                                        \
+    sg_check_ret_val(_val);                                                 \
+  }
 
 /*
  * This loops over the entire map to save data. It collects all the data of
@@ -266,16 +292,6 @@ extern bool sg_success;
   }                                                                         \
 }
 
-/* Iterate on the extras half-bytes */
-#define halfbyte_iterate_extras(e, num_extras_types)                        \
-{                                                                           \
-  int e;                                                                    \
-  for(e = 0; 4 * e < (num_extras_types); e++) {
-
-#define halfbyte_iterate_extras_end                                         \
-  }                                                                         \
-}
-
 /* Iterate on the specials half-bytes */
 #define halfbyte_iterate_special(s, num_specials_types)                     \
 {                                                                           \
@@ -296,15 +312,40 @@ extern bool sg_success;
   }                                                                         \
 }
 
-/* Iterate on the roads half-bytes */
-#define halfbyte_iterate_roads(r, num_roads_types)                          \
-{                                                                           \
-  int r;                                                                    \
-  for(r = 0; 4 * r < (num_roads_types); r++) {
+struct loaddata {
+  struct section_file *file;
+  const char *secfile_options;
 
-#define halfbyte_iterate_roads_end                                          \
-  }                                                                         \
-}
+  /* loaded in sg_load_savefile(); needed in sg_load_player() */
+  struct {
+    const char **order;
+    size_t size;
+  } improvement;
+  /* loaded in sg_load_savefile(); needed in sg_load_player() */
+  struct {
+    const char **order;
+    size_t size;
+  } technology;
+  /* loaded in sg_load_savefile(); needed in sg_load_map(), ... */
+  struct {
+    enum tile_special_type *order;
+    size_t size;
+  } special;
+  /* loaded in sg_load_savefile(); needed in sg_load_map(), ... */
+  struct {
+    struct base_type **order;
+    size_t size;
+  } base;
+
+  /* loaded in sg_load_game(); needed in sg_load_random(), ... */
+  enum server_states server_state;
+
+  /* loaded in sg_load_random(); needed in sg_load_sanitycheck() */
+  RANDOM_STATE rstate;
+
+  /* loaded in sg_load_map_worked(); needed in sg_load_player_cities() */
+  int *worked_tiles;
+};
 
 struct savedata {
   struct section_file *file;
@@ -313,6 +354,7 @@ struct savedata {
   /* set by the caller */
   const char *save_reason;
   bool scenario;
+  int version;
 
   /* Set in sg_save_game(); needed in sg_save_map_*(); ... */
   bool save_players;
@@ -323,25 +365,26 @@ struct savedata {
 #define log_worker      log_verbose
 
 static const char savefile_options_default[] =
-  " +version2";
+  " +version2 knownv2";
 /* The following savefile option are added if needed:
  *  - specials
  *  - riversoverlay
  * See also calls to sg_save_savefile_options(). */
 
+static const char hex_chars[] = "0123456789abcdef";
 static const char num_chars[] =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-+";
 
 static void savegame2_load_real(struct section_file *file);
 static void savegame2_save_real(struct section_file *file,
                                 const char *save_reason,
-                                bool scenario);
+                                bool scenario, int version);
 struct loaddata *loaddata_new(struct section_file *file);
 void loaddata_destroy(struct loaddata *loading);
 
 struct savedata *savedata_new(struct section_file *file,
                               const char *save_reason,
-                              bool scenario);
+                              bool scenario, int version);
 void savedata_destroy(struct savedata *saving);
 
 static enum unit_orders char2order(char order);
@@ -360,15 +403,17 @@ static void worklist_save(struct section_file *file,
                           int max_length, const char *path, ...);
 static void unit_ordering_calc(void);
 static void unit_ordering_apply(void);
-static void sg_extras_set(bv_extras *extras, char ch, struct extra_type **index);
-static char sg_extras_get(bv_extras extras, const int *index);
-static void sg_special_set(bv_extras *extras, char ch,
+static void sg_special_set(bv_special *specials, char ch,
                            const enum tile_special_type *index,
                            bool rivers_overlay);
-static void sg_bases_set(bv_extras *extras, char ch, struct base_type **index);
-static void sg_roads_set(bv_extras *extras, char ch, struct road_type **index);
+static char sg_special_get(bv_special specials,
+                           const enum tile_special_type *index);
+static void sg_bases_set(bv_bases *bases, char ch, struct base_type **index);
+static char sg_bases_get(bv_bases bases, const int *index);
 static struct resource *char2resource(char c);
 static char resource2char(const struct resource *presource);
+/* bin2ascii_hex() is defined as macro */
+static int ascii_hex2bin(char ch, int halfbyte);
 static char num2char(unsigned int num);
 static int char2num(char ch);
 static struct terrain *char2terrain(char ch);
@@ -377,6 +422,9 @@ static Tech_type_id technology_load(struct section_file *file,
                                     const char* path, int plrno);
 static void technology_save(struct section_file *file,
                             const char* path, int plrno, Tech_type_id tech);
+
+static void sg_load_compat(struct loaddata *loading);
+static void sg_save_compat(struct savedata *saving);
 
 static void sg_load_savefile(struct loaddata *loading);
 static void sg_save_savefile(struct savedata *saving);
@@ -402,11 +450,11 @@ static void sg_load_map(struct loaddata *loading);
 static void sg_save_map(struct savedata *saving);
 static void sg_load_map_tiles(struct loaddata *loading);
 static void sg_save_map_tiles(struct savedata *saving);
-static void sg_load_map_tiles_extras(struct loaddata *loading);
-static void sg_save_map_tiles_extras(struct savedata *saving);
 static void sg_load_map_tiles_bases(struct loaddata *loading);
-static void sg_load_map_tiles_roads(struct loaddata *loading);
+static void sg_save_map_tiles_bases(struct savedata *saving);
 static void sg_load_map_tiles_specials(struct loaddata *loading,
+                                       bool rivers_overlay);
+static void sg_save_map_tiles_specials(struct savedata *saving,
                                        bool rivers_overlay);
 static void sg_load_map_tiles_resources(struct loaddata *loading);
 static void sg_save_map_tiles_resources(struct savedata *saving);
@@ -428,17 +476,11 @@ static void sg_load_player_cities(struct loaddata *loading,
                                   struct player *plr);
 static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
                                 struct city *pcity, const char *citystr);
-static void sg_load_player_city_citizens(struct loaddata *loading,
-                                         struct player *plr,
-                                         struct city *pcity,
-                                         const char *citystr);
 static void sg_load_player_units(struct loaddata *loading,
                                  struct player *plr);
 static bool sg_load_player_unit(struct loaddata *loading,
                                 struct player *plr, struct unit *punit,
                                 const char *unitstr);
-static void sg_load_player_units_transport(struct loaddata *loading,
-                                           struct player *plr);
 static void sg_load_player_attributes(struct loaddata *loading,
                                       struct player *plr);
 static void sg_load_player_vision(struct loaddata *loading,
@@ -462,12 +504,8 @@ static void sg_save_player_vision(struct savedata *saving,
 static void sg_load_event_cache(struct loaddata *loading);
 static void sg_save_event_cache(struct savedata *saving);
 
-static void sg_load_mapimg(struct loaddata *loading);
-static void sg_save_mapimg(struct savedata *saving);
-
 static void sg_load_sanitycheck(struct loaddata *loading);
 static void sg_save_sanitycheck(struct savedata *saving);
-
 
 /****************************************************************************
   Main entry point for loading a game.
@@ -480,9 +518,8 @@ void savegame2_load(struct section_file *file)
 
   fc_assert_ret(file != NULL);
 
-#ifdef DEBUG_TIMERS
-  struct timer *loadtimer = timer_new(TIMER_CPU, TIMER_DEBUG);
-  timer_start(loadtimer);
+#ifdef DEBUG
+  struct timer *loadtimer = new_timer_start(TIMER_CPU, TIMER_DEBUG);
 #endif
 
   savefile_options = secfile_lookup_str(file, "savefile.options");
@@ -495,19 +532,18 @@ void savegame2_load(struct section_file *file)
   if (!has_capabilities("+version2", savefile_options)) {
     /* load old format (freeciv 2.2.x) */
     log_verbose("loading savefile in old format ...");
-    secfile_allow_digital_boolean(file, TRUE);
-    legacy_game_load(file);
+    game_load(file);
   } else {
     /* load new format (freeciv 2.2.99 and newer) */
     log_verbose("loading savefile in new format ...");
     savegame2_load_real(file);
   }
 
-#ifdef DEBUG_TIMERS
-  timer_stop(loadtimer);
-  log_debug("Loading secfile in %.3f seconds.", timer_read_seconds(loadtimer));
-  timer_destroy(loadtimer);
-#endif /* DEBUG_TIMERS */
+#ifdef DEBUG
+  stop_timer(loadtimer);
+  log_debug("Loading secfile in %.3f seconds.", read_timer_seconds(loadtimer));
+  free_timer(loadtimer);
+#endif
 }
 
 /****************************************************************************
@@ -519,19 +555,19 @@ void savegame2_save(struct section_file *file, const char *save_reason,
 {
   fc_assert_ret(file != NULL);
 
-#ifdef DEBUG_TIMERS
-  struct timer *savetimer = timer_new(TIMER_CPU, TIMER_DEBUG);
-  timer_start(savetimer);
+#ifdef DEBUG
+  struct timer *savetimer = new_timer_start(TIMER_CPU, TIMER_DEBUG);
 #endif
 
+  /* freeciv 2.2.99 or newer */
   log_verbose("saving game in new format ...");
-  savegame2_save_real(file, save_reason, scenario);
+  savegame2_save_real(file, save_reason, scenario, game.server.saveversion);
 
-#ifdef DEBUG_TIMERS
-  timer_stop(savetimer);
-  log_debug("Creating secfile in %.3f seconds.", timer_read_seconds(savetimer));
-  timer_destroy(savetimer);
-#endif /* DEBUG_TIMERS */
+#ifdef DEBUG
+  stop_timer(savetimer);
+  log_debug("Creating secfile in %.3f seconds.", read_timer_seconds(savetimer));
+  free_timer(savetimer);
+#endif
 }
 
 /* =======================================================================
@@ -575,8 +611,6 @@ static void savegame2_load_real(struct section_file *file)
   sg_load_players(loading);
   /* [event_cache] */
   sg_load_event_cache(loading);
-  /* [mapimg] */
-  sg_load_mapimg(loading);
 
   /* Sanity checks for the loaded game. */
   sg_load_sanitycheck(loading);
@@ -597,12 +631,12 @@ static void savegame2_load_real(struct section_file *file)
 ****************************************************************************/
 static void savegame2_save_real(struct section_file *file,
                                 const char *save_reason,
-                                bool scenario)
+                                bool scenario, int version)
 {
   struct savedata *saving;
 
   /* initialise loading */
-  saving = savedata_new(file, save_reason, scenario);
+  saving = savedata_new(file, save_reason, scenario, version);
   sg_success = TRUE;
 
   /* [scenario] */
@@ -625,11 +659,12 @@ static void savegame2_save_real(struct section_file *file,
   sg_save_players(saving);
   /* [event_cache] */
   sg_save_event_cache(saving);
-  /* [mapimg] */
-  sg_save_mapimg(saving);
 
   /* Sanity checks for the saved game. */
   sg_save_sanitycheck(saving);
+
+  /* [compat] */
+  sg_save_compat(saving);
 
   /* deinitialise saving */
   savedata_destroy(saving);
@@ -640,7 +675,7 @@ static void savegame2_save_real(struct section_file *file,
 }
 
 /****************************************************************************
-  Create new loaddata item for given section file.
+  ...
 ****************************************************************************/
 struct loaddata *loaddata_new(struct section_file *file)
 {
@@ -652,16 +687,10 @@ struct loaddata *loaddata_new(struct section_file *file)
   loading->improvement.size = -1;
   loading->technology.order = NULL;
   loading->technology.size = -1;
-  loading->trait.order = NULL;
-  loading->trait.size = -1;
-  loading->extra.order = NULL;
-  loading->extra.size = -1;
   loading->special.order = NULL;
   loading->special.size = -1;
   loading->base.order = NULL;
   loading->base.size = -1;
-  loading->road.order = NULL;
-  loading->road.size = -1;
 
   loading->server_state = S_S_INITIAL;
   loading->rstate = fc_rand_state();
@@ -671,7 +700,7 @@ struct loaddata *loaddata_new(struct section_file *file)
 }
 
 /****************************************************************************
-  Free resources allocated for loaddata item.
+  ...
 ****************************************************************************/
 void loaddata_destroy(struct loaddata *loading)
 {
@@ -683,24 +712,12 @@ void loaddata_destroy(struct loaddata *loading)
     free(loading->technology.order);
   }
 
-  if (loading->trait.order != NULL) {
-    free(loading->trait.order);
-  }
-
-  if (loading->extra.order != NULL) {
-    free(loading->extra.order);
-  }
-
   if (loading->special.order != NULL) {
     free(loading->special.order);
   }
 
   if (loading->base.order != NULL) {
     free(loading->base.order);
-  }
-
-  if (loading->road.order != NULL) {
-    free(loading->road.order);
   }
 
   if (loading->worked_tiles != NULL) {
@@ -711,11 +728,11 @@ void loaddata_destroy(struct loaddata *loading)
 }
 
 /****************************************************************************
-  Create new savedata item for given file.
+  ...
 ****************************************************************************/
 struct savedata *savedata_new(struct section_file *file,
                               const char *save_reason,
-                              bool scenario)
+                              bool scenario, int version)
 {
   struct savedata *saving = calloc(1, sizeof(*saving));
   saving->file = file;
@@ -723,6 +740,7 @@ struct savedata *savedata_new(struct section_file *file,
 
   saving->save_reason = save_reason;
   saving->scenario = scenario;
+  saving->version = version;
 
   saving->save_players = FALSE;
 
@@ -730,7 +748,7 @@ struct savedata *savedata_new(struct section_file *file,
 }
 
 /****************************************************************************
-  Free resources allocated for savedata item
+  ...
 ****************************************************************************/
 void savedata_destroy(struct savedata *saving)
 {
@@ -833,7 +851,7 @@ static enum direction8 char2dir(char dir)
   }
 
   /* This can happen if the savegame is invalid. */
-  return direction8_invalid();
+  return DIR8_LAST;
 }
 
 /****************************************************************************
@@ -875,7 +893,7 @@ static char activity2char(enum unit_activity activity)
     return 'w';
   case ACTIVITY_POLLUTION:
     return 'p';
-  case ACTIVITY_OLD_ROAD:
+  case ACTIVITY_ROAD:
     return 'r';
   case ACTIVITY_MINE:
     return 'm';
@@ -887,7 +905,7 @@ static char activity2char(enum unit_activity activity)
     return 't';
   case ACTIVITY_SENTRY:
     return 's';
-  case ACTIVITY_OLD_RAILROAD:
+  case ACTIVITY_RAILROAD:
     return 'l';
   case ACTIVITY_PILLAGE:
     return 'e';
@@ -905,10 +923,6 @@ static char activity2char(enum unit_activity activity)
     return 'u';
   case ACTIVITY_BASE:
     return 'b';
-  case ACTIVITY_GEN_ROAD:
-    return 'R';
-  case ACTIVITY_CONVERT:
-    return 'c';
   case ACTIVITY_UNKNOWN:
   case ACTIVITY_PATROL_UNUSED:
     return '?';
@@ -1116,69 +1130,13 @@ static void unit_ordering_apply(void)
 }
 
 /****************************************************************************
-  Helper function for loading extras from a savegame.
-
-  'ch' gives the character loaded from the savegame. Extras are packed
-  in four to a character in hex notation. 'index' is a mapping of
-  savegame bit -> base bit.
-****************************************************************************/
-static void sg_extras_set(bv_extras *extras, char ch, struct extra_type **index)
-{
-  int i, bin;
-  const char *pch = strchr(hex_chars, ch);
-
-  if (!pch || ch == '\0') {
-    log_sg("Unknown hex value: '%c' (%d)", ch, ch);
-    bin = 0;
-  } else {
-    bin = pch - hex_chars;
-  }
-
-  for (i = 0; i < 4; i++) {
-    struct extra_type *pextra = index[i];
-
-    if (pextra == NULL) {
-      continue;
-    }
-    if (bin & (1 << i)) {
-      BV_SET(*extras, extra_index(pextra));
-    }
-  }
-}
-
-/****************************************************************************
-  Helper function for saving extras into a savegame.
-
-  Extras are packed in four to a character in hex notation. 'index'
-  specifies which set of extras are included in this character.
-****************************************************************************/
-static char sg_extras_get(bv_extras extras, const int *index)
-{
-  int i, bin = 0;
-
-  for (i = 0; i < 4; i++) {
-    int extra = index[i];
-
-    if (extra < 0) {
-      break;
-    }
-
-    if (BV_ISSET(extras, extra)) {
-      bin |= (1 << i);
-    }
-  }
-
-  return hex_chars[bin];
-}
-
-/****************************************************************************
   Complicated helper function for loading specials from a savegame.
 
   'ch' gives the character loaded from the savegame. Specials are packed
   in four to a character in hex notation. 'index' is a mapping of
   savegame bit -> special bit. S_LAST is used to mark unused savegame bits.
 ****************************************************************************/
-static void sg_special_set(bv_extras *extras, char ch,
+static void sg_special_set(bv_special *specials, char ch,
                            const enum tile_special_type *index,
                            bool rivers_overlay)
 {
@@ -1195,46 +1153,42 @@ static void sg_special_set(bv_extras *extras, char ch,
   for (i = 0; i < 4; i++) {
     enum tile_special_type sp = index[i];
 
-    if (sp == S_LAST) {
+    if (sp >= S_LAST) {
       continue;
     }
-    if (rivers_overlay && sp != S_OLD_RIVER) {
+    if (rivers_overlay && sp != S_RIVER) {
       continue;
     }
 
     if (bin & (1 << i)) {
-      if (sp == S_OLD_ROAD) {
-        struct road_type *proad;
-
-        proad = road_by_compat_special(ROCO_ROAD);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
-        }
-      } else if (sp == S_OLD_RAILROAD) {
-        struct road_type *proad;
-
-        proad = road_by_compat_special(ROCO_RAILROAD);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
-        }
-      } else if (sp == S_OLD_RIVER) {
-        struct road_type *proad;
-
-        proad = road_by_compat_special(ROCO_RIVER);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
-        }
-      } else {
-        struct extra_type *pextra;
-
-        pextra = extra_type_by_rule_name(special_rule_name(sp));
-
-        if (pextra) {
-          BV_SET(*extras, extra_index(pextra));
-        }
-      }
+      set_special(specials, sp);
     }
   }
+}
+
+/****************************************************************************
+  Complicated helper function for saving specials into a savegame.
+
+  Specials are packed in four to a character in hex notation. 'index'
+  specifies which set of specials are included in this character.
+****************************************************************************/
+static char sg_special_get(bv_special specials,
+                           const enum tile_special_type *index)
+{
+  int i, bin = 0;
+
+  for (i = 0; i < 4; i++) {
+    enum tile_special_type sp = index[i];
+
+    if (sp >= S_LAST) {
+      break;
+    }
+    if (contains_special(specials, sp)) {
+      bin |= (1 << i);
+    }
+  }
+
+  return hex_chars[bin];
 }
 
 /****************************************************************************
@@ -1244,7 +1198,7 @@ static void sg_special_set(bv_extras *extras, char ch,
   in four to a character in hex notation. 'index' is a mapping of
   savegame bit -> base bit.
 ****************************************************************************/
-static void sg_bases_set(bv_extras *extras, char ch, struct base_type **index)
+static void sg_bases_set(bv_bases *bases, char ch, struct base_type **index)
 {
   int i, bin;
   const char *pch = strchr(hex_chars, ch);
@@ -1263,40 +1217,33 @@ static void sg_bases_set(bv_extras *extras, char ch, struct base_type **index)
       continue;
     }
     if (bin & (1 << i)) {
-      BV_SET(*extras, extra_index(base_extra_get(pbase)));
+      BV_SET(*bases, base_index(pbase));
     }
   }
 }
 
 /****************************************************************************
-  Helper function for loading roads from a savegame.
+  Helper function for saving bases into a savegame.
 
-  'ch' gives the character loaded from the savegame. Roads are packed
-  in four to a character in hex notation. 'index' is a mapping of
-  savegame bit -> road bit.
+  Specials are packed in four to a character in hex notation. 'index'
+  specifies which set of bases are included in this character.
 ****************************************************************************/
-static void sg_roads_set(bv_extras *extras, char ch, struct road_type **index)
+static char sg_bases_get(bv_bases bases, const int *index)
 {
-  int i, bin;
-  const char *pch = strchr(hex_chars, ch);
-
-  if (!pch || ch == '\0') {
-    log_sg("Unknown hex value: '%c' (%d)", ch, ch);
-    bin = 0;
-  } else {
-    bin = pch - hex_chars;
-  }
+  int i, bin = 0;
 
   for (i = 0; i < 4; i++) {
-    struct road_type *proad = index[i];
+    int base = index[i];
 
-    if (proad == NULL) {
-      continue;
+    if (base < 0) {
+      break;
     }
-    if (bin & (1 << i)) {
-      BV_SET(*extras, extra_index(road_extra_get(proad)));
+    if (BV_ISSET(bases, base)) {
+      bin |= (1 << i);
     }
   }
+
+  return hex_chars[bin];
 }
 
 /****************************************************************************
@@ -1318,6 +1265,39 @@ static struct resource *char2resource(char c)
 static char resource2char(const struct resource *presource)
 {
   return presource ? presource->identifier : RESOURCE_NONE_IDENTIFIER;
+}
+
+/****************************************************************************
+  This returns an ascii hex value of the given half-byte of the binary
+  integer. See ascii_hex2bin().
+  example: bin2ascii_hex(0xa00, 2) == 'a'
+****************************************************************************/
+#define bin2ascii_hex(value, halfbyte_wanted) \
+  hex_chars[((value) >> ((halfbyte_wanted) * 4)) & 0xf]
+
+/****************************************************************************
+  This returns a binary integer value of the ascii hex char, offset by the
+  given number of half-bytes. See bin2ascii_hex().
+  example: ascii_hex2bin('a', 2) == 0xa00
+  This is only used in loading games, and it requires some error checking so
+  it's done as a function.
+****************************************************************************/
+static int ascii_hex2bin(char ch, int halfbyte)
+{
+  const char *pch;
+
+  if (ch == ' ') {
+    /* Sane value. It is unknow if there are savegames out there which
+     * need this fix. Savegame.c doesn't write such savegames
+     * (anymore) since the inclusion into CVS (2000-08-25). */
+    return 0;
+  }
+
+  pch = strchr(hex_chars, ch);
+
+  sg_failure_ret_val(NULL != pch && '\0' != ch, 0,
+                     "Unknown hex value: '%c' %d", ch, ch);
+  return (pch - hex_chars) << (halfbyte * 4);
 }
 
 /****************************************************************************
@@ -1473,15 +1453,9 @@ static void sg_load_savefile(struct loaddata *loading)
 
   /* Load ruleset. */
   sz_strlcpy(game.server.rulesetdir,
-             secfile_lookup_str_default(loading->file, "classic",
+             secfile_lookup_str_default(loading->file, "default",
                                         "savefile.rulesetdir"));
-  if (!strcmp("default", game.server.rulesetdir)) {
-    sz_strlcpy(game.server.rulesetdir, "classic");
-  }
-  if (!load_rulesets(NULL, TRUE)) {
-    /* Failed to load correct ruleset */
-    sg_failure_ret(TRUE, "Failed to load ruleset");
-  }
+  load_rulesets();
 
   /* Load improvements. */
   loading->improvement.size
@@ -1509,54 +1483,11 @@ static void sg_load_savefile(struct loaddata *loading)
                    secfile_error());
   }
 
-  /* Load traits. */
-  loading->trait.size
-    = secfile_lookup_int_default(loading->file, 0,
-                                 "savefile.trait_size");
-  if (loading->trait.size) {
-    loading->trait.order
-      = secfile_lookup_str_vec(loading->file, &loading->trait.size,
-                               "savefile.trait_vector");
-    sg_failure_ret(loading->trait.size != 0,
-                   "Failed to load trait order: %s",
-                   secfile_error());
-  }
-
-  /* Load extras. */
-  loading->extra.size
-    = secfile_lookup_int_default(loading->file, 0,
-                                 "savefile.extras_size");
-  if (loading->extra.size) {
-    const char **modname;
-    size_t nmod;
-    int j;
-
-    modname = secfile_lookup_str_vec(loading->file, &loading->extra.size,
-                                     "savefile.extras_vector");
-    sg_failure_ret(loading->extra.size != 0,
-                   "Failed to load extras order: %s",
-                   secfile_error());
-    sg_failure_ret(!(game.control.num_extra_types < loading->extra.size),
-                   "Number of extras defined by the ruleset (= %d) are "
-                   "lower than the number in the savefile (= %d).",
-                   game.control.num_extra_types, (int)loading->extra.size);
-    /* make sure that the size of the array is divisible by 4 */
-    nmod = 4 * ((loading->extra.size + 3) / 4);
-    loading->extra.order = fc_calloc(nmod, sizeof(*loading->extra.order));
-    for (j = 0; j < loading->extra.size; j++) {
-      loading->extra.order[j] = extra_type_by_rule_name(modname[j]);
-    }
-    free(modname);
-    for (; j < nmod; j++) {
-      loading->extra.order[j] = NULL;
-    }
-  }
-
   /* Load specials. */
   loading->special.size
     = secfile_lookup_int_default(loading->file, 0,
-                                 "savefile.specials_size");
-  if (loading->special.size) {
+                                 "savefile.special_size");
+  {
     const char **modname;
     size_t nmod;
     enum tile_special_type j;
@@ -1581,15 +1512,7 @@ static void sg_load_savefile(struct loaddata *loading)
     loading->special.order = fc_calloc(nmod,
                                        sizeof(*loading->special.order));
     for (j = 0; j < loading->special.size; j++) {
-      if (!strcasecmp("Road", modname[j])) {
-        loading->special.order[j] = S_OLD_ROAD;
-      } else if (!strcasecmp("Railroad", modname[j])) {
-        loading->special.order[j] = S_OLD_RAILROAD;
-      } else if (!strcasecmp("River", modname[j])) {
-        loading->special.order[j] = S_OLD_RIVER;
-      } else {
-        loading->special.order[j] = special_by_rule_name(modname[j]);
-      }
+      loading->special.order[j] = special_by_rule_name(modname[j]);
     }
     free(modname);
     for (; j < nmod; j++) {
@@ -1626,36 +1549,6 @@ static void sg_load_savefile(struct loaddata *loading)
       loading->base.order[j] = NULL;
     }
   }
-
-  /* Load roads. */
-  loading->road.size
-    = secfile_lookup_int_default(loading->file, 0,
-                                 "savefile.roads_size");
-  if (loading->road.size) {
-    const char **modname;
-    size_t nmod;
-    int j;
-
-    modname = secfile_lookup_str_vec(loading->file, &loading->road.size,
-                                     "savefile.roads_vector");
-    sg_failure_ret(loading->road.size != 0,
-                   "Failed to load roads order: %s",
-                   secfile_error());
-    sg_failure_ret(!(game.control.num_road_types < loading->road.size),
-                   "Number of roads defined by the ruleset (= %d) are "
-                   "lower than the number in the savefile (= %d).",
-                   game.control.num_road_types, (int)loading->road.size);
-    /* make sure that the size of the array is divisible by 4 */
-    nmod = 4 * ((loading->road.size + 3) / 4);
-    loading->road.order = fc_calloc(nmod, sizeof(*loading->road.order));
-    for (j = 0; j < loading->road.size; j++) {
-      loading->road.order[j] = road_type_by_rule_name(modname[j]);
-    }
-    free(modname);
-    for (; j < nmod; j++) {
-      loading->road.order[j] = NULL;
-    }
-  }
 }
 
 /****************************************************************************
@@ -1668,8 +1561,6 @@ static void sg_save_savefile(struct savedata *saving)
 
   /* Save savefile options. */
   sg_save_savefile_options(saving, savefile_options_default);
-
-  secfile_insert_int(saving->file, current_compat_ver(), "savefile.version");
 
   /* Save reason of the savefile generation. */
   secfile_insert_str(saving->file, saving->save_reason, "savefile.reason");
@@ -1710,101 +1601,41 @@ static void sg_save_savefile(struct savedata *saving)
                            "savefile.technology_vector");
   }
 
-  /* Save activities order in the savegame. */
-  secfile_insert_int(saving->file, ACTIVITY_LAST,
-                     "savefile.activities_size");
-  if (ACTIVITY_LAST > 0) {
-    const char **modname;
-    int i = 0;
-    int j;
-
-    modname = fc_calloc(ACTIVITY_LAST, sizeof(*modname));
-
-    for (j = 0; j < ACTIVITY_LAST; j++) {
-      modname[i++] = unit_activity_name(j);
-    }
-
-    secfile_insert_str_vec(saving->file, modname,
-                           ACTIVITY_LAST,
-                           "savefile.activities_vector");
-    free(modname);
-  }
-
-  /* Save trait order in savegame. */
-  secfile_insert_int(saving->file, TRAIT_COUNT,
-                     "savefile.trait_size");
+  /* Save specials order in savegame. */
+  secfile_insert_int(saving->file, S_LAST, "savefile.specials_size");
   {
     const char **modname;
-    enum trait tr;
-    int j;
 
-    modname = fc_calloc(TRAIT_COUNT, sizeof(*modname));
+    modname = fc_calloc(S_LAST, sizeof(*modname));
+    tile_special_type_iterate(j) {
+      modname[j] = special_rule_name(j);
+    } tile_special_type_iterate_end;
 
-    for (tr = trait_begin(), j = 0; tr != trait_end(); tr = trait_next(tr), j++) {
-      modname[j] = trait_name(tr);
-    }
+    /* Obsoleted entries */
+    modname[S_OLD_FORTRESS] = "Obsolete";
+    modname[S_OLD_AIRBASE] = "Obsolete";
 
-    secfile_insert_str_vec(saving->file, modname, TRAIT_COUNT,
-                           "savefile.trait_vector");
+    secfile_insert_str_vec(saving->file, modname, S_LAST,
+                           "savefile.specials_vector");
     free(modname);
   }
 
-  /* Save extras order in the savegame. */
-  secfile_insert_int(saving->file, game.control.num_extra_types,
-                     "savefile.extras_size");
-  if (game.control.num_extra_types > 0) {
+  /* Save bases order in the savegame. */
+  secfile_insert_int(saving->file, game.control.num_base_types,
+                     "savefile.bases_size");
+  if (game.control.num_base_types > 0) {
     const char **modname;
     int i = 0;
 
-    modname = fc_calloc(game.control.num_extra_types, sizeof(*modname));
+    modname = fc_calloc(game.control.num_base_types, sizeof(*modname));
 
-    extra_type_iterate(pextra) {
-      modname[i++] = extra_rule_name(pextra);
-    } extra_type_iterate_end;
-
-    secfile_insert_str_vec(saving->file, modname,
-                           game.control.num_extra_types,
-                           "savefile.extras_vector");
-    free(modname);
-  }
-
-  /* Save diplstate type order in the savegame. */
-  secfile_insert_int(saving->file, DS_LAST,
-                     "savefile.diplstate_type_size");
-  if (DS_LAST > 0) {
-    const char **modname;
-    int i = 0;
-    int j;
-
-    modname = fc_calloc(DS_LAST, sizeof(*modname));
-
-    for (j = 0; j < DS_LAST; j++) {
-      modname[i++] = diplstate_type_name(j);
-    }
+    base_type_iterate(pbase) {
+      modname[i++] = base_rule_name(pbase);
+    } base_type_iterate_end;
 
     secfile_insert_str_vec(saving->file, modname,
-                           DS_LAST,
-                           "savefile.diplstate_type_vector");
-    free(modname);
-  }
-
-  /* Save city_option order in the savegame. */
-  secfile_insert_int(saving->file, CITYO_LAST,
-                     "savefile.city_options_size");
-  if (CITYO_LAST > 0) {
-    const char **modname;
-    int i = 0;
-    int j;
-
-    modname = fc_calloc(CITYO_LAST, sizeof(*modname));
-
-    for (j = 0; j < CITYO_LAST; j++) {
-      modname[i++] = city_options_name(j);
-    }
-
-    secfile_insert_str_vec(saving->file, modname,
-                           CITYO_LAST,
-                           "savefile.city_options_vector");
+                           game.control.num_base_types,
+                           "savefile.bases_vector");
     free(modname);
   }
 }
@@ -2131,7 +1962,7 @@ static void sg_load_script(struct loaddata *loading)
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
-  script_server_state_load(loading->file);
+  script_state_load(loading->file);
 }
 
 /****************************************************************************
@@ -2142,7 +1973,7 @@ static void sg_save_script(struct savedata *saving)
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
-  script_server_state_save(saving->file);
+  script_state_save(saving->file);
 }
 
 /* =======================================================================
@@ -2177,9 +2008,6 @@ static void sg_load_scenario(struct loaddata *loading)
     }
     game.scenario.players
       = secfile_lookup_bool_default(loading->file, TRUE, "scenario.players");
-    game.scenario.startpos_nations
-      = secfile_lookup_bool_default(loading->file, FALSE,
-                                    "scenario.startpos_nations");
 
     sg_failure_ret(loading->server_state == S_S_INITIAL
                    || (loading->server_state == S_S_RUNNING
@@ -2215,8 +2043,6 @@ static void sg_save_scenario(struct savedata *saving)
   secfile_insert_str(saving->file, game.scenario.description,
                      "scenario.description");
   secfile_insert_bool(saving->file, game.scenario.players, "scenario.players");
-  secfile_insert_bool(saving->file, game.scenario.startpos_nations,
-                      "scenario.startpos_nations");
 }
 
 /* =======================================================================
@@ -2282,35 +2108,15 @@ static void sg_load_map(struct loaddata *loading)
     /* Load tiles. */
     sg_load_map_tiles(loading);
     sg_load_map_startpos(loading);
-
-    if (loading->version >= 30) {
-      /* 2.6.0 or newer */
-      sg_load_map_tiles_extras(loading);
-    } else {
-      sg_load_map_tiles_bases(loading);
-      if (loading->version >= 20) {
-        /* 2.5.0 or newer */
-        sg_load_map_tiles_roads(loading);
-      }
-      if (has_capability("specials", loading->secfile_options)) {
-        /* Load specials. */
-        sg_load_map_tiles_specials(loading, FALSE);
-      }
-    }
-
+    sg_load_map_tiles_bases(loading);
     if (has_capability("specials", loading->secfile_options)) {
-      /* Load resources. */
+      /* Load specials and resources. */
+      sg_load_map_tiles_specials(loading, FALSE);
       sg_load_map_tiles_resources(loading);
     } else if (has_capability("riversoverlay", loading->secfile_options)) {
       /* Load only rivers overlay. */
-      struct road_type *priver;
-
       sg_load_map_tiles_specials(loading, TRUE);
-      priver = road_by_compat_special(ROCO_RIVER);
-      if (priver == NULL) {
-        /* They are still as river specials */
-        map.server.have_rivers_overlay = TRUE;
-      }
+      map.server.have_rivers_overlay = TRUE;
     }
 
     /* Nothing more needed for a scenario. */
@@ -2324,17 +2130,8 @@ static void sg_load_map(struct loaddata *loading)
 
   sg_load_map_tiles(loading);
   sg_load_map_startpos(loading);
-  if (loading->version >= 30) {
-    /* 2.6.0 or newer */
-    sg_load_map_tiles_extras(loading);
-  } else {
-    sg_load_map_tiles_bases(loading);
-    if (loading->version >= 20) {
-      /* 2.5.0 or newer */
-      sg_load_map_tiles_roads(loading);
-    }
-    sg_load_map_tiles_specials(loading, FALSE);
-  }
+  sg_load_map_tiles_bases(loading);
+  sg_load_map_tiles_specials(loading, FALSE);
   sg_load_map_tiles_resources(loading);
   sg_load_map_known(loading);
   sg_load_map_owner(loading);
@@ -2358,9 +2155,18 @@ static void sg_save_map(struct savedata *saving)
 
   sg_save_map_tiles(saving);
   sg_save_map_startpos(saving);
-  sg_save_map_tiles_extras(saving);
-  if (map.server.have_resources) {
+  sg_save_map_tiles_bases(saving);
+  if (!map.server.have_resources) {
+    if (map.server.have_rivers_overlay) {
+      /* Save the rivers overlay map; this is a special case to allow
+       * re-saving scenarios which have rivers overlay data. This only
+       * applies if you don't have the rest of the specials. */
+      sg_save_savefile_options(saving, " riversoverlay");
+      sg_save_map_tiles_specials(saving, TRUE);
+    }
+  } else {
     sg_save_savefile_options(saving, " specials");
+    sg_save_map_tiles_specials(saving, FALSE);
     sg_save_map_tiles_resources(saving);
   }
 
@@ -2390,26 +2196,17 @@ static void sg_load_map_tiles(struct loaddata *loading)
 
   /* Check for special tile sprites. */
   whole_map_iterate(ptile) {
-    const char *spec_sprite;
-    const char *label;
-    int nat_x, nat_y;
-
-    index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
-    spec_sprite = secfile_lookup_str(loading->file, "map.spec_sprite_%d_%d",
-                                     nat_x, nat_y);
-    label = secfile_lookup_str_default(loading->file, NULL, "map.label_%d_%d",
-                                       nat_x, nat_y);
+    const char *spec_sprite = secfile_lookup_str(loading->file,
+                                                 "map.spec_sprite_%d_%d",
+                                                 ptile->nat_x, ptile->nat_y);
     if (NULL != ptile->spec_sprite) {
       ptile->spec_sprite = fc_strdup(spec_sprite);
-    }
-    if (label != NULL) {
-      tile_set_label(ptile, label);
     }
   } whole_map_iterate_end;
 }
 
 /****************************************************************************
-  Save all map tiles
+  ...
 ****************************************************************************/
 static void sg_save_map_tiles(struct savedata *saving)
 {
@@ -2422,62 +2219,16 @@ static void sg_save_map_tiles(struct savedata *saving)
 
   /* Save special tile sprites. */
   whole_map_iterate(ptile) {
-    int nat_x, nat_y;
-
-    index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
     if (ptile->spec_sprite) {
       secfile_insert_str(saving->file, ptile->spec_sprite,
-                         "map.spec_sprite_%d_%d", nat_x, nat_y);
-    }
-    if (ptile->label != NULL) {
-      secfile_insert_str(saving->file, ptile->label,
-                         "map.label_%d_%d", nat_x, nat_y);
+                         "map.spec_sprite_%d_%d", ptile->nat_x,
+                         ptile->nat_y);
     }
   } whole_map_iterate_end;
 }
 
 /****************************************************************************
-  Load extras to map
-****************************************************************************/
-static void sg_load_map_tiles_extras(struct loaddata *loading)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  /* Load extras. */
-  halfbyte_iterate_extras(j, loading->extra.size) {
-    LOAD_MAP_CHAR(ch, ptile, sg_extras_set(&ptile->extras, ch, loading->extra.order + 4 * j),
-                  loading->file, "map.e%02d_%04d", j);
-  } halfbyte_iterate_extras_end;
-}
-
-/****************************************************************************
-  Save information about extras on map
-****************************************************************************/
-static void sg_save_map_tiles_extras(struct savedata *saving)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  /* Save extras. */
-  halfbyte_iterate_extras(j, game.control.num_extra_types) {
-    int mod[4];
-    int l;
-
-    for (l = 0; l < 4; l++) {
-      if (4 * j + 1 > game.control.num_extra_types) {
-        mod[l] = -1;
-      } else {
-        mod[l] = 4 * j + l;
-      }
-    }
-    SAVE_MAP_CHAR(ptile, sg_extras_get(ptile->extras, mod),
-                  saving->file, "map.e%02d_%04d", j);
-  } halfbyte_iterate_extras_end;
-}
-
-/****************************************************************************
-  Load bases to map
+  ...
 ****************************************************************************/
 static void sg_load_map_tiles_bases(struct loaddata *loading)
 {
@@ -2486,30 +2237,39 @@ static void sg_load_map_tiles_bases(struct loaddata *loading)
 
   /* Load bases. */
   halfbyte_iterate_bases(j, loading->base.size) {
-    LOAD_MAP_CHAR(ch, ptile, sg_bases_set(&ptile->extras, ch,
+    LOAD_MAP_CHAR(ch, ptile, sg_bases_set(&ptile->bases, ch,
                                           loading->base.order + 4 * j),
                   loading->file, "map.b%02d_%04d", j);
   } halfbyte_iterate_bases_end;
 }
 
 /****************************************************************************
-  Load roads to map
+  ...
 ****************************************************************************/
-static void sg_load_map_tiles_roads(struct loaddata *loading)
+static void sg_save_map_tiles_bases(struct savedata *saving)
 {
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
-  /* Load roads. */
-  halfbyte_iterate_roads(j, loading->road.size) {
-    LOAD_MAP_CHAR(ch, ptile, sg_roads_set(&ptile->extras, ch,
-                                          loading->road.order + 4 * j),
-                  loading->file, "map.r%02d_%04d", j);
-  } halfbyte_iterate_roads_end;
+  /* Save bases. */
+  halfbyte_iterate_bases(j, game.control.num_base_types) {
+    int mod[4];
+    int l;
+
+    for (l = 0; l < 4; l++) {
+      if (4 * j + 1 > game.control.num_base_types) {
+        mod[l] = -1;
+      } else {
+        mod[l] = 4 * j + l;
+      }
+    }
+    SAVE_MAP_CHAR(ptile, sg_bases_get(ptile->bases, mod), saving->file,
+                  "map.b%02d_%04d", j);
+  } halfbyte_iterate_bases_end;
 }
 
 /****************************************************************************
-  Load information about specials on map
+  ...
 ****************************************************************************/
 static void sg_load_map_tiles_specials(struct loaddata *loading,
                                        bool rivers_overlay)
@@ -2532,7 +2292,7 @@ static void sg_load_map_tiles_specials(struct loaddata *loading,
    * the rivers overlay but no other specials. Scenarios that encode things
    * this way should have the "riversoverlay" capability. */
   halfbyte_iterate_special(j, loading->special.size) {
-    LOAD_MAP_CHAR(ch, ptile, sg_special_set(&ptile->extras, ch,
+    LOAD_MAP_CHAR(ch, ptile, sg_special_set(&ptile->special, ch,
                                             loading->special.order + 4 * j,
                                             rivers_overlay),
                   loading->file, "map.spe%02d_%04d", j);
@@ -2540,7 +2300,34 @@ static void sg_load_map_tiles_specials(struct loaddata *loading,
 }
 
 /****************************************************************************
-  Load information about resources on map.
+  ...
+****************************************************************************/
+static void sg_save_map_tiles_specials(struct savedata *saving,
+                                       bool rivers_overlay)
+{
+  /* Check status and return if not OK (sg_success != TRUE). */
+  sg_check_ret();
+
+  halfbyte_iterate_special(j, S_LAST) {
+    enum tile_special_type mod[4];
+    int l;
+
+    for (l = 0; l < 4; l++) {
+      if (rivers_overlay) {
+        /* Save only rivers overlay. */
+        mod[l] = (4 * j + l == S_RIVER) ? S_RIVER : S_LAST;
+      } else {
+        /* Save all specials. */
+        mod[l] = MIN(4 * j + l, S_LAST);
+      }
+    }
+    SAVE_MAP_CHAR(ptile, sg_special_get(ptile->special, mod), saving->file,
+                  "map.spe%02d_%04d", j);
+  } halfbyte_iterate_special_end;
+}
+
+/****************************************************************************
+  ...
 ****************************************************************************/
 static void sg_load_map_tiles_resources(struct loaddata *loading)
 {
@@ -2558,7 +2345,7 @@ static void sg_load_map_tiles_resources(struct loaddata *loading)
 
     if (terrain_has_resource(ptile->terrain, ptile->resource)) {
       /* cannot use set_special() for internal values */
-      ptile->resource_valid = TRUE;
+      BV_SET(ptile->special, S_RESOURCE_VALID);
     }
   } whole_map_iterate_end;
 
@@ -2566,7 +2353,7 @@ static void sg_load_map_tiles_resources(struct loaddata *loading)
 }
 
 /****************************************************************************
-  Load information about resources on map.
+  ...
 ****************************************************************************/
 static void sg_save_map_tiles_resources(struct savedata *saving)
 {
@@ -2658,11 +2445,6 @@ static void sg_load_map_startpos(struct loaddata *loading)
                 map_startpos_count(), game.server.max_players);
     game.server.max_players = map_startpos_count();
   }
-
-  /* Re-initialize nation availability in light of start positions.
-   * This has to be after loading [scenario] and [map].startpos and
-   * before we seek nations for players. */
-  update_nations_with_startpos();
 }
 
 /****************************************************************************
@@ -2685,14 +2467,10 @@ static void sg_save_map_startpos(struct savedata *saving)
                      "map.startpos_count");
 
   map_startpos_iterate(psp) {
-    int nat_x, nat_y;
-
     ptile = startpos_tile(psp);
 
-    index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
-    secfile_insert_int(saving->file, nat_x, "map.startpos%d.x", i);
-    secfile_insert_int(saving->file, nat_y, "map.startpos%d.y", i);
-
+    secfile_insert_int(saving->file, ptile->nat_x, "map.startpos%d.x", i);
+    secfile_insert_int(saving->file, ptile->nat_y, "map.startpos%d.y", i);
     secfile_insert_bool(saving->file, startpos_is_excluding(psp),
                         "map.startpos%d.exclude", i);
     if (startpos_allows_all(psp)) {
@@ -2721,14 +2499,13 @@ static void sg_save_map_startpos(struct savedata *saving)
 }
 
 /****************************************************************************
-  Load tile owner information
+  ...
 ****************************************************************************/
 static void sg_load_map_owner(struct loaddata *loading)
 {
   int x, y;
   struct player *owner = NULL;
   struct tile *claimer = NULL;
-  struct player *eowner = NULL;
 
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
@@ -2744,22 +2521,15 @@ static void sg_load_map_owner(struct loaddata *loading)
                                              "map.owner%04d", y);
     const char *buffer2 = secfile_lookup_str(loading->file,
                                              "map.source%04d", y);
-    const char *buffer3 = secfile_lookup_str(loading->file,
-                                             "map.eowner%04d", y);
     const char *ptr1 = buffer1;
     const char *ptr2 = buffer2;
-    const char *ptr3 = buffer3;
 
     sg_failure_ret(buffer1 != NULL, "%s", secfile_error());
     sg_failure_ret(buffer2 != NULL, "%s", secfile_error());
-    if (loading->version >= 30) {
-      sg_failure_ret(buffer3 != NULL, "%s", secfile_error());
-    }
 
     for (x = 0; x < map.xsize; x++) {
       char token1[TOKEN_SIZE];
       char token2[TOKEN_SIZE];
-      char token3[TOKEN_SIZE];
       int number;
       struct tile *ptile = native_pos_to_tile(x, y);
 
@@ -2785,30 +2555,13 @@ static void sg_load_map_owner(struct loaddata *loading)
         claimer = index_to_tile(number);
       }
 
-      if (loading->version >= 30) {
-        scanin(&ptr3, ",", token3, sizeof(token3));
-        sg_failure_ret(token3[0] != '\0',
-                       "Map size not correct (map.eowner%d).", y);
-        if (strcmp(token3, "-") == 0) {
-          eowner = NULL;
-        } else {
-          sg_failure_ret(str_to_int(token3, &number),
-                         "Got base owner %s in (%d, %d).", token3, x, y);
-          eowner = player_by_number(number);
-        }
-      } else {
-        eowner = owner;
-      }
-
-      map_claim_ownership(ptile, owner, claimer, FALSE);
-      tile_claim_bases(ptile, eowner);
-      log_debug("extras_owner(%d, %d) = %s", TILE_XY(ptile), player_name(eowner));
+      map_claim_ownership(ptile, owner, claimer);
     }
   }
 }
 
 /****************************************************************************
-  Save tile owner information
+  ...
 ****************************************************************************/
 static void sg_save_map_owner(struct savedata *saving)
 {
@@ -2865,32 +2618,10 @@ static void sg_save_map_owner(struct savedata *saving)
     }
     secfile_insert_str(saving->file, line, "map.source%04d", y);
   }
-
-  for (y = 0; y < map.ysize; y++) {
-    char line[map.xsize * TOKEN_SIZE];
-
-    line[0] = '\0';
-    for (x = 0; x < map.xsize; x++) {
-      char token[TOKEN_SIZE];
-      struct tile *ptile = native_pos_to_tile(x, y);
-
-      if (!saving->save_players || base_owner(ptile) == NULL) {
-        strcpy(token, "-");
-      } else {
-        fc_snprintf(token, sizeof(token), "%d",
-                    player_number(base_owner(ptile)));
-      }
-      strcat(line, token);
-      if (x + 1 < map.xsize) {
-        strcat(line, ",");
-      }
-    }
-    secfile_insert_str(saving->file, line, "map.eowner%04d", y);
-  }
 }
 
 /****************************************************************************
-  Save worked tiles information
+  ...
 ****************************************************************************/
 static void sg_load_map_worked(struct loaddata *loading)
 {
@@ -2934,7 +2665,7 @@ static void sg_load_map_worked(struct loaddata *loading)
 }
 
 /****************************************************************************
-  Save worked tiles information
+  ...
 ****************************************************************************/
 static void sg_save_map_worked(struct savedata *saving)
 {
@@ -2973,10 +2704,26 @@ static void sg_save_map_worked(struct savedata *saving)
 }
 
 /****************************************************************************
-  Load tile known status
+  ...
 ****************************************************************************/
 static void sg_load_map_known(struct loaddata *loading)
 {
+  char *kver = NULL;
+  int bit_magic;
+
+  if (has_capability("knownv2", loading->secfile_options)) {
+    kver = "kvb";
+    bit_magic = 32;
+  } else {
+    /* Backward compatibility with old 2.3.x savegames.
+     * This causes bit-shifts of >=32 (undefined behaviour), but on
+     * common platforms, information happens not to be lost, just
+     * oddly arranged.
+     * See gna bug #19029. */
+    kver = "k";
+    bit_magic = 8;
+  }
+
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
@@ -2995,12 +2742,15 @@ static void sg_load_map_known(struct loaddata *loading)
       for (j = 0; j < 8; j++) {
         for (i = 0; i < 4; i++) {
           /* Only bother trying to load the map for this halfbyte if at least
-           * one of the corresponding player slots is in use. */
-          if (player_slot_is_used(player_slot_by_number(l*32 + j*4 + i))) {
+           * one of the corresponding player slots is in use.
+           * (Unless we're in backward compatibility mode, in which case
+           * the mapping of slots to bits is wacky and unpredictable.) */
+          if (bit_magic == 8
+              || player_slot_is_used(player_slot_by_number(l*32 + j*4 + i))) {
             LOAD_MAP_CHAR(ch, ptile,
                           known[l * MAP_INDEX_SIZE + tile_index(ptile)]
                             |= ascii_hex2bin(ch, j),
-                          loading->file, "map.k%02d_%04d", l * 8 + j);
+                          loading->file, "map.%s%02d_%04d", kver, l * 8 + j);
             break;
           }
         }
@@ -3018,7 +2768,8 @@ static void sg_load_map_known(struct loaddata *loading)
         p = player_index(pplayer);
         l = player_index(pplayer) / 32;
 
-        if (known[l * MAP_INDEX_SIZE + tile_index(ptile)] & (1u << (p % 32))) {
+        if (known[l * MAP_INDEX_SIZE + tile_index(ptile)]
+            & (1u << (p - l * bit_magic))) {
           map_set_known(ptile, pplayer);
         }
       } players_iterate_end;
@@ -3029,7 +2780,7 @@ static void sg_load_map_known(struct loaddata *loading)
 }
 
 /****************************************************************************
-  Save tile known status for whole map and all players
+  ...
 ****************************************************************************/
 static void sg_save_map_known(struct savedata *saving)
 {
@@ -3046,7 +2797,10 @@ static void sg_save_map_known(struct savedata *saving)
                         "game.save_known");
     if (game.server.save_options.save_known) {
       int j, p, l, i;
-      unsigned int *known = fc_calloc(lines * MAP_INDEX_SIZE, sizeof(*known));
+      unsigned int *known_old = fc_calloc(lines * MAP_INDEX_SIZE,
+                                          sizeof(*known_old));
+      unsigned int *known = fc_calloc(lines * MAP_INDEX_SIZE,
+                                      sizeof(*known));
 
       /* HACK: we convert the data into a 32-bit integer, and then save it as
        * hex. */
@@ -3056,12 +2810,30 @@ static void sg_save_map_known(struct savedata *saving)
           if (map_is_known(ptile, pplayer)) {
             p = player_index(pplayer);
             l = p / 32;
+            /* Backward compatibility: this calculation deliberately shifts
+             * too far left (invoking undefined behaviour) so that old
+             * (2.3.0/2.3.1) servers stand a chance of loading new savegames
+             * (since in practice the undefined behaviour doesn't seem to lose
+             * information on common platforms). See gna bug #19029. */
+            known_old[l * MAP_INDEX_SIZE + tile_index(ptile)]
+              |= (1u << (p - l * 8));
+            /* Sensible version for newer servers */
             known[l * MAP_INDEX_SIZE + tile_index(ptile)]
               |= (1u << (p % 32)); /* "p % 32" = "p - l * 32" */ 
           }
         } players_iterate_end;
       } whole_map_iterate_end;
 
+      for (l = 0; l < lines; l++) {
+        for (j = 0; j < 8; j++) {
+          /* Backward compatibility: save all halfbytes (even if none of the
+           * player slots are used) */
+          /* put 4-bit segments of the 32-bit "known" field */
+          SAVE_MAP_CHAR(ptile, bin2ascii_hex(known_old[l * MAP_INDEX_SIZE
+                                                   + tile_index(ptile)], j),
+                        saving->file, "map.k%02d_%04d", l * 8 + j);
+        }
+      }
       for (l = 0; l < lines; l++) {
         for (j = 0; j < 8; j++) {
           for (i = 0; i < 4; i++) {
@@ -3071,7 +2843,7 @@ static void sg_save_map_known(struct savedata *saving)
               /* put 4-bit segments of the 32-bit "known" field */
               SAVE_MAP_CHAR(ptile, bin2ascii_hex(known[l * MAP_INDEX_SIZE
                                                        + tile_index(ptile)], j),
-                            saving->file, "map.k%02d_%04d", l * 8 + j);
+                            saving->file, "map.kvb%02d_%04d", l * 8 + j);
               break;
             }
           }
@@ -3079,6 +2851,7 @@ static void sg_save_map_known(struct savedata *saving)
       }
 
       FC_FREE(known);
+      FC_FREE(known_old);
     }
   }
 }
@@ -3120,7 +2893,7 @@ static void sg_load_players_basic(struct loaddata *loading)
   for (k = 0; k < loading->improvement.size; k++) {
     sg_failure_ret(string[k] == '1' || string[k] == '0',
                    "Undefined value '%c' within "
-                   "'players.destroyed_wonders'.", string[k]);
+                   "'players.destroyed_wonders'.", string[k])
 
     if (string[k] == '1') {
       struct impr_type *pimprove =
@@ -3136,6 +2909,10 @@ static void sg_load_players_basic(struct loaddata *loading)
     = secfile_lookup_int_default(loading->file, server.identity_number,
                                  "players.identity_number_used");
 
+  /* Initialize nations we loaded from rulesets. This has to be after
+   * map loading and before we seek nations for players */
+  init_available_nations();
+
   /* First remove all defined players. */
   players_iterate(pplayer) {
     server_remove_player(pplayer);
@@ -3144,36 +2921,15 @@ static void sg_load_players_basic(struct loaddata *loading)
   /* Now, load the players from the savefile. */
   player_slots_iterate(pslot) {
     struct player *pplayer;
-    struct rgbcolor *prgbcolor = NULL;
-    int pslot_id = player_slot_index(pslot);
 
     if (NULL == secfile_section_lookup(loading->file, "player%d",
-                                       pslot_id)) {
+                                       player_slot_index(pslot))) {
       continue;
     }
 
-    /* Get player AI type. */
-    string = secfile_lookup_str(loading->file, "player%d.ai_type",
-                                player_slot_index(pslot));
-    sg_failure_ret(string != NULL, "%s", secfile_error());
-
-    /* Get player color */
-    if (!rgbcolor_load(loading->file, &prgbcolor, "player%d.color",
-                       pslot_id)) {
-      log_verbose("No color defined for player %d.", pslot_id);
-      /* If game is already running, server_create_player() will assign
-       * a color, else colors will be assigned on game start */
-    }
-
-    /* Create player. */
-    pplayer = server_create_player(player_slot_index(pslot), string,
-                                   prgbcolor);
-    sg_failure_ret(pplayer != NULL, "Invalid AI type: '%s'!", string);
-
+    /* create player */
+    pplayer = server_create_player(player_slot_index(pslot));
     server_player_init(pplayer, FALSE, FALSE);
-
-    /* Free the color definition. */
-    rgbcolor_destroy(prgbcolor);
   } player_slots_iterate_end;
 
   /* check number of players */
@@ -3303,10 +3059,9 @@ static void sg_load_players(struct loaddata *loading)
 
     /* print out some informations */
     if (pplayer->ai_controlled) {
-      log_normal(_("%s has been added as %s level AI-controlled player "
-                   "(%s)."), player_name(pplayer),
-                 ai_level_name(pplayer->ai_common.skill_level),
-                 ai_name(pplayer->ai));
+      log_normal(_("%s has been added as %s level AI-controlled player."),
+                 player_name(pplayer),
+                 ai_level_name(pplayer->ai_common.skill_level));
     } else {
       log_normal(_("%s has been added as human player."),
                  player_name(pplayer));
@@ -3315,19 +3070,10 @@ static void sg_load_players(struct loaddata *loading)
 
   /* In case of tech_leakage, we can update research only after all the 
    * players have been loaded */
-  /* Also load the transport status of the units here. It must be a special
-   * case as all units must be known (unit on an allied transporter). */
   players_iterate(pplayer) {
     /* Mark the reachable techs */
     player_research_update(pplayer);
-    /* Load unit transport status. */
-    sg_load_player_units_transport(loading, pplayer);
   } players_iterate_end;
-
-  /* Savegame may contain nation assignments that are incompatible with the
-   * current nationset -- for instance, if it predates the introduction of
-   * nationsets. Ensure they are compatible, one way or another. */
-  fit_nationset_to_players();
 
   /* Some players may have invalid nations in the ruleset. Once all players
    * are loaded, pick one of the remaining nations for them. */
@@ -3342,9 +3088,12 @@ static void sg_load_players(struct loaddata *loading)
   } players_iterate_end;
 
   /* Sanity check alliances, prevent allied-with-ally-of-enemy. */
-  players_iterate_alive(plr) {
-    players_iterate_alive(aplayer) {
-      if (pplayers_allied(plr, aplayer)) {
+  players_iterate(plr) {
+    players_iterate(aplayer) {
+      if (plr->is_alive
+          && aplayer->is_alive
+          && pplayers_allied(plr, aplayer))
+      {
         enum dipl_reason can_ally = pplayer_can_make_treaty(plr, aplayer,
                                                             DS_ALLIANCE);
         if (can_ally == DIPL_ALLIANCE_PROBLEM_US
@@ -3357,8 +3106,8 @@ static void sg_load_players(struct loaddata *loading)
           player_diplstate_get(aplayer, plr)->type = DS_PEACE;
         }
       }
-    } players_iterate_alive_end;
-  } players_iterate_alive_end;
+    } players_iterate_end;
+  } players_iterate_end;
 
   /* Update all city information.  This must come after all cities are
    * loaded (in player_load) but before player (dumb) cities are loaded
@@ -3477,7 +3226,7 @@ static void sg_save_players(struct savedata *saving)
 }
 
 /****************************************************************************
-  Main player data loading function
+  ...
 ****************************************************************************/
 static void sg_load_player_main(struct loaddata *loading,
                                 struct player *plr)
@@ -3486,6 +3235,7 @@ static void sg_load_player_main(struct loaddata *loading,
   const char *string;
   struct government *gov;
   struct player_research *research;
+  enum ai_level skill_level;
 
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
@@ -3501,13 +3251,6 @@ static void sg_load_player_main(struct loaddata *loading,
              secfile_lookup_str_default(loading->file, "",
                                         "player%d.ranked_username",
                                         plrno));
-  string = secfile_lookup_str_default(loading->file, "",
-                                      "player%d.delegation_username",
-                                      plrno);
-  /* Defaults to no delegation. */
-  if (strlen(string)) {
-    player_delegation_set(plr, string);
-  }
 
   /* Nation */
   string = secfile_lookup_str(loading->file, "player%d.nation", plrno);
@@ -3580,34 +3323,59 @@ static void sg_load_player_main(struct loaddata *loading,
   /* load ai data */
   players_iterate(aplayer) {
     char buf[32];
+    struct ai_dip_intel *adip = ai_diplomacy_get(plr, aplayer);
 
     fc_snprintf(buf, sizeof(buf), "player%d.ai%d", plrno,
                 player_index(aplayer));
 
     plr->ai_common.love[player_index(aplayer)] =
         secfile_lookup_int_default(loading->file, 1, "%s.love", buf);
+    adip->spam
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.spam", buf);
+    adip->countdown
+         = secfile_lookup_int_default(loading->file, -1,
+                                      "%s.countdown", buf);
+    adip->war_reason
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.war_reason", buf);
+    adip->ally_patience
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.patience", buf);
+    adip->warned_about_space
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.warn_space", buf);
+    adip->asked_about_peace
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.ask_peace", buf);
+    adip->asked_about_alliance
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.ask_alliance", buf);
+    adip->asked_about_ceasefire
+         = secfile_lookup_int_default(loading->file, 0,
+                                      "%s.ask_ceasefire", buf);
   } players_iterate_end;
 
-  CALL_FUNC_EACH_AI(player_load, plr, loading->file, plrno);
-
+  skill_level
+    = secfile_lookup_int_default(loading->file, game.info.skill_level,
+                                 "player%d.ai.skill_level", plrno);
   /* Some sane defaults */
+  BV_CLR_ALL(plr->ai_common.handicaps);
   plr->ai_common.fuzzy = 0;
   plr->ai_common.expand = 100;
   plr->ai_common.science_cost = 100;
   plr->ai_common.skill_level =
     secfile_lookup_int_default(loading->file, game.info.skill_level,
                                "player%d.ai.skill_level", plrno);
+  if (plr->ai_controlled) {
+    set_ai_level_directer(plr, plr->ai_common.skill_level);
+  }
 
   plr->ai_common.barbarian_type
     = secfile_lookup_int_default(loading->file, 0,
                                  "player%d.ai.is_barbarian", plrno);
   if (is_barbarian(plr)) {
     server.nbarbarians++;
-  }
-
-  if (plr->ai_controlled) {
-    set_ai_level_directer(plr, plr->ai_common.skill_level);
-    CALL_PLR_AI_FUNC(gained_control, plr, plr);
   }
 
   /* Load city style. */
@@ -3699,54 +3467,6 @@ static void sg_load_player_main(struct loaddata *loading,
     }
   }
 
-  /* Traits */
-  {
-    for (i = 0; i < loading->trait.size; i++) {
-      enum trait tr = trait_by_name(loading->trait.order[i], fc_strcasecmp);
-
-      if (trait_is_valid(tr)) {
-        secfile_lookup_int(loading->file, &plr->ai_common.traits[tr].mod, 
-                           "plr%d.trait.mod%d", plrno, i);
-      }
-    }
-  }
-
-  /* Achievements */
-  {
-    int count;
-
-    count = secfile_lookup_int_default(loading->file, -1,
-                                       "player%d.achievement_count", plrno);
-
-    if (count > 0) {
-      for (i = 0; i < count; i++) {
-        const char *name;
-        struct achievement *pach;
-        bool first;
-
-        name = secfile_lookup_str(loading->file,
-                                  "player%d.achievement%d.name", plrno, i);
-        pach = achievement_by_rule_name(name);
-
-        sg_failure_ret(pach != NULL,
-                       "Unknown achievement \"%s\".", name);
-
-        secfile_lookup_bool(loading->file, &first,
-                            "player%d.achievement%d.first", plrno, i);
-
-        sg_failure_ret(pach->first == NULL || !first,
-                       "Multiple players listed as first to get achievement \"%s\".",
-                       name);
-
-        BV_SET(pach->achievers, player_index(plr));
-
-        if (first) {
-          pach->first = plr;
-        }
-      }
-    }
-  }
-
   /* Unit statistics. */
   plr->score.units_built =
       secfile_lookup_int_default(loading->file, 0,
@@ -3806,8 +3526,10 @@ static void sg_load_player_main(struct loaddata *loading,
                        "Undefined value '%c' within '%s.structure'.", st[i],
                        prefix)
 
-        if (!(st[i] == '0')) {
-          BV_SET(ship->structure, i);
+        if (st[i] == '0') {
+          ship->structure[i] = FALSE;
+        } else {
+          ship->structure[i] = TRUE;
         }
       }
       if (ship->state >= SSHIP_LAUNCHED) {
@@ -3818,34 +3540,10 @@ static void sg_load_player_main(struct loaddata *loading,
       spaceship_calc_derived(ship);
     }
   }
-
-  /* Load lost wonder data. */
-  string = secfile_lookup_str(loading->file, "player%d.lost_wonders", plrno);
-  /* If not present, probably an old savegame; nothing to be done */
-  if (string) {
-    int k;
-    sg_failure_ret(strlen(string) == loading->improvement.size,
-                   "Invalid length for 'player%d.lost_wonders' "
-                   "(%lu ~= %lu)", plrno, (unsigned long) strlen(string),
-                   (unsigned long) loading->improvement.size);
-    for (k = 0; k < loading->improvement.size; k++) {
-      sg_failure_ret(string[k] == '1' || string[k] == '0',
-                     "Undefined value '%c' within "
-                     "'player%d.lost_wonders'.", plrno, string[k]);
-
-      if (string[k] == '1') {
-        struct impr_type *pimprove =
-            improvement_by_rule_name(loading->improvement.order[k]);
-        if (pimprove) {
-          plr->wonders[improvement_index(pimprove)] = WONDER_LOST;
-        }
-      }
-    }
-  }
 }
 
 /****************************************************************************
-  Main player data saving function.
+  ...
 ****************************************************************************/
 static void sg_save_player_main(struct savedata *saving,
                                 struct player *plr)
@@ -3856,19 +3554,12 @@ static void sg_save_player_main(struct savedata *saving,
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
 
-  secfile_insert_str(saving->file, ai_name(plr->ai),
-                     "player%d.ai_type", plrno);
   secfile_insert_str(saving->file, player_name(plr),
                      "player%d.name", plrno);
   secfile_insert_str(saving->file, plr->username,
                      "player%d.username", plrno);
-  rgbcolor_save(saving->file, plr->rgb, "player%d.color", plrno);
   secfile_insert_str(saving->file, plr->ranked_username,
                      "player%d.ranked_username", plrno);
-  secfile_insert_str(saving->file,
-                     player_delegation_get(plr) ? player_delegation_get(plr)
-                                                : "",
-                     "player%d.delegation_username", plrno);
   secfile_insert_str(saving->file, nation_rule_name(nation_of_player(plr)),
                      "player%d.nation", plrno);
   secfile_insert_int(saving->file, plr->team ? team_index(plr->team) : -1,
@@ -3921,13 +3612,29 @@ static void sg_save_player_main(struct savedata *saving,
   } players_iterate_end;
 
   players_iterate(aplayer) {
+    struct ai_dip_intel *adip = ai_diplomacy_get(plr, aplayer);
+
     i = player_index(aplayer);
     /* save ai data */
     secfile_insert_int(saving->file, plr->ai_common.love[i],
                        "player%d.ai%d.love", plrno, i);
+    secfile_insert_int(saving->file, adip->spam,
+                       "player%d.ai%d.spam", plrno, i);
+    secfile_insert_int(saving->file, adip->countdown,
+                       "player%d.ai%d.countdown", plrno, i);
+    secfile_insert_int(saving->file, adip->war_reason,
+                       "player%d.ai%d.war_reason", plrno, i);
+    secfile_insert_int(saving->file, adip->ally_patience,
+                       "player%d.ai%d.patience", plrno, i);
+    secfile_insert_int(saving->file, adip->warned_about_space,
+                       "player%d.ai%d.warn_space", plrno, i);
+    secfile_insert_int(saving->file, adip->asked_about_peace,
+                       "player%d.ai%d.ask_peace", plrno, i);
+    secfile_insert_int(saving->file, adip->asked_about_alliance,
+                       "player%d.ai%d.ask_alliance", plrno, i);
+    secfile_insert_int(saving->file, adip->asked_about_ceasefire,
+                       "player%d.ai%d.ask_ceasefire", plrno, i);
   } players_iterate_end;
-
-  CALL_FUNC_EACH_AI(player_save, plr, saving->file, plrno);
 
   secfile_insert_int(saving->file, plr->ai_common.skill_level,
                      "player%d.ai.skill_level", plrno);
@@ -3976,41 +3683,6 @@ static void sg_save_player_main(struct savedata *saving,
     secfile_insert_str(saving->file, invs, "player%d.research.done", plrno);
   }
 
-  /* Save traits */
-  {
-    enum trait tr;
-    int j;
-
-    for (tr = trait_begin(), j = 0; tr != trait_end(); tr = trait_next(tr), j++) {
-      secfile_insert_int(saving->file, plr->ai_common.traits[tr].mod,
-                         "player%d.trait.mod%d", plrno, j);
-    }
-  }
-
-  /* Save achievements */
-  {
-    int j = 0;
-
-    achievements_iterate(pach) {
-      if (achievement_player_has(pach, plr)) {
-        secfile_insert_str(saving->file, achievement_rule_name(pach),
-                           "player%d.achievement%d.name", plrno, j);
-        if (pach->first == plr) {
-          secfile_insert_bool(saving->file, TRUE,
-                              "player%d.achievement%d.first", plrno, j);
-        } else {
-          secfile_insert_bool(saving->file, FALSE,
-                              "player%d.achievement%d.first", plrno, j);
-        }
-
-        j++;
-      }
-    } achievements_iterate_end;
-
-    secfile_insert_int(saving->file, j,
-                       "player%d.achievement_count", plrno);
-  }
-
   secfile_insert_bool(saving->file, plr->server.capital,
                       "player%d.capital", plrno);
   secfile_insert_int(saving->file, plr->revolution_finishes,
@@ -4049,7 +3721,7 @@ static void sg_save_player_main(struct savedata *saving,
                        "%s.solar_panels", buf);
 
     for(i = 0; i < NUM_SS_STRUCTURALS; i++) {
-      st[i] = BV_ISSET(ship->structure, i) ? '1' : '0';
+      st[i] = (ship->structure[i]) ? '1' : '0';
     }
     st[i] = '\0';
     secfile_insert_str(saving->file, st, "%s.structure", buf);
@@ -4058,26 +3730,10 @@ static void sg_save_player_main(struct savedata *saving,
                          "%s.launch_year", buf);
     }
   }
-
-  /* Save lost wonders info. */
-  {
-    char lost[B_LAST+1];
-
-    improvement_iterate(pimprove) {
-      if (is_wonder(pimprove) && wonder_is_lost(plr, pimprove)) {
-        lost[improvement_index(pimprove)] = '1';
-      } else {
-        lost[improvement_index(pimprove)] = '0';
-      }
-    } improvement_iterate_end;
-    lost[improvement_count()] = '\0';
-    secfile_insert_str(saving->file, lost,
-                       "player%d.lost_wonders", plrno);
-  }
 }
 
 /****************************************************************************
-  Load city data
+  ...
 ****************************************************************************/
 static void sg_load_player_cities(struct loaddata *loading,
                                   struct player *plr)
@@ -4115,33 +3771,25 @@ static void sg_load_player_cities(struct loaddata *loading,
     identity_number_reserve(pcity->id);
     idex_register_city(pcity);
 
-    /* Load the information about the nationality of citizens. This is done
-     * here because the city sanity check called by citizens_update() requires
-     * that the city is registered. */
-    sg_load_player_city_citizens(loading, plr, pcity, buf);
-
     /* After everything is loaded, but before vision. */
-    map_claim_ownership(city_tile(pcity), plr, city_tile(pcity), TRUE);
+    map_claim_ownership(city_tile(pcity), plr, city_tile(pcity));
 
     /* adding the city contribution to fog-of-war */
     pcity->server.vision = vision_new(plr, city_tile(pcity));
     vision_reveal_tiles(pcity->server.vision, game.server.vision_reveal_tiles);
     city_refresh_vision(pcity);
 
-    /* Refresh the city. This also checks the squared city radius. Thus, it
-     * must be after improvements, as the effect City_Radius_SQ could be
-     * influenced by improvements; and after the vision is defined, as the
-     * function calls city_refresh_vision(). */
-    city_refresh(pcity);
+    /* Check the squared city radius. Must be after improvements, as the
+     * effect City_Radius_SQ could be influenced by improvements; and after
+     * the vision is defined, as the function calls city_refresh_vision(). */
+    if (city_map_update_radius_sq(pcity, FALSE)) {
+      /* squared city radius has been changed - repair the city */
+      auto_arrange_workers(pcity);
+      city_refresh(pcity);
+    }
 
     city_list_append(plr->cities, pcity);
   }
-
-  /* Check the sanity of the cities. */
-  city_list_iterate(plr->cities, pcity) {
-    city_refresh(pcity);
-    sanity_check_city(pcity);
-  } city_list_iterate_end;
 }
 
 /****************************************************************************
@@ -4152,9 +3800,9 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
 {
   struct player *past;
   const char *kind, *name, *string;
-  int id, i, repair, specialists = 0, workers = 0, value;
+  int id, i, repair, specialists = 0, workers = 0;
   int nat_x, nat_y;
-  citizens size;
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &nat_x, "%s.x", citystr),
                   FALSE, "%s", secfile_error());
@@ -4181,28 +3829,22 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     pcity->original = past;
   }
 
-  sg_warn_ret_val(secfile_lookup_int(loading->file, &value, "%s.size",
+  sg_warn_ret_val(secfile_lookup_int(loading->file, &pcity->size, "%s.size",
                                      citystr), FALSE, "%s", secfile_error());
-  size = (citizens)value; /* set the correct type */
-  sg_warn_ret_val(value == (int)size, FALSE,
-                  "Invalid city size: %d, set to %d", value, size);
-  city_size_set(pcity, size);
 
   specialist_type_iterate(sp) {
     sg_warn_ret_val(
-        secfile_lookup_int(loading->file, &value, "%s.n%s", citystr,
+        secfile_lookup_int(loading->file, &pcity->specialists[sp],
+                           "%s.n%s", citystr,
                            specialist_rule_name(specialist_by_number(sp))),
         FALSE, "%s", secfile_error());
-    pcity->specialists[sp] = (citizens)value; /* set the correct type */
-    sg_warn_ret_val(value == (int)pcity->specialists[sp], FALSE,
-                    "Invalid number of specialists: %d, set to %d.", value,
-                    pcity->specialists[sp]);
     specialists += pcity->specialists[sp];
   } specialist_type_iterate_end;
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
-    pcity->trade[i] = secfile_lookup_int_default(loading->file, 0,
-                                                 "%s.traderoute%d", citystr, i);
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+    sg_warn_ret_val(secfile_lookup_int(loading->file, &pcity->trade[i],
+                                      "%s.traderoute%d", citystr, i),
+                    FALSE, "%s", secfile_error());
   }
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &pcity->food_stock,
@@ -4326,7 +3968,7 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
                                  citystr);
   city_map_radius_sq_set(pcity, radius_sq);
 
-  city_tile_iterate(radius_sq, city_tile(pcity), ptile) {
+  city_tile_iterate_index(radius_sq, city_tile(pcity), ptile, index) {
     if (loading->worked_tiles[ptile->index] == pcity->id) {
       tile_set_worked(ptile, pcity);
       workers++;
@@ -4337,7 +3979,7 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
       loading->worked_tiles[ptile->index] = -1;
 #endif /* DEBUG */
     }
-  } city_tile_iterate_end;
+  } city_tile_iterate_index_end;
 
   if (tile_worked(city_tile(pcity)) != pcity) {
     struct city *pwork = tile_worked(city_tile(pcity));
@@ -4345,8 +3987,8 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     if (NULL != pwork) {
       log_sg("[%s] city center of '%s' (%d,%d) [%d] is worked by '%s' "
              "(%d,%d) [%d]; repairing ", citystr, city_name(pcity),
-             TILE_XY(city_tile(pcity)), city_size_get(pcity), city_name(pwork),
-             TILE_XY(city_tile(pwork)), city_size_get(pwork));
+             TILE_XY(city_tile(pcity)), pcity->size, city_name(pwork),
+             TILE_XY(city_tile(pwork)), pwork->size);
 
       tile_set_worked(city_tile(pcity), NULL); /* remove tile from pwork */
       pwork->specialists[DEFAULT_SPECIALIST]++;
@@ -4354,7 +3996,7 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     } else {
       log_sg("[%s] city center of '%s' (%d,%d) [%d] is empty; repairing ",
              citystr, city_name(pcity), TILE_XY(city_tile(pcity)),
-             city_size_get(pcity));
+             pcity->size);
     }
 
     /* repair pcity */
@@ -4362,11 +4004,11 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     city_repair_size(pcity, -1);
   }
 
-  repair = city_size_get(pcity) - specialists - (workers - FREE_WORKED_TILES);
+  repair = pcity->size - specialists - (workers - FREE_WORKED_TILES);
   if (0 != repair) {
     log_sg("[%s] size mismatch for '%s' (%d,%d): size [%d] != "
            "(workers [%d] - free worked tiles [%d]) + specialists [%d]",
-           citystr, city_name(pcity), TILE_XY(city_tile(pcity)), city_size_get(pcity),
+           citystr, city_name(pcity), TILE_XY(city_tile(pcity)), pcity->size,
            workers, FREE_WORKED_TILES, specialists);
 
     /* repair pcity */
@@ -4385,55 +4027,35 @@ static bool sg_load_player_city(struct loaddata *loading, struct player *plr,
     }
   }
 
-  CALL_FUNC_EACH_AI(city_load, loading->file, pcity, citystr);
+  /* FIXME: remove this when the urgency is properly recalculated. */
+  city_data->urgency
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.urgency", citystr);
+
+  /* avoid fc_rand recalculations on subsequent reload. */
+  city_data->building_turn
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.building_turn",
+                                 citystr);
+  city_data->building_wait
+    = secfile_lookup_int_default(loading->file, BUILDING_WAIT_MINIMUM,
+                                 "%s.ai.building_wait", citystr);
+
+  /* avoid fc_rand and expensive recalculations on subsequent reload. */
+  city_data->founder_turn
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.founder_turn",
+                                 citystr);
+  city_data->founder_want
+    = secfile_lookup_int_default(loading->file, 0, "%s.ai.founder_want",
+                                 citystr);
+  city_data->founder_boat
+    = secfile_lookup_bool_default(loading->file,
+                                  (city_data->founder_want < 0),
+                                  "%s.ai.founder_boat", citystr);
 
   return TRUE;
 }
 
 /****************************************************************************
-  Load nationality data for one city.
-****************************************************************************/
-static void sg_load_player_city_citizens(struct loaddata *loading,
-                                         struct player *plr,
-                                         struct city *pcity,
-                                         const char *citystr)
-{
-  if (game.info.citizen_nationality) {
-    citizens size;
-
-    citizens_init(pcity);
-    player_slots_iterate(pslot) {
-      int nationality;
-
-      nationality = secfile_lookup_int_default(loading->file, -1,
-                                               "%s.citizen%d", citystr,
-                                               player_slot_index(pslot));
-      if (nationality > 0 && !player_slot_is_used(pslot)) {
-        log_sg("Citizens of an invalid nation for %s (player slot %d)!",
-                city_name(pcity), player_slot_index(pslot));
-        continue;
-      }
-
-      if (nationality != -1 && player_slot_is_used(pslot)) {
-        sg_warn(nationality >= 0 && nationality <= MAX_CITY_SIZE,
-                "Invalid value for citizens of player %d in %s: %d.",
-                player_slot_index(pslot), city_name(pcity), nationality);
-        citizens_nation_set(pcity, pslot, nationality);
-      }
-    } player_slots_iterate_end;
-    /* Sanity check. */
-    size = citizens_count(pcity);
-    if (size != city_size_get(pcity)) {
-      log_sg("City size and number of citizens does not match in %s "
-             "(%d != %d)! Repairing ...", city_name(pcity),
-             city_size_get(pcity), size);
-      citizens_update(pcity, NULL);
-    }
-  }
-}
-
-/****************************************************************************
-  Save cities data
+  ...
 ****************************************************************************/
 static void sg_save_player_cities(struct savedata *saving,
                                   struct player *plr)
@@ -4441,7 +4063,6 @@ static void sg_save_player_cities(struct savedata *saving,
   int wlist_max_length = 0;
   int i = 0;
   int plrno = player_number(plr);
-  bool nations[MAX_NUM_PLAYER_SLOTS];
 
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
@@ -4449,31 +4070,10 @@ static void sg_save_player_cities(struct savedata *saving,
   secfile_insert_int(saving->file, city_list_size(plr->cities),
                      "player%d.ncities", plrno);
 
-  if (game.info.citizen_nationality) {
-    /* Initialise the nation list for the citizens information. */
-    player_slots_iterate(pslot) {
-      nations[player_slot_index(pslot)] = FALSE;
-    } player_slots_iterate_end;
-  }
-
-  /* First determine lenght of longest worklist and the nations we have. */
+  /* First determine lenght of longest worklist */
   city_list_iterate(plr->cities, pcity) {
-    /* Check the sanity of the city. */
-    city_refresh(pcity);
-    sanity_check_city(pcity);
-
     if (pcity->worklist.length > wlist_max_length) {
       wlist_max_length = pcity->worklist.length;
-    }
-
-    if (game.info.citizen_nationality) {
-      /* Find all nations of the citizens,*/
-      players_iterate(pplayer) {
-        if (!nations[player_index(pplayer)]
-            && citizens_nation_get(pcity, pplayer->slot) != 0) {
-          nations[player_index(pplayer)] = TRUE;
-        }
-      } players_iterate_end;
     }
   } city_list_iterate_end;
 
@@ -4481,27 +4081,25 @@ static void sg_save_player_cities(struct savedata *saving,
     struct tile *pcenter = city_tile(pcity);
     char impr_buf[MAX_NUM_ITEMS + 1];
     char buf[32];
-    int j, nat_x, nat_y;
+    int j;
+    struct ai_city *city_data = def_ai_city_data(pcity);
 
     fc_snprintf(buf, sizeof(buf), "player%d.c%d", plrno, i);
 
-
-    index_to_native_pos(&nat_x, &nat_y, tile_index(pcenter));
-    secfile_insert_int(saving->file, nat_y, "%s.y", buf);
-    secfile_insert_int(saving->file, nat_x, "%s.x", buf);
-
+    secfile_insert_int(saving->file, pcenter->nat_y, "%s.y", buf);
+    secfile_insert_int(saving->file, pcenter->nat_x, "%s.x", buf);
     secfile_insert_int(saving->file, pcity->id, "%s.id", buf);
 
     secfile_insert_int(saving->file, player_number(pcity->original),
                        "%s.original", buf);
-    secfile_insert_int(saving->file, city_size_get(pcity), "%s.size", buf);
+    secfile_insert_int(saving->file, pcity->size, "%s.size", buf);
 
     specialist_type_iterate(sp) {
       secfile_insert_int(saving->file, pcity->specialists[sp], "%s.n%s", buf,
                          specialist_rule_name(specialist_by_number(sp)));
     } specialist_type_iterate_end;
 
-    for (j = 0; j < MAX_TRADE_ROUTES; j++) {
+    for (j = 0; j < NUM_TRADE_ROUTES; j++) {
       secfile_insert_int(saving->file, pcity->trade[j], "%s.traderoute%d",
                          buf, j);
     }
@@ -4586,25 +4184,30 @@ static void sg_save_player_cities(struct savedata *saving,
                           "%s.option%d", buf, j);
     }
 
-    CALL_FUNC_EACH_AI(city_save, saving->file, pcity, buf);
+    /* FIXME: remove this when the urgency is properly recalculated. */
+    secfile_insert_int(saving->file, city_data->urgency,
+                       "%s.ai.urgency", buf);
 
-    if (game.info.citizen_nationality) {
-      /* Save nationality of the citizens,*/
-      players_iterate(pplayer) {
-        if (nations[player_index(pplayer)]) {
-          secfile_insert_int(saving->file,
-                             citizens_nation_get(pcity, pplayer->slot),
-                             "%s.citizen%d", buf, player_index(pplayer));
-        }
-      } players_iterate_end;
-    }
+    /* avoid fc_rand recalculations on subsequent reload. */
+    secfile_insert_int(saving->file, city_data->building_turn,
+                       "%s.ai.building_turn", buf);
+    secfile_insert_int(saving->file, city_data->building_wait,
+                       "%s.ai.building_wait", buf);
+
+    /* avoid fc_rand and expensive recalculations on subsequent reload. */
+    secfile_insert_int(saving->file, city_data->founder_turn,
+                       "%s.ai.founder_turn", buf);
+    secfile_insert_int(saving->file, city_data->founder_want,
+                       "%s.ai.founder_want", buf);
+    secfile_insert_bool(saving->file, city_data->founder_boat,
+                       "%s.ai.founder_boat", buf);
 
     i++;
   } city_list_iterate_end;
 }
 
 /****************************************************************************
-  Load unit data
+  ...
 ****************************************************************************/
 static void sg_load_player_units(struct loaddata *loading,
                                  struct player *plr)
@@ -4628,7 +4231,6 @@ static void sg_load_player_units(struct loaddata *loading,
     const char *name;
     char buf[32];
     struct unit_type *type;
-    struct tile *ptile;
 
     fc_snprintf(buf, sizeof(buf), "player%d.u%d", plrno, i);
 
@@ -4637,9 +4239,9 @@ static void sg_load_player_units(struct loaddata *loading,
     sg_failure_ret(type != NULL, "%s: unknown unit type \"%s\".", buf, name);
 
     /* Create a dummy unit. */
-    punit = unit_virtual_create(plr, NULL, type, 0);
+    punit = create_unit_virtual(plr, NULL, type, 0);
     if (!sg_load_player_unit(loading, plr, punit, buf)) {
-      unit_virtual_destroy(punit);
+      destroy_unit_virtual(punit);
       sg_failure_ret(FALSE, "Error loading unit %d of player %d.", i, plrno);
     }
 
@@ -4653,23 +4255,25 @@ static void sg_load_player_units(struct loaddata *loading,
       punit->homecity = IDENTITY_NUMBER_ZERO;
     }
 
-    ptile = unit_tile(punit);
-
     /* allocate the unit's contribution to fog of war */
-    punit->server.vision = vision_new(unit_owner(punit), ptile);
+    punit->server.vision = vision_new(unit_owner(punit), punit->tile);
     unit_refresh_vision(punit);
     /* NOTE: There used to be some map_set_known calls here.  These were
      * unneeded since unfogging the tile when the unit sees it will
      * automatically reveal that tile. */
 
     unit_list_append(plr->units, punit);
-    unit_list_prepend(unit_tile(punit)->units, punit);
+    unit_list_prepend(punit->tile->units, punit);
 
     /* Claim ownership of fortress? */
-    if ((!base_owner(ptile)
-         || pplayers_at_war(base_owner(ptile), plr))
-        && tile_has_claimable_base(ptile, unit_type(punit))) {
-      tile_claim_bases(ptile, plr);
+    if (tile_has_claimable_base(punit->tile, unit_type(punit))
+        && (!tile_owner(punit->tile)
+            || (tile_owner(punit->tile)
+                && pplayers_at_war(tile_owner(punit->tile), plr)))) {
+      map_claim_ownership(punit->tile, plr, punit->tile);
+      map_claim_border(punit->tile, plr);
+      /* city_thaw_workers_queue() later */
+      /* city_refresh() later */
     }
   }
 }
@@ -4685,17 +4289,10 @@ static bool sg_load_player_unit(struct loaddata *loading,
   enum unit_activity activity;
   int nat_x, nat_y;
   enum tile_special_type target;
-  struct extra_type *pextra = NULL;
   struct base_type *pbase = NULL;
-  struct road_type *proad = NULL;
-  struct tile *ptile;
-  int extra_id;
-  int base_id;
-  int road_id;
+  int base;
+  struct unit_ai *unit_data = def_ai_unit_data(punit);
   int ei;
-  const char *facing_str;
-  enum tile_special_type cfspe;
-  int natnbr;
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &punit->id, "%s.id",
                                      unitstr), FALSE, "%s", secfile_error());
@@ -4703,38 +4300,9 @@ static bool sg_load_player_unit(struct loaddata *loading,
                   FALSE, "%s", secfile_error());
   sg_warn_ret_val(secfile_lookup_int(loading->file, &nat_y, "%s.y", unitstr),
                   FALSE, "%s", secfile_error());
-
-  ptile = native_pos_to_tile(nat_x, nat_y);
-  sg_warn_ret_val(NULL != ptile, FALSE, "%s invalid tile (%d, %d)",
+  punit->tile = native_pos_to_tile(nat_x, nat_y);
+  sg_warn_ret_val(NULL != punit->tile, FALSE, "%s invalid tile (%d, %d)",
                   unitstr, nat_x, nat_y);
-  unit_tile_set(punit, ptile);
-
-  facing_str
-    = secfile_lookup_str_default(loading->file, "x",
-                                 "%s.facing", unitstr);
-  if (facing_str[0] != 'x') {
-    /* We don't touch punit->facing if savegame does not contain that
-     * information. Initial orientation set by unit_virtual_create()
-     * is as good as any. */
-    enum direction8 facing = char2dir(facing_str[0]);
-
-    if (direction8_is_valid(facing)) {
-      punit->facing = facing;
-    } else {
-      log_error("Illegal unit orientation '%s'", facing_str);
-    }
-  }
-
-  /* If savegame has unit nationality, it doesn't hurt to
-   * internally set it even if nationality rules are disabled. */
-  natnbr = secfile_lookup_int_default(loading->file,
-                                      player_number(plr),
-                                      "%s.nationality", unitstr);
-
-  punit->nationality = player_by_number(natnbr);
-  if (punit->nationality == NULL) {
-    punit->nationality = plr;
-  }
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &punit->homecity,
                                      "%s.homecity", unitstr), FALSE,
@@ -4753,6 +4321,29 @@ static bool sg_load_player_unit(struct loaddata *loading,
   punit->server.birth_turn
     = secfile_lookup_int_default(loading->file, game.info.turn,
                                  "%s.born", unitstr);
+  base = secfile_lookup_int_default(loading->file, -1,
+                                    "%s.activity_base", unitstr);
+  if (base >= 0 && base < loading->base.size) {
+    pbase = loading->base.order[base];
+  }
+
+  {
+    int tgt_no = secfile_lookup_int_default(loading->file,
+                                            loading->special.size /* S_LAST */,
+                                            "%s.activity_target", unitstr);
+    if (tgt_no >= 0 && tgt_no < loading->special.size) {
+      target = loading->special.order[tgt_no];
+    } else {
+      target = S_LAST;
+    }
+  }
+  if (target == S_OLD_FORTRESS) {
+    target = S_LAST;
+    pbase = base_type_by_rule_name("Fortress");
+  } else if (target == S_OLD_AIRBASE) {
+    target = S_LAST;
+    pbase = base_type_by_rule_name("Airbase");
+  }
 
   if (activity == ACTIVITY_PATROL_UNUSED) {
     /* Previously ACTIVITY_PATROL and ACTIVITY_GOTO were used for
@@ -4765,145 +4356,39 @@ static bool sg_load_player_unit(struct loaddata *loading,
     activity = ACTIVITY_IDLE;
   }
 
-  extra_id = secfile_lookup_int_default(loading->file, -2,
-                                        "%s.activity_tgt", unitstr);
+  if (activity == ACTIVITY_FORTRESS) {
+    activity = ACTIVITY_BASE;
+    pbase = get_base_by_gui_type(BASE_GUI_FORTRESS, punit, punit->tile);
+  } else if (activity == ACTIVITY_AIRBASE) {
+    activity = ACTIVITY_BASE;
+    pbase = get_base_by_gui_type(BASE_GUI_AIRBASE, punit, punit->tile);
+  }
 
-  if (extra_id != -2) {
-    if (extra_id >= 0 && extra_id < loading->extra.size) {
-      pextra = loading->extra.order[extra_id];
-      set_unit_activity_targeted(punit, activity, pextra);
+  /* We need changed_from == ACTIVITY_IDLE by now so that
+   * set_unit_activity() and friends don't spuriously restore activity
+   * points -- unit should have been created this way */
+  fc_assert(punit->changed_from == ACTIVITY_IDLE);
+
+  if (activity == ACTIVITY_BASE) {
+    if (pbase) {
+      set_unit_activity_base(punit, base_number(pbase));
     } else {
-      set_unit_activity(punit, activity);
+      log_sg("Cannot find base %d for %s to build",
+             base, unit_rule_name(punit));
+      set_unit_activity(punit, ACTIVITY_IDLE);
     }
+  } else if (activity == ACTIVITY_PILLAGE) {
+    if (target != S_LAST) {
+      pbase = NULL;
+    }
+    /* An out-of-range base number is seen with old savegames. We take
+     * it as indicating undirected pillaging. We will assign pillage
+     * targets before play starts. */
+    set_unit_activity_targeted(punit, activity, target,
+                               pbase ? base_index(pbase) : BASE_NONE);
   } else {
-    /* extra_id == -2 -> activity_tgt not set */
-    base_id = secfile_lookup_int_default(loading->file, -1,
-                                      "%s.activity_base", unitstr);
-    if (base_id >= 0 && base_id < loading->base.size) {
-      pbase = loading->base.order[base_id];
-    }
-    road_id = secfile_lookup_int_default(loading->file, -1,
-                                      "%s.activity_road", unitstr);
-    if (road_id >= 0 && road_id < loading->road.size) {
-      proad = loading->road.order[road_id];
-    }
-
-    {
-      int tgt_no = secfile_lookup_int_default(loading->file,
-                                              loading->special.size /* S_LAST */,
-                                              "%s.activity_target", unitstr);
-      if (tgt_no >= 0 && tgt_no < loading->special.size) {
-        target = loading->special.order[tgt_no];
-      } else {
-        target = S_LAST;
-      }
-    }
-
-    if (target == S_OLD_ROAD) {
-      target = S_LAST;
-      proad = road_by_compat_special(ROCO_ROAD);
-    } else if (target == S_OLD_RAILROAD) {
-      target = S_LAST;
-      proad = road_by_compat_special(ROCO_RAILROAD);
-    }
-
-    if (activity == ACTIVITY_FORTRESS) {
-      activity = ACTIVITY_BASE;
-      pbase = get_base_by_gui_type(BASE_GUI_FORTRESS, punit, unit_tile(punit));
-    } else if (activity == ACTIVITY_AIRBASE) {
-      activity = ACTIVITY_BASE;
-      pbase = get_base_by_gui_type(BASE_GUI_AIRBASE, punit, unit_tile(punit));
-    }
-
-    if (activity == ACTIVITY_OLD_ROAD) {
-      activity = ACTIVITY_GEN_ROAD;
-      proad = road_by_compat_special(ROCO_ROAD);
-    } else if (activity == ACTIVITY_OLD_RAILROAD) {
-      activity = ACTIVITY_GEN_ROAD;
-      proad = road_by_compat_special(ROCO_RAILROAD);
-    }
-
-    /* We need changed_from == ACTIVITY_IDLE by now so that
-     * set_unit_activity() and friends don't spuriously restore activity
-     * points -- unit should have been created this way */
-    fc_assert(punit->changed_from == ACTIVITY_IDLE);
-
-    if (activity == ACTIVITY_BASE) {
-      if (pbase) {
-        set_unit_activity_base(punit, base_number(pbase));
-      } else {
-        log_sg("Cannot find base %d for %s to build",
-               base_id, unit_rule_name(punit));
-        set_unit_activity(punit, ACTIVITY_IDLE);
-      }
-    } else if (activity == ACTIVITY_GEN_ROAD) {
-      if (proad) {
-        set_unit_activity_road(punit, road_number(proad));
-      } else {
-        log_sg("Cannot find road %d for %s to build",
-               road_id, unit_rule_name(punit));
-        set_unit_activity(punit, ACTIVITY_IDLE);
-      }
-    } else if (activity == ACTIVITY_PILLAGE) {
-      struct extra_type *a_target;
-
-      if (target != S_LAST) {
-        a_target = special_extra_get(target);
-      } else if (pbase != NULL) {
-        a_target = base_extra_get(pbase);
-      } else if (proad != NULL) {
-        a_target = road_extra_get(proad);
-      } else {
-        a_target = NULL;
-      }
-      /* An out-of-range base number is seen with old savegames. We take
-       * it as indicating undirected pillaging. We will assign pillage
-       * targets before play starts. */
-      set_unit_activity_targeted(punit, activity, a_target);
-    } else if (activity == ACTIVITY_IRRIGATE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_IRRIGATION,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_IRRIGATE, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_IRRIGATE, NULL);
-      }
-    } else if (activity == ACTIVITY_MINE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_MINE,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_MINE, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_MINE, NULL);
-      }
-    } else if (activity == ACTIVITY_POLLUTION) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANPOLLUTION,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_POLLUTION, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_POLLUTION, NULL);
-      }
-    } else if (activity == ACTIVITY_FALLOUT) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANFALLOUT,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_FALLOUT, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_FALLOUT, NULL);
-      }
-    } else {
-      set_unit_activity_targeted(punit, activity, NULL);
-    }
-  } /* activity_tgt == NULL */
+    set_unit_activity(punit, activity);
+  }
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &punit->activity_count,
                                      "%s.activity_count", unitstr), FALSE,
@@ -4912,96 +4397,21 @@ static bool sg_load_player_unit(struct loaddata *loading,
   punit->changed_from =
     secfile_lookup_int_default(loading->file, ACTIVITY_IDLE,
                                "%s.changed_from", unitstr);
-
-  extra_id = secfile_lookup_int_default(loading->file, -2,
-                                        "%s.changed_from_tgt", unitstr);
-
-  if (extra_id != -2) {
-    if (extra_id >= 0 && extra_id < loading->extra.size) {
-      punit->changed_from_target = loading->extra.order[extra_id];
-    } else {
-      punit->changed_from_target = NULL;
-    }
+  punit->changed_from_target =
+    secfile_lookup_int_default(loading->file, S_LAST,
+                               "%s.changed_from_target", unitstr);
+  base =
+    secfile_lookup_int_default(loading->file, -1,
+                               "%s.changed_from_base", unitstr);
+  if (base >= 0 && base < loading->base.size) {
+    punit->changed_from_base = base_number(loading->base.order[base]);
   } else {
-    /* extra_id == -2 -> changed_from_tgt not set */
-
-    cfspe =
-      secfile_lookup_int_default(loading->file, S_LAST,
-                                 "%s.changed_from_target", unitstr);
-    base_id =
-      secfile_lookup_int_default(loading->file, -1,
-                                 "%s.changed_from_base", unitstr);
-    road_id =
-      secfile_lookup_int_default(loading->file, -1,
-                                 "%s.changed_from_road", unitstr);
-
-    if (road_id == -1) {
-      if (cfspe == S_OLD_ROAD) {
-        proad = road_by_compat_special(ROCO_ROAD);
-        if (proad) {
-          road_id = road_index(proad);
-        }
-      } else if (cfspe == S_OLD_RAILROAD) {
-        proad = road_by_compat_special(ROCO_RAILROAD);
-        if (proad) {
-          road_id = road_index(proad);
-        }
-      }
-    }
-
-    if (base_id >= 0 && base_id < loading->base.size) {
-      punit->changed_from_target = base_extra_get(loading->base.order[base_id]);
-    } else if (road_id >= 0 && road_id < loading->road.size) {
-      punit->changed_from_target = road_extra_get(loading->road.order[road_id]);
-    } else if (cfspe != S_LAST) {
-      punit->changed_from_target = special_extra_get(cfspe);
-    } else {
-      punit->changed_from_target = NULL;
-    }
-
-    if (punit->changed_from == ACTIVITY_IRRIGATE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_IRRIGATION,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        punit->changed_from_target = tgt;
-      } else {
-        punit->changed_from_target = NULL;
-      }
-    } else if (punit->changed_from == ACTIVITY_MINE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_MINE,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        punit->changed_from_target = tgt;
-      } else {
-        punit->changed_from_target = NULL;
-      }
-    } else if (punit->changed_from == ACTIVITY_POLLUTION) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANPOLLUTION,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        punit->changed_from_target = tgt;
-      } else {
-        punit->changed_from_target = NULL;
-      }
-    } else if (punit->changed_from == ACTIVITY_FALLOUT) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANFALLOUT,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        punit->changed_from_target = tgt;
-      } else {
-        punit->changed_from_target = NULL;
-      }
-    }
+    punit->changed_from_base = BASE_NONE;
+    fc_assert_action(punit->changed_from != ACTIVITY_BASE
+                     && (punit->changed_from != ACTIVITY_PILLAGE
+                         || punit->changed_from_target != S_LAST),
+                     punit->changed_from = ACTIVITY_IDLE);
   }
-
   punit->changed_from_count =
     secfile_lookup_int_default(loading->file, 0,
                                "%s.changed_from_count", unitstr);
@@ -5050,9 +4460,14 @@ static bool sg_load_player_unit(struct loaddata *loading,
                                       unitstr);
   }
 
-  /* Load AI data of the unit. */
-  CALL_FUNC_EACH_AI(unit_load, loading->file, punit, unitstr);
-
+  unit_data->passenger
+    = secfile_lookup_int_default(loading->file, 0, "%s.passenger", unitstr);
+  unit_data->ferryboat
+    = secfile_lookup_int_default(loading->file, 0, "%s.ferryboat", unitstr);
+  unit_data->charge
+    = secfile_lookup_int_default(loading->file, 0, "%s.charge", unitstr);
+  unit_data->bodyguard
+    = secfile_lookup_int_default(loading->file, 0, "%s.bodyguard", unitstr);
   sg_warn_ret_val(secfile_lookup_bool(loading->file,
                                       &punit->ai_controlled,
                                       "%s.ai", unitstr), FALSE,
@@ -5070,10 +4485,9 @@ static bool sg_load_player_unit(struct loaddata *loading,
   punit->paradropped
     = secfile_lookup_bool_default(loading->file, FALSE,
                                   "%s.paradropped", unitstr);
-
-  /* The transport status (punit->transported_by) is loaded in
-   * sg_player_units_transport(). */
-
+  punit->transported_by
+    = secfile_lookup_int_default(loading->file, -1, "%s.transported_by",
+                                 unitstr);
   /* Initialize upkeep values: these are hopefully initialized
    * elsewhere before use (specifically, in city_support(); but
    * fixme: check whether always correctly initialized?).
@@ -5089,12 +4503,7 @@ static bool sg_load_player_unit(struct loaddata *loading,
     int len = secfile_lookup_int_default(loading->file, 0,
                                          "%s.orders_length", unitstr);
     if (len > 0) {
-      const char *orders_unitstr, *dir_unitstr, *act_unitstr;
-      const char *tgt_unitstr;
-      const char *base_unitstr = NULL;
-      const char *road_unitstr = NULL;
-      int road_idx = road_index(road_by_compat_special(ROCO_ROAD));
-      int rail_idx = road_index(road_by_compat_special(ROCO_RAILROAD));
+      const char *orders_unitstr, *dir_unitstr, *act_unitstr, *base_unitstr;
 
       punit->orders.list = fc_malloc(len * sizeof(*(punit->orders.list)));
       punit->orders.length = len;
@@ -5117,19 +4526,12 @@ static bool sg_load_player_unit(struct loaddata *loading,
       act_unitstr
         = secfile_lookup_str_default(loading->file, "",
                                      "%s.activity_list", unitstr);
-      tgt_unitstr
-        = secfile_lookup_str_default(loading->file, NULL, "%s.tgt_list", unitstr);
-
-      if (tgt_unitstr == NULL) {
-        base_unitstr
-          = secfile_lookup_str(loading->file, "%s.base_list", unitstr);
-        road_unitstr
-          = secfile_lookup_str_default(loading->file, NULL, "%s.road_list", unitstr);
-      }
-
+      base_unitstr
+        = secfile_lookup_str(loading->file, "%s.base_list", unitstr);
       punit->has_orders = TRUE;
       for (j = 0; j < len; j++) {
         struct unit_order *order = &punit->orders.list[j];
+        struct base_type *pbase = NULL;
 
         if (orders_unitstr[j] == '\0' || dir_unitstr[j] == '\0'
             || act_unitstr[j] == '\0') {
@@ -5141,7 +4543,7 @@ static bool sg_load_player_unit(struct loaddata *loading,
         order->dir = char2dir(dir_unitstr[j]);
         order->activity = char2activity(act_unitstr[j]);
         if (order->order == ORDER_LAST
-            || (order->order == ORDER_MOVE && !direction8_is_valid(order->dir))
+            || (order->order == ORDER_MOVE && order->dir == DIR8_LAST)
             || (order->order == ORDER_ACTIVITY
                 && order->activity == ACTIVITY_LAST)) {
           /* An invalid order. Just drop the orders for this unit. */
@@ -5151,61 +4553,21 @@ static bool sg_load_player_unit(struct loaddata *loading,
           break;
         }
 
-        if (tgt_unitstr) {
-          if (tgt_unitstr[j] != '?') {
-            extra_id = char2num(tgt_unitstr[j]);
+        if (base_unitstr && base_unitstr[j] != '?') {
+          base = char2num(base_unitstr[j]);
 
-            if (extra_id < 0 || extra_id >= loading->extra.size) {
-              log_sg("Cannot find extra %d for %s to build",
-                     extra_id, unit_rule_name(punit));
-              order->target = EXTRA_NONE;
-            } else {
-              order->target = extra_id;
-            }
+          if (base >= 0 && base < loading->base.size) {
+            pbase = loading->base.order[base];
           } else {
-            order->target = EXTRA_NONE;
+            log_sg("Cannot find base %d for %s to build",
+                   base, unit_rule_name(punit));
+            base = base_number(get_base_by_gui_type(BASE_GUI_FORTRESS,
+                                                    NULL, NULL));
           }
+
+          order->base = base;
         } else {
-          /* In pre-2.6 savegames, base_list and road_list were only saved
-           * for those activities (and not e.g. pillaging) */
-          if (base_unitstr && base_unitstr[j] != '?'
-              && order->activity == ACTIVITY_BASE) {
-            base_id = char2num(base_unitstr[j]);
-
-            if (base_id < 0 || base_id >= loading->base.size) {
-              log_sg("Cannot find base %d for %s to build",
-                     base_id, unit_rule_name(punit));
-              base_id = base_number(get_base_by_gui_type(BASE_GUI_FORTRESS,
-                                                         NULL, NULL));
-            }
-
-            order->target
-              = extra_number(base_extra_get(base_by_number(base_id)));
-          } else if (road_unitstr && road_unitstr[j] != '?'
-                     && order->activity == ACTIVITY_OLD_ROAD) {
-            road_id = char2num(road_unitstr[j]);
-
-            if (road_id < 0 || road_id >= loading->road.size) {
-              log_sg("Cannot find road %d for %s to build",
-                     road_id, unit_rule_name(punit));
-              road_id = 0;
-            }
-
-            order->target
-              = extra_number(road_extra_get(road_by_number(road_id)));
-          } else {
-            order->target = EXTRA_NONE;
-          }
-
-          if (order->activity == ACTIVITY_OLD_ROAD) {
-            order->activity = ACTIVITY_GEN_ROAD;
-            order->target
-              = extra_number(road_extra_get(road_by_number(road_idx)));
-          } else if (order->activity == ACTIVITY_OLD_RAILROAD) {
-            order->activity = ACTIVITY_GEN_ROAD;
-            order->target
-              = extra_number(road_extra_get(road_by_number(rail_idx)));
-          }
+          order->base = BASE_NONE;
         }
       }
     } else {
@@ -5217,57 +4579,8 @@ static bool sg_load_player_unit(struct loaddata *loading,
   return TRUE;
 }
 
-/*****************************************************************************
-  Load the transport status of all units. This is seperated from the other
-  code as all units must be known.
-*****************************************************************************/
-static void sg_load_player_units_transport(struct loaddata *loading,
-                                           struct player *plr)
-{
-  int nunits, i, plrno = player_number(plr);
-
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  /* Recheck the number of units for the player. This is a copied from
-   * sg_load_player_units(). */
-  sg_failure_ret(secfile_lookup_int(loading->file, &nunits,
-                                    "player%d.nunits", plrno),
-                 "%s", secfile_error());
-  if (!plr->is_alive && nunits > 0) {
-    log_sg("'player%d.nunits' = %d for dead player!", plrno, nunits);
-    nunits = 0; /* Some old savegames may be buggy. */
-  }
-
-  for (i = 0; i < nunits; i++) {
-    int id_unit, id_trans;
-    struct unit *punit, *ptrans;
-
-    id_unit = secfile_lookup_int_default(loading->file, -1,
-                                         "player%d.u%d.id",
-                                         plrno, i);
-    punit = player_unit_by_number(plr, id_unit);
-    fc_assert_action(punit != NULL, continue);
-
-    id_trans = secfile_lookup_int_default(loading->file, -1,
-                                          "player%d.u%d.transported_by",
-                                          plrno, i);
-    if (id_trans == -1) {
-      /* Not transported. */
-      continue;
-    }
-
-    ptrans = game_unit_by_number(id_trans);
-    fc_assert_action(id_trans == -1 || ptrans != NULL, continue);
-
-    if (ptrans) {
-      fc_assert_action(unit_transport_load(punit, ptrans, TRUE), continue);
-    }
-  }
-}
-
 /****************************************************************************
-  Save unit data
+  ...
 ****************************************************************************/
 static void sg_save_player_units(struct savedata *saving,
                                  struct player *plr)
@@ -5281,23 +4594,14 @@ static void sg_save_player_units(struct savedata *saving,
                      "player%d.nunits", player_number(plr));
 
   unit_list_iterate(plr->units, punit) {
+    struct unit_ai *unit_data = def_ai_unit_data(punit);
+
     char buf[32];
-    char dirbuf[2] = " ";
-    int nat_x, nat_y;
-
     fc_snprintf(buf, sizeof(buf), "player%d.u%d", player_number(plr), i);
-    dirbuf[0] = dir2char(punit->facing);
+
     secfile_insert_int(saving->file, punit->id, "%s.id", buf);
-
-    index_to_native_pos(&nat_x, &nat_y, tile_index(unit_tile(punit)));
-    secfile_insert_int(saving->file, nat_x, "%s.x", buf);
-    secfile_insert_int(saving->file, nat_y, "%s.y", buf);
-
-    secfile_insert_str(saving->file, dirbuf, "%s.facing", buf);
-    if (game.info.citizen_nationality) {
-      secfile_insert_int(saving->file, player_number(unit_nationality(punit)),
-                         "%s.nationality", buf);
-    }
+    secfile_insert_int(saving->file, punit->tile->nat_x, "%s.x", buf);
+    secfile_insert_int(saving->file, punit->tile->nat_y, "%s.y", buf);
     secfile_insert_int(saving->file, punit->veteran, "%s.veteran", buf);
     secfile_insert_int(saving->file, punit->hp, "%s.hp", buf);
     secfile_insert_int(saving->file, punit->homecity, "%s.homecity", buf);
@@ -5307,24 +4611,18 @@ static void sg_save_player_units(struct savedata *saving,
     secfile_insert_int(saving->file, punit->activity, "%s.activity", buf);
     secfile_insert_int(saving->file, punit->activity_count,
                        "%s.activity_count", buf);
-    if (punit->activity_target == NULL) {
-      secfile_insert_int(saving->file, -1, "%s.activity_tgt", buf);
-    } else {
-      secfile_insert_int(saving->file, extra_index(punit->activity_target),
-                         "%s.activity_tgt", buf);
-    }
-
+    secfile_insert_int(saving->file, punit->activity_target,
+                       "%s.activity_target", buf);
+    secfile_insert_int(saving->file, punit->activity_base,
+                       "%s.activity_base", buf);
     secfile_insert_int(saving->file, punit->changed_from,
                        "%s.changed_from", buf);
     secfile_insert_int(saving->file, punit->changed_from_count,
                        "%s.changed_from_count", buf);
-    if (punit->changed_from_target == NULL) {
-      secfile_insert_int(saving->file, -1, "%s.changed_from_tgt", buf);
-    } else {
-      secfile_insert_int(saving->file, extra_index(punit->changed_from_target),
-                         "%s.changed_from_tgt", buf);
-    }
-
+    secfile_insert_int(saving->file, punit->changed_from_target,
+                       "%s.changed_from_target", buf);
+    secfile_insert_int(saving->file, punit->changed_from_base,
+                       "%s.changed_from_base", buf);
     secfile_insert_bool(saving->file, punit->done_moving,
                         "%s.done_moving", buf);
     secfile_insert_int(saving->file, punit->moves_left, "%s.moves", buf);
@@ -5335,10 +4633,11 @@ static void sg_save_player_units(struct savedata *saving,
                        "%s.battlegroup", buf);
 
     if (punit->goto_tile) {
-      index_to_native_pos(&nat_x, &nat_y, tile_index(punit->goto_tile));
       secfile_insert_bool(saving->file, TRUE, "%s.go", buf);
-      secfile_insert_int(saving->file, nat_x, "%s.goto_x", buf);
-      secfile_insert_int(saving->file, nat_y, "%s.goto_y", buf);
+      secfile_insert_int(saving->file, punit->goto_tile->nat_x,
+                         "%s.goto_x", buf);
+      secfile_insert_int(saving->file, punit->goto_tile->nat_y,
+                         "%s.goto_y", buf);
     } else {
       secfile_insert_bool(saving->file, FALSE, "%s.go", buf);
       /* Set this values to allow saving it as table. */
@@ -5348,10 +4647,14 @@ static void sg_save_player_units(struct savedata *saving,
 
     secfile_insert_bool(saving->file, punit->ai_controlled,
                         "%s.ai", buf);
-
-    /* Save AI data of the unit. */
-    CALL_FUNC_EACH_AI(unit_save, saving->file, punit, buf);
-
+    secfile_insert_int(saving->file, unit_data->passenger,
+                       "%s.passenger", buf);
+    secfile_insert_int(saving->file, unit_data->ferryboat,
+                       "%s.ferryboat", buf);
+    secfile_insert_int(saving->file, unit_data->charge,
+                       "%s.charge", buf);
+    secfile_insert_int(saving->file, unit_data->bodyguard,
+                       "%s.bodyguard", buf);
     secfile_insert_int(saving->file, punit->server.ord_map,
                        "%s.ord_map", buf);
     secfile_insert_int(saving->file, punit->server.ord_city,
@@ -5359,14 +4662,13 @@ static void sg_save_player_units(struct savedata *saving,
     secfile_insert_bool(saving->file, punit->moved, "%s.moved", buf);
     secfile_insert_bool(saving->file, punit->paradropped,
                         "%s.paradropped", buf);
-    secfile_insert_int(saving->file, unit_transport_get(punit)
-                                     ? unit_transport_get(punit)->id : -1,
+    secfile_insert_int(saving->file, punit->transported_by,
                        "%s.transported_by", buf);
 
     if (punit->has_orders) {
       int len = punit->orders.length, j;
       char orders_buf[len + 1], dir_buf[len + 1];
-      char act_buf[len + 1], tgt_buf[len + 1];
+      char act_buf[len + 1], base_buf[len + 1];
 
       secfile_insert_int(saving->file, len, "%s.orders_length", buf);
       secfile_insert_int(saving->file, punit->orders.index,
@@ -5380,13 +4682,15 @@ static void sg_save_player_units(struct savedata *saving,
         orders_buf[j] = order2char(punit->orders.list[j].order);
         dir_buf[j] = '?';
         act_buf[j] = '?';
-        tgt_buf[j] = '?';
+        base_buf[j] = '?';
         switch (punit->orders.list[j].order) {
         case ORDER_MOVE:
           dir_buf[j] = dir2char(punit->orders.list[j].dir);
           break;
         case ORDER_ACTIVITY:
-          tgt_buf[j] = num2char(punit->orders.list[j].target);
+          if (punit->orders.list[j].activity == ACTIVITY_BASE) {
+            base_buf[j] = num2char(punit->orders.list[j].base);
+          }
           act_buf[j] = activity2char(punit->orders.list[j].activity);
           break;
         case ORDER_FULL_MP:
@@ -5399,12 +4703,12 @@ static void sg_save_player_units(struct savedata *saving,
           break;
         }
       }
-      orders_buf[len] = dir_buf[len] = act_buf[len] = tgt_buf[len] = '\0';
+      orders_buf[len] = dir_buf[len] = act_buf[len] = base_buf[len] = '\0';
 
       secfile_insert_str(saving->file, orders_buf, "%s.orders_list", buf);
       secfile_insert_str(saving->file, dir_buf, "%s.dir_list", buf);
       secfile_insert_str(saving->file, act_buf, "%s.activity_list", buf);
-      secfile_insert_str(saving->file, tgt_buf, "%s.tgt_list", buf);
+      secfile_insert_str(saving->file, base_buf, "%s.base_list", buf);
     } else {
       /* Put all the same fields into the savegame - otherwise the
        * registry code can't correctly use a tabular format and the
@@ -5416,7 +4720,7 @@ static void sg_save_player_units(struct savedata *saving,
       secfile_insert_str(saving->file, "-", "%s.orders_list", buf);
       secfile_insert_str(saving->file, "-", "%s.dir_list", buf);
       secfile_insert_str(saving->file, "-", "%s.activity_list", buf);
-      secfile_insert_str(saving->file, "-", "%s.tgt_list", buf);
+      secfile_insert_str(saving->file, "-", "%s.base_list", buf);
     }
 
     i++;
@@ -5424,7 +4728,7 @@ static void sg_save_player_units(struct savedata *saving,
 }
 
 /****************************************************************************
-  Load player (client) attributes data
+  ...
 ****************************************************************************/
 static void sg_load_player_attributes(struct loaddata *loading,
                                       struct player *plr)
@@ -5501,7 +4805,7 @@ static void sg_load_player_attributes(struct loaddata *loading,
 }
 
 /****************************************************************************
-  Save player (client) attributes data.
+  ...
 ****************************************************************************/
 static void sg_save_player_attributes(struct savedata *saving,
                                       struct player *plr)
@@ -5584,7 +4888,7 @@ static void sg_save_player_attributes(struct savedata *saving,
 }
 
 /****************************************************************************
-  Load vision data
+  ...
 ****************************************************************************/
 static void sg_load_player_vision(struct loaddata *loading,
                                   struct player *plr)
@@ -5599,7 +4903,7 @@ static void sg_load_player_vision(struct loaddata *loading,
   sg_check_ret();
 
   if (!plr->is_alive) {
-    /* Reveal all for dead players. */
+    /* Reval all for dead players. */
     map_know_and_see_all(plr);
   }
 
@@ -5644,44 +4948,22 @@ static void sg_load_player_vision(struct loaddata *loading,
                   = char2resource(ch), loading->file,
                 "player%d.map_res%04d", plrno);
 
-  if (loading->version >= 30) {
-    /* 2.6.0 or newer */
+  /* Load player map (specials). */
+  halfbyte_iterate_special(j, loading->special.size) {
+    LOAD_MAP_CHAR(ch, ptile,
+                  sg_special_set(
+                    &map_get_player_tile(ptile, plr)->special,
+                    ch, loading->special.order + 4 * j, FALSE),
+                  loading->file, "player%d.map_spe%02d_%04d", plrno, j);
+  } halfbyte_iterate_special_end;
 
-    /* Load player map (extras). */
-    halfbyte_iterate_extras(j, loading->extra.size) {
-      LOAD_MAP_CHAR(ch, ptile,
-                    sg_extras_set(&map_get_player_tile(ptile, plr)->extras,
-                                  ch, loading->extra.order + 4 * j),
-                    loading->file, "player%d.map_e%02d_%04d", plrno, j);
-    } halfbyte_iterate_extras_end;
-  } else {
-    /* Load player map (specials). */
-    halfbyte_iterate_special(j, loading->special.size) {
-      LOAD_MAP_CHAR(ch, ptile,
-                    sg_special_set(&map_get_player_tile(ptile, plr)->extras,
-                                   ch, loading->special.order + 4 * j, FALSE),
-                    loading->file, "player%d.map_spe%02d_%04d", plrno, j);
-    } halfbyte_iterate_special_end;
-
-    /* Load player map (bases). */
-    halfbyte_iterate_bases(j, loading->base.size) {
-      LOAD_MAP_CHAR(ch, ptile,
-                    sg_bases_set(&map_get_player_tile(ptile, plr)->extras,
-                                 ch, loading->base.order + 4 * j),
-                    loading->file, "player%d.map_b%02d_%04d", plrno, j);
-    } halfbyte_iterate_bases_end;
-
-    /* Load player map (roads). */
-    if (loading->version >= 20) {
-      /* 2.5.0 or newer */
-      halfbyte_iterate_roads(j, loading->road.size) {
-        LOAD_MAP_CHAR(ch, ptile,
-                      sg_roads_set(&map_get_player_tile(ptile, plr)->extras,
-                                   ch, loading->road.order + 4 * j),
-                      loading->file, "player%d.map_r%02d_%04d", plrno, j);
-      } halfbyte_iterate_roads_end;
-    }
-  }
+  /* Load player map (bases). */
+  halfbyte_iterate_bases(j, loading->base.size) {
+    LOAD_MAP_CHAR(ch, ptile,
+                  sg_bases_set(&map_get_player_tile(ptile, plr)->bases,
+                               ch, loading->base.order + 4 * j),
+                  loading->file, "player%d.map_b%02d_%04d", plrno, j);
+  } halfbyte_iterate_bases_end;
 
   if (game.server.foggedborders) {
     /* Load player map (border). */
@@ -5691,17 +4973,12 @@ static void sg_load_player_vision(struct loaddata *loading,
       const char *buffer
         = secfile_lookup_str(loading->file, "player%d.map_owner%04d",
                              plrno, y);
-      const char *buffer2
-        = secfile_lookup_str(loading->file, "player%d.extras_owner%04d",
-                             plrno, y);
       const char *ptr = buffer;
-      const char *ptr2 = buffer2;
 
       sg_failure_ret(NULL != buffer,
                     "Savegame corrupt - map line %d not found.", y);
       for (x = 0; x < map.xsize; x++) {
         char token[TOKEN_SIZE];
-        char token2[TOKEN_SIZE];
         int number;
         struct tile *ptile = native_pos_to_tile(x, y);
 
@@ -5710,29 +4987,13 @@ static void sg_load_player_vision(struct loaddata *loading,
                        "Savegame corrupt - map size not correct.");
         if (strcmp(token, "-") == 0) {
           map_get_player_tile(ptile, plr)->owner = NULL;
-        } else  {
-          sg_failure_ret(str_to_int(token, &number),
-                         "Savegame corrupt - got tile owner=%s in (%d, %d).",
-                         token, x, y);
-          map_get_player_tile(ptile, plr)->owner = player_by_number(number);
+          continue;
         }
 
-        if (loading->version >= 30) {
-          scanin(&ptr2, ",", token2, sizeof(token2));
-          sg_failure_ret('\0' != token2[0],
-                         "Savegame corrupt - map size not correct.");
-          if (strcmp(token2, "-") == 0) {
-            map_get_player_tile(ptile, plr)->extras_owner = NULL;
-          } else  {
-            sg_failure_ret(str_to_int(token2, &number),
-                           "Savegame corrupt - got extras owner=%s in (%d, %d).",
-                           token, x, y);
-            map_get_player_tile(ptile, plr)->extras_owner = player_by_number(number);
-          }
-        } else {
-          map_get_player_tile(ptile, plr)->extras_owner
-            = map_get_player_tile(ptile, plr)->owner;
-        }
+        sg_failure_ret(str_to_int(token, &number),
+                       "Savegame corrupt - got tile owner=%s in (%d, %d).",
+                       token, x, y);
+        map_get_player_tile(ptile, plr)->owner = player_by_number(number);
       }
     }
   }
@@ -5759,7 +5020,7 @@ static void sg_load_player_vision(struct loaddata *loading,
     char buf[32];
     fc_snprintf(buf, sizeof(buf), "player%d.dc%d", plrno, i);
 
-    pdcity = vision_site_new(0, NULL, NULL);
+    pdcity = create_vision_site(0, NULL, NULL);
     if (sg_load_player_vision_city(loading, plr, pdcity, buf)) {
       change_playertile_site(map_get_player_tile(pdcity->location, plr),
                              pdcity);
@@ -5768,7 +5029,7 @@ static void sg_load_player_vision(struct loaddata *loading,
       /* Error loading the data. */
       log_sg("Skipping seen city %d for player %d.", i, plrno);
       if (pdcity != NULL) {
-        vision_site_destroy(pdcity);
+        free_vision_site(pdcity);
       }
     }
   }
@@ -5797,8 +5058,7 @@ static bool sg_load_player_vision_city(struct loaddata *loading,
                                        const char *citystr)
 {
   const char *string;
-  int i, id, size;
-  citizens city_size;
+  int i, id;
   int nat_x, nat_y;
 
   sg_warn_ret_val(secfile_lookup_int(loading->file, &nat_x, "%s.x",
@@ -5824,13 +5084,9 @@ static bool sg_load_player_vision_city(struct loaddata *loading,
   sg_warn_ret_val(IDENTITY_NUMBER_ZERO < pdcity->identity, FALSE,
                   "%s has invalid id (%d); skipping.", citystr, id);
 
-  sg_warn_ret_val(secfile_lookup_int(loading->file, &size,
+  sg_warn_ret_val(secfile_lookup_int(loading->file, &pdcity->size,
                                      "%s.size", citystr),
                   FALSE, "%s", secfile_error());
-  city_size = (citizens)size; /* set the correct type */
-  sg_warn_ret_val(size == (int)city_size, FALSE,
-                  "Invalid city size: %d; set to %d.", size, city_size);
-  vision_site_size_set(pdcity, city_size);
 
   /* Initialise list of improvements */
   BV_CLR_ALL(pdcity->improvements);
@@ -5866,14 +5122,12 @@ static bool sg_load_player_vision_city(struct loaddata *loading,
                                               "%s.happy", citystr);
   pdcity->unhappy = secfile_lookup_bool_default(loading->file, FALSE,
                                                 "%s.unhappy", citystr);
-  pdcity->city_image = secfile_lookup_int_default(loading->file, -100,
-                                                  "%s.city_image", citystr);
 
   return TRUE;
 }
 
 /****************************************************************************
-  Save vision data
+  ...
 ****************************************************************************/
 static void sg_save_player_vision(struct savedata *saving,
                                   struct player *plr)
@@ -5930,39 +5184,29 @@ static void sg_save_player_vision(struct savedata *saving,
       secfile_insert_str(saving->file, line, "player%d.map_owner%04d",
                          plrno, y);
     }
-
-    for (y = 0; y < map.ysize; y++) {
-      char line[map.xsize * TOKEN_SIZE];
-
-      line[0] = '\0';
-      for (x = 0; x < map.xsize; x++) {
-        char token[TOKEN_SIZE];
-        struct tile *ptile = native_pos_to_tile(x, y);
-        struct player_tile *plrtile = map_get_player_tile(ptile, plr);
-
-        if (plrtile == NULL || plrtile->extras_owner == NULL) {
-          strcpy(token, "-");
-        } else {
-          fc_snprintf(token, sizeof(token), "%d",
-                      player_number(plrtile->extras_owner));
-        }
-        strcat(line, token);
-        if (x < map.xsize) {
-          strcat(line, ",");
-        }
-      }
-      secfile_insert_str(saving->file, line, "player%d.extras_owner%04d",
-                         plrno, y);
-    }
   }
 
-  /* Save the map (extras). */
-  halfbyte_iterate_extras(j, game.control.num_extra_types) {
+  /* Save the map (specials). */
+  halfbyte_iterate_special(j, S_LAST) {
+    enum tile_special_type mod[4];
+    int l;
+
+    for (l = 0; l < 4; l++) {
+      mod[l] = MIN(4 * j + l, S_LAST);
+    }
+    SAVE_MAP_CHAR(ptile,
+                  sg_special_get(map_get_player_tile(ptile, plr)->special,
+                                 mod), saving->file,
+                  "player%d.map_spe%02d_%04d", plrno, j);
+  } halfbyte_iterate_special_end;
+
+  /* Save the map (bases). */
+  halfbyte_iterate_bases(j, game.control.num_base_types) {
     int mod[4];
     int l;
 
     for (l = 0; l < 4; l++) {
-      if (4 * j + 1 > game.control.num_extra_types) {
+      if (4 * j + 1 > game.control.num_base_types) {
         mod[l] = -1;
       } else {
         mod[l] = 4 * j + l;
@@ -5970,9 +5214,9 @@ static void sg_save_player_vision(struct savedata *saving,
     }
 
     SAVE_MAP_CHAR(ptile,
-                  sg_extras_get(map_get_player_tile(ptile, plr)->extras, mod),
-                  saving->file, "player%d.map_e%02d_%04d", plrno, j);
-  } halfbyte_iterate_extras_end;
+                  sg_bases_get(map_get_player_tile(ptile, plr)->bases, mod),
+                  saving->file, "player%d.map_b%02d_%04d", plrno, j);
+  } halfbyte_iterate_bases_end;
 
   /* Save the map (update time). */
   for (i = 0; i < 4; i++) {
@@ -5992,25 +5236,19 @@ static void sg_save_player_vision(struct savedata *saving,
 
     fc_snprintf(buf, sizeof(buf), "player%d.dc%d", plrno, i);
 
-    if (NULL != pdcity && plr != vision_site_owner(pdcity)) {
-      int nat_x, nat_y;
-
-      index_to_native_pos(&nat_x, &nat_y, tile_index(ptile));
-      secfile_insert_int(saving->file, nat_y, "%s.y", buf);
-      secfile_insert_int(saving->file, nat_x, "%s.x", buf);
-
+    if (NULL != pdcity && plr != vision_owner(pdcity)) {
+      secfile_insert_int(saving->file, ptile->nat_y, "%s.y", buf);
+      secfile_insert_int(saving->file, ptile->nat_x, "%s.x", buf);
       secfile_insert_int(saving->file, pdcity->identity, "%s.id", buf);
-      secfile_insert_int(saving->file, player_number(vision_site_owner(pdcity)),
+      secfile_insert_int(saving->file, player_number(vision_owner(pdcity)),
                          "%s.owner", buf);
 
-      secfile_insert_int(saving->file, vision_site_size_get(pdcity),
-                         "%s.size", buf);
+      secfile_insert_int(saving->file, pdcity->size, "%s.size", buf);
       secfile_insert_bool(saving->file, pdcity->occupied,
                           "%s.occupied", buf);
       secfile_insert_bool(saving->file, pdcity->walls, "%s.walls", buf);
       secfile_insert_bool(saving->file, pdcity->happy, "%s.happy", buf);
       secfile_insert_bool(saving->file, pdcity->unhappy, "%s.unhappy", buf);
-      secfile_insert_int(saving->file, pdcity->city_image, "%s.city_image", buf);
 
       /* Save improvement list as bitvector. Note that improvement order
        * is saved in savefile.improvement.order. */
@@ -6066,71 +5304,6 @@ static void sg_save_event_cache(struct savedata *saving)
 }
 
 /* =======================================================================
- * Load / save the mapimg definitions.
- * ======================================================================= */
-
-/****************************************************************************
-  Load '[mapimg]'.
-****************************************************************************/
-static void sg_load_mapimg(struct loaddata *loading)
-{
-  int mapdef_count, i;
-
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  /* Clear all defined map images. */
-  while (mapimg_count() > 0) {
-    mapimg_delete(0);
-  }
-
-  mapdef_count = secfile_lookup_int_default(loading->file, 0,
-                                            "mapimg.count");
-  log_verbose("Saved map image definitions: %d.", mapdef_count);
-
-  if (0 >= mapdef_count) {
-    return;
-  }
-
-  for (i = 0; i < mapdef_count; i++) {
-    const char *p;
-
-    p = secfile_lookup_str(loading->file, "mapimg.mapdef%d", i);
-    if (NULL == p) {
-      log_verbose("[Mapimg %4d] Missing definition.", i);
-      continue;
-    }
-
-    if (!mapimg_define(p, FALSE)) {
-      log_error("Invalid map image definition %4d: %s.", i, p);
-    }
-
-    log_verbose("Mapimg %4d loaded.", i);
-  }
-}
-
-/****************************************************************************
-  Save '[mapimg]'.
-****************************************************************************/
-static void sg_save_mapimg(struct savedata *saving)
-{
-  /* Check status and return if not OK (sg_success != TRUE). */
-  sg_check_ret();
-
-  secfile_insert_int(saving->file, mapimg_count(), "mapimg.count");
-  if (mapimg_count() > 0) {
-    int i;
-
-    for (i = 0; i < mapimg_count(); i++) {
-      char buf[MAX_LEN_MAPDEF];
-
-      mapimg_id2str(i, buf, sizeof(buf));
-      secfile_insert_str(saving->file, buf, "mapimg.mapdef%d", i);
-    }
-  }
-}
-
-/* =======================================================================
  * Sanity checks for loading / saving a game.
  * ======================================================================= */
 
@@ -6160,12 +5333,13 @@ static void sg_load_sanitycheck(struct loaddata *loading)
   /* Fix ferrying sanity */
   players_iterate(pplayer) {
     unit_list_iterate_safe(pplayer->units, punit) {
-      if (!unit_transport_get(punit)
-          && !can_unit_exist_at_tile(punit, unit_tile(punit))) {
+      struct unit *ferry = game_unit_by_number(punit->transported_by);
+
+      if (!ferry && !can_unit_exist_at_tile(punit, punit->tile)) {
         log_sg("Removing %s unferried %s in %s at (%d, %d)",
                nation_rule_name(nation_of_player(pplayer)),
                unit_rule_name(punit),
-               terrain_rule_name(unit_tile(punit)->terrain),
+               terrain_rule_name(punit->tile->terrain),
                TILE_XY(unit_tile(punit)));
         bounce_unit(punit, TRUE);
       }
@@ -6185,7 +5359,8 @@ static void sg_load_sanitycheck(struct loaddata *loading)
     unit_list_iterate(pplayer->units, punit) {
       unit_assign_specific_activity_target(punit,
                                            &punit->activity,
-                                           &punit->activity_target);
+                                           &punit->activity_target,
+                                           &punit->activity_base);
     } unit_list_iterate_end;
   } players_iterate_end;
 
@@ -6199,11 +5374,9 @@ static void sg_load_sanitycheck(struct loaddata *loading)
     /* Recalculate for all players. */
     pplayer->ai_controlled = FALSE;
 
-    /* Building advisor needs data phase open in order to work */
-    adv_data_phase_init(pplayer, FALSE);
+    ai_data_phase_init(pplayer, FALSE);
     building_advisor(pplayer);
-    /* Close data phase again so it can be opened again when game starts. */
-    adv_data_phase_done(pplayer);
+    ai_data_phase_done(pplayer);
 
     pplayer->ai_controlled = saved_ai_control;
   } players_iterate_end;
@@ -6238,9 +5411,6 @@ static void sg_load_sanitycheck(struct loaddata *loading)
       calc_civ_score(pplayer);
     } players_iterate_end;
   }
-
-  /* At the end do the default sanity checks. */
-  sanity_check();
 }
 
 /****************************************************************************
@@ -6250,4 +5420,134 @@ static void sg_save_sanitycheck(struct savedata *saving)
 {
   /* Check status and return if not OK (sg_success != TRUE). */
   sg_check_ret();
+}
+
+/* =======================================================================
+ * Compatibility functions for loading / saving a game.
+ * ======================================================================= */
+
+typedef void (*load_version_func_t) (struct loaddata *loading);
+typedef void (*save_version_func_t) (struct savedata *saving);
+
+/* (No compatibility functions yet; when adding them, use names like
+ * compat_load/save_020400(); see trunk code for examples) */
+
+struct compatibility {
+  int version;
+  const struct sset_val_name name;
+  const load_version_func_t load;
+  const save_version_func_t save;
+};
+
+/* The struct below contains the information about the savegame versions. It
+ * is identified by the version number (first element), which should be
+ * steadily increasing. It is saved as 'savefile.version'. The support
+ * string (first element of 'name') is not saved in the savegame; it is
+ * used as a value for the 'saveversion' option entered at the server prompt
+ * and saved in settings files (so, once assigned, cannot be changed). The
+ * 'pretty' string (second element of 'name') is presented in places like
+ * 'help saveversion' output, and can be changed if necessary
+ * For changes in the development version, edit the definitions above and
+ * add the needed code to save/load the old version below. Thus, old
+ * savegames can still be created and loaded while the main definition
+ * represents the current state of the art. */
+static struct compatibility compat[] = {
+  /* dummy; equal to the current version (last element) */
+  { 0, { "CURRENT", N_("current version") }, NULL, NULL },
+  /* version 1 and 2 is not used */
+  /* version 3: first savegame2 format, so no compat functions for translation
+   * from previous format */
+  { 3, { "2.3.0", N_("freeciv 2.3.0") }, NULL, NULL },
+  /* Current savefile version is listed above this line; it corresponds to
+     the definitions in this file. */
+};
+
+static const int compat_num = ARRAY_SIZE(compat);
+#define compat_current (compat_num - 1)
+
+/****************************************************************************
+  Savefile version setting names accessor.
+****************************************************************************/
+const struct sset_val_name *saveversion_name(int saveversion)
+{
+  return (0 <= saveversion && saveversion < compat_num
+          ? &compat[saveversion].name : NULL);
+}
+
+/****************************************************************************
+  Compatibility functions for loaded game.
+
+  This function is called at the beginning of loading a savegame. The data in
+  loading->file should be change such, that the current loading functions can
+  be executed without errors.
+****************************************************************************/
+static void sg_load_compat(struct loaddata *loading)
+{
+  int i, version;
+
+  /* Check status and return if not OK (sg_success != TRUE). */
+  sg_check_ret();
+
+  version = secfile_lookup_int_default(loading->file, -1,
+                                       "savefile.version");
+#ifdef DEBUG
+  sg_failure_ret(0 < version, "Invalid savefile format version (%d).",
+                 version);
+  if (version > compat[compat_current].version) {
+    /* Debug build can (TRY TO!) load newer versions but ... */
+    log_error("Savegame version newer than this build found (%d > %d). "
+              "Trying to load the game nevertheless ...", version,
+              compat[compat_current].version);
+  }
+#else
+  sg_failure_ret(0 < version && version <= compat[compat_current].version,
+                 "Unknown savefile format version (%d).", version);
+#endif /* DEBUG */
+
+
+  for (i = 0; i < compat_num; i++) {
+    if (version < compat[i].version && compat[i].load != NULL) {
+      log_normal(_("Run compatibility function for version: <%d "
+                   "(save file: %d; server: %d)."), compat[i].version,
+                 version, compat[compat_current].version);
+      compat[i].load(loading);
+    }
+  }
+}
+
+/****************************************************************************
+  Compatibility functions for saved game.
+
+  This function is called at the end of saving the game data. The data in
+  saving->file should be change such, that the resulting save file can be
+  loaded by the version defined in game.server.saveversion.
+****************************************************************************/
+static void sg_save_compat(struct savedata *saving)
+{
+  int i, version;
+
+  /* Check status and return if not OK (sg_success != TRUE). */
+  sg_check_ret();
+
+  sg_failure_ret(saveversion_name(game.server.saveversion) != NULL,
+                 "Unknown savefile format version.");
+
+  if (0 == game.server.saveversion) {
+    /* A value of zero is set to current save file format */
+    version = compat[compat_current].version;
+  } else {
+    version = compat[game.server.saveversion].version;
+  }
+
+  for (i = compat_current; i >= 0; i--) {
+    if (compat[i].version > version && compat[i].save != NULL) {
+      log_normal(_("Run compatibility function for version: <%d "
+                   "(want: %d, server: %d)."), compat[i].version,
+                 version, compat[compat_current].version);
+      compat[i].save(saving);
+    }
+  }
+
+  /* update version information */
+  secfile_replace_int(saving->file, version, "savefile.version");
 }

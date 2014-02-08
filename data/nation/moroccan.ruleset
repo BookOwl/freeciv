@@ -3,8 +3,8 @@
 name=_("Moroccan")
 plural=_("?plural:Moroccans")
 groups="Medieval", "Early Modern", "Modern", "African"
-legend=_("Modern Morocco gained independence in 1956. However, the area\
- has been inhabited since at least 8000 BCE. In classical times the region\
+legend=_("Modern Morocco gained independence in 1956.  However, the area\
+ has been inhabited since at least 8000 BC.  In classical times the region\
  was known as Mauretania.")
 
 leaders = {
@@ -26,8 +26,10 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",            "female_title"
  "Despotism",       _("Sheikh %s"),          _("Shaykha %s")
- "Fundamentalism",  _("Caliph %s"),          _("Calipha %s")
- "Republic",        _("Vizier %s"),          _("?female:Vizier %s")
+ "Monarchy",        _("Malik %s"),           _("Malika %s")
+ "Republic",        _("Sultan %s"),          _("Sultana %s")
+ "Communism",       _("Caliph %s"),          _("Calipha %s")
+ "Democracy",       _("Amir Al-Muminin %s"), _("Amirat Al-Muminin %s")
 }
 
 flag="morocco"
@@ -36,6 +38,7 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="Amazigh", "Riffian", "Sahrawi"
 

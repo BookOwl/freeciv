@@ -15,12 +15,13 @@
 
 #include <gtk/gtk.h>
 
+#include "fcintl.h"
+
 #include "dialogs_g.h"
 
 void popup_revolution_dialog(struct government *government);
 void message_dialog_button_set_sensitive(GtkWidget *shl, int button,
 					 gboolean state);
 gboolean taxrates_callback(GtkWidget *w, GdkEventButton *ev, gpointer data);
-void nationset_sync_to_server(const char *nationset);
 
 #endif  /* FC__DIALOGS_H */

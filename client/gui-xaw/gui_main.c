@@ -13,14 +13,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #ifdef AUDIO_SDL
-/* Though it would happily compile without this include,
- * it is needed for sound to work as long as SDL-1.2 mixer is
- * being used. It defines "main" macro to rename our main() so that
- * it can install SDL's own. */
 #include "SDL.h"
 #endif
 
@@ -69,7 +65,7 @@
 #include "tilespec.h"
 
 /* gui-xaw */
-#include "xaw_actions.h"
+#include "actions.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -557,7 +553,7 @@ static void unit_icon_callback(Widget w, XtPointer client_data,
   if (punit) { /* should always be true at this point */
     if (unit_owner(punit) == client.conn.playing) {
       /* may be non-true if alliance */
-      unit_focus_set(punit);
+      set_unit_focus(punit);
     }
   }
 }
@@ -917,7 +913,7 @@ void set_unit_icon(int idx, struct unit *punit)
   if (punit) {
     struct canvas store = {XawPixcommPixmap(w)};
 
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
     xaw_expose_now(w);
   }
 }
@@ -1087,7 +1083,7 @@ void add_unit_to_battlegroup(int battlegroup)
     if (punit && punit->battlegroup == battlegroup) {
       /* If top unit already in the same battlegroup, detach it */
       unit_change_battlegroup(punit, BATTLEGROUP_NONE);
-      refresh_unit_mapcanvas(punit, unit_tile(punit), TRUE, FALSE);
+      refresh_unit_mapcanvas(punit, punit->tile, TRUE, FALSE);
     } else {
       key_unit_assign_battlegroup(battlegroup, TRUE);
     }

@@ -28,7 +28,7 @@ ruler_titles = {
  "Monarchy",       _("Sultan %s"),         _("Sultana %s")
  "Fundamentalism", _("Imam %s"),           _("Imama %s")
  "Despotism",      _("Sheikh %s"),         _("Shaykha %s")
- "Republic",       _("Vizier %s"),         _("?female:Vizier %s")
+ "Democracy",      _("Prime Minister %s"), _("?female:Prime Minister %s")
  "Communism",   _("General Commander %s"), _("?female:General Commander %s")
 }
 
@@ -38,30 +38,31 @@ city_style = "Tropical"
 
 init_techs="" 
 init_buildings="" 
+init_government="Despotism" 
 init_units="" 
 
-civilwar_nations = "emirati", "himyarite", "persian", "zanzibari"
+civilwar_nations = "arab", "emirati", "himyarite", "persian"
 
 cities = 
-"Maskat",
+  "Al Maskat",
 "Nizwa",
-"Al-Hamra",
+"Al Hamra",
 "Dibba Al-Baya",
 "Ruwi",
 "Jalan Bani Bu Hassan",
 "Khasab",
-"Masira",
+"Masirah",
 "Mudhaybi",
 "Izki",
-"As-Sib",
-"Mana",
-"Al-Buraimi",
+"As Sib",
+"Manah",
+"Al Buraimi",
 "Ibra",
 "Thumrait",
 "Jabrin",
 "Haima",
 "Adam",
-"Al-Suwaiq",
+"Al Suwaiq",
 "Barka",
 "Samail",
 "Saiq",
@@ -69,11 +70,11 @@ cities =
 "Ibri",
 "Sohar",
 "Mahooth",
-"Matra",
-"Al-Jazer",
+"Matrah",
+"Al Jazer",
 "Shinas",
 "Mudhaireb",
-"Salala",
+"Salalah",
 "Sur",
 "Bidiya",
 "Saham",

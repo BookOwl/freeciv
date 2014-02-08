@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
@@ -20,7 +20,6 @@
 #include "log.h"
 #include "mem.h"
 #include "pqueue.h"
-#include "support.h"
 
 /* common */
 #include "game.h"
@@ -255,7 +254,7 @@ pf_normal_map_check(struct pf_map *pfm, const char *file,
   return (struct pf_normal_map *) pfm;
 }
 #define PF_NORMAL_MAP(pfm)                                                  \
-  pf_normal_map_check(pfm, __FILE__, __FUNCTION__, __FC_LINE__)
+  pf_normal_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
 #else
 #define PF_NORMAL_MAP(pfm) ((struct pf_normal_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -296,7 +295,7 @@ static void pf_normal_node_init(struct pf_normal_map *pfnm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -885,7 +884,7 @@ pf_danger_map_check(struct pf_map *pfm, const char *file,
   return (struct pf_danger_map *) pfm;
 }
 #define PF_DANGER_MAP(pfm)                                                  \
-  pf_danger_map_check(pfm, __FILE__, __FUNCTION__, __FC_LINE__)
+  pf_danger_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
 #else
 #define PF_DANGER_MAP(pfm) ((struct pf_danger_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -926,7 +925,7 @@ static void pf_danger_node_init(struct pf_danger_map *pfdm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -1739,7 +1738,7 @@ pf_fuel_map_check(struct pf_map *pfm, const char *file,
   return (struct pf_fuel_map *) pfm;
 }
 #define PF_FUEL_MAP(pfm) \
-  pf_fuel_map_check(pfm, __FILE__, __FUNCTION__, __FC_LINE__)
+  pf_fuel_map_check(pfm, __FILE__, __FUNCTION__, __LINE__)
 #else
 #define PF_FUEL_MAP(pfm) ((struct pf_fuel_map *) (pfm))
 #endif /* PF_DEBUG */
@@ -1780,7 +1779,7 @@ static void pf_fuel_node_init(struct pf_fuel_map *pffm,
     struct city *pcity = tile_city(ptile);
     struct terrain *pterrain = tile_terrain(ptile);
     bool my_zoc = (NULL != pcity || pterrain == T_UNKNOWN
-                   || terrain_type_terrain_class(pterrain) == TC_OCEAN
+                   || terrain_has_flag(pterrain, TER_OCEANIC)
                    || params->get_zoc(params->owner, ptile));
     /* ZoC rules cannot prevent us from moving into/attacking an occupied
      * tile. Other rules can, but we don't care about them here. */
@@ -2226,27 +2225,6 @@ static void pf_fuel_map_create_segment(struct pf_fuel_map *pffm,
 }
 
 /****************************************************************************
-  Adjust cost for move_rate and fuel usage.
-****************************************************************************/
-static int pf_fuel_map_adjust_cost(const int cost,
-                                   const int moves_left,
-                                   const int move_rate)
-{
-  int remaining_moves;
-
-  if (cost == PF_IMPOSSIBLE_MC) {
-    return PF_IMPOSSIBLE_MC;
-  }
-
-  remaining_moves = moves_left % move_rate;
-  if (remaining_moves == 0) {
-    remaining_moves = move_rate;
-  }
-
-  return MIN(cost, remaining_moves);
-}
-
-/****************************************************************************
   This function returns whether a unit with or without fuel can attack.
 
   moves_left: moves left before the attack.
@@ -2256,16 +2234,18 @@ static inline bool
 pf_fuel_map_attack_is_possible(const struct pf_parameter *param,
                                int moves_left, int moves_left_req)
 {
-  if (uclass_has_flag(param->uclass, UCF_MISSILE)) {
-    /* Case missile */
-    return TRUE;
-  } else if (BV_ISSET(param->unit_flags, UTYF_ONEATTACK)) {
-    /* Case Bombers */
-    if (moves_left <= param->move_rate) {
-      /* We are in the last turn of fuel, don't attack */
-      return FALSE;
-    } else {
+  if (BV_ISSET(param->unit_flags, F_ONEATTACK)) {
+    if (param->fuel == 1) {
+      /* Case missile */
       return TRUE;
+    } else {
+      /* Case Bombers */
+      if (moves_left <= param->move_rate) {
+        /* We are in the last turn of fuel, don't attack */
+        return FALSE;
+      } else {
+        return TRUE;
+      }
     }
   } else {
     /* Case fighters */
@@ -2394,15 +2374,11 @@ static bool pf_fuel_map_iterate(struct pf_map *pfm)
           continue;
         }
 
-        cost = pf_fuel_map_adjust_cost(cost, loc_moves_left, params->move_rate);
-        if (cost == PF_IMPOSSIBLE_MC) {
-          continue;
-        }
-
         moves_left = loc_moves_left - cost;
         if (moves_left < node1->moves_left_req
-            && (!uclass_has_flag(params->uclass, UCF_MISSILE)
-                || 0 > moves_left)) {
+            && (!BV_ISSET(params->unit_flags, F_ONEATTACK)
+                || 1 != params->fuel
+                || 0 >= moves_left)) {
           /* We don't have enough moves left, but missiles
            * can do suicidal attacks. */
           continue;
@@ -3034,9 +3010,14 @@ static int pf_reverse_map_get_costs(const struct tile *to_tile,
   } else if (!is_native_tile_to_class(param->uclass, to_tile)
              && !tile_city(to_tile)) {
     return -1;  /* Impossible move. */
+  } else if (uclass_has_flag(param->uclass, UCF_TERRAIN_SPEED)) {
+    if (BV_ISSET(param->unit_flags, F_IGTER)) {
+      cost = MIN(map_move_cost(param->owner, from_tile, to_tile), SINGLE_MOVE);
+    } else {
+      cost = map_move_cost(param->owner, from_tile, to_tile);
+    }
   } else {
-    cost = map_move_cost(param->owner, param->uclass, from_tile, to_tile,
-                         BV_ISSET(param->unit_flags, UTYF_IGTER));
+    cost = SINGLE_MOVE;
   }
 
   if (to_cost + cost > FC_PTR_TO_INT(param->data)) {
@@ -3055,9 +3036,9 @@ static int pf_reverse_map_get_costs(const struct tile *to_tile,
   'pf_reverse_map' constructor. If 'max_turns' is positive, then it won't
   try to iterate the maps beyond this number of turns.
 ****************************************************************************/
-struct pf_reverse_map *pf_reverse_map_new(const struct player *pplayer,
+struct pf_reverse_map *pf_reverse_map_new(struct player *pplayer,
                                           struct tile *start_tile,
-                                          int max_turns, bool omniscient)
+                                          int max_turns)
 {
   struct pf_reverse_map *pfrm = fc_malloc(sizeof(struct pf_reverse_map));
   struct pf_parameter *param = &pfrm->param;
@@ -3067,7 +3048,7 @@ struct pf_reverse_map *pf_reverse_map_new(const struct player *pplayer,
   param->get_costs = pf_reverse_map_get_costs;
   param->start_tile = start_tile;
   param->owner = pplayer;
-  param->omniscience = omniscient;
+  param->omniscience = !ai_handicap(pplayer, H_MAP);
   param->data = FC_INT_TO_PTR(max_turns);
 
   /* Initialize the map vector. */
@@ -3081,10 +3062,9 @@ struct pf_reverse_map *pf_reverse_map_new(const struct player *pplayer,
   it won't try to iterate the maps beyond this number of turns.
 ****************************************************************************/
 struct pf_reverse_map *pf_reverse_map_new_for_city(const struct city *pcity,
-                                                   const struct player *attacker,
-                                                   int max_turns, bool omniscient)
+                                                   int max_turns)
 {
-  return pf_reverse_map_new(attacker, city_tile(pcity), max_turns, omniscient);
+  return pf_reverse_map_new(city_owner(pcity), city_tile(pcity), max_turns);
 }
 
 /****************************************************************************
@@ -3092,10 +3072,9 @@ struct pf_reverse_map *pf_reverse_map_new_for_city(const struct city *pcity,
   it won't try to iterate the maps beyond this number of turns.
 ****************************************************************************/
 struct pf_reverse_map *pf_reverse_map_new_for_unit(const struct unit *punit,
-                                                   int max_turns, bool omniscient)
+                                                   int max_turns)
 {
-  return pf_reverse_map_new(unit_owner(punit), unit_tile(punit), max_turns,
-                            omniscient);
+  return pf_reverse_map_new(unit_owner(punit), unit_tile(punit), max_turns);
 }
 
 /****************************************************************************

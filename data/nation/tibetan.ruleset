@@ -25,6 +25,7 @@ leaders = {
 ruler_titles = {
  "government",     "male_title",           "female_title"
  "Fundamentalism", _("Dalai Lama %s"),     _("?female:Dalai Lama %s")
+ "Democracy",      _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="tibet"
@@ -33,8 +34,9 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "mongol", "nepali", "bhutanese", "sherpa"
+civilwar_nations = "mongol", "nepali", "bhutanese"
 
 cities =
  "Lhasa",

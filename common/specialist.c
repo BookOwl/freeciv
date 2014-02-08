@@ -12,13 +12,12 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-#include "string_vector.h"
 
 /* common */
 #include "city.h"
@@ -57,10 +56,6 @@ void specialists_free(void)
     struct specialist *p = &specialists[i];
 
     requirement_vector_free(&p->reqs);
-    if (NULL != p->helptext) {
-      strvec_destroy(p->helptext);
-      p->helptext = NULL;
-    }
   }
 }
 
@@ -195,7 +190,7 @@ const char *specialists_abbreviation_string(void)
 
   and you'll get "0/3/1".
 ****************************************************************************/
-const char *specialists_string(const citizens *specialists)
+const char *specialists_string(const int *specialists)
 {
   static char buf[5 * SP_MAX];
 

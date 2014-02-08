@@ -12,16 +12,13 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common & utility */
 #include "fcintl.h"
 #include "game.h"
 #include "support.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 /* client */
 #include "client_main.h"
@@ -86,7 +83,7 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
   Update the timeout display.  The timeout is the time until the turn
   ends, in seconds.
 ****************************************************************************/
-void gui_update_timeout_label(void)
+void update_timeout_label(void)
 {
   /* PORTME */
     

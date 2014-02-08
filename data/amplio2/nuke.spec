@@ -1,12 +1,13 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2013.Feb.13"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
 artists = "
-    Michael Johnson <justaguest>
+    Tatu Rissanen <tatu.rissanen@hut.fi>
+    Jeff Mallatt <jjm@codewell.com> (miscellaneous)
 "
 
 [file]

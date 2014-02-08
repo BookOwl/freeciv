@@ -25,9 +25,8 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",        "female_title"
  "Despotism",       _("Landgrave %s"),   _("Landgravine %s")
- "Fundamentalism",  _("Bishop %s"),      _("?female:Bishop %s")
  "Monarchy",        _("Elector %s"),     _("Electress %s")
- "Democracy", _("Minister-President %s"), _("?female:Minister-President %s")
+ "Republic", _("Minister-President %s"), _("?female:Minister-President %s")
 }
 
 flag="hesse"
@@ -36,9 +35,10 @@ city_style = "european"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="hanoverian", "badian", "palatinate", "rhenish"
+civilwar_nations="bavarian", "hanoverian", "badian", "palatinate"
 
 cities =
  "Kassel",
@@ -50,7 +50,6 @@ cities =
  "Nassau",
  "Offenbach am Main",
  "Hanau",
- "Mainz",
  "Weilburg",
  "Gießen",
  "Fulda",
@@ -58,15 +57,12 @@ cities =
  "Wetzlar",
  "Rodgau",
  "Oberursel",
- "Worms",
  "Dreieich",
  "Bensheim",
  "Hofheim",
- "Arolsen",
  "Maintal",
  "Langen",
  "Neu-Isenburg",
- "Bingen",
  "Mörfelden-Walldorf",
  "Limburg",
  "Dietzenbach",
@@ -75,7 +71,6 @@ cities =
  "Vilbel",
  "Lampertheim",
  "Hersfeld",
- "Alzey",
  "Taunusstein",
  "Friedberg",
  "Baunatal",
@@ -84,7 +79,6 @@ cities =
  "Griesheim",
  "Hattersheim",
  "Heppenheim",
- "Nieder-Olm",
  "Butzbach",
  "Pfungstadt",
  "Korbach",
@@ -94,7 +88,6 @@ cities =
  "Obertshausen",
  "Groß-Gerau",
  "Idstein",
- "Ingelheim",
  "Karben",
  "Stadtallendorf",
  "Gelnhausen",

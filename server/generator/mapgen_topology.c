@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* sqrt */
@@ -38,7 +38,6 @@ int ice_base_colatitude = 0 ;
 int map_colatitude(const struct tile *ptile)
 {
   double x, y;
-  int tile_x, tile_y;
 
   fc_assert_ret_val(ptile != NULL, MAX_COLATITUDE / 2);
 
@@ -49,10 +48,8 @@ int map_colatitude(const struct tile *ptile)
     return MAX_COLATITUDE / 2;
   }
 
-
-  index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
-  do_in_natural_pos(ntl_x, ntl_y, tile_x, tile_y) {
-    if (!current_topo_has_flag(TF_WRAPX) && !current_topo_has_flag(TF_WRAPY)) {
+  do_in_natural_pos(ntl_x, ntl_y, ptile->x, ptile->y) {
+    if (!topo_has_flag(TF_WRAPX) && !topo_has_flag(TF_WRAPY)) {
       /* A FLAT (unwrapped) map 
        *
        * We assume this is a partial planetary map.  A polar zone is placed
@@ -94,13 +91,13 @@ int map_colatitude(const struct tile *ptile)
 	 / (NATURAL_HEIGHT / 2 - 1));
   } do_in_natural_pos_end;
 
-  if (current_topo_has_flag(TF_WRAPX) && !current_topo_has_flag(TF_WRAPY)) {
+  if (topo_has_flag(TF_WRAPX) && !topo_has_flag(TF_WRAPY)) {
     /* In an Earth-like topology the polar zones are at north and south.
      * This is equivalent to a Mercator projection. */
     return MAX_COLATITUDE * y;
   }
   
-  if (!current_topo_has_flag(TF_WRAPX) && current_topo_has_flag(TF_WRAPY)) {
+  if (!topo_has_flag(TF_WRAPX) && topo_has_flag(TF_WRAPY)) {
     /* In a Uranus-like topology the polar zones are at east and west.
      * This isn't really the way Uranus is; it's the way Earth would look
      * if you tilted your head sideways.  It's still a Mercator
@@ -338,7 +335,7 @@ void generator_init_topology(bool autosize)
   }
 
   /* correction for single pole (Flat Earth) */
-  if (!current_topo_has_flag(TF_WRAPX) && !current_topo_has_flag(TF_WRAPY)) {
+  if (!topo_has_flag(TF_WRAPX) && !topo_has_flag(TF_WRAPY)) {
     ice_base_colatitude /= 2;
   }
 

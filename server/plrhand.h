@@ -16,22 +16,12 @@
 struct section_file;
 struct connection;
 struct conn_list;
-struct rgbcolor;
-struct player;
-struct nation_type;
 
 enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
-struct player *server_create_player(int player_id, const char *ai_type,
-                                    struct rgbcolor *prgbcolor);
-const struct rgbcolor *player_preferred_color(struct player *pplayer);
-void assign_player_colors(void);
-void server_player_set_color(struct player *pplayer,
-                             const struct rgbcolor *prgbcolor);
-const char *player_color_ftstr(struct player *pplayer);
-void server_player_init(struct player *pplayer, bool initmap,
-                        bool needs_team);
-void give_midgame_initial_units(struct player *pplayer, struct tile *ptile);
+void server_player_init(struct player *pplayer,
+			bool initmap, bool needs_team);
+struct player *server_create_player(int player_id);
 void server_remove_player(struct player *pplayer);
 void kill_player(struct player *pplayer);
 void update_revolution(struct player *pplayer);
@@ -47,23 +37,8 @@ bool server_player_set_name_full(const struct connection *caller,
 
 struct nation_type *pick_a_nation(const struct nation_list *choices,
                                   bool ignore_conflicts,
-                                  bool needs_startpos,
+                                  bool only_available,
                                   enum barbarian_type barb_type);
-bool nation_is_in_current_set(const struct nation_type *pnation);
-bool client_can_pick_nation(const struct nation_type *nation);
-void count_playable_nations(void);
-void send_nation_availability(struct conn_list *dest);
-void fit_nationset_to_players(void);
-
-/* Iterate over nations in the currently selected set.
- * Does not filter on playability or anything else. */
-#define allowed_nations_iterate(pnation)                            \
-  nations_iterate(pnation) {                                        \
-    if (nation_is_in_current_set(pnation)) {
-
-#define allowed_nations_iterate_end                                 \
-    }                                                               \
-  } nations_iterate_end
 
 void check_player_max_rates(struct player *pplayer);
 void make_contact(struct player *pplayer1, struct player *pplayer2,
@@ -90,7 +65,7 @@ do {\
   int MY_i;\
   struct player *NAME_pplayer;\
   log_debug("shuffled_players_iterate @ %s line %d",\
-            __FILE__, __FC_LINE__);\
+            __FILE__, __LINE__);\
   for (MY_i = 0; MY_i < player_slot_count(); MY_i++) {\
     NAME_pplayer = shuffled_player(MY_i);\
     if (NAME_pplayer != NULL) {\
@@ -110,10 +85,8 @@ do {\
   } shuffled_players_iterate_end;\
 } while (0)
 
-bool civil_war_possible(struct player *pplayer, bool conquering_city,
-                        bool honour_server_option);
 bool civil_war_triggered(struct player *pplayer);
-struct player *civil_war(struct player *pplayer);
+void civil_war(struct player *pplayer);
 
 void update_players_after_alliance_breakup(struct player* pplayer,
                                           struct player* pplayer2);
@@ -125,21 +98,5 @@ int normal_player_count(void);
 void player_status_add(struct player *plr, enum player_status status);
 bool player_status_check(struct player *plr, enum player_status status);
 void player_status_reset(struct player *plr);
-
-const char *player_delegation_get(const struct player *pplayer);
-void player_delegation_set(struct player *pplayer, const char *username);
-bool player_delegation_active(const struct player *pplayer);
-
-void send_delegation_info(const struct connection *pconn);
-
-struct player *player_by_user_delegated(const char *name);
-
-/* player colors */
-void playercolor_init(void);
-void playercolor_free(void);
-
-int playercolor_count(void);
-void playercolor_add(struct rgbcolor *prgbcolor);
-struct rgbcolor *playercolor_get(int id);
 
 #endif  /* FC__PLRHAND_H */

@@ -3,7 +3,7 @@
 name=_("Martian")
 plural=_("?plural:Martians")
 groups="Imaginary"
-legend=_("Marsmen landed on Earth in 4000 BCE!")
+legend=_("Marsmen landed on Earth in 4000 BC!")
 
 leaders = {
  "name",                        "sex"
@@ -24,6 +24,7 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="atlantean"

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -45,6 +45,9 @@
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
+#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -52,15 +55,10 @@
 #include <winsock.h>
 #endif
 
-/* dependencies */
-#include "cvercmp.h"
-
 /* utility */
 #include "fcintl.h"
-#include "fcthread.h"
 #include "log.h"
 #include "mem.h"
-#include "netfile.h"
 #include "netintf.h"
 #include "rand.h" /* fc_rand() */
 #include "registry.h"
@@ -74,7 +72,6 @@
 #include "version.h"
 
 /* client */
-#include "chatline_common.h"
 #include "client_main.h"
 #include "servers.h"
 
@@ -84,7 +81,7 @@ struct server_scan {
   enum server_scan_type type;
   ServerScanErrorFunc error_func;
 
-  struct srv_list srvrs;
+  struct server_list *servers;
   int sock;
 
   /* Only used for metaserver */
@@ -94,21 +91,14 @@ struct server_scan {
       META_WAITING,
       META_DONE
     } state;
-
-    enum server_scan_status status;
-
-    fc_thread thr;
-    fc_mutex mutex;
-
+    char name[MAX_LEN_ADDR];
+    int port;
     const char *urlpath;
     FILE *fp; /* temp file */
   } meta;
 };
 
 extern enum announce_type announce;
-
-static bool begin_metaserver_scan(struct server_scan *scan);
-static void delete_server_list(struct server_list *server_list);
 
 /**************************************************************************
  The server sends a stream in a registry 'ini' type format.
@@ -119,36 +109,10 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   struct server_list *server_list;
   struct section_file *file;
   int nservers, i, j;
-  const char *latest_ver;
 
   /* This call closes f. */
   if (!(file = secfile_from_stream(f, TRUE))) {
     return NULL;
-  }
-
-  latest_ver = secfile_lookup_str_default(file, NULL, "versions." FOLLOWTAG);
-
-  if (latest_ver != NULL) {
-    const char *my_comparable = fc_comparable_version();
-    char vertext[2048];
-
-    log_verbose("Metaserver says latest '%s' version is '%s'; we have '%s'",
-                FOLLOWTAG, latest_ver, my_comparable);
-    if (cvercmp_greater(latest_ver, my_comparable)) {
-      const char *const followtag = "?vertag:" FOLLOWTAG;
-      fc_snprintf(vertext, sizeof(vertext),
-                  /* TRANS: Type is version tag name like "stable", "S2_4",
-                   * "win32" (which can also be localised -- msgids start
-                   * '?vertag:') */
-                  _("Latest %s release of Freeciv is %s, this is %s."),
-                  Q_(followtag), latest_ver, my_comparable);
-    } else {
-      fc_snprintf(vertext, sizeof(vertext),
-                  _("There is no newer %s release of Freeciv available."),
-                  FOLLOWTAG);
-    }
-
-    output_window_append(ftc_client, vertext);
   }
 
   server_list = server_list_new();
@@ -212,58 +176,158 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   }
 
   secfile_destroy(file);
-
   return server_list;
 }
 
-/****************************************************************************
-  Read the reply string from the metaserver.
-****************************************************************************/
-static bool meta_read_response(struct server_scan *scan)
+/*****************************************************************
+  Returns an uname like string.
+*****************************************************************/
+static void my_uname(char *buf, size_t len)
 {
-  fz_FILE *f;
-  char str[4096];
-  struct server_list *srvrs;
+#ifdef HAVE_UNAME
+  {
+    struct utsname un;
 
-  f = fz_from_stream(scan->meta.fp);
-  if (NULL == f) {
-    fc_snprintf(str, sizeof(str),
-                _("Failed to read the metaserver data from %s."),
-                metaserver);
-    scan->error_func(scan, str);
-
-    return FALSE;
+    uname(&un);
+    fc_snprintf(buf, len, "%s %s [%s]", un.sysname, un.release, un.machine);
   }
+#else /* ! HAVE_UNAME */
+  /* Fill in here if you are making a binary without sys/utsname.h and know
+     the OS name, release number, and machine architechture */
+#ifdef WIN32_NATIVE
+  {
+    char cpuname[16];
+    char *osname;
+    SYSTEM_INFO sysinfo;
+    OSVERSIONINFO osvi;
 
-  /* parse message body */
-  fc_allocate_mutex(&scan->srvrs.mutex);
-  srvrs = parse_metaserver_data(f);
-  scan->srvrs.servers = srvrs;
-  fc_release_mutex(&scan->srvrs.mutex);
-  scan->meta.state = META_DONE;
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    GetVersionEx(&osvi);
 
-  /* 'f' (hence 'meta.fp') was closed in parse_metaserver_data(). */
-  scan->meta.fp = NULL;
+    switch (osvi.dwPlatformId) {
+    case VER_PLATFORM_WIN32s:
+      osname = "Win32s";
+      break;
 
-  if (NULL == srvrs) {
-    fc_snprintf(str, sizeof(str),
-                _("Failed to parse the metaserver data from %s:\n"
-                  "%s."),
-                metaserver, secfile_error());
-    scan->error_func(scan, str);
+    case VER_PLATFORM_WIN32_WINDOWS:
+      osname = "Win32";
 
-    return FALSE;
+      if (osvi.dwMajorVersion == 4) {
+	switch (osvi.dwMinorVersion) {
+	case  0: osname = "Win95";    break;
+	case 10: osname = "Win98";    break;
+	case 90: osname = "WinME";    break;
+	default:			    break;
+	}
+      }
+      break;
+
+    case VER_PLATFORM_WIN32_NT:
+      osname = "WinNT";
+
+      if (osvi.dwMajorVersion == 5) {
+	switch (osvi.dwMinorVersion) {
+	case 0: osname = "Win2000";   break;
+	case 1: osname = "WinXP";	    break;
+	default:			    break;
+	}
+      }
+      break;
+
+    default:
+      osname = osvi.szCSDVersion;
+      break;
+    }
+
+    GetSystemInfo(&sysinfo); 
+    switch (sysinfo.wProcessorArchitecture) {
+      case PROCESSOR_ARCHITECTURE_INTEL:
+	{
+	  unsigned int ptype;
+	  if (sysinfo.wProcessorLevel < 3) /* Shouldn't happen. */
+	    ptype = 3;
+	  else if (sysinfo.wProcessorLevel > 9) /* P4 */
+	    ptype = 6;
+	  else
+	    ptype = sysinfo.wProcessorLevel;
+
+          fc_snprintf(cpuname, sizeof(cpuname), "i%d86", ptype);
+	}
+	break;
+
+      case PROCESSOR_ARCHITECTURE_MIPS:
+	sz_strlcpy(cpuname, "mips");
+	break;
+
+      case PROCESSOR_ARCHITECTURE_ALPHA:
+	sz_strlcpy(cpuname, "alpha");
+	break;
+
+      case PROCESSOR_ARCHITECTURE_PPC:
+	sz_strlcpy(cpuname, "ppc");
+	break;
+#if 0
+      case PROCESSOR_ARCHITECTURE_IA64:
+	sz_strlcpy(cpuname, "ia64");
+	break;
+#endif
+      default:
+	sz_strlcpy(cpuname, "unknown");
+	break;
+    }
+    fc_snprintf(buf, len, "%s %ld.%ld [%s]",
+                osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
   }
-
-  return TRUE;
+#else
+  fc_snprintf(buf, len, "unknown unknown [unknown]");
+#endif
+#endif /* HAVE_UNAME */
 }
 
 /****************************************************************************
-  Metaserver scan thread entry point
+  Send the request string to the metaserver.
 ****************************************************************************/
-static void metaserver_scan(void *arg)
+static void meta_send_request(struct server_scan *scan)
 {
-  struct server_scan *scan = arg;
+  const char *capstr;
+  char str[MAX_LEN_PACKET];
+  char machine_string[128];
+
+  my_uname(machine_string, sizeof(machine_string));
+
+  capstr = fc_url_encode(our_capability);
+
+  fc_snprintf(str, sizeof(str),
+    "POST %s HTTP/1.1\r\n"
+    "Host: %s:%d\r\n"
+    "User-Agent: Freeciv/%s %s %s\r\n"
+    "Connection: close\r\n"
+    "Content-Type: application/x-www-form-urlencoded; charset=\"utf-8\"\r\n"
+    "Content-Length: %lu\r\n"
+    "\r\n"
+    "client_cap=%s\r\n",
+    scan->meta.urlpath,
+    scan->meta.name, scan->meta.port,
+    VERSION_STRING, client_string, machine_string,
+    (unsigned long) (strlen("client_cap=") + strlen(capstr)),
+    capstr);
+
+  if (fc_writesocket(scan->sock, str, strlen(str)) != strlen(str)) {
+    /* Even with non-blocking this shouldn't fail. */
+    scan->error_func(scan, fc_strerror(fc_get_errno()));
+    return;
+  }
+
+  scan->meta.state = META_WAITING;
+}
+
+/****************************************************************************
+  Read the request string (or part of it) from the metaserver.
+****************************************************************************/
+static void meta_read_response(struct server_scan *scan)
+{
+  char buf[4096];
+  int result;
 
   if (!scan->meta.fp) {
 #ifdef WIN32_NATIVE
@@ -275,56 +339,194 @@ static void metaserver_scan(void *arg)
     scan->meta.fp = fc_fopen(filename, "w+b");
 #else
     scan->meta.fp = tmpfile();
-#endif /* WIN32_NATIVE */
+#endif
 
     if (!scan->meta.fp) {
       scan->error_func(scan, _("Could not open temp file."));
     }
   }
 
-  if (scan->meta.fp) {
+  while (1) {
+    result = fc_readsocket(scan->sock, buf, sizeof(buf));
 
-    fc_allocate_mutex(&scan->meta.mutex);
+    if (result < 0) {
+      if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
+	/* Keep waiting. */
+	return;
+      }
+      scan->error_func(scan, fc_strerror(fc_get_errno()));
+      return;
+    } else if (result == 0) {
+      fz_FILE *f;
+      char str[4096];
 
-    if (!begin_metaserver_scan(scan)) {
-      scan->meta.status = SCAN_STATUS_ERROR;
-    } else {
-
+      /* We're done! */
       rewind(scan->meta.fp);
 
-      if (!meta_read_response(scan)) {
-        scan->meta.status = SCAN_STATUS_ERROR;
-      } else {
-        scan->meta.status = SCAN_STATUS_DONE;
+      f = fz_from_stream(scan->meta.fp);
+      if (NULL == f) {
+        fc_snprintf(str, sizeof(str),
+                    _("Failed to read the metaserver data from http://%s."),
+                    scan->meta.name);
+        scan->error_func(scan, str);
+        return;
+      }
+
+      /* skip HTTP headers */
+      /* XXX: TODO check for magic Content-Type: text/x-ini -vasc */
+      while (fz_fgets(str, sizeof(str), f) && strcmp(str, "\r\n") != 0) {
+	/* nothing */
+      }
+
+      /* XXX: TODO check for magic Content-Type: text/x-ini -vasc */
+
+      /* parse HTTP message body */
+      scan->servers = parse_metaserver_data(f);
+      scan->meta.state = META_DONE;
+
+      /* 'f' (hence 'meta.fp') was closed in parse_metaserver_data(). */
+      scan->meta.fp = NULL;
+
+      if (NULL == scan->servers) {
+        fc_snprintf(str, sizeof(str),
+                    _("Failed to parse the metaserver data from http://%s:\n"
+                      "%s."),
+                    scan->meta.name, secfile_error());
+        scan->error_func(scan, str);
+      }
+
+      return;
+    } else {
+      if (fwrite(buf, 1, result, scan->meta.fp) != result) {
+	scan->error_func(scan, fc_strerror(fc_get_errno()));
       }
     }
-
-    fc_release_mutex(&scan->meta.mutex);
   }
 }
 
 /****************************************************************************
-  Begin a metaserver scan for servers.
+  Begin a metaserver scan for servers.  This just initiates the connection
+  to the metaserver; later get_meta_server_list should be called whenever
+  the socket has data pending to read and parse it.
 
   Returns FALSE on error (in which case errbuf will contain an error
   message).
 ****************************************************************************/
 static bool begin_metaserver_scan(struct server_scan *scan)
 {
-  struct netfile_post *post;
-  bool retval = TRUE;
+  union fc_sockaddr names[2];
+  int i, name_count;
+  int s = -1;
 
-  post = netfile_start_post();
-  netfile_add_form_str(post, "client_cap", our_capability);
-
-  if (!netfile_send_post(metaserver, post, scan->meta.fp, NULL)) {
-    scan->error_func(scan, _("Error connecting to metaserver"));
-    retval = FALSE;
+  scan->meta.urlpath = fc_lookup_httpd(scan->meta.name, &scan->meta.port,
+				       metaserver);
+  if (!scan->meta.urlpath) {
+    scan->error_func(scan,
+                     _("Invalid $http_proxy or metaserver value, must "
+                       "start with 'http://'"));
+    return FALSE;
   }
 
-  netfile_close_post(post);
+  if (!net_lookup_service(scan->meta.name, scan->meta.port,
+                          &names[0], FALSE)) {
+    scan->error_func(scan, _("Failed looking up metaserver's host"));
+    return FALSE;
+  }
+  name_count = 1;
+#ifdef IPV6_SUPPORT
+  if (names[0].saddr.sa_family == AF_INET6) {
+    /* net_lookup_service() prefers IPv6 address.
+     * Check if there is also IPv4 address.
+     * TODO: This would be easier using getaddrinfo() */
+    if (net_lookup_service(scan->meta.name, scan->meta.port,
+                           &names[1], TRUE /* force IPv4 */)) {
+      name_count = 2;
+    }
+  }
+#endif
 
-  return retval;
+  /* Try all (IPv4, IPv6, ...) addresses until we have a connection. */  
+  for (i = 0; i < name_count; i++) {
+    if ((s = socket(names[i].saddr.sa_family, SOCK_STREAM, 0)) == -1) {
+      /* Probably EAFNOSUPPORT or EPROTONOSUPPORT. */
+      continue;
+    }
+
+    fc_nonblock(s);
+  
+    if (fc_connect(s, &names[i].saddr, sockaddr_size(&names[i])) == -1) {
+      if (errno == EINPROGRESS) {
+        /* With non-blocking sockets this is the expected result. */
+        scan->meta.state = META_CONNECTING;
+        scan->sock = s;
+        break;
+      } else {
+        fc_closesocket(s);
+        s = -1;
+        continue;
+      }
+    } else {
+      /* Instant connection?  Whoa. */
+      scan->sock = s;
+      scan->meta.state = META_CONNECTING;
+      meta_send_request(scan);
+      break;
+    }
+  }
+
+  if (s == -1) {
+    scan->error_func(scan, fc_strerror(fc_get_errno()));
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**************************************************************************
+  Check for data received from the metaserver.
+**************************************************************************/
+static enum server_scan_status
+get_metaserver_list(struct server_scan *scan)
+{
+  struct timeval tv;
+  fd_set sockset;
+
+  if (!scan || scan->sock < 0) {
+    return SCAN_STATUS_ERROR;
+  }
+
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  FD_ZERO(&sockset);
+  FD_SET(scan->sock, &sockset);
+
+  switch (scan->meta.state) {
+  case META_CONNECTING:
+    if (fc_select(scan->sock + 1, NULL, &sockset, NULL, &tv) < 0) {
+      scan->error_func(scan, fc_strerror(fc_get_errno()));
+    } else if (FD_ISSET(scan->sock, &sockset)) {
+      meta_send_request(scan);
+    }
+    /* Keep waiting. */
+    return SCAN_STATUS_WAITING;
+    break;
+  case META_WAITING:
+    if (fc_select(scan->sock + 1, &sockset, NULL, NULL, &tv) < 0) {
+      scan->error_func(scan, fc_strerror(fc_get_errno()));
+    } else if (FD_ISSET(scan->sock, &sockset)) {
+      meta_read_response(scan);
+      return SCAN_STATUS_PARTIAL;
+    }
+    /* Keep waiting. */
+    return SCAN_STATUS_WAITING;
+    break;
+  case META_DONE:
+    return SCAN_STATUS_DONE;
+    break;
+  }
+
+  log_error("Unsupported metaserver state: %d.", scan->meta.state);
+  return SCAN_STATUS_ERROR;
 }
 
 /**************************************************************************
@@ -400,7 +602,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   if (announce == ANNOUNCE_IPV6) {
     family = AF_INET6;
   } else
-#endif /* IPv6 support */
+#endif
   {
     family = AF_INET;
   }
@@ -421,7 +623,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   memset(&addr, 0, sizeof(addr));
 
 #ifndef IPV6_SUPPORT
-  if (family == AF_INET) {
+  {
 #ifdef HAVE_INET_ATON
     inet_aton(group, &addr.saddr_in4.sin_addr);
 #else  /* HAVE_INET_ATON */
@@ -432,17 +634,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr.sa_family = AF_INET6;
     inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else if (family == AF_INET) {
+  } else {
     inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
 #endif /* IPv6 support */
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
-  } else {
-    fc_assert(FALSE);
-
-    log_error("Unsupported address family in begin_lanserver_scan()");
-
-    return FALSE;
   }
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
@@ -503,17 +699,10 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     addr.saddr_in6.sin6_addr = in6addr_any;
   } else
 #endif /* IPv6 support */
-  if (family == AF_INET) {
+  {
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT + 1);
     addr.saddr_in4.sin_addr.s_addr = htonl(INADDR_ANY);
-  } else {
-    /* This is not only error situation worth assert() This
-     * is error situation that has check (with assert) against
-     * earlier already. */
-    fc_assert(FALSE);
-
-    return FALSE;
   }
 
   if (bind(scan->sock, &addr.saddr, sockaddr_size(&addr)) < 0) {
@@ -549,9 +738,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     }
   }
 
-  fc_allocate_mutex(&scan->srvrs.mutex);
-  scan->srvrs.servers = server_list_new();
-  fc_release_mutex(&scan->srvrs.mutex);
+  scan->servers = server_list_new();
 
   return TRUE;
 }
@@ -574,7 +761,6 @@ get_lan_server_list(struct server_scan *scan)
   char version[256];
   char status[256];
   char players[256];
-  char humans[256];
   char message[1024];
   bool found_new = FALSE;
 
@@ -602,7 +788,6 @@ get_lan_server_list(struct server_scan *scan)
     dio_get_string(&din, version, sizeof(version));
     dio_get_string(&din, status, sizeof(status));
     dio_get_string(&din, players, sizeof(players));
-    dio_get_string(&din, humans, sizeof(humans));
     dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
@@ -619,15 +804,9 @@ get_lan_server_list(struct server_scan *scan)
         if (fromend.saddr.sa_family == AF_INET6) {
           inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
                     dst, sizeof(dst));
-        } else if (fromend.saddr.sa_family == AF_INET) {
-          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
         } else {
-	  fc_assert(FALSE);
-
-	  log_error("Unsupported address family in get_lan_server_list()");
-
-	  fc_snprintf(dst, sizeof(dst), "Unknown");
-	}
+          inet_ntop(AF_INET, &fromend.saddr_in4.sin_addr, dst, sizeof(dst));;
+        }
       }
 #else  /* IPv6 support */
       const char *dst = NULL;
@@ -649,17 +828,14 @@ get_lan_server_list(struct server_scan *scan)
     }
 
     /* UDP can send duplicate or delayed packets. */
-    fc_allocate_mutex(&scan->srvrs.mutex);
-    server_list_iterate(scan->srvrs.servers, aserver) {
+    server_list_iterate(scan->servers, aserver) {
       if (0 == fc_strcasecmp(aserver->host, servername)
           && aserver->port == port) {
 	duplicate = TRUE;
 	break;
       }
     } server_list_iterate_end;
-
     if (duplicate) {
-      fc_release_mutex(&scan->srvrs.mutex);
       continue;
     }
 
@@ -671,13 +847,12 @@ get_lan_server_list(struct server_scan *scan)
     pserver->version = fc_strdup(version);
     pserver->state = fc_strdup(status);
     pserver->nplayers = atoi(players);
-    pserver->humans = atoi(humans);
+    pserver->humans = -1;
     pserver->message = fc_strdup(message);
     pserver->players = NULL;
     found_new = TRUE;
 
-    server_list_prepend(scan->srvrs.servers, pserver);
-    fc_release_mutex(&scan->srvrs.mutex);
+    server_list_prepend(scan->servers, pserver);
   }
 
   if (found_new) {
@@ -708,21 +883,10 @@ struct server_scan *server_scan_begin(enum server_scan_type type,
   scan->type = type;
   scan->error_func = error_func;
   scan->sock = -1;
-  fc_init_mutex(&scan->srvrs.mutex);
 
   switch (type) {
   case SERVER_SCAN_GLOBAL:
-    {
-      int thr_ret;
-
-      fc_init_mutex(&scan->meta.mutex);
-      thr_ret = fc_thread_start(&scan->meta.thr, metaserver_scan, scan);
-      if (thr_ret) {
-        ok = FALSE;
-      } else {
-        ok = TRUE;
-      }
-    }
+    ok = begin_metaserver_scan(scan);
     break;
   case SERVER_SCAN_LOCAL:
     ok = begin_lanserver_scan(scan);
@@ -773,15 +937,7 @@ enum server_scan_status server_scan_poll(struct server_scan *scan)
 
   switch (scan->type) {
   case SERVER_SCAN_GLOBAL:
-    {
-      enum server_scan_status status;
-
-      fc_allocate_mutex(&scan->meta.mutex);
-      status = scan->meta.status;
-      fc_release_mutex(&scan->meta.mutex);
-
-      return status;
-    }
+    return get_metaserver_list(scan);
     break;
   case SERVER_SCAN_LOCAL:
     return get_lan_server_list(scan);
@@ -794,16 +950,15 @@ enum server_scan_status server_scan_poll(struct server_scan *scan)
 }
 
 /**************************************************************************
-  Returns the srv_list currently held by the scan (may be NULL).
+  Returns the server_list currently held by the scan (may be NULL).
 **************************************************************************/
-struct srv_list *
-server_scan_get_list(struct server_scan *scan)
+const struct server_list *
+server_scan_get_list(const struct server_scan *scan)
 {
   if (!scan) {
     return NULL;
   }
-
-  return &scan->srvrs;
+  return scan->servers;
 }
 
 /**************************************************************************
@@ -816,48 +971,20 @@ void server_scan_finish(struct server_scan *scan)
     return;
   }
 
-  if (scan->type == SERVER_SCAN_GLOBAL) {
-    /* Signal metserver scan thread to stop */
-    fc_allocate_mutex(&scan->meta.mutex);
-    scan->meta.status = SCAN_STATUS_ABORT;
-    fc_release_mutex(&scan->meta.mutex);
-
-    /* Wait thread to stop */
-    fc_thread_wait(&scan->meta.thr);
-    fc_destroy_mutex(&scan->meta.mutex);
-
-    /* This mainly duplicates code from below "else" block.
-     * That's intentional, since they will be completely different in future versions.
-     * We are better prepared for that by having them separately already. */
-    if (scan->sock >= 0) {
-      fc_closesocket(scan->sock);
-      scan->sock = -1;
-    }
-
-    if (scan->srvrs.servers) {
-      fc_allocate_mutex(&scan->srvrs.mutex);
-      delete_server_list(scan->srvrs.servers);
-      scan->srvrs.servers = NULL;
-      fc_release_mutex(&scan->srvrs.mutex);
-    }
-
-    if (scan->meta.fp) {
-      fclose(scan->meta.fp);
-      scan->meta.fp = NULL;
-    }
-  } else {
-    if (scan->sock >= 0) {
-      fc_closesocket(scan->sock);
-      scan->sock = -1;
-    }
-
-    if (scan->srvrs.servers) {
-      delete_server_list(scan->srvrs.servers);
-      scan->srvrs.servers = NULL;
-    }
+  if (scan->sock >= 0) {
+    fc_closesocket(scan->sock);
+    scan->sock = -1;
   }
 
-  fc_destroy_mutex(&scan->srvrs.mutex);
+  if (scan->servers) {
+    delete_server_list(scan->servers);
+    scan->servers = NULL;
+  }
+
+  if (scan->meta.fp) {
+    fclose(scan->meta.fp);
+    scan->meta.fp = NULL;
+  }
 
   free(scan);
 }

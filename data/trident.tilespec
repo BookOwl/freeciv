@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2013.Oct.19"
+options = "+Freeciv-2.3-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "Trident"
@@ -18,16 +18,17 @@ small_tile_width   = 15
 small_tile_height  = 20
 
 ; Basic tile style.
-type = "overview"
-is_hex = FALSE
+is_hex = 0
+is_isometric = 0
+
+; Use roadstyle 1 (old non-iso style)
+roadstyle = 1
 
 ; Was fogstyle 0 (old iso style)
 fogstyle = 2
 
 ; Was darkness style 3 (15 sprites)
 darkness_style = 4
-; Which terrain layer darkness is drawn top of (0-2)
-darkness_layer = 0
  
 ; offset the flags by this amount when drawing units
 unit_flag_offset_x = 0
@@ -42,9 +43,6 @@ unit_offset_y = 0
 ; offset the city bar text by this amount (from the city tile origin)
 citybar_offset_y = 27
 
-; offset the tile label text by this amount
-tilelabel_offset_y = 10
-
 ; Font size (points) to use to draw city names and productions:
 city_names_font_size = 10
 city_productions_font_size = 10
@@ -58,14 +56,13 @@ minimap_intro_file = "misc/radar"
 ; the data path. Order may be important for color allocation on 
 ; low-color systems, and if there are any duplicate tags (lattermost
 ; tag is used).
-files =
+files = 
+  "misc/colors.spec",
   "misc/overlays.spec",
   "misc/citybar.spec",
   "trident/tiles.spec",
   "trident/earth.spec",
   "misc/small.spec",
-  "misc/governments.spec",
-  "misc/specialists.spec",
   "trident/units.spec",
   "trident/select.spec",
   "misc/flags.spec",
@@ -101,7 +98,7 @@ match_types = "water"
 ; Water graphics referenced by terrain.ruleset
 ;
 [tile_coast]
-blend_layer = 0
+is_blended = 0
 num_layers = 3
 layer0_match_type = "water"
 layer1_match_type = "water"
@@ -111,7 +108,7 @@ layer2_match_with = "water"
 layer2_sprite_type = "corner"
 
 [tile_floor]
-blend_layer = 0
+is_blended = 0
 num_layers = 3
 layer0_match_type = "water"
 layer1_match_type = "water"
@@ -123,79 +120,65 @@ layer2_sprite_type = "corner"
 ; Land graphics referenced by terrain.ruleset
 ;
 [tile_arctic]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "arctic"
 layer0_match_with = "arctic"
+mine_sprite = "tx.oil_mine"
 
 [tile_desert]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "desert"
 layer0_match_with = "desert"
+mine_sprite = "tx.oil_mine"
 
 [tile_forest]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "forest"
 layer0_match_with = "forest"
 
 [tile_grassland]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "grassland"
 layer0_match_with = "grassland"
 
 [tile_hills]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "hills"
 layer0_match_with = "hills"
+mine_sprite = "tx.mine"
 
 [tile_jungle]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "jungle"
 layer0_match_with = "jungle"
 
 [tile_mountains]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "mountains"
 layer0_match_with = "mountains"
+mine_sprite = "tx.mine"
 
 [tile_plains]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "plains"
 layer0_match_with = "plains"
 
 [tile_swamp]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "swamp"
 layer0_match_with = "swamp"
 
 [tile_tundra]
-blend_layer = 0
+is_blended = 0
 num_layers = 1
 layer0_match_type = "tundra"
 layer0_match_with = "tundra"
-
-[extras]
-styles =
-    { "name",          "style"
-      "road",          "RoadParityCombined"
-      "rail",          "RoadParityCombined"
-      "river",         "River"
-      "tx.irrigation", "Cardinals"
-      "tx.farmland",   "Cardinals"
-      "tx.mine",       "Single1"
-      "tx.oil_mine",   "Single1"
-      "tx.pollution",  "Single2"
-      "tx.fallout",    "Single2"
-      "tx.village",    "Single1"
-      "base.fortress", "3Layer"
-      "base.airbase",  "3Layer"
-      "base.ruins",    "3Layer"
-    }

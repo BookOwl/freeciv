@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -29,7 +29,6 @@
 /* client */
 #include "client_main.h"
 #include "climisc.h"
-#include "options.h"
 #include "text.h"
 
 /* client/include */
@@ -111,11 +110,10 @@ static const char *col_diplstate(const struct player *player)
     pds = player_diplstate_get(client.conn.playing, player);
     if (pds->type == DS_CEASEFIRE || pds->type == DS_ARMISTICE) {
       fc_snprintf(buf, sizeof(buf), "%s (%d)",
-                  diplstate_type_translated_name(pds->type),
-                  pds->turns_left);
+                  diplstate_text(pds->type), pds->turns_left);
       return buf;
     } else {
-      return diplstate_type_translated_name(pds->type);
+      return diplstate_text(pds->type);
     }
   }
 }
@@ -179,39 +177,13 @@ const char *plrdlg_col_state(const struct player *plr)
     /* TRANS: Dead -- Rest In Peace -- Reqia In Pace */
     return _("R.I.P.");
   } else if (!plr->is_connected) {
-    struct option *opt;
-    bool consider_tb = FALSE;
-
-    if (plr->ai_controlled) {
-      return "";
-    }
-
-    opt = optset_option_by_name(server_optset, "turnblock");
-    if (opt != NULL) {
-      consider_tb = option_bool_get(opt);
-    }
-
-    if (!consider_tb) {
-      /* TRANS: No connection */
-      return _("noconn");
-    }
-
-    if (!is_player_phase(plr, game.info.phase)) {
-      return _("waiting");
-    } else if (plr->phase_done) {
-      return _("done");
-    } else {
-      /* TRANS: Turnblocking & player not connected */
-      return _("blocking");
-    }
+    return "";
+  } else if (!is_player_phase(plr, game.info.phase)) {
+    return _("waiting");
+  } else if (plr->phase_done) {
+    return _("done");
   } else {
-    if (!is_player_phase(plr, game.info.phase)) {
-      return _("waiting");
-    } else if (plr->phase_done) {
-      return _("done");
-    } else {
-      return _("moving");
-    }
+    return _("moving");
   }
 }
 
@@ -275,7 +247,7 @@ struct player_dlg_column player_dlg_columns[] = {
 const int num_player_dlg_columns = ARRAY_SIZE(player_dlg_columns);
 
 /******************************************************************
-  Return default player dlg sorting column.
+ ...
 *******************************************************************/
 int player_dlg_default_sort_column(void)
 {

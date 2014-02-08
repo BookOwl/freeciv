@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -42,10 +42,8 @@
 #include "mapview_common.h"
 #include "tilespec.h"
 
-#include "dialogs_g.h"
-
-/* client/gui-gtk-2.0 */
 #include "canvas.h"
+#include "dialogs_g.h"
 #include "editgui.h"
 #include "editprop.h"
 #include "gui_main.h"
@@ -437,7 +435,8 @@ static void editbar_add_tool_button(struct editbar *eb,
 
   gtk_container_add(GTK_CONTAINER(button), image);
   gtk_toggle_button_set_mode(GTK_TOGGLE_BUTTON(button), FALSE);
-  gtk_widget_set_tooltip_text(button, editor_tool_get_tooltip(ett));
+  gtk_tooltips_set_tip(eb->tooltips, button,
+                       editor_tool_get_tooltip(ett), "");
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
@@ -497,7 +496,7 @@ static void editbar_add_mode_button(struct editbar *eb,
   gtk_toggle_button_set_mode(GTK_TOGGLE_BUTTON(button), FALSE);
   tooltip = editor_get_mode_tooltip(etm);
   if (tooltip != NULL) {
-    gtk_widget_set_tooltip_text(button, tooltip);
+    gtk_tooltips_set_tip(eb->tooltips, button, tooltip, "");
   }
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
@@ -527,6 +526,7 @@ static struct editbar *editbar_create(void)
 
   hbox = gtk_hbox_new(FALSE, 4);
   eb->widget = hbox;
+  eb->tooltips = gtk_tooltips_new();
   eb->size_group = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
 
   sprites = get_editor_sprites(tileset);
@@ -539,7 +539,6 @@ static struct editbar *editbar_create(void)
   editbar_add_tool_button(eb, ETT_TERRAIN);
   editbar_add_tool_button(eb, ETT_TERRAIN_RESOURCE);
   editbar_add_tool_button(eb, ETT_TERRAIN_SPECIAL);
-  editbar_add_tool_button(eb, ETT_ROAD);
   editbar_add_tool_button(eb, ETT_MILITARY_BASE);
   editbar_add_tool_button(eb, ETT_UNIT);
   editbar_add_tool_button(eb, ETT_CITY);
@@ -577,10 +576,10 @@ static struct editbar *editbar_create(void)
                    G_CALLBACK(editbar_player_pov_combobox_changed), eb);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox,
+  gtk_tooltips_set_tip(eb->tooltips, evbox,
       _("Switch player point-of-view. Use this to edit "
         "from the perspective of different players, or "
-        "even as a global observer."));
+        "even as a global observer."), "");
   gtk_container_add(GTK_CONTAINER(evbox), combo);
   gtk_box_pack_start(GTK_BOX(vbox), evbox, TRUE, FALSE, 0);
   eb->player_pov_combobox = combo;
@@ -590,7 +589,8 @@ static struct editbar *editbar_create(void)
   pixbuf = sprite_get_pixbuf(sprites->properties);
   image = gtk_image_new_from_pixbuf(pixbuf);
   gtk_container_add(GTK_CONTAINER(button), image);
-  gtk_widget_set_tooltip_text(button, _("Show the property editor."));
+  gtk_tooltips_set_tip(eb->tooltips, button,
+      _("Show the property editor."), "");
   gtk_size_group_add_widget(eb->size_group, button);
   gtk_button_set_relief(GTK_BUTTON(button), GTK_RELIEF_NONE);
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
@@ -682,7 +682,7 @@ static void editbar_refresh(struct editbar *eb)
 }
 
 /****************************************************************************
-  Create a pixbuf containing a representative image for the given extra
+  Create a pixbuf containing a representative image for the given base
   type, to be used as an icon in the GUI.
 
   May return NULL on error.
@@ -690,7 +690,7 @@ static void editbar_refresh(struct editbar *eb)
   NB: You must call g_object_unref on the non-NULL return value when you
   no longer need it.
 ****************************************************************************/
-static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
+static GdkPixbuf *create_military_base_pixbuf(const struct base_type *pbase)
 {
   struct drawn_sprite sprs[80];
   int count, w, h, canvas_x, canvas_y;
@@ -711,8 +711,8 @@ static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
   canvas_x = 0;
   canvas_y = 0;
 
-  count = fill_basic_extra_sprite_array(tileset, sprs, pextra);
-  put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+  count = fill_basic_base_sprite_array(tileset, sprs, pbase);
+  put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
 
   return pixbuf;
 }
@@ -750,7 +750,7 @@ static GdkPixbuf *create_terrain_pixbuf(struct terrain *pterrain)
   for (i = 0; i < 3; i++) {
     count = fill_basic_terrain_layer_sprite_array(tileset, sprs,
                                                   i, pterrain);
-    put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+    put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
   }
 
   return pixbuf;
@@ -823,39 +823,24 @@ static void editbar_reload_tileset(struct editbar *eb)
   store = tvs->store;
   gtk_list_store_clear(store);
 
-  extra_type_by_cause_iterate(EC_SPECIAL, spe) {
+  tile_special_type_iterate(special) {
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
-                       TVS_COL_ID, spe->data.special_idx,
-                       TVS_COL_NAME, extra_name_translation(spe),
+                       TVS_COL_ID, special,
+                       TVS_COL_NAME, special_name_translation(special),
                        -1);
-    pixbuf = create_extra_pixbuf(spe);
-    if (pixbuf != NULL) {
-      gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(pixbuf);
+    sprite = get_basic_special_sprite(tileset, special);
+    if (sprite == NULL) {
+      continue;
     }
-  } extra_type_by_cause_iterate_end;
-
-  tvs = eb->tool_selectors[ETT_ROAD];
-  store = tvs->store;
-  gtk_list_store_clear(store);
-
-  road_type_iterate(proad) {
-    int id;
-
-    id = road_number(proad);
-
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       TVS_COL_ID, id,
-                       TVS_COL_NAME, road_name_translation(proad),
-                       -1);
-    pixbuf = create_extra_pixbuf(road_extra_get(proad));
-    if (pixbuf != NULL) {
-      gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(pixbuf);
+    pixbuf = sprite_get_pixbuf(sprite);
+    if (pixbuf == NULL) {
+      continue;
     }
-  } road_type_iterate_end;
+
+    gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
+  } tile_special_type_iterate_end;
+
 
   /* Reload military bases. */
 
@@ -873,7 +858,7 @@ static void editbar_reload_tileset(struct editbar *eb)
                        TVS_COL_ID, id,
                        TVS_COL_NAME, base_name_translation(pbase),
                        -1);
-    pixbuf = create_extra_pixbuf(base_extra_get(pbase));
+    pixbuf = create_military_base_pixbuf(pbase);
     if (pixbuf != NULL) {
       gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
       g_object_unref(pixbuf);
@@ -893,8 +878,7 @@ static void editbar_reload_tileset(struct editbar *eb)
                        TVS_COL_ID, utype_number(putype),
                        TVS_COL_NAME, utype_name_translation(putype),
                        -1);
-    sprite = get_unittype_sprite(tileset, putype, direction8_invalid(),
-                                 TRUE);
+    sprite = get_unittype_sprite(tileset, putype);
     if (sprite == NULL) {
       continue;
     }
@@ -1188,6 +1172,7 @@ static struct editinfobox *editinfobox_create(void)
   char buf[128];
 
   ei = fc_calloc(1, sizeof(*ei));
+  ei->tooltips = gtk_tooltips_new();
 
   frame = gtk_frame_new(_("Editor Tool"));
   gtk_container_set_border_width(GTK_CONTAINER(frame), 4);
@@ -1202,7 +1187,8 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox, _("Click to change value if applicable."));
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
+                       _("Click to change value if applicable."), "");
   g_signal_connect(evbox, "button_press_event",
       G_CALLBACK(editinfobox_handle_tool_image_button_press), NULL);
   gtk_box_pack_start(GTK_BOX(hbox), evbox, FALSE, FALSE, 0);
@@ -1229,7 +1215,8 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox, _("Click to change tool mode."));
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
+                       _("Click to change tool mode."), "");
   g_signal_connect(evbox, "button_press_event",
       G_CALLBACK(editinfobox_handle_mode_image_button_press), NULL);
   gtk_box_pack_start(GTK_BOX(hbox), evbox, FALSE, FALSE, 0);
@@ -1258,11 +1245,11 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
   ei->size_hbox = hbox;
   spin = gtk_spin_button_new_with_range(1, 255, 1);
-  gtk_widget_set_tooltip_text(spin,
+  gtk_tooltips_set_tip(ei->tooltips, spin,
       _("Use this to change the \"size\" parameter for the tool. "
         "This parameter controls for example the half-width "
         "of the square of tiles that will be affected by the "
-        "tool, or the size of a created city."));
+        "tool, or the size of a created city."), "");
   g_signal_connect(spin, "value-changed",
                    G_CALLBACK(editinfobox_spin_button_value_changed),
                    GINT_TO_POINTER(SPIN_BUTTON_SIZE));
@@ -1275,10 +1262,10 @@ static struct editinfobox *editinfobox_create(void)
   gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
   ei->count_hbox = hbox;
   spin = gtk_spin_button_new_with_range(1, 255, 1);
-  gtk_widget_set_tooltip_text(spin,
+  gtk_tooltips_set_tip(ei->tooltips, spin,
       _("Use this to change the tool's \"count\" parameter. "
         "This controls for example how many units are placed "
-        "at once with the unit tool."));
+        "at once with the unit tool."), "");
   g_signal_connect(spin, "value-changed",
                    G_CALLBACK(editinfobox_spin_button_value_changed),
                    GINT_TO_POINTER(SPIN_BUTTON_COUNT));
@@ -1310,10 +1297,10 @@ static struct editinfobox *editinfobox_create(void)
                    G_CALLBACK(editinfobox_tool_applied_player_changed), ei);
 
   evbox = gtk_event_box_new();
-  gtk_widget_set_tooltip_text(evbox,
+  gtk_tooltips_set_tip(ei->tooltips, evbox,
       _("Use this to change the \"applied player\" tool parameter. "
         "This controls for example under which player units and cities "
-        "are created."));
+        "are created."), "");
   gtk_container_add(GTK_CONTAINER(evbox), combo);
   gtk_box_pack_start(GTK_BOX(vbox), evbox, FALSE, FALSE, 0);
   ei->tool_applied_player_combobox = combo;
@@ -1411,7 +1398,6 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
   struct resource *presource;
   struct unit_type *putype;
   struct base_type *pbase;
-  struct road_type *proad;
   const struct editor_sprites *sprites;
 
   sprites = get_editor_sprites(tileset);
@@ -1433,27 +1419,16 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
     }
     break;
   case ETT_TERRAIN_SPECIAL:
-    if (value >= 0) {
-      pixbuf = create_extra_pixbuf(special_extra_get(value));
-    }
-    break;
-  case ETT_ROAD:
-    proad = road_by_number(value);
-    if (proad != NULL) {
-      pixbuf = create_extra_pixbuf(road_extra_get(proad));
-    }
+    sprite = get_basic_special_sprite(tileset, value);
     break;
   case ETT_MILITARY_BASE:
     pbase = base_by_number(value);
-    if (pbase != NULL) {
-      pixbuf = create_extra_pixbuf(base_extra_get(pbase));
-    }
+    pixbuf = create_military_base_pixbuf(pbase);
     break;
   case ETT_UNIT:
     putype = utype_by_number(value);
     if (putype) {
-      sprite = get_unittype_sprite(tileset, putype, direction8_invalid(),
-                                   TRUE);
+      sprite = get_unittype_sprite(tileset, putype);
     }
     break;
   case ETT_CITY:
@@ -1645,9 +1620,6 @@ static gboolean handle_edit_key_press_with_shift(GdkEventKey *ev)
   case GDK_S:
     editgui_run_tool_selection(ETT_TERRAIN_SPECIAL);
     break;
-  case GDK_P:
-    editgui_run_tool_selection(ETT_ROAD);
-    break;
   case GDK_M:
     editgui_run_tool_selection(ETT_MILITARY_BASE);
     break;
@@ -1691,9 +1663,6 @@ gboolean handle_edit_key_press(GdkEventKey *ev)
   case GDK_s:
     new_ett = ETT_TERRAIN_SPECIAL;
     break;
-  case GDK_p:
-    new_ett = ETT_ROAD;
-    break;
   case GDK_m:
     new_ett = ETT_MILITARY_BASE;
     break;
@@ -1706,7 +1675,7 @@ gboolean handle_edit_key_press(GdkEventKey *ev)
   case GDK_v:
     new_ett = ETT_VISION;
     break;
-  case GDK_b:
+  case GDK_p:
     new_ett = ETT_STARTPOS;
     break;
   case GDK_plus:

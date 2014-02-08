@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 /* common */
@@ -21,9 +21,6 @@
 /* client */
 #include "client_main.h"
 #include "control.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "gotodlg.h"
 

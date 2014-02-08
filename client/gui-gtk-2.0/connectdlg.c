@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <errno.h>
@@ -63,9 +63,56 @@ void close_connection_dialog()
 }
 
 /**************************************************************************
-  gtk client does nothing here. This gets called when one is rejected
-  from game.
+...
+**************************************************************************/
+static void filesel_response_callback(GtkWidget *w, gint id, gpointer data)
+{
+  if (id == GTK_RESPONSE_OK) {
+    gchar *filename;
+    bool is_save = (bool)data;
+
+    filename = g_filename_to_utf8(
+	gtk_file_selection_get_filename(GTK_FILE_SELECTION(w)),
+	-1, NULL, NULL, NULL);
+
+    if (is_save) {
+      send_save_game(filename);
+    } else {
+      send_chat_printf("/load %s", filename);
+    }
+
+    g_free(filename);
+  }
+
+  gtk_widget_destroy(w);
+}
+
+
+/**************************************************************************
+ create a file selector for both the load and save commands
+**************************************************************************/
+GtkWidget *create_file_selection(const char *title, bool is_save)
+{
+  GtkWidget *filesel;
+  
+  /* Create the selector */
+  filesel = gtk_file_selection_new(title);
+  setup_dialog(filesel, toplevel);
+  gtk_window_set_position(GTK_WINDOW(filesel), GTK_WIN_POS_MOUSE);
+
+  g_signal_connect(filesel, "response",
+		   G_CALLBACK(filesel_response_callback), (gpointer)is_save);
+
+  /* Display that dialog */
+  gtk_window_present(GTK_WINDOW(filesel));
+
+  return filesel;
+}
+
+/**************************************************************************
+...
 **************************************************************************/
 void gui_server_connect(void)
 {
 }
+

@@ -27,9 +27,7 @@ leaders = {
 
 ruler_titles = {
  "government",        "male_title",       "female_title"
- "Anarchy",           _("Usurper %s"),    _("?female:Usurper %s") 
  "Fundamentalism",    _("Presbyter %s"),  _("?female:Presbyter %s") 
- "Republic",          _("Consul %s"),     _("?female:Consul %s") 
 }
 
 flag= "valknut" 
@@ -38,6 +36,7 @@ city_style = "Celtic"
 
 init_techs="" 
 init_buildings="" 
+init_government="Despotism" 
 init_units="" 
 
 conflicts_with = "italian", "croatian", "slovenian", "bosnian-herzegovinian", "serbian",

@@ -14,14 +14,6 @@
 #ifndef FC__NAME_TRANSLATION_H
 #define FC__NAME_TRANSLATION_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-#ifdef HAVE_CONFIG_H
-#include <fc_config.h>
-#endif
-
 /* utility */
 #include "fcintl.h"
 #include "support.h"
@@ -59,7 +51,6 @@ static inline void name_init(struct name_translation *ptrans)
   qualifier).
 ****************************************************************************/
 static inline void names_set(struct name_translation *ptrans,
-                             const char *domain,
                              const char *vernacular_name,
                              const char *rule_name)
 {
@@ -69,17 +60,10 @@ static inline void names_set(struct name_translation *ptrans,
   (void) sz_loud_strlcpy(ptrans->rulename,
                          rule_name ? rule_name : Qn_(vernacular_name),
                          name_too_long);
-
-  if (ptrans->vernacular[0] != '\0') {
-    /* Translate now. */
-    if (domain == NULL) {
-      ptrans->translated = Q_(ptrans->vernacular);
-    } else {
-      ptrans->translated = skip_intl_qualifier_prefix(DG_(domain, ptrans->vernacular));
-    }
-  } else {
-    ptrans->translated = ptrans->vernacular;
-  }
+  /* Translate now. */
+  ptrans->translated =
+    ('\0' == ptrans->vernacular[0]
+     ? ptrans->vernacular : Q_(ptrans->vernacular));
 }
 
 /****************************************************************************
@@ -87,10 +71,9 @@ static inline void names_set(struct name_translation *ptrans,
   Assumes the rule name should be based on the vernacular.
 ****************************************************************************/
 static inline void name_set(struct name_translation *ptrans,
-                            const char *domain,
                             const char *vernacular_name)
 {
-  names_set(ptrans, domain, vernacular_name, NULL);
+  names_set(ptrans, vernacular_name, NULL);
 }
 
 /****************************************************************************
@@ -128,9 +111,5 @@ static inline const char *
 #undef vernacular
 #undef rulename
 #undef translated
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__NAME_TRANSLATION_H */

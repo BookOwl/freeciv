@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <unistd.h>
@@ -25,7 +25,7 @@
 #include "string_vector.h"
 #include "support.h"
 
-/* client/include */
+/* include */
 #include "themes_g.h"
 
 /* client */

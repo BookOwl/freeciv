@@ -8,7 +8,7 @@ legend=_("The Isle of Man is an island in the British Isles located\
  is a self-governing British Crown Dependency. In the Middle Ages it was\
  the center of the Kingdom of Mann and the Isles, and later of the\
  Lordship of Man. Man is noted for having the oldest still functioning\
- parliament in the world, the Tynwald, which has existed since 979 CE. Since\
+ parliament in the world, the Tynwald, which has existed since 979 AD. Since\
  1765 the island depends on Great Britain.")
 
 leaders = {
@@ -41,10 +41,11 @@ flag_alt = "-"
 city_style = "Celtic" 
 init_techs="" 
 init_buildings="" 
+init_government="Despotism" 
 init_units="" 
 
 conflicts_with="british"
-civilwar_nations="english", "scottish", "scottish gaelic"
+civilwar_nations="english", "scottish", "norwegian"
 
 cities=
   "Doolish",

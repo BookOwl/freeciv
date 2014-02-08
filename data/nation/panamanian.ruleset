@@ -28,6 +28,7 @@ ruler_titles = {
  "government",      "male_title",      "female_title"
  "Despotism",      _("General %s"),      _("?female:General %s")
  "Fundamentalism", _("Bishop %s"),       _("Mother Superior %s")
+ "Monarchy",       _("Duke %s"),         _("Duchess %s")
 }
 
 flag="panama"
@@ -36,9 +37,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations = "colombian", "dominicano", "kuna"
+civilwar_nations = "colombian", "dominicano"
 
 cities =
 "Ciudad de Panamá (ocean, river)",

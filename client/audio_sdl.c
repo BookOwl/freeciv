@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <string.h>
@@ -20,11 +20,9 @@
 #include "SDL.h"
 #include "SDL_mixer.h"
 
-/* utility */
 #include "log.h"
 #include "support.h"
 
-/* client */
 #include "audio.h"
 
 #include "audio_sdl.h"

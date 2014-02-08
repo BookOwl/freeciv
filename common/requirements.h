@@ -14,37 +14,26 @@
 #ifndef FC__REQUIREMENTS_H
 #define FC__REQUIREMENTS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "fc_types.h"
 
 #include "tech.h"
 #include "terrain.h"
 #include "unittype.h"
 
-/* Range of requirements.
- * Used in the network protocol.
- * Order is important -- wider ranges should come later -- some code
- * assumes a total order, or tests for e.g. >= REQ_RANGE_PLAYER. */
+/* Range of requirements. */
 #define SPECENUM_NAME req_range
 #define SPECENUM_VALUE0 REQ_RANGE_LOCAL
 #define SPECENUM_VALUE0NAME "Local"
-#define SPECENUM_VALUE1 REQ_RANGE_CADJACENT
-#define SPECENUM_VALUE1NAME "CAdjacent"
-#define SPECENUM_VALUE2 REQ_RANGE_ADJACENT
-#define SPECENUM_VALUE2NAME "Adjacent"
-#define SPECENUM_VALUE3 REQ_RANGE_CITY
-#define SPECENUM_VALUE3NAME "City"
-#define SPECENUM_VALUE4 REQ_RANGE_CONTINENT
-#define SPECENUM_VALUE4NAME "Continent"
-#define SPECENUM_VALUE5 REQ_RANGE_PLAYER
-#define SPECENUM_VALUE5NAME "Player"
-#define SPECENUM_VALUE6 REQ_RANGE_ALLIANCE
-#define SPECENUM_VALUE6NAME "Alliance"
-#define SPECENUM_VALUE7 REQ_RANGE_WORLD
-#define SPECENUM_VALUE7NAME "World"
+#define SPECENUM_VALUE1 REQ_RANGE_ADJACENT
+#define SPECENUM_VALUE1NAME "Adjacent"
+#define SPECENUM_VALUE2 REQ_RANGE_CITY
+#define SPECENUM_VALUE2NAME "City"
+#define SPECENUM_VALUE3 REQ_RANGE_CONTINENT
+#define SPECENUM_VALUE3NAME "Continent"
+#define SPECENUM_VALUE4 REQ_RANGE_PLAYER
+#define SPECENUM_VALUE4NAME "Player"
+#define SPECENUM_VALUE5 REQ_RANGE_WORLD
+#define SPECENUM_VALUE5NAME "World"
 #define SPECENUM_COUNT REQ_RANGE_COUNT /* keep this last */
 #include "specenum_gen.h"
 
@@ -52,13 +41,12 @@ extern "C" {
  * may not be active on a target.  If it is active then something happens.
  * For instance units and buildings have requirements to be built, techs
  * have requirements to be researched, and effects have requirements to be
- * active.
- * Used in the network protocol. */
+ * active. */
 struct requirement {
   struct universal source;		/* requirement source */
   enum req_range range;			/* requirement range */
   bool survives; /* set if destroyed sources satisfy the req*/
-  bool present;	 /* set if the requirement is to be present */
+  bool negated;	 /* set if the requirement is to be negated */
 };
 
 #define SPECLIST_TAG requirement
@@ -77,14 +65,14 @@ struct requirement {
 
 /* General requirement functions. */
 struct requirement req_from_str(const char *type, const char *range,
-				bool survives, bool present,
+				bool survives, bool negated,
 				const char *value);
 
 void req_get_values(const struct requirement *req, int *type,
-		    int *range, bool *survives, bool *present,
+		    int *range, bool *survives, bool *negated,
 		    int *value);
 struct requirement req_from_values(int type, int range,
-				   bool survives, bool present, int value);
+				   bool survives, bool negated, int value);
 
 bool are_requirements_equal(const struct requirement *req1,
 			    const struct requirement *req2);
@@ -93,7 +81,6 @@ bool are_requirements_opposites(const struct requirement *req1,
                                 const struct requirement *req2);
 
 bool is_req_active(const struct player *target_player,
-		   const struct player *other_player,
 		   const struct city *target_city,
 		   const struct impr_type *target_building,
 		   const struct tile *target_tile,
@@ -103,7 +90,6 @@ bool is_req_active(const struct player *target_player,
 		   const struct requirement *req,
                    const enum   req_problem_type prob_type);
 bool are_reqs_active(const struct player *target_player,
-		     const struct player *other_player,
 		     const struct city *target_city,
 		     const struct impr_type *target_building,
 		     const struct tile *target_tile,
@@ -134,9 +120,5 @@ const char *universal_name_translation(const struct universal *psource,
 const char *universal_type_rule_name(const struct universal *psource);
 
 int universal_build_shield_cost(const struct universal *target);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__REQUIREMENTS_H */

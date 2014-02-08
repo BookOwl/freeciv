@@ -18,7 +18,7 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",       "female_title"
- "Despotism",       _("Colonel %s"),    _("?female:Colonel %s")
+ "Republic",        _("Colonel %s"),    _("?female:Colonel %s")
 }
 
 flag="biafra"
@@ -27,6 +27,7 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with = "benin"

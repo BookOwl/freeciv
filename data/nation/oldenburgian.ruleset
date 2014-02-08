@@ -31,7 +31,7 @@ ruler_titles = {
  "Despotism",      _("Count %s"),         _("Countess %s")
  "Fundamentalism", _("Bishop %s"),        _("?female:Bishop %s")
  "Monarchy",       _("Grand Duke %s"),    _("Grand Duchess %s")
- "Democracy",  _("Minister-President %s"), _("?female:Minister-President %s")
+ "Republic",  _("Minister-President %s"), _("?female:Minister-President %s")
 }
 
 flag="oldenburg"
@@ -40,6 +40,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "schleswig-holsteinian", "hanoverian", "frisian", "palatinate" ;latter because of Birkenfeld
 

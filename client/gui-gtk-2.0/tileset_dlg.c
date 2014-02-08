@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
@@ -35,7 +35,7 @@ static void tileset_suggestion_callback(GtkWidget *dlg, gint arg)
 {
   if (arg == GTK_RESPONSE_YES) {
     /* User accepted tileset loading */
-    tilespec_reread(game.control.prefered_tileset, FALSE);
+    tilespec_reread(game.control.prefered_tileset);
   }
 }
 

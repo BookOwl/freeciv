@@ -1,20 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = aicore scriptcore
+SUBDIRS = aicore
 
 lib_LTLIBRARIES = libfreeciv.la
 
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility \
-	-I$(srcdir)/aicore \
-	-I$(srcdir)/scriptcore \
-	$(MAPIMG_WAND_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(srcdir)/aicore
 
 libfreeciv_la_SOURCES = \
-		achievements.c	\
-		achievements.h	\
-		actions.c	\
-		actions.h	\
 		ai.c		\
 		ai.h		\
 		base.c		\
@@ -23,8 +15,6 @@ libfreeciv_la_SOURCES = \
 		borders.h	\
 		capstr.c	\
 		capstr.h	\
-		citizens.c	\
-		citizens.h	\
 		city.c		\
 		city.h		\
 		combat.c	\
@@ -35,18 +25,12 @@ libfreeciv_la_SOURCES = \
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		disaster.c	\
-		disaster.h	\
 		effects.c	\
 		effects.h	\
 		events.c	\
 		events.h	\
-		extras.c	\
-		extras.h	\
 		featured_text.c	\
 		featured_text.h	\
-		fc_cmdhelp.c	\
-		fc_cmdhelp.h	\
 		fc_interface.c	\
 		fc_interface.h	\
 		fc_types.h	\
@@ -61,10 +45,6 @@ libfreeciv_la_SOURCES = \
 		improvement.h	\
 		map.c		\
 		map.h		\
-		mapimg.c	\
-		mapimg.h	\
-		metaknowledge.c \
-		metaknowledge.h \
 		movement.c	\
 		movement.h	\
 		name_translation.h \
@@ -80,10 +60,6 @@ libfreeciv_la_SOURCES = \
 		requirements.h	\
 		research.c	\
 		research.h	\
-		rgbcolor.c	\
-		rgbcolor.h	\
-		road.c		\
-		road.h		\
 		spaceship.c	\
 		spaceship.h	\
 		specialist.c	\
@@ -96,40 +72,36 @@ libfreeciv_la_SOURCES = \
 		terrain.h	\
 		tile.c		\
 		tile.h		\
-		traderoutes.c	\
-		traderoutes.h	\
-		traits.h	\
 		unit.c		\
 		unit.h		\
 		unitlist.c	\
 		unitlist.h	\
 		unittype.c	\
 		unittype.h	\
-		version.c	\
-		version.h	\
-		victory.c	\
-		victory.h	\
 		vision.c	\
 		vision.h	\
-		workertask.c	\
-		workertask.h	\
 		worklist.c	\
-		worklist.h
+		worklist.h	\
+		version.c	\
+		version.h
 
 EXTRA_DIST = 	packets.def
 
 libfreeciv_la_DEPENDENCIES = \
-	$(top_builddir)/utility/libcivutility.la \
-	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/scriptcore/libscriptcore.la
+ $(top_builddir)/utility/libcivutility.la \
+ $(top_builddir)/common/aicore/libaicore.la
 
 libfreeciv_la_LIBADD = \
-	$(top_builddir)/utility/libcivutility.la \
-	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/scriptcore/libscriptcore.la \
-	$(COMMON_LIBS)
+ $(top_builddir)/utility/libcivutility.la \
+ $(top_builddir)/common/aicore/libaicore.la \
+ $(COMMON_LIBS)
 
 BUILT_SOURCES = packets_gen.c packets_gen.h
+
+# packets_gen.h must be generated before it can be included.
+# Automatic dependencies are only generated during first
+# build. We need dependency for that first build.
+%.o : packets_gen.h
 
 # ./generate_packets.py makes both packets_gen.[ch]
 #
@@ -146,21 +118,12 @@ packets_generate: packets.def generate_packets.py
 	touch packets_generate
 
 # These files are not generated to builddir, but to srcdir */
-MAINTAINERCLEANFILES = \
-	$(srcdir)/packets_gen.h \
-	$(srcdir)/packets_gen.c
+MAINTAINERCLEANFILES = $(srcdir)/packets_gen.h $(srcdir)/packets_gen.c
 
 if SVNREV
 BUILT_SOURCES += fc_svnrev_gen.h
 endif
-if GITREV
-BUILT_SOURCES += fc_gitrev_gen.h
-endif
 
-.PHONY : fc_svnrev_gen.h fc_gitrev_gen.h
-
+.PHONY : fc_svnrev_gen.h
 fc_svnrev_gen.h :
 	"$(top_srcdir)/bootstrap/generate_svnrev.sh" "$(top_srcdir)" "$(top_builddir)"
-
-fc_gitrev_gen.h :
-	"$(top_srcdir)/bootstrap/generate_gitrev.sh" "$(top_srcdir)" "$(top_builddir)"

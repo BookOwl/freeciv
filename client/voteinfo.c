@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <time.h>
@@ -23,7 +23,7 @@
 /* common */
 #include "packets.h"
 
-/* client/include */
+/* include */
 #include "voteinfo_bar_g.h"
 
 /* client */
@@ -307,3 +307,4 @@ bool voteinfo_bar_can_be_shown(void)
               || (client_has_player()
                   && !client_is_observer())));
 }
+

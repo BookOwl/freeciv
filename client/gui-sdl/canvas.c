@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -69,14 +69,6 @@ void canvas_free(struct canvas *store)
 {
   FREESURFACE(store->surf);
   free(store);
-}
-
-/****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* sdl-client has no zoom support */
 }
 
 /**************************************************************************

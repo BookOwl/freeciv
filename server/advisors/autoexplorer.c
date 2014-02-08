@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h> /* log */
@@ -34,11 +34,8 @@
 #include "maphand.h"
 #include "srv_log.h"
 
-/* server/advisors */
-#include "advgoto.h"
-
-/* ai */
-#include "handicaps.h"
+/* server/ai */
+#include "aitools.h"
 
 #include "autoexplorer.h"
 
@@ -84,7 +81,7 @@ static bool player_may_explore(const struct tile *ptile,
                                const bv_unit_type_flags unit_flags)
 {
   /* Don't allow military units to cross borders. */
-  if (!BV_ISSET(unit_flags, UTYF_CIVILIAN)
+  if (!BV_ISSET(unit_flags, F_CIVILIAN)
       && !player_can_invade_tile(pplayer, ptile)) {
     return FALSE;
   }
@@ -104,7 +101,7 @@ static bool player_may_explore(const struct tile *ptile,
 }
 
 /***************************************************************************
-  TB function used by explorer_goto().
+  TB function used by ai_explorer_goto().
 ***************************************************************************/
 static enum tile_behavior explorer_tb(const struct tile *ptile,
                                       enum known_type k,
@@ -122,33 +119,14 @@ static enum tile_behavior explorer_tb(const struct tile *ptile,
 static bool explorer_goto(struct unit *punit, struct tile *ptile)
 {
   struct pf_parameter parameter;
-  struct adv_risk_cost risk_cost;
-  bool alive = TRUE;
-  struct pf_map *pfm;
-  struct pf_path *path;
-  struct player *pplayer = unit_owner(punit);
+  struct ai_risk_cost risk_cost;
 
-  pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
+  ai_fill_unit_param(&parameter, &risk_cost, punit, ptile);
   parameter.get_TB = explorer_tb;
-  adv_avoid_risks(&parameter, &risk_cost, punit, NORMAL_STACKING_FEARFULNESS);
 
-  /* Show the destination in the client */
-  punit->goto_tile = ptile;
-
-  UNIT_LOG(LOG_DEBUG, punit, "explorer_goto to %d,%d", TILE_XY(ptile));
-
-  pfm = pf_map_new(&parameter);
-  path = pf_map_path(pfm, ptile);
-
-  if (path != NULL) {
-    alive = adv_follow_path(punit, path, ptile);
-    pf_path_destroy(path);
-  }
-
-  pf_map_destroy(pfm);
-
-  return alive;
+  UNIT_LOG(LOG_DEBUG, punit, "ai_explorer_goto to %d,%d",
+           ptile->x, ptile->y);
+  return ai_unit_goto_constrained(punit, ptile, &parameter);
 }
 
 /**************************************************************************
@@ -204,7 +182,7 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
 
   /* First do some checks that would make a tile completely non-desirable.
    * If we're a barbarian and the tile has a hut, don't go there. */
-  if (is_barbarian(pplayer) && tile_has_cause_extra(ptile, EC_HUT)) {
+  if (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT)) {
     return 0;
   }
 
@@ -257,9 +235,9 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
     desirable = 0;
   }
 
-  if ((!pplayer->ai_controlled || !has_handicap(pplayer, H_HUTS))
+  if ((!pplayer->ai_controlled || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_cause_extra(ptile, EC_HUT)) {
+      && tile_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -309,7 +287,7 @@ enum unit_move_result manage_auto_explorer(struct unit *punit)
 
   UNIT_LOG(LOG_DEBUG, punit, "auto-exploring.");
 
-  if (pplayer->ai_controlled && unit_has_type_flag(punit, UTYF_GAMELOSS)) {
+  if (pplayer->ai_controlled && unit_has_type_flag(punit, F_GAMELOSS)) {
     UNIT_LOG(LOG_DEBUG, punit, "exploration too dangerous!");
     return MR_BAD_ACTIVITY; /* too dangerous */
   }

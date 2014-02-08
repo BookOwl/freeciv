@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <math.h>
@@ -69,7 +69,7 @@ struct science_report {
   struct gui_dialog *shell;
   GtkComboBox *reachable_techs;
   GtkComboBox *reachable_goals;
-  GtkWidget *button_show_all;
+  GtkWidget *button_reachable;
   GtkLabel *main_label;         /* Gets science_dialog_text(). */
   GtkProgressBar *progress_bar;
   GtkLabel *goal_label;
@@ -85,20 +85,20 @@ static bool science_report_combo_get_active(GtkComboBox *combo,
                                             const char **name);
 static void science_report_combo_set_active(GtkComboBox *combo,
                                             Tech_type_id tech);
-static gboolean science_diagram_button_release_callback(GtkWidget *widget,
-                                                        GdkEventButton *event,
-                                                        gpointer data);
+static void science_diagram_button_release_callback(GtkWidget *widget,
+                                                    GdkEventButton *event,
+                                                    gpointer data);
 static void science_diagram_update(GtkWidget *widget, gpointer data);
 static GtkWidget *science_diagram_new(void);
-static void science_diagram_data(GtkWidget *widget, bool show_all);
+static void science_diagram_data(GtkWidget *widget, bool reachable);
 static void science_diagram_center(GtkWidget *diagram, Tech_type_id tech);
 static void science_report_redraw(struct science_report *preport);
 static gint cmp_func(gconstpointer a_p, gconstpointer b_p);
 static void science_report_update(struct science_report *preport);
 static void science_report_current_callback(GtkComboBox *combo,
                                             gpointer data);
-static void science_report_show_all_callback(GtkComboBox *combo,
-                                             gpointer data);
+static void science_report_unreachable_callback(GtkComboBox *combo,
+                                                gpointer data);
 static void science_report_goal_callback(GtkComboBox *combo, gpointer data);
 static void science_report_init(struct science_report *preport);
 static void science_report_free(struct science_report *preport);
@@ -190,14 +190,15 @@ static void science_report_combo_set_active(GtkComboBox *combo,
 /****************************************************************************
   Change tech goal, research or open help dialog.
 ****************************************************************************/
-static gboolean science_diagram_button_release_callback(GtkWidget *widget,
-    GdkEventButton *event, gpointer data)
+static void science_diagram_button_release_callback(GtkWidget *widget,
+                                                    GdkEventButton *event,
+                                                    gpointer data)
 {
   struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
   Tech_type_id tech = get_tech_on_reqtree(reqtree, event->x, event->y);
 
   if (tech == A_NONE) {
-    return TRUE;
+    return;
   }
 
   if (event->button == 3) {
@@ -219,7 +220,6 @@ static gboolean science_diagram_button_release_callback(GtkWidget *widget,
       }
     }
   }
-  return TRUE;
 }
 
 /****************************************************************************
@@ -263,17 +263,17 @@ static GtkWidget *science_diagram_new(void)
 /****************************************************************************
   Recreate the req tree.
 ****************************************************************************/
-static void science_diagram_data(GtkWidget *widget, bool show_all)
+static void science_diagram_data(GtkWidget *widget, bool reachable)
 {
   struct reqtree *reqtree;
   int width, height;
 
   if (can_conn_edit(&client.conn)) {
     /* Show all techs in editor mode, not only currently reachable ones */
-    reqtree = create_reqtree(NULL, TRUE);
+    reqtree = create_reqtree(NULL, FALSE);
   } else {
     /* Show only at some point reachable techs */
-    reqtree = create_reqtree(client_player(), show_all);
+    reqtree = create_reqtree(client_player(), reachable);
   }
 
   get_reqtree_dimensions(reqtree, &width, &height);
@@ -323,8 +323,8 @@ static void science_report_redraw(struct science_report *preport)
   fc_assert_ret(NULL != preport);
 
   science_diagram_data(GTK_WIDGET(preport->drawing_area),
-                       gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
-                         preport->button_show_all)));
+                       !gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
+                         preport->button_reachable)));
 
   if (client_has_player()) {
     researching = player_research_get(client_player())->researching;
@@ -424,7 +424,7 @@ static void science_report_update(struct science_report *preport)
 
   /* Collect all techs which are reachable in next 10 steps. */
   advance_index_iterate(A_FIRST, i) {
-    if (player_invention_reachable(client_player(), i)
+    if (player_invention_reachable(client_player(), i, FALSE)
         && TECH_KNOWN != presearch->inventions[i].state
         && (i == presearch->tech_goal
             || 10 >= presearch->inventions[i].num_required_techs)) {
@@ -473,8 +473,8 @@ static void science_report_current_callback(GtkComboBox *combo,
 /****************************************************************************
   Show or hide unreachable techs.
 ****************************************************************************/
-static void science_report_show_all_callback(GtkComboBox *combo,
-                                             gpointer data)
+static void science_report_unreachable_callback(GtkComboBox *combo,
+                                                gpointer data)
 {
   struct science_report *preport = (struct science_report *) data;
 
@@ -508,7 +508,7 @@ static void science_report_goal_callback(GtkComboBox *combo, gpointer data)
 ****************************************************************************/
 static void science_report_init(struct science_report *preport)
 {
-  GtkWidget *frame, *table, *help_button, *show_all_button, *sw, *w;
+  GtkWidget *frame, *table, *help_button, *reachable_button, *sw, *w;
   GtkBox *vbox;
   GtkListStore *store;
   GtkCellRenderer *renderer;
@@ -588,15 +588,15 @@ static void science_report_init(struct science_report *preport)
   preport->goal_label = GTK_LABEL(w);
 
   /* Toggle unreachable button. */
-  /* TRANS: As in 'Show all (even not reachable) techs'. */
-  show_all_button = gtk_toggle_button_new_with_label(_("Show all"));
-  gtk_table_attach(GTK_TABLE(table), show_all_button, 5, 6, 0, 1, 0, 0, 0,
+  /* TRANS: As in 'Show all (even currently not reachable) techs'. */
+  reachable_button = gtk_toggle_button_new_with_label(_("Show all"));
+  gtk_table_attach(GTK_TABLE(table), reachable_button, 5, 6, 0, 1, 0, 0, 0,
                    0);
-  g_signal_connect(show_all_button, "toggled",
-                   G_CALLBACK(science_report_show_all_callback), preport);
-  gtk_widget_set_sensitive(show_all_button, can_client_issue_orders()
+  g_signal_connect(reachable_button, "toggled",
+                   G_CALLBACK(science_report_unreachable_callback), preport);
+  gtk_widget_set_sensitive(reachable_button, can_client_issue_orders()
                                              && !client_is_global_observer());
-  preport->button_show_all = show_all_button;
+  preport->button_reachable = reachable_button;
 
   /* Science diagram. */
   sw = gtk_scrolled_window_new(NULL, NULL);
@@ -826,8 +826,7 @@ static void economy_report_update(struct economy_report *preport)
   for (i = 0; i < entries_used; i++) {
     struct unit_entry *pentry = unit_entries + i;
     struct unit_type *putype = pentry->type;
-    struct sprite *sprite = get_unittype_sprite(tileset, putype,
-                                                direction8_invalid(), TRUE);
+    struct sprite *sprite = get_unittype_sprite(tileset, putype);
     cid cid = cid_encode_unit(putype);
 
     gtk_list_store_append(store, &iter);
@@ -1191,12 +1190,12 @@ enum units_report_response {
   URD_RES_UPGRADE
 };
 
-/* Those values must match the order of unit_report_columns[]. */
+/* Those values must match the functions units_report_store_new() and
+ * units_report_column_name(). */
 enum units_report_columns {
   URD_COL_UTYPE_NAME,
   URD_COL_UPGRADABLE,
-  URD_COL_N_UPGRADABLE,
-  URD_COL_IN_PROGRESS,
+  URD_COL_IN_PROJECT,
   URD_COL_ACTIVE,
   URD_COL_SHIELD,
   URD_COL_FOOD,
@@ -1204,42 +1203,10 @@ enum units_report_columns {
 
   /* Not visible. */
   URD_COL_TEXT_WEIGHT,
-  URD_COL_UPG_VISIBLE,
-  URD_COL_NUPG_VISIBLE,
+  URD_COL_BOOL_VISIBLE,
   URD_COL_UTYPE_ID,
 
   URD_COL_NUM
-};
-
-static const struct {
-  GType type;
-  const char *title;
-  const char *tooltip;
-  bool rightalign;
-  int visible_col;
-} unit_report_columns[] = {
-  { /* URD_COL_UTYPE_NAME */   G_TYPE_STRING,  N_("Unit Type"),
-    NULL,                         FALSE,  -1 },
-  { /* URD_COL_UPGRADABLE */   G_TYPE_BOOLEAN, N_("?Upgradable unit [short]:U"),
-    N_("Upgradable"),             TRUE,   URD_COL_UPG_VISIBLE },
-  { /* URD_COL_N_UPGRADABLE */ G_TYPE_INT,     "" /* merge with previous col */,
-    NULL,                         TRUE,   URD_COL_NUPG_VISIBLE },
-  /* TRANS: "In progress" abbreviation. */
-  { /* URD_COL_IN_PROGRESS */  G_TYPE_INT,     N_("In-Prog"),
-    N_("In progress"),            TRUE,   -1 },
-  { /* URD_COL_ACTIVE */       G_TYPE_INT,     N_("Active"),
-    NULL,                         TRUE,   -1 },
-  { /* URD_COL_SHIELD */       G_TYPE_INT,     N_("Shield"),
-    N_("Total shield upkeep"),    TRUE,   -1 },
-  { /* URD_COL_FOOD */         G_TYPE_INT,     N_("Food"),
-    N_("Total food upkeep"),      TRUE,   -1 },
-  { /* URD_COL_GOLD */         G_TYPE_INT,     N_("Gold"),
-    N_("Total gold upkeep"),      TRUE,   -1 },
-  /* Columns in the model but not the view: */
-  { /* URD_COL_TEXT_WEIGHT */  G_TYPE_INT,     NULL /* ... */ },
-  { /* URD_COL_UPG_VISIBLE */  G_TYPE_BOOLEAN, NULL /* ... */ },
-  { /* URD_COL_NUPG_VISIBLE */ G_TYPE_BOOLEAN, NULL /* ... */ },
-  { /* URD_COL_UTYPE_ID */     G_TYPE_INT,     NULL /* ... */ }
 };
 
 /****************************************************************************
@@ -1247,15 +1214,48 @@ static const struct {
 ****************************************************************************/
 static GtkListStore *units_report_store_new(void)
 {
-  int i;
-  GType cols[URD_COL_NUM];
-  fc_assert(ARRAY_SIZE(unit_report_columns) == URD_COL_NUM);
+  return gtk_list_store_new(URD_COL_NUM,
+                            G_TYPE_STRING,      /* URD_COL_UTYPE_NAME */
+                            G_TYPE_BOOLEAN,     /* URD_COL_UPGRADABLE */
+                            G_TYPE_INT,         /* URD_COL_IN_PROJECT */
+                            G_TYPE_INT,         /* URD_COL_ACTIVE */
+                            G_TYPE_INT,         /* URD_COL_SHIELD */
+                            G_TYPE_INT,         /* URD_COL_FOOD */
+                            G_TYPE_INT,         /* URD_COL_GOLD */
+                            G_TYPE_INT,         /* URD_COL_TEXT_WEIGHT */
+                            G_TYPE_BOOLEAN,     /* URD_COL_BOOL_VISIBLE */
+                            G_TYPE_INT);        /* URD_COL_UTYPE_ID */
+}
 
-  for (i=0; i<URD_COL_NUM; i++) {
-    cols[i] = unit_report_columns[i].type;
+/****************************************************************************
+  Returns the title of the column (translated).
+****************************************************************************/
+static const char *units_report_column_name(enum units_report_columns col)
+{
+  switch (col) {
+  case URD_COL_UTYPE_NAME:
+    return _("Unit Type");
+  case URD_COL_UPGRADABLE:
+    return Q_("?Upgradable unit [short]:U");
+  case URD_COL_IN_PROJECT:
+    /* TRANS: "In project" abbreviation. */
+    return _("In-Prog");
+  case URD_COL_ACTIVE:
+    return _("Active");
+  case URD_COL_SHIELD:
+    return _("Shield");
+  case URD_COL_FOOD:
+    return _("Food");
+  case URD_COL_GOLD:
+    return _("Gold");
+  case URD_COL_TEXT_WEIGHT:
+  case URD_COL_BOOL_VISIBLE:
+  case URD_COL_UTYPE_ID:
+  case URD_COL_NUM:
+    break;
   }
-  
-  return gtk_list_store_newv(URD_COL_NUM, cols);
+
+  return NULL;
 }
 
 /****************************************************************************
@@ -1272,7 +1272,6 @@ static void units_report_update(struct units_report *preport)
   struct urd_info unit_array[utype_count()];
   struct urd_info unit_totals;
   struct urd_info *info;
-  int total_upgradable_count = 0;
   GtkTreeSelection *selection;
   GtkTreeModel *model;
   GtkListStore *store;
@@ -1327,8 +1326,6 @@ static void units_report_update(struct units_report *preport)
   gtk_list_store_clear(store);
 
   unit_type_iterate(utype) {
-    bool upgradable;
-
     utype_id = utype_index(utype);
     info = unit_array + utype_id;
 
@@ -1336,22 +1333,20 @@ static void units_report_update(struct units_report *preport)
       continue;         /* We don't need a row for this type. */
     }
 
-    upgradable = client_has_player()
-                 && NULL != can_upgrade_unittype(client_player(), utype);
     
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
                        URD_COL_UTYPE_NAME, utype_name_translation(utype),
-                       URD_COL_UPGRADABLE, upgradable,
-                       URD_COL_N_UPGRADABLE, 0, /* never displayed */
-                       URD_COL_IN_PROGRESS, info->building_count,
+                       URD_COL_UPGRADABLE, (client_has_player()
+                           && NULL != can_upgrade_unittype(client_player(),
+                                                           utype)),
+                       URD_COL_IN_PROJECT, info->building_count,
                        URD_COL_ACTIVE, info->active_count,
                        URD_COL_SHIELD, info->upkeep[O_SHIELD],
                        URD_COL_FOOD, info->upkeep[O_FOOD],
                        URD_COL_GOLD, info->upkeep[O_GOLD],
                        URD_COL_TEXT_WEIGHT, PANGO_WEIGHT_NORMAL,
-                       URD_COL_UPG_VISIBLE, TRUE,
-                       URD_COL_NUPG_VISIBLE, FALSE,
+                       URD_COL_BOOL_VISIBLE, TRUE,
                        URD_COL_UTYPE_ID, utype_id,
                        -1);
     if (selected == utype_id) {
@@ -1365,25 +1360,20 @@ static void units_report_update(struct units_report *preport)
       unit_totals.upkeep[o] += info->upkeep[o];
     } output_type_iterate_end;
     unit_totals.building_count += info->building_count;
-    if (upgradable) {
-      total_upgradable_count += info->active_count;
-    }
   } unit_type_iterate_end;
 
   /* Add the total row. */
   gtk_list_store_append(store, &iter);
   gtk_list_store_set(store, &iter,
                      URD_COL_UTYPE_NAME, _("Totals:"),
-                     URD_COL_UPGRADABLE, FALSE, /* never displayed */
-                     URD_COL_N_UPGRADABLE, total_upgradable_count,
-                     URD_COL_IN_PROGRESS, unit_totals.building_count,
+                     URD_COL_UPGRADABLE, FALSE,
+                     URD_COL_IN_PROJECT, unit_totals.building_count,
                      URD_COL_ACTIVE, unit_totals.active_count,
                      URD_COL_SHIELD, unit_totals.upkeep[O_SHIELD],
                      URD_COL_FOOD, unit_totals.upkeep[O_FOOD],
                      URD_COL_GOLD, unit_totals.upkeep[O_GOLD],
                      URD_COL_TEXT_WEIGHT, PANGO_WEIGHT_BOLD,
-                     URD_COL_UPG_VISIBLE, FALSE,
-                     URD_COL_NUPG_VISIBLE, TRUE,
+                     URD_COL_BOOL_VISIBLE, FALSE,
                      URD_COL_UTYPE_ID, U_LAST,
                      -1);
   if (selected == U_LAST) {
@@ -1503,7 +1493,7 @@ static void units_report_command_callback(struct gui_dialog *pdialog,
       if (ACTIVITY_IDLE == punit->activity
           || ACTIVITY_SENTRY == punit->activity) {
         if (can_unit_do_activity(punit, ACTIVITY_IDLE)) {
-          unit_focus_set_and_select(punit);
+          set_unit_focus_and_select(punit);
         }
       }
     }
@@ -1552,7 +1542,7 @@ static void units_report_init(struct units_report *preport)
   GtkListStore *store;
   GtkTreeSelection *selection;
   GtkBox *vbox;
-  GtkTreeViewColumn *col = NULL;
+  const char *title;
   enum units_report_columns i;
 
   fc_assert_ret(NULL != preport);
@@ -1583,45 +1573,31 @@ static void units_report_init(struct units_report *preport)
   g_signal_connect(selection, "changed",
                    G_CALLBACK(units_report_selection_callback), preport);
 
-  for (i = 0; unit_report_columns[i].title != NULL; i++) {
+  for (i = 0; (title = units_report_column_name(i)); i++) {
     GtkCellRenderer *renderer;
+    GtkTreeViewColumn *col;
 
-    if (strlen(unit_report_columns[i].title) > 0) {
-      GtkWidget *header = gtk_label_new(Q_(unit_report_columns[i].title));
-      if (unit_report_columns[i].tooltip) {
-        gtk_widget_set_tooltip_text(header,
-                                    Q_(unit_report_columns[i].tooltip));
-      }
-      gtk_widget_show(header);
-      col = gtk_tree_view_column_new();
-      gtk_tree_view_column_set_widget(col, header);
-      if (unit_report_columns[i].rightalign) {
-        gtk_tree_view_column_set_alignment(col, 1.0);
-      }
-      gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
-    } /* else add new renderer to previous TreeViewColumn */
-
-    fc_assert(col != NULL);
-    if (G_TYPE_BOOLEAN == unit_report_columns[i].type) {
+    if (G_TYPE_BOOLEAN
+        == gtk_tree_model_get_column_type(GTK_TREE_MODEL(store), i)) {
       renderer = gtk_cell_renderer_toggle_new();
-      gtk_tree_view_column_pack_start(col, renderer, FALSE);
-      gtk_tree_view_column_add_attribute(col, renderer, "active", i);
+      col = gtk_tree_view_column_new_with_attributes(title, renderer,
+                                                     "active", i, "visible",
+                                                     URD_COL_BOOL_VISIBLE,
+                                                     NULL);
     } else {
       renderer = gtk_cell_renderer_text_new();
-      gtk_tree_view_column_pack_start(col, renderer, TRUE);
-      gtk_tree_view_column_add_attribute(col, renderer, "text", i);
-      gtk_tree_view_column_add_attribute(col, renderer,
-                                         "weight", URD_COL_TEXT_WEIGHT);
+      col = gtk_tree_view_column_new_with_attributes(title, renderer,
+                                                     "text", i, "weight",
+                                                     URD_COL_TEXT_WEIGHT,
+                                                     NULL);
     }
 
-    if (unit_report_columns[i].visible_col >= 0) {
-      gtk_tree_view_column_add_attribute(col, renderer, "visible",
-                                         unit_report_columns[i].visible_col);
-    }
-
-    if (unit_report_columns[i].rightalign) {
+    if (i > 0) {
       g_object_set(G_OBJECT(renderer), "xalign", 1.0, NULL);
+      gtk_tree_view_column_set_alignment(col, 1.0);
     }
+
+    gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
   }
 
   button = gui_dialog_add_stockbutton(preport->shell, GTK_STOCK_FIND,
@@ -1737,10 +1713,11 @@ endgame_report_column_name(enum endgame_report_columns col)
 }
 
 /****************************************************************************
-  Fill a final report with statistics for each player.
+  Initialize a final report to be filled with statistics for each player.
 ****************************************************************************/
-static void endgame_report_update(struct endgame_report *preport,
-                                  const struct packet_endgame_report *packet)
+static void endgame_report_update_new(struct endgame_report *preport,
+                                      const struct packet_endgame_report_new
+                                      *packet)
 {
   const size_t col_num = packet->category_num + FRD_COL_NUM;
   GType col_types[col_num];
@@ -1798,6 +1775,43 @@ static void endgame_report_update(struct endgame_report *preport,
   preport->player_count = packet->player_num;
   preport->players_received = 0;
 }
+
+/****************************************************************************
+  Fill a final report with statistics for each player.
+****************************************************************************/
+static void endgame_report_update_old(struct endgame_report *preport,
+                                      const struct packet_endgame_report_old
+                                      *packet)
+{
+  struct packet_endgame_report_new np;
+  int i;
+
+  np.category_num = packet->category_num;
+
+  for (i = 0; i < packet->category_num; i++) {
+    strcpy(np.category_name[i], packet->category_name[i]);
+  }
+
+  np.player_num = packet->player_num;
+
+  endgame_report_update_new(preport, &np);
+
+  for (i = 0; i < packet->player_num; i++) {
+    struct packet_endgame_player npp;
+    int j;
+
+    npp.category_num = packet->category_num;
+    npp.player_id = packet->player_id[i];
+    npp.score = packet->score[i];
+
+    for (j = 0; j < packet->category_num; j++) {
+      npp.category_score[j] = packet->category_score[j][i];
+    }
+
+    endgame_report_dialog_player(&npp);
+  }
+}
+
 
 /****************************************************************************
   Handle endgame report information about one player.
@@ -1862,10 +1876,22 @@ static void endgame_report_init(struct endgame_report *preport)
 /****************************************************************************
   Start building a dialog with player statistics at endgame.
 ****************************************************************************/
-void endgame_report_dialog_start(const struct packet_endgame_report *packet)
+void endgame_report_dialog_start(const struct packet_endgame_report_new *packet)
 {
   if (NULL == endgame_report.shell) {
     endgame_report_init(&endgame_report);
   }
-  endgame_report_update(&endgame_report, packet);
+  endgame_report_update_new(&endgame_report, packet);
+}
+
+/****************************************************************************
+  Show a dialog with player statistics at endgame.
+****************************************************************************/
+void endgame_report_dialog_popup(const struct packet_endgame_report_old *packet)
+{
+  if (NULL == endgame_report.shell) {
+    endgame_report_init(&endgame_report);
+  }
+  endgame_report_update_old(&endgame_report, packet);
+  gui_dialog_present(endgame_report.shell);
 }

@@ -25,7 +25,8 @@ leaders = {
 
 ruler_titles = {
  "government",     "male_title",         "female_title"
- "Despotism",      _("%s Bey"),          _("?female:%s Bey")
+ "Despotism",      _("Mirza %s"),        _("?female:Mirza %s")
+ "Monarchy",       _("%s Bey"),          _("?female:%s Bey")
  "Republic",       _("Hetman %s"),       _("?female:Hetman %s")
  "Fundamentalism", _("Grand Mufti %s"),  _("?female:Grand Mufti %s")
 }
@@ -36,6 +37,7 @@ city_style="European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 civilwar_nations="Crimean Tatar", "Tatar", "Polish", "Lithuanian",

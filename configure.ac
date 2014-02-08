@@ -3,15 +3,14 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl Initialize with some random file to ensure the source is here.
 AC_INIT([freeciv], m4_esyscmd([./fc_version | tr -d '\n']))
-AC_PREREQ(2.61)
+AC_PREREQ(2.59)
 AC_CONFIG_SRCDIR([common/game.c])
 AC_CONFIG_AUX_DIR(bootstrap) # This can't be quoted or automake will fail
 AC_CONFIG_MACRO_DIR([m4])
 ifdef([AC_CONFIG_MACRO_DIRS],[AC_CONFIG_MACRO_DIRS([dependencies/m4])])
-AC_CONFIG_HEADERS([fc_config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CANONICAL_HOST
-AC_USE_SYSTEM_EXTENSIONS
-AC_C_BIGENDIAN
+AC_GNU_SOURCE
 
 BUG_URL="http://gna.org/projects/freeciv/"
 WIKI_URL="http://www.freeciv.org/"
@@ -62,82 +61,19 @@ AC_DEFINE_UNQUOTED([DATASUBDIR],
                    [Version specific subdir for default data path])
 AC_SUBST([DATASUBDIR])
 
-AC_DEFINE_UNQUOTED([FREECIV_DISTRIBUTOR], ["$FREECIV_DISTRIBUTOR"],
-                   [Distribution this freeciv is built for])
-
 dnl Initialize automake stuff
-AM_INIT_AUTOMAKE([subdir-objects dist-bzip2 dist-zip])
+AM_INIT_AUTOMAKE
 
 dnl Use Automake 1.11 silent rules by default if available
 dnl verbose build using  make V=1
 ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
-UTILITY_LIBS=
-
-AC_PROG_MKDIR_P
-
-dnl Sed is needed for the configuration
-dnl of the clients, database setting and the mapimg toolkits.
-AC_PROG_SED
-
-dnl set default values
-fcdb_all=no
-fcdb_mysql=no
-fcdb_postgres=no
-fcdb_sqlite3=no
-
-dnl checks for databases
-dnl all:                  Autodetect as many as possible [default].
-dnl mysql:                use mysql database
-dnl postgres:             use postgres database
-dnl comma-separated-list: Detect these or abort.
-AC_ARG_ENABLE([fcdb],
-  AS_HELP_STRING([--enable-fcdb[=no/all/mysql/postgres/sqlite3]],
-                 [database backends [no](no, or list)]),
-[databases=${enableval}],
-[databases=no])
-
-for db in $(echo $databases | $SED 's/,/ /g') ; do
-  if test "x$db" = "xall" ; then
-    fcdb_all=yes
-  elif test "x$db" = "xno" ; then
-    fcdb_all=no
-  elif test "x$db" = "xmysql" ; then
-    fcdb_mysql=yes
-  elif test "x$db" = "xpostgres" ; then
-    fcdb_postgres=yes
-  elif test "x$db" = "xsqlite3" ; then
-    fcdb_sqlite3=yes
-  else
-    AC_MSG_ERROR([bad value ${db} for --enable-fcdb])
-  fi
-done
-
-dnl checks for database mysql
-dnl sets FCDB_MYSQL(conditional), FCDB_MYSQL_CFLAGS, FCDB_MYSQL_LDFLAGS
-FC_FCDB_MYSQL
-
-dnl checks for database postgres
-dnl sets FCDB_POSTGRES(conditional), FCDB_POSTGRES_CFLAGS, FCDB_POSTGRES_LDFLAGS
-FC_FCDB_POSTGRES
-
-dnl checks for database sqlite3
-dnl sets FCDB_SQLITE3(conditional), FCDB_SQLITE3_CFLAGS, FCDB_SQLITE3_LDFLAGS
-FC_FCDB_SQLITE3
-
-dnl check if a database backend is available
-if test "x$fcdb_mysql" = "xyes" || test "x$fcdb_postgres" = "xyes" \
-   || test "x$fcdb_sqlite3" = "xyes"; then
-  enable_fcdb=yes
-  AC_DEFINE([HAVE_FCDB], [1], [Database backend available])
-else
-  enable_fcdb=no
-fi
-AM_CONDITIONAL(FCDB_DB, test "x$enable_fcdb" = "xyes")
+dnl checks for mysql, sets AUTH_LIBS, AUTH_CFLAGS
+FC_CHECK_AUTH
 
 dnl  no=do not compile server,  yes=compile server,  *=error
-AC_ARG_ENABLE([server],
-  AS_HELP_STRING([--disable-server], [do not compile the server]),
+AC_ARG_ENABLE(server,
+[  --disable-server        do not compile the server],
 [case "${enableval}" in
   yes) server=yes ;;
   no)  server=no ;;
@@ -148,121 +84,63 @@ AM_CONDITIONAL(SERVER, test x$server = xyes)
 dnl yes     - Support for IPv6 required
 dnl no      - Legacy IPv4 support
 dnl test    - Try to enable IPv6 support
-AC_ARG_ENABLE([ipv6],
-  AS_HELP_STRING([--enable-ipv6=yes/no/test], [use IPv6 [test]]),
+AC_ARG_ENABLE(ipv6,
+[  --enable-ipv6=yes/no/test
+                          use IPv6 [[test]]],
 [case "${enableval}" in
   yes|no|test) ipv6=${enableval} ;;
   *)   AC_MSG_ERROR(bad value ${enableval} for --enable-ipv6) ;;
 esac], [ipv6=test])
 if test x$ipv6 != xno ; then
-  enable_ipv6=yes
-  dnl We check some functions (getaddrinfo) twice. Once unconditionally
-  dnl to get HAVE_xxx always correctly set. We need separate check here to
-  dnl correcly disable IPv6 when function is not available.
+  ipv6_possible=true
   AC_CHECK_FUNCS([getaddrinfo inet_pton inet_ntop getnameinfo],
-[], [enable_ipv6=no])
-  if test x$enable_ipv6 = xyes ; then
+[], [ipv6_possible=false])
+  if test x$ipv6_possible = xtrue ; then
     AC_MSG_CHECKING([for AF_INET6])
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
 #include <sys/socket.h>
       ]], [[return AF_INET6;]])], [AC_MSG_RESULT([yes])],
        [AC_MSG_RESULT([no])
-        enable_ipv6=no])
+        ipv6_possible=false])
   fi
-  if test x$enable_ipv6 = xno && test x$ipv6 = xyes ; then
+  if test x$ipv6_possible = xfalse && test x$ipv6 = xyes ; then
     AC_MSG_ERROR([Cannot enable IPv6 functionality])
   fi
-  if test x$enable_ipv6 = xyes ; then
+  if test x$ipv6_possible = xtrue ; then
     AC_DEFINE([IPV6_SUPPORT], [1], [IPv6 Support built in])
-  else
-    feature_ipv6=missing
   fi
 fi
 
-AC_ARG_WITH([readline],
-  AS_HELP_STRING([--with-readline], [support fancy command line editing]),
+AC_ARG_WITH(readline,
+[  --with-readline         support fancy command line editing],
 WITH_READLINE=$withval,	dnl yes/no - required to use / never use
 WITH_READLINE="maybe"	dnl maybe  - use if found [default]
 )
-
-FOLLOWTAG=${DEFAULT_FOLLOW_TAG}
-AC_ARG_WITH([followtag],
-  AS_HELP_STRING([--with-followtag], [version tag to follow]),
-[FOLLOWTAG=${withval}])
-AC_DEFINE_UNQUOTED([FOLLOWTAG], ["${FOLLOWTAG}"], [Version tag to follow])
-
-dnl set default values
-mapimg_all=auto
-mapimg_magickwand=no
-
-dnl map images
-dnl all:                  Autodetect as many as possible [default].
-dnl no:                   No additional toolkits.
-dnl magickwand:           compile magickwand (imagemagick) support.
-dnl comma-separated-list: Detect these or abort.
-AC_ARG_ENABLE([mapimg],
-  AS_HELP_STRING([--enable-mapimg=no/auto/magickwand],
-                 [additional map image toolkits to compile [auto](no, or list)]),
-[toolkits=${enableval}],
-[enable_mapimg=auto])
-
-for toolkit in $(echo $toolkits | $SED 's/,/ /g') ; do
-  if test "x$toolkit" = "xauto" ; then
-    enable_mapimg=auto
-  elif test "x$toolkit" = "xno" ; then
-    enable_mapimg=no
-  else
-    enable_mapimg=selected
-  fi
-
-  if test "x$toolkit" = "xmagickwand" ; then
-    mapimg_magickwand=yes
-  fi
-done
-
-dnl checks for MagickWand mapimg support
-dnl sets MAPIMG_WAND_CFLAGS, MAPIMG_WAND_LIBS
-FC_MAPIMG_MAGICKWAND
-
-AC_ARG_ENABLE([fcweb],
-  AS_HELP_STRING([--enable-fcweb], [build fcweb version of server [false]]),
-[case "${enableval}" in
-  yes)
-    fcweb=true ;;
-  no)
-    fcweb=false ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fcweb]) ;;
-esac], [fcweb=false])
-
-FC_WEB_CLIENT
 
 dnl no:   Do not compile client.
 dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
-AC_ARG_ENABLE([client],
-  AS_HELP_STRING([--enable-client=auto/all/gtk2/gtk3/sdl/sdl2/xaw/qt/stub],
-                 [clients to compile [auto](list for multiple)]),
+AC_ARG_ENABLE(client,
+[  --enable-client[=auto/all/gtk2/sdl/xaw/win32/ftwl/stub]
+                          clients to compile [[auto]] (or list for multiple)
+                          maintained clients: gtk2/sdl/xaw/stub
+                          unmaintained clients: win32/ftwl],
 [clients=${enableval}],
 [client=auto])
 
-if test "x$fcweb" = "xtrue" ; then
-  if test "x$clients" != "x" && test "x$clients" != "xauto" &&
-     test "x$clients" != "xno" ; then
-    AC_MSG_ERROR([One cannot enable any clients for freeciv-web build])
-  fi
-  clients=no
-fi
-
 gui_gtk2=no
-gui_gtk3=no
 gui_sdl=no
-gui_sdl2=no
 gui_xaw=no
-gui_qt=no
+gui_win32=no
+gui_ftwl=no
 gui_beos=no
 gui_stub=no
+
+dnl AC_PROG_SED is available only in autoconf 2.60 and later.
+dnl With older autoconf, assume that 'sed' is ok.
+ifdef([AC_PROG_SED], [AC_PROG_SED], [SED=sed])
 
 for gui in $(echo $clients | $SED 's/,/ /g') ; do
   if test "x$gui" = "xno" ; then
@@ -277,14 +155,9 @@ for gui in $(echo $clients | $SED 's/,/ /g') ; do
        test "x$gui" = "xgtk20"  ||
        test "x$gui" = "xgtk-2.0" ; then
       gui_gtk2=yes
-    elif test "x$gui" = "xgtk3"   ||
-         test "x$gui" = "xgtk3.0" ||
-         test "x$gui" = "xgtk30"  ||
-         test "x$gui" = "xgtk-3.0" ; then
-      gui_gtk3=yes
     elif test "x$gui" = "xgtk" ; then
-      AC_MSG_WARN([for requested client 'gtk' enabled gtk3-client, that has changed since earlier versions])
-      gui_gtk3=yes
+      AC_MSG_WARN([for requested client 'gtk' enabled gtk2-client, but that default may change in the future])
+      gui_gtk2=yes
     else
       if test ! -d "${srcdir}/client/gui-$gui" ; then
         AC_MSG_ERROR(bad value ${gui} for --enable-client)
@@ -295,13 +168,32 @@ for gui in $(echo $clients | $SED 's/,/ /g') ; do
   fi
 done
 
-AC_ARG_WITH([xaw],
-  AS_HELP_STRING([--with-xaw], [use the Xaw widget set for the xaw client]),
+dnl You MUST build ftwl to use the ftwl client
+AC_ARG_ENABLE(ftwl,
+[  --enable-ftwl[=no/x11/sdl/opengl]
+                          compile ftwl [default=no]],
+[case "${enableval}" in
+  x11)	  ftwl=x11 ;;
+  sdl)    ftwl=sdl ;;
+  opengl) ftwl=opengl ;;
+  *)	  AC_MSG_ERROR(bad value ${enableval} for --enable-ftwl) ;;
+esac], [ftwl=no])
+AM_CONDITIONAL(FTWL, test x$ftwl != xno)
+if test "x$ftwl" != "xno" ; then
+  PKG_PROG_PKG_CONFIG
+  PKG_CHECK_MODULES([CAIRO], [cairo],,
+    [AC_MSG_ERROR([--enable-ftwl requires cairo])])
+  FTWL_CFLAGS="$FTWL_CFLAGS $CAIRO_CFLAGS"
+  FTWL_LIBS="$FTWL_LIBS $CAIRO_LIBS"
+fi
+
+AC_ARG_WITH(xaw,
+[  --with-xaw              use the Xaw widget set for the xaw client],
 WITH_XAW=1
 )
 
-AC_ARG_WITH([xaw3d],
-  AS_HELP_STRING([--with-xaw3d], [use the Xaw3d widget set for the xaw client]),
+AC_ARG_WITH(xaw3d,
+[  --with-xaw3d            use the Xaw3d widget set for the xaw client],
 WITH_XAW3D=1
 )
 
@@ -310,7 +202,7 @@ if test "x$WITH_XAW" != "x" && test "x$WITH_XAW3D" != "x" ; then
 fi
 
 AC_ARG_ENABLE([svnrev],
-  AS_HELP_STRING([--enable-svnrev], [get svn revision to version information]),
+[  --enable-svnrev         get svn revision to version information],
 [case "${enableval}" in
   yes) svnrev=true  ;;
   no)  svnrev=false ;;
@@ -321,20 +213,9 @@ if test x$svnrev = xtrue ; then
   AC_DEFINE([SVNREV], [1], [Get svn revision information to version number])
 fi
 
-AC_ARG_ENABLE([gitrev],
-  AS_HELP_STRING([--enable-gitrev], [get git revision to version information]),
-[case "${enableval}" in
-  yes) gitrev=true  ;;
-  no)  gitrev=false ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-gitrev]) ;;
-esac], [gitrev=false])
-AM_CONDITIONAL([GITREV], [test x$gitrev = xtrue])
-if test x$gitrev = xtrue ; then
-  AC_DEFINE([GITREV], [1], [Get git revision information to version number])
-fi
-
-AC_ARG_ENABLE([make_data],
-  AS_HELP_STRING([--disable-make-data], [do not recurse make into data directories]),
+AC_ARG_ENABLE(make_data,
+[  --disable-make-data     do not recurse make into data directories
+                          (ok to disable unless you will 'make install')],
 [case "${enableval}" in
   yes) make_data=true ;;
   no)  make_data=false ;;
@@ -342,8 +223,9 @@ AC_ARG_ENABLE([make_data],
 esac], [make_data=true])
 AM_CONDITIONAL(MAKE_DATA, test x$make_data = xtrue)
 
-AC_ARG_ENABLE([make_include],
-  AS_HELP_STRING([--enable-make-include], [force make to recurse into include directory]),
+AC_ARG_ENABLE(make_include,
+[  --enable-make-include   force make to recurse into include directory
+                          (useful for 'make tags')],
 [case "${enableval}" in
   yes) make_include=true ;;
   no)  make_include=false ;;
@@ -351,94 +233,19 @@ AC_ARG_ENABLE([make_include],
 esac], [make_include=false])
 AM_CONDITIONAL(MAKE_CLIENT_INCLUDE, test "$make_include" = "true")
 
-AC_ARG_WITH([efence],
-  AS_HELP_STRING([--with-efence], [use Electric Fence, malloc debugger]),
-  WITH_EFENCE=1
-)
-
-AC_ARG_ENABLE([aimodules],
-  AS_HELP_STRING([--enable-aimodules=yes/no/experimental], [support for ai modules [no]]),
+AC_ARG_ENABLE([auto_deps],
+[  --disable-auto-deps     remove automatic deps calcs, which require gmake,gcc],
 [case "${enableval}" in
-  yes) enable_aimodules=yes ;;
-  no)  enable_aimodules=no ;;
-  experimental) enable_aimodules=yes
-                exp_aimodules=yes ;;
-  *)   AC_MSG_ERROR([bad value ${enable_aimodules} for --enable-aimodules]) ;;
-esac], [enable_aimodules=no])
-aimoduledir="${libdir}/fcai"
-AC_SUBST(aimoduledir)
-AM_CONDITIONAL(AI_MODULES, test "x$enable_aimodules" = "xyes")
-if test $enable_aimodules = yes ; then
-  if test x$enable_shared != xyes ; then
-    AC_MSG_ERROR([cannot enable ai module support if also build of shared libraries is not enabled with --enable-shared])
-  fi
-  LIBS_TMP="$LIBS"
-  LIBS="$LIBS -lltdl"
-  AC_MSG_CHECKING([whether can build modules])
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <ltdl.h>]],
-     [[lt_dlopenext(NULL);]])],
-     [AC_MSG_RESULT([yes])],
-     [AC_MSG_RESULT([no])
-      AC_MSG_ERROR([cannot build loadable AI modules as requested])])
-  LIBS="$LIBS_TMP"
-  SERVER_LIBS="${SERVER_LIBS} -lltdl"
-  AC_DEFINE([AI_MODULES], [1], [Enable ai modules])
-  CPPFLAGS="${CPPFLAGS} -DAI_MODULEDIR=\"\\\"${aimoduledir}\\\"\""
-  ai_mod_default_needed=yes
-fi
-AM_CONDITIONAL(EXP_AI_MODULES, test "x$exp_aimodules" = "xyes")
+  yes) enable_auto_deps=true ;;
+  no)  enable_auto_deps=false;;
+  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-auto-deps]) ;;
+esac], [enable_auto_deps="maybe"])
+AUTO_DEPS=$enable_auto_deps
 
-AC_ARG_ENABLE([ai-static],
-  AS_HELP_STRING([--enable-ai-static], [statically link listed modules to server]),
-[static_modules="${enableval}"],
-[static_modules="classic"])
-
-ai_mod_static_classic=no
-ai_mod_static_threaded=no
-
-for module in $(echo $static_modules | $SED 's/,/ /g') ; do
-  if test "x$module" = "xclassic" ; then
-    ai_mod_static_classic=yes
-    ai_mod_default_needed=yes
-    AC_DEFINE([AI_MOD_STATIC_CLASSIC], [1],
-              [classic ai module statically linked])
-  elif test "x$module" = "xthreaded" ; then
-    ai_mod_static_threaded=yes
-    ai_mod_default_needed=yes
-    AC_DEFINE([AI_MOD_STATIC_THREADED], [1],
-              [threaded ai module statically linked])
-  else
-    AC_MSG_ERROR([bad value ${module} for --enable-ai-static])
-  fi
-  if test "x$default_ai_set" = "x" ; then
-    dnl Make first static module default ai type
-    default_ai_set="${module}"
-  fi
-done
-if test "x$ai_mod_statix_classic" != "xyes" ; then
-  if test "x$ai_mod_static_threaded" = "xyes" ; then
-    AC_MSG_WARN([Selected ai module depends on classic, it's automatically enabled])
-    ai_mod_static_classic=yes
-  fi
-fi
-AM_CONDITIONAL([AI_MOD_STATIC_CLASSIC],
-[test "x$ai_mod_static_classic" = "xyes" || test "x$enable_aimodules" != "xyes"])
-AM_CONDITIONAL([AI_MOD_STATIC_THREADED],
-[test "x$ai_mod_static_threaded" = "xyes"])
-
-AC_ARG_WITH([default-ai],
-  AS_HELP_STRING([--with-default-ai], [default ai type [first static]]),
-  [default_ai_set="${withval}"],
-  [])
-
-AM_CONDITIONAL([AI_MOD_DEFAULT_NEEDED],
-[test  "x${ai_mod_default_needed}" = "xyes" || test "x${default_ai_set}" = "x"])
-
-if test "x${default_ai_set}" = "x" ; then
-  default_ai_set="classic"
-fi
-
-AC_DEFINE_UNQUOTED([AI_MOD_DEFAULT], ["${default_ai_set}"], [Default ai type name])
+AC_ARG_WITH(efence,
+	[  --with-efence           use Electric Fence, malloc debugger ],
+	WITH_EFENCE=1
+)
 
 dnl Checks for programs.
 AC_PROG_AWK
@@ -446,8 +253,6 @@ AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_LN_S
 AC_DISABLE_SHARED
-dnl Replace AC_PROG_LIBTOOL with LT_INIT when minimum libtool
-dnl version 2.2
 AC_PROG_LIBTOOL
 LIBTOOL="$LIBTOOL --preserve-dup-deps"
 AC_SUBST(LIBTOOL)
@@ -456,13 +261,7 @@ if test -z $AR; then
 	AC_MSG_ERROR([*** 'ar' missing.  Install binutils, fix your \$PATH, or set \$AR manually. ***])
 fi
 
-AM_PROG_CC_C_O
-AC_PROG_CXX
-FC_WORKING_CXX
-
 AC_CHECK_PROG(UNAME,uname,uname,:)
-
-AC_CHECK_SIZEOF([int])
 
 dnl Programs already checked by AM_INIT_AUTOMAKE:
 dnl  AC_PROG_MAKE_SET
@@ -479,13 +278,20 @@ or try using --with-libiconv-prefix.])
 fi
 LIBS="$LIBS $LIBICONV"
 
+dnl Autoconf >= 2.60 defines localedir. For older versions of autoconf, we
+dnl have to define it here, so that it can be used in po/Makefile.
+dnl You cannot use localedir above this line or it will fail for old ac's.
+if test -z "$localedir"; then
+  localedir="$datadir/locale"
+  AC_SUBST(localedir)
+fi
+
 dnl I18n support
-ALL_LINGUAS="ar bg cs ca da de el en_GB eo es et fa fi fr ga gd he hu id it ja 
-ko lt nl nb pl pt pt_BR ro ru sr sv tr uk zh_CN zh_TW"
-PO_DOMAINS="freeciv nations ruledit"
+ALL_LINGUAS="ar bg cs ca da de el en_GB eo es et fa fi fr ga gd he hu it ja 
+ko lt nl nb no pl pt pt_BR ro ru sr sv tr uk zh_CN"
 
 AC_ARG_ENABLE([nls],
-  AS_HELP_STRING([--disable-nls], [do not add localization support]),
+[  --disable-nls        do not add localization support],
 [case "${enableval}" in
   yes) USE_NLS=yes ;;
   no)  USE_NLS=no  ;;
@@ -599,29 +405,33 @@ else
   AC_SUBST([POFILES])
 fi
 
-PKG_PROG_PKG_CONFIG
-PKG_CHECK_MODULES([CURL], [libcurl],,
-    [AC_MSG_ERROR([libcurl development files required])])
-UTILITY_CFLAGS="${UTILITY_CFLAGS} ${CURL_CFLAGS}"
-UTILITY_LIBS="${UTILITY_LIBS} ${CURL_LIBS}"
-
 dnl Set debug flags supported by compiler
 EXTRA_DEBUG_CFLAGS=""
-EXTRA_DEBUG_CXXFLAGS=""
-EXTRA_DEBUG_LDFLAGS=""
+FC_C_FLAGS([-Wall -Wpointer-arith -Wcast-align -Wmissing-prototypes -Wmissing-declarations -Wno-unused-but-set-variable],
+ [], [EXTRA_DEBUG_CFLAGS])
+
 dnl check debugging
 FC_DEBUG
 dnl check profiling
 FC_GPROF
-
 AC_C99_VARIADIC_MACROS
 AC_C99_VARIABLE_ARRAYS
 AC_C99_INITIALIZERS
 AC_C99_STDINT_H
 
+if test "$AUTO_DEPS" = "maybe"; then
+   dnl Should also check for gmake?
+   if test -n "$GCC"; then
+      AUTO_DEPS="yes"
+   else
+      AUTO_DEPS="no"
+   fi
+fi
+AC_SUBST([AUTO_DEPS])
+
 dnl BeOS-specific settings
 if test x`$UNAME -s` = xBeOS ; then
-  AC_DEFINE([SOCKET_ZERO_ISNT_STDIN], [1], [BeOS-specific setting])
+  AC_DEFINE(SOCKET_ZERO_ISNT_STDIN, 1, [BeOS-specific setting])
   CFLAGS="$CFLAGS -Wno-multichar"
   LDFLAGS="$LDFLAGS -x none"
   if test x$enable_debug = xyes ; then
@@ -683,21 +493,22 @@ if test x$build = x$host ; then
   HOST_PATH_SEPARATOR=$PATH_SEPARATOR
 fi
 
-dnl note this has to match the path installed by translations/freeciv/Makefile
+dnl note this has to match the path installed by po/Makefile
 if test x"$MINGW32" != "xyes"; then
   CPPFLAGS="$CPPFLAGS -DLOCALEDIR=\"\\\"$localedir\\\"\""
 else
-  AC_DEFINE_UNQUOTED([LOCALEDIR], ["./share/locale"], [Locale directory (windows)])
+  AC_DEFINE_UNQUOTED(LOCALEDIR, "./share/locale", [Locale directory (windows)])
 fi
 
 CPPFLAGS="$CPPFLAGS -DBINDIR=\"\\\"$bindir\\\"\""
 
 COMMON_LIBS=-lm
+UTILITY_LIBS=
 
 dnl Check for zlib
 AC_CHECK_LIB(z, gzgets,
-  [AC_DEFINE([HAVE_LIBZ], [1], [zlib is available])
-UTILITY_LIBS="${UTILITY_LIBS} -lz"
+  [AC_DEFINE(HAVE_LIBZ, 1, [zlib is available])
+UTILITY_LIBS="$UTILITY_LIBS -lz"
 COMMON_LIBS="$COMMON_LIBS -lz"], 
   AC_MSG_ERROR([Could not find zlib library.]))
 
@@ -710,85 +521,34 @@ if test "$GZIP" = "no"; then
   AC_MSG_ERROR([You need the gzip program for compilation.])
 fi
 
-dnl Check for bzip2 compression
+dnl Check for libbzip2
 AC_CHECK_LIB(bz2, BZ2_bzReadOpen,
   [AC_CHECK_HEADERS([bzlib.h],
-   [AC_DEFINE([HAVE_LIBBZ2], [1], [libbzip2 is available])
-UTILITY_LIBS="${UTILITY_LIBS} -lbz2"
-libbz2_available=true])])
-if test "x$libbz2_available" != "xtrue" ; then
-  feature_bz2=missing
-fi
+   [AC_DEFINE(HAVE_LIBBZ2, 1, [libbzip2 is available])
+UTILITY_LIBS="$UTILITY_LIBS -lbz2"])])
 
-dnl Check for xz compression
-AC_CHECK_LIB(lzma, lzma_code,
-  [AC_CHECK_HEADERS([lzma.h],
-   [AC_DEFINE([HAVE_LIBLZMA], [1], [liblzma is available])
-UTILITY_LIBS="${UTILITY_LIBS} -llzma"
-libxz_available=true])])
-if test "x$libxz_available" != "xtrue" ; then
-  feature_xz=missing
-fi
-
-AC_SUBST([UTILITY_CFLAGS])
 AC_SUBST([UTILITY_LIBS])
 AC_SUBST([COMMON_LIBS])
 
-AC_ARG_ENABLE([crosser],
-  AS_HELP_STRING([--enable-crosser], [build version to be used with crosser environment]),
-[case "${enableval}" in
-  yes) crosser=yes ;;
-  no)  crosser=no ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-crosser]) ;;
-esac], [crosser=no])
-if test x$crosser = xyes && test x$MINGW32 != xyes ; then
-  AC_MSG_ERROR([--enable-crosser is Windows build specific option])
+dnl Check and compile ftwl
+if test "$ftwl" = x11 ; then
+     FTWL_CFLAGS="$FTWL_CFLAGS "`freetype-config --cflags`
+     FTWL_LIBS="$FTWL_LIBS -L/usr/X11R6/lib -lX11 -lpng "`freetype-config --libs`
 fi
 
-dnl Check thread implementation
-AC_MSG_CHECKING([for threads implementation])
-thread_impl=none
-
-CFLAGS_SAVE="${CFLAGS}"
-LIBS_SAVE="${LIBS}"
-
-if test x$crosser != xyes ; then
-  FC_C_FLAGS([-pthread], [], [CFLAGS])
-  FC_LD_FLAGS([-pthread], [], [LIBS])
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <pthread.h>]],
-    [[return pthread_create(NULL, NULL, NULL, NULL);]])],
-    [AC_DEFINE([HAVE_PTHREAD], [1], [Use pthreads as thread implementation])
-    thread_impl=pthreads
-    AC_MSG_RESULT([pthreads])
-    AC_DEFINE([HAVE_THREAD_COND], [1], [Has thread condition variable implementation])])
-    thread_cond=true
+if test "$ftwl" = sdl ; then
+     FTWL_CFLAGS="$FTWL_CFLAGS "`sdl-config --cflags`" "`freetype-config --cflags`
+     FTWL_LIBS="$FTWL_LIBS "`sdl-config --libs`" -lpng "`freetype-config --libs`
+     AC_DEFINE(SDL, 1, [SDL is used])
 fi
 
-if test "x$thread_impl" = "xnone" ; then
-  CFLAGS="$CFLAGS_SAVE"
-  LDFLAGS="$LDFLAGS_SAVE"
-
-  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <windows.h>]],
-    [[CreateThread(NULL, 0, NULL, NULL, 0, NULL);]])],
-    [AC_DEFINE([HAVE_WINTHREADS], [1], [Use Windows threads as thread implementation])
-    thread_impl=windows
-    AC_MSG_RESULT([windows])])
-fi
-
-if test "x$thread_impl" = "xnone" ; then
-  AC_MSG_ERROR([No usable thread implementation available])
-fi
-
-if test "x$thread_cond" != "xtrue" ; then
-  feature_thr_cond=missing
+if test "$ftwl" = opengl ; then
+     FTWL_CFLAGS="$FTWL_CFLAGS "`sdl-config --cflags`" "`freetype-config --cflags`
+     FTWL_LIBS="$FTWL_LIBS "`sdl-config --libs`" -lpng "`freetype-config --libs -lGL -lGLU`
 fi
 
 dnl Check and choose clients
 if test "x$client" != "xno"; then
-
-  dnl Check for sound support, sets SOUND_CFLAGS, SOUND_LIBS, AUDIO_SDL
-  dnl Client gui checks need to know which mixer version this has selected
-  FC_CHECK_SOUND()
 
   dnl if specified --with-xaw or --with-xaw3d, assume --enable-client=xaw
   if test -n "$WITH_XAW" || test -n "$WITH_XAW3D"; then
@@ -807,23 +567,33 @@ if test "x$client" != "xno"; then
     AS_MESSAGE([checking for which clients to compile:...])
   fi
 
-  dnl Gtk-3.0-specific overrides
-  FC_GTK3_CLIENT
-
   dnl Gtk-2.0-specific overrides
   FC_GTK2_CLIENT
 
   dnl SDL-specific overrides
   FC_SDL_CLIENT
 
-  dnl SDL2-specific overrides
-  FC_SDL2_CLIENT
-
   dnl Xaw-specific overrides
   FC_XAW_CLIENT
 
-  dnl QT-specific overrides
-  FC_QT_CLIENT
+  if test "x$gui_ftwl" = "xyes" || test "x$client" = "xall" ||
+     test "x$client" = "xauto" ; then
+    AC_MSG_CHECKING([will compile gui-ftwl])
+    if test "x$ftwl" = "xno" ; then
+      AC_MSG_RESULT([no])
+      if test "x$gui_ftwl" = "xyes" ; then
+        AC_MSG_ERROR(You must use --enable-ftwl to compile the ftwl client)
+      fi
+    else
+      AC_MSG_RESULT([yes])
+      gui_ftwl=yes
+      if test "x$client" = "xauto" ; then
+        client=yes
+      fi
+      GUI_ftwl_CFLAGS="$GUI_ftwl_CFLAGS $FTWL_CFLAGS"
+      GUI_ftwl_LIBS="$GUI_ftwl_LIBS $FTWL_LIBS"
+    fi
+  fi
 
   dnl BeOS-specific overrides
   if test "x$gui_beos" = "xyes" || test "x$client" = "xall"
@@ -845,28 +615,39 @@ if test "x$client" != "xno"; then
     fi
   fi
 
+  dnl Win32-specific overrides
+  FC_WIN32_CLIENT
+
   dnl Stub-specific overrides
   if test "x$gui_stub" = "xyes" || test "x$client" = "xall" ; then
-    gui_stub=yes
-    if test "x$client" = "xauto" ; then
-      client=yes
+    found_client=yes
+
+    if test "x$found_client" = "xyes"; then
+      gui_stub=yes
+      if test "x$client" = "xauto" ; then
+        client=yes
+      fi
+      GUI_stub_LIBS="-lm"
+    elif test "x$gui_stub" = "xyes"; then
+      AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
-    GUI_stub_LIBS="-lm"
   fi
 
   dnl If client still "auto", error out since we couldn't guess it
   if test "x$client" = "xauto" ; then
     AC_MSG_ERROR(could not guess which client to compile)
   fi
+
+  dnl Check for sound support, sets SOUND_CFLAGS, SOUND_LIBS, AUDIO_SDL
+  FC_CHECK_SOUND()
 fi
 
 if test "x$client" = "xall" ; then
   if test "x$gui_gtk2" = "xyes" ||
-     test "x$gui_gtk3" = "xyes" ||
      test "x$gui_sdl" = "xyes" ||
-     test "x$gui_sdl2" = "xyes" ||
      test "x$gui_xaw" = "xyes" ||
-     test "x$gui_qt" = "xyes" ||
+     test "x$gui_ftwl" = "xyes" ||
+     test "x$gui_win32" = "xyes" ||
      test "x$gui_beos" = "xyes" ||
      test "x$gui_stub" = "xyes" ; then
     client=yes
@@ -876,14 +657,9 @@ if test "x$client" = "xall" ; then
 fi
 
 dnl Check for GGZ
-if test "x$gui_gtk2" = "xyes" || test "x$gui_gtk3" = "xyes" ; then
+if test "x$gui_gtk2" = "xyes" ; then
   AC_GGZ_CHECK("gtk")
-  if test "x$gui_gtk2" = "xyes" ; then
-    GUI_gtk2_LIBS="$GUI_gtk2_LIBS $LIB_GGZ_GTK"
-  fi
-  if test "x$gui_gtk3" = "xyes" ; then
-    GUI_gtk3_LIBS="$GUI_gtk3_LIBS $LIB_GGZ_GTK"
-  fi
+  GUI_gtk2_LIBS="$GUI_gtk2_LIBS $LIB_GGZ_GTK"
 else
   AC_GGZ_CHECK
 fi
@@ -895,233 +671,72 @@ FC_LD_FLAGS(["-Wl,-rpath=${lib_prefix}"], [], [LDFLAGS])
 
 AM_CONDITIONAL([CLIENT], [test "x$client" = "xyes"])
 
-
 dnl freeciv-modpack checks
-AC_ARG_ENABLE([fcmp],
-  AS_HELP_STRING([--enable-fcmp=no/yes/gtk2/gtk3/qt/cli/all/auto], [build freeciv-modpack-program [auto]]),
-[fc_mp=${enableval}],
-[fc_mp=auto])
-
-fcmp_cli=no
-fcmp_gtk2=no
-fcmp_gtk3=no
-fcmp_qt=no
-
-if test "x$fc_mp" = "xcli" ; then
-  dnl Only cli requested -> no gui needed
-  modinst=cli
-fi
-
-for mp in $(echo $fc_mp | $SED 's/,/ /g') ; do
-  if test "x$mp" = "xno" ; then
-    modinst=no
-  elif test "x$mp" = "xauto" || test "x$mp" = "xyes" ; then
-    modinst=auto
-  elif test "x$mp" = "xall" ; then
-    modinst=all
-  else if test "x$mp" = "xgtk2"   ||
-          test "x$mp" = "xgtk2.0" ||
-          test "x$mp" = "xgtk20"  ||
-          test "x$mp" = "xgtk-2.0" ; then
-      req_fcmp_gtk2=yes
-    elif test "x$mp" = "xgtk3"   ||
-         test "x$mp" = "xgtk3.0" ||
-         test "x$mp" = "xgtk30"  ||
-         test "x$mp" = "xgtk-3.0" ; then
-      req_fcmp_gtk3=yes
-    elif test "x$mp" = "xqt" ; then
-      req_fcmp_qt=yes
-    elif test "x$mp" = "xcli" ; then
-      req_fcmp_cli=yes
-    elif test "x$mp" != "xyes" ; then
-      AC_MSG_ERROR([bad value ${mp} for --enable-fcmp])
-    fi
-  fi
-done
-
-if test "x$req_fcmp_gtk3" = "xyes" ||
-   test "x$modinst" = "xall" || test "x$modinst" = "xauto" ; then
-  AM_PATH_GTK_3_0([3.0.0],
+modinst=no
+AM_PATH_GTK_2_0([2.6.0],
 [
   PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
 [
-  fcmp_gtk3=yes
-  MP_gtk3_CFLAGS="$GTK3_CFLAGS $GHTREAD_CFLAGS"
-  MP_gtk3_LIBS="$GTK3_LIBS $GTHREAD_LIBS"
+  modinst=yes
+  MP_gtk2_CFLAGS="$GTK_CFLAGS $GTHREAD_CFLAGS"
+  MP_gtk2_LIBS="$GTK_LIBS $GTHREAD_LIBS"
   if test "x$MINGW32" = "xyes"; then
-    dnl Required to compile gtk3 on Windows platform
-    MP_gtk3_CFLAGS="$MP_gtk3_CFLAGS -mms-bitfields"
-    MP_gtk3_LDFLAGS="$MP_gtk3_LDFLAGS -mwindows"
-  fi
-
-  if test "x$modinst" = "xauto" ; then
-    modinst=found
-  fi
-])])
-fi
-
-if test "x$req_fcmp_gtk3" = "xyes" && test "x$fcmp_gtk3" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build gtk3-version of freeciv-modpack as requested])
-fi
-
-if test "x$req_fcmp_gtk2" = "xyes" ||
-   test "x$modinst" = "xauto" || test "x$modinst" = "xall" ; then
-  AM_PATH_GTK_2_0([2.12.0],
-[
-  PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
-[
-  fcmp_gtk2=yes
-  MP_gtk2_CFLAGS="$GTK2_CFLAGS $GTHREAD_CFLAGS"
-  MP_gtk2_LIBS="$GTK2_LIBS $GTHREAD_LIBS"
-  if test "x$MINGW32" = "xyes"; then
-     dnl Required to compile gtk2 on Windows platform
-     MP_gtk2_CFLAGS="$MP_gtk2_CFLAGS -mms-bitfields"
-     MP_gtk2_LDFLAGS="$MP_gtk2_LDFLAGS -mwindows"
-  fi
-
-  if test "x$modinst" = "xauto" ; then
-    modinst=found
-  fi
-])])
-fi
-
-if test "x$req_fcmp_gtk2" = "xyes" && test "x$fcmp_gtk2" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build gtk2-version of freeciv-modpack as requested])
-fi
-
-if test "x$req_fcmp_qt" = "xyes" ||
-   test "x$modinst" = "xauto" || test "x$modinst" = "xall" ; then
-
-   if test "x$cxx_works" = "xyes" ; then
-     FC_QT5
-
-     if test "x$fc_qt5_usable" = "xtrue" ; then
-       fcmp_qt=yes
-
-       MP_qt_CPPFLAGS=$FC_QT5_CPPFLAGS
-       MP_qt_CXXFLAGS=$FC_QT5_CXXFLAGS
-       MP_qt_LIBS=$FC_QT5_LIBS
-
-       if test "x$modinst" = "xauto" ; then
-         modinst=found
-       fi
-     fi
-   fi
-
-fi
-
-if test "x$req_fcmp_qt" = "xyes" && test "x$fcmp_qt" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build Qt-version of freeciv-modpack as requested])
-fi
-
-dnl Cli does not satisfy --enable-fcmp=auto as it's not an gui.
-if test "x$req_fcmp_cli" = "xyes" || test "x$modinst" = "xall" ; then
-  fcmp_cli=yes
-fi
-
-if test "x$modinst" != "xfound" &&
-   test "x$modinst" != "xno" &&
-   test "x$modinst" != "xcli" &&
-   test "x$fcmp_gtk3" != "xyes" &&
-   test "x$fcmp_gtk2" != "xyes" &&
-   test "x$fcmp_qt" != "xyes" ;then
-  AC_MSG_ERROR([Cannot build modpack installer with any gui])
-fi 
-
-if test "x$modinst" != "xno" && test "x$MINGW32" != "xyes" ; then
-  dnl Hack to get a run-time icon -- not needed on Windows
-  MP_gtk2_CFLAGS="$MP_gtk2_CFLAGS -DMPICON_PATH=\"\\\"$datadir/freeciv/misc/mpicon.png\\\"\""
-  MP_gtk3_CFLAGS="$MP_gtk3_CFLAGS -DMPICON_PATH=\"\\\"$datadir/freeciv/misc/mpicon.png\\\"\""
-fi
-
-AM_CONDITIONAL([MODINST], [test "x$modinst" != "xno"])
-AM_CONDITIONAL([MODINST_GTK3], [test "x$fcmp_gtk3" = "xyes"])
-AM_CONDITIONAL([MODINST_GTK2], [test "x$fcmp_gtk2" = "xyes"])
-AM_CONDITIONAL([MODINST_QT], [test "x$fcmp_qt" = "xyes"])
-AM_CONDITIONAL([MODINST_CLI], [test "x$fcmp_cli" = "xyes"])
-
-AC_ARG_ENABLE([ruledit],
-  AS_HELP_STRING([--enable-ruledit], [build freeciv-ruledit (WIP)]),
-[case "${enableval}" in
-  yes) ruledit=yes ;;
-  no)  ruledit=no ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-ruledit]) ;;
-esac], [ruledit=no])
-if test "x$ruledit" = "xyes" ; then
-  if test "x$cxx_works" = "xyes" ; then
-    FC_QT5
-
-    if test "x$fc_qt5_usable" = "xtrue" ; then
-      ruledit_CPPFLAGS=$FC_QT5_CPPFLAGS
-      ruledit_CXXFLAGS=$FC_QT5_CXXFLAGS
-      ruledit_LIBS=$FC_QT5_LIBS
-    else
-      AC_MSG_ERROR([Qt5 not found for building freeciv-ruledit])
-    fi
+    dnl Required to compile gtk2 on Windows platform
+    MP_gtk2_CFLAGS="$MP_gtk2_CFLAGS -mms-bitfields"
+    MP_gtk2_LIBS="$GTK_LIBS"
+    MP_gtk2_LDFLAGS="$MP_gtk2_LDFLAGS -mwindows"
   else
-    AC_MSG_ERROR([No working C++ compiler found for building freeciv-ruledit])
+    dnl Hack to get a run-time icon -- not needed on Windows
+    MP_gtk2_CFLAGS="$MP_gtk2_CFLAGS -DMPICON_PATH=\"\\\"$datadir/freeciv/misc/mpicon.png\\\"\""
   fi
-fi
-AM_CONDITIONAL([RULEDIT], [test "x$ruledit" = "xyes"])
+])])
+AM_CONDITIONAL([MODINST], [test "x$modinst" = "xyes"])
 
 AC_SUBST([GUI_gtk2_CFLAGS])
 AC_SUBST([GUI_gtk2_LIBS])
 AC_SUBST([GUI_gtk2_LDFLAGS])
-AC_SUBST([GUI_gtk3_CFLAGS])
-AC_SUBST([GUI_gtk3_LIBS])
-AC_SUBST([GUI_gtk3_LDFLAGS])
 AC_SUBST([GUI_sdl_CFLAGS])
 AC_SUBST([GUI_sdl_LIBS])
 AC_SUBST([GUI_sdl_LDFLAGS])
-AC_SUBST([GUI_sdl2_CFLAGS])
-AC_SUBST([GUI_sdl2_LIBS])
-AC_SUBST([GUI_sdl2_LDFLAGS])
 AC_SUBST([GUI_xaw_CFLAGS])
 AC_SUBST([GUI_xaw_LIBS])
 AC_SUBST([GUI_xaw_LDFLAGS])
-AC_SUBST([GUI_qt_CPPFLAGS])
-AC_SUBST([GUI_qt_CFLAGS])
-AC_SUBST([GUI_qt_CXXFLAGS])
-AC_SUBST([GUI_qt_LIBS])
-AC_SUBST([GUI_qt_LDFLAGS])
+AC_SUBST([GUI_ftwl_CFLAGS])
+AC_SUBST([GUI_ftwl_LIBS])
+AC_SUBST([GUI_ftwl_LDFLAGS])
+AC_SUBST([GUI_win32_CFLAGS])
+AC_SUBST([GUI_win32_LIBS])
+AC_SUBST([GUI_win32_LDFLAGS])
 AC_SUBST([GUI_stub_CFLAGS])
 AC_SUBST([GUI_stub_LIBS])
 AC_SUBST([GUI_stub_LDFLAGS])
 AC_SUBST([GUI_beos_CFLAGS])
 AC_SUBST([GUI_beos_LIBS])
 AC_SUBST([GUI_beos_LDFLAGS])
-AC_SUBST([MP_cli_CFLAGS])
-AC_SUBST([MP_cli_LIBS])
-AC_SUBST([MP_cli_LDFLAGS])
 AC_SUBST([MP_gtk2_CFLAGS])
 AC_SUBST([MP_gtk2_LIBS])
 AC_SUBST([MP_gtk2_LDFLAGS])
-AC_SUBST([MP_gtk3_CFLAGS])
-AC_SUBST([MP_gtk3_LIBS])
-AC_SUBST([MP_gtk3_LDFLAGS])
-AC_SUBST([MP_qt_CPPFLAGS])
-AC_SUBST([MP_qt_CXXFLAGS])
-AC_SUBST([MP_qt_LIBS])
-AC_SUBST([ruledit_CPPFLAGS])
-AC_SUBST([ruledit_CXXFLAGS])
-AC_SUBST([ruledit_LIBS])
 AC_SUBST([SOUND_CFLAGS])
 AC_SUBST([SOUND_LIBS])
+AC_SUBST([FTWL_CFLAGS])
 AC_SUBST([VERSION_WITHOUT_LABEL])
 AC_SUBST([VERSION_LABEL])
 AC_SUBST([HOST_PATH_SEPARATOR])
-AM_CONDITIONAL(AUDIO_SDL, test "x$SDL_mixer" != "xno")
+AM_CONDITIONAL(AUDIO_SDL, test "x$SDL_mixer" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_SDL, test "x$gui_sdl" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_SDL2, test "x$gui_sdl2" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_2_0, test "x$gui_gtk2" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_GTK_3_0, test "x$gui_gtk3" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "x$gui_xaw" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_QT, test "x$gui_qt" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_STUB, test "x$gui_stub" = "xyes")
+AM_CONDITIONAL(CLIENT_GUI_WIN32, test "x$gui_win32" = "xyes")
+AM_CONDITIONAL(CLIENT_GUI_FTWL, test "x$gui_ftwl" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_BEOS, test "x$gui_beos" = "xyes")
+AM_CONDITIONAL(FTWL, test "$ftwl" != "no")
+AM_CONDITIONAL(FTWL_X11, test "$ftwl" = "x11")
+AM_CONDITIONAL(FTWL_SDL, test "$ftwl" = "sdl")
+AM_CONDITIONAL(FTWL_OPENGL, test "$ftwl" = "opengl")
 AM_CONDITIONAL(MINGW32, test x"$MINGW32" = "xyes")
 
-dnl Additional client libraries:
+dnl Additional client libraires:
 if test "x$client" = "xyes"; then
     CLIENT_LIBS=" -lm "
     AC_SUBST(CLIENT_LIBS)
@@ -1129,7 +744,7 @@ fi
 
 dnl Checks for additional server libraries:
 if test "x$server" = "xyes"; then
-    SERVER_LIBS="-lm ${SERVER_LIBS}"
+    SERVER_LIBS=" -lm "
 
     dnl Some systems (e.g., BeOS) need this lib
     AC_CHECK_LIB(bind, gethostbyaddr, SERVER_LIBS="-lbind $SERVER_LIBS")
@@ -1145,8 +760,7 @@ dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([fcntl.h sys/time.h sys/types.h unistd.h sys/utsname.h \
-                  sys/file.h libintl.h signal.h strings.h execinfo.h \
-                  libgen.h])
+                  sys/file.h libintl.h signal.h strings.h])
 AC_HEADER_STDBOOL
 dnl Avoid including the unix emulation layer if we build mingw executables
 dnl There would be type conflicts between winsock and bsd/unix includes
@@ -1172,9 +786,6 @@ AC_CHECK_TYPES(socklen_t, [], [],
 [#include <sys/types.h>
 #include <sys/socket.h>
 ])
-AC_TYPE_INTPTR_T
-dnl Headers that might contain the intptr_t definition found earlier
-AC_CHECK_HEADERS([inttypes.h stdint.h])
 
 dnl Checks for library functions.
 AC_FUNC_FORK
@@ -1190,11 +801,10 @@ fi
 AC_CHECK_FUNCS([bind connect fileno flock ftime gethostbyname gethostname \
 		getpwuid inet_aton select snooze strcasecmp strcasestr \
 		strerror strlcat strlcpy strncasecmp strstr uname usleep \
-                getline _strcoll stricoll _stricoll strcasecoll getaddrinfo \
-                backtrace])
+                getline _strcoll stricoll _stricoll strcasecoll])
 
 AC_MSG_CHECKING(for working gettimeofday)
-  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE([HAVE_GETTIMEOFDAY], [1],
+  FC_CHECK_GETTIMEOFDAY_RUNTIME(,AC_DEFINE(HAVE_GETTIMEOFDAY, 1,
 	[Define if the gettimeofday function works and is sane.]),)
 
 dnl Check for extra socket libraries.
@@ -1225,39 +835,30 @@ dnl and not in LIBS.
 dnl Now check if non blocking sockets are possible
 dnl (if fcntl or ioctl exists)
 
-AC_CHECK_FUNC([fcntl],
-              [AC_DEFINE([HAVE_FCNTL], [1], [fcntl support])
-               AC_DEFINE([NONBLOCKING_SOCKETS], [1], [nonblocking sockets support])],
-               [AC_CHECK_FUNC([ioctl], 
-                             [AC_DEFINE([HAVE_IOCTL], [1], [ioctl support])
-                              AC_DEFINE([NONBLOCKING_SOCKETS], [1], [nonblocking sockets support])])])
+AC_CHECK_FUNC(fcntl,
+              [AC_DEFINE(HAVE_FCNTL, 1, [fcntl support])
+               AC_DEFINE(NONBLOCKING_SOCKETS, 1, [nonblocking sockets support])],
+               [AC_CHECK_FUNC(ioctl, 
+                             [AC_DEFINE(HAVE_IOCTL, 1, [ioctl support])
+                              AC_DEFINE(NONBLOCKING_SOCKETS, 1, [nonblocking sockets support])])])
 
 dnl Checks if SIGPIPE is usable
 AC_MSG_CHECKING([for SIGPIPE])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <signal.h>]], [[signal (SIGPIPE, SIG_IGN)]])],[AC_MSG_RESULT([yes])
-                AC_DEFINE([HAVE_SIGPIPE], [1], [sigpipe support])],[AC_MSG_RESULT([no])])
+                AC_DEFINE(HAVE_SIGPIPE, 1, [sigpipe support])],[AC_MSG_RESULT([no])])
 
 dnl export where the datadir is going to be installed
 FC_EXPAND_DIR(FREECIV_DATADIR, "$datadir/freeciv")
 
 if test x"$MINGW32" = xyes; then
+  DEFAULT_DATA_PATH=".;data;~/.freeciv/$DATASUBDIR;$datadir/freeciv"
   DEFAULT_SAVE_PATH=".;~/.freeciv/saves"
-  if test x$crosser = xyes ; then
-    FC_CONF_PATH="../etc/freeciv"
-    DEFAULT_DATA_PATH=".;data;~/.freeciv/$DATASUBDIR;$datadir/freeciv;../share/freeciv"
-    DEFAULT_SCENARIO_PATH=".;data/scenarios;~/.freeciv/$DATASUBDIR/scenarios;~/.freeciv/scenarios;$datadir/freeciv/scenarios;../share/freeciv/scenarios"
-  else
-    FC_CONF_PATH="etc/freeciv"
-    DEFAULT_DATA_PATH=".;data;~/.freeciv/$DATASUBDIR;$datadir/freeciv"
-    DEFAULT_SCENARIO_PATH=".;data/scenarios;~/.freeciv/$DATASUBDIR/scenarios;~/.freeciv/scenarios;$datadir/freeciv/scenarios"
-  fi
+  DEFAULT_SCENARIO_PATH=".;data/scenario;~/.freeciv/$DATASUBDIR/scenarios;~/.freeciv/scenarios;$datadir/freeciv/scenario"
 else
-  FC_CONF_PATH="$sysconfdir/freeciv"
   DEFAULT_DATA_PATH=".:data:~/.freeciv/$DATASUBDIR:$datadir/freeciv"
   DEFAULT_SAVE_PATH=".:~/.freeciv/saves"
-  DEFAULT_SCENARIO_PATH=".:data/scenarios:~/.freeciv/$DATASUBDIR/scenarios:~/.freeciv/scenarios:$datadir/freeciv/scenarios"
+  DEFAULT_SCENARIO_PATH=".:data/scenario:~/.freeciv/$DATASUBDIR/scenarios:~/.freeciv/scenarios:$datadir/freeciv/scenario"
 fi
-CPPFLAGS="$CPPFLAGS -DFC_CONF_PATH=\"\\\"$FC_CONF_PATH\\\"\""
 CPPFLAGS="$CPPFLAGS -DDEFAULT_DATA_PATH=\"\\\"$DEFAULT_DATA_PATH\\\"\""
 CPPFLAGS="$CPPFLAGS -DDEFAULT_SAVES_PATH=\"\\\"$DEFAULT_SAVES_PATH\\\"\""
 CPPFLAGS="$CPPFLAGS -DDEFAULT_SCENARIO_PATH=\"\\\"$DEFAULT_SCENARIO_PATH\\\"\""
@@ -1272,195 +873,115 @@ if test -n "$WITH_EFENCE"; then
   fi])
 fi
 
-AC_ARG_ENABLE([sys-lua],
-  AS_HELP_STRING([--enable-sys-lua], [use lua from system instead of one from freeciv tree [test]]),
-[case "${enableval}" in
-  yes)
-    sys_lua=true ;;
-  no)
-    sys_lua=false ;;
-  test)
-    sys_lua=test ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-sys-lua]) ;;
-esac], [sys_lua=test])
-
-dnl There's wide divergence on what the pkg-config file for Lua is called
-dnl See http://lua-users.org/lists/lua-l/2008-09/msg00184.html
-if test "x$sys_lua" = "xtrue" || test "x$sys_lua" = "xtest" ; then
-  PKG_CHECK_MODULES([LUA], [lua5.2], [sys_lua=true],
-    [PKG_CHECK_MODULES([LUA], [lua-5.2], [sys_lua=true],
-      [PKG_CHECK_MODULES([LUA], [lua >= 5.2 lua < 5.3], [sys_lua=true],
-[if test "x$sys_lua" = "xtrue" ; then
-  AC_MSG_ERROR([Use of included lua disabled, and no lua found from system])
+dnl Checks needed for Lua. Get rid of these if system lua is ever used.
+gl_FUNC_MKSTEMP
+if test x$gl_cv_func_working_mkstemp = xyes ; then
+  AC_DEFINE([HAVE_MKSTEMP], [1], [Have working mkstemp])
 fi
-feature_syslua=missing
-sys_lua=false])])])
-fi
+AC_CHECK_FUNCS([isatty popen _longjmp])
 
-if test "x$sys_lua" != "xtrue" ; then
-  dnl Checks needed for included lua.
-  gl_FUNC_MKSTEMP
-  if test x$gl_cv_func_working_mkstemp = xyes ; then
-    AC_DEFINE([HAVE_MKSTEMP], [1], [Have working mkstemp])
-  fi
-  AC_CHECK_FUNCS([isatty popen _longjmp])
-
-  LUA_CFLAGS="-I\$(top_srcdir)/dependencies/lua-5.2/src"
-  LUA_LIBS="\$(top_builddir)/dependencies/lua-5.2/src/liblua.la"
-fi
-
+dnl In the future we probably get rid of our own lua tree and use
+dnl lua from system.
+dnl LUA_AS_DEPENDENCY should be empty when using lua outside own our tree.
+LUA_CFLAGS="-I\$(top_srcdir)/dependencies/lua-5.1/src"
+LUA_LIBS="\$(top_builddir)/dependencies/lua-5.1/src/liblua.a"
+LUA_AS_DEPENDENCY="$LUA_LIBS"
 AC_SUBST([LUA_CFLAGS])
 AC_SUBST([LUA_LIBS])
-AM_CONDITIONAL([SYS_LUA], [test "x$sys_lua" = "xtrue"])
+AC_SUBST([LUA_AS_DEPENDENCY])
 
-if test x$enable_fcdb = xyes ; then
-  LUASQL_CFLAGS="-I\$(top_srcdir)/dependencies/luasql/src"
-  LUASQL_LIBS=""
-  if test x$fcdb_mysql = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql/src/libluasql_mysql.la"
-  fi
-  if test x$fcdb_postgres = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql/src/libluasql_postgres.la"
-  fi
-  if test x$fcdb_sqlite3 = xyes ; then
-    LUASQL_LIBS="$LUASQL_LIBS \$(top_builddir)/dependencies/luasql/src/libluasql_sqlite3.la"
-  fi
-  LUASQL_AS_DEPENDENCY="$LUASQL_LIBS"
 
-  AC_SUBST([LUASQL_CFLAGS])
-  AC_SUBST([LUASQL_LIBS])
-  AC_SUBST([LUASQL_AS_DEPENDENCY])
-fi
-
-AC_ARG_ENABLE([sys-tolua-cmd],
-  AS_HELP_STRING([--enable-sys-tolua-cmd], [use tolua command from system instead of one from freeciv tree [true when cross-compiling]]),
-[case "${enableval}" in
-  yes)
-    sys_tolua_cmd=true ;;
-  no)
-    if test "x$cross_compiling" = "xyes" ; then
-      AC_MSG_ERROR([Must use external host tolua command when cross-compiling])
-    fi
-    sys_tolua_cmd=false ;;
-  *)
-    sys_tolua_cmd=${enableval} ;;
-esac], [
-if test "x$cross_compiling" = "xyes" ; then
-  sys_tolua_cmd=true
-else
-  sys_tolua_cmd=false
-fi])
-
-if test "x$sys_tolua_cmd" = "xtrue" ; then
-  AC_PATH_PROG([TOLUA], [tolua], [notfound])
-  if test x$TOLUA = xnotfound ; then
-    AC_MSG_ERROR([tolua command not found from the system])
-  fi
-elif test "x$sys_tolua_cmd" != "xfalse" ; then
-  TOLUA=$sys_tolua_cmd
-else
-  TOLUA="\$(top_builddir)/dependencies/tolua-5.2/src/bin/tolua$EXEEXT"
-fi
-
-AC_SUBST([TOLUA])
-
-TOLUA_CFLAGS="-I\$(top_srcdir)/dependencies/tolua-5.2/include"
-TOLUA_LIBS="\$(top_builddir)/dependencies/tolua-5.2/src/lib/libtolua.la"
+TOLUA_CFLAGS="-I\$(top_srcdir)/dependencies/tolua-5.1/include"
+TOLUA_LIBS="\$(top_builddir)/dependencies/tolua-5.1/src/lib/libtolua.a"
+TOLUA_AS_DEPENDENCY="$TOLUA_LIBS"
 AC_SUBST([TOLUA_CFLAGS])
 AC_SUBST([TOLUA_LIBS])
+AC_SUBST([TOLUA_AS_DEPENDENCY])
+
+TOLUA="\$(top_builddir)/dependencies/tolua-5.1/src/bin/tolua$EXEEXT"
+AC_SUBST([TOLUA])
 
 dnl Freeciv uses a non-standard macro, Q_(), to handle cases of qualified
 dnl translatable strings and macro PL_() to handle plural forms.
 dnl Since the Gettext supplied Autoconf support
 dnl doesn't seem to have a way to add new keywords to its xgettext call,
 dnl we do the following.
-dnl The Gettext supplied Autoconf support starts with
-dnl 'translations/<domain>/Makefile.in.in', and builds
-dnl 'translations/<domain>/Makefile.in' then 'translations/<domain>/Makefile'.
-dnl In order for the commonly used _() and N_() macros to work, there
-dnl should be somewhere in that 'translations/<domain>/Makefile' a call
-dnl to xgettext with "--keyword=_" and "--keyword=N_" as arguments.
-dnl To support Q_() and PL_(), the following simply replaces instances of 
+dnl The Gettext supplied Autoconf support starts with 'po/Makefile.in.in',
+dnl and builds 'po/Makefile.in' then 'po/Makefile'.  In order for the
+dnl commonly used _() and N_() macros to work, there should be somewhere
+dnl in that 'po/Makefile' a call to xgettext with "--keyword=_" and
+dnl "--keyword=N_" as arguments.  To support Q_() and PL_(),
+dnl the following simply replaces instances of 
 dnl "--keyword=N_" with "--keyword=N_ --keyword=Q_ --keyword=PL_:1,2"
-dnl in the 'translations/<domain>/Makefile' file.
-AC_CONFIG_COMMANDS([fc_default-1],[[for domain in $PO_DOMAINS ; do
-   if test -f translations/${domain}/Makefile ; then
-     if grep 'keyword=N_ --keyword=Q_ --keyword=PL_:1,2' translations/${domain}/Makefile >/dev/null 2>&1 ; then
+dnl in the 'po/Makefile' file.
+AC_CONFIG_COMMANDS([fc_default-1],[[if test -f po/Makefile ; then
+     if grep 'keyword=N_ --keyword=Q_ --keyword=PL_:1,2' po/Makefile >/dev/null 2>&1 ; then
        # has already been extended
        :
      else
-       echo extending translations/${domain}/Makefile
-       mv -f translations/${domain}/Makefile translations/${domain}/Makefile.tmp
-       sed -e 's/--keyword=N_/--keyword=N_ --keyword=Q_ --keyword=PL_:1,2/g' translations/${domain}/Makefile.tmp > translations/${domain}/Makefile
-       rm translations/${domain}/Makefile.tmp
+       echo extending po/Makefile
+       mv -f po/Makefile po/Makefile.tmp
+       sed -e 's/--keyword=N_/--keyword=N_ --keyword=Q_ --keyword=PL_:1,2/g' po/Makefile.tmp > po/Makefile
+       rm po/Makefile.tmp
      fi
-   fi
- done]],[PO_DOMAINS="$PO_DOMAINS"])
+   fi]],[[]])
 
 dnl Vast quantities of meaningless errors from xgettext is also annoying.
 dnl We fix this by forcing xgettext to assume all files are C source files.
-AC_CONFIG_COMMANDS([fc_default-2],[[for domain in $PO_DOMAINS ; do
-   if test -f translations/freeciv/Makefile ; then
-     if grep 'language=C --files-from=\$(srcdir)/POTFILES.in' translations/${domain}/Makefile >/dev/null 2>&1 ; then
+AC_CONFIG_COMMANDS([fc_default-2],[[if test -f po/Makefile ; then
+     if grep 'language=C --files-from=\$(srcdir)/POTFILES.in' po/Makefile >/dev/null 2>&1 ; then
        # has already been silenced
        :
      else
-       echo silencing translations/${domain}/Makefile
-       mv -f translations/${domain}/Makefile translations/${domain}/Makefile.tmp
-       sed -e 's/--files-from=$(srcdir)\/POTFILES.in/--language=C --files-from=$(srcdir)\/POTFILES.in/' translations/${domain}/Makefile.tmp > translations/${domain}/Makefile
-       rm translations/${domain}/Makefile.tmp
+       echo silencing po/Makefile
+       mv -f po/Makefile po/Makefile.tmp
+       sed -e 's/--files-from=$(srcdir)\/POTFILES.in/--language=C --files-from=$(srcdir)\/POTFILES.in/' po/Makefile.tmp > po/Makefile
+       rm po/Makefile.tmp
      fi
-   fi
- done]],[PO_DOMAINS="$PO_DOMAINS"])
+   fi]],[[]])
 
 dnl Most of the C comments copied to freeciv.pot are spurious; 
 dnl change to only copy those with prefix "TRANS:"
 dnl Also add --escape to the arguments to convert extended
 dnl characters to escape characters.
-AC_CONFIG_COMMANDS([fc_default-4],[[for domain in $PO_DOMAINS ; do
-   if test -f translations/${domain}/Makefile ; then
-     if grep 'add-comments="TRANS:" --escape' translations/${domain}/Makefile >/dev/null 2>&1 ; then
+AC_CONFIG_COMMANDS([fc_default-4],[[if test -f po/Makefile ; then
+     if grep 'add-comments="TRANS:" --escape' po/Makefile >/dev/null 2>&1 ; then
        # has already been modified
        :
      else
-       echo modifying translations/${domain}/Makefile add-comments/escape
-       mv -f translations/${domain}/Makefile translations/${domain}/Makefile.tmp
-       sed -e 's/add-comments/add-comments="TRANS:" --escape/' translations/${domain}/Makefile.tmp > translations/${domain}/Makefile
-       rm translations/${domain}/Makefile.tmp
+       echo modifying po/Makefile add-comments/escape
+       mv -f po/Makefile po/Makefile.tmp
+       sed -e 's/add-comments/add-comments="TRANS:" --escape/' po/Makefile.tmp > po/Makefile
+       rm po/Makefile.tmp
      fi
-   fi
- done]],[PO_DOMAINS="$PO_DOMAINS"])
+   fi]],[[]])
 
 dnl The BeOS sys/uio.h is broken.  This kludges it out of existence.
-dnl (This still causes lots of spurious changes to fc_config.h on BeOS.)
+dnl (This still causes lots of spurious changes to config.h on BeOS.)
 AC_CONFIG_COMMANDS([fc_default-5],[[if test x`uname -s` = xBeOS ; then
-     if grep '#define HAVE_SYS_UIO_H 1' fc_config.h >/dev/null 2>&1 ; then
-       echo kluging fc_config.h
-       mv -f fc_config.h fc_config.h.tmp
-       sed -e 's/#define HAVE_SYS_UIO_H 1/#undef HAVE_SYS_UIO_H/g' fc_config.h.tmp > fc_config.h
-       rm fc_config.h.tmp
+     if grep '#define HAVE_SYS_UIO_H 1' config.h >/dev/null 2>&1 ; then
+       echo kluging config.h 
+       mv -f config.h config.h.tmp
+       sed -e 's/#define HAVE_SYS_UIO_H 1/#undef HAVE_SYS_UIO_H/g' config.h.tmp > config.h
+       rm config.h.tmp
      fi
    fi]],[[]])
 
 CFLAGS="$EXTRA_DEBUG_CFLAGS $CFLAGS"
-CXXFLAGS="$EXTRA_DEBUG_CXXFLAGS $CXXFLAGS"
-LDFLAGS="$EXTRA_DEBUG_LDFLAGS $LDFLAGS"
 
 dnl Rebuild 'configure' whenever fc_version changes, if maintainer mode enabled.
 AC_SUBST([CONFIGURE_DEPENDENCIES], ["$CONFIGURE_DEPENDENCIES \$(top_srcdir)/fc_version"])
 
-dnl Make sure that config.h changes when ever CPPFLAGS, CFLAGS or CXXFLAGS
+dnl Make sure that config.h changes when ever CPPFLAGS or CFLAGS
 dnl change so everything gets rebuilt. LDFLAGS is not handled here
 dnl since change in it should not cause recompilation, only relinking.
 dnl Note: Variables are named FC_STORE_* instead of FC_*_STORE in order to
-dnl make them appear next to each other in fc_config.h.  Also single-quotes are
+dnl make them appear next to each other in config.h.  Also single-quotes are
 dnl used because some " may appear unescaped within the flag strings.
 AC_DEFINE_UNQUOTED([FC_STORE_CPPFLAGS], ['$CPPFLAGS'],
                    [These are the CPPFLAGS used in compilation])
 AC_DEFINE_UNQUOTED([FC_STORE_CFLAGS], ['$CFLAGS'],
                    [These are the CFLAGS used in compilation])
-AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
-                   [These are the CXXFLAGS used in compilation])
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
@@ -1472,21 +993,16 @@ AC_CONFIG_FILES([Makefile
 	  data/buildings/Makefile
 	  data/flags/Makefile
 	  data/misc/Makefile
-	  data/cimpletoon/Makefile
 	  data/trident/Makefile
 	  data/isophex/Makefile
 	  data/isotrident/Makefile
 	  data/stdsounds/Makefile
 	  data/default/Makefile
-	  data/classic/Makefile
-	  data/multiplayer/Makefile
+          data/multiplayer/Makefile
 	  data/experimental/Makefile
-          data/alien/Makefile
-          data/alien/nation/Makefile
-          data/civ2civ3/Makefile
 	  data/civ1/Makefile
 	  data/civ2/Makefile
-	  data/scenarios/Makefile
+	  data/scenario/Makefile
 	  data/nation/Makefile
 	  data/themes/Makefile
 	  data/themes/gui-gtk-2.0/Makefile
@@ -1510,73 +1026,40 @@ AC_CONFIG_FILES([Makefile
 	  data/themes/gui-gtk-2.0/Freeciv/gtk-2.0/Spin/Makefile
 	  data/themes/gui-gtk-2.0/Freeciv/gtk-2.0/Tabs/Makefile
 	  data/themes/gui-gtk-2.0/Freeciv/gtk-2.0/Toolbar/Makefile
-	  data/themes/gui-gtk-3.0/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Arrows/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Buttons/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Check-Radio/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Combo/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Frame-Gap/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Handles/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Lines/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/ListHeaders/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Menu-Menubar/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Others/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Panel/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/ProgressBar/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Range/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Scrollbars/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Shadows/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Spin/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Tabs/Makefile
-	  data/themes/gui-gtk-3.0/Freeciv/gtk-3.0/Toolbar/Makefile
 	  data/themes/gui-sdl/Makefile
 	  data/themes/gui-sdl/human/Makefile
 	  data/wonders/Makefile
 	  data/icons/Makefile
 	  utility/Makefile
+	  utility/ftwl/Makefile
 	  dependencies/Makefile
-	  dependencies/lua-5.2/Makefile
-          dependencies/lua-5.2/src/Makefile
-	  dependencies/tolua-5.2/Makefile
-	  dependencies/tolua-5.2/src/Makefile
-	  dependencies/tolua-5.2/src/lib/Makefile
-          dependencies/tolua-5.2/src/bin/Makefile
-          dependencies/luasql/Makefile
-          dependencies/luasql/src/Makefile
-          dependencies/cvercmp/Makefile  
+	  dependencies/lua-5.1/Makefile
+          dependencies/lua-5.1/src/Makefile
+	  dependencies/tolua-5.1/Makefile
+	  dependencies/tolua-5.1/src/Makefile
+	  dependencies/tolua-5.1/src/lib/Makefile
+          dependencies/tolua-5.1/src/bin/Makefile
 	  common/Makefile
-          common/aicore/Makefile
-          common/scriptcore/Makefile
+	  common/aicore/Makefile
 	  ai/Makefile
-          ai/default/Makefile
-          ai/classic/Makefile
-          ai/stub/Makefile
-          ai/threaded/Makefile
 	  tests/Makefile
   	  win32/Makefile
 	  client/Makefile
 	  client/agents/Makefile
 	  client/include/Makefile
 	  client/gui-sdl/Makefile
-          client/gui-sdl2/Makefile
 	  client/gui-gtk-2.0/Makefile
-	  client/gui-gtk-3.0/Makefile
 	  client/gui-xaw/Makefile
-          client/gui-qt/Makefile
+	  client/gui-win32/Makefile
+	  client/gui-ftwl/Makefile
 	  client/gui-stub/Makefile
-          client/luascript/Makefile
 	  server/Makefile
           server/advisors/Makefile
 	  server/generator/Makefile
 	  server/scripting/Makefile
-          tools/Makefile
-          tools/ruledit/Makefile
-          translations/Makefile
-	  translations/freeciv/Makefile.in
-	  translations/nations/Makefile.in
-          translations/ruledit/Makefile.in
+	  manual/Makefile
+          modinst/Makefile
+	  po/Makefile.in
 	  doc/Makefile
 	  doc/man/Makefile
           doc/man/freeciv-client.6
@@ -1591,55 +1074,43 @@ AC_CONFIG_FILES([Makefile
 	  doc/nl/Makefile
 	  doc/sv/Makefile
 	  freeciv.spec:bootstrap/freeciv.spec.in
+	  bootstrap/undep.sh
 	  data/Freeciv
 	  client/freeciv.desktop:bootstrap/freeciv.desktop.in
-          client/freeciv-gtk2.desktop:bootstrap/freeciv-gtk2.desktop.in
-          client/freeciv-sdl.desktop:bootstrap/freeciv-sdl.desktop.in
-          client/freeciv-sdl2.desktop:bootstrap/freeciv-sdl2.desktop.in
-          client/freeciv-qt.desktop:bootstrap/freeciv-qt.desktop.in
 	  server/freeciv-server.desktop:bootstrap/freeciv-server.desktop.in
-	  tools/freeciv-modpack.desktop:bootstrap/freeciv-modpack.desktop.in
-          client/freeciv-gtk2.appdata.xml:bootstrap/freeciv-gtk2.appdata.xml.in
-          client/freeciv-gtk3.appdata.xml:bootstrap/freeciv-gtk3.appdata.xml.in
-          client/freeciv-sdl.appdata.xml:bootstrap/freeciv-sdl.appdata.xml.in
-          client/freeciv-sdl2.appdata.xml:bootstrap/freeciv-sdl2.appdata.xml.in
-          client/freeciv-qt.appdata.xml:bootstrap/freeciv-qt.appdata.xml.in
-          server/freeciv-server.appdata.xml:bootstrap/freeciv-server.appdata.xml.in
-          tools/freeciv-modpack.appdata.xml:bootstrap/freeciv-modpack.appdata.xml.in])
-AC_CONFIG_FILES([fcgui:bootstrap/fcgui.in], [chmod +x fcgui])
-AC_CONFIG_FILES([fcser:bootstrap/fcser.in], [chmod +x fcser])
+	  modinst/freeciv-modpack.desktop:bootstrap/freeciv-modpack.desktop.in])
+AC_CONFIG_FILES([civ:bootstrap/civ.in], [chmod +x civ])
+AC_CONFIG_FILES([ser:bootstrap/ser.in], [chmod +x ser])
+AC_CONFIG_COMMANDS([default],[[ chmod +x bootstrap/undep.sh ; bootstrap/undep.sh ]],[[]])
 
 if test "$USE_NLS" != "yes" ; then
 
   dnl Produced config.status will have constant value of FORCE_DIST,
   dnl but it still checks 'if test x$FORCE_DIST = xyes'. We cannot
   dnl do that check in configure when producing config.status.
-  AC_CONFIG_COMMANDS([translations/freeciv/Makefile], [
-    for domain in $PO_DOMAINS ; do
+  AC_CONFIG_COMMANDS([po/Makefile], [
     dnl Usually glib-gettext.m4:AM_GLIB_GNU_GETTEXT outputs commands to
-    dnl generate translations/${domain}/Makefile.
+    dnl generate po/Makefile.
     dnl If NLS is disabled, we generate one here.
-    rm -f translations/${domain}/Makefile
+    rm -f po/Makefile
 
     dnl - Add nonls_warn as dependency to dist -target
     dnl - Remove dependencies from update-po, so it is never rebuilt
     dnl - Set list of distributed files (no generated files)
     sed -e 's/^dist distdir:.*/dist distdir: nonls_warn/' \
         -e 's/^update-po:.*/update-po:/' \
-        -e 's/^DISTFILES =.*/DISTFILES = Makefile.in.in POTFILES.in POTFILES.skip \$(POFILES)/' \
-        translations/${domain}/Makefile.in > translations/${domain}/Makefile
+        -e 's/^DISTFILES =.*/DISTFILES = ChangeLog Makefile.in.in POTFILES.in POTFILES.skip \$(POFILES)/' \
+        po/Makefile.in > po/Makefile
 
     dnl Create nonls_warn target.
-    echo >> translations/${domain}/Makefile
-    echo nonls_warn: >> translations/${domain}/Makefile
+    echo >> po/Makefile
+    echo nonls_warn: >> po/Makefile
     if test "x$FORCE_DIST" = "xyes" ; then
-      echo "	@echo Building dist without generated localization files!" >> translations/${domain}/Makefile
+      echo "	@echo Building dist without generated localization files!" >> po/Makefile
     else
-      echo "	@echo Cannot build dist with NLS disabled! && /bin/false" >> translations/${domain}/Makefile
+      echo "	@echo Cannot build dist with NLS disabled! && /bin/false" >> po/Makefile
     fi
-    done
-  ], [FORCE_DIST=$FORCE_DIST
-PO_DOMAINS="$PO_DOMAINS"])
+  ], [FORCE_DIST=$FORCE_DIST])
 fi
 
 AC_OUTPUT
@@ -1647,37 +1118,24 @@ AC_OUTPUT
 AC_MSG_NOTICE([
 ****************** Configuration Summary ******************
 
-  == General build options ==
-  Shared libraries:      $enable_shared
-  Debugging support:     $enable_debug
-  Profiling support:     $enable_gprof
-  IPv6 support:          $enable_ipv6
-  Map image toolkits:    $enable_mapimg
-    ppm:                   built-in
-    MagickWand:            $mapimg_magickwand
-
-  == Client ==
   Build freeciv client:  $client
+    Debugging support:     $enable_debug
+    Profiling support:     $enable_gprof
 
   Maintained client frontends:
-    Gtk-3.0: $gui_gtk3
     Gtk-2.0: $gui_gtk2
     SDL:     $gui_sdl
     Xaw:     $gui_xaw
     Stub:    $gui_stub
 
-  In-development client frontends:
-  (these are not yet ready for general use)
-    QT:      $gui_qt
-    SDL2:    $gui_sdl2
+  Not maintained client frontends:
+  (no guarantee that they even compile)
+    Win32:   $gui_win32
+    FTWL:    $gui_ftwl
 
-  == Server ==
   Build freeciv server:  $server
-    AI modules support:    $enable_aimodules
-    Database support:      $enable_fcdb
-      mysql:                 $fcdb_mysql
-      postgres:              $fcdb_postgres
-      sqlite3:               $fcdb_sqlite3
+    Debugging support:     $enable_debug
+    Profiling support:     $enable_gprof
+    Auth database support: $auth
 ])
 
-FC_MISSING_FEATURES

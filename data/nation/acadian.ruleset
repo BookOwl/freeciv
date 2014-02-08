@@ -28,8 +28,8 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",         "female_title"
- "Democracy",       _("Premier %s"),      _("Premiere %s")
- "Fundamentalism",  _("Abbot %s"),        _("Mother Superior %s")
+ "Democracy",      _("Prime Minister %s"),  _("?female:Prime Minister %s")
+ "Fundamentalism", _("Abbot %s"),           _("Mother Superior %s")
 }
 
 flag="acadia"
@@ -38,6 +38,7 @@ city_style = "Celtic"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with="canadian"

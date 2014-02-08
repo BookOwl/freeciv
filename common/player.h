@@ -13,15 +13,10 @@
 #ifndef FC__PLAYER_H
 #define FC__PLAYER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /* utility */
 #include "bitvector.h"
 
 /* common */
-#include "ai.h" /* FC_AI_LAST */
 #include "city.h"
 #include "connection.h"
 #include "fc_types.h"
@@ -29,7 +24,6 @@ extern "C" {
 #include "shared.h"
 #include "spaceship.h"
 #include "tech.h"
-#include "traits.h"
 #include "unitlist.h"
 #include "vision.h"
 
@@ -40,15 +34,28 @@ extern "C" {
 #define ANON_PLAYER_NAME "noname"
 #define ANON_USER_NAME "Unassigned"
 
-enum plrcolor_mode {
-  PLRCOL_PLR_ORDER,
-  PLRCOL_PLR_RANDOM,
-  PLRCOL_PLR_SET,
-  PLRCOL_TEAM_ORDER,
-  PLRCOL_NATION_ORDER
+struct player_slot;
+
+enum handicap_type {
+  H_DIPLOMAT = 0,     /* Can't build offensive diplomats */
+  H_AWAY,             /* Away mode */
+  H_LIMITEDHUTS,      /* Can get only 25 gold and barbs from huts */
+  H_DEFENSIVE,        /* Build defensive buildings without calculating need */
+  H_EXPERIMENTAL,     /* Enable experimental AI features (for testing) */
+  H_RATES,            /* Can't set its rates beyond government limits */
+  H_TARGETS,          /* Can't target anything it doesn't know exists */
+  H_HUTS,             /* Doesn't know which unseen tiles have huts on them */
+  H_FOG,              /* Can't see through fog of war */
+  H_NOPLANES,         /* Doesn't build air units */
+  H_MAP,              /* Only knows map_is_known tiles */
+  H_DIPLOMACY,        /* Not very good at diplomacy */
+  H_REVOLUTION,       /* Cannot skip anarchy */
+  H_EXPANSION,        /* Don't like being much larger than human */
+  H_DANGER,           /* Always thinks its city is in danger */
+  H_LAST
 };
 
-struct player_slot;
+BV_DEFINE(bv_handicap, H_LAST);
 
 struct player_economic {
   int gold;
@@ -102,7 +109,7 @@ struct player_ai {
   int maxbuycost;
   /* The units of tech_want seem to be shields */
   int tech_want[A_LAST+1];
-  void *handicaps;
+  bv_handicap handicaps;        /* sum of enum handicap_type */
   enum ai_level skill_level;   	/* 0-10 value for save/load/display */
   int fuzzy;			/* chance in 1000 to mis-decide */
   int expand;			/* percentage factor to value new cities */
@@ -112,8 +119,6 @@ struct player_ai {
   enum barbarian_type barbarian_type;
 
   int love[MAX_NUM_PLAYER_SLOTS];
-
-  struct ai_trait *traits;
 };
 
 /* Diplomatic states (how one player views another).
@@ -121,48 +126,16 @@ struct player_ai {
  *
  * Adding to or reordering this array will break many things.
  */
-#define SPECENUM_NAME diplstate_type
-#define SPECENUM_VALUE0 DS_ARMISTICE
-#define SPECENUM_VALUE0NAME N_("?diplomatic_state:Armistice")
-#define SPECENUM_VALUE1 DS_WAR
-#define SPECENUM_VALUE1NAME N_("?diplomatic_state:War")
-#define SPECENUM_VALUE2 DS_CEASEFIRE
-#define SPECENUM_VALUE2NAME N_("?diplomatic_state:Cease-fire")
-#define SPECENUM_VALUE3 DS_PEACE
-#define SPECENUM_VALUE3NAME N_("?diplomatic_state:Peace")
-#define SPECENUM_VALUE4 DS_ALLIANCE
-#define SPECENUM_VALUE4NAME N_("?diplomatic_state:Alliance")
-#define SPECENUM_VALUE5 DS_NO_CONTACT
-#define SPECENUM_VALUE5NAME N_("?diplomatic_state:Never met")
-#define SPECENUM_VALUE6 DS_TEAM
-#define SPECENUM_VALUE6NAME N_("?diplomatic_state:Team")
-  /* When adding or removing entries, note that first value
-   * of diplrel_asym should be next to last diplstate_type */
-#define SPECENUM_COUNT DS_LAST	/* leave this last */
-#include "specenum_gen.h"
-
-/* Asymmetric diplomatic relations.
- *
- * The first element here is numbered DS_LAST
- */
-#define SPECENUM_NAME diplrel_asym
-#define SPECENUM_VALUE7 DRA_GIVES_SHARED_VISION
-#define SPECENUM_VALUE7NAME N_("Gives shared vision")
-#define SPECENUM_VALUE8 DRA_RECEIVES_SHARED_VISION
-#define SPECENUM_VALUE8NAME N_("Receives shared vision")
-#define SPECENUM_VALUE9 DRA_HOSTS_EMBASSY
-#define SPECENUM_VALUE9NAME N_("Hosts embassy")
-#define SPECENUM_VALUE10 DRA_HAS_EMBASSY
-#define SPECENUM_VALUE10NAME N_("Has embassy")
-#define SPECENUM_VALUE11 DRA_HOSTS_REAL_EMBASSY
-#define SPECENUM_VALUE11NAME N_("Hosts real embassy")
-#define SPECENUM_VALUE12 DRA_HAS_REAL_EMBASSY
-#define SPECENUM_VALUE12NAME N_("Has real embassy")
-#define SPECENUM_VALUE13 DRA_HAS_CASUS_BELLI
-#define SPECENUM_VALUE13NAME N_("Has Casus Belli")
-#define SPECENUM_VALUE14 DRA_PROVIDED_CASUS_BELLI
-#define SPECENUM_VALUE14NAME N_("Provided Casus Belli")
-#include "specenum_gen.h"
+enum diplstate_type {
+  DS_ARMISTICE = 0,
+  DS_WAR,
+  DS_CEASEFIRE,
+  DS_PEACE,
+  DS_ALLIANCE,
+  DS_NO_CONTACT,
+  DS_TEAM,
+  DS_LAST	/* leave this last */
+};
 
 enum dipl_reason {
   DIPL_OK, DIPL_ERROR, DIPL_SENATE_BLOCKING,
@@ -211,8 +184,7 @@ struct player {
   struct nation_type *nation;
   struct team *team;
   bool is_ready; /* Did the player click "start" yet? */
-  bool phase_done;    /* Has human player finished */
-  bool ai_phase_done; /* Has AI type finished */
+  bool phase_done;
   int nturns_idle;
   bool is_alive;
 
@@ -232,7 +204,7 @@ struct player {
 
   bool ai_controlled; /* 0: not automated; 1: automated */
   struct player_ai ai_common;
-  const struct ai_type *ai;
+  struct ai_type *ai;
 
   bool was_created;                    /* if the player was /created */
   bool is_connected;
@@ -240,14 +212,11 @@ struct player {
   struct conn_list *connections;       /* will replace conn */
   bv_player gives_shared_vision;       /* bitvector those that give you
                                         * shared vision */
-  int wonders[B_LAST];              /* contains city id's, WONDER_NOT_BUILT,
-                                     * or WONDER_LOST */
+  int wonders[B_LAST];              /* contains city id's or WONDER_NOT_BUILT */
   struct attribute_block_s attribute_block;
   struct attribute_block_s attribute_block_buffer;
 
   struct dbv tile_known;
-
-  struct rgbcolor *rgb;
 
   union {
     struct {
@@ -263,20 +232,7 @@ struct player {
 
       bv_debug debug;
 
-      struct adv_data *adv;
-
-      void *ais[FC_AI_LAST];
-
-      /* This user is allowed to take over the player. */
-      char delegate_to[MAX_LEN_NAME];
-      /* This is set when a player is 'involved' in a delegation.
-       * There are two cases:
-       *  - if delegate_to[] is set, it records the original owner, with
-       *    'username' temporarily holding the delegate's name;
-       *  - otherwise, it's set when a delegate's original player is 'put
-       *    aside' while the delegate user controls a delegated player.
-       *    (In this case orig_username == username.) */
-      char orig_username[MAX_LEN_NAME];
+      struct ai_data *aidata;
     } server;
 
     struct {
@@ -307,8 +263,6 @@ int player_slot_max_used_number(void);
 
 /* General player accessor functions. */
 struct player *player_new(struct player_slot *pslot);
-void player_set_color(struct player *pplayer,
-                      const struct rgbcolor *prgbcolor);
 void player_clear(struct player *pplayer, bool full);
 void player_ruleset_close(struct player *pplayer);
 void player_destroy(struct player *pplayer);
@@ -362,10 +316,12 @@ int num_known_tech_with_flag(const struct player *pplayer,
 			     enum tech_flag_id flag);
 int player_get_expected_income(const struct player *pplayer);
 
-struct city *player_capital(const struct player *pplayer);
+struct city *player_palace(const struct player *pplayer);
 
+bool ai_handicap(const struct player *pplayer, enum handicap_type htype);
 bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
 
+const char *diplstate_text(const enum diplstate_type type);
 const char *love_text(const int love);
 
 struct player_diplstate *player_diplstate_get(const struct player *plr1,
@@ -396,14 +352,6 @@ bool is_barbarian(const struct player *pplayer);
 
 bool gives_shared_vision(const struct player *me, const struct player *them);
 
-bool is_diplrel_between(const struct player *player1,
-                        const struct player *player2,
-                        int diplrel);
-bool is_diplrel_to_other(const struct player *pplayer, int diplrel);
-int diplrel_by_rule_name(const char *value);
-const char *diplrel_rule_name(int value);
-const char *diplrel_name_translation(int value);
-
 /* iterate over all player slots */
 #define player_slots_iterate(_pslot)                                        \
   if (player_slots_initialised()) {                                         \
@@ -422,15 +370,6 @@ const char *diplrel_name_translation(int value);
     struct player *_pplayer = player_slot_get_player(_pslot);
 #define players_iterate_end                                                 \
   } player_slots_iterate_end;
-
-/* iterate over all players, which are used at the moment and are alive */
-#define players_iterate_alive(_pplayer)                                     \
-  players_iterate(_pplayer) {                                                \
-    if (!_pplayer->is_alive) {                                              \
-      continue;                                                             \
-    }
-#define players_iterate_alive_end                                           \
-  } players_iterate_end;
 
 /* get 'struct player_list' and related functions: */
 #define SPECLIST_TAG player
@@ -454,25 +393,5 @@ const char *ai_level_name(enum ai_level level);
 const char *ai_level_cmd(enum ai_level level);
 bool is_settable_ai_level(enum ai_level level);
 int number_of_ai_levels(void);
-
-void *player_ai_data(const struct player *pplayer, const struct ai_type *ai);
-void player_set_ai_data(struct player *pplayer, const struct ai_type *ai,
-                        void *data);
-
-static inline bool player_is_cpuhog(const struct player *pplayer)
-{
-  /* You have to make code change here to enable cpuhog AI. There is no even
-   * configure option to change this. That's intentional.
-   * Enabling them causes game to proceed differently, and for reproducing
-   * reported bugs we want to know if this has been changed. People are more
-   * likely to report that they have made code changes than remembering some
-   * specific configure option they happened to pass to build this time - or even
-   * knowing what configure options somebody else used when building freeciv for them. */
-  return FALSE;
-}
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__PLAYER_H */

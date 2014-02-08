@@ -24,9 +24,9 @@ leaders = {
 }
 
 ruler_titles = {
- "government",     "male_title",           "female_title"
- "Despotism",      _("Sergeant %s"),       _("?female:Sergeant %s")
- "Fundamentalism", _("Reverend %s"),       _("?female:Reverend %s")
+ "government",    "male_title",           "female_title"
+ "Despotism",     _("Sergeant %s"),       _("?female:Sergeant %s")
+ "Republic",      _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="suriname"
@@ -35,9 +35,10 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="tupi", "dutch", "guyanese", "antillean"
+civilwar_nations="tupi", "dutch", "guyanese"
 
 cities =
  "Paramaribo",

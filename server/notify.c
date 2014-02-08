@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -59,32 +59,22 @@ static void package_event_full(struct packet_chat_msg *packet,
                                const struct ft_color color,
                                const char *format, va_list vargs)
 {
-  char buf[MAX_LEN_MSG];
-  char *str;
-
   fc_assert_ret(NULL != packet);
 
   packet->tile = (NULL != ptile ? tile_index(ptile) : -1);
   packet->event = event;
   packet->conn_id = pconn ? pconn->id : -1;
 
-  fc_vsnprintf(buf, sizeof(buf), format, vargs);
-  if (is_capitalization_enabled()) {
-    str = capitalized_string(buf);
-  } else {
-    str = buf;
-  }
-
   if (ft_color_requested(color)) {
-    featured_text_apply_tag(str, packet->message, sizeof(packet->message),
+    /* A color is requested. */
+    char buf[MAX_LEN_MSG];
+
+    fc_vsnprintf(buf, sizeof(buf), format, vargs);
+    featured_text_apply_tag(buf, packet->message, sizeof(packet->message),
                             TTT_COLOR, 0, FT_OFFSET_UNSET, color);
   } else {
     /* Simple case */
-    strncpy(packet->message, str, sizeof(packet->message));
-  }
-
-  if (is_capitalization_enabled()) {
-    free_capitalized(str);
+    fc_vsnprintf(packet->message, sizeof(packet->message), format, vargs);
   }
 }
 
@@ -821,28 +811,25 @@ void event_cache_load(struct section_file *file, const char *section)
 ***************************************************************/
 void event_cache_save(struct section_file *file, const char *section)
 {
+  struct tile *ptile;
   int event_count = 0;
+  char target[MAX_NUM_PLAYER_SLOTS + 1];
+  char *p;
 
   /* stop event logging; this way events from log_*() will not be added
    * to the event list while saving the event list */
   event_cache_status = FALSE;
 
   event_cache_iterate(pdata) {
-    struct tile *ptile = index_to_tile(pdata->packet.tile);
-    char target[MAX_NUM_PLAYER_SLOTS + 1];
-    char *p;
-    int tile_x = -1, tile_y = -1;
-
-    if (ptile != NULL) {
-      index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
-    }
-
+    ptile = index_to_tile(pdata->packet.tile);
     secfile_insert_int(file, pdata->turn, "%s.events%d.turn",
                        section, event_count);
     secfile_insert_int(file, pdata->timestamp, "%s.events%d.timestamp",
                        section, event_count);
-    secfile_insert_int(file, tile_x, "%s.events%d.x", section, event_count);
-    secfile_insert_int(file, tile_y, "%s.events%d.y", section, event_count);
+    secfile_insert_int(file, NULL != ptile ? ptile->x : -1,
+                       "%s.events%d.x", section, event_count);
+    secfile_insert_int(file, NULL != ptile ? ptile->y : -1,
+                       "%s.events%d.y", section, event_count);
     secfile_insert_str(file, server_states_name(pdata->server_state),
                        "%s.events%d.server_state", section, event_count);
     secfile_insert_str(file, event_type_name(pdata->packet.event),

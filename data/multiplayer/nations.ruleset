@@ -1,4 +1,3 @@
-
 ; Modifying this file:
 ; You should not modify this file except to make bugfixes or
 ; for other "maintenance".  If you want to make custom changes
@@ -7,18 +6,5 @@
 ; command "rulesetdir <mysubdir>" in the server to have freeciv
 ; use your new customized file.
 
-[datafile]
-description="Multiplayer nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.May.14"
-
-[compatibility]
-; Initial government for all the nations that do not
-; have it explicitly defined
-default_government = "Despotism"
-
-[default_traits]
-;expansionist = 50
-;trader = 50
-;aggressive = 50
-
-*include "default/nationlist.ruleset"
+; Use default nations.ruleset.
+*include "default/nations.ruleset"

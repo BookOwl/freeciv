@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -818,6 +818,8 @@ static void popup_chgall_dialog (Widget parent)
   struct chgall_data *state;
   Widget shell;
   Widget main_form;
+  Widget fr_label;
+  Widget to_label;
   Widget fr_viewport;
   Widget to_viewport;
   Position x, y;
@@ -866,6 +868,24 @@ static void popup_chgall_dialog (Widget parent)
      state->w.shell,
      NULL
     );
+
+  fr_label =
+    I_LW(XtVaCreateManagedWidget
+    (
+     "chgallfrlabel",
+     labelWidgetClass, 
+     main_form,
+     NULL
+    ));
+
+  to_label =
+    I_LW(XtVaCreateManagedWidget
+    (
+     "chgalltolabel",
+     labelWidgetClass, 
+     main_form,
+     NULL
+    ));
 
   fr_viewport =
     XtVaCreateManagedWidget

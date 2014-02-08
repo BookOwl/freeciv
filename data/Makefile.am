@@ -1,12 +1,9 @@
 ## Process this file with automake to produce Makefile.in
 
-pkgsysconfdir = $(sysconfdir)/$(PACKAGE)
-
 if CLIENT
 CLIENT_FILES =				\
 	hex2t.tilespec			\
 	amplio2.tilespec		\
-	cimpletoon.tilespec		\
 	isophex.tilespec		\
 	isotrident.tilespec		\
 	trident.tilespec		\
@@ -19,11 +16,6 @@ if CLIENT_GUI_GTK_2_0
 CLIENT_FILES += \
 	freeciv.rc-2.0	\
 	gtk_menus.xml
-else
-if CLIENT_GUI_GTK_3_0
-CLIENT_FILES += \
-	gtk_menus.xml
-endif
 endif
 else
 CLIENT_FILES =
@@ -33,21 +25,13 @@ if SERVER
 SERVER_FILES = \
 	civ1.serv \
 	civ2.serv \
-	classic.serv \
 	default.serv \
 	experimental.serv \
-	multiplayer.serv \
-	alien.serv \
-	civ2civ3.serv
-
-SERVER_CONF = database.lua
-
+	multiplayer.serv
 else
 SERVER_FILES =
-SERVER_CONF =
 endif
 
-pkgsysconf_DATA = $(SERVER_CONF)
 pkgdata_DATA = $(SERVER_FILES) $(CLIENT_FILES)
 
 # Freeciv.rc was originally for gui-gtk but is also used by gui-sdl
@@ -60,10 +44,8 @@ EXTRA_DIST = \
 	civserver.dsc.in	\
 	civclient.dsc.in	\
 	civserver.room.in	\
-	database.lua	\
 	hex2t.tilespec	\
 	amplio2.tilespec \
-	cimpletoon.tilespec \
 	isophex.tilespec	\
 	isotrident.tilespec \
 	trident.tilespec	\
@@ -71,22 +53,19 @@ EXTRA_DIST = \
 	helpdata.txt	\
 	civ1.serv	\
 	civ2.serv	\
-	classic.serv	\
 	default.serv	\
 	experimental.serv \
-	multiplayer.serv \
-	alien.serv \
-	civ2civ3.serv
+	multiplayer.serv
 
 if CLIENT
-CLIENTDATADIRS = amplio2 misc flags buildings cimpletoon isotrident trident\
+CLIENTDATADIRS = amplio2 misc flags buildings isotrident trident\
  isophex hex2t stdsounds themes wonders
 else
 CLIENTDATADIRS = 
 endif
 
 if SERVER
-SERVERDATADIRS = default classic civ1 civ2 experimental multiplayer alien civ2civ3 scenarios nation
+SERVERDATADIRS = default civ1 civ2 experimental multiplayer scenario nation
 else
 SERVERDATADIRS = 
 endif

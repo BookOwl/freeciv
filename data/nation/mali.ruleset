@@ -1,10 +1,8 @@
 [nation_mali]
 
-translation_domain="freeciv"
-
 name=_("Mali")
 plural=_("?plural:Malis")
-groups="Medieval", "African", "Core"
+groups="Medieval", "African"
 legend=_("Sub-Saharan Africa has been a cultural and ethnical melting pot\
  for millennia. In medieval times, the region was home to a succession of\
  empires called the Sahelian kingdoms. Of these, the Islamic Mali Empire\
@@ -34,9 +32,10 @@ city_style = "Classical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="Jolof", "Songhai", "Fulani"
+civilwar_nations="Jolof", "Songhai"
 
 cities=
  "Niani",

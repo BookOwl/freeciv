@@ -12,15 +12,11 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdlib.h>
 
-/* gui main header */
-#include "gui_stub.h"
-
-/* client */
 #include "repodlgs_common.h"
 
 #include "cityrep.h"
@@ -81,7 +77,15 @@ void units_report_dialog_popup(bool raise)
 /****************************************************************************
   Show a dialog with player statistics at endgame.
 ****************************************************************************/
-void endgame_report_dialog_start(const struct packet_endgame_report *packet)
+void endgame_report_dialog_popup(const struct packet_endgame_report_old *packet)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Prepare to show a dialog with player statistics at endgame.
+****************************************************************************/
+void endgame_report_dialog_start(const struct packet_endgame_report_new *packet)
 {
   /* PORTME */
 }

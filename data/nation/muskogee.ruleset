@@ -38,8 +38,9 @@ city_style = "Celtic"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations="choctaw", "chickasaw", "seminole"
+civilwar_nations="sioux", "iroquois", "cherokee"
 
 ; City list based on data from this page:
 ; http://www.accessgenealogy.com/native/tribes/creek/creektowns.htm

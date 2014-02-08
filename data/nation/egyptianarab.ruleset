@@ -23,8 +23,9 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",           "female_title"
  "Communism",       _("Chairman %s"),       _("Chairwoman %s")
- "Despotism",       _("Sheikh %s"),         _("Shaykha %s")
+ "Despotism",       _("Sultan %s"),         _("Sultana %s")
  "Fundamentalism",  _("Caliph %s"),         _("Calipha %s")
+ "Republic",        _("Prime Minister %s"), _("?female:Prime Minister %s")
 }
 
 flag="egypt"
@@ -33,52 +34,53 @@ city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with="egyptian"
 civilwar_nations="palestinian", "sudanese", "libyan", "arab"
 
 cities =
- "Al-Qahira",			;Cairo
+ "al-Qahira",			;Cairo
  "Eskendereyya",		;Alexandria
- "As-Suways",			;Suez
- "Al-Mansura",
- "El-Giza",			;Gizeh
+ "as-Suways",			;Suez
+ "al-Mansura",
+ "el-Giza",			;Gizeh
  "Shubra el-Kheima",
  "Bur Sa'id",			;Port Said
- "Al-Uqsur",			;Luxor
- "El-Mahalla el-Kubra",
+ "al-Uqsur",			;Luxor
+ "el-Mahalla el-Kubra",
  "Tanta",
  "Asyut",
- "Al-Ismayliya",
- "Al-Fayyum",
- "Az-Zaqaziq",
+ "al-Ismayliya",
+ "al-Fayyum",
+ "az-Zaqaziq",
  "Dumyat",
  "Aswan",
- "Al-Minya",
+ "al-Minya",
  "Damanhur",
  "Bani Suwayf",
  "Qina",
- "Al-Gardaqa",
+ "al-Gardaqa",
  "Madinat Sitta Uktubar",
  "Sawhaj",
  "Shibin-al-Kawm",
  "Banha",
- "Al-Asir mir-Ramadan",
+ "al-Asir mir-Ramadan",
  "Kafr-as-Shayh",
- "Al-Arish",
+ "al-Arish",
  "Matra",
  "Mallawi",
  "Bilbays",
  "Idfu",
  "Mit Gamr",
- "Al-Hawamidiya",
+ "al-Hawamidiya",
  "Disuq",
  "Qalyub",
  "Abu Kabir",
  "Ahmim",
  "Jirja",
- "Al-Matariya",
+ "al-Matariya",
  "Rashid",
  "Naj Hammadi",
  "Sharm al-Shaykh"

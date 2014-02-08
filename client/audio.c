@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -34,7 +34,6 @@
 #ifdef AUDIO_SDL
 #include "audio_sdl.h"
 #endif
-#include "client_main.h"
 
 #include "audio.h"
 
@@ -262,17 +261,6 @@ void audio_real_init(const char *const spec_name,
   log_normal(_("No real audio subsystem managed to initialize!"));
   log_normal(_("Perhaps there is some misconfiguration or bad permissions."));
   log_normal(_("Proceeding with sound support disabled."));
-}
-
-/**************************************************************************
-  Switch soundset
-**************************************************************************/
-void audio_restart(const char *soundset_name)
-{
-  audio_stop(); /* Fade down old one */
-
-  sz_strlcpy(sound_set_name, soundset_name);
-  audio_real_init(sound_set_name, sound_plugin_name);
 }
 
 /**************************************************************************

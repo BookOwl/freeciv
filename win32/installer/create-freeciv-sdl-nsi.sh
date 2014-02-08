@@ -36,12 +36,11 @@ OutFile "Output/\${APPNAME}-\${VERSION}-win32-\${GUI_ID}-setup.exe"
 
 Var STARTMENU_FOLDER
 Var DefaultLanguageCode
-Var LangName
 
 ; Pages
 
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "$1\doc\freeciv\COPYING"
+!insertmacro MUI_PAGE_LICENSE "$1\COPYING"
 !insertmacro MUI_PAGE_COMPONENTS
 Page custom DefaultLanguage DefaultLanguageLeave
 !insertmacro MULTIUSER_PAGE_INSTALLMODE
@@ -167,14 +166,14 @@ SectionGroup "Additional languages"
 
 EOF
 
-cat ../../bootstrap/langnames.txt |
-sort -k 2 |
-while read -r code name
+find $1/share/locale -mindepth 1 -maxdepth 1 -type d -printf %f\\n |
+sort |
+while read -r name
 do
-if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-echo "  Section \"$name ($code)\""
-echo "  SetOutPath \$INSTDIR\\share\\locale\\$code"
-echo "  File /r $1\\share\\locale\\$code\*.*"
+if test -e $1/share/locale/$name/LC_MESSAGES/freeciv.mo; then
+echo "  Section \"$name\""
+echo "  SetOutPath \$INSTDIR\\share\\locale\\$name"
+echo "  File /r $1\\share\\locale\\$name\*.*"
 
 # install special fonts for CJK locales
 if [ "$name" = "zh_CN" ]; then
@@ -240,17 +239,16 @@ Start Menu shortcut properties."
   \${NSD_CreateDropList} 0 -60% 100% 13u ""
   Pop \$DefaultLanguageDropList
 
-  \${NSD_CB_AddString} \$DefaultLanguageDropList "Autodetected"
-  \${NSD_CB_SelectString} \$DefaultLanguageDropList "Autodetected"
-  \${NSD_CB_AddString} \$DefaultLanguageDropList "US English (en_US)"
+  \${NSD_CB_AddString} \$DefaultLanguageDropList "auto"
+  \${NSD_CB_SelectString} \$DefaultLanguageDropList "auto"
 EOF
 
-  cat ../../bootstrap/langnames.txt |
-  sort -k 2 |
-  while read -r code name
+  find $1/share/locale -mindepth 1 -maxdepth 1 -type d -printf %f\\n |
+  sort |
+  while read -r name
   do
-  if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$name ($code)\""
+  if test -e $1/share/locale/$name/LC_MESSAGES/freeciv.mo; then
+  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$name\""
   fi
   done
 
@@ -259,25 +257,7 @@ cat <<EOF
 FunctionEnd
 
 Function DefaultLanguageLeave
-  \${NSD_GetText} \$DefaultLanguageDropList \$LangName
-EOF
-
-  echo "  \${If} \$LangName == \"Autodetected\""
-  echo "    StrCpy \$DefaultLanguageCode \"auto\""
-  echo "  \${EndIf}"
-  echo "  \${If} \$LangName == \"US English (en_US)\""
-  echo "    StrCpy \$DefaultLanguageCode \"en_US\""
-  echo "  \${EndIf}"
-
-  cat ../../bootstrap/langnames.txt |
-  while read -r code name
-  do
-    echo "  \${If} \$LangName == \"$name ($code)\""
-    echo "    StrCpy \$DefaultLanguageCode \"$code\""
-    echo "  \${EndIf}"
-  done
-
-cat <<EOF
+  \${NSD_GetText} \$DefaultLanguageDropList \$DefaultLanguageCode
 FunctionEnd
 
 Function RunFreeciv

@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -159,7 +159,7 @@ static void redraw_impr_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /*------------------------------------- */
   redraw_group(pHelpDlg->pBeginWidgetList, pWindow->prev->prev, FALSE);
@@ -195,7 +195,6 @@ void popup_impr_info(Impr_type_id impr)
   struct impr_type *pImpr_type;
   char buffer[64000];
   SDL_Rect area;
-  struct advance *obsTech = NULL;
 
   if(current_help_dlg != HELP_IMPROVEMENT) {
     popdown_help_dialog();
@@ -250,7 +249,7 @@ void popup_impr_info(Impr_type_id impr)
     SDL_FillRect(pBackgroundTmpl, NULL, map_rgba(pBackgroundTmpl->format, bg_color));
     putframe(pBackgroundTmpl,
              0, 0, pBackgroundTmpl->w - 1, pBackgroundTmpl->h - 1,
-             get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
     impr_type_count = 0;
     improvement_iterate(pImprove) {
@@ -311,7 +310,7 @@ void popup_impr_info(Impr_type_id impr)
 #endif
 
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 
@@ -378,20 +377,13 @@ void popup_impr_info(Impr_type_id impr)
                                                      adj_font(12), 0);
     pRequirementLabel2->ID = ID_LABEL;
   } else {
-    /* FIXME: this should show ranges, negated reqs, and all the
-     * MAX_NUM_REQS reqs.
+    /* FIXME: this should show ranges and all the MAX_NUM_REQS reqs.
      * Currently it's limited to 1 req. Remember MAX_NUM_REQS is a compile-time
      * definition. */
     requirement_vector_iterate(&pImpr_type->reqs, preq) {
-      if (!preq->present) {
-        continue;
-      }
       pRequirementLabel2 = create_iconlabel_from_chars(NULL, pWindow->dst,
                              universal_name_translation(&preq->source, buffer, sizeof(buffer)),
                              adj_font(12), WF_RESTORE_BACKGROUND);
-      if (preq->source.kind != VUT_ADVANCE) {
-        break; /* FIXME */
-      }
       pRequirementLabel2->ID = MAX_ID - advance_number(preq->source.value.advance);
       pRequirementLabel2->string16->fgcol = *get_tech_color(advance_number(preq->source.value.advance));
       pRequirementLabel2->action = change_tech_callback;
@@ -411,23 +403,16 @@ void popup_impr_info(Impr_type_id impr)
   DownAdd(pObsoleteByLabel, pDock);
   pDock = pObsoleteByLabel;
 
-
-  requirement_vector_iterate(&pImpr_type->obsolete_by, pobs) {
-    if (pobs->source.kind == VUT_ADVANCE) {
-      obsTech = pobs->source.value.advance;
-      break;
-    }
-  } requirement_vector_iterate_end;
-  if (obsTech == NULL) {
+  if (A_NEVER == pImpr_type->obsolete_by) {
     pObsoleteByLabel2 = create_iconlabel_from_chars(NULL, pWindow->dst,
                                                     _("Never"), adj_font(12), 0);
     pObsoleteByLabel2->ID = ID_LABEL;
   } else {
     pObsoleteByLabel2 = create_iconlabel_from_chars(NULL, pWindow->dst,
-                                                    advance_name_translation(obsTech),
-                                                    adj_font(12), WF_RESTORE_BACKGROUND);
-    pObsoleteByLabel2->ID = MAX_ID - advance_number(obsTech);
-    pObsoleteByLabel2->string16->fgcol = *get_tech_color(advance_number(obsTech));
+                          advance_name_translation(pImpr_type->obsolete_by),
+                          adj_font(12), WF_RESTORE_BACKGROUND);
+    pObsoleteByLabel2->ID = MAX_ID - advance_number(pImpr_type->obsolete_by);
+    pObsoleteByLabel2->string16->fgcol = *get_tech_color(advance_number(pImpr_type->obsolete_by));
     pObsoleteByLabel2->action = change_tech_callback;
     set_wstate(pObsoleteByLabel2, FC_WS_NORMAL);
   }
@@ -566,7 +551,7 @@ static void redraw_unit_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /*------------------------------------- */
   redraw_group(pHelpDlg->pBeginWidgetList, pWindow->prev->prev, FALSE);
@@ -659,7 +644,7 @@ void popup_unit_info(Unit_type_id type_id)
     SDL_FillRect(pBackgroundTmpl, NULL, map_rgba(pBackgroundTmpl->format, bg_color));
     putframe(pBackgroundTmpl,
              0, 0, pBackgroundTmpl->w - 1, pBackgroundTmpl->h - 1,
-             get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+             get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
     utype_count = 0;
     unit_type_iterate(ut) {
@@ -676,7 +661,7 @@ void popup_unit_info(Unit_type_id type_id)
       FREESURFACE(pText);
 
       /* blit unit icon */
-      pIcon = ResizeSurfaceBox(get_unittype_surface(ut, direction8_invalid()),
+      pIcon = ResizeSurfaceBox(get_unittype_surface(ut),
                                adj_size(36), adj_size(36), 1, TRUE, TRUE);
       dst.x = (adj_size(35) - pIcon->w) / 2;
       dst.y = (pBackground->h - pIcon->h) / 2;
@@ -718,7 +703,7 @@ void popup_unit_info(Unit_type_id type_id)
 #endif
 
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 
@@ -743,7 +728,7 @@ void popup_unit_info(Unit_type_id type_id)
 
   pUnitType = utype_by_number(type_id);
   pUnitNameLabel= create_iconlabel_from_chars(
-                adj_surf(get_unittype_surface(pUnitType, direction8_invalid())),
+                adj_surf(get_unittype_surface(pUnitType)),
                 pWindow->dst, utype_name_translation(pUnitType),
                 adj_font(24), WF_FREE_THEME);
 
@@ -788,11 +773,10 @@ void popup_unit_info(Unit_type_id type_id)
           pUnitType->happy_cost, PL_("citizen", "citizens", pUnitType->happy_cost));
     }
 
-    cat_snprintf(buf, sizeof(buf), "\n%s %d %s %d %s %s\n%s %d %s %d %s %d",
+    cat_snprintf(buf, sizeof(buf), "\n%s %d %s %d %s %d\n%s %d %s %d %s %d",
               _("Attack:"), pUnitType->attack_strength,
               _("Defense:"), pUnitType->defense_strength,
-              _("Move:"), move_points_text(pUnitType->move_rate,
-                                           NULL, NULL, FALSE),
+              _("Move:"), pUnitType->move_rate / SINGLE_MOVE,
               _("Vision:"), pUnitType->vision_radius_sq,
               _("FirePower:"), pUnitType->firepower,
               _("Hitpoints:"), pUnitType->hp);
@@ -1000,7 +984,7 @@ static void redraw_tech_info_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /* -------------------------- */
   pStr = create_str16_from_char(_("Allows"), adj_font(14));
@@ -1191,7 +1175,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
         set_wstate(pWidget, FC_WS_NORMAL);
         if (is_wonder(pImprove))
         {
-               pWidget->string16->fgcol = *get_theme_color(COLOR_THEME_CITYDLG_LUX);
+               pWidget->string16->fgcol = *get_game_colorRGB(COLOR_THEME_CITYDLG_LUX);
         }
         pWidget->action = change_impr_callback;
         pWidget->ID = MAX_ID - improvement_number(pImprove);
@@ -1207,10 +1191,9 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
   unit_count = 0;
   unit_type_iterate(un) {
     struct unit_type *pUnitType = un;
-
     if (advance_number(pUnitType->require_advance) == tech) {
       pWidget = create_iconlabel_from_chars(
-                                   ResizeSurfaceBox(get_unittype_surface(un, direction8_invalid()),
+                  ResizeSurfaceBox(get_unittype_surface(un),
                                    adj_size(48), adj_size(48), 1, TRUE, TRUE),
                   pWindow->dst, utype_name_translation(pUnitType), adj_font(14),
                   (WF_FREE_THEME|WF_RESTORE_BACKGROUND|WF_SELLECT_WITHOUT_BAR));
@@ -1348,7 +1331,7 @@ static struct widget * create_tech_info(Tech_type_id tech, int width, struct wid
 
 static void redraw_tech_tree_dlg(void)
 {
-  SDL_Color *line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE);
+  SDL_Color *line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE);
   SDL_Color bg_color = {255, 255, 255, 64};
 
   struct widget *pWindow = pHelpDlg->pEndWidgetList;
@@ -1369,7 +1352,7 @@ static void redraw_tech_tree_dlg(void)
   SDL_FillRectAlpha(pWindow->dst->surface, &dst, &bg_color);
   putframe(pWindow->dst->surface,
            dst.x, dst.y, dst.x + dst.w, dst.y + dst.h,
-           get_theme_color(COLOR_THEME_HELPDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_HELPDLG_FRAME));
 
   /* Draw Req arrows */
   i = 0;
@@ -1503,13 +1486,13 @@ static void redraw_tech_tree_dlg(void)
     switch((i % mod))
     {
       case 2:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE2);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE2);
       break;
       case 1:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE3);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE3);
       break;
       default:
-        line_color = get_theme_color(COLOR_THEME_HELPDLG_LINE);
+        line_color = get_game_colorRGB(COLOR_THEME_HELPDLG_LINE);
       break;
     }
 
@@ -2003,7 +1986,7 @@ void popup_tech_info(Tech_type_id tech)
       set_wstate(pListToggleButton, FC_WS_NORMAL);
     }
     widget_resize(pListToggleButton, adj_size(160), adj_size(15));
-    pListToggleButton->string16->fgcol = *get_theme_color(COLOR_THEME_HELPDLG_TEXT);
+    pListToggleButton->string16->fgcol = *get_game_colorRGB(COLOR_THEME_HELPDLG_TEXT);
 
     add_to_gui_list(ID_BUTTON, pListToggleButton);
 

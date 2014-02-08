@@ -27,7 +27,7 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",      "female_title"
  "Despotism",       _("Count %s"),     _("Countess %s")
- "Fundamentalism",  _("Fra %s"),       _("Madre %s")
+ "Fundamentalism",  _("Friar %s"),     _("Mother Superior %s")
 }
 
 flag="sicily"
@@ -37,6 +37,7 @@ city_style = "Classical"
 init_techs=""
 init_buildings=""
 
+init_government="Despotism"
 init_units=""
 civilwar_nations = "neapolitan", "maltese"
 

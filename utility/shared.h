@@ -13,10 +13,6 @@
 #ifndef FC__SHARED_H
 #define FC__SHARED_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <stdlib.h>		/* size_t */
 #include <string.h>		/* memset */
 #include <time.h>		/* time_t */
@@ -26,8 +22,8 @@ extern "C" {
 #include "support.h" /* bool, fc__attribute */
 
 #ifdef HAVE_CONFIG_H
-#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
-#error Files including fcintl.h should also include fc_config.h directly
+#ifndef FC_CONFIG_H            /* this should be defined in config.h */
+#error Files including fcintl.h should also include config.h directly
 #endif
 #endif
 
@@ -80,12 +76,12 @@ enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
 #define FC_MEMBER_ARRAY_SIZE(type, member) \
   ARRAY_SIZE(FC_MEMBER(type, member))
 
-#define FC_INT_TO_PTR(i) ((void *) (intptr_t) (i))
-#define FC_PTR_TO_INT(p) ((int) (intptr_t) (p))
-#define FC_UINT_TO_PTR(u) ((void *) (intptr_t) (u))
-#define FC_PTR_TO_UINT(p) ((unsigned int) (intptr_t) (p))
-#define FC_SIZE_TO_PTR(s) ((void *) (intptr_t) (s))
-#define FC_PTR_TO_SIZE(p) ((size_t) (intptr_t) (p))
+#define FC_INT_TO_PTR(i) ((void *) (unsigned long) (i))
+#define FC_PTR_TO_INT(p) ((int) (unsigned long) (p))
+#define FC_UINT_TO_PTR(u) ((void *) (unsigned long) (u))
+#define FC_PTR_TO_UINT(p) ((unsigned int) (unsigned long) (p))
+#define FC_SIZE_TO_PTR(s) ((void *) (unsigned long) (s))
+#define FC_PTR_TO_SIZE(p) ((size_t) (unsigned long) (p))
 
 /****************************************************************************
   Used to initialize an array 'a' of size 'size' with value 'val' in each
@@ -246,6 +242,26 @@ static inline struct cf_sequence cf_ptr_seq(char letter, const void *value);
 static inline struct cf_sequence cf_str_seq(char letter, const char *value);
 static inline struct cf_sequence cf_end(void);
 
+/* Tools for fc_vsnprintcf(). */
+#define CF_BOOL_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_BOOLEAN, .letter = ARG_letter, { .bool_value = ARG_value } }
+#define CF_TRANS_BOOL_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_TRANS_BOOLEAN, .letter = ARG_letter, \
+    { .bool_value = ARG_value } }
+#define CF_CHAR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_CHARACTER, .letter = ARG_letter, { .char_value = ARG_value } }
+#define CF_INT_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_INTEGER, .letter = ARG_letter, { .int_value = ARG_value } }
+#define CF_HEXA_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_HEXA, .letter = ARG_letter, { .int_value = ARG_value } }
+#define CF_FLOAT_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_FLOAT, .letter = ARG_letter, { .float_value = ARG_value } }
+#define CF_PTR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_POINTER, .letter = ARG_letter, { .ptr_value = ARG_value } }
+#define CF_STR_SEQ(ARG_letter, ARG_value) \
+  { .type = CF_STRING, .letter = ARG_letter, { .str_value = ARG_value } }
+#define CF_END { .type = CF_LAST }
+
 enum cf_type {
   CF_BOOLEAN,
   CF_TRANS_BOOLEAN,
@@ -277,12 +293,7 @@ struct cf_sequence {
 ****************************************************************************/
 static inline struct cf_sequence cf_bool_seq(char letter, bool value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_BOOLEAN;
-  sequence.letter = letter;
-  sequence.bool_value = value;
-
+  struct cf_sequence sequence = CF_BOOL_SEQ(letter, value);
   return sequence;
 }
 
@@ -292,12 +303,7 @@ static inline struct cf_sequence cf_bool_seq(char letter, bool value)
 ****************************************************************************/
 static inline struct cf_sequence cf_trans_bool_seq(char letter, bool value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_TRANS_BOOLEAN;
-  sequence.letter = letter;
-  sequence.bool_value = value;
-
+  struct cf_sequence sequence = CF_TRANS_BOOL_SEQ(letter, value);
   return sequence;
 }
 
@@ -306,12 +312,7 @@ static inline struct cf_sequence cf_trans_bool_seq(char letter, bool value)
 ****************************************************************************/
 static inline struct cf_sequence cf_char_seq(char letter, char value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_CHARACTER;
-  sequence.letter = letter;
-  sequence.char_value = value;
-
+  struct cf_sequence sequence = CF_CHAR_SEQ(letter, value);
   return sequence;
 }
 
@@ -320,12 +321,7 @@ static inline struct cf_sequence cf_char_seq(char letter, char value)
 ****************************************************************************/
 static inline struct cf_sequence cf_int_seq(char letter, int value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_INTEGER;
-  sequence.letter = letter;
-  sequence.int_value = value;
-
+  struct cf_sequence sequence = CF_INT_SEQ(letter, value);
   return sequence;
 }
 
@@ -334,12 +330,7 @@ static inline struct cf_sequence cf_int_seq(char letter, int value)
 ****************************************************************************/
 static inline struct cf_sequence cf_hexa_seq(char letter, int value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_HEXA;
-  sequence.letter = letter;
-  sequence.int_value = value;
-
+  struct cf_sequence sequence = CF_HEXA_SEQ(letter, value);
   return sequence;
 }
 
@@ -348,12 +339,7 @@ static inline struct cf_sequence cf_hexa_seq(char letter, int value)
 ****************************************************************************/
 static inline struct cf_sequence cf_float_seq(char letter, float value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_FLOAT;
-  sequence.letter = letter;
-  sequence.float_value = value;
-
+  struct cf_sequence sequence = CF_FLOAT_SEQ(letter, value);
   return sequence;
 }
 
@@ -362,12 +348,7 @@ static inline struct cf_sequence cf_float_seq(char letter, float value)
 ****************************************************************************/
 static inline struct cf_sequence cf_ptr_seq(char letter, const void *value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_POINTER;
-  sequence.letter = letter;
-  sequence.ptr_value = value;
-
+  struct cf_sequence sequence = CF_PTR_SEQ(letter, value);
   return sequence;
 }
 
@@ -376,12 +357,7 @@ static inline struct cf_sequence cf_ptr_seq(char letter, const void *value)
 ****************************************************************************/
 static inline struct cf_sequence cf_str_seq(char letter, const char *value)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_STRING;
-  sequence.letter = letter;
-  sequence.str_value = value;
-
+  struct cf_sequence sequence = CF_STR_SEQ(letter, value);
   return sequence;
 }
 
@@ -390,17 +366,10 @@ static inline struct cf_sequence cf_str_seq(char letter, const char *value)
 ****************************************************************************/
 static inline struct cf_sequence cf_end(void)
 {
-  struct cf_sequence sequence;
-
-  sequence.type = CF_LAST;
-
+  struct cf_sequence sequence = CF_END;
   return sequence;
 }
 
 bool formats_match(const char *format1, const char *format2);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__SHARED_H */

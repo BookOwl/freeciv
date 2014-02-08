@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -253,11 +253,10 @@ void real_players_dialog_update(void)
 	pds = player_diplstate_get(client.conn.playing, pplayer);
 	if (pds->type == DS_CEASEFIRE) {
 	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s (%d)",
-		      diplstate_type_translated_name(pds->type),
-		      pds->turns_left);
+		      diplstate_text(pds->type), pds->turns_left);
 	} else {
 	  fc_snprintf(dsbuf, sizeof(dsbuf), "%s",
-		      diplstate_type_translated_name(pds->type));
+		      diplstate_text(pds->type));
 	}
       }
 

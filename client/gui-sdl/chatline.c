@@ -20,7 +20,7 @@
  **********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -81,9 +81,6 @@ static void add_to_chat_list(Uint16 *pUniStr, size_t n_alloc);
 
 struct ADVANCED_DLG *pLoadDialog;
 
-/**************************************************************************
-  User event to load game dialog window.
-**************************************************************************/
 static int move_load_game_dlg_callback(struct widget *pWindow)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -92,9 +89,6 @@ static int move_load_game_dlg_callback(struct widget *pWindow)
   return -1;
 }
 
-/**************************************************************************
-  Close load game dialog
-**************************************************************************/
 void popdown_load_game_dialog(void)
 {
   if (pLoadDialog) {
@@ -117,9 +111,6 @@ void popdown_load_game_dialog(void)
   }
 }
 
-/**************************************************************************
-  User clicked load game dialog close-button.
-**************************************************************************/
 static int exit_load_dlg_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -132,9 +123,6 @@ static int exit_load_dlg_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  User selected file to load.
-**************************************************************************/
 static int load_selected_game_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
@@ -155,9 +143,6 @@ static int load_selected_game_callback(struct widget *pWidget)
   return -1;
 }
 
-/**************************************************************************
-  Open load game dialog
-**************************************************************************/
 static void popup_load_game_dialog(void)
 {
   struct widget *pWindow;
@@ -200,7 +185,7 @@ static void popup_load_game_dialog(void)
   pWindow = create_window_skeleton(NULL, pTitle, 0);
   pWindow->action = move_load_game_dlg_callback; 
   set_wstate(pWindow, FC_WS_NORMAL);
-
+  
   add_to_gui_list(ID_WINDOW, pWindow);
 
   pLoadDialog->pEndWidgetList = pWindow;
@@ -418,7 +403,7 @@ void clear_output_window(void)
 /* ====================================================================== */
 
 /**************************************************************************
-  User did something to connection list dialog.
+  ...
 **************************************************************************/
 static int conn_dlg_callback(struct widget *pWindow)
 {
@@ -426,7 +411,7 @@ static int conn_dlg_callback(struct widget *pWindow)
 }
 
 /**************************************************************************
-  User selected to get back from connection list dialog.
+  ...
 **************************************************************************/
 static int disconnect_conn_callback(struct widget *pWidget)
 {
@@ -439,7 +424,7 @@ static int disconnect_conn_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  Handle chat messages when connection dialog open.
+  ...
 **************************************************************************/
 static void add_to_chat_list(Uint16 *pUniStr, size_t n_alloc)
 {
@@ -493,13 +478,13 @@ static void add_to_chat_list(Uint16 *pUniStr, size_t n_alloc)
       widget_mark_dirty(pBuf);
     }
   }
-
+  
   flush_dirty();
-
+  
 }
 
 /**************************************************************************
-  User interacted with connection dialog inptu field.
+  ...
 **************************************************************************/
 static int input_edit_conn_callback(struct widget *pWidget)
 {
@@ -508,12 +493,13 @@ static int input_edit_conn_callback(struct widget *pWidget)
       char theinput[256];
       
       convertcopy_to_chars(theinput, sizeof(theinput), pWidget->string16->text);
-
+    
+    
       if (*theinput != '\0') {
         send_chat(theinput);
         /*real_output_window_append(theinput);*/
       }
-
+      
       FC_FREE(pWidget->string16->text);
       pWidget->string16->n_alloc = 0;
     }
@@ -522,7 +508,7 @@ static int input_edit_conn_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-   User interacted with Start Game button.
+ ...
 **************************************************************************/
 static int start_game_callback(struct widget *pWidget)
 {
@@ -533,7 +519,7 @@ static int start_game_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  User interacted with Select Nation button.
+...
 **************************************************************************/
 static int select_nation_callback(struct widget *pWidget)
 {
@@ -546,16 +532,17 @@ static int select_nation_callback(struct widget *pWidget)
 /* not implemented yet */
 #if 0
 /**************************************************************************
-  User interacted with Server Settings button.
+ ...
 **************************************************************************/
 static int server_config_callback(struct widget *pWidget)
 {
+
   return -1;
 }
 #endif
 
 /**************************************************************************
-  User interacted with Load Game button.
+...
 **************************************************************************/
 static int load_game_callback(struct widget *pWidget)
 {
@@ -663,7 +650,7 @@ void real_conn_list_dialog_update(void)
 }
 
 /**************************************************************************
-  Open connection list dialog
+  ...
 **************************************************************************/
 static void popup_conn_list_dialog(void)
 {
@@ -687,7 +674,7 @@ static void popup_conn_list_dialog(void)
   meswin_dialog_popdown();
 
   pConnDlg = fc_calloc(1, sizeof(struct CONNLIST));
-
+    
   pWindow = create_window_skeleton(NULL, NULL, 0);
   pWindow->action = conn_dlg_callback;
   set_wstate(pWindow, FC_WS_NORMAL);
@@ -714,7 +701,7 @@ static void popup_conn_list_dialog(void)
   SDL_FillRectAlpha(pWindow->theme, &area, &window_bg_color);
   putframe(pWindow->theme,
            area.x - 1, area.y - 1, area.x + area.w, area.y + area.h,
-           get_theme_color(COLOR_THEME_CONNLISTDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_CONNLISTDLG_FRAME));
   
   /* user list background */
   area.x = pWindow->size.w - adj_size(130);
@@ -724,7 +711,7 @@ static void popup_conn_list_dialog(void)
   SDL_FillRectAlpha(pWindow->theme, &area, &window_bg_color);
   putframe(pWindow->theme,
            area.x - 1, area.y - 1, area.x + area.w, area.y + area.h,
-           get_theme_color(COLOR_THEME_CONNLISTDLG_FRAME));
+           get_game_colorRGB(COLOR_THEME_CONNLISTDLG_FRAME));
   
   draw_frame(pWindow->theme, 0, 0, pWindow->theme->w, pWindow->theme->h);
     
@@ -769,13 +756,13 @@ static void popup_conn_list_dialog(void)
   hide_scrollbar(pConnDlg->pChat_Dlg->pScroll);  
   
   /* -------------------------------- */
-
+  
   /* input field */
-
+  
   pBuf = create_edit_from_unichars(NULL, pWindow->dst,
   		NULL, 0, adj_font(12), pWindow->size.w - adj_size(10) - adj_size(10),
 			(WF_RESTORE_BACKGROUND|WF_EDIT_LOOP));
-
+    
   pBuf->size.x = adj_size(10);
   pBuf->size.y = pWindow->size.h - adj_size(40) - adj_size(5) - pBuf->size.h;
   pBuf->action = input_edit_conn_callback;
@@ -860,7 +847,7 @@ static void popup_conn_list_dialog(void)
 }
 
 /**************************************************************************
-  Close connection list dialog.
+  ...
 **************************************************************************/
 bool popdown_conn_list_dialog(void)
 {

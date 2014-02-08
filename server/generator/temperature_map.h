@@ -13,6 +13,7 @@
 #ifndef FC__TEMPERATURE_MAP_H
 #define FC__TEMPERATURE_MAP_H
 
+#include "fcintl.h"
 #include "support.h"            /* bool type */
 
 /*

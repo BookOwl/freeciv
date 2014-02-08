@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdarg.h>
@@ -24,7 +24,6 @@
 #endif
 
 /* utility */
-#include "fcbacktrace.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
@@ -96,10 +95,10 @@ static void con_update_prompt(void)
   } else {
     rl_forced_update_display();
   }
-#else  /* HAVE_LIBREADLINE */
+#else
   con_dump(C_READY,"> ");
   con_flush();
-#endif /* HAVE_LIBREADLINE */
+#endif
 
   console_prompt_is_showing = TRUE;
 }
@@ -112,8 +111,6 @@ static void con_update_prompt(void)
 static const char *log_prefix(void)
 {
   static char buf[128];
-
-#ifdef LOG_TIMERS
   char timestr[32];
   time_t timestamp;
 
@@ -122,10 +119,6 @@ static const char *log_prefix(void)
            localtime(&timestamp));
 
   fc_snprintf(buf, sizeof(buf), "T%03d - %s", game.info.turn, timestr);
-
-#else  /* LOG_TIMERS */
-  fc_snprintf(buf, sizeof(buf), "T%03d", game.info.turn);
-#endif /* LOG_TIMERS */
 
   return buf;
 }
@@ -144,17 +137,6 @@ void con_log_init(const char *log_filename, enum log_level level,
   log_init(log_filename, level, con_handle_log, NULL,
            fatal_assertions);
 #endif /* DEBUG */
-  backtrace_init();
-}
-
-/************************************************************************
-  Deinitialize logging
-************************************************************************/
-void con_log_close(void)
-{
-  backtrace_deinit();
-
-  log_close();
 }
 
 #ifndef HAVE_LIBREADLINE
@@ -181,7 +163,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   console_prompt_is_showing = FALSE;
   return (int) strlen(buf);
 }
-#endif /* HAVE_LIBREADLINE */
+#endif
 
 /************************************************************************
 Write to console and add line-break, and show prompt if required.

@@ -26,6 +26,7 @@ leaders = {
 ruler_titles = {
  "government",      "male_title",           "female_title"
  "Communism",       _("Chairman %s"),       _("Chairwoman %s")
+ "Democracy",       _("Prime Minister %s"), _("?female:Prime Minister %s")
  "Despotism",       _("Prince %s"),         _("Princess %s")
 }
 
@@ -35,9 +36,10 @@ city_style = "Asian"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
-civilwar_nations="sherpa", "sikkimese"
+civilwar_nations="indian", "sikkimese"
 
 cities = 
  "Kathmandu",

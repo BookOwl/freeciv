@@ -13,10 +13,6 @@
 #ifndef FC__HELPDATA_H
 #define FC__HELPDATA_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include <stddef.h>		/* size_t */
 
 #include "improvement.h" 	/* Impr_type_id */
@@ -52,8 +48,6 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
 		      const char *user_text, struct terrain *pterrain);
 void helptext_base(char *buf, size_t bufsz, struct player *pplayer,
                    const char *user_text, struct base_type *pbase);
-void helptext_road(char *buf, size_t bufsz, struct player *pplayer,
-                   const char *user_text, struct road_type *proad);
 void helptext_specialist(char *buf, size_t bufsz, struct player *pplayer,
                          const char *user_text, struct specialist *pspec);
 void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
@@ -68,9 +62,5 @@ char *helptext_unit_upkeep_str(struct unit_type *punittype);
         help_iter_start();                \
         while((pitem=help_iter_next())) {   
 #define help_items_iterate_end }}
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__HELPDATA_H */

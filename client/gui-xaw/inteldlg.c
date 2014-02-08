@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <stdio.h>
@@ -275,7 +275,7 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  pcity = player_capital(pdialog->pplayer);
+  pcity = player_palace(pdialog->pplayer);
   fc_snprintf(buf, sizeof(buf), _("Capital: %s"),
 	      /* TRANS: "unknown" location */
 	      (!pcity) ? _("(unknown)") : city_name(pcity));
@@ -503,7 +503,7 @@ void update_intel_diplo_dialog(struct intel_dialog *pdialog)
 		  "%-32s %-16s %-16s",
 		  player_name(other),
 		  nation_adjective_for_player(other),
-		  diplstate_type_translated_name(state->type));
+		  diplstate_text(state->type));
       namelist_ptrs[i] = namelist_text[i];
       i++;
     } players_iterate_end;

@@ -13,10 +13,6 @@
 #ifndef FC__STRING_VECTOR_H
 #define FC__STRING_VECTOR_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "support.h"            /* bool type. */
 
 struct astring;
@@ -66,9 +62,5 @@ const char *strvec_to_and_list(const struct strvec *psv,
 #define strvec_iterate_end \
   } \
 }
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif /* FC__STRING_VECTOR_H */

@@ -14,10 +14,6 @@
 #ifndef FC__IOZ_H
 #define FC__IOZ_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 /********************************************************************** 
   An IO layer to support transparent compression/uncompression.
   (Currently only "required" functionality is supported.)
@@ -30,7 +26,7 @@ extern "C" {
 struct fz_FILE_s;		  /* opaque */
 typedef struct fz_FILE_s fz_FILE;
 
-/* (Possibly) supported methods (depending on fc_config.h). */
+/* (Possibly) supported methods (depending on config.h). */
 enum fz_method {
   FZ_PLAIN = 0,
 #ifdef HAVE_LIBZ
@@ -38,9 +34,6 @@ enum fz_method {
 #endif
 #ifdef HAVE_LIBBZ2
   FZ_BZIP2,
-#endif
-#ifdef HAVE_LIBLZMA
-  FZ_XZ,
 #endif
 };
 
@@ -54,9 +47,5 @@ int fz_fprintf(fz_FILE *fp, const char *format, ...)
 
 int fz_ferror(fz_FILE *fp);     
 const char *fz_strerror(fz_FILE *fp);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__IOZ_H */

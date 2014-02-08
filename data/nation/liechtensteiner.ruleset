@@ -27,9 +27,9 @@ leaders = {
 
 ruler_titles = {
  "government",      "male_title",            "female_title"
- "Despotism",       _("Prince %s"),          _("Princess %s")
- "Monarchy",        _("Grand Prince %s"),    _("Grand Princess %s")
- "Fundamentalism",  _("Bishop %s"),          _("Mother Superior %s")
+ "Monarchy",        _("Prince %s"),          _("Princess %s")
+ "Democracy",       _("Prime Minister %s"),  _("?female:Prime Minister %s")
+ "Fundamentalism",  _("Bishop %s"),          _("?female:Bishop %s")
 }
 
 flag="liechtenstein"
@@ -38,6 +38,7 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 conflicts_with = "haitian" ;similar flag
 civilwar_nations = "austrian", "swiss"

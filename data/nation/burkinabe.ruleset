@@ -24,8 +24,9 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations="fulani", "kanem-bornu", "ivoirian"
+civilwar_nations="malian", "kanem-bornu", "ivoirian"
 
 cities =
  "Ouagadougou",

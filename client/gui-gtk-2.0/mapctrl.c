@@ -12,20 +12,18 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include <gtk/gtk.h>
 
-/* utility */
-#include "fcintl.h"
-#include "support.h"
-
-/* common */
+/* common & utility */
 #include "combat.h"
+#include "fcintl.h"
 #include "game.h"
 #include "map.h"
 #include "player.h"
+#include "support.h"
 #include "unit.h"
 
 #include "overview_common.h"
@@ -56,7 +54,7 @@ struct tmousepos { int x, y; };
 extern gint cur_x, cur_y;
 
 /**************************************************************************
-  Button released when showing info label
+...
 **************************************************************************/
 static gboolean popit_button_release(GtkWidget *w, GdkEventButton *event)
 {
@@ -81,9 +79,10 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 
   ptile = canvas_pos_to_tile(mousepos->x, mousepos->y);
   if (tile_to_canvas_pos(&x, &y, ptile)) {
-    gint minx, miny, maxy;
+    gint minx, miny, maxx, maxy;
 
     gdk_window_get_origin(map_canvas->window, &minx, &miny);
+    maxx = minx + map_canvas->allocation.width;
     maxy = miny + map_canvas->allocation.height;
 
     if (x > mapview.width/2) {
@@ -153,7 +152,7 @@ static void popit(GdkEventButton *event, struct tile *ptile)
 }
 
 /**************************************************************************
-  Information label destruction requested
+...
 **************************************************************************/
 void popupinfo_popdown_callback(GtkWidget *w, gpointer data)
 {
@@ -346,7 +345,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 }
 
 /**************************************************************************
-  Update goto line so that destination is at current mouse pointer location.
+...
 **************************************************************************/
 void create_line_at_mouse_pos(void)
 {
@@ -440,7 +439,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
 }
 
 /**************************************************************************
-  Overview canvas moved
+...
 **************************************************************************/
 gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
@@ -449,7 +448,7 @@ gboolean move_overviewcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 }
 
 /**************************************************************************
-  Button pressed at overview
+...
 **************************************************************************/
 gboolean butt_down_overviewcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
 {

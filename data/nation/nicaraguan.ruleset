@@ -31,6 +31,7 @@ ruler_titles = {
  "Communism",       _("Comandante %s"),       _("Comandanta %s")
  "Despotism",       _("General %s"),          _("?female:General %s")
  "Fundamentalism",  _("Padre %s"),            _("Madre %s")
+ "Republic",        _("Supreme Director %s"), _("Supreme Directrice %s")
 }
 
 flag = "nicaragua"
@@ -39,6 +40,7 @@ city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations = "costa rican", "miskito"
 

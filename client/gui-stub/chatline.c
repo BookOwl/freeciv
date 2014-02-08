@@ -12,14 +12,10 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* client */
 #include "climisc.h"      /* for write_chatline_content */
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "chatline.h"
 
@@ -27,9 +23,9 @@
   Appends the string to the chat output window.  The string should be
   inserted on its own line, although it will have no newline.
 **************************************************************************/
-void gui_real_output_window_append(const char *astring,
-                                   const struct text_tag_list *tags,
-                                   int conn_id)
+void real_output_window_append(const char *astring,
+                               const struct text_tag_list *tags,
+                               int conn_id)
 {
   /* PORTME */
 }

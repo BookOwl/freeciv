@@ -11,14 +11,11 @@
    GNU General Public License for more details.
 ***********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
-#include "rand.h"
-
-/* common */
 #include "map.h"
+#include "rand.h"
 
 #include "height_map.h"
 #include "mapgen_topology.h"
@@ -165,8 +162,8 @@ liklihood of continents butting up to non-wrapped edges.
 **************************************************************************/
 void make_pseudofractal1_hmap(int extra_div)
 {
-  const bool xnowrap = !current_topo_has_flag(TF_WRAPX);
-  const bool ynowrap = !current_topo_has_flag(TF_WRAPY);
+  const bool xnowrap = !topo_has_flag(TF_WRAPX);
+  const bool ynowrap = !topo_has_flag(TF_WRAPY);
 
   /* 
    * How many blocks should the x and y directions be divided into

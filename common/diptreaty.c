@@ -12,15 +12,12 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* utility */
+#include "game.h"
 #include "log.h"
 #include "mem.h"
-
-/* common */
-#include "game.h"
 #include "player.h"
 
 #include "diptreaty.h"
@@ -38,11 +35,6 @@ bool diplomacy_possible(const struct player *pplayer1,
     return (!pplayer1->ai_controlled && !pplayer2->ai_controlled);
   case DIPLO_FOR_AIS:
     return (pplayer1->ai_controlled && pplayer2->ai_controlled);
-  case DIPLO_NO_AIS:
-    return (!pplayer1->ai_controlled || !pplayer2->ai_controlled);
-  case DIPLO_NO_MIXED:
-    return ((pplayer1->ai_controlled && pplayer2->ai_controlled)
-            || (!pplayer1->ai_controlled && !pplayer2->ai_controlled));
   case DIPLO_FOR_TEAMS:
     return players_on_same_team(pplayer1, pplayer2);
   case DIPLO_DISABLED:
@@ -87,7 +79,7 @@ bool could_intel_with_player(const struct player *pplayer,
 }
 
 /****************************************************************
-  Initialize treaty structure between two players.
+...
 *****************************************************************/
 void init_treaty(struct Treaty *ptreaty, 
 		 struct player *plr0, struct player *plr1)
@@ -111,7 +103,7 @@ void clear_treaty(struct Treaty *ptreaty)
 }
 
 /****************************************************************
-  Remove clause from treaty
+...
 *****************************************************************/
 bool remove_clause(struct Treaty *ptreaty, struct player *pfrom, 
 		  enum clause_type type, int val)
@@ -134,7 +126,7 @@ bool remove_clause(struct Treaty *ptreaty, struct player *pfrom,
 
 
 /****************************************************************
-  Add clause to treaty.
+...
 *****************************************************************/
 bool add_clause(struct Treaty *ptreaty, struct player *pfrom, 
 		enum clause_type type, int val)

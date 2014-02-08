@@ -20,14 +20,7 @@
     pete@shinners.org
 */
 
-#ifdef HAVE_CONFIG_H
-#include <fc_config.h>
-#endif
-
 #include "SDL.h"
-
-/* utility.h */
-#include "shared.h"
 
 int pygame_AlphaBlit (SDL_Surface *src, SDL_Rect *srcrect,
                    SDL_Surface *dst, SDL_Rect *dstrect);
@@ -56,11 +49,9 @@ extern int SDL_RLESurface(SDL_Surface *surface);
 extern void SDL_UnRLESurface(SDL_Surface *surface, int recode);
 
 
-/**********************************************************************
-  Blit from source rectangle to destination rectangle with alpha.
-  If dstrect is NULL, full dst surface is used.
-  We assume the "dst" has pixel alpha.
-***********************************************************************/
+
+/*we assume the "dst" has pixel alpha*/
+
 int pygame_AlphaBlit (SDL_Surface *src, SDL_Rect *srcrect,
                    SDL_Surface *dst, SDL_Rect *dstrect)
 {
@@ -153,10 +144,6 @@ int pygame_AlphaBlit (SDL_Surface *src, SDL_Rect *srcrect,
         return 0;
 }
 
-/**********************************************************************
-  Blit using alpha from src to dest. Rectangles are assumed to be
-  already clipped.
-***********************************************************************/
 static int SoftBlitAlpha(SDL_Surface *src, SDL_Rect *srcrect,
                         SDL_Surface *dst, SDL_Rect *dstrect)
 {
@@ -247,46 +234,38 @@ do {                                                                       \
 } while(0)
 
 
-#define DISEMBLE_RGB(buf, bpp, fmt, pixel, R, G, B)                          \
-do {                                                                         \
-        if(bpp==1){                                                          \
-            pixel = *((Uint8 *)(buf));                                       \
-            R = fmt->palette->colors[pixel].r;                               \
-            G = fmt->palette->colors[pixel].g;                               \
-            B = fmt->palette->colors[pixel].b;                               \
-        } else {                                                             \
-        switch (bpp) {                                                       \
-                case 2:                                                      \
-                        pixel = *((Uint16 *)(buf));                          \
-                break;                                                       \
-                case 4:                                                      \
-                        pixel = *((Uint32 *)(buf));                          \
-                break;                                                       \
-                default:        {/* case 3: FIXME: broken code (no alpha) */ \
-                        Uint8 *b = (Uint8 *)buf;                             \
-                        if(SDL_BYTEORDER == SDL_LIL_ENDIAN) {                \
-                                pixel = b[0] + (b[1] << 8) + (b[2] << 16);   \
-                        } else {                                             \
-                                pixel = (b[0] << 16) + (b[1] << 8) + b[2];   \
-                        }                                                    \
-                }                                                            \
-                break;                                                       \
-            }                                                                \
-            R = ((pixel&fmt->Rmask)>>fmt->Rshift)<<fmt->Rloss;               \
-            G = ((pixel&fmt->Gmask)>>fmt->Gshift)<<fmt->Gloss;               \
-            B = ((pixel&fmt->Bmask)>>fmt->Bshift)<<fmt->Bloss;               \
-        }                                                                    \
-} while(FALSE);
-
-#define DISEMBLE_RGBA(buf, bpp, fmt, pixel, R, G, B, A)                      \
-do {                                                                         \
-  DISEMBLE_RGB(buf, bpp, fmt, pixel, R, G, B);                               \
-  if (bpp == 1) {                                                            \
-    A = 255;                                                                 \
-  } else {                                                                   \
-    A = ((pixel&fmt->Amask)>>fmt->Ashift)<<fmt->Aloss;                       \
-  }                                                                          \
-} while(FALSE);
+#define DISEMBLE_RGBA(buf, bpp, fmt, pixel, R, G, B, A)                    \
+do {                                                                       \
+        if(bpp==1){\
+            pixel = *((Uint8 *)(buf));                           \
+            R = fmt->palette->colors[pixel].r; \
+            G = fmt->palette->colors[pixel].g; \
+            B = fmt->palette->colors[pixel].b; \
+            A = 255; \
+        } else { \
+        switch (bpp) {                                                           \
+                case 2:                                                           \
+                        pixel = *((Uint16 *)(buf));                           \
+                break;                                                           \
+                case 4:                                                           \
+                        pixel = *((Uint32 *)(buf));                           \
+                break;                                                           \
+                default:        {/* case 3: FIXME: broken code (no alpha) */                   \
+                        Uint8 *b = (Uint8 *)buf;                           \
+                        if(SDL_BYTEORDER == SDL_LIL_ENDIAN) {                   \
+                                pixel = b[0] + (b[1] << 8) + (b[2] << 16); \
+                        } else {                                           \
+                                pixel = (b[0] << 16) + (b[1] << 8) + b[2]; \
+                        }                                                   \
+                }                                                           \
+                break;                                                           \
+            }                                                                   \
+            R = ((pixel&fmt->Rmask)>>fmt->Rshift)<<fmt->Rloss;                 \
+            G = ((pixel&fmt->Gmask)>>fmt->Gshift)<<fmt->Gloss;                 \
+            B = ((pixel&fmt->Bmask)>>fmt->Bshift)<<fmt->Bloss;                 \
+            A = ((pixel&fmt->Amask)>>fmt->Ashift)<<fmt->Aloss;                 \
+        }\
+} while(0)
 
 #define PIXEL_FROM_RGBA(pixel, fmt, r, g, b, a)                         \
 {                                                                       \
@@ -321,7 +300,7 @@ do {                                            \
         dB = (((sB-dB)*(sA))>>8)+dB;                \
         dA = sA+dA - ((sA*dA)/255);                \
 } while(0)
-#else /* 0 */
+#else
 #define ALPHA_BLEND(sR, sG, sB, sA, dR, dG, dB, dA)  \
 do {   if(dA){\
         dR = ( ((255-sA)*dR ) + ((sR*sA)) ) >> 8;                \
@@ -335,7 +314,7 @@ do {   if(dA){\
         dA = sA;               \
     }\
 } while(0)
-#endif /* !0 */
+#endif
 
 #if 0
 /* a sad tale of many other blending techniques that didn't fly */
@@ -364,12 +343,10 @@ do {   if(dA){\
         dR = (((dR - sR) * (255-sA) * dA) >> 16) + (sR*sA)>>8);
         dG = (((dG - sG) * (255-sA) * dA) >> 16) + (sG*sA)>>8);
         dB = (((dB - sB) * (255-sA) * dA) >> 16) + (sB*sA)>>8);
-#endif /* 0 */
+#endif
 
 
-/**********************************************************************
-  Basic alpha blitting
-***********************************************************************/
+
 static void alphablit_alpha(SDL_BlitInfo *info)
 {
         int n;
@@ -402,9 +379,6 @@ static void alphablit_alpha(SDL_BlitInfo *info)
         }
 }
 
-/**********************************************************************
-  Blit using colorkey
-***********************************************************************/
 static void alphablit_colorkey(SDL_BlitInfo *info)
 {
         int n;
@@ -440,9 +414,7 @@ static void alphablit_colorkey(SDL_BlitInfo *info)
         }
 }
 
-/**********************************************************************
-  Blit solid surface
-***********************************************************************/
+
 static void alphablit_solid(SDL_BlitInfo *info)
 {
         int n;
@@ -456,7 +428,7 @@ static void alphablit_solid(SDL_BlitInfo *info)
         SDL_PixelFormat *dstfmt = info->dst;
         int srcbpp = srcfmt->BytesPerPixel;
         int dstbpp = dstfmt->BytesPerPixel;
-        int dR, dG, dB, dA, sR, sG, sB;
+        int dR, dG, dB, dA, sR, sG, sB, sA;
         int alpha = srcfmt->alpha;
 
         while ( height-- )
@@ -465,7 +437,7 @@ static void alphablit_solid(SDL_BlitInfo *info)
             {
                 int pixel;
                 DISEMBLE_RGBA(dst, dstbpp, dstfmt, pixel, dR, dG, dB, dA);
-                DISEMBLE_RGB(src, srcbpp, srcfmt, pixel, sR, sG, sB);
+                DISEMBLE_RGBA(src, srcbpp, srcfmt, pixel, sR, sG, sB, sA);
                 ALPHA_BLEND(sR, sG, sB, alpha, dR, dG, dB, dA);
                 ASSEMBLE_RGBA(dst, dstbpp, dstfmt, dR, dG, dB, dA);
                 src += srcbpp;

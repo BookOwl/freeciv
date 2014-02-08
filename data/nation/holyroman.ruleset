@@ -24,13 +24,11 @@ leaders = {
  "Ferdinandus I",               "Male"
  "Carolus VII Albertus",        "Male"
  "Franciscus II",               "Male"
- "Maria Theresia",              "Female"
 }
 
 ruler_titles = {
  "government",      "male_title",       "female_title"
- "Anarchy",        _("Pretender %s"),   _("?female:Pretender %s")
- "Democracy",      _("Chancellor %s"),  _("?female:Chancellor %s") 
+ "Republic",       _("Chancellor %s"),  _("?female:Chancellor %s") 
  "Fundamentalism", _("Pope %s"),        _("Popess %s")
  "Monarchy",       _("Emperor %s"),     _("Empress %s")
 }
@@ -41,6 +39,7 @@ city_style   = "European"
 
 init_techs = ""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 
 conflicts_with = "German", "Roman", "East German"
@@ -52,8 +51,8 @@ cities =
  "Norimberga (hills, mountains, river, !ocean)",			;Nuremberg
  "Roma (hills, plains)",						;Rome
  "Moguntiacum (plains, hills, river, !ocean)",				;Mainz
- "Colonia (plains, hills, river)",					;Cologne
- "Treveris (forest, river, !ocean)",					;Trier
+ "Colonia Agrippina  (plains, hills, river)",				;Cologne
+ "Augusta Treverorum (forest, river, !ocean)",				;Trier
  "Praga (hills, plains, forest, river, !ocean)",			;Prague
  "Brandenburgum (plains, forest)",					;Brandenburg
  "Dresda (plains, hills, river, !ocean)",				;Dresden
@@ -91,7 +90,7 @@ cities =
  "Bruna (hills, forest, !ocean)",					;Brno
  "Avennio Cavarum (plains, river, hills, mountains)",			;Avignon
  "Francofurtum ad Moenum  (grassland, hills, river, !ocean)", 		;Frankfurt am Main
- "Stratisburgum (river, plains, !ocean)",				;Strasbourg
+ "Argentoratum (river, plains, !ocean)",				;Strasbourg
  "Landshuta (forest, hills, !ocean)",					;Landshut
  "Mons Billiardae (hills, forest, !ocean)",				;Montbéliard
  "Smalcaldia (forest, hills, !ocean)",					;Schmalkalden
@@ -116,7 +115,7 @@ cities =
  "Turicum (hills, mountains, !ocean)",					;Zürich
  "Parma (grassland)",							;Parma
  "Cameracum (grassland, plains)",					;Cambrai
- "Taurinum (grassland, river)",						;Turin
+ "Augusta Taurinorum (grassland, river)",				;Turin
  "Antverpia (grassland, plains, swamp, river, ocean)",			;Antwerp
  "Tremonia  (grassland, hills)",					;Dortmund
  "Genava (river, mountains, hills, !ocean)",				;Geneva

@@ -17,7 +17,6 @@ leaders = {
 
 ruler_titles = {
  "government",       "male_title",       "female_title"
- "Democracy", _("Minister-President %s"), _("?female:Minister-President %s")
  "Despotism",        _("Duke %s"),       _("Duchess %s")
  "Fundamentalism",   _("Bishop %s"),     _("?female:Bishop %s")
 }
@@ -28,11 +27,11 @@ city_style = "European"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
-civilwar_nations = "sorbian", "hanoverian", "thuringian", "anhaltian"
+civilwar_nations = "sorbian", "hanoverian"
 
 cities =
-; Electoral/Royal Saxony
   "Wittenberg",
   "Dresden",
   "Leipzig",
@@ -67,33 +66,4 @@ cities =
   "Döbeln",
   "Rochlitz",
   "Auerbach",
-  "Oelsnitz",
-
-; Prussian Province of Saxony
-  "Magdeburg",
-  "Halle/Saale",
-  "Mühlhausen",
-  "Halberstadt",
-  "Stendal",
-  "Nordhausen",
-  "Quedlinburg",
-  "Bad Langensalza",
-
-; Saxon duchies
-  "Weimar",
-  "Gotha",
-  "Coburg",
-  "Altenburg",
-  "Meinigen",
-  "Hildburghausen",
-  "Saalfeld",
-  "Lauenburg/Elbe",
-
-; Lower Saxony
-  "Hannover",
-  "Oldenburg",
-  "Osnabrück",
-  "Braunschweig",
-  "Lüneburg",
-  "Göttingen",
-  "Salzgitter"
+  "Oelsnitz"

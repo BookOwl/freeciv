@@ -38,6 +38,8 @@ ruler_titles = {
  ;    ancient kingdom which occupied much of present-day 
  ;    Uganda. */
  "Monarchy",   _("Kabaka %s"),          _("?female:Kabaka %s")
+ ; The President, not Prime Minister, is head of government
+ ; in Uganda.
 }
 
 flag="uganda"
@@ -46,6 +48,7 @@ city_style = "tropical"
 
 init_techs=""
 init_buildings=""
+init_government="Despotism"
 init_units=""
 civilwar_nations="british", "kenyan", "sudanese", "rwandan"
    ; "tanzania" when ruleset available

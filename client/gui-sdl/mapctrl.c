@@ -19,7 +19,7 @@
     email                : Rafał Bursig <bursig@poczta.fm>
  **********************************************************************/
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
 #include "SDL.h"
@@ -744,7 +744,7 @@ static void popup_minimap_scale_dialog(void)
   
   area.h += adj_size(20); 
 
-  resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+  resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                 (pWindow->size.w - pWindow->area.w) + area.w,
                 (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -1086,7 +1086,7 @@ static void popup_unitinfo_scale_dialog(void)
   area.h += pBuf->size.h + adj_size(10);
   area.w = MAX(area.w, pBuf->size.w + adj_size(20));
   
-  resize_window(pWindow, NULL, get_theme_color(COLOR_THEME_BACKGROUND),
+  resize_window(pWindow, NULL, get_game_colorRGB(COLOR_THEME_BACKGROUND),
                 (pWindow->size.w - pWindow->area.w) + area.w,
                 (pWindow->size.h - pWindow->area.h) + area.h);
 
@@ -2370,13 +2370,10 @@ bool map_event_handler(SDL_keysym Key)
           key_map_borders_toggle();
         }
         return FALSE;
-
+  
+      /* show city names - Ctrl+n */
       case SDLK_n:
-        /* show native tiles - Ctrl+Shift+n */ 
-        if ((LCTRL || RCTRL) && (LSHIFT || RSHIFT)) {
-          key_map_native_toggle();
-        } else if (LCTRL || RCTRL) {
-          /* show city names - Ctrl+n */
+        if (LCTRL || RCTRL) {
           key_city_names_toggle();
         }
         return FALSE;
@@ -2611,7 +2608,7 @@ void popup_newcity_dialog(struct unit *pUnit, const char *pSuggestname)
 					  _("OK"), adj_font(10), 0);
   pOK_Button->action = newcity_ok_callback;
   pOK_Button->key = SDLK_RETURN;  
-  pOK_Button->data.tile = unit_tile(pUnit);
+  pOK_Button->data.tile = pUnit->tile;  
 
   area.h += pOK_Button->size.h;
 
@@ -2621,7 +2618,7 @@ void popup_newcity_dialog(struct unit *pUnit, const char *pSuggestname)
   			pWindow->dst, _("Cancel"), adj_font(10), 0);
   pCancel_Button->action = newcity_cancel_callback;
   pCancel_Button->key = SDLK_ESCAPE; 
-  pCancel_Button->data.tile = unit_tile(pUnit);
+  pCancel_Button->data.tile = pUnit->tile; 
 
   /* correct sizes */
   pCancel_Button->size.w += adj_size(5);
@@ -2630,7 +2627,7 @@ void popup_newcity_dialog(struct unit *pUnit, const char *pSuggestname)
   /* create text label */
   pStr = create_str16_from_char(_("What should we call our new city?"), adj_font(10));
   pStr->style |= (TTF_STYLE_BOLD|SF_CENTER);
-  pStr->fgcol = *get_theme_color(COLOR_THEME_NEWCITYDLG_TEXT);
+  pStr->fgcol = *get_game_colorRGB(COLOR_THEME_NEWCITYDLG_TEXT);
   pLabel = create_iconlabel(NULL, pWindow->dst, pStr, WF_DRAW_TEXT_LABEL_WITH_SPACE);
   
   area.h += pLabel->size.h;

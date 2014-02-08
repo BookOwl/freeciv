@@ -12,15 +12,11 @@
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
-#include <fc_config.h>
+#include <config.h>
 #endif
 
-/* common */
 #include "game.h"
 #include "government.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "dialogs.h"
 
@@ -73,24 +69,8 @@ void popdown_races_dialog(void)
 /**************************************************************************
   Popup a dialog window to select units on a particular tile.
 **************************************************************************/
-void unit_select_dialog_popup(struct tile *ptile)
+void popup_unit_select_dialog(struct tile *ptile)
 {
-  /* PORTME */
-}
-
-/**************************************************************************
-  Update the dialog window to select units on a particular tile.
-**************************************************************************/
-void unit_select_dialog_update_real(void)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  The server has changed the set of selectable nations.
-**************************************************************************/
-void races_update_pickable(void)
-{ 
   /* PORTME */
 }
 
@@ -174,7 +154,8 @@ void popup_sabotage_dialog(struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras may_pillage)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases)
 {
   /* PORTME */
 }
@@ -192,15 +173,6 @@ void popup_disband_dialog(struct unit_list *punits)
   user and load.
 **************************************************************************/
 void popup_tileset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
 {
   /* PORTME */
 }
@@ -245,22 +217,6 @@ void close_diplomat_dialog(void)
   Updates caravan dialog
 ****************************************************************/
 void caravan_dialog_update(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Show tileset error dialog.
-*****************************************************************/
-void show_tileset_error(const char *msg)
 {
   /* PORTME */
 }
