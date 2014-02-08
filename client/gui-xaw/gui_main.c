@@ -17,10 +17,6 @@
 #endif
 
 #ifdef AUDIO_SDL
-/* Though it would happily compile without this include,
- * it is needed for sound to work as long as SDL-1.2 mixer is
- * being used. It defines "main" macro to rename our main() so that
- * it can install SDL's own. */
 #include "SDL.h"
 #endif
 
@@ -69,7 +65,7 @@
 #include "tilespec.h"
 
 /* gui-xaw */
-#include "xaw_actions.h"
+#include "actions.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -917,7 +913,7 @@ void set_unit_icon(int idx, struct unit *punit)
   if (punit) {
     struct canvas store = {XawPixcommPixmap(w)};
 
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
     xaw_expose_now(w);
   }
 }

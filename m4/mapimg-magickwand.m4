@@ -14,7 +14,7 @@ AC_DEFUN([FC_MAPIMG_MAGICKWAND],
       AC_SUBST(MAPIMG_WAND_CFLAGS)
       AC_SUBST(MAPIMG_WAND_LIBS)
 
-      AC_DEFINE([HAVE_MAPIMG_MAGICKWAND], [1], [Have magicwand mapimg toolkit])
+      AC_DEFINE(HAVE_MAPIMG_MAGICKWAND,1,[ ])
       mapimg_magickwand=yes
     ],
     [
@@ -22,7 +22,6 @@ AC_DEFUN([FC_MAPIMG_MAGICKWAND],
         AC_MSG_ERROR([mapimg toolkit magickwandclient not available])
       fi
       mapimg_magickwand=no
-      feature_magickwand=missing
     ])
   fi
 ])

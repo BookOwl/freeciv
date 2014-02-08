@@ -625,7 +625,7 @@ static SDL_Surface *create_unit_surface(struct unit *pUnit, bool support, int w,
                                 tileset_full_tile_width(tileset),
                                 tileset_full_tile_height(tileset));  
   
-  put_unit(pUnit, destcanvas, 1.0, 0, 0);
+  put_unit(pUnit, destcanvas, 0, 0);
   
   src_rect = get_smaller_surface_rect(destcanvas->surf);
   pSurf = create_surf_alpha(src_rect.w, src_rect.h, SDL_SWSURFACE);
@@ -1985,7 +1985,7 @@ static void redraw_info_city_dialog(struct widget *pCityWindow,
   step = 0;
   dest.x = pCityWindow->size.x + adj_size(10);
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     if (pCity->trade[i]) {
       step += pCity->trade_value[i];
 

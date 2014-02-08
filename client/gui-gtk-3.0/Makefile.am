@@ -5,7 +5,7 @@ AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include \
 	-I$(top_srcdir)/utility -I$(top_srcdir)/common \
 	-I$(top_srcdir)/common/aicore -I$(top_srcdir)/common/scriptcore \
 	-I$(srcdir)/../agents  -I$(srcdir)/../luascript \
-	$(GUI_gtk3_CFLAGS) $(GGZ_GTK_INCLUDES) $(SOUND_CFLAGS)
+	$(GUI_gtk3_CFLAGS) $(SOUND_CFLAGS) $(GGZ_GTK_INCLUDES)
 
 libgui_gtk3_la_SOURCES = \
 	canvas.c	\
@@ -79,7 +79,6 @@ libgui_gtk3_la_SOURCES = \
 	ratesdlg.h	\
 	repodlgs.c	\
 	repodlgs.h	\
-	soundset_dlg.c	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
 	sprite.c	\

@@ -45,7 +45,6 @@
 #include "packets.h"
 #include "player.h"
 #include "spaceship.h"
-#include "victory.h"
 
 /* client */
 #include "client_main.h"
@@ -117,23 +116,22 @@ struct spaceship_dialog *get_spaceship_dialog(struct player *pplayer)
 }
 
 /****************************************************************
-  Refresh (update) the spaceship dialog for the given player.
+...
 *****************************************************************/
 void refresh_spaceship_dialog(struct player *pplayer)
 {
   struct spaceship_dialog *pdialog;
   struct player_spaceship *pship;
 
-  if (!(pdialog = get_spaceship_dialog(pplayer))) {
+  if(!(pdialog=get_spaceship_dialog(pplayer)))
     return;
-  }
 
-  pship = &(pdialog->pplayer->spaceship);
+  pship=&(pdialog->pplayer->spaceship);
 
-  if (victory_enabled(VC_SPACERACE)
-      && pplayer == client.conn.playing
-      && pship->state == SSHIP_STARTED
-      && pship->success_rate > 0) {
+  if (game.info.spacerace
+     && pplayer == client.conn.playing
+     && pship->state == SSHIP_STARTED
+     && pship->success_rate > 0) {
     XtSetSensitive(pdialog->launch_command, TRUE);
   } else {
     XtSetSensitive(pdialog->launch_command, FALSE);

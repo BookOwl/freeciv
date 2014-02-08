@@ -17,7 +17,6 @@
 
 /* common */
 #include "ai.h"
-#include "player.h"
 
 const char *fc_ai_stub_capstr(void);
 bool fc_ai_stub_setup(struct ai_type *ai);
@@ -31,22 +30,11 @@ const char *fc_ai_stub_capstr(void)
 }
 
 /**************************************************************************
-  Set phase done
-**************************************************************************/
-static void stub_end_turn(struct player *pplayer)
-{
-  pplayer->ai_phase_done = TRUE;
-}
-
-/**************************************************************************
   Setup player ai_funcs function pointers.
 **************************************************************************/
 bool fc_ai_stub_setup(struct ai_type *ai)
 {
   strncpy(ai->name, "stub", sizeof(ai->name));
-
-  ai->funcs.first_activities = stub_end_turn;
-  ai->funcs.restart_phase    = stub_end_turn;
 
   return TRUE;
 }

@@ -2,6 +2,7 @@
 
 files=`find $1 -name "*.h" \
        | sort \
+       | grep -v intl \
        | grep -v common/spec \
        | grep -v "Freeciv\.h" \
        | grep -v \./common/packets_gen\.h \

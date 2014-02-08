@@ -70,7 +70,6 @@ static const char *event_sections[] = {
 /*
  * Holds information about all event types. The entries don't have
  * to be sorted.
- * Every E_* event defined in common/events.h should have an entry here.
  */
 static struct {
   const char *enum_name;
@@ -112,7 +111,6 @@ static struct {
   GEN_EV(E_CITY_RADIUS_SQ,	E_S_CITY,	N_("City Map changed")),
   GEN_EV(E_WORKLIST,		E_S_CITY,	N_("Worklist Events")),
   GEN_EV(E_CITY_PRODUCTION_CHANGED, E_S_CITY,	N_("Production changed")),
-  GEN_EV(E_DISASTER,            E_S_CITY,       N_("Disaster")),
   GEN_EV(E_MY_DIPLOMAT_BRIBE,		E_S_D_ME,	N_("Bribe")),
   GEN_EV(E_DIPLOMATIC_INCIDENT,		E_S_D_ME,	N_("Caused Incident")),
   GEN_EV(E_MY_DIPLOMAT_ESCAPE,		E_S_D_ME,	N_("Escape")),
@@ -139,7 +137,6 @@ static struct {
   GEN_EV(E_HUT_SETTLER,		E_S_HUT,	N_("Settler Found in Hut")),
   GEN_EV(E_HUT_TECH,		E_S_HUT,	N_("Tech Found in Hut")),
   GEN_EV(E_HUT_BARB_CITY_NEAR,	E_S_HUT,	N_("Unit Spared by Barbarians")),
-  GEN_EV(E_ACHIEVEMENT,         E_S_NATION,     N_("Achievements")),
   GEN_EV(E_UPRISING,		E_S_NATION,	N_("Barbarian Uprising")),
   GEN_EV(E_CIVIL_WAR,		E_S_NATION,	N_("Civil War")),
   GEN_EV(E_ANARCHY,		E_S_NATION,	N_("Collapse to Anarchy")),
@@ -246,7 +243,7 @@ static int compar_event_message_texts(const void *i1, const void *i2)
 /****************************************************************************
   Returns a string for the sound to be used for this message type.
 ****************************************************************************/
-const char *get_event_tag(enum event_type event)
+const char *get_event_sound_tag(enum event_type event)
 {
   fc_assert_ret_val(event_type_is_valid(event), NULL);
 

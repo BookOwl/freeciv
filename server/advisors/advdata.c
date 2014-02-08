@@ -49,9 +49,6 @@
 #include "advtools.h"
 #include "autosettlers.h"
 
-/* ai */
-#include "handicaps.h"
-
 #include "advdata.h"
 
 static void adv_dipl_new(const struct player *plr1,
@@ -149,11 +146,11 @@ static bool player_has_really_useful_tech_parasite(struct player* pplayer)
   if (players_needed == 0) {
     return FALSE;
   }
-
+  
   advance_index_iterate(A_FIRST, tech) {
     int players_having;
 
-    if (!player_invention_gettable(pplayer, tech, game.info.tech_parasite_allow_holes)
+    if (!player_invention_reachable(pplayer, tech, FALSE)
         || TECH_KNOWN == player_invention_state(pplayer, tech)) {
       continue;
     }
@@ -215,13 +212,13 @@ static void count_my_units(struct player *pplayer)
       adv->stats.units.sea++;
     }
 
-    if (unit_has_type_flag(punit, UTYF_TRIREME)) {
+    if (unit_has_type_flag(punit, F_TRIREME)) {
       adv->stats.units.triremes++;
     }
     if (uclass_has_flag(unit_class(punit), UCF_MISSILE)) {
       adv->stats.units.missiles++;
     }
-    if (unit_has_type_flag(punit, UTYF_PARATROOPERS)) {
+    if (unit_has_type_flag(punit, F_PARATROOPERS)) {
       adv->stats.units.paratroopers++;
     }
     if (can_upgrade_unittype(pplayer, unit_type(punit)) >= 0) {
@@ -270,7 +267,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   TIMING_LOG(AIT_AIDATA, TIMER_START);
 
-  nuke_units = num_role_units(UTYF_NUCLEAR);
+  nuke_units = num_role_units(F_NUCLEAR);
   danger_of_nukes = FALSE;
 
   /*** Threats ***/
@@ -300,7 +297,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
     } city_list_iterate_end;
 
     unit_list_iterate(aplayer->units, punit) {
-      if (unit_has_type_flag(punit, UTYF_IGWALL)) {
+      if (unit_has_type_flag(punit, F_IGWALL)) {
         adv->threats.igwall = TRUE;
       }
 
@@ -343,14 +340,14 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
       }
 
       /* If he builds nukes, worry a lot. */
-      if (unit_has_type_flag(punit, UTYF_NUCLEAR)) {
+      if (unit_has_type_flag(punit, F_NUCLEAR)) {
         danger_of_nukes = TRUE;
       }
     } unit_list_iterate_end;
 
     /* Check for nuke capability */
     for (i = 0; i < nuke_units; i++) {
-      struct unit_type *nuke = get_role_unit(UTYF_NUCLEAR, i);
+      struct unit_type *nuke = get_role_unit(F_NUCLEAR, i);
 
       if (can_player_build_unit_direct(aplayer, nuke)) { 
         adv->threats.nuclear = 1;
@@ -373,7 +370,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
     Continent_id continent = tile_continent(ptile);
 
     if (is_ocean_tile(ptile)) {
-      if (adv->explore.sea_done && has_handicap(pplayer, H_TARGETS) 
+      if (adv->explore.sea_done && ai_handicap(pplayer, H_TARGETS) 
           && !map_is_known(ptile, pplayer)) {
 	/* We're not done there. */
         adv->explore.sea_done = FALSE;
@@ -386,14 +383,14 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
       /* we don't need more explaining, we got the point */
       continue;
     }
-    if (tile_has_cause_extra(ptile, EC_HUT) 
-        && (!has_handicap(pplayer, H_HUTS)
+    if (tile_has_special(ptile, S_HUT) 
+        && (!ai_handicap(pplayer, H_HUTS)
              || map_is_known(ptile, pplayer))) {
       adv->explore.land_done = FALSE;
       adv->explore.continent[continent] = TRUE;
       continue;
     }
-    if (has_handicap(pplayer, H_TARGETS) && !map_is_known(ptile, pplayer)) {
+    if (ai_handicap(pplayer, H_TARGETS) && !map_is_known(ptile, pplayer)) {
       /* this AI must explore */
       adv->explore.land_done = FALSE;
       adv->explore.continent[continent] = TRUE;
@@ -416,7 +413,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
   unit_list_iterate(pplayer->units, punit) {
     struct tile *ptile = unit_tile(punit);
 
-    if (!is_ocean_tile(ptile) && unit_has_type_flag(punit, UTYF_SETTLERS)) {
+    if (!is_ocean_tile(ptile) && unit_has_type_flag(punit, F_SETTLERS)) {
       adv->stats.workers[(int)tile_continent(unit_tile(punit))]++;
     }
   } unit_list_iterate_end;
@@ -482,7 +479,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
    * than the best human players. This should lead to more exciting games
    * for the beginners.
    */
-  if (has_handicap(pplayer, H_EXPANSION)) {
+  if (ai_handicap(pplayer, H_EXPANSION)) {
     bool found_human = FALSE;
     adv->max_num_cities = 3;
     players_iterate_alive(aplayer) {
@@ -779,7 +776,7 @@ void adv_best_government(struct player *pplayer)
   adv->goal.govt.req = A_UNSET;
   adv->goal.revolution = current_gov;
 
-  if (has_handicap(pplayer, H_AWAY) || !pplayer->is_alive) {
+  if (ai_handicap(pplayer, H_AWAY) || !pplayer->is_alive) {
     return;
   }
 
@@ -787,7 +784,6 @@ void adv_best_government(struct player *pplayer)
     governments_iterate(gov) {
       int val = 0;
       int dist;
-      int revolution_turns;
 
       if (gov == game.government_during_revolution) {
         continue; /* pointless */
@@ -811,17 +807,13 @@ void adv_best_government(struct player *pplayer)
        * a very small amount here to choose govt in cases where
        * we have no cities yet. */
       bonus += get_player_bonus(pplayer, EFT_VETERAN_BUILD) > 0 ? 3 : 0;
+      bonus -= get_player_bonus(pplayer, EFT_REVOLUTION_WHEN_UNHAPPY) > 0 ? 3 : 0;
       bonus += get_player_bonus(pplayer, EFT_NO_INCITE) > 0 ? 4 : 0;
       bonus += get_player_bonus(pplayer, EFT_UNBRIBABLE_UNITS) > 0 ? 2 : 0;
       bonus += get_player_bonus(pplayer, EFT_INSPIRE_PARTISANS) > 0 ? 3 : 0;
       bonus += get_player_bonus(pplayer, EFT_RAPTURE_GROW) > 0 ? 2 : 0;
       bonus += get_player_bonus(pplayer, EFT_FANATICS) > 0 ? 3 : 0;
       bonus += get_player_bonus(pplayer, EFT_OUTPUT_INC_TILE) * 8;
-
-      revolution_turns = get_player_bonus(pplayer, EFT_REVOLUTION_UNHAPPINESS);
-      if (revolution_turns > 0) {
-        bonus -= 6 / revolution_turns;
-      }
 
       val += (val * bonus) / 100;
 
@@ -896,19 +888,19 @@ bool adv_is_player_dangerous(struct player *pplayer,
 {
   struct adv_dipl *dip;
   enum diplstate_type ds;
-  enum override_bool dang = NO_OVERRIDE;
+  enum danger_consideration dang = DANG_UNDECIDED;
 
   if (pplayer->ai_controlled) {
     /* Give AI code possibility to decide itself */
     CALL_PLR_AI_FUNC(consider_plr_dangerous, pplayer, pplayer, aplayer, &dang);
   }
 
-  if (dang == OVERRIDE_FALSE) {
+  if (dang == DANG_NOT) {
     return FALSE;
   }
 
-  if (dang == OVERRIDE_TRUE) {
-    return TRUE;
+  if (dang == DANG_YES) {
+    return TRUE;;
   }
 
   if (pplayer == aplayer) {

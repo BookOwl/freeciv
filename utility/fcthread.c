@@ -86,14 +86,7 @@ void fc_thread_wait(fc_thread *thread)
 ***********************************************************************/
 void fc_init_mutex(fc_mutex *mutex)
 {
-  pthread_mutexattr_t attr;
-
-  pthread_mutexattr_init(&attr);
-  pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-
-  pthread_mutex_init(mutex, &attr);
-
-  pthread_mutexattr_destroy(&attr);
+  pthread_mutex_init(mutex, NULL);
 }
 
 /**********************************************************************
@@ -249,7 +242,49 @@ void fc_release_mutex(fc_mutex *mutex)
 
 #else /* No thread implementation */
 
-#error "No working thread implementation"
+
+/* Basic thread functions */
+
+/**********************************************************************
+  Dummy fc_thread_start(). Just run given function in current thread.
+***********************************************************************/
+int fc_thread_start(fc_thread *thread, void (*function) (void *arg),
+                    void *arg)
+{
+  function(arg);
+
+  return 0;
+}
+
+/**********************************************************************
+  Dummy fc_thread_wait()
+***********************************************************************/
+void fc_thread_wait(fc_thread *thread)
+{}
+
+/**********************************************************************
+ Dummy fc_init_mutex()
+***********************************************************************/
+void fc_init_mutex(fc_mutex *mutex)
+{}
+
+/**********************************************************************
+  Dummy fc_destroy_mutex()
+***********************************************************************/
+void fc_destroy_mutex(fc_mutex *mutex)
+{}
+
+/**********************************************************************
+  Dummy fc_allocate_mutex()
+***********************************************************************/
+void fc_allocate_mutex(fc_mutex *mutex)
+{}
+
+/**********************************************************************
+  Dummy fc_release_mutex()
+***********************************************************************/
+void fc_release_mutex(fc_mutex *mutex)
+{}
 
 #endif /* HAVE_PTHREAD || HAVE_WINTHREADS */
 
@@ -283,6 +318,18 @@ void fc_thread_cond_signal(fc_thread_cond *cond)
 {}
 
 #endif /* !HAVE_THREAD_COND */
+
+/**********************************************************************
+  Has freeciv any kind of real thread implementation
+***********************************************************************/
+bool has_thread_impl(void)
+{
+#ifdef HAVE_THREADS
+  return TRUE;
+#else
+  return FALSE;
+#endif
+}
 
 /**********************************************************************
   Has freeciv thread condition variable implementation

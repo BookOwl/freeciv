@@ -279,8 +279,9 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
       Tech_type_id i = advance_number(padvance);
 
       if (player_invention_state(pgiver, i) == TECH_KNOWN
-          && player_invention_gettable(pother, i, game.info.tech_trade_allow_holes)
-          && player_invention_state(pother, i) != TECH_KNOWN) {
+          && player_invention_reachable(pother, i, FALSE)
+          && (player_invention_state(pother, i) == TECH_UNKNOWN
+              || player_invention_state(pother, i) == TECH_PREREQS_KNOWN)) {
         sorting_list = g_list_prepend(sorting_list, padvance);
       }
     } advance_iterate_end;
@@ -567,12 +568,12 @@ static void diplomacy_destroy(struct Diplomacy_dialog* pdialog)
   if (dialog_list) {
     /* Diplomatic meetings in one main tab. */
     if (dialog_list_size(dialog_list) > 0) {
-      if (dipl_main && dipl_main->dialog) {
-        gchar *buf;
+      char buf[128];
 
-        buf = g_strdup_printf(_("Diplomacy [%d]"), dialog_list_size(dialog_list));
+      fc_snprintf(buf, sizeof(buf), _("Diplomacy [%d]"),
+                  dialog_list_size(dialog_list));
+      if (dipl_main && dipl_main->dialog) {
         gui_dialog_set_title(dipl_main->dialog, buf);
-        g_free(buf);
       }
     } else if (dipl_main) {
       /* No meeting left - destroy main tab. */
@@ -628,8 +629,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   int i;
 
   struct Diplomacy_dialog *pdialog;
-  char plr_buf[4 * MAX_LEN_NAME];
-  gchar *buf;
+  char buf[256], plr_buf[4 * MAX_LEN_NAME];
 
   pdialog = fc_malloc(sizeof(*pdialog));
 
@@ -639,9 +639,9 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   /* Get main diplomacy tab. */
   dipl_dialog = diplomacy_main_create();
 
-  buf = g_strdup_printf(_("Diplomacy [%d]"), dialog_list_size(dialog_list));
+  fc_snprintf(buf, sizeof(buf), _("Diplomacy [%d]"),
+              dialog_list_size(dialog_list));
   gui_dialog_set_title(dipl_dialog->dialog, buf);
-  g_free(buf);
 
   notebook = dipl_dialog->notebook;
 
@@ -658,7 +658,7 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   gui_dialog_set_default_response(pdialog->dialog, RESPONSE_CANCEL_MEETING);
 
   /* Label for the new meeting. */
-  buf = g_strdup_printf("%s", nation_plural_for_player(plr1));
+  fc_snprintf(buf, sizeof(buf), "%s", nation_plural_for_player(plr1));
   gui_dialog_set_title(pdialog->dialog, buf);
 
   /* Sort meeting tabs alphabetically by the tab label. */
@@ -676,7 +676,6 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
       break;
     }
   }
-  g_free(buf);
 
   /* Content. */
   mainbox = pdialog->dialog->vbox;
@@ -692,10 +691,9 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   /* Our nation. */
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  buf = g_strdup_printf("<span size=\"large\"><u>%s</u></span>",
-                        nation_plural_for_player(plr0));
+  fc_snprintf(buf, sizeof(buf), "<span size=\"large\"><u>%s</u></span>",
+              nation_plural_for_player(plr0));
   gtk_label_set_markup(GTK_LABEL(label), buf);
-  g_free(buf);
   gtk_container_add(GTK_CONTAINER(vbox), label);
 
   hbox = gtk_grid_new();
@@ -712,10 +710,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   label = gtk_label_new(NULL);
   gtk_widget_set_hexpand(label, TRUE);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  buf = g_strdup_printf("<span size=\"large\" weight=\"bold\">%s</span>",
-                        ruler_title_for_player(plr0, plr_buf, sizeof(plr_buf)));
+  fc_snprintf(buf, sizeof(buf),
+              "<span size=\"large\" weight=\"bold\">%s</span>",
+              ruler_title_for_player(plr0, plr_buf, sizeof(plr_buf)));
   gtk_label_set_markup(GTK_LABEL(label), buf);
-  g_free(buf);
   gtk_container_add(GTK_CONTAINER(hbox), label);
 
   image = gtk_image_new();
@@ -775,10 +773,9 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   /* Their nation. */
   label = gtk_label_new(NULL);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  buf = g_strdup_printf("<span size=\"large\"><u>%s</u></span>",
-                        nation_plural_for_player(plr1));
+  fc_snprintf(buf, sizeof(buf), "<span size=\"large\"><u>%s</u></span>",
+              nation_plural_for_player(plr1));
   gtk_label_set_markup(GTK_LABEL(label), buf);
-  g_free(buf);
   gtk_container_add(GTK_CONTAINER(vbox), label);
 
   hbox = gtk_grid_new();
@@ -795,10 +792,10 @@ static struct Diplomacy_dialog *create_diplomacy_dialog(struct player *plr0,
   label = gtk_label_new(NULL);
   gtk_widget_set_hexpand(label, TRUE);
   gtk_misc_set_alignment(GTK_MISC(label), 0.5, 0.5);
-  buf = g_strdup_printf("<span size=\"large\" weight=\"bold\">%s</span>",
-                        ruler_title_for_player(plr1, plr_buf, sizeof(plr_buf)));
+  fc_snprintf(buf, sizeof(buf),
+              "<span size=\"large\" weight=\"bold\">%s</span>",
+              ruler_title_for_player(plr1, plr_buf, sizeof(plr_buf)));
   gtk_label_set_markup(GTK_LABEL(label), buf);
-  g_free(buf);
   gtk_container_add(GTK_CONTAINER(hbox), label);
 
   image = gtk_image_new();
@@ -966,8 +963,9 @@ static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data)
       Tech_type_id i = advance_number(padvance);
 
       if (player_invention_state(pgiver, i) == TECH_KNOWN
-          && player_invention_gettable(pdest, i, game.info.tech_trade_allow_holes)
-          && player_invention_state(pdest, i) != TECH_KNOWN) {
+          && player_invention_reachable(pdest, i, FALSE)
+          && (player_invention_state(pdest, i) == TECH_UNKNOWN
+              || player_invention_state(pdest, i) == TECH_PREREQS_KNOWN)) {
         dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
                                                  CLAUSE_ADVANCE, i);
       }

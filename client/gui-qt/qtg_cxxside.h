@@ -14,10 +14,6 @@
 #ifndef FC__QTG_CXXSIDE_H
 #define FC__QTG_CXXSIDE_H
 
-// common
-#include "fc_types.h"
-
-// gui-qt
 #include "canvas.h"
 #include "pages.h"
 
@@ -26,8 +22,6 @@ void setup_gui_funcs();
 void qtg_ui_init();
 void qtg_ui_main(int argc, char *argv[]);
 void qtg_ui_exit();
-
-enum gui_type qtg_get_gui_type();
 
 void qtg_real_output_window_append(const char *astring,
                                    const struct text_tag_list *tags,
@@ -50,7 +44,6 @@ void qtg_color_free(struct color *pcolor);
 
 struct canvas *qtg_canvas_create(int width, int height);
 void qtg_canvas_free(struct canvas *store);
-void qtg_canvas_set_zoom(struct canvas *store, float zoom);
 void qtg_canvas_copy(struct canvas *dest, struct canvas *src,
 		     int src_x, int src_y, int dest_x, int dest_y, int width,
 		     int height);

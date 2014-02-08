@@ -387,7 +387,7 @@ static void calculate_diagram_layout(struct reqtree *tree)
   If pplayer is given, add only techs reachable by that player to tree.
 *************************************************************************/
 static struct reqtree *create_dummy_reqtree(struct player *pplayer,
-                                            bool show_all)
+                                            bool reachable)
 {
   struct reqtree *tree = fc_malloc(sizeof(*tree));
   int j;
@@ -399,7 +399,7 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer,
       nodes[tech] = NULL;
       continue;
     }
-    if (pplayer && !show_all && !player_invention_reachable(pplayer, tech)) {
+    if (pplayer && reachable && !player_invention_reachable(pplayer, tech, TRUE)) {
       /* Reqtree requested for particular player and this tech is
        * unreachable to him/her. */
       nodes[tech] = NULL;
@@ -424,7 +424,7 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer,
     tech_one = advance_required(tech, AR_ONE);
     tech_two = advance_required(tech, AR_TWO);
 
-    if (!show_all && A_NONE != tech_one
+    if (reachable && A_NONE != tech_one
         && A_LAST != tech_two && A_NONE != tech_two
         && (nodes[tech_one] == NULL || nodes[tech_two] == NULL)) {
       /* Print only reachable techs. */
@@ -826,12 +826,12 @@ static void improve(struct reqtree *tree)
 
   If pplayer is not NULL, techs unreachable to that player are not shown.
 *************************************************************************/
-struct reqtree *create_reqtree(struct player *pplayer, bool show_all)
+struct reqtree *create_reqtree(struct player *pplayer, bool reachable)
 {
   struct reqtree *tree1, *tree2;
   int i, j;
 
-  tree1 = create_dummy_reqtree(pplayer, show_all);
+  tree1 = create_dummy_reqtree(pplayer, reachable);
   longest_path_layering(tree1);
   tree2 = add_dummy_nodes(tree1);
   destroy_reqtree(tree1);
@@ -880,24 +880,24 @@ static enum color_std node_color(struct tree_node *node)
       return COLOR_REQTREE_KNOWN;
     }
 
-    if (!player_invention_reachable(client.conn.playing, node->tech)) {
+    if (!player_invention_reachable(client.conn.playing, node->tech, TRUE)) {
       return COLOR_REQTREE_UNREACHABLE;
     }
 
-    if (!player_invention_gettable(client.conn.playing, node->tech, TRUE)) {
+    if (!player_invention_reachable(client.conn.playing, node->tech, FALSE)) {
       if (is_tech_a_req_for_goal(client.conn.playing, node->tech,
                                  research->tech_goal)
           || node->tech == research->tech_goal) {
-        return COLOR_REQTREE_GOAL_NOT_GETTABLE;
+        return COLOR_REQTREE_GOAL_UNKNOWN;
       } else {
-        return COLOR_REQTREE_NOT_GETTABLE;
+        return COLOR_REQTREE_UNREACHABLE;
       }
     }
 
     if (research->researching == node->tech) {
       return COLOR_REQTREE_RESEARCHING;
     }
-
+    
     if (TECH_KNOWN == player_invention_state(client.conn.playing, node->tech)) {
       return COLOR_REQTREE_KNOWN;
     }

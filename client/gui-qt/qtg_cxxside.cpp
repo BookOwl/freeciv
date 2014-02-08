@@ -16,8 +16,8 @@
 #endif
 
 
-// client
-#include "gui_interface.h"
+// gui-qt
+#include "qtg_cside.h"
 
 #include "qtg_cxxside.h"
 
@@ -28,8 +28,6 @@ void setup_gui_funcs()
   funcs->ui_init = qtg_ui_init;
   funcs->ui_main = qtg_ui_main;
   funcs->ui_exit = qtg_ui_exit;
-
-  funcs->get_gui_type = qtg_get_gui_type;
 
   funcs->real_output_window_append = qtg_real_output_window_append;
 
@@ -47,7 +45,6 @@ void setup_gui_funcs()
 
   funcs->canvas_create = qtg_canvas_create;
   funcs->canvas_free = qtg_canvas_free;
-  funcs->canvas_set_zoom = qtg_canvas_set_zoom;
   funcs->canvas_copy = qtg_canvas_copy;
   funcs->canvas_put_sprite = qtg_canvas_put_sprite;
   funcs->canvas_put_sprite_full = qtg_canvas_put_sprite_full;

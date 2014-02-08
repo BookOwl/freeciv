@@ -38,28 +38,18 @@ extern "C" {
 #include <libintl.h>
 #endif
 
-/* Core freeciv */
 #define _(String) gettext(String)
-#define DG_(domain, String) dgettext(domain, String)
 #define N_(String) String
 #define Q_(String) skip_intl_qualifier_prefix(gettext(String))
 #define PL_(String1, String2, n) ngettext((String1), (String2), (n))
 
-/* Ruledit */
-#define R__(String) dgettext("freeciv-ruledit", String)
-
 #else  /* ENABLE_NLS */
 
-/* Core freeciv */
 #define _(String) (String)
-#define DG_(domain, String) (String)
 #define N_(String) String
 #define Q_(String) skip_intl_qualifier_prefix(String)
 #define PL_(String1, String2, n) ((n) == 1 ? (String1) : (String2))
 #define C_(String) capitalized_string(String)
-
-/* Ruledit */
-#define R__(String) (String)
 
 #undef textdomain
 #undef bindtextdomain

@@ -40,8 +40,8 @@ $[
 
 -- Chat module implementation.
 
-function chat.msg(fmt, ...)
-  chat.base(string.format(fmt, ...))
+function chat.msg(...)
+  chat.base(string.format(unpack(arg)))
 end
 
 $]
