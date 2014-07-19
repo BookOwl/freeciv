@@ -26,7 +26,6 @@
 #include "map.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
 #include "specialist.h"
 #include "terrain.h"
 #include "unit.h"
@@ -81,25 +80,18 @@ static void check_specials(const char *file, const char *function, int line)
 {
   whole_map_iterate(ptile) {
     const struct terrain *pterrain = tile_terrain(ptile);
+    bv_special special = tile_specials(ptile);
 
-    extra_type_iterate(pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        extra_deps_iterate(&(pextra->reqs), pdep) {
-          SANITY_TILE(ptile, tile_has_extra(ptile, pdep));
-        } extra_deps_iterate_end;
-      }
-    } extra_type_iterate_end;
+    if (contains_special(special, S_FARMLAND)) {
+      SANITY_TILE(ptile, contains_special(special, S_IRRIGATION));
+    }
 
-    extra_type_by_cause_iterate(EC_MINE, pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        SANITY_TILE(ptile, pterrain->mining_result == pterrain);
-      }
-    } extra_type_by_cause_iterate_end;
-    extra_type_by_cause_iterate(EC_IRRIGATION, pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        SANITY_TILE(ptile, pterrain->irrigation_result == pterrain);
-      }
-    } extra_type_by_cause_iterate_end;
+    if (contains_special(special, S_MINE)) {
+      SANITY_TILE(ptile, pterrain->mining_result == pterrain);
+    }
+    if (contains_special(special, S_IRRIGATION)) {
+      SANITY_TILE(ptile, pterrain->irrigation_result == pterrain);
+    }
 
     SANITY_TILE(ptile, terrain_index(pterrain) >= T_FIRST 
                        && terrain_index(pterrain) < terrain_count());
@@ -549,24 +541,6 @@ static void check_teams(const char *file, const char *function, int line)
   } team_slots_iterate_end;
 }
 
-/****************************************************************************
-  Sanity checks on all players.
-****************************************************************************/
-static void
-check_researches(const char *file, const char *function, int line)
-{
-  researches_iterate(presearch) {
-    SANITY_CHECK(S_S_RUNNING != server_state()
-                 || A_UNSET == presearch->researching
-                 || is_future_tech(presearch->researching)
-                 || (A_NONE != presearch->researching
-                     && valid_advance_by_number(presearch->researching)));
-    SANITY_CHECK(A_UNSET == presearch->tech_goal
-                 || (A_NONE != presearch->tech_goal
-                     && valid_advance_by_number(presearch->tech_goal)));
-  } researches_iterate_end;
-}
-
 /**************************************************************************
   Sanity checking on connections.
 **************************************************************************/
@@ -601,7 +575,6 @@ void real_sanity_check(const char *file, const char *function, int line)
   check_misc(file, function, line);
   check_players(file, function, line);
   check_teams(file, function, line);
-  check_researches(file, function, line);
   check_connections(file, function, line);
 }
 

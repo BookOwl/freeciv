@@ -16,35 +16,19 @@
 
 /* utility */
 #include "fcintl.h"
+#include "game.h"
 #include "log.h"
 #include "support.h"
 
 /* common */
-#include "achievements.h"
-#include "calendar.h"
 #include "citizens.h"
-#include "culture.h"
-#include "game.h"
 #include "government.h"
 #include "improvement.h"
-#include "player.h"
 #include "map.h"
-#include "research.h"
 #include "road.h"
 #include "specialist.h"
-#include "style.h"
 
 #include "requirements.h"
-
-/* The item contradicts, fulfills or is irrelevant to the requirement */
-enum item_found {ITF_NO, ITF_YES, ITF_NOT_APPLICABLE};
-
-/************************************************************************
-  Container for item_found functions
-************************************************************************/
-typedef enum item_found (*universal_found)(const struct requirement *,
-                                           const struct universal *);
-static universal_found universal_found_function[VUT_COUNT] = {NULL};
 
 /**************************************************************************
   Parse requirement type (kind) and value strings into a universal
@@ -86,27 +70,15 @@ struct universal universal_by_rule_name(const char *kind,
       return source;
     }
     break;
-  case VUT_ACHIEVEMENT:
-    source.value.achievement = achievement_by_rule_name(value);
-    if (source.value.achievement != NULL) {
-      return source;
-    }
-    break;
-  case VUT_STYLE:
-    source.value.style = style_by_rule_name(value);
-    if (source.value.style != NULL) {
-      return source;
-    }
-    break;
   case VUT_IMPROVEMENT:
     source.value.building = improvement_by_rule_name(value);
     if (source.value.building != NULL) {
       return source;
     }
     break;
-  case VUT_EXTRA:
-    source.value.extra = extra_type_by_rule_name(value);
-    if (source.value.extra != NULL) {
+  case VUT_SPECIAL:
+    source.value.special = special_by_rule_name(value);
+    if (source.value.special != S_LAST) {
       return source;
     }
     break;
@@ -138,12 +110,6 @@ struct universal universal_by_rule_name(const char *kind,
   case VUT_NATIONALITY:
     source.value.nationality = nation_by_rule_name(value);
     if (source.value.nationality != NO_NATION_SELECTED) {
-      return source;
-    }
-    break;
-  case VUT_DIPLREL:
-    source.value.diplrel = diplrel_by_rule_name(value);
-    if (source.value.diplrel != diplrel_asym_invalid()) {
       return source;
     }
     break;
@@ -189,21 +155,9 @@ struct universal universal_by_rule_name(const char *kind,
       return source;
     }
     break;
-  case VUT_MINCULTURE:
-    source.value.minculture = atoi(value);
-    if (source.value.minculture > 0) {
-      return source;
-    }
-    break;
   case VUT_AI_LEVEL:
-    source.value.ai_level = ai_level_by_name(value, fc_strcasecmp);
-    if (ai_level_is_valid(source.value.ai_level)) {
-      return source;
-    }
-    break;
-  case VUT_MAXTILEUNITS:
-    source.value.max_tile_units = atoi(value);
-    if (0 <= source.value.max_tile_units) {
+    source.value.ai_level = ai_level_by_name(value);
+    if (source.value.ai_level != AI_LEVEL_LAST) {
       return source;
     }
     break;
@@ -214,15 +168,15 @@ struct universal universal_by_rule_name(const char *kind,
       return source;
     }
     break;
-  case VUT_BASEFLAG:
-    source.value.baseflag = base_flag_id_by_name(value, fc_strcasecmp);
-    if (base_flag_id_is_valid(source.value.baseflag)) {
+  case VUT_BASE:
+    source.value.base = base_type_by_rule_name(value);
+    if (source.value.base != NULL) {
       return source;
     }
     break;
-  case VUT_ROADFLAG:
-    source.value.roadflag = road_flag_id_by_name(value, fc_strcasecmp);
-    if (road_flag_id_is_valid(source.value.roadflag)) {
+  case VUT_ROAD:
+    source.value.road = road_type_by_rule_name(value);
+    if (source.value.road != NULL) {
       return source;
     }
     break;
@@ -284,26 +238,14 @@ struct universal universal_by_number(const enum universals_n kind,
       return source;
     }
     break;
-  case VUT_ACHIEVEMENT:
-    source.value.achievement = achievement_by_number(value);
-    if (source.value.achievement != NULL) {
-      return source;
-    }
-    break;
-  case VUT_STYLE:
-    source.value.style = style_by_number(value);
-    if (source.value.style != NULL) {
-      return source;
-    }
-    break;
   case VUT_IMPROVEMENT:
     source.value.building = improvement_by_number(value);
     if (source.value.building != NULL) {
       return source;
     }
     break;
-  case VUT_EXTRA:
-    source.value.extra = extra_by_number(value);
+  case VUT_SPECIAL:
+    source.value.special = value;
     return source;
   case VUT_TERRAIN:
     source.value.terrain = terrain_by_number(value);
@@ -323,12 +265,6 @@ struct universal universal_by_number(const enum universals_n kind,
   case VUT_NATION:
     source.value.nation = nation_by_number(value);
     if (source.value.nation != NULL) {
-      return source;
-    }
-    break;
-  case VUT_DIPLREL:
-    source.value.diplrel = value;
-    if (source.value.diplrel != diplrel_asym_invalid()) {
       return source;
     }
     break;
@@ -365,23 +301,17 @@ struct universal universal_by_number(const enum universals_n kind,
   case VUT_MINSIZE:
     source.value.minsize = value;
     return source;
-  case VUT_MINCULTURE:
-    source.value.minculture = value;
-    return source;
   case VUT_AI_LEVEL:
     source.value.ai_level = value;
-    return source;
-  case VUT_MAXTILEUNITS:
-    source.value.max_tile_units = value;
     return source;
   case VUT_TERRAINCLASS:
     source.value.terrainclass = value;
     return source;
-  case VUT_BASEFLAG:
-    source.value.baseflag = value;
+  case VUT_BASE:
+    source.value.base = base_by_number(value);
     return source;
-  case VUT_ROADFLAG:
-    source.value.roadflag = value;
+  case VUT_ROAD:
+    source.value.road = road_by_number(value);
     return source;
   case VUT_MINYEAR:
     source.value.minyear = value;
@@ -429,14 +359,10 @@ int universal_number(const struct universal *source)
     return source->value.techflag;
   case VUT_GOVERNMENT:
     return government_number(source->value.govern);
-  case VUT_ACHIEVEMENT:
-    return achievement_number(source->value.achievement);
-  case VUT_STYLE:
-    return style_number(source->value.style);
   case VUT_IMPROVEMENT:
     return improvement_number(source->value.building);
-  case VUT_EXTRA:
-    return extra_number(source->value.extra);
+  case VUT_SPECIAL:
+    return source->value.special;
   case VUT_TERRAIN:
     return terrain_number(source->value.terrain);
   case VUT_TERRFLAG:
@@ -447,8 +373,6 @@ int universal_number(const struct universal *source)
     return nation_number(source->value.nation);
   case VUT_NATIONALITY:
     return nation_number(source->value.nationality);
-  case VUT_DIPLREL:
-    return source->value.diplrel;
   case VUT_UTYPE:
     return utype_number(source->value.utype);
   case VUT_UTFLAG:
@@ -463,18 +387,14 @@ int universal_number(const struct universal *source)
     return specialist_number(source->value.specialist);
   case VUT_MINSIZE:
     return source->value.minsize;
-  case VUT_MINCULTURE:
-    return source->value.minculture;
   case VUT_AI_LEVEL:
     return source->value.ai_level;
-  case VUT_MAXTILEUNITS:
-    return source->value.max_tile_units;
   case VUT_TERRAINCLASS:
     return source->value.terrainclass;
-  case VUT_BASEFLAG:
-    return source->value.baseflag;
-  case VUT_ROADFLAG:
-    return source->value.roadflag;
+  case VUT_BASE:
+    return base_number(source->value.base);
+  case VUT_ROAD:
+    return road_number(source->value.road);
   case VUT_MINYEAR:
     return source->value.minyear;
   case VUT_TERRAINALTER:
@@ -499,7 +419,7 @@ int universal_number(const struct universal *source)
   Pass this some values like "Building", "Factory".
 ****************************************************************************/
 struct requirement req_from_str(const char *type, const char *range,
-				bool survives, bool present,
+				bool survives, bool negated,
 				const char *value)
 {
   struct requirement req;
@@ -517,7 +437,7 @@ struct requirement req_from_str(const char *type, const char *range,
     case VUT_COUNT:
       break;
     case VUT_IMPROVEMENT:
-    case VUT_EXTRA:
+    case VUT_SPECIAL:
     case VUT_TERRAIN:
     case VUT_TERRFLAG:
     case VUT_RESOURCE:
@@ -528,25 +448,20 @@ struct requirement req_from_str(const char *type, const char *range,
     case VUT_OTYPE:
     case VUT_SPECIALIST:
     case VUT_TERRAINCLASS:
-    case VUT_BASEFLAG:
-    case VUT_ROADFLAG:
+    case VUT_BASE:
+    case VUT_ROAD:
     case VUT_TERRAINALTER:
     case VUT_CITYTILE:
-    case VUT_MAXTILEUNITS:
       req.range = REQ_RANGE_LOCAL;
       break;
     case VUT_MINSIZE:
-    case VUT_MINCULTURE:
     case VUT_NATIONALITY:
       req.range = REQ_RANGE_CITY;
       break;
     case VUT_GOVERNMENT:
-    case VUT_ACHIEVEMENT:
-    case VUT_STYLE:
     case VUT_ADVANCE:
     case VUT_TECHFLAG:
     case VUT_NATION:
-    case VUT_DIPLREL:
     case VUT_AI_LEVEL:
       req.range = REQ_RANGE_PLAYER;
       break;
@@ -557,7 +472,7 @@ struct requirement req_from_str(const char *type, const char *range,
   }
 
   req.survives = survives;
-  req.present = present;
+  req.negated = negated;
 
   /* These checks match what combinations are supported inside
    * is_req_active(). However, it's only possible to do basic checks,
@@ -565,53 +480,32 @@ struct requirement req_from_str(const char *type, const char *range,
    * might not have been lodaed yet. */
   switch (req.source.kind) {
   case VUT_TERRAIN:
-  case VUT_EXTRA:
+  case VUT_SPECIAL:
   case VUT_RESOURCE:
   case VUT_TERRAINCLASS:
   case VUT_TERRFLAG:
-  case VUT_BASEFLAG:
-  case VUT_ROADFLAG:
+  case VUT_BASE:
+  case VUT_ROAD:
     invalid = (req.range != REQ_RANGE_LOCAL
                && req.range != REQ_RANGE_CADJACENT
 	       && req.range != REQ_RANGE_ADJACENT
-               && req.range != REQ_RANGE_CITY
-               && req.range != REQ_RANGE_TRADEROUTE);
+               && req.range != REQ_RANGE_CITY);
     break;
   case VUT_ADVANCE:
   case VUT_TECHFLAG:
-  case VUT_ACHIEVEMENT:
     invalid = (req.range < REQ_RANGE_PLAYER);
     break;
   case VUT_GOVERNMENT:
   case VUT_AI_LEVEL:
-  case VUT_STYLE:
     invalid = (req.range != REQ_RANGE_PLAYER);
     break;
   case VUT_MINSIZE:
   case VUT_NATIONALITY:
-    invalid = (req.range != REQ_RANGE_CITY
-               && req.range != REQ_RANGE_TRADEROUTE);
-    break;
-  case VUT_MINCULTURE:
-    invalid = (req.range != REQ_RANGE_CITY
-               && req.range != REQ_RANGE_TRADEROUTE
-               && req.range != REQ_RANGE_PLAYER
-               && req.range != REQ_RANGE_TEAM
-               && req.range != REQ_RANGE_ALLIANCE
-               && req.range != REQ_RANGE_WORLD);
-    break;
-  case VUT_DIPLREL:
-    invalid = (req.range != REQ_RANGE_LOCAL
-               && req.range != REQ_RANGE_PLAYER
-               && req.range != REQ_RANGE_TEAM
-               && req.range != REQ_RANGE_ALLIANCE
-               && req.range != REQ_RANGE_WORLD);
+    invalid = (req.range != REQ_RANGE_CITY);
     break;
   case VUT_NATION:
     invalid = (req.range != REQ_RANGE_PLAYER
-               && req.range != REQ_RANGE_TEAM
-               && req.range != REQ_RANGE_ALLIANCE
-               && req.range != REQ_RANGE_WORLD);
+	       && req.range != REQ_RANGE_WORLD);
     break;
   case VUT_UTYPE:
   case VUT_UTFLAG:
@@ -623,7 +517,6 @@ struct requirement req_from_str(const char *type, const char *range,
     invalid = (req.range != REQ_RANGE_LOCAL);
     break;
   case VUT_CITYTILE:
-  case VUT_MAXTILEUNITS:
     invalid = (req.range != REQ_RANGE_LOCAL
                && req.range != REQ_RANGE_CADJACENT
                && req.range != REQ_RANGE_ADJACENT);
@@ -649,7 +542,7 @@ struct requirement req_from_str(const char *type, const char *range,
     /* Check 'survives'. */
     switch (req.source.kind) {
     case VUT_IMPROVEMENT:
-      /* See buildings_in_range(). */
+      /* See count_buildings_in_range(). */
       invalid = survives && req.range <= REQ_RANGE_CONTINENT;
       break;
     case VUT_NATION:
@@ -658,6 +551,7 @@ struct requirement req_from_str(const char *type, const char *range,
     case VUT_ADVANCE:
     case VUT_GOVERNMENT:
     case VUT_TERRAIN:
+    case VUT_SPECIAL:
     case VUT_UTYPE:
     case VUT_UTFLAG:
     case VUT_UCLASS:
@@ -665,23 +559,17 @@ struct requirement req_from_str(const char *type, const char *range,
     case VUT_OTYPE:
     case VUT_SPECIALIST:
     case VUT_MINSIZE:
-    case VUT_MINCULTURE:
     case VUT_AI_LEVEL:
     case VUT_TERRAINCLASS:
+    case VUT_BASE:
     case VUT_MINYEAR:
     case VUT_TERRAINALTER:
     case VUT_CITYTILE:
+    case VUT_ROAD:
     case VUT_RESOURCE:
     case VUT_TERRFLAG:
     case VUT_NATIONALITY:
-    case VUT_BASEFLAG:
-    case VUT_ROADFLAG:
-    case VUT_EXTRA:
     case VUT_TECHFLAG:
-    case VUT_ACHIEVEMENT:
-    case VUT_STYLE:
-    case VUT_DIPLREL:
-    case VUT_MAXTILEUNITS:
       /* Most requirements don't support 'survives'. */
       invalid = survives;
       break;
@@ -697,7 +585,7 @@ struct requirement req_from_str(const char *type, const char *range,
   if (invalid) {
     log_error("Invalid requirement %s | %s | %s | %s | %s: %s",
               type, range, survives ? "survives" : "",
-              present ? "present" : "", value, error);
+              negated ? "negated" : "", value, error);
     req.source.kind = universals_n_invalid();
   }
 
@@ -709,7 +597,7 @@ struct requirement req_from_str(const char *type, const char *range,
   of req_get_values.
 ****************************************************************************/
 struct requirement req_from_values(int type, int range,
-				   bool survives, bool present,
+				   bool survives, bool negated,
 				   int value)
 {
   struct requirement req;
@@ -717,7 +605,7 @@ struct requirement req_from_values(int type, int range,
   req.source = universal_by_number(type, value);
   req.range = range;
   req.survives = survives;
-  req.present = present;
+  req.negated = negated;
   return req;
 }
 
@@ -727,13 +615,13 @@ struct requirement req_from_values(int type, int range,
 ****************************************************************************/
 void req_get_values(const struct requirement *req,
 		    int *type, int *range,
-		    bool *survives, bool *present,
+		    bool *survives, bool *negated,
 		    int *value)
 {
   universal_extraction(&req->source, type, value);
   *range = req->range;
   *survives = req->survives;
-  *present = req->present;
+  *negated = req->negated;
 }
 
 /****************************************************************************
@@ -745,7 +633,7 @@ bool are_requirements_equal(const struct requirement *req1,
   return (are_universals_equal(&req1->source, &req2->source)
 	  && req1->range == req2->range
 	  && req1->survives == req2->survives
-	  && req1->present == req2->present);
+	  && req1->negated == req2->negated);
 }
 
 /****************************************************************************
@@ -757,37 +645,7 @@ bool are_requirements_opposites(const struct requirement *req1,
   return (are_universals_equal(&req1->source, &req2->source)
           && req1->range == req2->range
           && req1->survives == req2->survives
-          && req1->present != req2->present);
-}
-
-/****************************************************************************
-  Returns TRUE if players are in the same requirements range.
-****************************************************************************/
-static inline bool players_in_same_range(const struct player *pplayer1,
-                                         const struct player *pplayer2,
-                                         enum req_range range)
-{
-  switch (range) {
-  case REQ_RANGE_WORLD:
-    return TRUE;
-  case REQ_RANGE_ALLIANCE:
-    return pplayers_allied(pplayer1, pplayer2);
-  case REQ_RANGE_TEAM:
-    return players_on_same_team(pplayer1, pplayer2);
-  case REQ_RANGE_PLAYER:
-    return pplayer1 == pplayer2;
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_TRADEROUTE:
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_ADJACENT:
-  case REQ_RANGE_CADJACENT:
-  case REQ_RANGE_LOCAL:
-  case REQ_RANGE_COUNT:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
-  return FALSE;
+          && req1->negated != req2->negated);
 }
 
 /****************************************************************************
@@ -909,7 +767,7 @@ is_building_in_range(const struct player *target_player,
 {
   /* Check if it's certain that the building is obsolete given the
    * specification we have */
-  if (improvement_obsolete(target_player, source, target_city)) {
+  if (improvement_obsolete(target_player, source)) {
     return TRI_NO;
   }
 
@@ -919,32 +777,19 @@ is_building_in_range(const struct player *target_player,
     switch (range) {
     case REQ_RANGE_WORLD:
       return BOOL_TO_TRISTATE(num_world_buildings_total(source) > 0);
-    case REQ_RANGE_ALLIANCE:
-    case REQ_RANGE_TEAM:
-      if (target_player == NULL) {
-        return TRI_MAYBE;
-      }
-      players_iterate_alive(plr2) {
-        if (players_in_same_range(target_player, plr2, range)
-            && player_has_ever_built(plr2, source)) {
-          return TRI_YES;
-        }
-      } players_iterate_alive_end;
-      return TRI_NO;
     case REQ_RANGE_PLAYER:
       if (target_player == NULL) {
         return TRI_MAYBE;
       }
       return BOOL_TO_TRISTATE(player_has_ever_built(target_player, source));
     case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CITY:
     case REQ_RANGE_LOCAL:
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
       /* There is no sources cache for this. */
       log_error("Surviving requirements are only supported at "
-                "World/Alliance/Team/Player ranges.");
+                "world and player ranges.");
       return TRI_NO;
     case REQ_RANGE_COUNT:
       break;
@@ -956,18 +801,6 @@ is_building_in_range(const struct player *target_player,
     switch (range) {
     case REQ_RANGE_WORLD:
       return BOOL_TO_TRISTATE(num_world_buildings(source) > 0);
-    case REQ_RANGE_ALLIANCE:
-    case REQ_RANGE_TEAM:
-      if (target_player == NULL) {
-        return TRI_MAYBE;
-      }
-      players_iterate_alive(plr2) {
-        if (players_in_same_range(target_player, plr2, range)
-            && num_player_buildings(plr2, source) > 0) {
-          return TRI_YES;
-        }
-      } players_iterate_alive_end;
-      return TRI_NO;
     case REQ_RANGE_PLAYER:
       if (target_player == NULL) {
         return TRI_MAYBE;
@@ -980,21 +813,6 @@ is_building_in_range(const struct player *target_player,
         int continent = tile_continent(target_city->tile);
         return BOOL_TO_TRISTATE(num_continent_buildings(target_player,
                                                         continent, source) > 0);
-      } else {
-        return TRI_MAYBE;
-      }
-    case REQ_RANGE_TRADEROUTE:
-      if (target_city) {
-        if (num_city_buildings(target_city, source) > 0) {
-          return TRI_YES;
-        } else {
-          trade_routes_iterate(target_city, trade_partner) {
-            if (num_city_buildings(trade_partner, source) > 0) {
-              return TRI_YES;
-            }
-          } trade_routes_iterate_end;
-        }
-        return TRI_NO;
       } else {
         return TRI_MAYBE;
       }
@@ -1038,33 +856,16 @@ static enum fc_tristate is_tech_in_range(const struct player *target_player,
   switch (range) {
   case REQ_RANGE_PLAYER:
     if (NULL != target_player) {
-      return BOOL_TO_TRISTATE(TECH_KNOWN == research_invention_state
-                                (research_get(target_player), tech));
+      return BOOL_TO_TRISTATE(TECH_KNOWN == player_invention_state(target_player, tech));
     } else {
       return TRI_MAYBE;
-    }
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-   if (NULL == target_player) {
-     return TRI_MAYBE;
-   }
-   players_iterate_alive(plr2) {
-     if (players_in_same_range(target_player, plr2, range)) {
-       if (research_invention_state(research_get(plr2), tech)
-           == TECH_KNOWN) {
-         return TRI_YES;
-       }
-     }
-   } players_iterate_alive_end;
-
-   return TRI_NO;
+    };
   case REQ_RANGE_WORLD:
     return BOOL_TO_TRISTATE(game.info.global_advances[tech]);
   case REQ_RANGE_LOCAL:
   case REQ_RANGE_CADJACENT:
   case REQ_RANGE_ADJACENT:
   case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_COUNT:
     break;
@@ -1076,238 +877,44 @@ static enum fc_tristate is_tech_in_range(const struct player *target_player,
 }
 
 /****************************************************************************
-  Is there a tech with the given flag within range of the target?
+  Is there a source special within range of the target?
 ****************************************************************************/
-static enum fc_tristate is_techflag_in_range(const struct player *target_player,
-                                             enum req_range range,
-                                             enum tech_flag_id techflag)
+static enum fc_tristate is_special_in_range(const struct tile *target_tile,
+                                            const struct city *target_city,
+                                            enum req_range range, bool survives,
+                                            enum tile_special_type special)
+
 {
-  switch (range) {
-  case REQ_RANGE_PLAYER:
-    if (NULL != target_player) {
-      return BOOL_TO_TRISTATE(player_knows_techs_with_flag(target_player, techflag));
-    } else {
-      return TRI_MAYBE;
-    }
-    break;
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-    if (NULL == target_player) {
-      return TRI_MAYBE;
-    }
-    players_iterate_alive(plr2) {
-      if (players_in_same_range(target_player, plr2, range)
-          && player_knows_techs_with_flag(plr2, techflag)) {
-        return TRI_YES;
-      }
-    } players_iterate_alive_end;
-    return TRI_NO;
-  case REQ_RANGE_WORLD:
-    players_iterate(pplayer) {
-      if (player_knows_techs_with_flag(pplayer, techflag)) {
-        return TRI_YES;
-      }
-    } players_iterate_end;
-
-    return TRI_NO;
-  case REQ_RANGE_LOCAL:
-  case REQ_RANGE_CADJACENT:
-  case REQ_RANGE_ADJACENT:
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_COUNT:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
-
-  return TRI_MAYBE;
-}
-
-/****************************************************************************
-  Is city with at least minculture culture in range?
-****************************************************************************/
-static enum fc_tristate is_minculture_in_range(const struct city *target_city,
-                                               const struct player *target_player,
-                                               enum req_range range,
-                                               int minculture)
-{
-  switch (range) {
-  case REQ_RANGE_CITY:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(city_culture(target_city) >= minculture);
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    if (city_culture(target_city) >= minculture) {
-      return TRI_YES;
-    } else {
-      trade_routes_iterate(target_city, trade_partner) {
-        if (city_culture(trade_partner) >= minculture) {
-          return TRI_YES;
-        }
-      } trade_routes_iterate_end;
-      return TRI_MAYBE;
-    }
-  case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-  case REQ_RANGE_WORLD:
-    if (NULL == target_player) {
-      return TRI_MAYBE;
-    }
-    players_iterate_alive(plr2) {
-      if (players_in_same_range(target_player, plr2, range)) {
-        int total = 0;
-
-        city_list_iterate(plr2->cities, pcity) {
-          total += city_culture(pcity);
-        } city_list_iterate_end;
-
-        if (total >= minculture) {
-          return TRI_YES;
-        }
-      }
-    } players_iterate_alive_end;
-    return TRI_NO;
-  case REQ_RANGE_LOCAL:
-  case REQ_RANGE_CADJACENT:
-  case REQ_RANGE_ADJACENT:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_COUNT:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
-
-  return TRI_MAYBE;
-}
-
-/****************************************************************************
-  Is there a tile with max X units within range of the target?
-****************************************************************************/
-static enum fc_tristate
-is_tile_units_in_range(const struct tile *target_tile, enum req_range range,
-                       int maxUnits)
-{
-  /* TODO: if can't see V_INVIS -> TRI_MAYBE */
   switch (range) {
   case REQ_RANGE_LOCAL:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(unit_list_size(target_tile->units) <= maxUnits);
+    return BOOL_TO_TRISTATE(tile_has_special(target_tile, special));
   case REQ_RANGE_CADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    if (unit_list_size(target_tile->units) <= maxUnits) {
-      return TRI_YES;
-    }
-    cardinal_adjc_iterate(target_tile, adjc_tile) {
-      if (unit_list_size(adjc_tile->units) <= maxUnits) {
-        return TRI_YES;
-      }
-    } cardinal_adjc_iterate_end;
-    return TRI_NO;
+    return BOOL_TO_TRISTATE(is_special_card_near(target_tile, special, TRUE));
   case REQ_RANGE_ADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    if (unit_list_size(target_tile->units) <= maxUnits) {
-      return TRI_YES;
-    }
-    adjc_iterate(target_tile, adjc_tile) {
-      if (unit_list_size(adjc_tile->units) <= maxUnits) {
-        return TRI_YES;
-      }
-    } adjc_iterate_end;
-    return TRI_NO;
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-  case REQ_RANGE_WORLD:
-  case REQ_RANGE_COUNT:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
-
-  return TRI_MAYBE;
-}
-
-/****************************************************************************
-  Is there a source extra type within range of the target?
-****************************************************************************/
-static enum fc_tristate is_extra_type_in_range(const struct tile *target_tile,
-                                               const struct city *target_city,
-                                               enum req_range range, bool survives,
-                                               struct extra_type *pextra)
-{
-  switch (range) {
-  case REQ_RANGE_LOCAL:
-    /* The requirement is filled if the tile has extra of requested type. */
-    if (!target_tile) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(tile_has_extra(target_tile, pextra));
-  case REQ_RANGE_CADJACENT:
-    if (!target_tile) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(tile_has_extra(target_tile, pextra)
-                            || is_extra_card_near(target_tile, pextra));
-  case REQ_RANGE_ADJACENT:
-    if (!target_tile) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(tile_has_extra(target_tile, pextra)
-                            || is_extra_near_tile(target_tile, pextra));
+    return BOOL_TO_TRISTATE(is_special_near_tile(target_tile, special, TRUE));
   case REQ_RANGE_CITY:
     if (!target_city) {
       return TRI_MAYBE;
     }
     city_tile_iterate(city_map_radius_sq_get(target_city),
                       city_tile(target_city), ptile) {
-      if (tile_has_extra(ptile, pextra)) {
+      if (tile_has_special(ptile, special)) {
         return TRI_YES;
       }
     } city_tile_iterate_end;
 
     return TRI_NO;
-
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    city_tile_iterate(city_map_radius_sq_get(target_city),
-                      city_tile(target_city), ptile) {
-      if (tile_has_extra(ptile, pextra)) {
-        return TRI_YES;
-      }
-    } city_tile_iterate_end;
-    trade_routes_iterate(target_city, trade_partner) {
-      city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                        city_tile(trade_partner), ptile) {
-        if (tile_has_extra(ptile, pextra)) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-    } trade_routes_iterate_end;
-
-    return TRI_NO;
-
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1332,7 +939,7 @@ static enum fc_tristate is_terrain_in_range(const struct tile *target_tile,
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return pterrain && tile_terrain(target_tile) == pterrain;
+    return BOOL_TO_TRISTATE(pterrain && tile_terrain(target_tile) == pterrain);
   case REQ_RANGE_CADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
@@ -1355,32 +962,10 @@ static enum fc_tristate is_terrain_in_range(const struct tile *target_tile,
         }
       } city_tile_iterate_end;
     }
-    return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    if (pterrain != NULL) {
-      city_tile_iterate(city_map_radius_sq_get(target_city),
-                        city_tile(target_city), ptile) {
-        if (tile_terrain(ptile) == pterrain) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-      trade_routes_iterate(target_city, trade_partner) {
-        city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                          city_tile(trade_partner), ptile) {
-          if (tile_terrain(ptile) == pterrain) {
-            return TRI_YES;
-          }
-        } city_tile_iterate_end;
-      } trade_routes_iterate_end;
-    }
+
     return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1430,32 +1015,8 @@ static enum fc_tristate is_resource_in_range(const struct tile *target_tile,
     }
 
     return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    if (pres != NULL) {
-      city_tile_iterate(city_map_radius_sq_get(target_city),
-                        city_tile(target_city), ptile) {
-        if (tile_resource(ptile) == pres) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-      trade_routes_iterate(target_city, trade_partner) {
-        city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                          city_tile(trade_partner), ptile) {
-          if (tile_resource(ptile) == pres) {
-            return TRI_YES;
-          }
-        } city_tile_iterate_end;
-      } trade_routes_iterate_end;
-    }
-
-    return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1507,35 +1068,8 @@ static enum fc_tristate is_terrain_class_in_range(const struct tile *target_tile
     } city_tile_iterate_end;
 
     return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    city_tile_iterate(city_map_radius_sq_get(target_city),
-                      city_tile(target_city), ptile) {
-      const struct terrain *pterrain = tile_terrain(ptile);
-      if (pterrain != T_UNKNOWN
-          && terrain_type_terrain_class(pterrain) == pclass) {
-        return TRI_YES;
-      }
-    } city_tile_iterate_end;
-
-    trade_routes_iterate(target_city, trade_partner) {
-      city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                        city_tile(trade_partner), ptile) {
-        const struct terrain *pterrain = tile_terrain(ptile);
-        if (pterrain != T_UNKNOWN
-            && terrain_type_terrain_class(pterrain) == pclass) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-    } trade_routes_iterate_end;
-
-    return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1593,35 +1127,8 @@ static enum fc_tristate is_terrainflag_in_range(const struct tile *target_tile,
     } city_tile_iterate_end;
 
     return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    city_tile_iterate(city_map_radius_sq_get(target_city),
-                      city_tile(target_city), ptile) {
-      const struct terrain *pterrain = tile_terrain(ptile);
-      if (pterrain != T_UNKNOWN
-          && terrain_has_flag(pterrain, terrflag)) {
-        return TRI_YES;
-      }
-    } city_tile_iterate_end;
-
-    trade_routes_iterate(target_city, trade_partner) {
-      city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                        city_tile(trade_partner), ptile) {
-        const struct terrain *pterrain = tile_terrain(ptile);
-        if (pterrain != T_UNKNOWN
-            && terrain_has_flag(pterrain, terrflag)) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-    } trade_routes_iterate_end;
-
-    return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1633,69 +1140,46 @@ static enum fc_tristate is_terrainflag_in_range(const struct tile *target_tile,
 }
 
 /****************************************************************************
-  Is there a base with the given flag within range of the target?
+  Is there a source base type within range of the target?
 ****************************************************************************/
-static enum fc_tristate is_baseflag_in_range(const struct tile *target_tile,
-                                             const struct city *target_city,
-                                             enum req_range range, bool survives,
-                                             enum base_flag_id baseflag)
+static enum fc_tristate is_base_type_in_range(const struct tile *target_tile,
+                                              const struct city *target_city,
+                                              enum req_range range, bool survives,
+                                              struct base_type *pbase)
 {
   switch (range) {
   case REQ_RANGE_LOCAL:
-    /* The requirement is filled if the tile has a base with correct flag. */
+    /* The requirement is filled if the tile has base of requested type. */
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_base_flag(target_tile, baseflag));
+    return BOOL_TO_TRISTATE(tile_has_base(target_tile, pbase));
   case REQ_RANGE_CADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_base_flag(target_tile, baseflag)
-                            || is_base_flag_card_near(target_tile, baseflag));
+    return BOOL_TO_TRISTATE(tile_has_base(target_tile, pbase)
+                            || is_base_card_near(target_tile, pbase));
   case REQ_RANGE_ADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_base_flag(target_tile, baseflag)
-                            || is_base_flag_near_tile(target_tile, baseflag));
+    return BOOL_TO_TRISTATE(tile_has_base(target_tile, pbase)
+                            || is_base_near_tile(target_tile, pbase));
   case REQ_RANGE_CITY:
     if (!target_city) {
       return TRI_MAYBE;
     }
     city_tile_iterate(city_map_radius_sq_get(target_city),
                       city_tile(target_city), ptile) {
-      if (tile_has_base_flag(ptile, baseflag)) {
+      if (tile_has_base(ptile, pbase)) {
         return TRI_YES;
       }
     } city_tile_iterate_end;
-
-    return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    city_tile_iterate(city_map_radius_sq_get(target_city),
-                      city_tile(target_city), ptile) {
-      if (tile_has_base_flag(ptile, baseflag)) {
-        return TRI_YES;
-      }
-    } city_tile_iterate_end;
-
-    trade_routes_iterate(target_city, trade_partner) {
-      city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                        city_tile(trade_partner), ptile) {
-        if (tile_has_base_flag(ptile, baseflag)) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-    } trade_routes_iterate_end;
 
     return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1707,69 +1191,83 @@ static enum fc_tristate is_baseflag_in_range(const struct tile *target_tile,
 }
 
 /****************************************************************************
-  Is there a road with the given flag within range of the target?
+  Is there a tech with the given flag within range of the target?
 ****************************************************************************/
-static enum fc_tristate is_roadflag_in_range(const struct tile *target_tile,
-                                             const struct city *target_city,
-                                             enum req_range range, bool survives,
-                                             enum road_flag_id roadflag)
+static enum fc_tristate is_techflag_in_range(const struct player *target_player,
+                                             enum req_range range,
+                                             enum tech_flag_id techflag)
+{
+  switch (range) {
+  case REQ_RANGE_PLAYER:
+    if (NULL != target_player) {
+      return BOOL_TO_TRISTATE(player_knows_techs_with_flag(target_player, techflag));
+    } else {
+      return TRI_MAYBE;
+    };
+    break;
+  case REQ_RANGE_WORLD:
+    players_iterate(pplayer) {
+      if (player_knows_techs_with_flag(pplayer, techflag)) {
+        return TRI_YES;
+      }
+    } players_iterate_end;
+
+    return TRI_NO;
+  case REQ_RANGE_LOCAL:
+  case REQ_RANGE_CADJACENT:
+  case REQ_RANGE_ADJACENT:
+  case REQ_RANGE_CITY:
+  case REQ_RANGE_CONTINENT:
+  case REQ_RANGE_COUNT:
+    break;
+  }
+
+  fc_assert_msg(FALSE, "Invalid range %d.", range);
+
+  return TRI_MAYBE;
+}
+
+/****************************************************************************
+  Is there a source road type within range of the target?
+****************************************************************************/
+static enum fc_tristate is_road_type_in_range(const struct tile *target_tile,
+                                              const struct city *target_city,
+                                              enum req_range range, bool survives,
+                                              struct road_type *proad)
 {
   switch (range) {
   case REQ_RANGE_LOCAL:
-    /* The requirement is filled if the tile has a road with correct flag. */
+    /* The requirement is filled if the tile has road of requested type. */
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_road_flag(target_tile, roadflag));
+    return BOOL_TO_TRISTATE(tile_has_road(target_tile, proad));
   case REQ_RANGE_CADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_road_flag(target_tile, roadflag)
-                            || is_road_flag_card_near(target_tile, roadflag));
+    return BOOL_TO_TRISTATE(tile_has_road(target_tile, proad)
+                            || is_road_card_near(target_tile, proad));
   case REQ_RANGE_ADJACENT:
     if (!target_tile) {
       return TRI_MAYBE;
     }
-    return BOOL_TO_TRISTATE(tile_has_road_flag(target_tile, roadflag)
-                            || is_road_flag_near_tile(target_tile, roadflag));
+    return BOOL_TO_TRISTATE(tile_has_road(target_tile, proad)
+                            || is_road_near_tile(target_tile, proad));
   case REQ_RANGE_CITY:
     if (!target_city) {
       return TRI_MAYBE;
     }
     city_tile_iterate(city_map_radius_sq_get(target_city),
                       city_tile(target_city), ptile) {
-      if (tile_has_road_flag(ptile, roadflag)) {
+      if (tile_has_road(ptile, proad)) {
         return TRI_YES;
       }
     } city_tile_iterate_end;
-
-    return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (!target_city) {
-      return TRI_MAYBE;
-    }
-    city_tile_iterate(city_map_radius_sq_get(target_city),
-                      city_tile(target_city), ptile) {
-      if (tile_has_road_flag(ptile, roadflag)) {
-        return TRI_YES;
-      }
-    } city_tile_iterate_end;
-
-    trade_routes_iterate(target_city, trade_partner) {
-      city_tile_iterate(city_map_radius_sq_get(trade_partner),
-                        city_tile(trade_partner), ptile) {
-        if (tile_has_road_flag(ptile, roadflag)) {
-          return TRI_YES;
-        }
-      } city_tile_iterate_end;
-    } trade_routes_iterate_end;
 
     return TRI_NO;
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1800,11 +1298,8 @@ static enum fc_tristate is_terrain_alter_possible_in_range(const struct tile *ta
   case REQ_RANGE_CADJACENT:
   case REQ_RANGE_ADJACENT: /* XXX Could in principle support ADJACENT. */
   case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_COUNT:
     break;
@@ -1828,19 +1323,6 @@ static enum fc_tristate is_nation_in_range(const struct player *target_player,
       return TRI_MAYBE;
     }
     return BOOL_TO_TRISTATE(nation_of_player(target_player) == nation);
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-    if (target_player == NULL) {
-      return TRI_MAYBE;
-    }
-    players_iterate_alive(plr2) {
-      if (players_in_same_range(target_player, plr2, range)) {
-        if (nation_of_player(plr2) == nation) {
-          return TRI_YES;
-        }
-      }
-    } players_iterate_alive_end;
-    return TRI_NO;
   case REQ_RANGE_WORLD:
     /* NB: if a player is ever removed outright from the game
      * (e.g. via /remove), rather than just dying, this 'survives'
@@ -1852,7 +1334,6 @@ static enum fc_tristate is_nation_in_range(const struct player *target_player,
   case REQ_RANGE_CADJACENT:
   case REQ_RANGE_ADJACENT:
   case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_COUNT:
     break;
@@ -1872,89 +1353,21 @@ static enum fc_tristate is_nationality_in_range(const struct city *target_city,
 {
   switch (range) {
   case REQ_RANGE_CITY:
-    if (target_city == NULL) {
+   if (target_city == NULL) {
      return TRI_MAYBE;
-    }
-    citizens_iterate(target_city, slot, count) {
-      if (player_slot_get_player(slot)->nation == nationality) {
-        return TRI_YES;
-      }
-    } citizens_iterate_end;
+   }
+   citizens_iterate(target_city, slot, count) {
+     if (player_slot_get_player(slot)->nation == nationality) {
+       return TRI_YES;
+     }
+   } citizens_iterate_end;
 
-    return TRI_NO;
-  case REQ_RANGE_TRADEROUTE:
-    if (target_city == NULL) {
-      return TRI_MAYBE;
-    }
-    citizens_iterate(target_city, slot, count) {
-      if (player_slot_get_player(slot)->nation == nationality) {
-        return TRI_YES;
-      }
-    } citizens_iterate_end;
-
-    trade_routes_iterate(target_city, trade_partner) {
-      citizens_iterate(trade_partner, slot, count) {
-        if (player_slot_get_player(slot)->nation == nationality) {
-          return TRI_YES;
-        }
-      } citizens_iterate_end;
-    } trade_routes_iterate_end;
-
-    return TRI_NO;
+   return TRI_NO;
   case REQ_RANGE_PLAYER:
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
   case REQ_RANGE_WORLD:
   case REQ_RANGE_LOCAL:
   case REQ_RANGE_CADJACENT:
   case REQ_RANGE_ADJACENT:
-  case REQ_RANGE_CONTINENT:
-  case REQ_RANGE_COUNT:
-    break;
-  }
-
-  fc_assert_msg(FALSE, "Invalid range %d.", range);
-
-  return TRI_MAYBE;
-}
-
-/**************************************************************************
-  Is the diplomatic state within range of the target?
-**************************************************************************/
-static enum fc_tristate is_diplrel_in_range(const struct player *target_player,
-                                            const struct player *other_player,
-                                            enum req_range range,
-                                            int diplrel)
-{
-  switch (range) {
-  case REQ_RANGE_PLAYER:
-    if (target_player == NULL) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(is_diplrel_to_other(target_player, diplrel));
-  case REQ_RANGE_TEAM:
-  case REQ_RANGE_ALLIANCE:
-  case REQ_RANGE_WORLD:
-    if (target_player == NULL) {
-      return TRI_MAYBE;
-    }
-    players_iterate_alive(plr2) {
-      if (players_in_same_range(target_player, plr2, range)) {
-        if (is_diplrel_to_other(plr2, diplrel)) {
-          return TRI_YES;
-        }
-      }
-    } players_iterate_alive_end;
-    return TRI_NO;
-  case REQ_RANGE_LOCAL:
-    if (target_player == NULL || other_player == NULL) {
-      return TRI_MAYBE;
-    }
-    return BOOL_TO_TRISTATE(is_diplrel_between(target_player, other_player, diplrel));
-  case REQ_RANGE_CADJACENT:
-  case REQ_RANGE_ADJACENT:
-  case REQ_RANGE_CITY:
-  case REQ_RANGE_TRADEROUTE:
   case REQ_RANGE_CONTINENT:
   case REQ_RANGE_COUNT:
     break;
@@ -2079,11 +1492,8 @@ static enum fc_tristate is_citytile_in_range(const struct tile *target_tile,
 
         return TRI_NO;
       case REQ_RANGE_CITY:
-      case REQ_RANGE_TRADEROUTE:
       case REQ_RANGE_CONTINENT:
       case REQ_RANGE_PLAYER:
-      case REQ_RANGE_TEAM:
-      case REQ_RANGE_ALLIANCE:
       case REQ_RANGE_WORLD:
       case REQ_RANGE_COUNT:
 	break;
@@ -2104,39 +1514,6 @@ static enum fc_tristate is_citytile_in_range(const struct tile *target_tile,
 }
 
 /****************************************************************************
-  Has achievement been claimed by someone in range.
-****************************************************************************/
-static enum fc_tristate
-is_achievement_in_range(const struct player *target_player,
-                        enum req_range range,
-                        const struct achievement *achievement)
-{
-  if (range == REQ_RANGE_WORLD) {
-    return BOOL_TO_TRISTATE(achievement_claimed(achievement));
-  } else if (target_player == NULL) {
-    return TRI_MAYBE;
-  } else if (range == REQ_RANGE_ALLIANCE || range == REQ_RANGE_TEAM) {
-    players_iterate_alive(plr2) {
-      if (players_in_same_range(target_player, plr2, range)
-          && achievement_player_has(achievement, plr2)) {
-        return TRI_YES;
-      }
-    } players_iterate_alive_end;
-    return TRI_NO;
-  } else if (range == REQ_RANGE_PLAYER) {
-    if (achievement_player_has(achievement, target_player)) {
-      return TRI_YES;
-    } else {
-      return TRI_NO;
-    }
-  } else {
-    fc_assert_ret_val_msg(FALSE, TRI_MAYBE,
-                          "Illegal range %d for achievement requirement.",
-                          range);
-  }
-}
-
-/****************************************************************************
   Checks the requirement to see if it is active on the given target.
 
   target gives the type of the target
@@ -2148,12 +1525,10 @@ is_achievement_in_range(const struct player *target_player,
   player as well as the city itself as the target city.
 ****************************************************************************/
 bool is_req_active(const struct player *target_player,
-		   const struct player *other_player,
 		   const struct city *target_city,
 		   const struct impr_type *target_building,
 		   const struct tile *target_tile,
-                   const struct unit *target_unit,
-                   const struct unit_type *target_unittype,
+		   const struct unit_type *target_unittype,
 		   const struct output_type *target_output,
 		   const struct specialist *target_specialist,
 		   const struct requirement *req,
@@ -2161,13 +1536,8 @@ bool is_req_active(const struct player *target_player,
 {
   enum fc_tristate eval = TRI_NO;
 
-  /* The supplied unit has a type. Use it if the unit type is missing. */
-  if (target_unittype == NULL && target_unit != NULL) {
-    target_unittype = unit_type(target_unit);
-  }
-
   /* Note the target may actually not exist.  In particular, effects that
-   * have a VUT_RESOURCE, or VUT_TERRAIN may often be passed
+   * have a VUT_SPECIAL, VUT_RESOURCE, or VUT_TERRAIN may often be passed
    * to this function with a city as their target.  In this case the
    * requirement is simply not met. */
   switch (req->source.kind) {
@@ -2191,27 +1561,16 @@ bool is_req_active(const struct player *target_player,
       eval = BOOL_TO_TRISTATE(government_of_player(target_player) == req->source.value.govern);
     }
     break;
-  case VUT_ACHIEVEMENT:
-    eval = is_achievement_in_range(target_player, req->range,
-                                   req->source.value.achievement);
-    break;
-  case VUT_STYLE:
-    if (target_player == NULL) {
-      eval = TRI_MAYBE;
-    } else {
-      eval = BOOL_TO_TRISTATE(target_player->style == req->source.value.style);
-    }
-    break;
   case VUT_IMPROVEMENT:
     eval = is_building_in_range(target_player, target_city,
                                 target_building,
                                 req->range, req->survives,
                                 req->source.value.building);
     break;
-  case VUT_EXTRA:
-    eval = is_extra_type_in_range(target_tile, target_city,
-                                  req->range, req->survives,
-                                  req->source.value.extra);
+  case VUT_SPECIAL:
+    eval = is_special_in_range(target_tile, target_city,
+                               req->range, req->survives,
+                               req->source.value.special);
     break;
   case VUT_TERRAIN:
     eval = is_terrain_in_range(target_tile, target_city,
@@ -2235,10 +1594,6 @@ bool is_req_active(const struct player *target_player,
   case VUT_NATIONALITY:
     eval = is_nationality_in_range(target_city, req->range,
                                    req->source.value.nationality);
-    break;
-  case VUT_DIPLREL:
-    eval = is_diplrel_in_range(target_player, other_player, req->range,
-                               req->source.value.diplrel);
     break;
   case VUT_UTYPE:
     if (target_unittype == NULL) {
@@ -2284,28 +1639,8 @@ bool is_req_active(const struct player *target_player,
     if (target_city == NULL) {
       eval = TRI_MAYBE;
     } else {
-      if (req->range == REQ_RANGE_TRADEROUTE) {
-        bool found = FALSE;
-
-        if (city_size_get(target_city) >= req->source.value.minsize) {
-          eval = TRI_YES;
-          break;
-        }
-        trade_routes_iterate(target_city, trade_partner) {
-          if (city_size_get(trade_partner) >= req->source.value.minsize) {
-            found = TRUE;
-            break;
-          }
-        } trade_routes_iterate_end;
-        eval = BOOL_TO_TRISTATE(found);
-      } else {
-        eval = BOOL_TO_TRISTATE(city_size_get(target_city) >= req->source.value.minsize);
-      }
+      eval = BOOL_TO_TRISTATE(city_size_get(target_city) >= req->source.value.minsize);
     }
-    break;
-  case VUT_MINCULTURE:
-    eval = is_minculture_in_range(target_city, target_player, req->range,
-                                  req->source.value.minculture);
     break;
   case VUT_AI_LEVEL:
     if (target_player == NULL) {
@@ -2315,24 +1650,20 @@ bool is_req_active(const struct player *target_player,
                               && target_player->ai_common.skill_level == req->source.value.ai_level);
     }
     break;
-  case VUT_MAXTILEUNITS:
-    eval = is_tile_units_in_range(target_tile, req->range,
-                                  req->source.value.max_tile_units);
-    break;
   case VUT_TERRAINCLASS:
     eval = is_terrain_class_in_range(target_tile, target_city,
                                      req->range, req->survives,
                                      req->source.value.terrainclass);
     break;
-  case VUT_BASEFLAG:
-    eval = is_baseflag_in_range(target_tile, target_city,
+  case VUT_BASE:
+    eval = is_base_type_in_range(target_tile, target_city,
                                  req->range, req->survives,
-                                 req->source.value.baseflag);
+                                 req->source.value.base);
     break;
-  case VUT_ROADFLAG:
-    eval = is_roadflag_in_range(target_tile, target_city,
+  case VUT_ROAD:
+    eval = is_road_type_in_range(target_tile, target_city,
                                  req->range, req->survives,
-                                 req->source.value.roadflag);
+                                 req->source.value.road);
     break;
   case VUT_MINYEAR:
     eval = BOOL_TO_TRISTATE(game.info.year >= req->source.value.minyear);
@@ -2367,10 +1698,11 @@ bool is_req_active(const struct player *target_player,
       return FALSE;
     }
   }
-  if (req->present) {
-    return (eval == TRI_YES);
-  } else {
+
+  if (req->negated) {
     return (eval == TRI_NO);
+  } else {
+    return (eval == TRI_YES);
   }
 }
 
@@ -2388,11 +1720,9 @@ bool is_req_active(const struct player *target_player,
   player as well as the city itself as the target city.
 ****************************************************************************/
 bool are_reqs_active(const struct player *target_player,
-		     const struct player *other_player,
 		     const struct city *target_city,
 		     const struct impr_type *target_building,
 		     const struct tile *target_tile,
-                     const struct unit *target_unit,
 		     const struct unit_type *target_unittype,
 		     const struct output_type *target_output,
 		     const struct specialist *target_specialist,
@@ -2400,10 +1730,9 @@ bool are_reqs_active(const struct player *target_player,
                      const enum   req_problem_type prob_type)
 {
   requirement_vector_iterate(reqs, preq) {
-    if (!is_req_active(target_player, other_player, target_city,
-                       target_building, target_tile,
-                       target_unit, target_unittype,
-                       target_output, target_specialist,
+    if (!is_req_active(target_player, target_city, target_building,
+		       target_tile, target_unittype, target_output,
+		       target_specialist,
 		       preq, prob_type)) {
       return FALSE;
     }
@@ -2430,31 +1759,26 @@ bool is_req_unchanging(const struct requirement *req)
   case VUT_SPECIALIST:	/* Only so long as it's at local range only */
   case VUT_AI_LEVEL:
   case VUT_CITYTILE:
-  case VUT_STYLE:
     return TRUE;
   case VUT_ADVANCE:
   case VUT_TECHFLAG:
   case VUT_GOVERNMENT:
-  case VUT_ACHIEVEMENT:
   case VUT_IMPROVEMENT:
   case VUT_MINSIZE:
-  case VUT_MINCULTURE:
   case VUT_NATIONALITY:
-  case VUT_DIPLREL:
-  case VUT_MAXTILEUNITS:
   case VUT_UTYPE:	/* Not sure about this one */
   case VUT_UTFLAG:	/* Not sure about this one */
   case VUT_UCLASS:	/* Not sure about this one */
   case VUT_UCFLAG:	/* Not sure about this one */
-  case VUT_ROADFLAG:
+  case VUT_ROAD:
     return FALSE;
+  case VUT_SPECIAL:
   case VUT_TERRAIN:
-  case VUT_EXTRA:
   case VUT_RESOURCE:
   case VUT_TERRAINCLASS:
   case VUT_TERRFLAG:
   case VUT_TERRAINALTER:
-  case VUT_BASEFLAG:
+  case VUT_BASE:
     /* Terrains, specials and bases aren't really unchanging; in fact they're
      * practically guaranteed to change.  We return TRUE here for historical
      * reasons and so that the AI doesn't get confused (since the AI
@@ -2489,14 +1813,10 @@ bool are_universals_equal(const struct universal *psource1,
     return psource1->value.techflag == psource2->value.techflag;
   case VUT_GOVERNMENT:
     return psource1->value.govern == psource2->value.govern;
-  case VUT_ACHIEVEMENT:
-    return psource1->value.achievement == psource2->value.achievement;
-  case VUT_STYLE:
-    return psource1->value.style == psource2->value.style;
   case VUT_IMPROVEMENT:
     return psource1->value.building == psource2->value.building;
-  case VUT_EXTRA:
-    return psource1->value.extra == psource2->value.extra;
+  case VUT_SPECIAL:
+    return psource1->value.special == psource2->value.special;
   case VUT_TERRAIN:
     return psource1->value.terrain == psource2->value.terrain;
   case VUT_TERRFLAG:
@@ -2507,8 +1827,6 @@ bool are_universals_equal(const struct universal *psource1,
     return psource1->value.nation == psource2->value.nation;
   case VUT_NATIONALITY:
     return psource1->value.nationality == psource2->value.nationality;
-  case VUT_DIPLREL:
-    return psource1->value.diplrel == psource2->value.diplrel;
   case VUT_UTYPE:
     return psource1->value.utype == psource2->value.utype;
   case VUT_UTFLAG:
@@ -2523,18 +1841,14 @@ bool are_universals_equal(const struct universal *psource1,
     return psource1->value.specialist == psource2->value.specialist;
   case VUT_MINSIZE:
     return psource1->value.minsize == psource2->value.minsize;
-  case VUT_MINCULTURE:
-    return psource1->value.minculture == psource2->value.minculture;
   case VUT_AI_LEVEL:
     return psource1->value.ai_level == psource2->value.ai_level;
-  case VUT_MAXTILEUNITS:
-    return psource1->value.max_tile_units == psource2->value.max_tile_units;
   case VUT_TERRAINCLASS:
     return psource1->value.terrainclass == psource2->value.terrainclass;
-  case VUT_BASEFLAG:
-    return psource1->value.baseflag == psource2->value.baseflag;
-  case VUT_ROADFLAG:
-    return psource1->value.roadflag == psource2->value.roadflag;
+  case VUT_BASE:
+    return psource1->value.base == psource2->value.base;
+  case VUT_ROAD:
+    return psource1->value.road == psource2->value.road;
   case VUT_MINYEAR:
     return psource1->value.minyear == psource2->value.minyear;
   case VUT_TERRAINALTER:
@@ -2576,14 +1890,10 @@ const char *universal_rule_name(const struct universal *psource)
     return tech_flag_id_name(psource->value.techflag);
   case VUT_GOVERNMENT:
     return government_rule_name(psource->value.govern);
-  case VUT_ACHIEVEMENT:
-    return achievement_rule_name(psource->value.achievement);
-  case VUT_STYLE:
-    return style_rule_name(psource->value.style);
   case VUT_IMPROVEMENT:
     return improvement_rule_name(psource->value.building);
-  case VUT_EXTRA:
-    return extra_rule_name(psource->value.extra);
+  case VUT_SPECIAL:
+    return special_rule_name(psource->value.special);
   case VUT_TERRAIN:
     return terrain_rule_name(psource->value.terrain);
   case VUT_TERRFLAG:
@@ -2592,8 +1902,6 @@ const char *universal_rule_name(const struct universal *psource)
     return resource_rule_name(psource->value.resource);
   case VUT_NATION:
     return nation_rule_name(psource->value.nation);
-  case VUT_DIPLREL:
-    return diplrel_rule_name(psource->value.diplrel);
   case VUT_NATIONALITY:
     return nation_rule_name(psource->value.nationality);
   case VUT_UTYPE:
@@ -2612,21 +1920,14 @@ const char *universal_rule_name(const struct universal *psource)
     fc_snprintf(buffer, sizeof(buffer), "%d", psource->value.minsize);
 
     return buffer;
-  case VUT_MINCULTURE:
-    fc_snprintf(buffer, sizeof(buffer), "%d", psource->value.minculture);
-
-    return buffer;
   case VUT_AI_LEVEL:
     return ai_level_name(psource->value.ai_level);
-  case VUT_MAXTILEUNITS:
-    fc_snprintf(buffer, sizeof(buffer), "%d", psource->value.max_tile_units);
-    return buffer;
   case VUT_TERRAINCLASS:
     return terrain_class_name(psource->value.terrainclass);
-  case VUT_BASEFLAG:
-    return base_flag_id_name(psource->value.baseflag);
-  case VUT_ROADFLAG:
-    return road_flag_id_name(psource->value.roadflag);
+  case VUT_BASE:
+    return base_rule_name(psource->value.base);
+  case VUT_ROAD:
+    return road_rule_name(psource->value.road);
   case VUT_TERRAINALTER:
     return terrain_alteration_name(psource->value.terrainalter);
   case VUT_COUNT:
@@ -2662,20 +1963,12 @@ const char *universal_name_translation(const struct universal *psource,
     fc_strlcat(buf, government_name_translation(psource->value.govern),
                bufsz);
     return buf;
-  case VUT_ACHIEVEMENT:
-    fc_strlcat(buf, achievement_name_translation(psource->value.achievement),
-               bufsz);
-    return buf;
-  case VUT_STYLE:
-    fc_strlcat(buf, style_name_translation(psource->value.style),
-               bufsz);
-    return buf;
   case VUT_IMPROVEMENT:
     fc_strlcat(buf, improvement_name_translation(psource->value.building),
                bufsz);
     return buf;
-  case VUT_EXTRA:
-    fc_strlcat(buf, extra_name_translation(psource->value.extra), bufsz);
+  case VUT_SPECIAL:
+    fc_strlcat(buf, special_name_translation(psource->value.special), bufsz);
     return buf;
   case VUT_TERRAIN:
     fc_strlcat(buf, terrain_name_translation(psource->value.terrain), bufsz);
@@ -2690,10 +1983,6 @@ const char *universal_name_translation(const struct universal *psource,
   case VUT_NATIONALITY:
     cat_snprintf(buf, bufsz, _("%s citizens"),
                  nation_adjective_translation(psource->value.nationality));
-    return buf;
-  case VUT_DIPLREL:
-    fc_strlcat(buf, diplrel_name_translation(psource->value.diplrel),
-               bufsz);
     return buf;
   case VUT_UTYPE:
     fc_strlcat(buf, utype_name_translation(psource->value.utype), bufsz);
@@ -2730,20 +2019,10 @@ const char *universal_name_translation(const struct universal *psource,
     cat_snprintf(buf, bufsz, _("Size %d"),
 		 psource->value.minsize);
     return buf;
-  case VUT_MINCULTURE:
-    cat_snprintf(buf, bufsz, _("Culture %d"),
-		 psource->value.minculture);
-    return buf;
   case VUT_AI_LEVEL:
     /* TRANS: "Hard AI" */
     cat_snprintf(buf, bufsz, _("%s AI"),
-                 ai_level_translated_name(psource->value.ai_level)); /* FIXME */
-    return buf;
-  case VUT_MAXTILEUNITS:
-    /* TRANS: here <= means 'less than or equal' */
-    cat_snprintf(buf, bufsz, PL_("<=%d unit",
-                                 "<=%d units", psource->value.max_tile_units),
-                 psource->value.max_tile_units);
+                 ai_level_name(psource->value.ai_level)); /* FIXME */
     return buf;
   case VUT_TERRAINCLASS:
     /* TRANS: Terrain class: "Land terrain" */
@@ -2757,18 +2036,14 @@ const char *universal_name_translation(const struct universal *psource,
                  /* flag names are never translated */
                  terrain_flag_id_name(psource->value.terrainflag));
     return buf;
-  case VUT_BASEFLAG:
-    cat_snprintf(buf, bufsz,
-                 /* TRANS: Base flag */
-                 Q_("?baseflag:\"%s\" base"),
-                 /* flag names are never translated */
-                 base_flag_id_name(psource->value.baseflag));
-  case VUT_ROADFLAG:
-    cat_snprintf(buf, bufsz,
-                 /* TRANS: Road flag */
-                 Q_("?roadflag:\"%s\" road"),
-                 /* flag names are never translated */
-                 road_flag_id_name(psource->value.roadflag));
+  case VUT_BASE:
+    fc_strlcat(buf, base_name_translation(psource->value.base), bufsz);
+    return buf;
+  case VUT_ROAD:
+    /* TRANS: Road type requirement: "Road" / "Railroad" / "Maglev" ... */
+    cat_snprintf(buf, bufsz, Q_("?road:%s"),
+                 road_name_translation(psource->value.road));
+    return buf;
   case VUT_MINYEAR:
     cat_snprintf(buf, bufsz, _("After %s"),
                  textyear(psource->value.minyear));
@@ -2776,7 +2051,7 @@ const char *universal_name_translation(const struct universal *psource,
   case VUT_TERRAINALTER:
     /* TRANS: "Irrigation possible" */
     cat_snprintf(buf, bufsz, _("%s possible"),
-                 Q_(terrain_alteration_name(psource->value.terrainalter)));
+                 terrain_alteration_name_translation(psource->value.terrainalter));
     return buf;
   case VUT_CITYTILE:
     fc_strlcat(buf, _("City center"), bufsz);
@@ -2811,93 +2086,4 @@ int universal_build_shield_cost(const struct universal *target)
     break;
   }
   return FC_INFINITY;
-}
-
-/*************************************************************************
-  Will the specified universal fulfill the requirements in the list?
-
-  Not being mentioned counts as fulfillment.
-**************************************************************************/
-bool universal_fulfills_requirement(const struct requirement_vector *reqs,
-                                    const struct universal *source)
-{
-  fc_assert(universal_found_function[source->kind]);
-
-  requirement_vector_iterate(reqs, preq) {
-    switch ((*universal_found_function[source->kind])(preq, source)) {
-    case ITF_NOT_APPLICABLE:
-      continue;
-    case ITF_NO:
-      if (preq->present) {
-        return FALSE;
-      }
-      break;
-    case ITF_YES:
-      if (!preq->present) {
-        return FALSE;
-      }
-      break;
-    }
-  } requirement_vector_iterate_end;
-
-  return TRUE;
-}
-
-/*************************************************************************
-  Find if a unit class fulfills a requirement
-**************************************************************************/
-static enum item_found unit_class_found(const struct requirement *preq,
-                                        const struct universal *source)
-{
-  fc_assert(source->value.uclass);
-
-  switch (preq->source.kind) {
-  case VUT_UCLASS:
-    return source->value.uclass == preq->source.value.uclass ? ITF_YES
-                                                             : ITF_NO;
-  case VUT_UCFLAG:
-    return uclass_has_flag(source->value.uclass,
-                           preq->source.value.unitclassflag) ? ITF_YES
-                                                             : ITF_NO;
-
-  default:
-    /* Not found and not relevant. */
-    return ITF_NOT_APPLICABLE;
-  };
-}
-
-/*************************************************************************
-  Find if a unit type fulfills a requirement
-**************************************************************************/
-static enum item_found unit_type_found(const struct requirement *preq,
-                                       const struct universal *source)
-{
-  fc_assert(source->value.utype);
-
-  switch (preq->source.kind) {
-  case VUT_UTYPE:
-    return source->value.utype == preq->source.value.utype ? ITF_YES : ITF_NO;
-  case VUT_UCLASS:
-    return utype_class(source->value.utype) == preq->source.value.uclass
-                                            ? ITF_YES : ITF_NO;
-  case VUT_UTFLAG:
-    return utype_has_flag(source->value.utype,
-                          preq->source.value.unitflag) ? ITF_YES : ITF_NO;
-  case VUT_UCFLAG:
-    return uclass_has_flag(utype_class(source->value.utype),
-                           preq->source.value.unitclassflag) ? ITF_YES
-                                                             : ITF_NO;
-  default:
-    /* Not found and not relevant. */
-    return ITF_NOT_APPLICABLE;
-  };
-}
-
-/************************************************************************
-  Initialise universal_found_callbacks array.
-*************************************************************************/
-void universal_found_functions_init(void)
-{
-  universal_found_function[VUT_UCLASS] = &unit_class_found;
-  universal_found_function[VUT_UTYPE] = &unit_type_found;
 }

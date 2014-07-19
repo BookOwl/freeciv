@@ -58,7 +58,7 @@ class races_dialog:public QDialog
   QComboBox *leader_name;
   QRadioButton *is_male;
   QRadioButton *is_female;
-  QTableWidget *styles;
+  QTableWidget *city_styles;
   QTextEdit *description;
   QPushButton *ok_button;
   QPushButton *random_button;
@@ -157,14 +157,13 @@ class choice_dialog: public QWidget
   QList<QVariant> data1_list;
   QList<QVariant> data2_list;
   QSignalMapper *signal_mapper;
-  void (*run_on_close)(void);
 public:
   choice_dialog(const QString title, const QString text,
-                QWidget *parent = NULL, void (*run_on_close)(void) = NULL);
+                QWidget *parent = NULL);
   ~choice_dialog();
   void set_layout();
   void add_item(QString title, pfcn_void func, QVariant data1, 
-                QVariant data2, QString tool_tip);
+                QVariant data2);
   void show_me();
   QVBoxLayout *get_layout();
   QList<pfcn_void> func_list;

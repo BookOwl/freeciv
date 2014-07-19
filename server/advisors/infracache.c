@@ -23,10 +23,8 @@
 #include "tile.h"
 
 /* server */
+#include "citytools.h"
 #include "maphand.h"
-
-/* server/advisors */
-#include "advbuilding.h"
 
 #include "infracache.h"
 
@@ -62,7 +60,7 @@ static int adv_calc_base(const struct city *pcity, const struct tile *ptile,
 static int adv_calc_irrigate(const struct city *pcity,
                              const struct tile *ptile)
 {
-  int goodness;
+  int goodness, farmland_goodness;
   struct terrain *old_terrain, *new_terrain;
 
   fc_assert_ret_val(ptile != NULL, -1)
@@ -77,56 +75,54 @@ static int adv_calc_irrigate(const struct city *pcity,
       /* Not a valid activity. */
       return -1;
     }
-    /* Irrigation would change the terrain type, clearing conflicting
-     * extras in the process.  Calculate the benefit of doing so. */
+    /* Irrigation would change the terrain type, clearing the mine
+     * in the process.  Calculate the benefit of doing so. */
     vtile = tile_virtual_new(ptile);
 
     tile_change_terrain(vtile, new_terrain);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
-
     return goodness;
-  } else if (old_terrain == new_terrain) {
-    struct extra_type *pextra = next_extra_for_tile(ptile, EC_IRRIGATION,
-                                                    city_owner(pcity), NULL);
-
-    if (pextra != NULL) {
-      struct tile *vtile = tile_virtual_new(ptile);
-
-      /* Try to add extra, and to remove conflicting ones. */
-      if (tile_extra_apply(vtile, pextra)) {
-        struct extra_type *pextra2 = next_extra_for_tile(vtile, EC_IRRIGATION,
-                                                         city_owner(pcity), NULL);
-
-        goodness = city_tile_value(pcity, vtile, 0, 0);
-
-        if (pextra2 != NULL) {
-          struct tile *vtile2 = tile_virtual_new(vtile);
-
-          /* If the player can further irrigate to make farmland, consider the
-           * potentially greater benefit.  Note the hack: autosettler ordinarily
-           * discounts benefits by the time it takes to make them; farmland takes
-           * twice as long, so make it look half as good. */
-          if (tile_extra_apply(vtile2, pextra2)) {
-            int second_goodness = city_tile_value(pcity, vtile2, 0, 0);
-            int oldv = city_tile_value(pcity, ptile, 0, 0);
-
-            second_goodness = oldv + (second_goodness - oldv) / 2;
-
-            if (second_goodness > goodness) {
-              goodness = second_goodness;
-            }
-          }
-          tile_virtual_destroy(vtile2);
-        }
-        tile_virtual_destroy(vtile);
-
-        return goodness;
+  } else if (old_terrain == new_terrain
+             && !tile_has_special(ptile, S_IRRIGATION)) {
+    /* The tile is currently unirrigated; irrigating it would put an
+     * S_IRRIGATE on it replacing any S_MINE already there.  Calculate
+     * the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    tile_clear_special(vtile, S_MINE);
+    tile_set_special(vtile, S_IRRIGATION);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    /* If the player can further irrigate to make farmland, consider the
+     * potentially greater benefit.  Note the hack: autosettler ordinarily
+     * discounts benefits by the time it takes to make them; farmland takes
+     * twice as long, so make it look half as good. */
+    if (player_knows_techs_with_flag(city_owner(pcity), TF_FARMLAND)) {
+      int oldv = city_tile_value(pcity, ptile, 0, 0);
+      vtile = tile_virtual_new(ptile);
+      tile_clear_special(vtile, S_MINE);
+      tile_set_special(vtile, S_IRRIGATION);
+      tile_set_special(vtile, S_FARMLAND);
+      farmland_goodness = city_tile_value(pcity, vtile, 0, 0);
+      farmland_goodness = oldv + (farmland_goodness - oldv) / 2;
+      if (farmland_goodness > goodness) {
+        goodness = farmland_goodness;
       }
+      tile_virtual_destroy(vtile);
     }
-
-    /* Cannot build irrigation extra */
-    return -1;
+    return goodness;
+  } else if (old_terrain == new_terrain
+             && tile_has_special(ptile, S_IRRIGATION)
+             && !tile_has_special(ptile, S_FARMLAND)
+             && player_knows_techs_with_flag(city_owner(pcity), TF_FARMLAND)) {
+    /* The tile is currently irrigated; irrigating it more puts an
+     * S_FARMLAND on it.  Calculate the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    fc_assert(!tile_has_special(vtile, S_MINE));
+    tile_set_special(vtile, S_FARMLAND);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    return goodness;
   } else {
     return -1;
   }
@@ -157,56 +153,26 @@ static int adv_calc_mine(const struct city *pcity, const struct tile *ptile)
       /* Not a valid activity. */
       return -1;
     }
-    /* Mining would change the terrain type, clearing conflicting
-     * extras in the process.  Calculate the benefit of doing so. */
+    /* Mining would change the terrain type, clearing the irrigation
+     * in the process.  Calculate the benefit of doing so. */
     vtile = tile_virtual_new(ptile);
 
     tile_change_terrain(vtile, new_terrain);
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);
-
     return goodness;
-  } else if (old_terrain == new_terrain) {
-    struct extra_type *pextra = next_extra_for_tile(ptile, EC_MINE,
-                                                    city_owner(pcity), NULL);
-
-    if (pextra != NULL) {
-      struct tile *vtile = tile_virtual_new(ptile);
-
-      /* Try to add extra, and to remove conflicting ones. */
-      if (tile_extra_apply(vtile, pextra)) {
-        struct extra_type *pextra2 = next_extra_for_tile(vtile, EC_MINE,
-                                                         city_owner(pcity), NULL);
-
-        goodness = city_tile_value(pcity, vtile, 0, 0);
-
-        if (pextra2 != NULL) {
-          struct tile *vtile2 = tile_virtual_new(vtile);
-
-          /* If the player can further mine, consider the
-           * potentially greater benefit.  Note the hack: autosettler ordinarily
-           * discounts benefits by the time it takes to make them; second level mine
-           * takes twice as long, so make it look half as good. */
-          if (tile_extra_apply(vtile2, pextra2)) {
-            int second_goodness = city_tile_value(pcity, vtile2, 0, 0);
-            int oldv = city_tile_value(pcity, ptile, 0, 0);
-
-            second_goodness = oldv + (second_goodness - oldv) / 2;
-
-            if (second_goodness > goodness) {
-              goodness = second_goodness;
-            }
-          }
-          tile_virtual_destroy(vtile2);
-        }
-        tile_virtual_destroy(vtile);
-
-        return goodness;
-      }
-    }
-
-    /* Cannot build mine extra */
-    return -1;
+  } else if (old_terrain == new_terrain
+             && !tile_has_special(ptile, S_MINE)) {
+    /* The tile is currently unmined; mining it would put an S_MINE on it
+     * replacing any S_IRRIGATION/S_FARMLAND already there.  Calculate
+     * the benefit of doing so. */
+    struct tile *vtile = tile_virtual_new(ptile);
+    tile_clear_special(vtile, S_IRRIGATION);
+    tile_clear_special(vtile, S_FARMLAND);
+    tile_set_special(vtile, S_MINE);
+    goodness = city_tile_value(pcity, vtile, 0, 0);
+    tile_virtual_destroy(vtile);
+    return goodness;
   } else {
     return -1;
   }
@@ -272,27 +238,19 @@ static int adv_calc_pollution(const struct city *pcity,
 {
   int goodness;
   struct tile *vtile;
-  bool polluted = FALSE;
 
-  fc_assert_ret_val(ptile != NULL, -1);
+  fc_assert_ret_val(ptile != NULL, -1)
+
+  if (!tile_has_special(ptile, S_POLLUTION)) {
+    return -1;
+  }
 
   vtile = tile_virtual_new(ptile);
+  tile_clear_special(vtile, S_POLLUTION);
+  goodness = city_tile_value(pcity, vtile, 0, 0);
 
-  extra_type_by_rmcause_iterate(ERM_CLEANPOLLUTION, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      polluted = TRUE;
-      tile_remove_extra(vtile, pextra);
-    }
-  } extra_type_by_rmcause_iterate_end;
-
-  if (!polluted) {
-    goodness = -1;
-  } else {
-    goodness = city_tile_value(pcity, vtile, 0, 0);
-
-    /* FIXME: need a better way to guarantee pollution is cleaned up. */
-    goodness = (goodness + best + 50) * 2;
-  }
+  /* FIXME: need a better way to guarantee pollution is cleaned up. */
+  goodness = (goodness + best + 50) * 2;
 
   tile_virtual_destroy(vtile);
 
@@ -312,28 +270,20 @@ static int adv_calc_fallout(const struct city *pcity,
 {
   int goodness;
   struct tile *vtile;
-  bool polluted = FALSE;
 
-  fc_assert_ret_val(ptile != NULL, -1);
+  fc_assert_ret_val(ptile != NULL, -1)
+
+  if (!tile_has_special(ptile, S_FALLOUT)) {
+    return -1;
+  }
 
   vtile = tile_virtual_new(ptile);
+  tile_clear_special(vtile, S_FALLOUT);
+  goodness = city_tile_value(pcity, vtile, 0, 0);
 
-  extra_type_by_rmcause_iterate(ERM_CLEANFALLOUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(vtile, pextra);
-      polluted = TRUE;
-    }
-  } extra_type_by_rmcause_iterate_end;
-
-  if (!polluted) {
-    goodness = -1;
-  } else {
-    goodness = city_tile_value(pcity, vtile, 0, 0);
-
-    /* FIXME: need a better way to guarantee fallout is cleaned up. */
-    if (!city_owner(pcity)->ai_controlled) {
-      goodness = (goodness + best + 50) * 2;
-    }
+  /* FIXME: need a better way to guarantee fallout is cleaned up. */
+  if (!city_owner(pcity)->ai_controlled) {
+    goodness = (goodness + best + 50) * 2;
   }
 
   tile_virtual_destroy(vtile);
@@ -394,12 +344,12 @@ static int adv_calc_base(const struct city *pcity, const struct tile *ptile,
 
     tile_add_base(vtile, pbase);
 
-    extra_type_iterate(cextra) {
-      if (tile_has_extra(vtile, cextra)
-          && !can_extras_coexist(base_extra_get(pbase), cextra)) {
-        tile_remove_extra(vtile, cextra);
+    base_type_iterate(cbase) {
+      if (BV_ISSET(pbase->conflicts, base_index(cbase))
+          && tile_has_base(vtile, cbase)) {
+        tile_remove_base(vtile, cbase);
       }
-    } extra_type_iterate_end;
+    } base_type_iterate_end;
 
     goodness = city_tile_value(pcity, vtile, 0, 0);
     tile_virtual_destroy(vtile);

@@ -16,13 +16,6 @@ desktopfile_DATA += \
 appdatafile_DATA += \
 	freeciv-sdl.appdata.xml
 endif
-if CLIENT_GUI_SDL2
-GUI_SUBDIRS += gui-sdl2
-desktopfile_DATA += \
-	freeciv-sdl2.desktop
-appdatafile_DATA += \
-	freeciv-sdl2.appdata.xml
-endif
 if CLIENT_GUI_GTK_2_0
 GUI_SUBDIRS += gui-gtk-2.0
 desktopfile_DATA += \
@@ -128,8 +121,6 @@ freeciv_client_src = $(AUDIO_SDL_FILES) \
 	mapview_common.h \
 	messagewin_common.c \
 	messagewin_common.h \
-	music.c		\
-	music.h		\
 	overview_common.c	\
 	overview_common.h	\
 	packhand.c	\
@@ -233,22 +224,6 @@ freeciv_sdl_LDADD = \
  $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
  $(MAPIMG_WAND_LIBS) \
  $(gui_sdl_libs)
-endif
-
-if CLIENT_GUI_SDL2
-bin_PROGRAMS += freeciv-sdl2
-noinst_LTLIBRARIES += libfcgui-sdl2.la
-libfcgui_sdl2_la_SOURCES = $(freeciv_client_src)
-libfcgui_sdl2_la_LIBADD = gui-sdl2/libgui-sdl2.la $(clientlibs)
-freeciv_sdl2_SOURCES = dummy.c
-freeciv_sdl2_LDFLAGS = $(gui_sdl2_ldflags) $(GGZMOD_ldflags)
-freeciv_sdl2_LDADD = \
- $(gui_sdl2_libs) \
- libfcgui-sdl2.la \
- $(top_builddir)/common/libfreeciv.la \
- $(INTLLIBS) $(CLIENT_LIBS) $(SOUND_LIBS) $(LIB_GGZMOD) $(CLIENTICON) \
- $(MAPIMG_WAND_LIBS) \
- $(gui_sdl2_libs)
 endif
 
 if CLIENT_GUI_XAW

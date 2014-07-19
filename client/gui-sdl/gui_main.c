@@ -193,12 +193,12 @@ static void parse_options(int argc, char **argv)
       print_usage(argv[0]);
       exit(EXIT_SUCCESS);
     } else if (is_option("--fullscreen",argv[i])) {
-      options.gui_sdl_fullscreen = TRUE;
+      gui_sdl_fullscreen = TRUE;
     } else if (is_option("--eventthread",argv[i])) {
       /* init events in other thread ( only linux and BeOS ) */  
       SDL_InitSubSystem(SDL_INIT_EVENTTHREAD);
     } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
-      sz_strlcpy(options.gui_sdl_default_theme_name, option);
+      sz_strlcpy(gui_sdl_default_theme_name, option);
     }
     i++;
   }
@@ -262,19 +262,15 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
             flush_dirty();
             return ID_ERROR;
 
-        case SDLK_F11:
-          send_report_request(REPORT_DEMOGRAPHIC);
+	  case SDLK_F11:
+            send_report_request(REPORT_DEMOGRAPHIC);
           return ID_ERROR;
 
-        case SDLK_F12:
-          popup_spaceship_dialog(client.conn.playing);
+	  case SDLK_F12:
+            popup_spaceship_dialog(client.conn.playing);
           return ID_ERROR;
 
-        case SDLK_ASTERISK:
-          send_report_request(REPORT_ACHIEVEMENTS);
-          return ID_ERROR;
-
-        default:
+	  default:
 	  return ID_ERROR;
 	}
       }
@@ -375,7 +371,7 @@ static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void
   }
 
 #ifndef UNDER_CE
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     check_scroll_area(pMotionEvent->x, pMotionEvent->y);
   }
 #endif /* UNDER_CE */
@@ -857,12 +853,12 @@ static void real_resize_window_callback(void *data)
   struct widget *widget;
   Uint32 flags = Main.screen->flags;
 
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     flags |= SDL_FULLSCREEN;
   } else {
     flags &= ~SDL_FULLSCREEN;
   }
-  set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height, flags);
+  set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height, flags);
 
   if (C_S_RUNNING == client_state()) {
     /* Move units window to botton-right corner. */
@@ -914,8 +910,8 @@ void gui_options_extra_init(void)
     log_error("Didn't find option %s!", #var);                              \
   }
 
-  option_var_set_callback(options.gui_sdl_fullscreen, resize_window_callback);
-  option_var_set_callback(options.gui_sdl_screen, resize_window_callback);
+  option_var_set_callback(gui_sdl_fullscreen, resize_window_callback);
+  option_var_set_callback(gui_sdl_screen, resize_window_callback);
 #undef option_var_set_callback
 }
 
@@ -1018,19 +1014,19 @@ void ui_main(int argc, char *argv[])
     
   setup_auxiliary_tech_icons();
   
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE
         /* set 320x240 fullscreen */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
       #else  /* UNDER_CE */
         /* small screen on desktop -> don't set 320x240 fullscreen mode */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif /* UNDER_CE */
     #else  /* SMALL_SCREEN */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
     #endif /* SMALL_SCREEN */
     
@@ -1038,14 +1034,14 @@ void ui_main(int argc, char *argv[])
     
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE    
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #else  /* UNDER_CE */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif /* UNDER_CE */
     #else  /* SMALL_SCREEN */
-    set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+    set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
       SDL_SWSURFACE | SDL_ANYFORMAT);
     #endif /* SMALL_SCREEN */
     
@@ -1251,14 +1247,6 @@ void gui_ggz_embed_ensure_server(void)
   Updates a gui font style.
 **************************************************************************/
 void gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
 {
   /* PORTME */
 }

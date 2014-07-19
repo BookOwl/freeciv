@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2013.Oct.19"
+options = "+Freeciv-2.5-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "cimpletoon"
@@ -67,7 +67,6 @@ files =
   "amplio2/tiles.spec",
   "amplio2/fog.spec",
   "misc/small.spec",
-  "misc/events.spec",
   "misc/governments.spec",
   "misc/specialists.spec",
   "amplio2/veterancy.spec",
@@ -145,11 +144,13 @@ num_layers = 3
 layer0_match_type = "shallow"
 layer1_match_type = "ice"
 layer2_match_type = "ice"
+mine_sprite = "tx.oil_mine"
 
 [tile_desert]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
 [tile_forest]
 blend_layer = 1
@@ -157,11 +158,13 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
+mine_sprite = "tx.mine"
 
 [tile_grassland]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_hills]
 blend_layer = 1
@@ -169,6 +172,7 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "hills"
 layer1_match_with = "hills"
+mine_sprite = "tx.mine"
 
 [tile_jungle]
 blend_layer = 1
@@ -176,6 +180,7 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
+mine_sprite = "tx.mine"
 
 [tile_mountains]
 blend_layer = 1
@@ -185,36 +190,30 @@ layer1_match_type = "hills"
 layer1_match_with = "hills"
 layer1_is_tall = TRUE
 layer1_offset_y = 6
+mine_sprite = "tx.mine"
 
 [tile_plains]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_swamp]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_tundra]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
-[extras]
+[roads]
 styles =
-    { "name",          "style"
-      "road.road",     "RoadAllSeparate"
-      "road.rail",     "RoadAllSeparate"
-      "road.river",    "River"
-      "tx.irrigation", "Cardinals"
-      "tx.farmland",   "Cardinals"
-      "tx.mine",       "Single1"
-      "tx.oil_mine",   "Single1"
-      "tx.pollution",  "Single2"
-      "tx.fallout",    "Single2"
-      "tx.village",    "Single1"
-      "base.fortress", "3Layer"
-      "base.airbase",  "3Layer"
-      "base.ruins",    "3Layer"
+    { "name",  "style"
+      "road.road",  "AllSeparate"
+      "road.rail",  "AllSeparate"
+      "road.river", "River"
     }

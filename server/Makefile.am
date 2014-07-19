@@ -28,13 +28,12 @@ SERVERICON=../win32/servericon.o
 endif
 
 exe_sources = \
-		civserver.c
+		civserver.c	\
+		civserver.h
 
 libfreeciv_srv_la_SOURCES = \
 		aiiface.c	\
 		aiiface.h	\
-		animals.c	\
-		animals.h	\
 		auth.c		\
 		auth.h		\
 		barbarian.c	\
@@ -73,8 +72,6 @@ libfreeciv_srv_la_SOURCES = \
 		maphand.h	\
 		meta.c		\
 		meta.h		\
-		mood.c		\
-		mood.h		\
 		notify.c	\
 		notify.h	\
 		plrhand.c	\
@@ -87,8 +84,6 @@ libfreeciv_srv_la_SOURCES = \
 		ruleset.h	\
 		sanitycheck.c	\
 		sanitycheck.h	\
-		savecompat.c	\
-		savecompat.h	\
 		savegame.c	\
 		savegame.h	\
 		savegame2.c	\

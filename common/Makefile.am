@@ -11,32 +11,22 @@ AM_CPPFLAGS = \
 	$(MAPIMG_WAND_CFLAGS)
 
 libfreeciv_la_SOURCES = \
-		achievements.c	\
-		achievements.h	\
-		actions.c	\
-		actions.h	\
 		ai.c		\
 		ai.h		\
 		base.c		\
 		base.h		\
 		borders.c	\
 		borders.h	\
-		calendar.c	\
-		calendar.h	\
 		capstr.c	\
 		capstr.h	\
 		citizens.c	\
 		citizens.h	\
 		city.c		\
 		city.h		\
-		clientutils.c	\
-		clientutils.h	\
 		combat.c	\
 		combat.h	\
 		connection.c	\
 		connection.h	\
-		culture.c	\
-		culture.h	\
 		dataio.c	\
 		dataio.h	\
 		diptreaty.c	\
@@ -47,8 +37,6 @@ libfreeciv_la_SOURCES = \
 		effects.h	\
 		events.c	\
 		events.h	\
-		extras.c	\
-		extras.h	\
 		featured_text.c	\
 		featured_text.h	\
 		fc_cmdhelp.c	\
@@ -68,8 +56,6 @@ libfreeciv_la_SOURCES = \
 		map.h		\
 		mapimg.c	\
 		mapimg.h	\
-		metaknowledge.c \
-		metaknowledge.h \
 		movement.c	\
 		movement.h	\
 		name_translation.h \
@@ -93,8 +79,6 @@ libfreeciv_la_SOURCES = \
 		spaceship.h	\
 		specialist.c	\
 		specialist.h	\
-		style.c		\
-		style.h		\
 		team.c		\
 		team.h		\
 		tech.c		\
@@ -112,16 +96,14 @@ libfreeciv_la_SOURCES = \
 		unitlist.h	\
 		unittype.c	\
 		unittype.h	\
-		version.c	\
-		version.h	\
-		victory.c	\
-		victory.h	\
 		vision.c	\
 		vision.h	\
 		workertask.c	\
 		workertask.h	\
 		worklist.c	\
-		worklist.h
+		worklist.h	\
+		version.c	\
+		version.h
 
 EXTRA_DIST = \
 		packets.def	\

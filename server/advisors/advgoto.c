@@ -157,6 +157,8 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
   Similar to is_my_zoc(), but with some changes:
   - destination (x0,y0) need not be adjacent?
   - don't care about some directions?
+  
+  Note this function only makes sense for ground units.
 
   Fix to bizarre did-not-find bug.  Thanks, Katvrr -- Syela
 **************************************************************************/
@@ -171,7 +173,7 @@ static bool adv_could_be_my_zoc(struct unit *myunit, struct tile *ptile)
   }
 
   adjc_iterate(ptile, atile) {
-    if (!terrain_has_flag(tile_terrain(atile), TER_NO_ZOC)
+    if (!is_ocean_tile(atile)
 	&& is_non_allied_unit_tile(atile, unit_owner(myunit))) {
       return FALSE;
     }
@@ -256,14 +258,14 @@ bool adv_danger_at(struct unit *punit, struct tile *ptile)
   int a = 0, d, db;
   struct player *pplayer = unit_owner(punit);
   struct city *pcity = tile_city(ptile);
-  enum override_bool dc = NO_OVERRIDE;
+  enum danger_consideration dc = DANG_UNDECIDED;
   int extras_bonus = 0;
 
   /* Give AI code possibility to decide itself */
   CALL_PLR_AI_FUNC(consider_tile_dangerous, unit_owner(punit), ptile, punit, &dc);
-  if (dc == OVERRIDE_TRUE) {
+  if (dc == DANG_YES) {
     return TRUE;
-  } else if (dc == OVERRIDE_FALSE) {
+  } else if (dc == DANG_NOT) {
     return FALSE;
   }
 
@@ -348,8 +350,7 @@ static double chance_killed_at(const struct tile *ptile,
 
   /* If we are on defensive terrain, we are more likely to survive */
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  extras_bonus += tile_extras_class_defense_bonus(ptile,
-                                                  utype_class(param->utype));
+  extras_bonus += tile_extras_class_defense_bonus(ptile, param->uclass);
   db += (extras_bonus) / 100;
   p *= 10.0 / db;
 

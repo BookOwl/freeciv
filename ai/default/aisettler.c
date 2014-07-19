@@ -51,13 +51,9 @@
 #include "infracache.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "aidata.h"
 #include "aicity.h"
 #include "aiferry.h"
-#include "ailog.h"
 #include "aiplayer.h"
 #include "aitools.h"
 #include "aiunit.h"
@@ -136,9 +132,11 @@ static void tile_data_cache_destroy(struct tile_data_cache *ptdc);
 
 /* struct tdcache_hash. */
 #define SPECHASH_TAG tile_data_cache
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct tile_data_cache *
-#define SPECHASH_IDATA_FREE tile_data_cache_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct tile_data_cache *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_FREE tile_data_cache_destroy
 #include "spechash.h"
 
 struct ai_settler {
@@ -278,7 +276,7 @@ static struct cityresult *cityresult_fill(struct ai_type *ait,
   struct player *saved_owner = NULL;
   struct tile *saved_claimer = NULL;
   bool virtual_city = FALSE;
-  bool handicap = has_handicap(pplayer, H_MAP);
+  bool handicap = ai_handicap(pplayer, H_MAP);
   struct adv_data *adv = adv_data_get(pplayer, NULL);
   struct ai_plr *ai = dai_plr_data_get(ait, pplayer, NULL);
   struct cityresult *result;
@@ -587,12 +585,11 @@ static int defense_bonus(const struct cityresult *result)
     10 + tile_terrain(result->tile)->defense_bonus / 10;
   int river_bonus = 0;
 
-  /* TODO: Check those extras that would survive on city tile, not roads */
   road_type_iterate(priver) {
     if (tile_has_road(result->tile, priver)) {
       /* TODO: Do not use full bonus of those road types
        *       that are not native to all important units. */
-      river_bonus += road_extra_get(priver)->defense_bonus;
+      river_bonus += priver->defense_bonus;
     }
   } road_type_iterate_end;
 
@@ -704,7 +701,7 @@ struct cityresult *city_desirability(struct ai_type *ait, struct player *pplayer
   fc_assert_ret_val(ai, NULL);
 
   if (!city_can_be_built_here(ptile, punit)
-      || (has_handicap(pplayer, H_MAP)
+      || (ai_handicap(pplayer, H_MAP)
           && !map_is_known(ptile, pplayer))) {
     return NULL;
   }
@@ -879,6 +876,7 @@ static struct cityresult *find_best_city_placement(struct ai_type *ait,
   struct pf_parameter parameter;
   struct player *pplayer = unit_owner(punit);
   struct unit *ferry = NULL;
+  struct unit_class *ferry_class = NULL;
   struct cityresult *cr1 = NULL, *cr2 = NULL;
 
   fc_assert_ret_val(pplayer->ai_controlled, NULL);
@@ -888,7 +886,6 @@ static struct cityresult *find_best_city_placement(struct ai_type *ait,
   /* Phase 1: Consider building cities on our continent */
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   cr1 = settler_map_iterate(ait, &parameter, punit, 0);
 
   if (cr1 && cr1->result > RESULT_IS_ENOUGH) {
@@ -917,12 +914,10 @@ static struct cityresult *find_best_city_placement(struct ai_type *ait,
         boattype = get_role_unit(L_FERRYBOAT, 0);
 
         if (NULL != boattype
-            && A_NEVER != boattype->require_advance) {
-          struct ai_plr *plr_data = def_ai_player_data(pplayer, ait);
-
-          plr_data->tech_want[advance_index(boattype->require_advance)]
+         && A_NEVER != boattype->require_advance) {
+          pplayer->ai_common.tech_want[advance_index(boattype->require_advance)]
             += FERRY_TECH_WANT;
-          TECH_LOG(ait, LOG_DEBUG, pplayer, boattype->require_advance,
+          TECH_LOG(LOG_DEBUG, pplayer, boattype->require_advance,
                    "+ %d for %s to ferry settler",
                    FERRY_TECH_WANT,
                    utype_rule_name(boattype));
@@ -934,9 +929,10 @@ static struct cityresult *find_best_city_placement(struct ai_type *ait,
       unit_tile_set(ferry, unit_tile(punit));
     }
 
-    fc_assert(dai_is_ferry(ferry, ait));
+    ferry_class = unit_class(ferry);
+
+    fc_assert(ferry_class->adv.sea_move != MOVE_NONE);
     pft_fill_unit_overlap_param(&parameter, ferry);
-    parameter.omniscience = !has_handicap(pplayer, H_MAP);
     parameter.get_TB = no_fights_or_unknown;
 
     /* FIXME: Maybe penalty for using an existing boat is too high?
@@ -1008,7 +1004,7 @@ void dai_auto_settler_run(struct ai_type *ait, struct player *pplayer,
 {
   int best_impr = 0;            /* best terrain improvement we can do */
   enum unit_activity best_act;
-  struct extra_type *best_target;
+  struct act_tgt best_target;
   struct tile *best_tile = NULL;
   struct pf_path *path = NULL;
 

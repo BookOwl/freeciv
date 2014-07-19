@@ -29,7 +29,7 @@ ruler_titles = {
 
 flag="uae"
 flag_alt = "-"
-style = "Babylonian"
+city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""

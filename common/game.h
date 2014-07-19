@@ -58,8 +58,7 @@ enum autosave_type {
   AS_TURN = 0,
   AS_GAME_OVER,
   AS_QUITIDLE,
-  AS_INTERRUPT,
-  AS_TIMER
+  AS_INTERRUPT
 };
 
 struct user_flag
@@ -67,6 +66,9 @@ struct user_flag
   char *name;
   char *helptxt;
 };
+
+#define CONTAMINATION_POLLUTION 1
+#define CONTAMINATION_FALLOUT   2
 
 /* The number of turns that the first user needs to be attached to a 
  * player for that user to be ranked as that player */
@@ -97,7 +99,7 @@ struct civ_game {
     struct {
       /* Only used at the client (./client/). */
 
-      bool ruleset_init;
+      /* Nothing yet. */
     } client;
 
     struct {
@@ -107,6 +109,7 @@ struct civ_game {
 
       /* Game settings & other data. */
 
+      bool allied_victory;
       enum city_names_mode allowed_city_names;
       enum plrcolor_mode plrcolormode;
       int aqueductloss;
@@ -144,6 +147,7 @@ struct civ_game {
       int min_players;
       bool natural_city_names;
       int netwait;
+      int nuke_contamination;
       int num_phases;
       int occupychance;
       int onsetbarbarian;
@@ -156,7 +160,6 @@ struct civ_game {
       int save_compress_level;
       enum fz_method save_compress_type;
       int save_nturns;
-      int save_frequency;
       unsigned autosaves; /* FIXME: char would be enough, but current settings.c code wants to
                              write sizeof(unsigned) bytes */
       bool savepalace;
@@ -189,7 +192,6 @@ struct civ_game {
        * use. The "stored" value is a value the player can change; it won't
        * take effect until the next turn. */
       int phase_mode_stored;
-      struct timer *save_timer;
       char connectmsg[MAX_LEN_MSG];
       char save_name[MAX_LEN_NAME];
       bool scorelog;
@@ -237,13 +239,6 @@ struct civ_game {
       } mutexes;
 
       int first_timeout;
-
-      struct trait_limits default_traits[TRAIT_COUNT];
-      struct government *default_government;
-
-      struct {
-        const char *nationlist;
-      } ruledit;
     } server;
   };
 
@@ -265,6 +260,9 @@ void game_reset(void);
 void game_ruleset_init(void);
 void game_ruleset_free(void);
 
+int game_next_year(int);
+void game_advance_year(void);
+
 int civ_population(const struct player *pplayer);
 struct city *game_city_by_name(const char *name);
 struct city *game_city_by_number(int id);
@@ -278,6 +276,8 @@ void initialize_globals(void);
 bool is_player_phase(const struct player *pplayer, int phase);
 
 const char *population_to_text(int thousand_citizen);
+
+const char *textyear(int year);
 
 int generate_save_name(const char *format, char *buf, int buflen,
                        const char *reason);
@@ -464,7 +464,7 @@ extern struct civ_game game;
 #define GAME_DEFAULT_SCOREFILE       "freeciv-score.log"
 #define GAME_DEFAULT_SCORETURN       20
 
-#define GAME_DEFAULT_VICTORY_CONDITIONS (1 << VC_SPACERACE | 1 << VC_ALLIED)
+#define GAME_DEFAULT_SPACERACE       TRUE
 #define GAME_DEFAULT_END_SPACESHIP   TRUE
 
 #define GAME_DEFAULT_TURNBLOCK       TRUE
@@ -549,17 +549,13 @@ extern struct civ_game game;
 #define GAME_DEFAULT_SAVETURNS       1
 #define GAME_MIN_SAVETURNS           1
 #define GAME_MAX_SAVETURNS           200
-#define GAME_DEFAULT_SAVEFREQUENCY   15
-#define GAME_MIN_SAVEFREQUENCY       2
-#define GAME_MAX_SAVEFREQUENCY       1440
 
 #define GAME_DEFAULT_AUTOSAVES       (1 << AS_TURN | 1 << AS_GAME_OVER | 1 << AS_QUITIDLE | 1 << AS_INTERRUPT)
 
-#define GAME_DEFAULT_SKILL_LEVEL     AI_LEVEL_EASY
-#define GAME_HARDCODED_DEFAULT_SKILL_LEVEL 3 /* that was 'easy' in old saves */
-#define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for oldest save games */
+#define GAME_DEFAULT_SKILL_LEVEL 3      /* easy */
+#define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
 
-#define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOCqrb"
+#define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOqrb"
 #define GAME_DEFAULT_ALLOW_TAKE      "HAhadOo"
 
 #define GAME_DEFAULT_EVENT_CACHE_TURNS    1
@@ -592,16 +588,17 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_PLRCOLORMODE PLRCOL_PLR_ORDER
 
-#define GAME_DEFAULT_REVOLENTYPE        REVOLEN_RANDOM
-#define GAME_DEFAULT_REVOLUTION_LENGTH  5
-#define GAME_MIN_REVOLUTION_LENGTH      1
-#define GAME_MAX_REVOLUTION_LENGTH      20
+#define GAME_DEFAULT_REVOLUTION_LENGTH 0
+#define GAME_MIN_REVOLUTION_LENGTH 0
+#define GAME_MAX_REVOLUTION_LENGTH 10
 
 #define GAME_START_YEAR -4000
 
 #define GAME_DEFAULT_AIRLIFTINGSTYLE AIRLIFTING_CLASSICAL
 
 #define GAME_MAX_READ_RECURSION 10 /* max recursion for the read command */
+
+#define GAME_DEFAULT_ALLIED_VICTORY TRUE
 
 #define GAME_DEFAULT_KICK_TIME 1800     /* 1800 seconds = 30 minutes. */
 #define GAME_MIN_KICK_TIME 0            /* 0 = disabling. */

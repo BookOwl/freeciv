@@ -31,7 +31,6 @@
 #include "map.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
 #include "unit.h"
 
 /* common/scriptcore */
@@ -187,30 +186,26 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
           }
           break;
 	case CLAUSE_ADVANCE:
-          if (!research_invention_gettable(research_get(pother),
-                   pclause->value, game.info.tech_trade_allow_holes)) {
+          if (!player_invention_reachable(pother, pclause->value, FALSE)) {
 	    /* It is impossible to give a technology to a civilization that
-	     * can not possess it (the client should enforce this). */
+	     * can never possess it (the client should enforce this). */
             log_error("Treaty: %s can't have tech %s",
                       nation_rule_name(nation_of_player(pother)),
-                      advance_rule_name(advance_by_number(pclause->value)));
+                      advance_name_by_player(pplayer, pclause->value));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
                           _("The %s can't accept %s."),
                           nation_plural_for_player(pother),
-                          advance_name_translation(advance_by_number
-                                                   (pclause->value)));
+			  advance_name_for_player(pplayer, pclause->value));
 	    return;
           }
-          if (research_invention_state(research_get(pplayer), pclause->value)
-              != TECH_KNOWN) {
+	  if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
             log_error("Nation %s try to give unknown tech %s to nation %s.",
                       nation_rule_name(nation_of_player(pplayer)),
-                      advance_rule_name(advance_by_number(pclause->value)),
+                      advance_name_by_player(pplayer, pclause->value),
                       nation_rule_name(nation_of_player(pother)));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
 			  _("You don't have tech %s, you can't accept treaty."),
-                          advance_name_translation(advance_by_number
-                                                   (pclause->value)));
+			  advance_name_for_player(pplayer, pclause->value));
 	    return;
 	  }
 	  break;
@@ -417,26 +412,23 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
         /* It is possible that two players open the diplomacy dialog
          * and try to give us the same tech at the same time. This
          * should be handled discreetly instead of giving a core dump. */
-        if (research_invention_state(research_get(pdest), pclause->value)
-            == TECH_KNOWN) {
+        if (player_invention_state(pdest, pclause->value) == TECH_KNOWN) {
           log_verbose("Nation %s already know tech %s, "
                       "that %s want to give them.",
                       nation_rule_name(nation_of_player(pdest)),
-                      advance_rule_name(advance_by_number(pclause->value)),
+                      advance_name_by_player(pplayer, pclause->value),
                       nation_rule_name(nation_of_player(pgiver)));
           break;
         }
         notify_player(pdest, NULL, E_TECH_GAIN, ftc_server,
                       _("You are taught the knowledge of %s."),
-                      advance_name_translation(advance_by_number
-                                               (pclause->value)));
+                      advance_name_for_player(pdest, pclause->value));
 
         if (tech_transfer(pdest, pgiver, pclause->value)) {
           notify_embassies(pdest, pgiver, NULL, E_TECH_GAIN, ftc_server,
                            _("The %s have acquired %s from the %s."),
                            nation_plural_for_player(pdest),
-                           advance_name_translation(advance_by_number
-                                                    (pclause->value)),
+                           advance_name_for_player(pdest, pclause->value),
                            nation_plural_for_player(pgiver));
 
           script_server_signal_emit("tech_researched", 3,
@@ -618,8 +610,6 @@ void establish_embassy(struct player *pplayer, struct player *aplayer)
   send_player_all_c(pplayer, aplayer->connections);
   /* INFO_EMBASSY level info */
   send_player_all_c(aplayer, pplayer->connections);
-  /* Send research info */
-  send_research_info(research_get(aplayer), pplayer->connections);
 }
 
 /**************************************************************************

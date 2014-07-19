@@ -16,7 +16,7 @@ leaders = {
 
 flag = "mathclub"
 flag_alt = "finland"
-style = "Human"
+city_style = "Human"
 
 color.r =   0
 color.g = 255

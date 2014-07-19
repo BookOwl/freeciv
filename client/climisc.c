@@ -246,7 +246,7 @@ void client_diplomacy_clause_string(char *buf, int bufsiz,
   case CLAUSE_ADVANCE:
     fc_snprintf(buf, bufsiz, _("The %s give %s"),
                 nation_plural_for_player(pclause->from),
-                advance_name_translation(advance_by_number(pclause->value)));
+                advance_name_for_player(client.conn.playing, pclause->value));
     break;
   case CLAUSE_CITY:
     pcity = game_city_by_number(pclause->value);
@@ -347,12 +347,12 @@ void nuclear_winter_scaled(int *chance, int *rate, int max)
 struct sprite *client_research_sprite(void)
 {
   if (NULL != client.conn.playing && can_client_change_view()) {
-    const struct research *presearch = research_get(client_player());
     int index = 0;
 
-    if (A_UNSET != presearch->researching) {
-      index = (NUM_TILES_PROGRESS * presearch->bulbs_researched
-               / (presearch->researching_cost + 1));
+    if (A_UNSET != player_research_get(client.conn.playing)->researching) {
+      index = (NUM_TILES_PROGRESS
+	       * player_research_get(client.conn.playing)->bulbs_researched)
+	/ (total_bulbs_required(client.conn.playing) + 1);
     }
 
     /* This clipping can be necessary since we can end up with excess
@@ -600,7 +600,7 @@ static int target_get_section(struct universal target)
 /**************************************************************************
  Helper for name_and_sort_items.
 **************************************************************************/
-static int fc_cmp(const void *p1, const void *p2)
+static int my_cmp(const void *p1, const void *p2)
 {
   const struct item *i1 = p1, *i2 = p2;
   int s1 = target_get_section(i1->item);
@@ -661,7 +661,7 @@ void name_and_sort_items(struct universal *targets, int num_targets,
     }
   }
 
-  qsort(items, num_targets, sizeof(struct item), fc_cmp);
+  qsort(items, num_targets, sizeof(struct item), my_cmp);
 }
 
 /**************************************************************************
@@ -967,7 +967,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
    * about us. */
   if (-1 != conn_id
       && client.conn.id != conn_id
-      && ft_color_requested(options.highlight_our_names)) {
+      && ft_color_requested(highlight_our_names)) {
     const char *username = client.conn.username;
     size_t userlen = strlen(username);
     const char *playername = ((client_player() && !client_is_observer())
@@ -988,7 +988,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
           && 0 == fc_strncasecmp(p, username, userlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + userlen,
-                                             options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1000,7 +1000,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
                  && 0 == fc_strncasecmp(p, playername, playerlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + playerlen,
-                                             options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1190,7 +1190,7 @@ void common_taxrates_callback(int i)
 ****************************************************************************/
 bool can_units_do_connect(struct unit_list *punits,
 			  enum unit_activity activity,
-                          struct extra_type *tgt)
+                          struct act_tgt *tgt)
 {
   unit_list_iterate(punits, punit) {
     if (can_unit_do_connect(punit, activity, tgt)) {
@@ -1362,25 +1362,25 @@ bool mapimg_client_define(void)
   }
 
   /* Map image definition: zoom, turns */
-  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", options.mapimg_zoom,
-              options.mapimg_format);
+  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", mapimg_zoom,
+              mapimg_format);
 
   /* Map image definition: show */
   if (client_is_global_observer()) {
     cat_snprintf(str, sizeof(str), ":show=all");
     /* use all available knowledge */
-    options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
   } else {
     cat_snprintf(str, sizeof(str), ":show=plrid:plrid=%d",
                  player_index(client.conn.playing));
     /* use only player knowledge */
-    options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
   }
 
   /* Map image definition: map */
   for (layer = mapimg_layer_begin(); layer != mapimg_layer_end();
        layer = mapimg_layer_next(layer)) {
-    if (options.mapimg_layer[layer]) {
+    if (mapimg_layer[layer]) {
       cat_snprintf(map, sizeof(map), "%s",
                    mapimg_layer_name(layer));
       map[map_pos++] = mapimg_layer_name(layer)[0];
@@ -1414,7 +1414,7 @@ bool mapimg_client_createmap(const char *filename)
   char mapimgfile[512];
 
   if (NULL == filename || '\0' == filename[0]) {
-    sz_strlcpy(mapimgfile, options.mapimg_filename);
+    sz_strlcpy(mapimgfile, mapimg_filename);
   } else {
     sz_strlcpy(mapimgfile, filename);
   }

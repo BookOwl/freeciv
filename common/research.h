@@ -25,18 +25,7 @@ extern "C" {
 #include "fc_types.h"
 #include "tech.h"
 
-/* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all
- * requirements are fulfilled; all others (including those which can never
- * be reached) are TECH_UNKNOWN. */
-#define SPECENUM_NAME tech_state
-/* TECH_UNKNOWN must be 0 as the code does no special initialisation after
- * memset(0), See researches_init(). */
-#define SPECENUM_VALUE0 TECH_UNKNOWN
-#define SPECENUM_VALUE1 TECH_PREREQS_KNOWN
-#define SPECENUM_VALUE2 TECH_KNOWN
-#include "specenum_gen.h"
-
-struct research {
+struct player_research {
   /* The number of techs and future techs the player has
    * researched/acquired. */
   int techs_researched, future_tech;
@@ -50,7 +39,6 @@ struct research {
    * bulbs_researched tracks how many bulbs have been accumulated toward
    * this research target. */
   Tech_type_id researching;
-  int researching_cost;
   int bulbs_researched;
 
   /* If the player changes his research target in a turn, he loses some or
@@ -94,42 +82,9 @@ struct research {
 };
 
 /* Common functions. */
-void researches_init(void);
+void player_researches_init(void);
 
-int research_number(const struct research *presearch);
-
-struct research *research_by_number(int number);
-struct research *research_get(const struct player *pplayer);
-
-const char *research_advance_rule_name(const struct research *presearch,
-                                       Tech_type_id tech);
-const char *
-research_advance_name_translation(const struct research *presearch,
-                                  Tech_type_id tech);
-
-/* Ancillary routines */
-enum tech_state research_invention_state(const struct research *presearch,
-                                         Tech_type_id tech);
-enum tech_state research_invention_set(struct research *presearch,
-                                       Tech_type_id tech,
-                                       enum tech_state value);
-bool research_invention_reachable(const struct research *presearch,
-                                  const Tech_type_id tech);
-bool research_invention_gettable(const struct research *presearch,
-                                 const Tech_type_id tech,
-                                 bool reachable_ok);
-
-Tech_type_id research_goal_step(const struct research *presearch,
-                                Tech_type_id goal);
-int research_goal_unknown_techs(const struct research *presearch,
-                                Tech_type_id goal);
-int research_goal_bulbs_required(const struct research *presearch,
-                                 Tech_type_id goal);
-bool research_goal_tech_req(const struct research *presearch,
-                            Tech_type_id goal, Tech_type_id tech);
-
-int research_total_bulbs_required(const struct research *presearch,
-                                  Tech_type_id tech, bool loss_value);
+struct player_research *player_research_get(const struct player *pplayer);
 
 /* Iterating utilities. */
 struct research_iter;
@@ -137,22 +92,10 @@ struct research_iter;
 size_t research_iter_sizeof(void);
 struct iterator *research_iter_init(struct research_iter *it);
 
-#define researches_iterate(_presearch)                                      \
-  generic_iterate(struct research_iter, struct research *,                  \
-                  _presearch, research_iter_sizeof, research_iter_init)
-#define researches_iterate_end generic_iterate_end
-
-struct research_player_iter;
-
-size_t research_player_iter_sizeof(void);
-struct iterator *research_player_iter_init(struct research_player_iter *it,
-                                           const struct research *presearch);
-
-#define research_players_iterate(_presearch, _pplayer)                      \
-  generic_iterate(struct research_player_iter, struct player *, _pplayer,   \
-                  research_player_iter_sizeof, research_player_iter_init,   \
-                  _presearch)
-#define research_players_iterate_end generic_iterate_end
+#define player_researches_iterate(presearch)                                \
+  generic_iterate(struct research_iter, struct player_research *,           \
+                  presearch, research_iter_sizeof, research_iter_init)
+#define player_researches_iterate_end generic_iterate_end
 
 #ifdef __cplusplus
 }

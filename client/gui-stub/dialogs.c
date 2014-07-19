@@ -138,8 +138,7 @@ bool caravan_dialog_is_open(int *unit_id, int *city_id)
   Popup a dialog giving a diplomatic unit some options when moving into
   the target tile.
 **************************************************************************/
-void popup_diplomat_dialog(struct unit *punit, struct tile *ptile,
-                           const action_probability *action_probabilities)
+void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 {
   /* PORTME */
 }
@@ -175,7 +174,8 @@ void popup_sabotage_dialog(struct unit *actor, struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras may_pillage)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases, bv_roads roads)
 {
   /* PORTME */
 }
@@ -202,15 +202,6 @@ void popup_tileset_suggestion_dialog(void)
   user and load.
 *****************************************************************/
 void popup_soundset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain musicset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_musicset_suggestion_dialog(void)
 {
   /* PORTME */
 }

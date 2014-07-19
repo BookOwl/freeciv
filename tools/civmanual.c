@@ -98,8 +98,6 @@ enum manuals {
 #define TAIL " "
 #endif
 
-void insert_client_build_info(char *outbuf, size_t outlen);
-
 /* Needed for "About Freeciv" help */
 const char *client_string = "freeciv-manual";
 
@@ -154,7 +152,7 @@ static bool manual_command(void)
   /* Reset aifill to zero */
   game.info.aifill = 0;
 
-  if (!load_rulesets(NULL, FALSE, FALSE)) {
+  if (!load_rulesets(NULL, FALSE)) {
     /* Failed to load correct ruleset */
     return FALSE;
   }
@@ -387,10 +385,10 @@ static bool manual_command(void)
         road_type_iterate(proad) {
           if (++ri < game.control.num_road_types) {
             fprintf(doc, "%d / ", terrain_road_time(pterrain,
-                                                    road_extra_get(proad)));
+                                                   road_number(proad)));
           } else {
             fprintf(doc, "%d</td>", terrain_road_time(pterrain,
-                                                      road_extra_get(proad)));
+                                                      road_number(proad)));
           }
         } road_type_iterate_end;
         fprintf(doc, "</tr>\n\n");
@@ -415,7 +413,6 @@ static bool manual_command(void)
 
       improvement_iterate(pimprove) {
         char buf[64000];
-        struct advance *obs_tech = NULL;
 
         if (!valid_improvement(pimprove)
          || is_great_wonder(pimprove) == (manuals == MANUAL_BUILDINGS)) {
@@ -435,7 +432,7 @@ static bool manual_command(void)
           char text[512], text2[512];
           fc_snprintf(text2, sizeof(text2),
                       /* TRANS: improvement requires a feature to be absent. */
-                      req->present ? "%s" : _("no %s"),
+                      req->negated ? _("no %s") : "%s",
                       VUT_NONE != req->source.kind
                       ? universal_name_translation(&req->source,
                                                    text, sizeof(text))
@@ -443,16 +440,9 @@ static bool manual_command(void)
           fprintf(doc, "%s<br/>", text2);
         } requirement_vector_iterate_end;
 
-        requirement_vector_iterate(&pimprove->obsolete_by, pobs) {
-          if (pobs->source.kind == VUT_ADVANCE) {
-            obs_tech = pobs->source.value.advance;
-            break;
-          }
-        } requirement_vector_iterate_end;
-
         fprintf(doc, "<em>%s</em></td>\n",
-                obs_tech != NULL
-                ? advance_name_translation(obs_tech)
+                valid_advance(pimprove->obsolete_by)
+                ? advance_name_translation(pimprove->obsolete_by)
                 : _("None"));
         fprintf(doc, "<td>%s</td>\n</tr>\n\n", buf);
       } improvement_iterate_end;
@@ -620,12 +610,4 @@ int main(int argc, char **argv)
   registry_module_close();
 
   return retval;
-}
-
-/**************************************************************************
-  Empty function required by helpdata
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* Nothing here */
 }

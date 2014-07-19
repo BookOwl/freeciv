@@ -357,8 +357,9 @@ void get_modified_firepower(const struct unit *attacker,
   }
 
   /* In land bombardment both units have their firepower reduced to 1 */
-  if (!is_native_tile(unit_type(attacker), unit_tile(defender))
-      && !can_exist_at_tile(unit_type(defender), unit_tile(attacker))) {
+  if (is_sailing_unit(attacker)
+      && !is_ocean_tile(unit_tile(defender))
+      && is_ground_unit(defender)) {
     *att_fp = 1;
     *def_fp = 1;
   }
@@ -519,10 +520,12 @@ static int defense_multiplication(const struct unit_type *att_type,
 
     defensepower *= defense_multiplier;
 
-    /* This applies even if pcity is NULL. */
-    mod = 100 + get_unittype_bonus(def_player, ptile,
-                                   att_type, EFT_DEFEND_BONUS);
-    defensepower = MAX(0, defensepower * mod / 100);
+    if (!utype_has_flag(att_type, UTYF_IGWALL)) {
+      /* This applies even if pcity is NULL. */
+      mod = 100 + get_unittype_bonus(def_player, ptile,
+				     att_type, EFT_DEFEND_BONUS);
+      defensepower = MAX(0, defensepower * mod / 100);
+    }
 
     defense_divider = 1 + combat_bonus_against(att_type->bonuses, def_type,
                                                CBONUS_DEFENSE_DIVIDER);

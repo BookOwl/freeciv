@@ -22,7 +22,7 @@ extern "C" {
 
 /* Update this capability string when ever there is changes to ai_type
    structure below */
-#define FC_AI_MOD_CAPSTR "+Freeciv-ai-module-2014.Jul.11"
+#define FC_AI_MOD_CAPSTR "+Freeciv-ai-module-2.5-2014.Feb.25"
 
 /* Timers for all AI activities. Define it to get statistics about the AI. */
 #ifdef DEBUG
@@ -47,15 +47,13 @@ enum incident_type {
   INCIDENT_NUCLEAR_SELF, INCIDENT_LAST
 };
 
+enum danger_consideration { DANG_UNDECIDED, DANG_NOT, DANG_YES };
+
 struct ai_type
 {
   char name[MAX_LEN_NAME];
 
   struct {
-    /* Called for every AI type when game starts. Game is not necessarily new one,
-       it can also be an old game loaded from a savegame. */
-    void (*game_start)(void);
-
     /* Called for every AI type when game has ended. */
     void (*game_free)(void);
 
@@ -80,10 +78,7 @@ struct ai_type
     void (*lost_control)(struct player *pplayer);
 
     /* Called for AI type of the player who gets split to two. */
-    void (*split_by_civil_war)(struct player *original, struct player *created);
-
-   /* Called for AI type of the player who got created from the split. */
-    void (*created_by_civil_war)(struct player *original, struct player *created);
+    void (*split_by_civil_war)(struct player *pplayer);
 
     /* Called for player AI type when player phase begins. This is in the
      * beginning of phase setup. See also first_activities. */
@@ -184,9 +179,6 @@ struct ai_type
      * Unlike with phase_begin, everything is set up for phase already. */
     void (*first_activities)(struct player *pplayer);
 
-    /* Called for player AI when player phase is already active when AI gains control. */
-    void (*restart_phase)(struct player *pplayer);
-
     /* Called for player AI type in the beginning of player phase. Not for barbarian
      * players. */
     void (*diplomacy_actions)(struct player *pplayer);
@@ -224,11 +216,11 @@ struct ai_type
 
     /* Called for player AI type to decide if another player is dangerous. */
     void (*consider_plr_dangerous)(struct player *plr1, struct player *plr2,
-                                   enum override_bool *result);
+                                   enum danger_consideration *result);
 
     /* Called for player AI type to decide if it's dangerous for unit to enter tile. */
     void (*consider_tile_dangerous)(struct tile *ptile, struct unit *punit,
-                                    enum override_bool *result);
+                                    enum danger_consideration *result);
 
     /* Called for player AI to decide if city can be chosen to act as wonder city
      * for building advisor. */

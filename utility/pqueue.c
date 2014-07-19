@@ -27,17 +27,12 @@
 
 #include "pqueue.h"
 
-
-struct pq_cell {
-  pq_data_t data;
-  int priority;
-};
-
 struct pqueue {
   int size;			/* number of occupied cells */
   int avail;			/* total number of cells */
   int step;			/* additional memory allocation step */
-  struct pq_cell *cells; /* array containing data and priorities. */
+  pq_data_t *cells;		/* array containing data */
+  int *priorities;		/* backup priorities (in case data is changed) */
 };
 
 /**********************************************************************
@@ -52,7 +47,8 @@ struct pqueue *pq_create(int initial_size)
 {
   struct pqueue *q = fc_malloc(sizeof(struct pqueue));
 
-  q->cells = fc_malloc(sizeof(*q->cells) * initial_size);
+  q->cells = fc_malloc(sizeof(pq_data_t) * initial_size);
+  q->priorities = fc_malloc(sizeof(int) * initial_size);
   q->avail = initial_size;
   q->step = initial_size;
   q->size = 1;
@@ -66,6 +62,7 @@ void pq_destroy(struct pqueue *q)
 {
   fc_assert_ret(NULL != q);
   free(q->cells);
+  free(q->priorities);
   free(q);
 }
 
@@ -74,7 +71,7 @@ void pq_destroy(struct pqueue *q)
 *********************************************************************/
 void pq_insert(struct pqueue *q, pq_data_t datum, int datum_priority)
 {
-  int i, j;
+  int i;
 
   fc_assert_ret(NULL != q);
 
@@ -82,18 +79,20 @@ void pq_insert(struct pqueue *q, pq_data_t datum, int datum_priority)
   if (q->size >= q->avail) {
     int newsize = q->size + q->step;
 
-    q->cells = fc_realloc(q->cells, sizeof(*q->cells) * newsize);
+    q->cells = fc_realloc(q->cells, sizeof(pq_data_t) * newsize);
+    q->priorities = fc_realloc(q->priorities, sizeof(int) * newsize);
     q->avail = newsize;
   }
 
   /* insert item */
   i = q->size++;
-  while (i > 1 && (j = i / 2) && q->cells[j].priority < datum_priority) {
-    q->cells[i] = q->cells[j];
-    i = j;
+  while (i > 1 && q->priorities[i / 2] < datum_priority) {
+    q->cells[i] = q->cells[i / 2];
+    q->priorities[i] = q->priorities[i / 2];
+    i /= 2;
   }
-  q->cells[i].data = datum;
-  q->cells[i].priority = datum_priority;
+  q->cells[i] = datum;
+  q->priorities[i] = datum_priority;
 }
 
 /***************************************************************************
@@ -101,13 +100,13 @@ void pq_insert(struct pqueue *q, pq_data_t datum, int datum_priority)
 ****************************************************************************/
 void pq_replace(struct pqueue *q, const pq_data_t datum, int datum_priority)
 {
-  int i, j;
+  int i;
 
   fc_assert_ret(NULL != q);
 
   /* Lookup for datum... */
   for (i = q->size - 1; i >= 1; i--) {
-    if (q->cells[i].data == datum) {
+    if (q->cells[i] == datum) {
       break;
     }
   }
@@ -115,14 +114,15 @@ void pq_replace(struct pqueue *q, const pq_data_t datum, int datum_priority)
   if (i == 0) {
     /* Not found, insert. */
     pq_insert(q, datum, datum_priority);
-  } else if (q->cells[i].priority < datum_priority) {
+  } else if (q->priorities[i] < datum_priority) {
     /* Found, percolate-up. */
-    while ((j = i / 2) && q->cells[j].priority < datum_priority) {
-      q->cells[i] = q->cells[j];
-      i = j;
+    while (i > 1 && q->priorities[i / 2] < datum_priority) {
+      q->cells[i] = q->cells[i / 2];
+      q->priorities[i] = q->priorities[i / 2];
+      i /= 2;
     }
-    q->cells[i].data = datum;
-    q->cells[i].priority = datum_priority;
+    q->cells[i] = datum;
+    q->priorities[i] = datum_priority;
   }
 }
 
@@ -136,10 +136,10 @@ void pq_replace(struct pqueue *q, const pq_data_t datum, int datum_priority)
 *******************************************************************/
 bool pq_remove(struct pqueue * q, pq_data_t *dest)
 {
-  struct pq_cell tmp;
-  struct pq_cell *pcelli, *pcellj;
+  pq_data_t tmp;
+  int tmp_priority;
   pq_data_t top;
-  int i, j, s;
+  int i = 1;
 
   fc_assert_ret_val(NULL != q, FALSE);
 
@@ -148,29 +148,26 @@ bool pq_remove(struct pqueue * q, pq_data_t *dest)
   }
 
   fc_assert_ret_val(q->size <= q->avail, FALSE);
-  top = q->cells[1].data;
+  top = q->cells[1];
   q->size--;
   tmp = q->cells[q->size];
-  s = q->size / 2;
-  i = 1;
-  pcelli = q->cells + 1;
-  while (i <= s) {
-    j = 2 * i;
-    pcellj = q->cells + j;
-    if (j < q->size && pcellj->priority < q->cells[j + 1].priority) {
+  tmp_priority = q->priorities[q->size];
+  while (i <= q->size / 2) {
+    int j = 2 * i;
+    if (j < q->size && q->priorities[j] < q->priorities[j + 1]) {
       j++;
-      pcellj++;
     }
-    if (pcellj->priority <= tmp.priority) {
+    if (q->priorities[j] <= tmp_priority) {
       break;
     }
-    *pcelli = *pcellj;
+    q->cells[i] = q->cells[j];
+    q->priorities[i] = q->priorities[j];
     i = j;
-    pcelli = pcellj;
   }
-  *pcelli = tmp;
-  if (dest) {
-    *dest = top;
+  q->cells[i] = tmp;
+  q->priorities[i] = tmp_priority;
+  if(dest) {
+      *dest = top;
   }
   return TRUE;
 }
@@ -189,6 +186,6 @@ bool pq_peek(struct pqueue *q, pq_data_t * dest)
     return FALSE;
   }
 
-  *dest = q->cells[1].data;
+  *dest = q->cells[1];
   return TRUE;
 }

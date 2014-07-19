@@ -361,13 +361,14 @@ bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
-int map_move_cost(const struct player *pplayer,
-                  const struct unit_type *punittype,
+int map_move_cost(const struct player *pplayer, const struct unit_class *pclass,
                   const struct tile *src_tile,
                   const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
-bv_extras get_tile_infrastructure_set(const struct tile *ptile,
-                                      int *count);
+bv_special get_tile_infrastructure_set(const struct tile *ptile,
+					  int *count);
+bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount);
+bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount);
 
 bool can_channel_land(const struct tile *ptile);
 bool can_reclaim_ocean(const struct tile *ptile);

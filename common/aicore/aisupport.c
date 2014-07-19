@@ -28,7 +28,6 @@
 #include "spaceship.h"
 #include "tech.h"
 #include "unitlist.h"
-#include "victory.h"
 
 #include "aisupport.h"
 
@@ -41,7 +40,7 @@ struct player *player_leading_spacerace(void)
   int best_arrival = FC_INFINITY;
   enum spaceship_state best_state = SSHIP_NONE;
 
-  if (!victory_enabled(VC_SPACERACE)) {
+  if (game.info.spacerace == FALSE) {
     return NULL;
   }
 
@@ -134,7 +133,7 @@ int city_gold_worth(struct city *pcity)
     }
   } unit_list_iterate_end;
   city_built_iterate(pcity, pimprove) {
-    if (improvement_obsolete(pplayer, pimprove, pcity)) {
+    if (improvement_obsolete(pplayer, pimprove)) {
       worth += impr_sell_gold(pimprove) / 4;
     } else {
       worth += impr_sell_gold(pimprove);

@@ -86,8 +86,8 @@ struct nation_type;
 
 /* Nation hash. */
 #define SPECHASH_TAG nation
-#define SPECHASH_IKEY_TYPE struct nation_type *
-#define SPECHASH_IDATA_TYPE void *
+#define SPECHASH_KEY_TYPE struct nation_type *
+#define SPECHASH_DATA_TYPE void *
 #include "spechash.h"
 #define nation_hash_iterate(nationhash, pnation)                            \
   TYPED_HASH_KEYS_ITERATE(struct nation_type *, nationhash, pnation)
@@ -102,8 +102,8 @@ struct nation_type {
   char flag_graphic_str[MAX_LEN_NAME];
   char flag_graphic_alt[MAX_LEN_NAME];
   struct nation_leader_list *leaders;
-  struct nation_style *style;
-  char *legend;                         /* may be empty */
+  int city_style;
+  char *legend;				/* may be empty */
 
   bool is_playable;
   enum barbarian_type barb_type;
@@ -141,7 +141,7 @@ struct nation_type {
       /* Nation's associated player color (NULL if none). */
       struct rgbcolor *rgb;
 
-      struct trait_limits *traits;
+      int *traits;
 
       /* This nation has no start position in the current scenario. */
       bool no_startpos;
@@ -158,25 +158,6 @@ struct nation_type {
        * (On the server this is calculated on the fly from other values.
        * Use is_nation_pickable() to get the answer on client or server.) */
       bool is_pickable;
-    } client;
-  };
-};
-
-/* Nation group structure. */
-struct nation_group {
-  struct name_translation name;
-
-  union {
-    struct {
-      /* Only used in the server (./server/). */
-
-      /* How much the AI will try to select a nation in the same group */
-      int match;
-    } server;
-
-    struct {
-      /* Only used at the client. */
-      /* Nothing yet. */
     } client;
   };
 };
@@ -201,7 +182,7 @@ const char *nation_adjective_for_player(const struct player *pplayer);
 const char *nation_plural_translation(const struct nation_type *pnation);
 const char *nation_plural_for_player(const struct player *pplayer);
 
-struct nation_style *style_of_nation(const struct nation_type *pnation);
+int city_style_of_nation(const struct nation_type *nation);
 
 const struct rgbcolor *nation_color(const struct nation_type *pnation);
 

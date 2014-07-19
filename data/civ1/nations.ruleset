@@ -12,15 +12,7 @@
 
 [datafile]
 description="Civ1-equivalent nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.May.14"
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-;nationlist = ""
+options="+Freeciv-2.5-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
@@ -28,12 +20,9 @@ options="+Freeciv-ruleset-Devel-2013.May.14"
 default_government = "Despotism"
 
 [default_traits]
-;expansionist_min = 50
-;expansionist_max = 50
-;trader_min = 50
-;trader_max = 50
-;aggressive_min = 50
-;aggressive_max = 50
+;expansionist = 50
+;trader = 50
+;aggressive = 50
 
 ; Descriptions of nation sets
 ; These are self-contained subsets of the available nations; one of these
@@ -96,7 +85,7 @@ ruler_titles = {
 
 flag="usa"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -209,7 +198,7 @@ ruler_titles = {
 
 flag="aztec"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
@@ -306,7 +295,7 @@ ruler_titles =
 
 flag="babylon"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -373,7 +362,7 @@ ruler_titles = {
 
 flag="han"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -513,7 +502,7 @@ ruler_titles = {
 
 flag="egypt_ancient"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -590,7 +579,7 @@ ruler_titles = {
 
 flag="england"
 flag_alt="-"
-style = "European"
+city_style="European"
 
 init_techs=""
 init_buildings=""
@@ -700,7 +689,7 @@ ruler_titles = {
 
 flag="france_old"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -823,7 +812,7 @@ ruler_titles = {
 
 flag         = "hre"
 flag_alt     = "-"
-style        = "European"
+city_style   = "European"
 
 init_techs = ""
 init_buildings=""
@@ -971,7 +960,7 @@ ruler_titles = {
 
 flag="greece_ancient"
 flag_alt="-"
-style = "Classical"
+city_style="Classical"
 
 init_techs=""
 init_buildings=""
@@ -1121,7 +1110,7 @@ ruler_titles = {
 
 flag="india"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1215,7 +1204,7 @@ ruler_titles = {
 
 flag="mongolia"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1279,7 +1268,7 @@ ruler_titles = {
 
 flag="rome"
 flag_alt="-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""
@@ -1335,7 +1324,7 @@ ruler_titles = {
 
 flag="kiev"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1422,7 +1411,7 @@ ruler_titles = {
 
 flag="zulu"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
@@ -1486,7 +1475,7 @@ leaders = {
 
 flag="barbarian"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1521,7 +1510,7 @@ leaders = {
 
 flag="pirate"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

@@ -327,7 +327,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
   QModelIndexList indexes = sl.indexes();
   struct city *pcity;
   const struct player_diplstate *state;
-  struct research *my_research, *research;
+  struct player_research *research;
   char tbuf[256];
   QString res;
   QString sp = " ";
@@ -356,7 +356,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     return;
   }
   pcity = player_capital(pplayer);
-  research = research_get(pplayer);
+  research = player_research_get(pplayer);
 
   switch (research->researching) {
   case A_UNKNOWN:
@@ -366,10 +366,9 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     res = _("(none)");
     break;
   default:
-    res = QString(research_advance_name_translation(research,
-                                                    research->researching))
+    res = QString(advance_name_researching(pplayer))
           + sp + "(" + QString::number(research->bulbs_researched) + "/"
-          + QString::number(research->researching_cost) + ")";
+          + QString::number(total_bulbs_required(pplayer)) + ")";
     break;
   }
   /** Formatting rich text */
@@ -408,8 +407,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
       if (static_cast<int>(state->type) == i) {
         if (added == false) {
           ally_str = ally_str  + QString("<b>")
-                     + QString(diplstate_type_translated_name(
-                                 static_cast<diplstate_type>(i)))
+                     + QString(diplstate_text(static_cast<diplstate_type>(i)))
                      + ": "  + QString("</b>") + nl;
           added = true;
         }
@@ -423,7 +421,6 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     }
   }
   me = client_player();
-  my_research = research_get(me);
   if ((player_has_embassy(me, pplayer) || client_is_global_observer())
       && me != pplayer) {
     a = 0;
@@ -436,19 +433,18 @@ void plr_widget::nation_selected(const QItemSelection &sl,
 
     advance_iterate(A_FIRST, padvance) {
       tech_id = advance_number(padvance);
-      if (research_invention_state(my_research, tech_id) == TECH_KNOWN
-          && (research_invention_state(research, tech_id) == TECH_UNKNOWN)) {
+      if (player_invention_state(me, tech_id) == TECH_KNOWN
+          && (player_invention_state(pplayer, tech_id) == TECH_UNKNOWN)) {
         a++;
         techs_known = techs_known + QString("<i>") 
-                      + research_advance_name_translation(research, tech_id)
+                      + advance_name_for_player(pplayer, tech_id)
                       + "," + QString("</i>") + sp;
       }
-      if (research_invention_state(my_research, tech_id) == TECH_UNKNOWN
-          && (research_invention_state(research, tech_id) == TECH_KNOWN)) {
+      if (player_invention_state(me, tech_id) == TECH_UNKNOWN
+          && (player_invention_state(pplayer, tech_id) == TECH_KNOWN)) {
         b++;
         techs_unknown = techs_unknown + QString("<i>")
-                        + research_advance_name_translation(research,
-                                                            tech_id)
+                        + advance_name_for_player(pplayer, tech_id)
                         + "," + QString("</i>") + sp;
       }
     } advance_iterate_end;

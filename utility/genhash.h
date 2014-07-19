@@ -32,7 +32,7 @@ struct genhash;                 /* opaque */
 typedef unsigned int genhash_val_t;
 
 /* Function typedefs: */
-typedef genhash_val_t (*genhash_val_fn_t) (const void *);
+typedef genhash_val_t (*genhash_val_fn_t) (const void *, size_t);
 typedef bool (*genhash_comp_fn_t) (const void *, const void *);
 typedef void * (*genhash_copy_fn_t) (const void *);
 typedef void (*genhash_free_fn_t) (void *);
@@ -40,11 +40,16 @@ typedef void (*genhash_free_fn_t) (void *);
 
 /* Supplied functions (matching above typedefs) appropriate for
  * keys being normal nul-terminated strings: */
-genhash_val_t genhash_str_val_func(const char *vkey);
-bool genhash_str_comp_func(const char *vkey1, const char *vkey2);
+genhash_val_t genhash_str_val_func(const void *vkey, size_t num_buckets);
+bool genhash_str_comp_func(const void *vkey1, const void *vkey2);
 /* and malloc'ed strings: */
-char *genhash_str_copy_func(const char *vkey);
-void genhash_str_free_func(char *vkey);
+void *genhash_str_copy_func(const void *vkey);
+void genhash_str_free_func(void *vkey);
+
+/* Appropriate for void pointers, integers or casted longs, used as keys
+ * directly instead of by reference. */
+genhash_val_t genhash_ptr_val_func(const void *vkey, size_t num_buckets);
+bool genhash_ptr_comp_func(const void *vkey1, const void *vkey2);
 
 
 /* General functions: */

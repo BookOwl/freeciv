@@ -27,29 +27,29 @@
 /**************************************************************************
   Clean up
 **************************************************************************/
-static void none_audio_shutdown(void)
+static void my_shutdown(void)
 {
 }
 
 /**************************************************************************
   Stop music
 **************************************************************************/
-static void none_audio_stop(void)
+static void my_stop(void)
 {
 }
 
 /**************************************************************************
   Wait
 **************************************************************************/
-static void none_audio_wait(void)
+static void my_wait(void)
 {
 }
 
 /**************************************************************************
   Play sound sample
 **************************************************************************/
-static bool none_audio_play(const char *const tag, const char *const fullpath,
-                            bool repeat, audio_finished_callback cb)
+static bool my_play(const char *const tag, const char *const fullpath,
+		    bool repeat)
 {
   if (strcmp(tag, "e_turn_bell") == 0) {
     sound_bell();
@@ -61,7 +61,7 @@ static bool none_audio_play(const char *const tag, const char *const fullpath,
 /**************************************************************************
   Initialize.
 **************************************************************************/
-static bool none_audio_init(void)
+static bool my_init(void)
 {
   return TRUE;
 }
@@ -75,10 +75,10 @@ void audio_none_init(void)
 
   sz_strlcpy(self.name, "none");
   sz_strlcpy(self.descr, "/dev/null plugin");
-  self.init = none_audio_init;
-  self.shutdown = none_audio_shutdown;
-  self.stop = none_audio_stop;
-  self.wait = none_audio_wait;
-  self.play = none_audio_play;
+  self.init = my_init;
+  self.shutdown = my_shutdown;
+  self.stop = my_stop;
+  self.wait = my_wait;
+  self.play = my_play;
   audio_add_plugin(&self);
 }

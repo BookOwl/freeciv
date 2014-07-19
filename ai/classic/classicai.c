@@ -124,28 +124,6 @@ static void cai_assess_danger_player(struct player *pplayer)
 /**************************************************************************
   Call default ai with classic ai type as parameter.
 **************************************************************************/
-static void cai_split_by_civil_war(struct player *original,
-                                   struct player *created)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_assess_danger_player(deftype, original);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
-static void cai_created_by_civil_war(struct player *original,
-                                     struct player *created)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_player_copy(deftype, original, created);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
 static void cai_data_phase_begin(struct player *pplayer, bool is_new_phase)
 {
   struct ai_type *deftype = classic_ai_get_self();
@@ -409,16 +387,6 @@ static void cai_do_first_activities(struct player *pplayer)
   struct ai_type *deftype = classic_ai_get_self();
 
   dai_do_first_activities(deftype, pplayer);
-
-  pplayer->ai_phase_done = TRUE;
-}
-
-/**************************************************************************
-  Mark turn done as we have already done everything before game was saved.
-**************************************************************************/
-static void cai_restart_phase(struct player *pplayer)
-{
-  pplayer->ai_phase_done = TRUE;
 }
 
 /**************************************************************************
@@ -509,7 +477,7 @@ static void cai_unit_log(char *buffer, int buflength, const struct unit *punit)
   Call default ai with classic ai type as parameter.
 **************************************************************************/
 static void cai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
-                                       enum override_bool *result)
+                                       enum danger_consideration *result)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
@@ -520,7 +488,7 @@ static void cai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
   Call default ai with classic ai type as parameter.
 **************************************************************************/
 static void cai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
-                                        enum override_bool *result)
+                                        enum danger_consideration *result)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
@@ -546,7 +514,6 @@ bool fc_ai_classic_setup(struct ai_type *ai)
 
   strncpy(ai->name, "classic", sizeof(ai->name));
 
-  /* ai->funcs.game_start = NULL; */
   /* ai->funcs.game_free = NULL; */
 
   ai->funcs.player_alloc = cai_player_alloc;
@@ -555,8 +522,7 @@ bool fc_ai_classic_setup(struct ai_type *ai)
   ai->funcs.player_load = cai_player_load;
   ai->funcs.gained_control = cai_assess_danger_player;
   /* ai->funcs.lost_control = NULL; */
-  ai->funcs.split_by_civil_war = cai_split_by_civil_war;
-  ai->funcs.created_by_civil_war = cai_created_by_civil_war;
+  ai->funcs.split_by_civil_war = cai_assess_danger_player;
 
   ai->funcs.phase_begin = cai_data_phase_begin;
   ai->funcs.phase_finished = cai_data_phase_finished;
@@ -606,7 +572,6 @@ bool fc_ai_classic_setup(struct ai_type *ai)
   ai->funcs.settler_cont = cai_auto_settler_cont;
 
   ai->funcs.first_activities = cai_do_first_activities;
-  ai->funcs.restart_phase = cai_restart_phase;
   ai->funcs.diplomacy_actions = cai_diplomacy_actions;
   ai->funcs.last_activities = cai_do_last_activities;
   ai->funcs.treaty_evaluate = cai_treaty_evaluate;

@@ -2,7 +2,7 @@
 
 [datafile]
 description="Alien World unit data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.May.14"
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom unit type flags. There can be up to 16 of these.
@@ -52,6 +52,12 @@ veteran_move_bonus = 0, 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
+; move_type     = Where unit moves; "Land", "Sea", or "Both".
+;                 This is optional field. If it's not
+;                 given, move type is automatically determined from native
+;                 terrains. You need to set it only if you want to set move
+;                 type "Both" for unit that has no native Land terrains or
+;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects (whole movement points)
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or native base
 ; non_native_def_pct = Defense power percentage applying when defending on
@@ -91,7 +97,6 @@ veteran_move_bonus = 0, 0, 0
 ; "KillCitizen"       = Upon successful attack against a city, unit kills one
 ;                       citizen. The effect "Unit_No_Lose_Pop" and the server
 ;                       setting 'killcitizen' can disable this.
-; "Airliftable"       = Unit may be airlifted
 ;
 ; */ <-- avoid gettext warnings
 
@@ -101,7 +106,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "DamageSlows", "TerrainSpeed", "CanFortify", "ZOC",
                 "CollectRansom", "BuildAnywhere", "CanOccupyCity",
-                "CanPillage", "TerrainDefense", "KillCitizen","Airliftable"
+                "CanPillage", "TerrainDefense", "KillCitizen"
 
 [unitclass_native]
 name          = _("?unitclass:Native")
@@ -109,7 +114,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "DamageSlows", "TerrainSpeed", "CanFortify", "ZOC",
                 "CollectRansom", "BuildAnywhere", "CanOccupyCity",
-                "CanPillage", "TerrainDefense", "KillCitizen","Airliftable"
+                "CanPillage", "TerrainDefense", "KillCitizen"
 
 [unitclass_sea]
 name          = _("?unitclass:Sea")
@@ -136,7 +141,7 @@ flags         = "Unreachable", "KillCitizen"
 name          = _("?unitclass:Burrowing")
 min_speed     = 1
 hp_loss_pct   = 0
-flags         = "Unreachable", "DamageSlows", "CanPillage","Airliftable"
+flags         = "Unreachable", "DamageSlows", "CanPillage"
 
 [unitclass_missile]
 name          = _("?unitclass:Missile")
@@ -247,14 +252,13 @@ flags         = "Missile", "DoesntOccupyTile"
 ; "TradeRoute"	= can establish trade routes
 ; "IgZOC"       = ignore Zones of Control (ZOC) even if unit class has
 ;                 "ZOC" flag
-; "HasNoZOC"	= unit has no Zone of Control (ZOC), thus any unit can move
-;		  around it freely
 ; "NonMil"      = a non-military unit: no attacks; no martial law; can enter
 ;                 peaceful borders; DoesntOccupyTile
 ; "IgTer"       = use constant move cost defined in igter_cost (terrain.ruleset)
 ;                 rather than terrain/road etc cost, unless terrain cost is
 ;                 less
 ; "OneAttack"	= can only make a single attack, regardless of movement points
+; "IgWall"	= ignore effect of city walls
 ; "FieldUnit"	= cause unhappiness even when not being aggressive
 ; "AttackAny"   = can attack unreachable units
 ; "Marines"	= can attack from non-native tile (from transport or city)
@@ -262,7 +266,7 @@ flags         = "Missile", "DoesntOccupyTile"
 ;		  units other than missiles
 ; "Settlers"	= can irrigate and build roads
 ; "Diplomat"	= can do diplomat actions (see diplchance server option)
-; "Spy"		= enhanced diplomat actions. _Must_ be "Diplomat" also
+; "Spy"		= can do poison and sabotage, _must_ be "Diplomat" also
 ; "Trireme"	= (sea only) cannot leave shoreline
 ; "Nuclear"	= nuke!
 ; "Paratroopers"= can paradrop
@@ -277,6 +281,7 @@ flags         = "Missile", "DoesntOccupyTile"
 ;		  the same time; barbarians cannot use this at present
 ; "GameLoss"	= losing one of these units means you lose the game, but it
 ;		  is produced without homecity and upkeep
+; "Unbribable"	= this unit cannot be bribed
 ; "Undisbandable" = this unit cannot be disbanded, will not drown, and will not
 ;		  disband due to lack of shields to upkeep it in homecity;
 ;		  if not given enough food to upkeep it, homecity will shrink 

@@ -94,14 +94,6 @@ enum gui_type get_gui_type(void)
 }
 
 /**************************************************************************
-  Call  callback
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  funcs.insert_client_build_info(outbuf, outlen);
-}
-
-/**************************************************************************
   Call isometric_view_supported callback
 **************************************************************************/
 bool isometric_view_supported(void)
@@ -202,14 +194,6 @@ void canvas_free(struct canvas *store)
 }
 
 /**************************************************************************
-  Call canvas_set_zoom callback
-**************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  funcs.canvas_set_zoom(store, zoom);
-}
-
-/**************************************************************************
   Call canvas_copy callback
 **************************************************************************/
 void canvas_copy(struct canvas *dest, struct canvas *src,
@@ -272,6 +256,15 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
 			     int canvas_x, int canvas_y)
 {
   funcs.canvas_fill_sprite_area(pcanvas, psprite, pcolor, canvas_x, canvas_y);
+}
+
+/**************************************************************************
+  Call canvas_fog_sprite_area callback
+**************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  funcs.canvas_fog_sprite_area(pcanvas, psprite, canvas_x, canvas_y);
 }
 
 /**************************************************************************

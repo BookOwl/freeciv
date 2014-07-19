@@ -128,21 +128,10 @@ static void twai_control_lost(struct player *pplayer)
 /**************************************************************************
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
-static void twai_split_by_civil_war(struct player *original,
-                                    struct player *created)
+static void twai_split_by_civil_war(struct player *pplayer)
 {
   TAI_AIT;
-  TAI_DFUNC(dai_assess_danger_player, original);
-}
-
-/**************************************************************************
-  Call default ai with threaded ai type as parameter.
-**************************************************************************/
-static void twai_created_by_civil_war(struct player *original,
-                                      struct player *created)
-{
-  TAI_AIT;
-  TAI_DFUNC(dai_player_copy, original, created);
+  TAI_DFUNC(dai_assess_danger_player, pplayer);
 }
 
 /**************************************************************************
@@ -469,7 +458,7 @@ static void twai_unit_log(char *buffer, int buflength, const struct unit *punit)
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
 static void twai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
-                                        enum override_bool *result)
+                                        enum danger_consideration *result)
 {
   TAI_AIT;
   TAI_DFUNC(dai_consider_plr_dangerous, plr1, plr2, result);
@@ -479,7 +468,7 @@ static void twai_consider_plr_dangerous(struct player *plr1, struct player *plr2
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
 static void twai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
-                                         enum override_bool *result)
+                                         enum danger_consideration *result)
 {
   TAI_AIT;
   TAI_DFUNC(dai_consider_tile_dangerous, ptile, punit, result);
@@ -533,7 +522,6 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   ai->funcs.gained_control = twai_control_gained;
   ai->funcs.lost_control = twai_control_lost;
   ai->funcs.split_by_civil_war = twai_split_by_civil_war;
-  ai->funcs.created_by_civil_war = twai_created_by_civil_war;
 
   ai->funcs.phase_begin = twai_phase_begin;
   ai->funcs.phase_finished = twai_phase_finished;
@@ -569,9 +557,6 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   ai->funcs.settler_cont = twai_auto_settler_cont;
 
   ai->funcs.first_activities = twai_first_activities;
-  /* Do complete run after savegame loaded - we don't know what has been
-     done before. */
-  ai->funcs.restart_phase = twai_first_activities;
   ai->funcs.diplomacy_actions = twai_diplomacy_actions;
   ai->funcs.last_activities = twai_last_activities;
 

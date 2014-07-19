@@ -24,7 +24,7 @@ ruler_titles = {
 
 flag="syria"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

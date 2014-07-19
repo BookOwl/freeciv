@@ -26,7 +26,7 @@ ruler_titles = {
 
 flag="marshall_islands"
 flag_alt="-"
-style = "tropical"
+city_style="tropical"
 
 init_techs=""
 init_buildings=""

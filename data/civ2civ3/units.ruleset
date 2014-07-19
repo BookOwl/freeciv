@@ -16,7 +16,7 @@
 
 [datafile]
 description="Civ2Civ3 unit_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2013.May.14"
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom unit type flags. There can be up to 16 of these.
@@ -25,7 +25,7 @@ options="+Freeciv-ruleset-Devel-2013.May.14"
 ; helptxt       = displayed in the help for units with this flag (optional)
 flags =
   { "name", "helptxt"
-    "Airbase", _("Can build Airbases.")
+    "Airbase", _("Can build Airbases.") 
     "Transform", _("Can transform terrain.")
     "AirAttacker", _("Very bad at attacking AEGIS.")
     "Submarine", _("Attack value halved when attacking Destroyer.")
@@ -71,6 +71,12 @@ veteran_move_bonus = 0, 0, 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
+; move_type     = Where unit moves; "Land", "Sea", or "Both".
+;                 This is optional field. If it's not
+;                 given, move type is automatically determined from native
+;                 terrains. You need to set it only if you want to set move
+;                 type "Both" for unit that has no native Land terrains or
+;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects (whole movement points)
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or native base
 ; non_native_def_pct = Defense power percentage applying when defending on
@@ -110,7 +116,6 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "KillCitizen"       = Upon successful attack against a city, unit kills one
 ;                       citizen. The effect "Unit_No_Lose_Pop" and the server
 ;                       setting 'killcitizen' can disable this.
-; "Airliftable"       = Unit may be airlifted
 ;
 ; */ <-- avoid gettext warnings
 
@@ -129,7 +134,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
                 "CollectRansom", "ZOC", "CanFortify", "CanPillage",
-                "TerrainDefense", "KillCitizen", "Airliftable"
+                "TerrainDefense", "KillCitizen"
 
 [unitclass_land_small]
 ; /* TRANS: Unit class: used adjectivally */
@@ -137,7 +142,7 @@ name          = _("?unitclass:Small Land")
 min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "BuildAnywhere", "CollectRansom",
-                "ZOC", "TerrainDefense", "DoesntOccupyTile", "Airliftable"
+                "ZOC", "TerrainDefense", "DoesntOccupyTile"
 
 [unitclass_land_big]
 ; /* TRANS: Unit class: used adjectivally */
@@ -145,7 +150,7 @@ name          = _("?unitclass:Big Land")
 min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
-                "CollectRansom","ZOC", "CanFortify", "KillCitizen", "Airliftable"
+                "CollectRansom","ZOC", "CanFortify", "KillCitizen"
 
 [unitclass_merchant]
 ; /* TRANS: Unit class: used adjectivally */
@@ -153,21 +158,21 @@ name          = _("?unitclass:Merchant")
 min_speed     = 1
 hp_loss_pct   = 0
 flags         = "BuildAnywhere", "DoesntOccupyTile",
-                "TerrainDefense", "TerrainSpeed", "Airliftable"
+                "TerrainDefense", "TerrainSpeed"
 
 [unitclass_sea]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Sea")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "ZOC", "DamageSlows", "AttackNonNative", "AttFromNonNative"
+flags         = "DamageSlows", "AttackNonNative", "AttFromNonNative"
 
 [unitclass_trireme]
 ; /* TRANS: Unit class: used adjectivally */
 name          = _("?unitclass:Trireme")
 min_speed     = 2
 hp_loss_pct   = 0
-flags         = "ZOC", "DamageSlows", "AttFromNonNative"
+flags         = "DamageSlows", "AttFromNonNative"
 
 [unitclass_heli]
 ; /* TRANS: Unit class: used adjectivally */
@@ -289,21 +294,20 @@ flags         = "Unreachable", "DoesntOccupyTile", "CanPillage"
 ; "TradeRoute"	= can establish trade routes
 ; "IgZOC"       = ignore Zones of Control (ZOC) even if unit class has
 ;                 "ZOC" flag
-; "HasNoZOC"	= unit has no Zone of Control (ZOC), thus any unit can move
-;		  around it freely
 ; "NonMil"	= a non-military unit: no attacks; no martial law; can enter
 ;                 peaceful borders; DoesntOccupyTile
 ; "IgTer"       = use constant move cost defined in igter_cost (terrain.ruleset)
 ;                 rather than terrain/road etc cost, unless terrain cost is
 ;                 less
 ; "OneAttack"	= can only make a single attack, regardless of movement points
+; "IgWall"	= ignore effect of city walls
 ; "FieldUnit"	= cause unhappiness even when not being aggressive
 ; "Marines"	= can attack from non-native tile (from transport or city)
 ; "Partial_Invis" = visible only to adjancent units; does not hide transported
 ;		  units other than missiles
 ; "Settlers"	= can irrigate and build roads
 ; "Diplomat"	= can do diplomat actions (see diplchance server option)
-; "Spy"		= enhanced diplomat actions. _Must_ be "Diplomat" also
+; "Spy"		= can do poison and sabotage, _must_ be "Diplomat" also
 ; "Trireme"	= (sea only) cannot leave shoreline
 ; "Nuclear"	= nuke!
 ; "Paratroopers"= can paradrop
@@ -318,6 +322,7 @@ flags         = "Unreachable", "DoesntOccupyTile", "CanPillage"
 ;		  the same time; barbarians cannot use this at present
 ; "GameLoss"	= losing one of these units means you lose the game, but it
 ;		  is produced without homecity and upkeep
+; "Unbribable"	= this unit cannot be bribed
 ; "Undisbandable" = this unit cannot be disbanded, will not drown, and will not
 ;		  disband due to lack of shields to upkeep it in homecity;
 ;		  if not given enough food to upkeep it, homecity will shrink 
@@ -417,7 +422,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Settlers", "NonMil", "HasNoZOC", "AddToCity", "Cities"
+flags         = "Settlers", "NonMil", "AddToCity", "Cities"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -458,7 +463,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Settlers", "NonMil", "HasNoZOC", "AddToCity", "Capturable"
+flags         = "Settlers", "NonMil", "AddToCity", "Capturable"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -497,7 +502,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Settlers", "NonMil", "HasNoZOC", "Airbase"
+flags         = "Settlers", "NonMil", "Airbase"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -536,7 +541,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Settlers", "NonMil", "HasNoZOC", "Airbase", "Transform"
+flags         = "Settlers", "NonMil", "Airbase", "Transform"
 roles         = "Settlers"
 helptext      = _("\
 Engineers are similar to Workers, but they work twice as fast,\
@@ -821,7 +826,7 @@ defense       = 5
 hitpoints     = 20
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 6
+vision_radius_sq = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 1
@@ -1569,7 +1574,7 @@ uk_shield     = 1
 uk_food       = 1
 uk_gold       = 1
 cargo         = "Land", "Small Land", "Merchant"
-flags         = "BadCityDefender", "HasNoZOC"
+flags         = "BadCityDefender"
 roles         = "Ferryboat"
 helptext      = _("\
 The Trireme is your first boat unit. It can act\
@@ -1603,7 +1608,7 @@ uk_shield     = 1
 uk_food       = 1
 uk_gold       = 1
 cargo         = "Land", "Small Land", "Merchant"
-flags         = "BadCityDefender", "Only_Native_Attack", "HasNoZOC"
+flags         = "BadCityDefender", "Only_Native_Attack"
 roles         = "Ferryboat", "BarbarianBoat"
 helptext      = _("\
 The Caravel is a sailing ship that can enter\
@@ -1636,7 +1641,7 @@ uk_shield     = 1
 uk_food       = 1
 uk_gold       = 1
 cargo         = "Land", "Small Land", "Big Land", "Merchant"
-flags         = "BadCityDefender", "HasNoZOC"
+flags         = "BadCityDefender"
 roles         = "Ferryboat", "BarbarianBoat"
 helptext      = _("\
 The Galleon is a pure transport ship and cannot\
@@ -1906,7 +1911,7 @@ uk_shield     = 1
 uk_food       = 1
 uk_gold       = 1
 cargo         = "Air", "Missile", "Helicopter"
-flags         = "BadCityDefender", "HasNoZOC"
+flags         = "BadCityDefender"
 roles         = "DefendGood"
 helptext      = _("\
 The Carrier is a mobile airport.\
@@ -1942,7 +1947,7 @@ uk_shield     = 1
 uk_food       = 1
 uk_gold       = 1
 cargo         = "Land", "Small Land", "Big Land", "Merchant"
-flags         = "Settlers", "BadCityDefender", "HasNoZOC"
+flags         = "Settlers", "BadCityDefender"
 roles         = "Ferryboat"
 helptext      = _("\
 The Transport cannot attack on its own but\
@@ -2069,7 +2074,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Partial_Invis", "Diplomat", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "Partial_Invis", "Diplomat", "IgZOC", "NonMil"
 veteran_names =
 ; /* TRANS: diplomatic rank. */
 ; /* TRANS: Unless translated, the last character in "attache" should be */
@@ -2178,7 +2183,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "Partial_Invis", "Diplomat", "IgZOC", "NonMil", "HasNoZOC", "Spy"
+flags         = "Partial_Invis", "Diplomat", "IgZOC", "NonMil", "Spy"
 veteran_names =
 ; /* TRANS: Spy veteran level */
   _("?spy_level:informant"),
@@ -2247,7 +2252,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "TradeRoute", "HelpWonder", "NonMil", "HasNoZOC", "Capturable"
+flags         = "TradeRoute", "HelpWonder", "NonMil", "Capturable"
 roles         = ""
 helptext      = _("\
 A Caravan carries goods or material for trading with foreign countries, \
@@ -2289,7 +2294,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "TradeRoute", "HelpWonder", "NonMil", "HasNoZOC", "Capturable"
+flags         = "TradeRoute", "HelpWonder", "NonMil", "Capturable"
 roles         = ""
 helptext      = _("\
 The Freight unit replaces the Caravan, and moves at twice the speed.\
@@ -2313,14 +2318,14 @@ defense       = 1
 hitpoints     = 10
 firepower     = 1
 move_rate     = 1
-vision_radius_sq = 6
+vision_radius_sq = 2
 transport_cap = 0
 fuel          = 0
 uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "IgTer", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "IgTer", "IgZOC", "NonMil"
 roles         = "Explorer"
 helptext      = _("\
 Explorers are brave individuals that are very useful for\
@@ -2353,7 +2358,7 @@ uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
 flags         = "IgZOC", "NonMil", "NoBuild", "NoHome", "SuperSpy", 
-                "Undisbandable", "GameLoss", "Unique"
+                "Undisbandable", "Unbribable", "GameLoss", "Unique"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -2390,7 +2395,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgZOC", "NonMil",
+flags         = "IgZOC", "NonMil", "Unbribable",
                 "Undisbandable", "SuperSpy", "NoHome", "NoBuild"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
@@ -2432,7 +2437,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 1
-flags         = "HasNoZOC"
+flags         = ""
 roles         = ""
 helptext      = _("\
 The AWACS (Airborne Warning and Control System) is an airplane with an \

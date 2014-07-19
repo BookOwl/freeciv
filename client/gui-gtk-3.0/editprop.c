@@ -31,7 +31,6 @@
 #include "game.h"
 #include "map.h"
 #include "movement.h"
-#include "research.h"
 #include "tile.h"
 
 /* client */
@@ -83,8 +82,12 @@ static int get_next_unique_tag(void);
 
 /* 'struct stored_tag_hash' and related functions. */
 #define SPECHASH_TAG stored_tag
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_INT_DATA_TYPE
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE int
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_DATA FC_PTR_TO_INT
 #include "spechash.h"
 
 /* NB: If packet definitions change, be sure to
@@ -253,9 +256,11 @@ static void propstate_set_value(struct propstate *ps,
 static struct propval *propstate_get_value(struct propstate *ps);
 
 #define SPECHASH_TAG propstate
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct propstate *
-#define SPECHASH_IDATA_FREE propstate_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct propstate *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_FREE propstate_destroy
 #include "spechash.h"
 
 
@@ -337,7 +342,6 @@ enum object_property_ids {
   OPID_CITY_ID,
   OPID_CITY_XY,
   OPID_CITY_SIZE,
-  OPID_CITY_HISTORY,
   OPID_CITY_BUILDINGS,
   OPID_CITY_FOOD_STOCK,
   OPID_CITY_SHIELD_STOCK,
@@ -421,8 +425,10 @@ static void objprop_widget_toggle_button_changed(GtkToggleButton *button,
                                                  gpointer userdata);
 
 #define SPECHASH_TAG objprop
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objprop *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objprop *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -475,9 +481,11 @@ static void objbind_set_rowref(struct objbind *ob,
 static GtkTreeRowReference *objbind_get_rowref(struct objbind *ob);
 
 #define SPECHASH_TAG objbind
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objbind *
-#define SPECHASH_IDATA_FREE objbind_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objbind *
+#define SPECHASH_DATA_FREE objbind_destroy
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -885,11 +893,11 @@ static gchar *propval_as_string(struct propval *pv)
     return g_strdup_printf(_("%d known"), count);
 
   case VALTYPE_BV_SPECIAL:
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      if (BV_ISSET(pv->data.v_bv_special, spe->data.special_idx)) {
+    tile_special_type_iterate(spe) {
+      if (BV_ISSET(pv->data.v_bv_special, spe)) {
         count++;
       }
-    } extra_type_by_cause_iterate_end;
+    } tile_special_type_iterate_end;
     /* TRANS: "The number of terrain specials (e.g. hut,
      * river, pollution, etc.) present on a tile." */
     return g_strdup_printf(_("%d present"), count);
@@ -1492,30 +1500,13 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_int = ptile->continent;
         break;
       case OPID_TILE_SPECIALS:
-        BV_CLR_ALL(pv->data.v_bv_special);
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (tile_has_extra(ptile, pextra)) {
-            BV_SET(pv->data.v_bv_special, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
+        pv->data.v_bv_special = tile_specials(ptile);
         break;
       case OPID_TILE_ROADS:
-        BV_CLR_ALL(pv->data.v_bv_roads);
-        extra_type_iterate(pextra) {
-          if (tile_has_extra(ptile, pextra)
-              && is_extra_caused_by(pextra, EC_ROAD)) {
-            BV_SET(pv->data.v_bv_roads, road_index(extra_road_get(pextra)));
-          }
-        } extra_type_iterate_end;
+        pv->data.v_bv_roads = tile_roads(ptile);
         break;
       case OPID_TILE_BASES:
-        BV_CLR_ALL(pv->data.v_bv_bases);
-        extra_type_iterate(pextra) {
-          if (tile_has_extra(ptile, pextra)
-              && is_extra_caused_by(pextra, EC_BASE)) {
-            BV_SET(pv->data.v_bv_bases, base_index(extra_base_get(pextra)));
-          }
-        } extra_type_iterate_end;
+        pv->data.v_bv_bases = tile_bases(ptile);
         break;
       case OPID_TILE_VISION:
         pv->data.v_tile_vision = fc_malloc(sizeof(struct tile_vision_data));
@@ -1695,9 +1686,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       case OPID_CITY_SIZE:
         pv->data.v_int = city_size_get(pcity);
         break;
-      case OPID_CITY_HISTORY:
-        pv->data.v_int = pcity->history;
-        break;
       case OPID_CITY_BUILDINGS:
         pv->data.v_built = fc_malloc(sizeof(pcity->built));
         memcpy(pv->data.v_built, pcity->built, sizeof(pcity->built));
@@ -1721,7 +1709,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
   case OBJTYPE_PLAYER:
     {
       const struct player *pplayer = objbind_get_object(ob);
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         goto FAILED;
@@ -1741,11 +1728,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
 #endif /* DEBUG */
       case OPID_PLAYER_INVENTIONS:
-        presearch = research_get(pplayer);
         pv->data.v_inventions = fc_calloc(A_LAST, sizeof(bool));
         advance_index_iterate(A_FIRST, tech) {
           pv->data.v_inventions[tech]
-              = TECH_KNOWN == research_invention_state(presearch, tech);
+              = TECH_KNOWN == player_invention_state(pplayer, tech);
         } advance_index_iterate_end;
         pv->must_free = TRUE;
         break;
@@ -1922,12 +1908,6 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         *pmax = MAX_CITY_SIZE;
         *pstep = 1;
         *pbig_step = 5;
-        return TRUE;
-      case OPID_CITY_HISTORY:
-        *pmin = 0;
-        *pmax = USHRT_MAX;
-        *pstep = 1;
-        *pbig_step = 10;
         return TRUE;
       case OPID_CITY_FOOD_STOCK:
         *pmin = 0;
@@ -2180,7 +2160,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       }
 
       packet->tile = tile_index(ptile);
-      packet->extras = tile_extras(ptile);
+      packet->specials = tile_specials(ptile);
+      packet->bases = tile_bases(ptile);
+      packet->roads = tile_roads(ptile);
       /* TODO: Set more packet fields. */
     }
     return;
@@ -2243,7 +2225,6 @@ static void objbind_pack_current_values(struct objbind *ob,
       struct packet_edit_player *packet = pd.player;
       const struct player *pplayer = objbind_get_object(ob);
       const struct nation_type *pnation;
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         return;
@@ -2253,10 +2234,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       sz_strlcpy(packet->name, pplayer->name);
       pnation = nation_of_player(pplayer);
       packet->nation = nation_index(pnation);
-      presearch = research_get(pplayer);
       advance_index_iterate(A_FIRST, tech) {
         packet->inventions[tech]
-            = TECH_KNOWN == research_invention_state(presearch, tech);
+            = TECH_KNOWN == player_invention_state(pplayer, tech);
       } advance_index_iterate_end;
       packet->gold = pplayer->economic.gold;
       /* TODO: Set more packet fields. */
@@ -2327,39 +2307,13 @@ static void objbind_pack_modified_value(struct objbind *ob,
 
       switch (propid) {
       case OPID_TILE_SPECIALS:
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (BV_ISSET(pv->data.v_bv_special, pextra->data.special_idx)) {
-            BV_SET(packet->extras, pextra->data.special_idx);
-          } else {
-            BV_CLR(packet->extras, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
+        packet->specials = pv->data.v_bv_special;
         return;
       case OPID_TILE_ROADS:
-        extra_type_iterate(pextra) {
-          if (is_extra_caused_by(pextra, EC_ROAD)) {
-            int ridx = road_index(extra_road_get(pextra));
-
-            if (BV_ISSET(pv->data.v_bv_roads, ridx)) {
-              BV_SET(packet->extras, extra_index(pextra));
-            } else {
-              BV_CLR(packet->extras, extra_index(pextra));
-            }
-          }
-        } extra_type_iterate_end;
+        packet->roads = pv->data.v_bv_roads;
         return;
       case OPID_TILE_BASES:
-        extra_type_iterate(pextra) {
-          if (is_extra_caused_by(pextra, EC_BASE)) {
-            int bidx = base_index(extra_base_get(pextra));
-
-            if (BV_ISSET(pv->data.v_bv_bases, bidx)) {
-              BV_SET(packet->extras, extra_index(pextra));
-            } else {
-              BV_CLR(packet->extras, extra_index(pextra));
-            }
-          }
-        } extra_type_iterate_end;
+        packet->bases = pv->data.v_bv_bases;
         return;
       case OPID_TILE_LABEL:
         sz_strlcpy(packet->label, pv->data.v_string);
@@ -2438,9 +2392,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
         return;
       case OPID_CITY_SIZE:
         packet->size = pv->data.v_int;
-        return;
-      case OPID_CITY_HISTORY:
-        packet->history = pv->data.v_int;
         return;
       case OPID_CITY_FOOD_STOCK:
         packet->food_stock = pv->data.v_int;
@@ -2909,7 +2860,6 @@ static void objprop_setup_widget(struct objprop *op)
     return;
 
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
   case OPID_PLAYER_GOLD:
   case OPID_GAME_YEAR:
@@ -3101,7 +3051,6 @@ static void objprop_refresh_widget(struct objprop *op,
     break;
 
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
   case OPID_PLAYER_GOLD:
   case OPID_GAME_YEAR:
@@ -3688,13 +3637,13 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   case OPID_TILE_SPECIALS:
     gtk_list_store_clear(store);
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      id = spe->data.special_idx;
-      name = extra_name_translation(spe);
-      present = BV_ISSET(pv->data.v_bv_special, id);
+    tile_special_type_iterate(spe) {
+      id = spe;
+      name = special_name_translation(spe);
+      present = BV_ISSET(pv->data.v_bv_special, spe);
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } extra_type_by_cause_iterate_end;
+    } tile_special_type_iterate_end;
     buf = propval_as_string(pv);
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
     g_free(buf);
@@ -3991,7 +3940,7 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
 
   case OPID_TILE_SPECIALS:
     gtk_tree_model_get(model, &iter, 1, &id, -1);
-    if (id < 0 || id >= extra_type_list_size(extra_type_list_by_cause(EC_SPECIAL))) {
+    if (!(0 <= id && id < S_LAST)) {
       return;
     }
     if (present) {
@@ -4298,8 +4247,6 @@ static void property_page_setup_objprops(struct property_page *pp)
     ADDPROP(OPID_CITY_XY, Q_("?coordinates:X,Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
     ADDPROP(OPID_CITY_SIZE, _("Size"),
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_CITY_HISTORY, _("History"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     ADDPROP(OPID_CITY_BUILDINGS, _("Buildings"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BUILT_ARRAY);
@@ -4908,7 +4855,7 @@ static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
   canvas_y += (fh - h);
 
   for (i = 0; i < num_layers; i++) {
-    put_one_element(&canvas, 1.0, layers[i],
+    put_one_element(&canvas, layers[i],
                     ptile, NULL, NULL, punit, pcity,
                     canvas_x, canvas_y, NULL, NULL);
   }

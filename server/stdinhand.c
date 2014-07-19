@@ -78,9 +78,6 @@
 #include "script_server.h"
 #include "script_fcdb.h"
 
-/* ai */
-#include "handicaps.h"
-
 #include "stdinhand.h"
 
 #define TOKEN_DELIMITERS " \t\n,"
@@ -94,13 +91,16 @@ static time_t *time_duplicate(const time_t *t);
 
 /* 'struct kick_hash' and related functions. */
 #define SPECHASH_TAG kick
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE time_t *
-#define SPECHASH_UDATA_TYPE time_t
-#define SPECHASH_IDATA_COPY time_duplicate
-#define SPECHASH_IDATA_FREE (kick_hash_data_free_fn_t) free
-#define SPECHASH_UDATA_TO_IDATA(t) (&(t))
-#define SPECHASH_IDATA_TO_UDATA(p) (NULL != p ? *p : 0)
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE time_t
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
+#define SPECHASH_DATA_COPY time_duplicate
+#define SPECHASH_DATA_FREE free
+#define SPECHASH_DATA_TO_PTR(t) (&(t))
+#define SPECHASH_PTR_TO_DATA(p) (NULL != p ? *(time_t *) (p) : 0)
 #include "spechash.h"
 
 static struct kick_hash *kick_table_by_addr = NULL;
@@ -121,8 +121,8 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check,
                            int read_recursion);
 static bool show_command(struct connection *caller, char *str, bool check);
 static void show_command_one(struct connection *caller, struct setting *pset);
-static void show_ruleset_info(struct connection *caller, bool check,
-                              int read_recursion);
+static void show_changed(struct connection *caller, bool check,
+                         int read_recursion);
 static void show_mapimg(struct connection *caller, enum command_id cmd);
 static bool set_command(struct connection *caller, char *str, bool check);
 
@@ -643,7 +643,6 @@ static bv_handicap handicap_of_skill_level(int level)
      BV_SET(handicap, H_REVOLUTION);
      break;
    case AI_LEVEL_NOVICE:
-   case AI_LEVEL_HANDICAPPED:
      BV_SET(handicap, H_RATES);
      BV_SET(handicap, H_TARGETS);
      BV_SET(handicap, H_HUTS);
@@ -791,10 +790,6 @@ void toggle_ai_player_direct(struct connection *caller, struct player *pplayer)
     cancel_all_meetings(pplayer);
 
     CALL_PLR_AI_FUNC(gained_control, pplayer, pplayer);
-
-    if (is_player_phase(pplayer, game.info.phase)) {
-      CALL_PLR_AI_FUNC(restart_phase, pplayer, pplayer);
-    }
 
     if (S_S_RUNNING == server_state()) {
       /* In case this was last player who has not pressed turn done. */
@@ -1288,7 +1283,7 @@ static bool read_init_script_real(struct connection *caller,
     }
     fclose(script_file);
 
-    show_ruleset_info(caller, check, read_recursion);
+    show_changed(caller, check, read_recursion);
 
     return TRUE;
   } else {
@@ -1960,7 +1955,7 @@ static bool connectmsg_command(struct connection *caller, char *str,
 ******************************************************************/
 void set_ai_level_directer(struct player *pplayer, enum ai_level level)
 {
-  handicaps_set(pplayer, handicap_of_skill_level(level));
+  pplayer->ai_common.handicaps = handicap_of_skill_level(level);
   pplayer->ai_common.fuzzy = fuzzy_of_skill_level(level);
   pplayer->ai_common.expand = expansionism_of_skill_level(level);
   pplayer->ai_common.science_cost = science_cost_of_skill_level(level);
@@ -1975,14 +1970,13 @@ static enum command_id cmd_of_level(enum ai_level level)
 {
   switch (level) {
     case AI_LEVEL_AWAY         : return CMD_AWAY;
-    case AI_LEVEL_HANDICAPPED  : return CMD_HANDICAPPED;
     case AI_LEVEL_NOVICE       : return CMD_NOVICE;
     case AI_LEVEL_EASY         : return CMD_EASY;
     case AI_LEVEL_NORMAL       : return CMD_NORMAL;
     case AI_LEVEL_HARD         : return CMD_HARD;
     case AI_LEVEL_CHEATING     : return CMD_CHEATING;
     case AI_LEVEL_EXPERIMENTAL : return CMD_EXPERIMENTAL;
-    case AI_LEVEL_COUNT        : return CMD_NORMAL;
+    case AI_LEVEL_LAST         : return CMD_NORMAL;
   }
   log_error("Unknown AI level variant: %d.", level);
   return CMD_NORMAL;
@@ -1998,7 +1992,7 @@ void set_ai_level_direct(struct player *pplayer, enum ai_level level)
   cmd_reply(cmd_of_level(level), NULL, C_OK,
 	_("Player '%s' now has AI skill level '%s'."),
 	player_name(pplayer),
-	ai_level_translated_name(level));
+	ai_level_name(level));
   
 }
 
@@ -2008,8 +2002,7 @@ void set_ai_level_direct(struct player *pplayer, enum ai_level level)
 static bool set_ai_level_named(struct connection *caller, const char *name,
                                const char *level_name, bool check)
 {
-  enum ai_level level = ai_level_by_name(level_name, fc_strcasecmp);
-
+  enum ai_level level = ai_level_by_name(level_name);
   return set_ai_level(caller, name, level, check);
 }
 
@@ -2036,7 +2029,7 @@ static bool set_ai_level(struct connection *caller, const char *name,
       cmd_reply(cmd_of_level(level), caller, C_OK,
 		_("Player '%s' now has AI skill level '%s'."),
 		player_name(pplayer),
-		ai_level_translated_name(level));
+		ai_level_name(level));
     } else {
       cmd_reply(cmd_of_level(level), caller, C_FAIL,
 		_("%s is not controlled by the AI."),
@@ -2052,15 +2045,15 @@ static bool set_ai_level(struct connection *caller, const char *name,
         set_ai_level_directer(pplayer, level);
         send_player_info_c(pplayer, NULL);
         cmd_reply(cmd_of_level(level), caller, C_OK,
-                  _("Player '%s' now has AI skill level '%s'."),
+		_("Player '%s' now has AI skill level '%s'."),
                   player_name(pplayer),
-                  ai_level_translated_name(level));
+                  ai_level_name(level));
       }
     } players_iterate_end;
     game.info.skill_level = level;
     cmd_reply(cmd_of_level(level), caller, C_OK,
-              _("Default AI skill level set to '%s'."),
-              ai_level_translated_name(level));
+		_("Default AI skill level set to '%s'."),
+              ai_level_name(level));
   } else {
     cmd_reply_no_such_player(cmd_of_level(level), caller, name, match_result);
     return FALSE;
@@ -2108,22 +2101,16 @@ static bool set_away(struct connection *caller, char *name, bool check)
 /**************************************************************************
   Show changed settings.
 **************************************************************************/
-static void show_ruleset_info(struct connection *caller, bool check,
-                              int read_recursion)
+static void show_changed(struct connection *caller, bool check,
+                         int read_recursion)
 {
-  char *show_arg = "changed";
-
-  /* show changed settings only at the top level of recursion */
   if (read_recursion != 0) {
     return;
   }
 
+  /* show changed settings only at the top level of recursion */
+  char *show_arg = "changed";
   show_command(caller, show_arg, check);
-
-  if (game.control.description[0] != '\0') {
-    cmd_reply(CMD_RULESETDIR, caller, C_COMMENT, "%s", game.control.description);
-    cmd_reply(CMD_RULESETDIR, caller, C_COMMENT, horiz_line);
-  }
 }
 
 /**************************************************************************
@@ -3758,19 +3745,6 @@ bool load_command(struct connection *caller, const char *filename, bool check)
   conn_list_destroy(global_observers);
 
   aifill(game.info.aifill);
-
-  achievements_iterate(pach) {
-    players_iterate(pplayer) {
-      struct packet_achievement_info pack;
-
-      pack.id = achievement_index(pach);
-      pack.gained = achievement_player_has(pach, pplayer);
-      pack.first = (pach->first == pplayer);
-
-      lsend_packet_achievement_info(pplayer->connections, &pack);
-    } players_iterate_end;
-  } achievements_iterate_end;
-
   return TRUE;
 }
 
@@ -3833,7 +3807,7 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check,
 
     /* load the ruleset (and game settings defined in the ruleset) */
     player_info_freeze();
-    if (!load_rulesets(old, TRUE, FALSE)) {
+    if (!load_rulesets(old, TRUE)) {
       success = FALSE;
 
       /* While loading of the requested ruleset failed, we might
@@ -3846,8 +3820,8 @@ static bool set_rulesetdir(struct connection *caller, char *str, bool check,
        * connected clients. */
       send_rulesets(game.est_connections);
     }
-    /* show ruleset description and list changed values */
-    show_ruleset_info(caller, check, read_recursion);
+    /* list changed values */
+    show_changed(caller, check, read_recursion);
     player_info_thaw();
 
     if (success) {
@@ -4347,7 +4321,6 @@ static bool handle_stdin_input_real(struct connection *caller,
     return create_command(caller, arg, check);
   case CMD_AWAY:
     return set_away(caller, arg, check);
-  case CMD_HANDICAPPED:
   case CMD_NOVICE:
   case CMD_EASY:
   case CMD_NORMAL:
@@ -4596,9 +4569,8 @@ static bool reset_command(struct connection *caller, char *arg, bool check,
   send_server_settings(game.est_connections);
   cmd_reply(CMD_RESET, caller, C_OK, _("Settings re-initialized."));
 
-  /* show ruleset description and list changed values */
-  show_ruleset_info(caller, check, read_recursion);
-
+  /* list changed values */
+  show_changed(caller, check, read_recursion);
   return TRUE;
 }
 
@@ -4728,7 +4700,7 @@ static bool lua_command(struct connection *caller, char *arg, bool check)
 
     if (is_reg_file_for_access(real_filename, FALSE)
         && (script_file = fc_fopen(real_filename, "r"))) {
-      ret = script_server_do_file(caller, real_filename, NULL);
+      ret = script_server_do_file(caller, real_filename);
       goto cleanup;
     } else {
       cmd_reply(CMD_LUA, caller, C_FAIL,
@@ -6291,10 +6263,10 @@ void show_players(struct connection *caller)
       } else {
         sz_strlcat(buf, _("Human"));
       }
-      if (pplayer->ai_controlled) {
+      if(pplayer->ai_controlled) {
         cat_snprintf(buf, sizeof(buf), _(", %s"), ai_name(pplayer->ai));
         cat_snprintf(buf, sizeof(buf), _(", difficulty level %s"),
-                     ai_level_translated_name(pplayer->ai_common.skill_level));
+                     ai_level_name(pplayer->ai_common.skill_level));
       }
       n = conn_list_size(pplayer->connections);
       if (n > 0) {
@@ -6919,11 +6891,10 @@ static int num_tokens(int start)
 }
 
 /**************************************************************************
-  Commands that may be followed by a player name
+Commands that may be followed by a player name
 **************************************************************************/
 static const int player_cmd[] = {
   CMD_AITOGGLE,
-  CMD_HANDICAPPED,
   CMD_NOVICE,
   CMD_EASY,
   CMD_NORMAL,

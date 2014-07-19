@@ -30,7 +30,6 @@
 
 /* common */
 #include "ai.h"
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "improvement.h"
@@ -64,45 +63,45 @@
 #define startpos_list_iterate_end LIST_BOTH_ITERATE_END
 
 /****************************************************************************
-  Get role_id for given role character
-****************************************************************************/
-enum unit_role_id crole_to_role_id(char crole)
-{
-  switch(crole) {
-  case 'c':
-    return L_CITIES;
-  case 'w':
-    return L_SETTLERS;
-  case 'x':
-    return L_EXPLORER;
-  case 'k':
-    return L_GAMELOSS;
-  case 's':
-    return L_DIPLOMAT;
-  case 'f':
-    return L_FERRYBOAT;
-  case 'd':
-    return L_DEFEND_OK;
-  case 'D':
-    return L_DEFEND_GOOD;
-  case 'a':
-    return L_ATTACK_FAST;
-  case 'A':
-    return L_ATTACK_STRONG;
-  default: 
-    return 0;
-  }
-}
-
-/****************************************************************************
   Get unit_type for given role character
 ****************************************************************************/
 struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
 {
   struct unit_type *utype = NULL;
-  enum unit_role_id role = crole_to_role_id(crole);
+  enum unit_role_id role;
 
-  if (role == 0) {
+  switch(crole) {
+  case 'c':
+    role = L_CITIES;
+    break;
+  case 'w':
+    role = L_SETTLERS;
+    break;
+  case 'x':
+    role = L_EXPLORER;
+    break;
+  case 'k':
+    role = L_GAMELOSS;
+    break;
+  case 's':
+    role = L_DIPLOMAT;
+    break;
+  case 'f':
+    role = L_FERRYBOAT;
+    break;
+  case 'd':
+    role = L_DEFEND_OK;
+    break;
+  case 'D':
+    role = L_DEFEND_GOOD;
+    break;
+  case 'a':
+    role = L_ATTACK_FAST;
+    break;
+  case 'A':
+    role = L_ATTACK_STRONG;
+    break;
+  default: 
     fc_assert_ret_val(FALSE, NULL);
     return NULL;
   }
@@ -130,7 +129,6 @@ static struct tile *place_starting_unit(struct tile *starttile,
 {
   struct tile *ptile = NULL;
   struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-  bool hut_present = FALSE;
 
   if (utype != NULL) {
     iterate_outward(starttile, map.xsize + map.ysize, itertile) {
@@ -153,14 +151,8 @@ static struct tile *place_starting_unit(struct tile *starttile,
    * other cases, huts are avoided as start positions).  Remove any such hut,
    * and make sure to tell the client, since we may have already sent this
    * tile (with the hut) earlier: */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(ptile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
     log_verbose("Removed hut on start position for %s",
                 player_name(pplayer));
@@ -170,6 +162,19 @@ static struct tile *place_starting_unit(struct tile *starttile,
   map_show_circle(pplayer, ptile, game.server.init_vis_radius_sq);
 
   if (utype != NULL) {
+    /* We cannot currently handle sea units as start units.
+     * TODO: remove this code block when we can. */
+    if (utype_move_type(utype) == UMT_SEA) {
+      log_error("Sea moving start units are not yet supported, "
+                "%s not created.",
+                utype_rule_name(utype));
+      notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
+                    _("Sea moving start units are not yet supported. "
+                      "Nobody gets %s."),
+                    utype_name_translation(utype));
+      return NULL;
+    }
+
     (void) create_unit(pplayer, ptile, utype, FALSE, 0, 0);
     return ptile;
   }

@@ -2,6 +2,7 @@
 
 files=`find $1 -name "*.c" -o -name "*.h" -o -name "*.cpp" \
        | sort \
+       | grep -v intl \
        | grep -v "Freeciv.h" \
        | fgrep -v "_gen." \
        | grep -v "fc_config.h" \

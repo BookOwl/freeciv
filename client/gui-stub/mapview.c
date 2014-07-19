@@ -15,13 +15,10 @@
 #include <fc_config.h>
 #endif
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
-#include "support.h"
-
-/* common */
-#include "calendar.h"
 #include "game.h"
+#include "support.h"
 
 /* gui main header */
 #include "gui_stub.h"

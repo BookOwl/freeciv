@@ -1,9 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-if RULEDIT
-SUBDIRS = ruledit
-endif
-
 MOCCMD=@MOCCMD@
 
 include $(top_srcdir)/bootstrap/Makerules.mk
@@ -36,7 +32,6 @@ noinst_LTLIBRARIES = libfcmp.la
 endif
 
 common_cppflags = \
-	-I$(top_srcdir)/dependencies/cvercmp \
 	-I$(top_srcdir)/utility \
 	-I$(top_srcdir)/common \
 	-I$(top_srcdir)/server \
@@ -112,7 +107,6 @@ freeciv_mp_cli_LDFLAGS = $(mp_cli_ldflags)
 
 freeciv_mp_cli_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
 		$(MAPIMG_WAND_LIBS) \
 		$(mp_cli_libs)
@@ -127,7 +121,6 @@ freeciv_mp_gtk2_LDFLAGS = $(mp_gtk2_ldflags)
 
 freeciv_mp_gtk2_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
 		$(MAPIMG_WAND_LIBS) \
 		$(mp_gtk2_libs) \
@@ -143,7 +136,6 @@ freeciv_mp_gtk3_LDFLAGS = $(mp_gtk3_ldflags)
 
 freeciv_mp_gtk3_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
 		$(MAPIMG_WAND_LIBS) \
 		$(mp_gtk3_libs) \
@@ -171,7 +163,6 @@ CLEANFILES = $(MOC_FILES)
 
 freeciv_mp_qt_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
 		$(MAPIMG_WAND_LIBS) \
 		$(mp_qt_libs) \

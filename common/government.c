@@ -176,7 +176,7 @@ bool can_change_to_government(struct player *pplayer,
   }
 
   return are_reqs_active(pplayer, NULL, NULL, NULL, NULL, NULL, NULL,
-                         NULL, NULL, &gov->reqs, RPT_CERTAIN);
+			 &gov->reqs, RPT_CERTAIN);
 }
 
 
@@ -192,9 +192,13 @@ struct ruler_title {
 /****************************************************************************
   Hash function.
 ****************************************************************************/
-static genhash_val_t nation_hash_val(const struct nation_type *pnation)
+static genhash_val_t nation_hash_val(const struct nation_type *pnation,
+                                     size_t num_buckets)
 {
-  return NULL != pnation ? nation_number(pnation) : nation_count();
+  genhash_val_t base = (NULL != pnation ? nation_number(pnation)
+                        : nation_count());
+
+  return base % num_buckets;
 }
 
 /****************************************************************************
@@ -487,7 +491,6 @@ static inline void government_init(struct government *pgovern)
       ruler_title_hash_new_full(nation_hash_val, nation_hash_comp,
                                 NULL, NULL, NULL, ruler_title_destroy);
   requirement_vector_init(&pgovern->reqs);
-  pgovern->changed_to_times = 0;
 }
 
 /****************************************************************************

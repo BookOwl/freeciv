@@ -42,6 +42,25 @@ struct nation_set {
   char description[MAX_LEN_MSG];
 };
 
+/* Nation group structure. */
+struct nation_group {
+  struct name_translation name;
+
+  union {
+    struct {
+      /* Only used in the server (./server/). */
+
+      /* How much the AI will try to select a nation in the same group */
+      int match;
+    } server;
+
+    struct {
+      /* Only used at the client. */
+      /* Nothing yet. */
+    } client;
+  };
+};
+
 static struct nation_type *nations = NULL;
 
 static int num_nation_sets;
@@ -645,12 +664,12 @@ void nations_free(void)
 }
 
 /****************************************************************************
-  Returns nation's style.
+  Returns nation's city style.
 ****************************************************************************/
-struct nation_style *style_of_nation(const struct nation_type *pnation)
+int city_style_of_nation(const struct nation_type *pnation)
 {
   NATION_CHECK(pnation, return 0);
-  return pnation->style;
+  return pnation->city_style;
 }
 
 /****************************************************************************

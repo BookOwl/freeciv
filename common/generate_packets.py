@@ -59,7 +59,7 @@ def write_disclaimer(f):
 
 ''')
 
-def fc_open(name):
+def my_open(name):
     verbose("writing %s"%name)
     f=open(name,"w")
     write_disclaimer(f)
@@ -716,7 +716,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
         if len(self.key_fields)==0:
             return "#define hash_%(name)s hash_const\n\n"%self.__dict__
         else:
-            intro='''static genhash_val_t hash_%(name)s(const void *vkey)
+            intro='''static genhash_val_t hash_%(name)s(const void *vkey, size_t num_buckets)
 {
 '''%self.__dict__
 
@@ -731,7 +731,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
                 a="(%s << 8) ^ %s"%(keys[0], keys[1])
             else:
                 assert 0
-            body=body+('  return %s;\n'%a)
+            body=body+('  return ((%s) %% num_buckets);\n'%a)
             extro="}\n\n"
             return intro+body+extro
 
@@ -1021,7 +1021,7 @@ class Packet:
         self.type=mo.group(1)
         self.name=self.type.lower()
         self.type_number=int(mo.group(2))
-        assert 0<=self.type_number<=65535
+        assert 0<=self.type_number<=255
         dummy=mo.group(3)
 
         del lines[0]
@@ -1575,9 +1575,9 @@ def main():
     output_h_name=target_root+"/common/packets_gen.h"
 
     if lazy_overwrite:
-        output_h=fc_open(output_h_name+".tmp")
+        output_h=my_open(output_h_name+".tmp")
     else:
-        output_h=fc_open(output_h_name)
+        output_h=my_open(output_h_name)
 
     output_h.write('''
 #ifdef __cplusplus
@@ -1585,7 +1585,6 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* common */
-#include "actions.h"
 #include "disaster.h"
 
 ''')
@@ -1613,9 +1612,9 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
     ### writing packets_gen.c
     output_c_name=target_root+"/common/packets_gen.c"
     if lazy_overwrite:
-        output_c=fc_open(output_c_name+".tmp")
+        output_c=my_open(output_c_name+".tmp")
     else:
-        output_c=fc_open(output_c_name)
+        output_c=my_open(output_c_name)
 
     output_c.write('''
 #ifdef HAVE_CONFIG_H
@@ -1640,7 +1639,7 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
 
 #include "packets.h"
 
-static genhash_val_t hash_const(const void *vkey)
+static genhash_val_t hash_const(const void *vkey, size_t num_buckets)
 {
   return 0;
 }
@@ -1692,7 +1691,7 @@ static int stats_total_sent;
                 open(i,"w").write(new)
             os.remove(i+".tmp")
 
-    f=fc_open(target_root+"/server/hand_gen.h")
+    f=my_open(target_root+"/server/hand_gen.h")
     f.write('''
 #ifndef FC__HAND_GEN_H
 #define FC__HAND_GEN_H
@@ -1736,7 +1735,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 ''')
     f.close()
 
-    f=fc_open(target_root+"/client/packhand_gen.h")
+    f=my_open(target_root+"/client/packhand_gen.h")
     f.write('''
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
@@ -1778,7 +1777,7 @@ bool client_handle_packet(enum packet_type type, const void *packet);
 ''')
     f.close()
 
-    f=fc_open(target_root+"/server/hand_gen.c")
+    f=my_open(target_root+"/server/hand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H
@@ -1834,7 +1833,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 ''')
     f.close()
 
-    f=fc_open(target_root+"/client/packhand_gen.c")
+    f=my_open(target_root+"/client/packhand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H

@@ -28,7 +28,6 @@ void qtg_ui_main(int argc, char *argv[]);
 void qtg_ui_exit();
 
 enum gui_type qtg_get_gui_type();
-void qtg_insert_client_build_info(char *outbuf, size_t outlen);
 
 void qtg_version_message(char *vertext);
 void qtg_real_output_window_append(const char *astring,
@@ -52,7 +51,6 @@ void qtg_color_free(struct color *pcolor);
 
 struct canvas *qtg_canvas_create(int width, int height);
 void qtg_canvas_free(struct canvas *store);
-void qtg_canvas_set_zoom(struct canvas *store, float zoom);
 void qtg_canvas_copy(struct canvas *dest, struct canvas *src,
 		     int src_x, int src_y, int dest_x, int dest_y, int width,
 		     int height);
@@ -74,6 +72,8 @@ void qtg_canvas_put_rectangle(struct canvas *pcanvas,
 void qtg_canvas_fill_sprite_area(struct canvas *pcanvas,
                                  struct sprite *psprite, struct color *pcolor,
                                  int canvas_x, int canvas_y);
+void qtg_canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+                                int canvas_x, int canvas_y);
 void qtg_canvas_put_line(struct canvas *pcanvas, struct color *pcolor,
                          enum line_type ltype, int start_x, int start_y,
                          int dx, int dy);

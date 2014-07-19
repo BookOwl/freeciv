@@ -36,13 +36,7 @@ enum trade_route_type {
   TRT_NATIONAL_IC                     = 1, /* Intercontinental */
   TRT_IN                              = 2,
   TRT_IN_IC                           = 3, /* International intercontinental */
-  TRT_ALLY                            = 4,
-  TRT_ALLY_IC                         = 5,
-  TRT_ENEMY                           = 6,
-  TRT_ENEMY_IC                        = 7,
-  TRT_TEAM                            = 8,
-  TRT_TEAM_IC                         = 9,
-  TRT_LAST                            = 10
+  TRT_LAST                            = 4
 };
 
 struct trade_route_settings {

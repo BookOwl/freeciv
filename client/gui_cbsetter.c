@@ -47,7 +47,6 @@ void setup_gui_funcs()
   funcs->ui_exit = gui_ui_exit;
 
   funcs->get_gui_type = gui_get_gui_type;
-  funcs->insert_client_build_info = gui_insert_client_build_info;
 
   funcs->version_message = gui_version_message;
   funcs->real_output_window_append = gui_real_output_window_append;
@@ -66,13 +65,13 @@ void setup_gui_funcs()
 
   funcs->canvas_create = gui_canvas_create;
   funcs->canvas_free = gui_canvas_free;
-  funcs->canvas_set_zoom = gui_canvas_set_zoom;
   funcs->canvas_copy = gui_canvas_copy;
   funcs->canvas_put_sprite = gui_canvas_put_sprite;
   funcs->canvas_put_sprite_full = gui_canvas_put_sprite_full;
   funcs->canvas_put_sprite_fogged = gui_canvas_put_sprite_fogged;
   funcs->canvas_put_rectangle = gui_canvas_put_rectangle;
   funcs->canvas_fill_sprite_area = gui_canvas_fill_sprite_area;
+  funcs->canvas_fog_sprite_area = gui_canvas_fog_sprite_area;
   funcs->canvas_put_line = gui_canvas_put_line;
   funcs->canvas_put_curved_line = gui_canvas_put_curved_line;
   funcs->get_text_size = gui_get_text_size;

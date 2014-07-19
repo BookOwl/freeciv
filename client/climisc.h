@@ -116,7 +116,7 @@ void common_taxrates_callback(int i);
 
 bool can_units_do_connect(struct unit_list *punits,
 			  enum unit_activity activity,
-                          struct extra_type *tgt);
+                          struct act_tgt *tgt);
 
 enum unit_bg_color_type { UNIT_BG_HP_LOSS,
                           UNIT_BG_LAND,

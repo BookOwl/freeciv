@@ -9,7 +9,7 @@
 
 [datafile]
 description="Default technology data for Freeciv (as Civ2, minus a few)"
-options="+Freeciv-ruleset-Devel-2013.May.14"
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -60,6 +60,7 @@ options="+Freeciv-ruleset-Devel-2013.May.14"
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
 ; "Population_Pollution_Inc" = Increase the pollution factor created by
 ;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
@@ -620,7 +621,7 @@ graphic_alt = "-"
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
 

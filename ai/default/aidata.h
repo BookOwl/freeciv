@@ -19,9 +19,6 @@
 /* common */
 #include "fc_types.h"
 
-/* server/advisors */
-#include "advtools.h"
-
 struct player;
 
 enum winning_strategy {
@@ -69,12 +66,13 @@ struct ai_plr
   int last_num_continents;
   int last_num_oceans;
 
+  /* Keep track of available ocean channels */
+  bool *channels;
+
   struct {
     int passengers;   /* number of passengers waiting for boats */
     int boats;
     int available_boats;
-
-    int *workers;     /* cities to workers on continent */
 
     bv_id diplomat_reservations;
   } stats;
@@ -92,9 +90,6 @@ struct ai_plr
 
   /* Cache map for AI settlers; defined in aisettler.c. */
   struct ai_settler *settler;
-
-  /* The units of tech_want seem to be shields */
-  adv_want tech_want[A_LAST+1];
 };
 
 void dai_data_init(struct ai_type *ait, struct player *pplayer);
@@ -106,6 +101,9 @@ void dai_data_phase_finished(struct ai_type *ait, struct player *pplayer);
 bool is_ai_data_phase_open(struct ai_type *ait, struct player *pplayer);
 
 struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer, bool *close);
+
+bool dai_channel(struct ai_type *ait, struct player *pplayer,
+                 Continent_id c1, Continent_id c2);
 
 struct ai_dip_intel *dai_diplomacy_get(struct ai_type *ait,
                                        const struct player *plr1,

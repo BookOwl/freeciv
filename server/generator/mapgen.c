@@ -1612,13 +1612,13 @@ static void make_huts(int number)
     /* Add a hut.  But not on a polar area, on an ocean, or too close to
      * another hut. */
     if ((ptile = rand_map_pos_characteristic(WC_ALL, TT_NFROZEN, MC_NONE))) {
-      struct extra_type *phut = rand_extra_for_tile(ptile, EC_HUT);
-
-      number--;
-      if (phut != NULL) {
-        tile_add_extra(ptile, phut);
+      if (is_ocean_tile(ptile)) {
+	map_set_placed(ptile); /* not good for a hut */
+      } else {
+	number--;
+	tile_set_special(ptile, S_HUT);
+	set_placed_near_pos(ptile, 3);
       }
-      set_placed_near_pos(ptile, 3);
     }
   }
   destroy_placed_map();
@@ -2279,7 +2279,7 @@ static void initworld(struct gen234_state *pstate)
     tile_set_terrain(ptile, deepest_ocean);
     tile_set_continent(ptile, 0);
     map_set_placed(ptile); /* not a land tile */
-    BV_CLR_ALL(ptile->extras);
+    tile_clear_all_specials(ptile);
     tile_set_owner(ptile, NULL, NULL);
   } whole_map_iterate_end;
 

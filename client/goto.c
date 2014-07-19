@@ -22,7 +22,6 @@
 #include "mem.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 #include "packets.h"
@@ -424,7 +423,7 @@ static enum tile_behavior get_TB_aggr(const struct tile *ptile,
                                       const struct pf_parameter *param)
 {
   if (known == TILE_UNKNOWN) {
-    if (!options.goto_into_unknown) {
+    if (!goto_into_unknown) {
       return TB_IGNORE;
     }
   } else if (is_non_allied_unit_tile(ptile, param->owner)
@@ -444,7 +443,7 @@ static enum tile_behavior get_TB_caravan(const struct tile *ptile,
                                          const struct pf_parameter *param)
 {
   if (known == TILE_UNKNOWN) {
-    if (!options.goto_into_unknown) {
+    if (!goto_into_unknown) {
       return TB_IGNORE;
     }
   } else if (is_non_allied_city_tile(ptile, param->owner)) {
@@ -477,36 +476,36 @@ static int get_activity_time(const struct tile *ptile,
     if (pterrain->irrigation_time == 0) {
       return -1;
     }
-    extra_type_iterate(pextra) {
-      if (BV_ISSET(connect_tgt->conflicts, extra_index(pextra))
-          && tile_has_extra(ptile, pextra)) {
-        /* Don't replace old extras. */
-        return -1;
-      }
-    } extra_type_iterate_end;
+    if (tile_has_special(ptile, S_MINE)) {
+      /* Don't overwrite mines. */
+      return -1;
+    }
 
-    if (tile_has_extra(ptile, connect_tgt)) {
+    if (tile_has_special(ptile, S_IRRIGATION)) {
       break;
     }
 
     activity_mc = pterrain->irrigation_time;
     break;
   case ACTIVITY_GEN_ROAD:
-    fc_assert(is_extra_caused_by(connect_tgt, EC_ROAD));
+    fc_assert(connect_tgt.type == ATT_ROAD);
+    {
+      struct road_type *proad = road_by_number(connect_tgt.obj.road);
 
-    if (!tile_has_extra(ptile, connect_tgt)) {
-      struct tile *vtile;
-      int single_mc;
+      if (!tile_has_road(ptile, proad)) {
+        struct tile *vtile;
+        int single_mc;
 
-      vtile = tile_virtual_new(ptile);
-      single_mc = check_recursive_road_connect(vtile, connect_tgt, NULL, pplayer, 0);
-      tile_virtual_destroy(vtile);
+        vtile = tile_virtual_new(ptile);
+        single_mc = check_recursive_road_connect(vtile, proad, NULL, pplayer, 0);
+        tile_virtual_destroy(vtile);
 
-      if (single_mc < 0) {
-        return -1;
+        if (single_mc < 0) {
+          return -1;
+        }
+
+        activity_mc += single_mc;
       }
-
-      activity_mc += single_mc;
     }
     break;
   default:
@@ -560,8 +559,7 @@ static int get_connect_road(const struct tile *src_tile, enum direction8 dir,
     return -1;
   }
 
-  move_cost = param->get_MC(src_tile, PF_MS_NATIVE, dest_tile, PF_MS_NATIVE,
-                            param);
+  move_cost = param->get_MC(src_tile, dir, dest_tile, param);
   if (move_cost == PF_IMPOSSIBLE_MC) {
     return -1;
   }
@@ -573,7 +571,7 @@ static int get_connect_road(const struct tile *src_tile, enum direction8 dir,
 
   fc_assert(connect_activity == ACTIVITY_GEN_ROAD);
 
-  proad = extra_road_get(connect_tgt);
+  proad = road_by_number(connect_tgt.obj.road);
 
   if (proad == NULL) {
     /* No suitable road type available */
@@ -672,8 +670,7 @@ static int get_connect_irrig(const struct tile *src_tile,
     return -1;
   }
 
-  move_cost = param->get_MC(src_tile, PF_MS_NATIVE, dest_tile, PF_MS_NATIVE,
-                            param);
+  move_cost = param->get_MC(src_tile, dir, dest_tile, param);
   if (move_cost == PF_IMPOSSIBLE_MC) {
     return -1;
   }
@@ -727,7 +724,7 @@ no_fights_or_unknown_goto(const struct tile *ptile,
                           enum known_type known,
                           const struct pf_parameter *p)
 {
-  if (known == TILE_UNKNOWN && options.goto_into_unknown) {
+  if (known == TILE_UNKNOWN && goto_into_unknown) {
     /* Special case allowing goto into the unknown. */
     return TB_NORMAL;
   }
@@ -1015,13 +1012,15 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
       p.orders[i] = ORDER_FULL_MP;
       p.dir[i] = -1;
       p.activity[i] = ACTIVITY_LAST;
-      p.target[i] = EXTRA_NONE;
+      p.base[i] = BASE_NONE;
+      p.road[i] = ROAD_NONE;
       log_goto_packet("  packet[%d] = wait: %d,%d", i, TILE_XY(old_tile));
     } else {
       p.orders[i] = ORDER_MOVE;
       p.dir[i] = get_direction_for_step(old_tile, new_tile);
       p.activity[i] = ACTIVITY_LAST;
-      p.target[i] = EXTRA_NONE;
+      p.base[i] = BASE_NONE;
+      p.road[i] = ROAD_NONE;
       log_goto_packet("  packet[%d] = move %s: %d,%d => %d,%d",
                       i, dir_get_name(p.dir[i]),
                       TILE_XY(old_tile), TILE_XY(new_tile));
@@ -1034,7 +1033,8 @@ static void send_path_orders(struct unit *punit, struct pf_path *path,
     p.dir[i] = (final_order->order == ORDER_MOVE) ? final_order->dir : -1;
     p.activity[i] = (final_order->order == ORDER_ACTIVITY)
       ? final_order->activity : ACTIVITY_LAST;
-    p.target[i] = final_order->target;
+    p.base[i] = final_order->base;
+    p.road[i] = final_order->road;
     p.length++;
   }
 
@@ -1125,29 +1125,26 @@ void send_patrol_route(void)
 /**************************************************************************
   Fill orders to build recursive roads.
 **************************************************************************/
-static bool order_recursive_roads(struct tile *ptile, struct extra_type *pextra,
+static bool order_recursive_roads(struct tile *ptile, struct road_type *proad,
                                  struct packet_unit_orders *p, int rec)
 {
-  if (rec > MAX_EXTRA_TYPES) {
+  if (rec > MAX_ROAD_TYPES) {
     return FALSE;
   }
 
-  if (!is_extra_caused_by(pextra, EC_ROAD)) {
-    return FALSE;
-  }
-
-  extra_deps_iterate(&(pextra->reqs), pdep) {
-    if (!tile_has_extra(ptile, pdep)) {
+  road_deps_iterate(&(proad->reqs), pdep) {
+    if (!tile_has_road(ptile, pdep)) {
       if (!order_recursive_roads(ptile, pdep, p, rec + 1)) {
         return FALSE;
       }
     }
-  } extra_deps_iterate_end;
+  } road_deps_iterate_end;
 
   p->orders[p->length] = ORDER_ACTIVITY;
   p->dir[p->length] = -1;
   p->activity[p->length] = ACTIVITY_GEN_ROAD;
-  p->target[p->length] = extra_index(pextra);
+  p->base[p->length] = BASE_NONE;
+  p->road[p->length] = road_index(proad);
   p->length++;
 
   return TRUE;
@@ -1158,7 +1155,7 @@ static bool order_recursive_roads(struct tile *ptile, struct extra_type *pextra,
   to the server.
 **************************************************************************/
 void send_connect_route(enum unit_activity activity,
-                        struct extra_type *tgt)
+                        struct act_tgt *tgt)
 {
   fc_assert_ret(goto_is_active());
   goto_map_unit_iterate(goto_maps, goto_map, punit) {
@@ -1190,17 +1187,18 @@ void send_connect_route(enum unit_activity activity,
     for (i = 0; i < path->length; i++) {
       switch (activity) {
       case ACTIVITY_IRRIGATE:
-	if (!tile_has_extra(old_tile, tgt)) {
+	if (!tile_has_special(old_tile, S_IRRIGATION)) {
 	  /* Assume the unit can irrigate or we wouldn't be here. */
 	  p.orders[p.length] = ORDER_ACTIVITY;
           p.dir[p.length] = -1;
 	  p.activity[p.length] = ACTIVITY_IRRIGATE;
-          p.target[p.length] = extra_index(tgt);
+          p.base[p.length] = BASE_NONE;
+          p.road[p.length] = ROAD_NONE;
 	  p.length++;
 	}
 	break;
       case ACTIVITY_GEN_ROAD:
-        order_recursive_roads(old_tile, tgt, &p, 0);
+        order_recursive_roads(old_tile, road_by_number(tgt->obj.road), &p, 0);
         break;
       default:
         log_error("Invalid connect activity: %d.", activity);
@@ -1215,7 +1213,8 @@ void send_connect_route(enum unit_activity activity,
 	p.orders[p.length] = ORDER_MOVE;
 	p.dir[p.length] = get_direction_for_step(old_tile, new_tile);
         p.activity[p.length] = ACTIVITY_LAST;
-        p.target[p.length] = EXTRA_NONE;
+        p.base[p.length] = BASE_NONE;
+        p.road[p.length] = ROAD_NONE;
 	p.length++;
 
 	old_tile = new_tile;
@@ -1259,7 +1258,8 @@ void send_goto_route(void)
       order.order = goto_last_order;
       order.dir = -1;
       order.activity = ACTIVITY_LAST;
-      order.target = EXTRA_NONE;
+      order.base = BASE_NONE;
+      order.road = ROAD_NONE;
 
       /* ORDER_MOVE would require real direction,
        * ORDER_ACTIVITY would require real activity */

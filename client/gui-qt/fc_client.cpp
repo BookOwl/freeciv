@@ -40,6 +40,9 @@ fc_client::fc_client() : QObject()
 {
   struct rgbcolor *prgbcolor;
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
+#endif
   /**
    * Somehow freeciv-client-common asks to switch to page when all widgets
    * haven't been created yet by Qt, even constructor finished job,
@@ -86,8 +89,7 @@ fc_client::fc_client() : QObject()
   info_tile_wdg = NULL;
   opened_dialog = NULL;
   current_unit_id = -1;
-  current_unit_target_id[ATK_CITY] = -1;
-  current_unit_target_id[ATK_UNIT] = -1;
+  current_unit_target_id = -1;
 
   for (int i = 0; i < LAST_WIDGET; i++) {
     dock_widget[i] = NULL;

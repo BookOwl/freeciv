@@ -37,7 +37,6 @@
 
 /* client */
 #include "client_main.h" /* client_state */
-#include "climisc.h"
 #include "control.h"
 
 /* gui-sdl */
@@ -168,28 +167,17 @@ static int unit_order_callback(struct widget *pOrder_Widget)
       key_unit_auto_explore();
       break;
     case ID_UNIT_ORDER_CONNECT_IRRIGATE:
-      {
-        struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *pextra;
-
-          pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-          key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-        }
-      }
+      key_unit_connect(ACTIVITY_IRRIGATE, NULL);
       break;
     case ID_UNIT_ORDER_CONNECT_ROAD:
       {
         struct road_type *proad = road_by_compat_special(ROCO_ROAD);
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) };
 
-          tgt = road_extra_get(proad);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+          key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
         }
       }
       break;
@@ -198,11 +186,10 @@ static int unit_order_callback(struct widget *pOrder_Widget)
         struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
 
         if (prail != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(prail) };
 
-          tgt = road_extra_get(prail);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+          key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
         }
       }
       break;
@@ -1083,8 +1070,7 @@ void real_menus_update(void)
       struct city *pCity = tile_city(pTile);
       struct terrain *pTerrain = tile_terrain(pTile);
       struct base_type *pbase;
-      struct extra_type *pextra = next_extra_for_tile(pTile, EC_ROAD,
-                                                      unit_owner(pUnit), pUnit);
+      struct road_type *proad = next_road_for_tile(pTile, unit_owner(pUnit), pUnit);
 
       if (!counter) {
 	local_show(ID_UNIT_ORDER_GOTO);
@@ -1116,11 +1102,10 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_BUILD_WONDER);
       }
 
-      if (pextra != NULL) {
-        struct road_type *proad = extra_road_get(pextra);
+      if (proad != NULL) {
         enum road_compat compat = road_compat_special(proad);
 
-        time = tile_activity_time(ACTIVITY_GEN_ROAD, pTile, road_extra_get(proad));
+	time = tile_activity_road_time(pTile, road_number(proad));
 
         /* TRANS: "Build Railroad (R) 3 turns" */
 	fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
@@ -1165,7 +1150,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_IRRIGATE)) {
-        time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit));
 
         if (!strcmp(terrain_rule_name(pTerrain), "Forest") ||
           !strcmp(terrain_rule_name(pTerrain), "Jungle")) {
@@ -1196,7 +1181,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_MINE)) {
-        time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit));
 
 	/* FIXME: THIS CODE IS WRONG */
    if (!strcmp(terrain_rule_name(pTerrain), "Forest")) {  
@@ -1231,7 +1216,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_TRANSFORM)) {
-        time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit));
 	fc_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 	  _("Transform to"),
 	  terrain_name_translation(pTerrain->transform_result),
@@ -1351,24 +1336,10 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_AUTO_EXPLORE);
       }
 
-      {
-        bool conn_possible = FALSE;
-        struct extra_type_list *extras;
-
-        extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *tgt;
-
-          tgt = extra_type_list_get(extras, 0);
-          conn_possible = can_units_do_connect(punits, ACTIVITY_IRRIGATE, tgt);
-        }
-
-        if (conn_possible) {
-          local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        } else {
-          local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        }
+      if (can_unit_do_connect(pUnit, ACTIVITY_IRRIGATE, NULL)) {
+	local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
+      } else {
+	local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
       }
 
       {
@@ -1376,11 +1347,11 @@ void real_menus_update(void)
         bool road_conn_possible;
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) }; 
 
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
+          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD,
+                                                   &tgt);
         } else {
           road_conn_possible = FALSE;
         }
@@ -1397,11 +1368,11 @@ void real_menus_update(void)
         bool road_conn_possible;
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) }; 
 
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
+          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD,
+                                                   &tgt);
         } else {
           road_conn_possible = FALSE;
         }

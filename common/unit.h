@@ -28,8 +28,6 @@ extern "C" {
 #include "unittype.h"
 #include "vision.h"
 
-struct road_type;
-
 /* Changing this enum will break network compatability. */
 enum unit_orders {
   ORDER_MOVE = 0,
@@ -50,7 +48,7 @@ enum unit_focus_status {
 
 /* Changing this enum will break network compatability. */
 enum diplomat_actions {
-  DIPLOMAT_MOVE = 0,	/* move onto tile when other options exist. */
+  DIPLOMAT_MOVE = 0,	/* move onto city square - only for allied cities */
   DIPLOMAT_EMBASSY = 1,
   DIPLOMAT_BRIBE = 2,
   DIPLOMAT_INCITE = 3,
@@ -59,8 +57,6 @@ enum diplomat_actions {
   DIPLOMAT_STEAL = 6,
   SPY_POISON = 7, 
   SPY_SABOTAGE_UNIT = 8,
-  DIPLOMAT_SABOTAGE_TARGET = 9,
-  DIPLOMAT_STEAL_TARGET = 10,
   DIPLOMAT_ANY_ACTION   /* leave this one last */
 };
 
@@ -117,7 +113,8 @@ struct unit_adv {
 struct unit_order {
   enum unit_orders order;
   enum unit_activity activity;  /* Only valid for ORDER_ACTIVITY. */
-  int target;
+  Base_type_id base;            /* Only valid for activity ACTIVITY_BASE */
+  Road_type_id road;            /* Only valid for activity ACTIVITY_GEN_ROAD */
   enum direction8 dir;          /* Only valid for ORDER_MOVE. */
 };
 
@@ -149,13 +146,13 @@ struct unit {
    * fractional values in some cases). */
   int activity_count;
 
-  struct extra_type *activity_target;
+  struct act_tgt activity_target;
 
   /* Previous activity, so it can be resumed without loss of progress
    * if the user changes their mind during a turn. */
   enum unit_activity changed_from;
   int changed_from_count;
-  struct extra_type *changed_from_target;
+  struct act_tgt changed_from_target;
 
   bool ai_controlled; /* 0: not automated; 1: automated */
   bool moved;
@@ -279,20 +276,25 @@ bool can_unit_change_homecity_to(const struct unit *punit,
 				 const struct city *pcity);
 bool can_unit_change_homecity(const struct unit *punit);
 const char *get_activity_text(enum unit_activity activity);
+bool cmp_act_tgt(struct act_tgt *act1, struct act_tgt *act2);
 bool can_unit_continue_current_activity(struct unit *punit);
 bool can_unit_do_activity(const struct unit *punit,
 			  enum unit_activity activity);
 bool can_unit_do_activity_targeted(const struct unit *punit,
 				   enum unit_activity activity,
-                                   struct extra_type *target);
+                                   struct act_tgt *target);
 bool can_unit_do_activity_targeted_at(const struct unit *punit,
 				      enum unit_activity activity,
-				      struct extra_type *target,
+				      struct act_tgt *target,
 				      const struct tile *ptile);
+bool can_unit_do_activity_base(const struct unit *punit,
+                               Base_type_id base);
+bool can_unit_do_activity_road(const struct unit *punit,
+                               Road_type_id road);
 void set_unit_activity(struct unit *punit, enum unit_activity new_activity);
 void set_unit_activity_targeted(struct unit *punit,
 				enum unit_activity new_activity,
-                                struct extra_type *new_target);
+                                struct act_tgt *new_target);
 void set_unit_activity_base(struct unit *punit,
                             Base_type_id base);
 void set_unit_activity_road(struct unit *punit,
@@ -301,18 +303,25 @@ int get_activity_rate(const struct unit *punit);
 int get_activity_rate_this_turn(const struct unit *punit);
 int get_turns_for_activity_at(const struct unit *punit,
 			      enum unit_activity activity,
-			      const struct tile *ptile,
-                              struct extra_type *tgt);
+			      const struct tile *ptile);
+int get_turns_for_road_at(const struct unit *punit,
+			  const struct road_type *proad,
+			  const struct tile *ptile);
+int get_turns_for_base_at(const struct unit *punit,
+                          const struct base_type *pbase,
+                          const struct tile *ptile);
 bool activity_requires_target(enum unit_activity activity);
 bool can_unit_do_autosettlers(const struct unit *punit); 
 bool is_unit_activity_on_tile(enum unit_activity activity,
 			      const struct tile *ptile);
-bv_extras get_unit_tile_pillage_set(const struct tile *ptile);
+bv_special get_unit_tile_pillage_set(const struct tile *ptile);
+bv_bases get_unit_tile_pillage_base_set(const struct tile *ptile);
+bv_roads get_unit_tile_pillage_road_set(const struct tile *ptile);
 bool is_attack_unit(const struct unit *punit);
 bool is_military_unit(const struct unit *punit);           /* !set !dip !cara */
 bool is_diplomat_unit(const struct unit *punit);
 bool is_square_threatened(const struct player *pplayer,
-			  const struct tile *ptile, bool omniscient);
+			  const struct tile *ptile);
 bool is_field_unit(const struct unit *punit);              /* ships+aero */
 bool is_hiding_unit(const struct unit *punit);
 bool unit_can_add_to_city(const struct unit *punit);
@@ -340,8 +349,6 @@ struct unit *is_enemy_unit_tile(const struct tile *ptile,
 				const struct player *pplayer);
 struct unit *is_non_allied_unit_tile(const struct tile *ptile,
 				     const struct player *pplayer);
-struct unit *is_other_players_unit_tile(const struct tile *ptile,
-					const struct player *pplayer);
 struct unit *is_non_attack_unit_tile(const struct tile *ptile,
 				     const struct player *pplayer);
 struct unit *unit_occupies_tile(const struct tile *ptile,
@@ -351,9 +358,7 @@ bool is_my_zoc(const struct player *unit_owner, const struct tile *ptile);
 bool unit_being_aggressive(const struct unit *punit);
 bool unit_type_really_ignores_zoc(const struct unit_type *punittype);
 
-bool is_build_activity(enum unit_activity activity, const struct tile *ptile);
-bool is_clean_activity(enum unit_activity activity);
-bool is_tile_activity(enum unit_activity activity);
+bool is_build_or_clean_activity(enum unit_activity activity);
 
 struct unit *unit_virtual_create(struct player *pplayer, struct city *pcity,
                                  struct unit_type *punittype,
@@ -381,7 +386,7 @@ void *unit_ai_data(const struct unit *punit, const struct ai_type *ai);
 void unit_set_ai_data(struct unit *punit, const struct ai_type *ai,
                       void *data);
 
-int unit_bribe_cost(struct unit *punit, struct player *briber);
+int unit_bribe_cost(struct unit *punit);
 
 bool unit_transport_load(struct unit *pcargo, struct unit *ptrans,
                          bool force);

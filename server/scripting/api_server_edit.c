@@ -267,15 +267,15 @@ Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
      * to pass correct reason to emitted signal. */
     if (game.info.free_tech_method == FTM_CHEAPEST) {
       id = pick_cheapest_tech(pplayer);
-    } else if (research_get(pplayer)->researching == A_UNSET
+    } else if (player_research_get(pplayer)->researching == A_UNSET
                || game.info.free_tech_method == FTM_RANDOM) {
       id = pick_random_tech(pplayer);
     } else {
-      id = research_get(pplayer)->researching;
+      id = player_research_get(pplayer)->researching;
     }
   }
 
-  if (research_invention_state(research_get(pplayer), id) != TECH_KNOWN) {
+  if (player_invention_state(pplayer, id) != TECH_KNOWN) {
     do_free_cost(pplayer, id);
     found_new_tech(pplayer, id, FALSE, TRUE);
     result = advance_by_number(id);
@@ -304,28 +304,6 @@ bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
   pplayer->ai_common.traits[tr].mod += mod;
 
   return TRUE;
-}
-
-/*****************************************************************************
-  Create a new extra.
-*****************************************************************************/
-void api_edit_create_extra(lua_State *L, Tile *ptile, const char *name)
-{
-  struct extra_type *pextra;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
-
-  if (!name) {
-    return;
-  }
-
-  pextra = extra_type_by_rule_name(name);
-
-  if (pextra) {
-    tile_add_extra(ptile, pextra);
-    update_tile_knowledge(ptile);
-  }
 }
 
 /*****************************************************************************
@@ -368,7 +346,7 @@ void api_edit_create_road(lua_State *L, Tile *ptile, const char *name)
   proad = road_type_by_rule_name(name);
 
   if (proad) {
-    create_road(ptile, proad);
+    tile_add_road(ptile, proad);
     update_tile_knowledge(ptile);
   }
 }

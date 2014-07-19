@@ -31,7 +31,6 @@ EXTRA_DIST=	autogen.sh 			\
 		diff_ignore			\
 		bootstrap/fcgui.in		\
 		bootstrap/fcser.in		\
-		bootstrap/fcruledit.in		\
 		bootstrap/fc_svnrev_gen.h.tmpl	\
 		bootstrap/generate_svnrev.sh	\
 		bootstrap/fc_gitrev_gen.h.tmpl	\
@@ -39,7 +38,6 @@ EXTRA_DIST=	autogen.sh 			\
 		bootstrap/freeciv.desktop.in	\
 		bootstrap/freeciv-gtk2.desktop.in \
 		bootstrap/freeciv-sdl.desktop.in \
-		bootstrap/freeciv-sdl2.desktop.in \
 		bootstrap/freeciv-qt.desktop.in \
 		bootstrap/freeciv-server.desktop.in	\
 		bootstrap/freeciv-mp-gtk2.desktop.in	\
@@ -48,7 +46,6 @@ EXTRA_DIST=	autogen.sh 			\
 		bootstrap/freeciv-gtk2.appdata.xml.in \
 		bootstrap/freeciv-gtk3.appdata.xml.in \
 		bootstrap/freeciv-sdl.appdata.xml.in \
-		bootstrap/freeciv-sdl2.appdata.xml.in \
 		bootstrap/freeciv-qt.appdata.xml.in \
 		bootstrap/freeciv-server.appdata.xml.in \
 		bootstrap/freeciv-mp-gtk2.appdata.xml.in \
@@ -58,8 +55,8 @@ EXTRA_DIST=	autogen.sh 			\
 		bootstrap/config.rpath		\
 		bootstrap/Makerules.mk		\
 		bootstrap/langnames.txt		\
+		m4/ac_path_lib.m4		\
 		m4/c99.m4			\
-		m4/c11.m4			\
 		m4/codeset.m4			\
 		m4/compiler.m4			\
 		m4/debug.m4			\
@@ -76,6 +73,8 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/gtk2-client.m4		\
 		m4/gtk3-client.m4		\
 		m4/iconv.m4			\
+		m4/imlib.m4			\
+		m4/lcmessage.m4			\
 		m4/lib-ld.m4			\
 		m4/lib-link.m4			\
 		m4/lib-prefix.m4		\
@@ -87,12 +86,12 @@ EXTRA_DIST=	autogen.sh 			\
 		m4/no-client.m4			\
 		m4/pkg.m4			\
 		m4/postgres.m4			\
+		m4/progtest.m4			\
 		m4/qt5.m4			\
 		m4/qt-client.m4			\
 		m4/readline.m4			\
 		m4/sdl-client.m4		\
 		m4/sdl.m4			\
-		m4/sdl2-client.m4		\
 		m4/sdl2.m4			\
 		m4/sqlite3.m4			\
 		m4/sound.m4			\
