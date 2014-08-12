@@ -12,47 +12,11 @@
 -- This file is the Freeciv server`s interface to the database backend
 -- when authentication is enabled. See doc/README.fcdb.
 
+-- **************************************************************************
+-- basic mysql functions
+-- **************************************************************************
+
 local dbh = nil
-
--- Machinery for debug logging of options
-local seen_options
-local function options_init()
-  seen_options = {}
-end
-local function option_log(name, val, is_sensitive, source)
-  if not seen_options[name] then
-    seen_options[name] = true
-    if is_sensitive then
-      log.debug('Database option \'%s\': %s', name, source)
-    else
-      log.debug('Database option \'%s\': %s: value \'%s\'', name, source, val)
-    end
-  end
-end
-
--- Get an option from configuration file, falling back to sensible
--- defaults where they exist
-local function get_option(name, is_sensitive)
-  local defaults = {
-    backend    = "sqlite",
-    table_user = "fcdb_auth",
-    table_log  = "fcdb_log"
-  }
-  local val = fcdb.option(name)
-  if val then
-    option_log(name, val, is_sensitive, 'read from file')
-  else
-    val = defaults[name]
-    if val then
-      option_log(name, val, is_sensitive, 'using default')
-    end
-  end
-  if not val then
-    log.error('Database option \'%s\' not specified in configuration file',
-              name)
-  end
-  return val
-end
 
 -- connect to a MySQL database (or stop with an error)
 local function mysql_connect()
@@ -62,16 +26,16 @@ local function mysql_connect()
     dbh:close()
   end
 
-  local sql = ls_mysql.mysql()
+  local sql = luasql.mysql()
 
-  log.verbose('MySQL database version is %s.', ls_mysql._MYSQLVERSION)
+  log.verbose('MySQL database version is %s.', luasql._MYSQLVERSION)
 
   -- Load the database parameters.
-  local database = get_option("database")
-  local user     = get_option("user")
-  local password = get_option("password", true)
-  local host     = get_option("host")
-  local port     = get_option("port")
+  local database = fcdb.option(fcdb.param.DATABASE)
+  local user     = fcdb.option(fcdb.param.USER)
+  local password = fcdb.option(fcdb.param.PASSWORD)
+  local host     = fcdb.option(fcdb.param.HOST)
+  local port     = fcdb.option(fcdb.param.PORT)
 
   dbh, err = sql:connect(database, user, password, host, port)
   if not dbh then
@@ -90,10 +54,11 @@ local function sqlite_connect()
     dbh:close()
   end
 
-  local sql = ls_sqlite3.sqlite3()
+  local sql = luasql.sqlite3()
 
   -- Load the database parameters.
-  local database = get_option("database")
+  local database = fcdb.option(fcdb.param.DATABASE)
+  -- USER/PASSWORD/HOST/PORT ignored for SQLite
 
   dbh, err = sql:connect(database)
   if not dbh then
@@ -129,7 +94,7 @@ end
 -- (This should be replaced with Lua os.time() once the script has access
 -- to this, see <http://gna.org/bugs/?19729>.)
 function sql_time()
-  local backend = get_option("backend")
+  local backend = fcdb.option(fcdb.param.BACKEND)
   if backend == 'mysql' then
     return 'UNIX_TIMESTAMP()'
   elseif backend == 'sqlite' then
@@ -148,13 +113,13 @@ function sqlite_createdb()
   local query
   local res
 
-  if get_option("backend") ~= 'sqlite' then
+  if fcdb.option(fcdb.param.BACKEND) ~= 'sqlite' then
     log.error("'backend' in configuration file must be 'sqlite'")
     return fcdb.status.ERROR
   end
 
-  local table_user = get_option("table_user")
-  local table_log  = get_option("table_log")
+  local table_user = fcdb.option(fcdb.param.TABLE_USER)
+  local table_log = fcdb.option(fcdb.param.TABLE_LOG)
 
   if not dbh then
     log.error("Missing database connection...")
@@ -246,8 +211,8 @@ function user_load(conn)
 
   local fields = 'password'
 
-  local table_user = get_option("table_user")
-  local table_log  = get_option("table_log")
+  local table_user = fcdb.option(fcdb.param.TABLE_USER)
+  local table_log = fcdb.option(fcdb.param.TABLE_LOG)
 
   if not dbh then
     log.error("Missing database connection...")
@@ -293,7 +258,7 @@ function user_save(conn)
   local res     -- result handle
   local query   -- sql query
 
-  local table_user = get_option("table_user")
+  local table_user = fcdb.option(fcdb.param.TABLE_USER)
 
   if not dbh then
     log.error("Missing database connection...")
@@ -331,8 +296,8 @@ function user_log(conn, success)
     return fcdb.status.ERROR
   end
 
-  local table_user = get_option("table_user")
-  local table_log  = get_option("table_log")
+  local table_user = fcdb.option(fcdb.param.TABLE_USER)
+  local table_log = fcdb.option(fcdb.param.TABLE_LOG)
 
   local username = dbh:escape(auth.get_username(conn))
   local ipaddr = auth.get_ipaddr(conn)
@@ -369,9 +334,7 @@ end
 function database_init()
   local status -- return value (status of the request)
 
-  options_init()
-
-  local backend = get_option("backend")
+  local backend = fcdb.option(fcdb.param.BACKEND)
   if backend == 'mysql' then
     log.verbose('Opening MySQL database connection...')
     status = mysql_connect()

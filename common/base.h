@@ -26,7 +26,6 @@ extern "C" {
 
 struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME base_gui_type
 #define SPECENUM_VALUE0 BASE_GUI_FORTRESS
 #define SPECENUM_VALUE0NAME "Fortress"
@@ -36,7 +35,6 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_VALUE2NAME "Other"
 #include "specenum_gen.h"
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME base_flag_id
 /* Unit inside are not considered aggressive if base is close to city */
 #define SPECENUM_VALUE0 BF_NOT_AGGRESSIVE
@@ -50,30 +48,47 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 /* Paratroopers can use base for paradrop */
 #define SPECENUM_VALUE3 BF_PARADROP_FROM
 #define SPECENUM_VALUE3NAME "ParadropFrom"
-/* Base will be built in cities automatically */
-#define SPECENUM_VALUE4 BF_SHOW_FLAG
-#define SPECENUM_VALUE4NAME "ShowFlag"
+/* Makes tile native terrain for units */
+#define SPECENUM_VALUE4 BF_NATIVE_TILE
+#define SPECENUM_VALUE4NAME "NativeTile"
 #define SPECENUM_COUNT BF_COUNT
-#define SPECENUM_BITVECTOR bv_base_flags
 #include "specenum_gen.h"
 
-struct extra_type;
+BV_DEFINE(bv_base_flags, BF_COUNT);
 
 struct base_type {
   Base_type_id item_number;
+  bool buildable;
+  bool pillageable;
+  struct name_translation name;
+  char graphic_str[MAX_LEN_NAME];
+  char graphic_alt[MAX_LEN_NAME];
+  char activity_gfx[MAX_LEN_NAME];
+  struct requirement_vector reqs;
   enum base_gui_type gui_type;
+  int build_time;
+  int defense_bonus;
   int border_sq;
   int vision_main_sq;
   int vision_invis_sq;
 
+  bv_unit_classes native_to;
   bv_base_flags flags;
+  bv_bases conflicts;
 
   struct strvec *helptext;
-
-  struct extra_type *self;
 };
 
 #define BASE_NONE       -1
+
+/* get 'struct base_type_list' and related functions: */
+#define SPECLIST_TAG base_type
+#define SPECLIST_TYPE struct base_type
+#include "speclist.h"
+
+#define base_type_list_iterate(baselist, pbase) \
+    TYPED_LIST_ITERATE(struct base_type, baselist, pbase)
+#define base_type_list_iterate_end LIST_ITERATE_END
 
 /* General base accessor functions. */
 Base_type_id base_count(void);
@@ -88,61 +103,49 @@ const char *base_name_translation(const struct base_type *pbase);
 struct base_type *base_type_by_rule_name(const char *name);
 struct base_type *base_type_by_translated_name(const char *name);
 
-struct extra_type *base_extra_get(const struct base_type *pbase);
+bool is_base_card_near(const struct tile *ptile, const struct base_type *pbase);
+bool is_base_near_tile(const struct tile *ptile, const struct base_type *pbase);
 
 /* Functions to operate on a base flag. */
 bool base_has_flag(const struct base_type *pbase, enum base_flag_id flag);
-bool is_base_flag_card_near(const struct tile *ptile,
-                            enum base_flag_id flag);
-bool is_base_flag_near_tile(const struct tile *ptile,
-                            enum base_flag_id flag);
 bool base_has_flag_for_utype(const struct base_type *pbase,
                              enum base_flag_id flag,
+                             const struct unit_type *punittype);
+bool is_native_base_to_uclass(const struct base_type *pbase,
+                              const struct unit_class *pclass);
+bool is_native_base_to_utype(const struct base_type *pbase,
                              const struct unit_type *punittype);
 bool is_native_tile_to_base(const struct base_type *pbase,
                             const struct tile *ptile);
 
 /* Ancillary functions */
-bool base_can_be_built(const struct base_type *pbase,
-                       const struct tile *ptile);
 bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                     const struct tile *ptile);
-bool player_can_build_base(const struct base_type *pbase,
-                           const struct player *pplayer,
-                           const struct tile *ptile);
 
 struct base_type *get_base_by_gui_type(enum base_gui_type type,
                                        const struct unit *punit,
                                        const struct tile *ptile);
 
+bool can_bases_coexist(const struct base_type *base1, const struct base_type *base2);
+
 bool territory_claiming_base(const struct base_type *pbase);
-struct player *base_owner(const struct tile *ptile);
 
 /* Initialization and iteration */
-void base_type_init(struct extra_type *pextra, int idx);
+void base_types_init(void);
 void base_types_free(void);
 
-#define base_type_iterate(_p)			 \
-{                                                \
-  extra_type_by_cause_iterate(EC_BASE, _e_) {    \
-    struct base_type *_p = extra_base_get(_e_);
+struct base_type *base_array_first(void);
+const struct base_type *base_array_last(void);
 
-#define base_type_iterate_end                    \
-  } extra_type_by_cause_iterate_end              \
-}
+#define base_type_iterate(_p)						\
+{									\
+  struct base_type *_p = base_array_first();				\
+  if (NULL != _p) {							\
+    for (; _p <= base_array_last(); _p++) {
 
-
-#define base_deps_iterate(_reqs, _dep)                                 \
-{                                                                      \
-  requirement_vector_iterate(_reqs, preq) {                            \
-    if (preq->source.kind == VUT_EXTRA                                 \
-        && preq->present                                               \
-        && is_extra_caused_by(preq->source.value.extra, EC_BASE)) {    \
-      struct base_type *_dep = extra_base_get(preq->source.value.extra);
-
-#define base_deps_iterate_end                                           \
-    }                                                                   \
-  } requirement_vector_iterate_end;                                     \
+#define base_type_iterate_end						\
+    }									\
+  }									\
 }
 
 #ifdef __cplusplus

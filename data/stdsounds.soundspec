@@ -1,6 +1,6 @@
 [soundspec]
 ; Format and options of this spec file:
-options = "+Freeciv-soundspec-Devel-2014.Mar.13"
+options = "+soundspec"
 
 [info]
 artists = "\
@@ -192,7 +192,7 @@ m_trireme = "stdsounds/inh2o.ogg" ; [pox]
 ;w_womens_suffrage = ""
 
 
-; This list contains all events up to E_ACHIEVEMENT
+; This list contains all events up to E_UNIT_BUILT_POP_COST
 ; (as numbered in common/events.h), in the sorted order.
 ; Alphabetical sorting is based on these tag names,
 ; as the message names and contents change. {was}
@@ -228,7 +228,6 @@ m_trireme = "stdsounds/inh2o.ogg" ; [pox]
 ;e_destroyed = ""
 ;e_diplomacy = ""
 ;e_diplomatic_incident = ""
-;e_disaster = ""
 ;e_enemy_diplomat_bribe = ""
 ;e_enemy_diplomat_embassy = ""
 ;e_enemy_diplomat_failed = ""
@@ -299,8 +298,6 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_unit_win = ""
 ;e_unit_win_att = ""
 ;e_uprising = ""
-;e_disaster = ""
-;e_achievement = ""
 ;e_vote_new = ""
 ;e_vote_resolved = ""
 ;e_vote_aborted = ""
@@ -313,3 +310,5 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 
 ; This pseudo-event is only used in the sound system.
 ;e_game_quit = ""
+
+;music_start = ""

@@ -7,12 +7,12 @@
 
 AC_DEFUN([FC_CHECK_SQLITE3],
 [
-  AC_ARG_WITH([sqlite3-prefix],
-    AS_HELP_STRING([--with-sqlite3-prefix=PFX], [Prefix where SQLite3 is installed (optional)]),
-[sqlite3_prefix="$withval"], [sqlite3_prefix=""])
+  AC_ARG_WITH(sqlite3-prefix,
+              [  --with-sqlite3-prefix=PFX Prefix where SQLite3 is installed (optional)],
+              sqlite3_prefix="$withval", sqlite3_prefix="")
 
-  sqlite3_cflags=""
-  sqlite3_ldflags=""
+  SQLITE3_CFLAGS=""
+  SQLITE3_LDFLAGS=""
   SQLITE3_VERSION=""
 
   ac_sqlite3_header="sqlite3.h"
@@ -75,16 +75,16 @@ AC_DEFUN([FC_CHECK_SQLITE3],
   CPPFLAGS="$saved_CPPFLAGS"
 
   if test "$success" = "yes"; then
-    sqlite3_cflags="$ac_sqlite3_cppflags"
-    sqlite3_ldflags="$ac_sqlite3_ldflags"
+    SQLITE3_CFLAGS="$ac_sqlite3_cppflags"
+    SQLITE3_LDFLAGS="$ac_sqlite3_ldflags"
 
     ac_sqlite3_header_path="$sqlite3_prefix/include/$ac_sqlite3_header"
 
     dnl Retrieve SQLite release version
     if test "x$ac_sqlite3_header_path" != "x"; then
       ac_sqlite3_version=`cat $ac_sqlite3_header_path \
-                          | grep '#define.*SQLITE_VERSION.*\"' | $SED -e 's/.* "//' \
-                          | $SED -e 's/"//'`
+                          | grep '#define.*SQLITE_VERSION.*\"' | sed -e 's/.* "//' \
+                          | sed -e 's/"//'`
       if test $ac_sqlite3_version != ""; then
         SQLITE3_VERSION=$ac_sqlite3_version
       else
@@ -92,8 +92,8 @@ AC_DEFUN([FC_CHECK_SQLITE3],
       fi
     fi
 
-    AC_SUBST(sqlite3_cflags)
-    AC_SUBST(sqlite3_ldflags)
+    AC_SUBST(SQLITE3_CFLAGS)
+    AC_SUBST(SQLITE3_LDFLAGS)
     AC_SUBST(SQLITE3_VERSION)
 
     ifelse([$1], , :, [$1])

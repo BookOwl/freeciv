@@ -15,12 +15,8 @@
 #include <fc_config.h>
 #endif
 
-/* common */
 #include "game.h"
 #include "government.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "dialogs.h"
 
@@ -87,14 +83,6 @@ void unit_select_dialog_update_real(void)
 }
 
 /**************************************************************************
-  The server has changed the set of selectable nations.
-**************************************************************************/
-void races_update_pickable(bool nationset_change)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
   In the nation selection dialog, make already-taken nations unavailable.
   This information is contained in the packet_nations_used packet.
 **************************************************************************/
@@ -138,8 +126,7 @@ bool caravan_dialog_is_open(int *unit_id, int *city_id)
   Popup a dialog giving a diplomatic unit some options when moving into
   the target tile.
 **************************************************************************/
-void popup_diplomat_dialog(struct unit *punit, struct tile *ptile,
-                           const action_probability *action_probabilities)
+void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 {
   /* PORTME */
 }
@@ -148,7 +135,7 @@ void popup_diplomat_dialog(struct unit *punit, struct tile *ptile,
   Popup a window asking a diplomatic unit if it wishes to incite the
   given enemy city.
 **************************************************************************/
-void popup_incite_dialog(struct unit *actor, struct city *pcity, int cost)
+void popup_incite_dialog(struct city *pcity, int cost)
 {
   /* PORTME */
 }
@@ -157,7 +144,7 @@ void popup_incite_dialog(struct unit *actor, struct city *pcity, int cost)
   Popup a dialog asking a diplomatic unit if it wishes to bribe the
   given enemy unit.
 **************************************************************************/
-void popup_bribe_dialog(struct unit *actor, struct unit *punit, int cost)
+void popup_bribe_dialog(struct unit *punit, int cost)
 {
   /* PORTME */
 }
@@ -166,7 +153,7 @@ void popup_bribe_dialog(struct unit *actor, struct unit *punit, int cost)
   Popup a dialog asking a diplomatic unit if it wishes to sabotage the
   given enemy city.
 **************************************************************************/
-void popup_sabotage_dialog(struct unit *actor, struct city *pcity)
+void popup_sabotage_dialog(struct city *pcity)
 {
   /* PORTME */
 }
@@ -175,7 +162,8 @@ void popup_sabotage_dialog(struct unit *actor, struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras may_pillage)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases)
 {
   /* PORTME */
 }
@@ -193,24 +181,6 @@ void popup_disband_dialog(struct unit_list *punits)
   user and load.
 **************************************************************************/
 void popup_tileset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain musicset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_musicset_suggestion_dialog(void)
 {
   /* PORTME */
 }
@@ -255,22 +225,6 @@ void close_diplomat_dialog(void)
   Updates caravan dialog
 ****************************************************************/
 void caravan_dialog_update(void)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Show tileset error dialog.
-*****************************************************************/
-void show_tileset_error(const char *msg)
 {
   /* PORTME */
 }

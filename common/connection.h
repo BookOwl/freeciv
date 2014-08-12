@@ -45,17 +45,15 @@ struct genhash;
 struct timer_list;
 struct conn_pattern_list;
 
-/* Used in the network protocol. */
 #define MAX_LEN_PACKET   4096
-#define MAX_LEN_CAPSTR    512
-#define MAX_LEN_PASSWORD  512 /* do not change this under any circumstances */
 
 #define MAX_LEN_BUFFER   (MAX_LEN_PACKET * 128)
+#define MAX_LEN_CAPSTR    512
+#define MAX_LEN_PASSWORD  512 /* do not change this under any circumstances */
 
 /****************************************************************************
   Command access levels for client-side use; at present, they are only
   used to control access to server commands typed at the client chatline.
-  Used in the network protocol.
 ****************************************************************************/
 #define SPECENUM_NAME cmdlevel
 /* User may issue no commands at all. */
@@ -117,11 +115,6 @@ struct socket_packet_buffer {
   unsigned char *data;
 };
 
-struct packet_header {
-  unsigned int length : 4;      /* Actually 'enum data_type' */
-  unsigned int type : 4;        /* Actually 'enum data_type' */
-};
-
 #define SPECVEC_TAG byte
 #define SPECVEC_TYPE unsigned char
 #include "specvec.h"
@@ -135,7 +128,6 @@ struct connection {
   int sock;
   bool used;
   bool established;		/* have negotiated initial packets */
-  struct packet_header packet_header;
   char *closing_reason;
 
   /* connection is "observer", not controller; may be observing

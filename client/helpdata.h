@@ -50,8 +50,8 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
 		      const char *user_text, int i);
 void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
 		      const char *user_text, struct terrain *pterrain);
-void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
-                    const char *user_text, struct extra_type *pextra);
+void helptext_base(char *buf, size_t bufsz, struct player *pplayer,
+                   const char *user_text, struct base_type *pbase);
 void helptext_specialist(char *buf, size_t bufsz, struct player *pplayer,
                          const char *user_text, struct specialist *pspec);
 void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
@@ -60,8 +60,6 @@ void helptext_nation(char *buf, size_t bufsz, struct nation_type *pnation,
 		     const char *user_text);
 
 char *helptext_unit_upkeep_str(struct unit_type *punittype);
-const char *helptext_road_bonus_str(const struct terrain *pterrain,
-                                    const struct road_type *proad);
 
 #define help_items_iterate(pitem) {       \
         const struct help_item *pitem;    \

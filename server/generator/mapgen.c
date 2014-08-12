@@ -30,9 +30,7 @@
 #include "shared.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
-#include "road.h"
 
 /* server/generator */
 #include "height_map.h"
@@ -67,10 +65,6 @@ struct terrain_select {
   int temp_condition;
   int wet_condition;
 };
-
-
-static struct road_type *river_types[MAX_ROAD_TYPES];
-static int river_type_count = 0;
 
 #define SPECLIST_TAG terrain_select
 #include "speclist.h"
@@ -117,40 +111,25 @@ struct river_map {
 };
 
 static int river_test_blocked(struct river_map *privermap,
-                              struct tile *ptile,
-                              struct road_type *priver);
+                              struct tile *ptile);
 static int river_test_rivergrid(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver);
+                                struct tile *ptile);
 static int river_test_highlands(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver);
+                                struct tile *ptile);
 static int river_test_adjacent_ocean(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_adjacent_river(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_adjacent_highlands(struct river_map *privermap,
-                                         struct tile *ptile,
-                                         struct road_type *priver);
-static int river_test_swamp(struct river_map *privermap,
-                            struct tile *ptile,
-                            struct road_type *priver);
+                                         struct tile *ptile);
+static int river_test_swamp(struct river_map *privermap, struct tile *ptile);
 static int river_test_adjacent_swamp(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_height_map(struct river_map *privermap,
-                                 struct tile *ptile,
-                                 struct road_type *priver);
-static void river_blockmark(struct river_map *privermap,
-                            struct tile *ptile);
-static bool make_river(struct river_map *privermap,
-                       struct tile *ptile,
-                       struct road_type *priver);
+                                 struct tile *ptile);
+static void river_blockmark(struct river_map *privermap, struct tile *ptile);
+static bool make_river(struct river_map *privermap, struct tile *ptile);
 static void make_rivers(void);
-
-static void river_types_init(void);
 
 #define HAS_POLES (map.server.temperature < 70 && !map.server.alltemperate)
 
@@ -172,7 +151,7 @@ static int river_pct = 0;
 #define map_pos_is_dry(ptile)						\
   (map_colatitude((ptile)) <= DRY_MAX_LEVEL				\
    && map_colatitude((ptile)) > DRY_MIN_LEVEL				\
-   && count_terrain_class_near_tile((ptile), FALSE, TRUE, TC_OCEAN) <= 35)
+   && count_ocean_near_tile((ptile), FALSE, TRUE) <= 35)
 typedef enum { WC_ALL = 200, WC_DRY, WC_NDRY } wetness_c;
 
 /* MISCELANEOUS (OTHER CONDITIONS) */
@@ -326,9 +305,7 @@ static struct terrain *pick_terrain_by_flag(enum terrain_flag_id flag)
   int count = 0;
 
   terrain_type_iterate(pterrain) {
-    if ((has_flag[terrain_index(pterrain)]
-         = (terrain_has_flag(pterrain, flag)
-            && !terrain_has_flag(pterrain, TER_NOT_GENERATED)))) {
+    if ((has_flag[terrain_index(pterrain)] = terrain_has_flag(pterrain, flag))) {
       count++;
     }
   } terrain_type_iterate_end;
@@ -369,19 +346,17 @@ static struct terrain *pick_terrain(enum mapgen_terrain_property target,
 
   /* Find the total weight. */
   terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
+    if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
+      continue;
+    }
+    if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
+      continue;
+    }
 
-      if (target != MG_UNUSED) {
-        sum += pterrain->property[target];
-      } else {
-        sum++;
-      }
+    if (target != MG_UNUSED) {
+      sum += pterrain->property[target];
+    } else {
+      sum++;
     }
   } terrain_type_iterate_end;
 
@@ -390,26 +365,24 @@ static struct terrain *pick_terrain(enum mapgen_terrain_property target,
 
   /* Finally figure out which one we picked. */
   terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      int property;
+    int property;
 
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
-
-      if (target != MG_UNUSED) {
-        property = pterrain->property[target];
-      } else {
-        property = 1;
-      }
-      if (sum < property) {
-        return pterrain;
-      }
-      sum -= property;
+    if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
+      continue;
     }
+    if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
+      continue;
+    }
+
+    if (target != MG_UNUSED) {
+      property = pterrain->property[target];
+    } else {
+      property = 1;
+    }
+    if (sum < property) {
+      return pterrain;
+    }
+    sum -= property;
   } terrain_type_iterate_end;
 
   /* This can happen with sufficient quantities of preferred and avoided
@@ -528,10 +501,10 @@ static void make_polar_land(void)
   Recursively generate terrains.
 **************************************************************************/
 static void place_terrain(struct tile *ptile, int diff, 
-                          struct terrain *pterrain, int *to_be_placed,
-                          wetness_c        wc,
-                          temperature_type tc,
-                          miscellaneous_c  mc)
+                           struct terrain *pterrain, int *to_be_placed,
+			   wetness_c        wc,
+			   temperature_type tc,
+			   miscellaneous_c  mc)
 {
   if (*to_be_placed <= 0) {
     return;
@@ -593,7 +566,6 @@ static void make_plains(void)
     }
   } whole_map_iterate_end;
 }
-
 /**************************************************************************
  This place randomly a cluster of terrains with some characteristics
  **************************************************************************/
@@ -685,8 +657,7 @@ static void make_terrains(void)
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_blocked(struct river_map *privermap,
-                              struct tile *ptile,
-                              struct road_type *priver)
+                              struct tile *ptile)
 {
   if (dbv_isset(&privermap->blocked, tile_index(ptile))) {
     return 1;
@@ -706,18 +677,16 @@ static int river_test_blocked(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_rivergrid(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver)
+                                struct tile *ptile)
 {
-  return (count_river_type_tile_card(ptile, priver, FALSE) > 1) ? 1 : 0;
+  return (count_special_near_tile(ptile, TRUE, FALSE, S_RIVER) > 1) ? 1 : 0;
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_highlands(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver)
+                                struct tile *ptile)
 {
   return tile_terrain(ptile)->property[MG_MOUNTAINOUS];
 }
@@ -726,28 +695,25 @@ static int river_test_highlands(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_ocean(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
-  return 100 - count_terrain_class_near_tile(ptile, TRUE, TRUE, TC_OCEAN);
+  return 100 - count_ocean_near_tile(ptile, TRUE, TRUE);
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_river(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
-  return 100 - count_river_type_tile_card(ptile, priver, TRUE);
+  return 100 - count_special_near_tile(ptile, TRUE, TRUE, S_RIVER);
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_highlands(struct river_map *privermap,
-                                         struct tile *ptile,
-                                         struct road_type *priver)
+                                         struct tile *ptile)
 {
   int sum = 0;
 
@@ -761,9 +727,7 @@ static int river_test_adjacent_highlands(struct river_map *privermap,
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
-static int river_test_swamp(struct river_map *privermap,
-                            struct tile *ptile,
-                            struct road_type *priver)
+static int river_test_swamp(struct river_map *privermap, struct tile *ptile)
 {
   return FC_INFINITY - tile_terrain(ptile)->property[MG_WET];
 }
@@ -772,8 +736,7 @@ static int river_test_swamp(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_swamp(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
   int sum = 0;
 
@@ -788,8 +751,7 @@ static int river_test_adjacent_swamp(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_height_map(struct river_map *privermap,
-                                 struct tile *ptile,
-                                 struct road_type *priver)
+                                 struct tile *ptile)
 {
   return hmap(ptile);
 }
@@ -797,8 +759,7 @@ static int river_test_height_map(struct river_map *privermap,
 /*********************************************************************
  Called from make_river. Marks all directions as blocked.  -Erik Sigra
 *********************************************************************/
-static void river_blockmark(struct river_map *privermap,
-                            struct tile *ptile)
+static void river_blockmark(struct river_map *privermap, struct tile *ptile)
 {
   log_debug("Blockmarking (%d, %d) and adjacent tiles.", TILE_XY(ptile));
 
@@ -810,7 +771,7 @@ static void river_blockmark(struct river_map *privermap,
 }
 
 struct test_func {
-  int (*func)(struct river_map *privermap, struct tile *ptile, struct road_type *priver);
+  int (*func)(struct river_map *privermap, struct tile *ptile);
   bool fatal;
 };
 
@@ -917,8 +878,7 @@ static struct test_func test_funcs[NUM_TEST_FUNCTIONS] = {
  If these rules haven't decided the direction, the random number
  generator gets the desicion.                              -Erik Sigra
 *********************************************************************/
-static bool make_river(struct river_map *privermap, struct tile *ptile,
-                       struct road_type *priver)
+static bool make_river(struct river_map *privermap, struct tile *ptile)
 {
   /* Comparison value for each tile surrounding the current tile.  It is
    * the suitability to continue a river to the tile in that direction;
@@ -937,8 +897,8 @@ static bool make_river(struct river_map *privermap, struct tile *ptile,
 
     /* Test if the river is done. */
     /* We arbitrarily make rivers end at the poles. */
-    if (count_river_near_tile(ptile, priver) > 0
-        || count_terrain_class_near_tile(ptile, TRUE, TRUE, TC_OCEAN) > 0
+    if (count_special_near_tile(ptile, TRUE, TRUE, S_RIVER) > 0
+        || count_ocean_near_tile(ptile, TRUE, TRUE) > 0
         || (tile_terrain(ptile)->property[MG_FROZEN] > 0
             && map_colatitude(ptile) < 0.8 * COLD_LEVEL)) {
 
@@ -964,7 +924,7 @@ static bool make_river(struct river_map *privermap, struct tile *ptile,
       cardinal_adjc_dir_iterate(ptile, ptile1, dir) {
         if (rd_direction_is_valid[dir]) {
           rd_comparison_val[dir] = (test_funcs[func_num].func)(privermap,
-                                                               ptile1, priver);
+                                                               ptile1);
           fc_assert_action(rd_comparison_val[dir] >= 0, continue);
           if (best_val == -1) {
             best_val = rd_comparison_val[dir];
@@ -1035,7 +995,6 @@ static void make_rivers(void)
   struct tile *ptile;
   struct terrain *pterrain;
   struct river_map rivermap;
-  struct road_type *road_river = NULL;
 
   /* Formula to make the river density similar om different sized maps. Avoids
      too few rivers on large maps and too many rivers on small maps. */
@@ -1057,11 +1016,6 @@ static void make_rivers(void)
      every iteration of the main loop in this function).
      Is needed to stop a potentially infinite loop. */
   int iteration_counter = 0;
-
-  if (river_type_count <= 0) {
-    /* No river type available */
-    return;
-  }
 
   create_placed_map(); /* needed bu rand_map_characteristic */
   set_all_ocean_tiles_placed();
@@ -1086,12 +1040,12 @@ static void make_rivers(void)
 	!is_ocean(pterrain)
 
 	/* Don't start a river on river. */
-	&& !tile_has_river(ptile)
+	&& !tile_has_special(ptile, S_RIVER)
 
 	/* Don't start a river on a tile is surrounded by > 1 river +
 	   ocean tile. */
-	&& (count_river_near_tile(ptile, NULL)
-	    + count_terrain_class_near_tile(ptile, TRUE, FALSE, TC_OCEAN) <= 1)
+	&& (count_special_near_tile(ptile, TRUE, FALSE, S_RIVER)
+	    + count_ocean_near_tile(ptile, TRUE, FALSE) <= 1)
 
 	/* Don't start a river on a tile that is surrounded by hills or
 	   mountains unless it is hard to find somewhere else to start
@@ -1119,27 +1073,14 @@ static void make_rivers(void)
       dbv_clr_all(&rivermap.blocked);
       dbv_clr_all(&rivermap.ok);
 
-      road_river = river_types[fc_rand(river_type_count)];
-
-      road_type_iterate(oriver) {
-        if (oriver != road_river) {
-          whole_map_iterate(rtile) {
-            if (tile_has_road(rtile, oriver)) {
-              dbv_set(&rivermap.blocked, tile_index(rtile));
-            }
-          } whole_map_iterate_end;
-        }
-      } road_type_iterate_end;
-
       log_debug("Found a suitable starting tile for a river at (%d, %d)."
                 " Starting to make it.", TILE_XY(ptile));
 
       /* Try to make a river. If it is OK, apply it to the map. */
-      if (make_river(&rivermap, ptile, road_river)) {
+      if (make_river(&rivermap, ptile)) {
         whole_map_iterate(ptile1) {
           if (dbv_isset(&rivermap.ok, tile_index(ptile1))) {
             struct terrain *pterrain = tile_terrain(ptile1);
-
             if (!terrain_has_flag(pterrain, TER_CAN_HAVE_RIVER)) {
               /* We have to change the terrain to put a river here. */
               pterrain = pick_terrain_by_flag(TER_CAN_HAVE_RIVER);
@@ -1147,8 +1088,7 @@ static void make_rivers(void)
                 tile_set_terrain(ptile1, pterrain);
               }
             }
-
-            tile_add_road(ptile1, road_river);
+            tile_set_special(ptile1, S_RIVER);
             current_riverlength++;
             map_set_placed(ptile1);
             log_debug("Applied a river to (%d, %d).", TILE_XY(ptile1));
@@ -1188,7 +1128,7 @@ static void make_land(void)
    * that terrain. We must set some terrain (and not T_UNKNOWN) so that "
    * continent number assignment works. */
   terrain_type_iterate(pterrain) {
-    if (!is_ocean(pterrain) && !terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
+    if (!is_ocean(pterrain)) {
       land_fill = pterrain;
       break;
     }
@@ -1290,12 +1230,7 @@ static void remove_tiny_islands(void)
   whole_map_iterate(ptile) {
     if (is_tiny_island(ptile)) {
       tile_set_terrain(ptile, shallow);
-      road_type_iterate(priver) {
-        if (tile_has_road(ptile, priver)
-            && road_has_flag(priver, RF_RIVER)) {
-          tile_remove_road(ptile, priver);
-        }
-      } road_type_iterate_end;
+      tile_clear_special(ptile, S_RIVER);
       tile_set_continent(ptile, 0);
     }
   } whole_map_iterate_end;
@@ -1369,29 +1304,20 @@ FIXME: Some continent numbers are unused at the end of this function, fx
 bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 {
   /* save the current random state: */
-  RANDOM_STATE rstate;
-  RANDOM_TYPE seed_rand;
-
-  /* Call fc_rand() even when result is not needed to make sure
-   * random state proceeds equally for random seeds and explicitly
-   * set seed. */
-  seed_rand = fc_rand(MAX_UINT32);
+  RANDOM_STATE rstate = fc_rand_state();
 
   if (map.server.seed == 0) {
-    /* Create a "random" map seed. */
-    map.server.seed = seed_rand & (MAX_UINT32 >> 1);
+    /* Create a "random" map seed.  Note the call to fc_rand() which will
+     * depend on the game seed. */
+    map.server.seed = (fc_rand(MAX_UINT32) ^ time(NULL)) & (MAX_UINT32 >> 1);
     log_debug("Setting map.seed:%d", map.server.seed);
   }
-
-  rstate = fc_rand_state();
 
   fc_srand(map.server.seed);
 
   /* don't generate tiles with mapgen==0 as we've loaded them from file */
   /* also, don't delete (the handcrafted!) tiny islands in a scenario */
   if (map.server.generator != MAPGEN_SCENARIO) {
-    river_types_init();
-
     generator_init_topology(autosize);
     /* Map can be already allocated, if we failed first map generation */
     if (map_is_empty()) {
@@ -1612,13 +1538,13 @@ static void make_huts(int number)
     /* Add a hut.  But not on a polar area, on an ocean, or too close to
      * another hut. */
     if ((ptile = rand_map_pos_characteristic(WC_ALL, TT_NFROZEN, MC_NONE))) {
-      struct extra_type *phut = rand_extra_for_tile(ptile, EC_HUT);
-
-      number--;
-      if (phut != NULL) {
-        tile_add_extra(ptile, phut);
+      if (is_ocean_tile(ptile)) {
+	map_set_placed(ptile); /* not good for a hut */
+      } else {
+	number--;
+	tile_set_special(ptile, S_HUT);
+	set_placed_near_pos(ptile, 3);
       }
-      set_placed_near_pos(ptile, 3);
     }
   }
   destroy_placed_map();
@@ -1786,8 +1712,7 @@ static void fill_island(int coast, long int *bucket,
     if ((i * 3 > k * 2
          || fc_rand(100) < 50
          || is_terrain_near_tile(ptile, pterrain, FALSE))
-        && (!is_terrain_class_card_near(ptile, TC_OCEAN)
-            || fc_rand(100) < coast)) {
+        && (!is_cardinally_adj_to_ocean(ptile) || fc_rand(100) < coast)) {
       tile_set_terrain(ptile, pterrain);
       map_set_placed(ptile);
 
@@ -1804,16 +1729,14 @@ static void fill_island(int coast, long int *bucket,
 /**************************************************************************
   Returns TRUE if ptile is suitable for a river mouth.
 **************************************************************************/
-static bool island_river_mouth_suitability(const struct tile *ptile,
-                                           const struct road_type *priver)
+static bool island_river_mouth_suitability(const struct tile *ptile)
 {
   int num_card_ocean, pct_adj_ocean, num_adj_river;
 
-  num_card_ocean = count_terrain_class_near_tile(ptile, C_CARDINAL, C_NUMBER,
-                                                 TC_OCEAN);
-  pct_adj_ocean = count_terrain_class_near_tile(ptile, C_ADJACENT, C_PERCENT,
-                                                TC_OCEAN);
-  num_adj_river = count_river_type_tile_card(ptile, priver, FALSE);
+  num_card_ocean = count_ocean_near_tile(ptile, C_CARDINAL, C_NUMBER);
+  pct_adj_ocean = count_ocean_near_tile(ptile, C_ADJACENT, C_PERCENT);
+  num_adj_river = count_special_near_tile(ptile, C_ADJACENT, C_NUMBER,
+                                          S_RIVER);
 
   return (num_card_ocean == 1 && pct_adj_ocean <= 35
           && num_adj_river == 0);
@@ -1823,17 +1746,16 @@ static bool island_river_mouth_suitability(const struct tile *ptile,
   Returns TRUE if there is a river in a cardinal direction near the tile
   and the tile is suitable for extending it.
 **************************************************************************/
-static bool island_river_suitability(const struct tile *ptile,
-                                     const struct road_type *priver)
+static bool island_river_suitability(const struct tile *ptile)
 {
   int pct_adj_ocean, num_card_ocean, pct_adj_river, num_card_river;
 
-  num_card_river = count_river_type_tile_card(ptile, priver, FALSE);
-  num_card_ocean = count_terrain_class_near_tile(ptile, C_CARDINAL, C_NUMBER,
-                                                 TC_OCEAN);
-  pct_adj_ocean = count_terrain_class_near_tile(ptile, C_ADJACENT, C_PERCENT,
-                                                TC_OCEAN);
-  pct_adj_river = count_river_type_near_tile(ptile, priver, TRUE);
+  num_card_river = count_special_near_tile(ptile, C_CARDINAL, C_NUMBER,
+                                           S_RIVER);
+  num_card_ocean = count_ocean_near_tile(ptile, C_CARDINAL, C_NUMBER);
+  pct_adj_ocean = count_ocean_near_tile(ptile, C_ADJACENT, C_PERCENT);
+  pct_adj_river = count_special_near_tile(ptile, C_ADJACENT, C_PERCENT,
+                                          S_RIVER);
 
   return (num_card_river == 1 && num_card_ocean == 0
           && pct_adj_ocean < 20 && pct_adj_river < 35
@@ -1854,10 +1776,6 @@ static void fill_island_rivers(int coast, long int *bucket,
   if (*bucket <= 0) {
     return;
   }
-  if (river_type_count <= 0) {
-    return;
-  }
-
   capac = pstate->totalmass;
   i = *bucket / capac;
   i++;
@@ -1873,25 +1791,21 @@ static void fill_island_rivers(int coast, long int *bucket,
   }
 
   while (i > 0 && failsafe-- > 0) {
-    struct road_type *priver;
-
     ptile = get_random_map_position_from_state(pstate);
     if (tile_continent(ptile) != pstate->isleindex
-        || tile_has_river(ptile)) {
+        || tile_has_special(ptile, S_RIVER)) {
       continue;
     }
-
-    priver = river_types[fc_rand(river_type_count)];
 
     if (test_wetness(ptile, WC_DRY) && fc_rand(100) < 50) {
       /* rivers don't like dry locations */
       continue;
     }
 
-    if ((island_river_mouth_suitability(ptile, priver)
+    if ((island_river_mouth_suitability(ptile)
          && (fc_rand(100) < coast || i == k))
-        || island_river_suitability(ptile, priver)) {
-      tile_add_road(ptile, priver);
+        || island_river_suitability(ptile)) {
+      tile_set_special(ptile, S_RIVER);
       i--;
     }
   }
@@ -2279,7 +2193,7 @@ static void initworld(struct gen234_state *pstate)
     tile_set_terrain(ptile, deepest_ocean);
     tile_set_continent(ptile, 0);
     map_set_placed(ptile); /* not a land tile */
-    BV_CLR_ALL(ptile->extras);
+    tile_clear_all_specials(ptile);
     tile_set_owner(ptile, NULL, NULL);
   } whole_map_iterate_end;
 
@@ -2556,17 +2470,3 @@ static void mapgenerator4(void)
 }
 
 #undef DMSIS
-
-/**************************************************************************
-  Initialize river types array
-**************************************************************************/
-static void river_types_init(void)
-{
-  river_type_count = 0;
-
-  road_type_iterate(priver) {
-    if (road_has_flag(priver, RF_RIVER)) {
-      river_types[river_type_count++] = priver;
-    }
-  } road_type_iterate_end;
-}

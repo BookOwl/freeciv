@@ -32,9 +32,9 @@
 #include "gamehand.h"
 #include "ggzserver.h"
 #include "maphand.h"
-#include "notify.h"
 #include "plrhand.h"
 #include "report.h"
+#include "savegame2.h"  /* saveversion_name() */
 #include "settings.h"
 #include "srv_main.h"
 #include "stdinhand.h"
@@ -266,14 +266,15 @@ static const struct sset_val_name *startpos_name(int startpos)
 }
 
 /****************************************************************************
-  Victory conditions setting names accessor.
+  Kill citizen setting names accessor.
 ****************************************************************************/
-static const struct sset_val_name *victory_conditions_name(int condition_bit)
+static const struct sset_val_name *killcitizen_name(int killcitizen_bit)
 {
-  switch (condition_bit) {
-  NAME_CASE(VC_SPACERACE, "SPACERACE", N_("Spacerace"));
-  NAME_CASE(VC_ALLIED, "ALLIED", N_("Allied victory"));
-  NAME_CASE(VC_CULTURE, "CULTURE", N_("Culture victory"));
+  switch (killcitizen_bit) {
+  NAME_CASE(UMT_LAND, "LAND", N_("Land moving units"));
+  NAME_CASE(UMT_SEA, "SEA", N_("Sea moving units"));
+  NAME_CASE(UMT_BOTH, "BOTH",
+            N_("Units able to move both on land and sea"));
   };
 
   return NULL;
@@ -289,7 +290,6 @@ static const struct sset_val_name *autosaves_name(int autosaves_bit)
   NAME_CASE(AS_GAME_OVER, "GAMEOVER", N_("Game over"));
   NAME_CASE(AS_QUITIDLE, "QUITIDLE", N_("No player connections"));
   NAME_CASE(AS_INTERRUPT, "INTERRUPT", N_("Server interrupted"));
-  NAME_CASE(AS_TIMER, "TIMER", N_("Timer"));
   };
 
   return NULL;
@@ -317,24 +317,10 @@ static const struct sset_val_name *borders_name(int borders)
 static const struct sset_val_name *plrcol_name(int plrcol)
 {
   switch (plrcol) {
-  NAME_CASE(PLRCOL_PLR_ORDER,    "PLR_ORDER",    N_("Per-player, in order"));
-  NAME_CASE(PLRCOL_PLR_RANDOM,   "PLR_RANDOM",   N_("Per-player, random"));
-  NAME_CASE(PLRCOL_PLR_SET,      "PLR_SET",      N_("Set manually"));
-  NAME_CASE(PLRCOL_TEAM_ORDER,   "TEAM_ORDER",   N_("Per-team, in order"));
-  NAME_CASE(PLRCOL_NATION_ORDER, "NATION_ORDER", N_("Per-nation, in order"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
-  Happyborders setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *happyborders_name(int happyborders)
-{
-  switch (happyborders) {
-  NAME_CASE(HB_DISABLED, "DISABLE", N_("Borders are not helping"));
-  NAME_CASE(HB_NATIONAL, "NATIONAL", N_("Happy within own borders"));
-  NAME_CASE(HB_ALLIANCE, "ALLIED", N_("Happy within allied borders"));
+  NAME_CASE(PLRCOL_PLR_ORDER,  "PLR_ORDER",  N_("Per-player, in order"));
+  NAME_CASE(PLRCOL_PLR_RANDOM, "PLR_RANDOM", N_("Per-player, random"));
+  NAME_CASE(PLRCOL_PLR_SET,    "PLR_SET",    N_("Set manually"));
+  NAME_CASE(PLRCOL_TEAM_ORDER, "TEAM_ORDER", N_("Per-team, in order"));
   }
   return NULL;
 }
@@ -349,8 +335,6 @@ static const struct sset_val_name *diplomacy_name(int diplomacy)
   NAME_CASE(DIPLO_FOR_HUMANS, "HUMAN",
             N_("Only allowed between human players"));
   NAME_CASE(DIPLO_FOR_AIS, "AI", N_("Only allowed between AI players"));
-  NAME_CASE(DIPLO_NO_AIS, "NOAI", N_("Only allowed when human involved"));
-  NAME_CASE(DIPLO_NO_MIXED, "NOMIXED", N_("Only allowed between two humans, or two AI players"));
   NAME_CASE(DIPLO_FOR_TEAMS, "TEAM", N_("Restricted to teams"));
   NAME_CASE(DIPLO_DISABLED, "DISABLED", N_("Disabled for everyone"));
   }
@@ -382,19 +366,6 @@ static const struct sset_val_name *barbarians_name(int barbarians)
   NAME_CASE(BARBS_NORMAL, "NORMAL", N_("Normal rate of appearance"));
   NAME_CASE(BARBS_FREQUENT, "FREQUENT", N_("Frequent barbarian uprising"));
   NAME_CASE(BARBS_HORDES, "HORDES", N_("Raging hordes"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
-  Revolution length type setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *revolentype_name(int revolentype)
-{
-  switch (revolentype) {
-  NAME_CASE(REVOLEN_FIXED, "FIXED", N_("Fixed to 'revolen' turns"));
-  NAME_CASE(REVOLEN_RANDOM, "RANDOM", N_("Randomly 1-'revolen' turns"));
-  NAME_CASE(REVOLEN_QUICKENING, "QUICKENING", N_("First time 'revolen', then always quicker"));
   }
   return NULL;
 }
@@ -501,38 +472,6 @@ static void scorelog_action(const struct setting *pset)
 static void aifill_action(const struct setting *pset)
 {
   aifill(*pset->integer.pvalue);
-}
-
-/*************************************************************************
-  Restrict to the selected nation set.
-*************************************************************************/
-static void nationset_action(const struct setting *pset)
-{
-  /* If any player's existing selection is invalid, abort it */
-  players_iterate(pplayer) {
-    if (pplayer->nation != NULL) {
-      if (!nation_is_in_current_set(pplayer->nation)) {
-        (void) player_set_nation(pplayer, NO_NATION_SELECTED);
-        send_player_info_c(pplayer, game.est_connections);
-      }
-    }
-  } players_iterate_end;
-  count_playable_nations();
-  aifill(game.info.aifill);
-
-  /* There might now be too many players for the available nations.
-   * Rather than getting rid of some players arbitrarily, we let the
-   * situation persist for all already-connected players; the server
-   * will simply refuse to start until someone reduces the number of
-   * players. This policy also avoids annoyance if nationset is
-   * accidentally and transiently set to an unintended value.
-   * (However, new connections will start out detached.) */
-  if (normal_player_count() > server.playable_nations) {
-    notify_conn(NULL, NULL, E_SETTING, ftc_server, "%s",
-                _("Warning: not enough nations for all current players."));
-  }
-
-  send_nation_availability(game.est_connections, TRUE);
 }
 
 /*************************************************************************
@@ -667,29 +606,6 @@ static bool demography_callback(const char *value,
 }
 
 /*************************************************************************
-  Autosaves setting callback
-*************************************************************************/
-static bool autosaves_callback(unsigned value, struct connection *caller,
-                               char *reject_msg, size_t reject_msg_len)
-{
-  if (S_S_RUNNING == server_state()) {
-    if ((value & (1 << AS_TIMER))
-        && !(game.server.autosaves & (1 << AS_TIMER))) {
-      game.server.save_timer = timer_renew(game.server.save_timer,
-                                           TIMER_USER, TIMER_ACTIVE);
-      timer_start(game.server.save_timer);
-    } else if (!(value & (1 << AS_TIMER))
-               && (game.server.autosaves & (1 << AS_TIMER))) {
-      timer_stop(game.server.save_timer);
-      timer_destroy(game.server.save_timer);
-      game.server.save_timer = NULL;
-    }
-  }
-
-  return TRUE;
-}
-
-/*************************************************************************
   Verify that a given allowtake string is valid.  See
   game.allow_take.
 *************************************************************************/
@@ -745,12 +661,19 @@ static bool startunits_callback(const char *value,
                                 size_t reject_msg_len)
 {
   int len = strlen(value), i;
-  Unit_Class_id  first_role;
-  bool firstnative = FALSE;
+  bool have_founder = FALSE;
 
-  /* We check each character individually to see if it's valid. */
+  /* We check each character individually to see if it's valid, and
+   * also make sure there is at least one city founder. */
+
   for (i = 0; i < len; i++) {
-    if (strchr("cwxksfdDaA", value[i])) {
+    /* Check for a city founder */
+    if (value[i] == 'c') {
+      have_founder = TRUE;
+      continue;
+    }
+    /* TODO: add 'f' back in here when we can support ferry units */
+    if (strchr("cwxksdDaA", value[i])) {
       continue;
     }
 
@@ -762,27 +685,14 @@ static bool startunits_callback(const char *value,
     return FALSE;
   }
 
-  /* Check the first character to make sure it can use a startpos. */
-  first_role = uclass_index(utype_class(get_role_unit(
-                                            crole_to_role_id(value[0]), 0)));
-  terrain_type_iterate(pterrain) {
-    if (terrain_has_flag(pterrain, TER_STARTER)
-        && BV_ISSET(pterrain->native_to, first_role)) {
-      firstnative = TRUE;
-      break;
-    }
-  } terrain_type_iterate_end;
-
-  if (!firstnative) {
-    /* Loading would cause an infinite loop hunting for a valid startpos. */
+  if (!have_founder) {
     settings_snprintf(reject_msg, reject_msg_len,
-                      _("The first starting unit must be native to at "
-                        "least one \"Starter\" terrain. "
-                        " Try \"help startunits\"."));
+                      _("No city founder ('c') within the starting units "
+                        "string: '%s'. Try \"help startunits\"."), value);
     return FALSE;
   }
 
-  /* Everything seems fine. */
+  /* All characters were valid. */
   return TRUE;
 }
 
@@ -835,27 +745,6 @@ static bool maxplayers_callback(int value, struct connection *caller,
   }
 
   return TRUE;
-}
-
-/*************************************************************************
-  Validate the 'nationset' server setting.
-*************************************************************************/
-static bool nationset_callback(const char *value,
-                               struct connection *caller,
-                               char *reject_msg,
-                               size_t reject_msg_len)
-{
-  if (strlen(value) == 0) {
-    return TRUE;
-  } else if (nation_set_by_rule_name(value)) {
-    return TRUE;
-  } else {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      /* TRANS: do not translate 'list nationsets' */
-                      _("Unknown nation set \"%s\". See '%slist nationsets' "
-                        "for possible values."), value, caller ? "/" : "");
-    return FALSE;
-  }
 }
 
 /*************************************************************************
@@ -1015,28 +904,6 @@ static bool topology_callback(unsigned value, struct connection *caller,
     return FALSE;
   }
 
-  return TRUE;
-}
-
-/*************************************************************************
-  Validate that the player color mode can be used.
-*************************************************************************/
-static bool plrcol_validate(int value, struct connection *caller,
-                            char *reject_msg, size_t reject_msg_len)
-{
-  enum plrcolor_mode mode = value;
-  if (mode == PLRCOL_NATION_ORDER) {
-    nations_iterate(pnation) {
-      if (nation_color(pnation)) {
-        /* At least one nation has a color. Allow this mode. */
-        return TRUE;
-      }
-    } nations_iterate_end;
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("No nations in the currently loaded ruleset have "
-                        "associated colors."));
-    return FALSE;
-  }
   return TRUE;
 }
 
@@ -1409,21 +1276,6 @@ static struct setting settings[] = {
           aifill_action, GAME_MIN_AIFILL, GAME_MAX_AIFILL,
           GAME_DEFAULT_AIFILL)
 
-  GEN_STRING("nationset", game.server.nationset,
-             SSET_PLAYERS, SSET_INTERNAL, SSET_RARE, SSET_TO_CLIENT,
-             N_("Set of nations to choose from"),
-             /* TRANS: do not translate '/list nationsets' */
-             N_("Controls the set of nations allowed in the game. The "
-                "choices are defined by the ruleset.\n"
-                "Only nations in the set selected here will be allowed in "
-                "any circumstances, including new players and civil war; "
-                "small sets may thus limit the number of players in a game.\n"
-                "If this is left blank, the ruleset's default nation set is "
-                "used.\n"
-                "See '/list nationsets' for possible choices for the "
-                "currently loaded ruleset."),
-             nationset_callback, nationset_action, GAME_DEFAULT_NATIONSET)
-
   GEN_INT("ec_turns", game.server.event_cache.turns,
           SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_SITUATIONAL,
           SSET_TO_CLIENT,
@@ -1459,31 +1311,25 @@ static struct setting settings[] = {
   /* Game initialization parameters (only affect the first start of the game,
    * and not reloads).  Can not be changed after first start of game.
    */
+  /* TODO: Add this line back when we can support Ferry units */
+  /* "    f   = Ferryboat (eg., Trireme)\n" */
   GEN_STRING("startunits", game.server.start_units,
 	     SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
              N_("List of players' initial units"),
              N_("This should be a string of characters, each of which "
-		"specifies a unit role. The first character must be native to "
-                "at least one \"Starter\" terrain. The characters and their "
+		"specifies a unit role. There must be at least one city "
+		"founder in the string. The characters and their "
 		"meanings are:\n"
 		"    c   = City founder (eg., Settlers)\n"
 		"    w   = Terrain worker (eg., Engineers)\n"
 		"    x   = Explorer (eg., Explorer)\n"
 		"    k   = Gameloss (eg., King)\n"
 		"    s   = Diplomat (eg., Diplomat)\n"
-                "    f   = Ferryboat (eg., Trireme)\n"
 		"    d   = Ok defense unit (eg., Warriors)\n"
 		"    D   = Good defense unit (eg., Phalanx)\n"
 		"    a   = Fast attack unit (eg., Horsemen)\n"
 		"    A   = Strong attack unit (eg., Catapult)\n"),
              startunits_callback, NULL, GAME_DEFAULT_START_UNITS)
-
-  GEN_BOOL("startcity", game.server.start_city,
-           SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-           N_("Whether player starts with a city"),
-           N_("If this is set, game will start with player's first "
-              "city already founded to starting location."),
-           NULL, NULL, GAME_DEFAULT_START_CITY)         
 
   GEN_INT("dispersion", game.server.dispersion,
 	  SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -1593,31 +1439,6 @@ static struct setting settings[] = {
           NULL, NULL,
 	  GAME_MIN_FREECOST, GAME_MAX_FREECOST, GAME_DEFAULT_FREECOST)
 
-  GEN_INT("techlossforgiveness", game.server.techloss_forgiveness,
-	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-	  N_("Research point debt threshold for losing tech"),
-          N_("When you have negative research points, and your shortfall is "
-             "greater than this percentage of the cost of your current "
-             "research, you forget a technology you already knew.\n"
-             "The special value -1 prevents loss of technology regardless of "
-             "research points."),
-          NULL, NULL,
-	  GAME_MIN_TECHLOSSFG, GAME_MAX_TECHLOSSFG,
-	  GAME_DEFAULT_TECHLOSSFG)
-
- GEN_INT("techlossrestore", game.server.techloss_restore,
-	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-	  N_("Research points restored after losing a tech"),
-          N_("When you lose a technology due to a negative research balance "
-             "(see 'techlossforgiveness'), this percentage of its research "
-             "cost is credited to your research balance (this may not be "
-             "sufficient to make it positive).\n"
-             "The special value -1 means that your research balance is always "
-             "restored to zero, regardless of your previous shortfall."),
-          NULL, NULL,
-	  GAME_MIN_TECHLOSSREST, GAME_MAX_TECHLOSSREST,
-	  GAME_DEFAULT_TECHLOSSREST)
-
   GEN_INT("foodbox", game.info.foodbox,
 	  SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
 	  N_("Food required for a city to grow"),
@@ -1711,7 +1532,7 @@ static struct setting settings[] = {
               "is not allowed."), NULL, NULL,
            GAME_DEFAULT_TRADING_CITY)
 
-  GEN_INT("trademindist", game.info.trademindist,
+  GEN_INT("trademindist", game.info.trademindist_new,
           SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
           N_("Minimum distance for trade routes"),
           N_("In order for two cities in the same civilization to establish "
@@ -1731,14 +1552,6 @@ static struct setting settings[] = {
           NULL, NULL,
           GAME_MIN_RAPTUREDELAY, GAME_MAX_RAPTUREDELAY,
           GAME_DEFAULT_RAPTUREDELAY)
-
-  GEN_INT("disasters", game.info.disasters,
-          SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Frequency of disasters"),
-          N_("Sets frequency of disasters occurring to cities."),
-          NULL, NULL,
-          GAME_MIN_DISASTERS, GAME_MAX_DISASTERS,
-          GAME_DEFAULT_DISASTERS)
 
   GEN_INT("razechance", game.server.razechance,
 	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -1760,29 +1573,19 @@ static struct setting settings[] = {
 	  GAME_DEFAULT_OCCUPYCHANCE)
 
   GEN_BOOL("autoattack", game.server.autoattack, SSET_RULES_FLEXIBLE, SSET_MILITARY,
-           SSET_SITUATIONAL, SSET_TO_CLIENT,
-           N_("Turn on/off server-side autoattack"),
-           N_("If set to on, units with moves left will automatically "
-              "consider attacking enemy units that move adjacent to them."),
-           NULL, NULL, GAME_DEFAULT_AUTOATTACK)
+         SSET_SITUATIONAL, SSET_TO_CLIENT,
+         N_("Turn on/off server-side autoattack"),
+         N_("If set to on, units with moves left will automatically "
+            "consider attacking enemy units that move adjacent to them."),
+         NULL, NULL, GAME_DEFAULT_AUTOATTACK)
 
-  GEN_BOOL("killstack", game.info.killstack, SSET_RULES, SSET_MILITARY,
-           SSET_RARE, SSET_TO_CLIENT,
-           N_("Do all units in tile die with defender"),
-           N_("If this is enabled, each time a defender unit loses in combat, "
-              "and is not inside a city or suitable base, all units in the same "
-              "tile are destroyed along with the defender. If this is disabled, "
-              "only the defender unit is destroyed."),
-           NULL, NULL, GAME_DEFAULT_KILLSTACK)
-
-  GEN_BOOL("killcitizen", game.info.killcitizen,
-           SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-           N_("Reduce city population after attack"),
-           N_("This flag indicates whether a city's population is reduced "
-              "after a successful attack by an enemy unit. If this is "
-              "disabled, population is never reduced. Even when this is "
-              "enabled, only some units may kill citizens."),
-           NULL, NULL, GAME_DEFAULT_KILLCITIZEN)
+  GEN_BITWISE("killcitizen", game.info.killcitizen,
+              SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+              N_("Reduce city population after attack"),
+              N_("This flag indicates whether city population is reduced "
+                 "after successful attack of enemy unit, depending on "
+                 "its movement type."),
+              NULL, NULL, killcitizen_name, GAME_DEFAULT_KILLCITIZEN)
 
   GEN_INT("killunhomed", game.server.killunhomed,
           SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -1802,14 +1605,13 @@ static struct setting settings[] = {
               "fortress or city will be owned by that nation."),
            NULL, NULL, borders_name, GAME_DEFAULT_BORDERS)
 
-  GEN_ENUM("happyborders", game.info.happyborders,
-           SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL,
-           SSET_TO_CLIENT,
-           N_("Units inside borders cause no unhappiness"),
-           N_("If this is set, units will not cause unhappiness when "
-              "inside your borders, or even allies borders, depending "
-              "on value."), NULL, NULL,
-           happyborders_name, GAME_DEFAULT_HAPPYBORDERS)
+  GEN_BOOL("happyborders", game.info.happyborders,
+	   SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL,
+	   SSET_TO_CLIENT,
+	   N_("Units inside borders cause no unhappiness"),
+	   N_("If this is set, units will not cause unhappiness when "
+              "inside your own borders."), NULL, NULL,
+	   GAME_DEFAULT_HAPPYBORDERS)
 
   GEN_ENUM("diplomacy", game.info.diplomacy,
            SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -1860,14 +1662,9 @@ static struct setting settings[] = {
               "- \"Per-team, in order\" (TEAM_ORDER): colors are assigned to "
               "teams from the list in the ruleset. Every player on the same "
               "team gets the same color.\n"
-              "- \"Per-nation, in order\" (NATION_ORDER): if the ruleset "
-              "defines a color for a player's nation, the player takes that "
-              "color. Any players whose nations don't have associated colors "
-              "get a random color from the list in the ruleset.\n"
               "Regardless of this setting, individual player colors can be "
               "changed after the game starts with the 'playercolor' command."),
-           plrcol_validate, plrcol_action, plrcol_name,
-           GAME_DEFAULT_PLRCOLORMODE)
+           NULL, plrcol_action, plrcol_name, GAME_DEFAULT_PLRCOLORMODE)
 
   /* Flexible rules: these can be changed after the game has started.
    *
@@ -1898,21 +1695,13 @@ static struct setting settings[] = {
 	  GAME_MIN_ONSETBARBARIAN, GAME_MAX_ONSETBARBARIAN, 
 	  GAME_DEFAULT_ONSETBARBARIAN)
 
-  GEN_ENUM("revolentype", game.info.revolentype,
-           SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-           N_("Way to determine revolution length"),
-           N_("Which method is used in determining how long period of anarchy "
-              "lasts when changing government. The actual value is set with "
-              "'revolen' setting."),
-           NULL, NULL, revolentype_name, GAME_DEFAULT_REVOLENTYPE)
-
   GEN_INT("revolen", game.server.revolution_length,
 	  SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
 	  N_("Length in turns of revolution"),
-	  N_("When changing governments, a period of anarchy will occur. "
-             "Value of this setting, used the way 'revolentype' setting "
-             "dictates, defines the length of the anarchy."),
-          NULL, NULL,
+	  N_("When changing governments, a period of anarchy lasting this "
+	     "many turns will occur. "
+             "Setting this value to 0 will give a random "
+             "length of 1-5 turns."), NULL, NULL,
 	  GAME_MIN_REVOLUTION_LENGTH, GAME_MAX_REVOLUTION_LENGTH, 
 	  GAME_DEFAULT_REVOLUTION_LENGTH)
 
@@ -1965,24 +1754,11 @@ static struct setting settings[] = {
           NULL, NULL,
           GAME_MIN_DIPLCHANCE, GAME_MAX_DIPLCHANCE, GAME_DEFAULT_DIPLCHANCE)
 
-  GEN_BITWISE("victories", game.info.victory_conditions,
-              SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-              N_("What kind of vicrories are possible"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parentheses and in uppercase must stay as
-               * untranslated. */
-              N_("This setting controls how game can be won. One can always "
-                 "win by conquering entire planet, but other victory conditions "
-                 "can be enabled or disabled:\n"
-                 "- \"Spacerace\" (SPACERACE): Spaceship is built and travels to "
-                 "Alpha Centauri.\n"
-                 "- \"Allied\" (ALLIED): After defeating enemies, all remaining "
-                 "players are allied.\n"
-                 "- \"Culture\" (CULTURE): Player meets ruleset defined cultural "
-                 "domination criteria.\n"),
-              NULL, NULL, victory_conditions_name, GAME_DEFAULT_VICTORY_CONDITIONS)
+  GEN_BOOL("spacerace", game.info.spacerace,
+           SSET_RULES_FLEXIBLE, SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
+           N_("Whether to allow space race"),
+           N_("If this option is enabled, players can build spaceships."),
+           NULL, NULL, GAME_DEFAULT_SPACERACE)
 
   GEN_BOOL("endspaceship", game.server.endspaceship, SSET_RULES_FLEXIBLE,
            SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
@@ -2047,6 +1823,17 @@ static struct setting settings[] = {
            N_("If unset, caught units will have no homecity and will be "
               "subject to the 'killunhomed' option."),
            NULL, NULL, GAME_DEFAULT_HOMECAUGHTUNITS)
+
+  GEN_BOOL("alliedvictory", game.server.allied_victory,
+           SSET_RULES_FLEXIBLE, SSET_MILITARY,
+           SSET_SITUATIONAL, SSET_TO_CLIENT,
+           N_("Whether allied players can win together"),
+           N_("If this option is turned on and a point is reached where "
+              "all the players still able to win the game are allies, and "
+              "at least one defeated player is not part of this alliance, "
+              "then the game will end in an immediate shared victory for "
+              "the allied players."),
+           NULL, NULL, GAME_DEFAULT_ALLIED_VICTORY)
 
   GEN_BOOL("naturalcitynames", game.server.natural_city_names,
            SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
@@ -2352,7 +2139,6 @@ static struct setting settings[] = {
                 "    E = include Economics\n"
                 "    M = include Military Service\n"
                 "    O = include Pollution\n"
-                "    C = include Culture\n"
                 "Additionally, the following characters control whether "
                 "or not certain columns are displayed in the report:\n"
                 "    q = display \"quantity\" column\n"
@@ -2373,19 +2159,6 @@ static struct setting settings[] = {
              "includes \"New turn\"."), NULL, NULL,
           GAME_MIN_SAVETURNS, GAME_MAX_SAVETURNS, GAME_DEFAULT_SAVETURNS)
 
-  GEN_INT("savefrequency", game.server.save_frequency,
-	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
-	  N_("Minutes per auto-save"),
-          /* TRANS: The string between double quotes is also translated
-           * separately (it must match!). The string between single
-           * quotes is a setting name and shouldn't be translated. */
-	  N_("How many minutes elapse between automatic game saves. "
-             "Unlike other save types, this save is only meant as backup "
-             "for computer memory, and it always uses the same name, older "
-             "saves are not kept. This setting only has an effect when the "
-             "'autosaves' setting includes \"Timer\"."), NULL, NULL,
-          GAME_MIN_SAVEFREQUENCY, GAME_MAX_SAVEFREQUENCY, GAME_DEFAULT_SAVEFREQUENCY)
-
   GEN_BITWISE("autosaves", game.server.autosaves,
               SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
               N_("Which savegames are generated automatically"),
@@ -2401,9 +2174,8 @@ static struct setting settings[] = {
                  "- \"No player connections\" (QUITIDLE): "
                  "Save before server restarts due to lack of players.\n"
                  "- \"Server interrupted\" (INTERRUPT): Save when server "
-                 "quits due to interrupt.\n"
-                 "- \"Timer\" (TIMER): Save every 'savefrequency' minutes."),
-              autosaves_callback, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
+                 "quits due to interrupt."),
+              NULL, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
 
   GEN_INT("compress", game.server.save_compress_level,
           SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
@@ -2420,6 +2192,14 @@ static struct setting settings[] = {
            N_("Savegame compression algorithm"),
            N_("Compression library to use for savegames."),
            NULL, NULL, compresstype_name, GAME_DEFAULT_COMPRESS_TYPE)
+
+  GEN_ENUM("saveversion", game.server.saveversion,
+           SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
+           N_("Save using the given savegame version"),
+           N_("Create a savegame which can be loaded by the given version "
+              "of Freeciv. Note that some features will not be "
+              "saved/restored for older versions."),
+           NULL, NULL, saveversion_name, GAME_DEFAULT_SAVEVERSION)
 
   GEN_STRING("savename", game.server.save_name,
              SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
@@ -3636,10 +3416,10 @@ static bool setting_ruleset_one(struct section_file *file,
     break;
   }
 
-  /* set lock */
-  lock = secfile_lookup_bool_default(file, FALSE, "%s.lock", path);
-
-  if (lock) {
+  if (!secfile_lookup_bool(file, &lock, "%s.lock", path)) {
+    log_error("Can't read lock status for setting '%s': %s", name,
+              secfile_error());
+  } else if (lock) {
     /* set lock */
     setting_lock_set(pset, lock);
     log_normal(_("Ruleset: '%s' has been locked by the ruleset."),
@@ -3861,9 +3641,6 @@ void settings_game_load(struct section_file *file, const char *section)
   char reject_msg[256], buf[256];
   int i, set_count;
   int oldcitymindist = game.info.citymindist; /* backwards compat, see below */
-
-  /* Compatibility with savegames created with older versions is usually
-   * handled as conversions in savegame2.c compat_load_<version>() */
 
   if (!secfile_lookup_int(file, &set_count, "%s.set_count", section)) {
     /* Old savegames and scenarios doesn't contain this, not an error. */

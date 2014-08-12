@@ -115,8 +115,6 @@ enum mapview_layer {
 
 #define NUM_TILES_PROGRESS 8
 
-#define MAX_NUM_CITIZEN_SPRITES 6
-
 enum arrow_type {
   ARROW_RIGHT,
   ARROW_PLUS,
@@ -131,14 +129,11 @@ extern struct tileset *tileset;
 struct strvec;
 const struct strvec *get_tileset_list(void);
 
-void tileset_error(enum log_level level, const char *format, ...);
-
 struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose);
 void tileset_init(struct tileset *t);
 void tileset_free(struct tileset *tileset);
 void tileset_load_tiles(struct tileset *t);
 void tileset_free_tiles(struct tileset *t);
-void tileset_ruleset_reset(struct tileset *t);
 
 void finish_loading_sprites(struct tileset *t);
 
@@ -156,8 +151,8 @@ void tileset_setup_tile_type(struct tileset *t,
 			     const struct terrain *pterrain);
 void tileset_setup_resource(struct tileset *t,
 			    const struct resource *presource);
-void tileset_setup_extra(struct tileset *t,
-                         struct extra_type *pextra);
+void tileset_setup_base(struct tileset *t,
+                        const struct base_type *pbase);
 void tileset_setup_government(struct tileset *t,
 			      struct government *gov);
 void tileset_setup_nation_flag(struct tileset *t, 
@@ -183,6 +178,9 @@ int fill_basic_terrain_layer_sprite_array(struct tileset *t,
                                           struct drawn_sprite *sprs,
                                           int layer,
                                           struct terrain *pterrain);
+int fill_basic_base_sprite_array(const struct tileset *t,
+                                 struct drawn_sprite *sprs,
+                                 const struct base_type *pbase);
 
 double get_focus_unit_toggle_timeout(const struct tileset *t);
 void reset_focus_unit_state(struct tileset *t);
@@ -261,11 +259,8 @@ struct editor_sprites {
     *vision,
     *territory,
     *properties,
-    *road,
     *military_base;
 };
-
-#define NUM_WALL_TYPES 7
 
 struct sprite *get_spaceship_sprite(const struct tileset *t,
 				    enum spaceship_part part);
@@ -315,10 +310,9 @@ struct sprite *get_unit_upkeep_sprite(const struct tileset *t,
 struct sprite *get_basic_fog_sprite(const struct tileset *t);
 struct sprite *get_resource_sprite(const struct tileset *t,
                                    const struct resource *presouce);
-int fill_basic_extra_sprite_array(const struct tileset *t,
-                                  struct drawn_sprite *sprs,
-                                  const struct extra_type *pextra);
-struct sprite *get_event_sprite(const struct tileset *t, enum event_type event);
+struct sprite *get_basic_special_sprite(const struct tileset *t,
+                                        enum tile_special_type special);
+struct sprite *get_basic_mine_sprite(const struct tileset *t);
 
 struct sprite *tiles_lookup_sprite_tag_alt(struct tileset *t,
                                            enum log_level level,

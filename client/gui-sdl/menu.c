@@ -32,12 +32,10 @@
 /* common */
 #include "game.h"
 #include "road.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
 #include "client_main.h" /* client_state */
-#include "climisc.h"
 #include "control.h"
 
 /* gui-sdl */
@@ -168,43 +166,13 @@ static int unit_order_callback(struct widget *pOrder_Widget)
       key_unit_auto_explore();
       break;
     case ID_UNIT_ORDER_CONNECT_IRRIGATE:
-      {
-        struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *pextra;
-
-          pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-          key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-        }
-      }
+      key_unit_connect(ACTIVITY_IRRIGATE);
       break;
     case ID_UNIT_ORDER_CONNECT_ROAD:
-      {
-        struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
-        if (proad != NULL) {
-          struct extra_type *tgt;
-
-          tgt = road_extra_get(proad);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
-        }
-      }
+      key_unit_connect(ACTIVITY_ROAD);
       break;
     case ID_UNIT_ORDER_CONNECT_RAILROAD:
-      {
-        struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
-
-        if (prail != NULL) {
-          struct extra_type *tgt;
-
-          tgt = road_extra_get(prail);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
-        }
-      }
+      key_unit_connect(ACTIVITY_RAILROAD);
       break;
     case ID_UNIT_ORDER_PATROL:
       key_unit_patrol();
@@ -404,8 +372,6 @@ void create_units_order_widgets(void)
   char cBuf[128];
   Uint16 *unibuf;  
   size_t len;
-  struct road_type *proad;
-  struct road_type *prail;
   
   /* No orders */
   fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("No Orders"),
@@ -574,42 +540,35 @@ void create_units_order_widgets(void)
   /* --------- */
 
   /* Connect road */
-  proad = road_by_compat_special(ROCO_ROAD);
-
-  if (proad != NULL) {
-    fc_snprintf(cBuf, sizeof(cBuf),
-                _("Connect With %s (%s)"),
-                road_name_translation(proad),
-                "Shift+R");
-    pBuf = create_themeicon(pTheme->OAutoConnect_Icon, Main.gui,
-                            WF_HIDDEN | WF_RESTORE_BACKGROUND
-                            | WF_WIDGET_HAS_INFO_LABEL);
-    set_wstate(pBuf, FC_WS_NORMAL);
-    pBuf->action = unit_order_callback;
-    pBuf->info_label = create_str16_from_char(cBuf, adj_font(10));
-    pBuf->key = SDLK_r;
-    pBuf->mod = KMOD_SHIFT;
-    add_to_gui_list(ID_UNIT_ORDER_CONNECT_ROAD, pBuf);
-  }
+  fc_snprintf(cBuf, sizeof(cBuf),
+              _("Connect With %s (%s)"),
+              road_name_translation(road_by_number(ROAD_ROAD)),
+              "Shift+R");
+  pBuf = create_themeicon(pTheme->OAutoConnect_Icon, Main.gui,
+                          WF_HIDDEN | WF_RESTORE_BACKGROUND
+                          | WF_WIDGET_HAS_INFO_LABEL);
+  set_wstate(pBuf, FC_WS_NORMAL);
+  pBuf->action = unit_order_callback;
+  pBuf->info_label = create_str16_from_char(cBuf, adj_font(10));
+  pBuf->key = SDLK_r;
+  pBuf->mod = KMOD_SHIFT;
+  add_to_gui_list(ID_UNIT_ORDER_CONNECT_ROAD, pBuf);
   /* --------- */
 
   /* Connect railroad */
-  prail = road_by_compat_special(ROCO_RAILROAD);
-  if (prail != NULL) {
-    fc_snprintf(cBuf, sizeof(cBuf),
-                _("Connect With %s (%s)"),
-                road_name_translation(prail),
-                "Shift+L");
-    pBuf = create_themeicon(pTheme->OAutoConnect_Icon, Main.gui,
-                            WF_HIDDEN | WF_RESTORE_BACKGROUND
-                            | WF_WIDGET_HAS_INFO_LABEL);
-    set_wstate(pBuf, FC_WS_NORMAL);
-    pBuf->action = unit_order_callback;
-    pBuf->info_label = create_str16_from_char(cBuf, adj_font(10));
-    pBuf->key = SDLK_l;
-    pBuf->mod = KMOD_SHIFT;
-    add_to_gui_list(ID_UNIT_ORDER_CONNECT_RAILROAD, pBuf);
-  }
+  fc_snprintf(cBuf, sizeof(cBuf),
+              _("Connect With %s (%s)"),
+              road_name_translation(road_by_number(ROAD_RAILROAD)),
+              "Shift+L");
+  pBuf = create_themeicon(pTheme->OAutoConnect_Icon, Main.gui,
+                          WF_HIDDEN | WF_RESTORE_BACKGROUND
+                          | WF_WIDGET_HAS_INFO_LABEL);
+  set_wstate(pBuf, FC_WS_NORMAL);
+  pBuf->action = unit_order_callback;
+  pBuf->info_label = create_str16_from_char(cBuf, adj_font(10));
+  pBuf->key = SDLK_l;
+  pBuf->mod = KMOD_SHIFT;
+  add_to_gui_list(ID_UNIT_ORDER_CONNECT_RAILROAD, pBuf);
   /* --------- */
 
   /* Auto-Explore */
@@ -861,20 +820,16 @@ void create_units_order_widgets(void)
 
   /* Build (Rail-)Road */
   /* TRANS: "Build Railroad (R) 999 turns" */
-  if (prail != NULL) {
-    fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
-                road_name_translation(prail), "R", 999, 
-                PL_("turn", "turns", 999));
-    len = strlen(cBuf);
-  }
+  fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
+              road_name_translation(road_by_number(ROAD_RAILROAD)), "R", 999, 
+              PL_("turn", "turns", 999));
+  len = strlen(cBuf);
   /* TRANS: "Build Road (R) 999 turns" */
-  if (proad != NULL) {
-    fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
-                road_name_translation(proad), "R", 999, 
-                PL_("turn", "turns", 999));
-    len = MAX(len, strlen(cBuf));
-  }
-
+  fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
+              road_name_translation(road_by_number(ROAD_ROAD)), "R", 999, 
+              PL_("turn", "turns", 999));
+  len = MAX(len, strlen(cBuf));
+  
   pBuf = create_themeicon(pTheme->ORoad_Icon, Main.gui,
                           WF_HIDDEN | WF_RESTORE_BACKGROUND
                           | WF_WIDGET_HAS_INFO_LABEL);
@@ -1044,8 +999,8 @@ void real_menus_update(void)
       disable_unitinfo_window_buttons();
     }
 
-    return;
-
+    return;   
+    
   } else {
       
     /* running state with human player */
@@ -1069,7 +1024,7 @@ void real_menus_update(void)
       /* show minimap buttons and unitinfo buttons */
       show_minimap_window_buttons();      
       show_unitinfo_window_buttons();
-
+            
       counter = 0;
     }
 
@@ -1083,9 +1038,7 @@ void real_menus_update(void)
       struct city *pCity = tile_city(pTile);
       struct terrain *pTerrain = tile_terrain(pTile);
       struct base_type *pbase;
-      struct extra_type *pextra = next_extra_for_tile(pTile, EC_ROAD,
-                                                      unit_owner(pUnit), pUnit);
-
+      
       if (!counter) {
 	local_show(ID_UNIT_ORDER_GOTO);
 	local_show(ID_UNIT_ORDER_DISBAND);
@@ -1116,21 +1069,23 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_BUILD_WONDER);
       }
 
-      if (pextra != NULL) {
-        struct road_type *proad = extra_road_get(pextra);
-        enum road_compat compat = road_compat_special(proad);
-
-        time = tile_activity_time(ACTIVITY_GEN_ROAD, pTile, road_extra_get(proad));
-
-        /* TRANS: "Build Railroad (R) 3 turns" */
-	fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
-                    road_name_translation(proad),
-                    "R", time, 
-                    PL_("turn", "turns", time));
-
-	if (compat == ROCO_RAILROAD) {
+      time = can_unit_do_activity(pUnit, ACTIVITY_RAILROAD);
+      if (can_unit_do_activity(pUnit, ACTIVITY_ROAD) || time) {
+	if(time) {
+	  time = tile_activity_time(ACTIVITY_RAILROAD, unit_tile(pUnit));
+          /* TRANS: "Build Railroad (R) 3 turns" */
+	  fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
+                      road_name_translation(road_by_number(ROAD_RAILROAD)),
+                      "R", time, 
+                      PL_("turn", "turns", time));
 	  pOrder_Road_Button->theme = pTheme->ORailRoad_Icon;
 	} else {
+	  time = tile_activity_time(ACTIVITY_ROAD, unit_tile(pUnit));
+          /* TRANS: "Build Road (R) 1 turn" */
+	  fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
+		      road_name_translation(road_by_number(ROAD_ROAD)),
+                      "R", time,
+                      PL_("turn", "turns", time));
 	  pOrder_Road_Button->theme = pTheme->ORoad_Icon;
 	}
         copy_chars_to_string16(pOrder_Road_Button->info_label, cBuf);
@@ -1140,7 +1095,7 @@ void real_menus_update(void)
       }
       
 	/* unit_can_est_trade_route_here(pUnit) */
-      if (pCity && unit_has_type_flag(pUnit, UTYF_TRADE_ROUTE)
+      if (pCity && unit_has_type_flag(pUnit, F_TRADE_ROUTE)
           && (pHomecity = game_city_by_number(pUnit->homecity))
           && can_cities_trade(pHomecity, pCity)) {
 	int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pCity);
@@ -1165,7 +1120,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_IRRIGATE)) {
-        time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit));
 
         if (!strcmp(terrain_rule_name(pTerrain), "Forest") ||
           !strcmp(terrain_rule_name(pTerrain), "Jungle")) {
@@ -1196,7 +1151,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_MINE)) {
-        time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit));
 
 	/* FIXME: THIS CODE IS WRONG */
    if (!strcmp(terrain_rule_name(pTerrain), "Forest")) {  
@@ -1231,7 +1186,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_TRANSFORM)) {
-        time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit));
 	fc_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
 	  _("Transform to"),
 	  terrain_name_translation(pTerrain->transform_result),
@@ -1325,7 +1280,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_autosettlers(pUnit)) {
-	if (unit_has_type_flag(pUnit, UTYF_SETTLERS)) {
+	if (unit_has_type_flag(pUnit, F_SETTLERS)) {
 	  if(pOrder_Automate_Unit_Button->theme != pTheme->OAutoSett_Icon) {
 	    fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Auto Settler"), "A");
 	    pOrder_Automate_Unit_Button->theme = pTheme->OAutoSett_Icon;
@@ -1351,66 +1306,22 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_AUTO_EXPLORE);
       }
 
-      {
-        bool conn_possible = FALSE;
-        struct extra_type_list *extras;
-
-        extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *tgt;
-
-          tgt = extra_type_list_get(extras, 0);
-          conn_possible = can_units_do_connect(punits, ACTIVITY_IRRIGATE, tgt);
-        }
-
-        if (conn_possible) {
-          local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        } else {
-          local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        }
+      if (can_unit_do_connect(pUnit, ACTIVITY_IRRIGATE)) {
+	local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
+      } else {
+	local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
       }
 
-      {
-        struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-        bool road_conn_possible;
-
-        if (proad != NULL) {
-          struct extra_type *tgt;
-
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
-        } else {
-          road_conn_possible = FALSE;
-        }
-
-        if (road_conn_possible) {
-          local_show(ID_UNIT_ORDER_CONNECT_ROAD);
-        } else {
-          local_hide(ID_UNIT_ORDER_CONNECT_ROAD);
-        }
+      if (can_unit_do_connect(pUnit, ACTIVITY_ROAD)) {
+	local_show(ID_UNIT_ORDER_CONNECT_ROAD);
+      } else {
+	local_hide(ID_UNIT_ORDER_CONNECT_ROAD);
       }
 
-      {
-        struct road_type *proad = road_by_compat_special(ROCO_RAILROAD);
-        bool road_conn_possible;
-
-        if (proad != NULL) {
-          struct extra_type *tgt;
-
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
-        } else {
-          road_conn_possible = FALSE;
-        }
-
-        if (road_conn_possible) {
-          local_show(ID_UNIT_ORDER_CONNECT_RAILROAD);
-        } else {
-          local_hide(ID_UNIT_ORDER_CONNECT_RAILROAD);
-        }
+      if (can_unit_do_connect(pUnit, ACTIVITY_RAILROAD)) {
+	local_show(ID_UNIT_ORDER_CONNECT_RAILROAD);
+      } else {
+	local_hide(ID_UNIT_ORDER_CONNECT_RAILROAD);
       }
 
       if (is_diplomat_unit(pUnit) &&
@@ -1420,7 +1331,7 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_DIPLOMAT_DLG);
       }
 
-      if (unit_has_type_flag(pUnit, UTYF_NUCLEAR)) {
+      if (unit_has_type_flag(pUnit, F_NUCLEAR)) {
 	local_show(ID_UNIT_ORDER_NUKE);
       } else {
 	local_hide(ID_UNIT_ORDER_NUKE);

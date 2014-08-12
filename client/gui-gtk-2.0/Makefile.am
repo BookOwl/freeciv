@@ -5,7 +5,7 @@ AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include \
 	-I$(top_srcdir)/utility -I$(top_srcdir)/common \
 	-I$(top_srcdir)/common/aicore -I$(top_srcdir)/common/scriptcore \
 	-I$(srcdir)/../agents  -I$(srcdir)/../luascript \
-	$(gui_gtk2_cflags) $(GGZ_GTK_INCLUDES) $(SOUND_CFLAGS)
+	$(GUI_gtk2_CFLAGS) $(SOUND_CFLAGS) $(GGZ_GTK_INCLUDES)
 
 # The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
 # Freeciv.h in the builddir, in preference to the one 
@@ -57,7 +57,6 @@ libgui_gtk2_la_SOURCES = \
 	finddlg.c	\
 	finddlg.h	\
 	gamedlgs.c	\
-	gamedlgs.h	\
 	gotodlg.c	\
 	gotodlg.h	\
 	graphics.c	\
@@ -99,7 +98,6 @@ libgui_gtk2_la_SOURCES = \
 	repodlgs.h	\
 	resources.c	\
 	resources.h	\
-	soundset_dlg.c	\
 	spaceshipdlg.c	\
 	spaceshipdlg.h  \
 	sprite.c	\
@@ -115,3 +113,4 @@ libgui_gtk2_la_SOURCES = \
 	wldlg.h	
 
 libgui_gtk2_la_LIBADD = -lm
+

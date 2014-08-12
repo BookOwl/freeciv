@@ -21,7 +21,7 @@ leaders = {
 }
 flag="nagorno_karabakh"
 flag_alt = "armenia"
-style = "celtic"
+city_style = "celtic"
 
 ruler_titles = {
  "government",      "male_title",        "female_title"

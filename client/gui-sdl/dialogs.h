@@ -39,6 +39,4 @@ void popup_unit_disband_dlg(struct unit *pUnit, bool city);
 void popup_revolution_dialog(void);
 void popdown_notify_goto_dialog(void);
 
-void nationset_changed(void);
-
 #endif	/* FC__DIALOGS_H */

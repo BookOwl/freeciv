@@ -18,7 +18,6 @@ struct connection;
 struct conn_list;
 struct rgbcolor;
 struct player;
-struct nation_type;
 
 enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
@@ -31,7 +30,6 @@ void server_player_set_color(struct player *pplayer,
 const char *player_color_ftstr(struct player *pplayer);
 void server_player_init(struct player *pplayer, bool initmap,
                         bool needs_team);
-void give_midgame_initial_units(struct player *pplayer, struct tile *ptile);
 void server_remove_player(struct player *pplayer);
 void kill_player(struct player *pplayer);
 void update_revolution(struct player *pplayer);
@@ -47,23 +45,8 @@ bool server_player_set_name_full(const struct connection *caller,
 
 struct nation_type *pick_a_nation(const struct nation_list *choices,
                                   bool ignore_conflicts,
-                                  bool needs_startpos,
+                                  bool only_available,
                                   enum barbarian_type barb_type);
-bool nation_is_in_current_set(const struct nation_type *pnation);
-bool client_can_pick_nation(const struct nation_type *nation);
-void count_playable_nations(void);
-void send_nation_availability(struct conn_list *dest, bool nationset_change);
-void fit_nationset_to_players(void);
-
-/* Iterate over nations in the currently selected set.
- * Does not filter on playability or anything else. */
-#define allowed_nations_iterate(pnation)                            \
-  nations_iterate(pnation) {                                        \
-    if (nation_is_in_current_set(pnation)) {
-
-#define allowed_nations_iterate_end                                 \
-    }                                                               \
-  } nations_iterate_end
 
 void check_player_max_rates(struct player *pplayer);
 void make_contact(struct player *pplayer1, struct player *pplayer2,

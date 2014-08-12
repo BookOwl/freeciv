@@ -8,12 +8,12 @@ AC_DEFUN([FC_FCDB_MYSQL],
 
     FC_CHECK_MYSQL(
     [
-      FCDB_MYSQL_CFLAGS="$mysql_cflags"
-      FCDB_MYSQL_LIBS="$mysql_ldflags"
+      FCDB_MYSQL_CFLAGS="$MYSQL_CFLAGS"
+      FCDB_MYSQL_LIBS="$MYSQL_LDFLAGS"
 
       AC_SUBST(FCDB_MYSQL_CFLAGS)
 
-      AC_DEFINE([HAVE_FCDB_MYSQL], [1], [Have MySQL database backend])
+      AC_DEFINE(HAVE_FCDB_MYSQL,1,[ ])
       fcdb_mysql=yes
     ],
     [

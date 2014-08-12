@@ -16,14 +16,11 @@
 #endif
 
 
-// client
-#include "gui_interface.h"
+// gui-qt
+#include "qtg_cside.h"
 
 #include "qtg_cxxside.h"
 
-/**************************************************************************
-  Setup the gui callback table.
-**************************************************************************/
 void setup_gui_funcs()
 {
   struct gui_funcs *funcs = get_gui_funcs();
@@ -32,10 +29,6 @@ void setup_gui_funcs()
   funcs->ui_main = qtg_ui_main;
   funcs->ui_exit = qtg_ui_exit;
 
-  funcs->get_gui_type = qtg_get_gui_type;
-  funcs->insert_client_build_info = qtg_insert_client_build_info;
-
-  funcs->version_message = qtg_version_message;
   funcs->real_output_window_append = qtg_real_output_window_append;
 
   funcs->isometric_view_supported = qtg_isometric_view_supported;
@@ -52,13 +45,13 @@ void setup_gui_funcs()
 
   funcs->canvas_create = qtg_canvas_create;
   funcs->canvas_free = qtg_canvas_free;
-  funcs->canvas_set_zoom = qtg_canvas_set_zoom;
   funcs->canvas_copy = qtg_canvas_copy;
   funcs->canvas_put_sprite = qtg_canvas_put_sprite;
   funcs->canvas_put_sprite_full = qtg_canvas_put_sprite_full;
   funcs->canvas_put_sprite_fogged = qtg_canvas_put_sprite_fogged;
   funcs->canvas_put_rectangle = qtg_canvas_put_rectangle;
   funcs->canvas_fill_sprite_area = qtg_canvas_fill_sprite_area;
+  funcs->canvas_fog_sprite_area = qtg_canvas_fog_sprite_area;
   funcs->canvas_put_line = qtg_canvas_put_line;
   funcs->canvas_put_curved_line = qtg_canvas_put_curved_line;
   funcs->get_text_size = qtg_get_text_size;

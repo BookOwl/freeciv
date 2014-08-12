@@ -29,9 +29,6 @@
 #include "fc_svnrev_gen.h"
 #endif /* SVNREV */
 
-#ifdef GITREV
-#include "fc_gitrev_gen.h"
-#endif /* GITREV */
 
 /**********************************************************************
   Return string containing both name of Freeciv and version.
@@ -46,9 +43,6 @@ const char *freeciv_name_version(void)
 #elif defined(SVNREV) && !defined(FC_SVNREV_OFF)
   fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s (%s)"),
               VERSION_STRING, fc_svn_revision());
-#elif defined(GITREV) && !defined(FC_GITREV_OFF)
-  fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s (%s)"),
-              VERSION_STRING, fc_git_revision());
 #else
   fc_snprintf(msgbuf, sizeof (msgbuf), _("Freeciv version %s"),
               VERSION_STRING);
@@ -89,28 +83,7 @@ const char *fc_svn_revision(void)
 }
 
 /**********************************************************************
-  Returns string with git revision information if it is possible to
-  determine. Can return also some fallback string or even NULL.
-***********************************************************************/
-const char *fc_git_revision(void)
-{
-#if defined(GITREV) && !defined(FC_GITREV_OFF)
-  static char buf[100];
-  bool translate = FC_GITREV1[0] != '\0';
-
-  fc_snprintf(buf, sizeof(buf), "%s%s",
-              translate ? _(FC_GITREV1) : FC_GITREV1, FC_GITREV2);
-
-  return buf; /* Either revision, or modified revision */
-#else  /* FC_GITREV_OFF */
-  return NULL;
-#endif /* FC_GITREV_OFF */
-}
-
-/**********************************************************************
   Returns version string that can be used to compare two freeciv builds.
-  This does not handle git revisions, as there's no way to compare
-  which of the two commits is "higher".
 ***********************************************************************/
 const char *fc_comparable_version(void)
 {

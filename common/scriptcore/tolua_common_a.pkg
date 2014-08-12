@@ -70,24 +70,24 @@ module log {
 $[
 -- Log module implementation.
 
-function log.fatal(fmt, ...)
-  log.base(log.level.FATAL, string.format(fmt, ...))
+function log.fatal(...)
+  log.base(log.level.FATAL, string.format(unpack(arg)))
 end
 
-function log.error(fmt, ...)
-  log.base(log.level.ERROR, string.format(fmt, ...))
+function log.error(...)
+  log.base(log.level.ERROR, string.format(unpack(arg)))
 end
 
-function log.normal(fmt, ...)
-  log.base(log.level.NORMAL, string.format(fmt, ...))
+function log.normal(...)
+  log.base(log.level.NORMAL, string.format(unpack(arg)))
 end
 
-function log.verbose(fmt, ...)
-  log.base(log.level.VERBOSE, string.format(fmt, ...))
+function log.verbose(...)
+  log.base(log.level.VERBOSE, string.format(unpack(arg)))
 end
 
-function log.debug(fmt, ...)
-  log.base(log.level.DEBUG, string.format(fmt, ...))
+function log.debug(...)
+  log.base(log.level.DEBUG, string.format(unpack(arg)))
 end
 
 -- ***************************************************************************

@@ -13,7 +13,7 @@ AC_DEFUN([FC_FCDB_POSTGRES],
 
       AC_SUBST(FCDB_POSTGRES_CFLAGS)
 
-      AC_DEFINE([HAVE_FCDB_POSTGRES], [1], [Have postgres database backend])
+      AC_DEFINE(HAVE_FCDB_POSTGRES,1,[ ])
       fcdb_postgres=yes
     ],
     [

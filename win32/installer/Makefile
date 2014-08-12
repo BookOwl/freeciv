@@ -24,21 +24,12 @@
 #
 
 
-# by default build all installers
-all: gtk3-installer gtk2-installer sdl-installer
+# build all installers
 
-gtk3-installer:
-	make GUI=gtk3 FCMP=gtk3 wrap-gtk3
-
-gtk2-installer:
-	make GUI=gtk2 FCMP=gtk2 wrap-gtk2
-
-sdl-installer:
-	make GUI=sdl FCMP=gtk3 wrap-sdl
-
-snapshot:
-	cd ../.. ; ./autogen.sh --no-configure-run
-	make EXTRA_CONFIG="--enable-svnrev" all
+all: 
+	make GUI=gtk3 installer-gtk3
+	make GUI=gtk2 installer-gtk2
+	make GUI=sdl installer-sdl
 
 
 # build Freeciv
@@ -47,7 +38,7 @@ build-freeciv-common:
 	# create build directory
 	mkdir -p build-$(GUI)
 	# configure
-	cd build-$(GUI); ../../../configure --enable-client=$(GUI) --with-followtag="win32-S2_6" --enable-fcdb=sqlite3 --enable-fcmp=$(FCMP) $(EXTRA_CONFIG)
+	cd build-$(GUI); ../../../configure --enable-client=$(GUI) --with-followtag="win32" --enable-fcdb=sqlite3 --enable-fcmp=gtk2
 	# make
 	make -C build-$(GUI)
 
@@ -72,10 +63,10 @@ install-freeciv-common:
 	mv install-$(GUI)/usr/local/share/doc install-$(GUI)/doc
 	# delete unneeded files
 	rm -r install-$(GUI)/usr
-	# strip 'freeciv-manual' and 'freeciv-mp-<gui>' executables
+	# strip 'freeciv-manual' and 'freeciv-modpack' executables
 	strip install-$(GUI)/freeciv-m*
 	# add start menu files
-	cp freeciv-server.cmd freeciv-mp-$(FCMP).cmd freeciv-$(GUI).cmd Freeciv.url install-$(GUI)/
+	cp freeciv-server.cmd freeciv-modpack.cmd freeciv-$(GUI).cmd Freeciv.url install-$(GUI)/
 
 install-freeciv-gtk3: install-freeciv-common
 
@@ -143,41 +134,39 @@ install-env-common:
 	cp -R $(addprefix /bin/, $(COMMON_DLLS)) install-$(GUI)
 
 DEFAULT_FCMP_DLLS := \
-	libgdk-3-0.dll \
-	libgtk-3-0.dll
-
-install-env-default-fcmp: install-env-common
-	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
-	# add additional GTK+3 files
-	mkdir -p install-$(GUI)/etc
-	cp -R /etc/gtk-3.0 install-$(GUI)/etc/
-	mkdir -p install-$(GUI)/lib/gtk-3.0/
-	cp -R /lib/gtk-3.0/3.0.0 install-$(GUI)/lib/gtk-3.0/
-	cp -R /share/locale install-$(GUI)/share/
-	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk30.mo -delete
-
-install-env-gtk3: install-env-default-fcmp
-
-GTK2_DLLS := \
 	libgdk-win32-2.0-0.dll \
 	libgtk-win32-2.0-0.dll
 
-install-env-gtk2: install-env-common
-	# add DLLs
-	cp -R $(addprefix /bin/, $(GTK2_DLLS)) install-$(GUI)
+install-env-default-fcmp: install-env-common
+	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
 	# add additional GTK+2 files
 	mkdir -p install-$(GUI)/etc
 	cp -R /etc/gtk-2.0 install-$(GUI)/etc/
 	mkdir -p install-$(GUI)/lib/gtk-2.0/
 	cp -R /lib/gtk-2.0/2.10.0 install-$(GUI)/lib/gtk-2.0/
 	cp -R /share/locale install-$(GUI)/share/
-	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk20.mo -delete
+	find install-$(GUI)/share/locale -type f -not -name freeciv.mo -and -not -name gtk30.mo -and -not -name gtk20.mo -delete
+
+GTK3_DLLS := \
+	libgdk-3-0.dll \
+	libgtk-3-0.dll
+
+install-env-gtk3: install-env-default-fcmp
+	# add DLLs
+	cp -R $(addprefix /bin/, $(GTK3_DLLS)) install-$(GUI)
+	# add additional GTK+3 files
+	mkdir -p install-$(GUI)/etc
+	cp -R /etc/gtk-3.0 install-$(GUI)/etc/
+	mkdir -p install-$(GUI)/lib/gtk-3.0/
+	cp -R /lib/gtk-3.0/3.0.0 install-$(GUI)/lib/gtk-3.0/
+	cp -R /share/locale install-$(GUI)/share/
+	find install-$(GUI)/share/locale -type f -not -name freeciv.mo -and -not -name gtk30.mo -delete
+
+install-env-gtk2: install-env-default-fcmp
 
 SDL_DLLS := \
 	libpng12-0.dll \
-	libSDL_gfx-15.dll \
-	SDL_image.dll \
-	SDL_ttf.dll
+	SDL_image.dll
 
 install-env-sdl: install-env-default-fcmp
 	# add DLLs
@@ -195,11 +184,11 @@ installer-common: clean-install-common install-freeciv-$(GUI) install-env-$(GUI)
 	mkdir -p Output
 	makensis Freeciv-$(FREECIV_VERSION)-$(GUI).nsi
 
-wrap-gtk3: build-freeciv-gtk3 installer-common
+installer-gtk3: build-freeciv-gtk3 installer-common
 
-wrap-gtk2: build-freeciv-gtk2 installer-common
+installer-gtk2: build-freeciv-gtk2 installer-common
 
-wrap-sdl: build-freeciv-sdl installer-common
+installer-sdl: build-freeciv-sdl installer-common
 
 
 # cleanup

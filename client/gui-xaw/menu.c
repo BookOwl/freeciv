@@ -75,13 +75,15 @@
 #define TEXT_ORDER_CITY_BUILD   0
 #define TEXT_ORDER_CITY_ADD_TO  1
 
-#define TEXT_ORDER_IRRIGATE            0
-#define TEXT_ORDER_IRRIGATE_GENERIC    1
+#define TEXT_ORDER_ROAD_ROAD      0
+#define TEXT_ORDER_ROAD_RAILROAD  1
+
+#define TEXT_ORDER_IRRIGATE_IRRIGATE   0
+#define TEXT_ORDER_IRRIGATE_FARMLAND   1
 #define TEXT_ORDER_IRRIGATE_CHANGE_TO  2
 
-#define TEXT_ORDER_MINE            0
-#define TEXT_ORDER_MINE_GENERIC    1
-#define TEXT_ORDER_MINE_CHANGE_TO  2
+#define TEXT_ORDER_MINE_MINE       0
+#define TEXT_ORDER_MINE_CHANGE_TO  1
 
 #define TEXT_ORDER_TRANSFORM_TERRAIN       0
 #define TEXT_ORDER_TRANSFORM_TRANSFORM_TO  1
@@ -150,7 +152,7 @@ static struct MenuEntry view_menu_entries[]={
     { { 0                             },      "", MENU_SEPARATOR_LINE, 0 },
     { { N_("Terrain"), 0              },      "", MENU_VIEW_SHOW_TERRAIN, 0 },
     { { N_("Coastline"), 0            },      "", MENU_VIEW_SHOW_COASTLINE, 0 },
-    { { N_("Paths"), 0                },      "", MENU_VIEW_SHOW_PATHS, 0 },
+    { { N_("Roads & Rails"), 0        },      "", MENU_VIEW_SHOW_ROADS_RAILS, 0 },
     { { N_("Irrigation"), 0           },      "", MENU_VIEW_SHOW_IRRIGATION, 0 },
     { { N_("Mines"), 0                },      "", MENU_VIEW_SHOW_MINES, 0 },
     { { N_("Bases"), 0                },      "", MENU_VIEW_SHOW_BASES, 0 },
@@ -168,12 +170,12 @@ static struct MenuEntry view_menu_entries[]={
 static struct MenuEntry order_menu_entries[]={
     { { N_("Build City"),
         N_("Add to City"), 0          },     "b", MENU_ORDER_BUILD_CITY, 0 },
-    { { N_("Build Road"), 0           },     "r", MENU_ORDER_ROAD, 0 },
-    { { N_("Build %s"),
-        N_("Build Irrigation"),
+    { { N_("Build Road"),
+        N_("Build Railroad"), 0       },     "r", MENU_ORDER_ROAD, 0 },
+    { { N_("Build Irrigation"),
+        N_("Build Farmland"),
         N_("Change to %s"), 0         },     "i", MENU_ORDER_IRRIGATE, 0 },
-    { { N_("Build %s"),
-        N_("Build Mine"),
+    { { N_("Build Mine"),
         N_("Change to %s"), 0         },     "m", MENU_ORDER_MINE, 0 },
     { { N_("Transform Terrain"),
         N_("Transform to %s"), 0      },     "o", MENU_ORDER_TRANSFORM, 0 },
@@ -232,7 +234,6 @@ static struct MenuEntry reports_menu_entries[]={
     { { N_("Messages"), 0             },    "F9", MENU_REPORT_MESSAGES, 0 },
     { { N_("Demographics"), 0         },   "F11", MENU_REPORT_DEMOGRAPHIC, 0 },
     { { N_("Spaceship"), 0            },   "F12", MENU_REPORT_SPACESHIP, 0 },
-    { { N_("Achievements"), 0         },      "", MENU_REPORT_ACHIEVEMENTS, 0},
     { { 0,                            },       0, MENU_END_OF_LIST, 0 }
 };
 
@@ -361,10 +362,10 @@ void real_menus_update(void)
     num_government_entries = i;
 
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-                         options.draw_city_names);
+			 draw_city_names);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_TERRAIN, 1);
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !options.draw_terrain);
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_PATHS, 1);
+    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !draw_terrain);
+    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_ROADS_RAILS, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_IRRIGATION, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_MINES, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_BASES, 1);
@@ -372,7 +373,7 @@ void real_menus_update(void)
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_POLLUTION, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITIES, 1);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_UNITS, 1);
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_FOCUS_UNIT, !options.draw_units);
+    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_FOCUS_UNIT, !draw_units);
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_FOG_OF_WAR, 1);
 
     menu_entry_sensitive(MENU_GAME, MENU_GAME_OPTIONS, 1);
@@ -395,9 +396,6 @@ void real_menus_update(void)
       struct tile *ptile = NULL;
       bool can_build;
       struct unit_list *punits = get_units_in_focus();
-      bool conn_possible;
-      struct road_type *proad;
-      struct extra_type_list *extras;
 
       XtSetSensitive(menus[MENU_ORDER]->button, True);
 
@@ -405,8 +403,10 @@ void real_menus_update(void)
 
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_CITY,
                            can_units_do(punits, unit_can_add_or_build_city));
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD,
-                           can_units_do_any_road(punits));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_ROAD, 
+			   can_units_do_activity(punits, ACTIVITY_ROAD)
+			   || can_units_do_activity(punits,
+						    ACTIVITY_RAILROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_IRRIGATE, 
 			   can_units_do_activity(punits, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_MINE, 
@@ -445,48 +445,15 @@ void real_menus_update(void)
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONVERT,
 			   units_can_convert(punits));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_DISBAND,
-			   units_have_type_flag(punits, UTYF_UNDISBANDABLE,
-                                                FALSE));
+			   units_have_flag(punits, F_UNDISBANDABLE, FALSE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_AUTO_EXPLORE, 
 			   can_units_do_activity(punits, ACTIVITY_EXPLORE));
-
-      proad = road_by_compat_special(ROCO_ROAD);
-      if (proad != NULL) {
-        struct extra_type *tgt;
-
-        tgt = road_extra_get(proad);
-
-        conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt);
-      } else {
-        conn_possible = FALSE;
-      }
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_ROAD, conn_possible);
-
-      proad = road_by_compat_special(ROCO_RAILROAD);
-      if (proad != NULL) {
-        struct extra_type *tgt;
-
-        tgt = road_extra_get(proad);
-
-        conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt);
-      } else {
-        conn_possible = FALSE;
-      }
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_ROAD,
+			   can_units_do_connect(punits, ACTIVITY_ROAD));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_RAIL,
-                           conn_possible);
-
-      extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-      if (extra_type_list_size(extras) > 0) { 
-        struct extra_type *tgt;
-
-        tgt = extra_type_list_get(extras, 0);
-        conn_possible = can_units_do_connect(punits, ACTIVITY_IRRIGATE, tgt);
-      } else {
-        conn_possible = FALSE;
-      }
-
-      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE, conn_possible);
+			   can_units_do_connect(punits, ACTIVITY_RAILROAD));
+      menu_entry_sensitive(MENU_ORDER, MENU_ORDER_CONNECT_IRRIGATE,
+			   can_units_do_connect(punits, ACTIVITY_IRRIGATE));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_GOTO_CITY,
 			   any_cities);
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_BUILD_WONDER,
@@ -499,7 +466,7 @@ void real_menus_update(void)
 			   can_units_do_diplomat_action(punits,
 							DIPLOMAT_ANY_ACTION));
       menu_entry_sensitive(MENU_ORDER, MENU_ORDER_NUKE,
-                           units_have_type_flag(punits, UTYF_NUCLEAR, TRUE));
+                           units_have_flag(punits, F_NUCLEAR, TRUE));
 
       /* FiXME: very odd, iterating for the first entry! */
       unit_list_iterate(punits, punit) {
@@ -510,7 +477,7 @@ void real_menus_update(void)
       tinfo = tile_terrain(ptile);
       can_build = !(tile_city(ptile));
 
-      if (units_have_type_flag(punits, UTYF_CITIES, TRUE)) {
+      if (units_have_flag(punits, F_CITIES, TRUE)) {
 	if (!can_build) {
 	  menu_entry_rename(MENU_ORDER, MENU_ORDER_BUILD_CITY,
 			  TEXT_ORDER_CITY_ADD_TO, NULL);
@@ -525,27 +492,14 @@ void real_menus_update(void)
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
 			  TEXT_ORDER_IRRIGATE_CHANGE_TO,
 			  terrain_name_translation(tinfo->irrigation_result));
-      } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
-        struct extra_type *pextra = NULL;
-
-        /* FIXME: this overloading doesn't work well with multiple focus
-         * units. */
-        unit_list_iterate(punits, punit) {
-          pextra = next_extra_for_tile(unit_tile(punit), EC_IRRIGATION,
-                                       unit_owner(punit), punit);
-          if (pextra != NULL) {
-            break;
-          }
-        } unit_list_iterate_end;
-
-        if (pextra != NULL) {
-          /* TRANS: Build irrigation of specific type */
-          menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
-                            TEXT_ORDER_IRRIGATE, extra_name_translation(pextra));
-        } else {
-          menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
-                            TEXT_ORDER_IRRIGATE_GENERIC, NULL);
-        }
+      }
+      else if (tile_has_special(ptile, S_IRRIGATION) &&
+	       player_knows_techs_with_flag(client.conn.playing, TF_FARMLAND)) {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
+			  TEXT_ORDER_IRRIGATE_FARMLAND, NULL);
+      } else {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_IRRIGATE,
+			  TEXT_ORDER_IRRIGATE_IRRIGATE, NULL);
       }
 
       if ((tinfo->mining_result != T_NONE)
@@ -553,27 +507,9 @@ void real_menus_update(void)
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
 			  TEXT_ORDER_MINE_CHANGE_TO,
 			  terrain_name_translation(tinfo->mining_result));
-      } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
-        struct extra_type *pextra = NULL;
-
-        /* FIXME: this overloading doesn't work well with multiple focus
-         * units. */
-        unit_list_iterate(punits, punit) {
-          pextra = next_extra_for_tile(unit_tile(punit), EC_MINE,
-                                       unit_owner(punit), punit);
-          if (pextra != NULL) {
-            break;
-          }
-        } unit_list_iterate_end;
-
-        if (pextra != NULL) {
-          /* TRANS: Build mine of specific type */
-          menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
-                            TEXT_ORDER_MINE, extra_name_translation(pextra));
-        } else {
-          menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
-                            TEXT_ORDER_MINE_GENERIC, NULL);
-        }
+      } else {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_MINE,
+			  TEXT_ORDER_MINE_MINE, NULL);
       }
 
       if ((tinfo->transform_result != T_NONE)
@@ -586,12 +522,20 @@ void real_menus_update(void)
 			  TEXT_ORDER_TRANSFORM_TERRAIN, NULL);
       }
 
-      if (units_have_type_flag(punits, UTYF_PARATROOPERS, TRUE)) {
+      if (units_have_flag(punits, F_PARATROOPERS, TRUE)) {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_POLLUTION,
 			  TEXT_ORDER_POLLUTION_PARADROP, NULL);
       } else {
 	menu_entry_rename(MENU_ORDER, MENU_ORDER_POLLUTION,
 			  TEXT_ORDER_POLLUTION_POLLUTION, NULL);
+      }
+
+      if (tile_has_special(ptile, S_ROAD)) {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
+			  TEXT_ORDER_ROAD_RAILROAD, NULL);
+      } else {
+	menu_entry_rename(MENU_ORDER, MENU_ORDER_ROAD,
+			  TEXT_ORDER_ROAD_ROAD, NULL);
       }
     }
   }
@@ -694,7 +638,7 @@ static void view_menu_callback(Widget w, XtPointer client_data,
   case MENU_VIEW_SHOW_CITY_NAMES:
     key_city_names_toggle();
     menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_CITY_GROWTH,
-                         options.draw_city_names);
+			 draw_city_names);
     break;
   case MENU_VIEW_SHOW_CITY_GROWTH:
     key_city_growth_toggle();
@@ -704,12 +648,12 @@ static void view_menu_callback(Widget w, XtPointer client_data,
     break;
   case MENU_VIEW_SHOW_TERRAIN:
     key_terrain_toggle();
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !options.draw_terrain);
+    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_COASTLINE, !draw_terrain);
     break;
   case MENU_VIEW_SHOW_COASTLINE:
     key_coastline_toggle();
     break;
-  case MENU_VIEW_SHOW_PATHS:
+  case MENU_VIEW_SHOW_ROADS_RAILS:
     key_roads_rails_toggle();
     break;
   case MENU_VIEW_SHOW_IRRIGATION:
@@ -732,7 +676,7 @@ static void view_menu_callback(Widget w, XtPointer client_data,
     break;
   case MENU_VIEW_SHOW_UNITS:
     key_units_toggle();
-    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_FOCUS_UNIT, !options.draw_units);
+    menu_entry_sensitive(MENU_VIEW, MENU_VIEW_SHOW_FOCUS_UNIT, !draw_units);
     break;
   case MENU_VIEW_SHOW_FOCUS_UNIT:
     key_focus_unit_toggle();
@@ -777,9 +721,6 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_airbase(); 
     break;
   case MENU_ORDER_POLLUTION: /* or MENU_ORDER_PARADROP */
-    /* FIXME: This calls key_unit_paradrop() / key_unit_pollution()
-     * as many times as there's focus units while those functions
-     * themselves handle all focus units at once. */
     unit_list_iterate(get_units_in_focus(), punit) {
       if (can_unit_paradrop(punit)) {
 	key_unit_paradrop();
@@ -826,43 +767,13 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
     key_unit_auto_explore();
     break;
   case MENU_ORDER_CONNECT_ROAD:
-    {
-      struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
-      if (proad != NULL) {
-        struct extra_type *tgt;
-
-        tgt = road_extra_get(proad);
-
-        key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
-      }
-    }
+    key_unit_connect(ACTIVITY_ROAD);
     break;
   case MENU_ORDER_CONNECT_RAIL:
-    {
-      struct road_type *proad = road_by_compat_special(ROCO_RAILROAD);
-
-      if (proad != NULL) {
-        struct extra_type *tgt;
-
-        tgt = road_extra_get(proad);
-
-        key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
-      }
-    }
+    key_unit_connect(ACTIVITY_RAILROAD);
     break;
   case MENU_ORDER_CONNECT_IRRIGATE:
-    {
-      struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-      if (extra_type_list_size(extras) > 0) {
-        struct extra_type *pextra;
-
-        pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-        key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-      }
-    }
+    key_unit_connect(ACTIVITY_IRRIGATE);
     break;
   case MENU_ORDER_PATROL:
     key_unit_patrol();
@@ -910,7 +821,7 @@ static void orders_menu_callback(Widget w, XtPointer client_data,
 }
 
 /****************************************************************
-  User has selected item from reports menu
+...
 *****************************************************************/
 static void reports_menu_callback(Widget w, XtPointer client_data,
 				  XtPointer garbage)
@@ -918,37 +829,34 @@ static void reports_menu_callback(Widget w, XtPointer client_data,
   size_t pane_num = (size_t)client_data;
 
   switch(pane_num) {
-  case MENU_REPORT_CITIES:
+   case MENU_REPORT_CITIES:
     city_report_dialog_popup(FALSE);
     break;
-  case MENU_REPORT_UNITS:
+   case MENU_REPORT_UNITS:
     units_report_dialog_popup(FALSE);
     break;
   case MENU_REPORT_PLAYERS:
     popup_players_dialog(FALSE);
     break;
-  case MENU_REPORT_ECONOMY:
+   case MENU_REPORT_ECONOMY:
     economy_report_dialog_popup(FALSE);
     break;
-  case MENU_REPORT_SCIENCE:
+   case MENU_REPORT_SCIENCE:
     science_report_dialog_popup(FALSE);
     break;
-  case MENU_REPORT_WOW:
+   case MENU_REPORT_WOW:
     send_report_request(REPORT_WONDERS_OF_THE_WORLD);
     break;
-  case MENU_REPORT_TOP_CITIES:
+   case MENU_REPORT_TOP_CITIES:
     send_report_request(REPORT_TOP_5_CITIES);
     break;
   case MENU_REPORT_MESSAGES:
     meswin_dialog_popup(FALSE);
     break;
-  case MENU_REPORT_DEMOGRAPHIC:
+   case MENU_REPORT_DEMOGRAPHIC:
     send_report_request(REPORT_DEMOGRAPHIC);
     break;
-  case MENU_REPORT_ACHIEVEMENTS:
-    send_report_request(REPORT_ACHIEVEMENTS);
-    break;
-  case MENU_REPORT_SPACESHIP:
+   case MENU_REPORT_SPACESHIP:
     if (NULL != client.conn.playing) {
       popup_spaceship_dialog(client.conn.playing);
     }
@@ -1103,7 +1011,7 @@ int is_menu_item_active(enum MenuIndex menu, enum MenuID id)
 }
 
 /****************************************************************
-  Create one of the main menus
+...
 *****************************************************************/
 void create_menu(enum MenuIndex menu, char *name, struct MenuEntry entries[], 
 		 void (*menucallback)(Widget, XtPointer, XtPointer),
@@ -1183,8 +1091,8 @@ void menu_entry_rename(enum MenuIndex menu, enum MenuID id, int var,
   char *item;
 
   for (i = 0; pmenu->entries[i].id != MENU_END_OF_LIST; i++) {
-    if (pmenu->entries[i].id == id) {
-      item = menu_entry_text(menu, i, var, terr);
+    if(pmenu->entries[i].id==id) {
+      item=menu_entry_text(menu, i, var, terr);
       XtVaSetValues(pmenu->entries[i].w, XtNlabel, item, NULL);
       return;
     }

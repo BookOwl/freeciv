@@ -64,26 +64,13 @@ def make_documentation(file):
  * - SPECENUM_ZERO: can be defined only if SPECENUM_BITWISE was also defined.
  * It defines a 0 value.  Note that if you don't declare this value, 0 passed
  * to the 'foo_is_valid()' function will return 0.
- * - SPECENUM_COUNT: a name for the maximum enumeration number plus 1. For
- * enums where every element from 0 to the maximum is defined, this is the
- * number of elements in the enum. This value is suitable to size an array
- * indexed by the enum. It can not be used in combination with
- * SPECENUM_BITWISE. SPECENUM_is_valid() will return the invalid element
- * for it.
+ * - SPECENUM_COUNT: The number of elements in the enum for use in static
+ * structs. It can not be used in combination with SPECENUM_BITWISE.
+ * SPECENUM_is_valid() will return the invalid element for it.
  *
  * SPECENUM_VALUE%dNAME, SPECENUM_ZERONAME, SPECENUM_COUNTNAME: Can be used
- * to bind a string to the particular enumerator to be returned by
- * SPECENUM_name(), etc. If not defined, the default name for 'FOO_FIRST'
- * is '"FOO_FIRST"'. A name can be qualified. The qualification will only
- * be used for its translation. The returned name will be unqualified. To
- * mark a name as translatable use N_().
- *
- * SPECENUM_NAMEOVERRIDE: call callback function foo_name_cb(enum foo),
- * defined by specnum user, to get name of the enum value. If the function
- * returns NULL, compiled in names are used.
- *
- * SPECENUM_BITVECTOR: specifies the name of a bit vector for the enum
- * values. It can not be used in combination with SPECENUM_BITWISE.
+ * to bind the name of the particular enumerator.  If not defined, the
+ * default name for 'FOO_FIRST' is '"FOO_FIRST"'.
  *
  * Assuming SPECENUM_NAME were 'foo', including this file would provide
  * the definition for the enumeration type 'enum foo', and prototypes for
@@ -99,7 +86,6 @@ def make_documentation(file):
  *   enum foo foo_next(enum foo);
  *
  *   const char *foo_name(enum foo);
- *   const char *foo_translated_name(enum foo);
  *   enum foo foo_by_name(const char *name,
  *                        int (*strcmp_func)(const char *, const char *));
  *
@@ -152,8 +138,6 @@ def make_macros(file):
 extern "C" {
 #endif /* __cplusplus */
 
-/* Utility */
-#include "fcintl.h"     /* translation */
 #include "log.h"        /* fc_assert. */
 #include "support.h"    /* bool type. */
 
@@ -185,13 +169,6 @@ extern "C" {
 #define SPECENUM_VALUE(value) (value)
 #endif /* SPECENUM_BITWISE */
 
-#ifdef SPECENUM_BITVECTOR
-#include "bitvector.h"
-#ifdef SPECENUM_BITWISE
-#error SPECENUM_BITWISE and SPECENUM_BITVECTOR cannot both be defined.
-#endif /* SPECENUM_BITWISE */
-#endif /* SPECENUM_BITVECTOR */
-
 #undef SPECENUM_MIN_VALUE
 #undef SPECENUM_MAX_VALUE
 ''')
@@ -207,8 +184,6 @@ extern "C" {
     macros.append("SPECENUM_ZERO")
     macros.append("SPECENUM_MIN_VALUE")
     macros.append("SPECENUM_MAX_VALUE")
-    macros.append("SPECENUM_NAMEOVERRIDE")
-    macros.append("SPECENUM_BITVECTOR")
 
 def make_enum(file):
     file.write('''
@@ -373,28 +348,16 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 
 def make_name(file):
     file.write('''
-#ifdef SPECENUM_NAMEOVERRIDE
-char *SPECENUM_FOO(_name_cb)(enum SPECENUM_NAME value);
-#endif /* SPECENUM_NAMEOVERRIDE */
-
 /**************************************************************************
   Returns the name of the enumerator.
 **************************************************************************/
 static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
 {
-#ifdef SPECENUM_NAMEOVERRIDE
-  char *name = SPECENUM_FOO(_name_cb)(enumerator);
-
-  if (name != NULL) {
-    return skip_intl_qualifier_prefix(name);
-  }
-#endif /* SPECENUM_NAMEOVERRIDE */
-
   switch (enumerator) {
 #ifdef SPECENUM_ZERO
   case SPECENUM_ZERO:
 #ifdef SPECENUM_ZERONAME
-    return skip_intl_qualifier_prefix(SPECENUM_ZERONAME);
+    return SPECENUM_ZERONAME;
 #else
     return SPECENUM_STRING(SPECENUM_ZERO);
 #endif
@@ -407,7 +370,7 @@ static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
 #ifdef SPECENUM_VALUE%d
   case SPECENUM_VALUE%d:
 #ifdef SPECENUM_VALUE%dNAME
-    return skip_intl_qualifier_prefix(SPECENUM_VALUE%dNAME);
+    return SPECENUM_VALUE%dNAME;
 #else
     return SPECENUM_STRING(SPECENUM_VALUE%d);
 #endif
@@ -419,7 +382,7 @@ static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
 #ifdef SPECENUM_COUNT
   case SPECENUM_COUNT:
 #ifdef SPECENUM_COUNTNAME
-    return skip_intl_qualifier_prefix(SPECENUM_COUNTNAME);
+    return SPECENUM_COUNTNAME;
 #else
     return SPECENUM_STRING(SPECENUM_COUNT);
 #endif
@@ -453,67 +416,6 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_by_name)
 }
 ''')
 
-def make_translated_name(file):
-    file.write('''
-/**************************************************************************
-  Returns the translated name of the enumerator.
-**************************************************************************/
-static inline const char *
-SPECENUM_FOO(_translated_name)(enum SPECENUM_NAME enumerator)
-{
-#ifdef SPECENUM_NAMEOVERRIDE
-  char *name = SPECENUM_FOO(_name_cb)(enumerator);
-
-  if (name != NULL) {
-    return Q_(name);
-  }
-#endif /* SPECENUM_NAMEOVERRIDE */
-
-  switch (enumerator) {
-#ifdef SPECENUM_ZERO
-  case SPECENUM_ZERO:
-#ifdef SPECENUM_ZERONAME
-    return Q_(SPECENUM_ZERONAME);
-#else
-    return SPECENUM_STRING(SPECENUM_ZERO);
-#endif
-#endif /* SPECENUM_ZERO */
-''')
-
-    for i in range(max_enum_values):
-        file.write('''
-#ifdef SPECENUM_VALUE%d
-  case SPECENUM_VALUE%d:
-#ifdef SPECENUM_VALUE%dNAME
-    return Q_(SPECENUM_VALUE%dNAME);
-#else
-    return SPECENUM_STRING(SPECENUM_VALUE%d);
-#endif
-#endif /* SPECENUM_VALUE%d */
-'''%(i,i,i,i,i,i))
-
-    file.write('''
-#ifdef SPECENUM_COUNT
-  case SPECENUM_COUNT:
-#ifdef SPECENUM_COUNTNAME
-    return Q_(SPECENUM_COUNTNAME);
-#else
-    return SPECENUM_STRING(SPECENUM_COUNT);
-#endif
-#endif /* SPECENUM_COUNT */
-  }
-
-  return NULL;
-}
-''')
-
-def make_bitvector(file):
-    file.write('''
-#ifdef SPECENUM_BITVECTOR
-BV_DEFINE(SPECENUM_BITVECTOR, (SPECENUM_MAX_VALUE + 1));
-#endif /* SPECENUM_BITVECTOR */
-''')
-
 def make_undef(file):
     for macro in macros:
         file.write('''
@@ -544,8 +446,6 @@ def main():
     make_next(output)
     make_name(output)
     make_by_name(output)
-    make_translated_name(output)
-    make_bitvector(output)
     make_undef(output)
 
     output.write('''

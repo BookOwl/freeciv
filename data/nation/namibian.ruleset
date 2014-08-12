@@ -26,13 +26,13 @@ ruler_titles = {
 
 flag = "namibia"
 flag_alt = "rwanda"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""
 init_units=""
 
-civilwar_nations="south african", "khoisan", "boer"
+civilwar_nations="south african", "botswanan", "boer"
 
 ; Based on http://de.wikipedia.org/wiki/Liste_der_Städte_in_Namibia
 

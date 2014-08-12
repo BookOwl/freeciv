@@ -60,6 +60,14 @@ static void player_diplstate_defaults(const struct player *plr1,
 static void player_diplstate_destroy(const struct player *plr1,
                                      const struct player *plr2);
 
+/* Names of AI levels. These must correspond to enum ai_level in
+ * player.h. Also commands to set AI level in server/commands.c
+ * must match these. */
+static const char *ai_level_names[] = {
+  NULL, N_("Away"), N_("Novice"), N_("Easy"), NULL, N_("Normal"),
+  NULL, N_("Hard"), N_("Cheating"), NULL, N_("Experimental")
+};
+
 /***************************************************************
   Returns true iff p1 can cancel treaty on p2.
 
@@ -81,7 +89,7 @@ enum dipl_reason pplayer_can_cancel_treaty(const struct player *p1,
   }
   if (player_diplstate_get(p1, p2)->has_reason_to_cancel == 0
       && get_player_bonus(p1, EFT_HAS_SENATE) > 0
-      && get_player_bonus(p1, EFT_NO_ANARCHY) <= 0) {
+      && get_player_bonus(p1, EFT_NO_ANARCHY) == 0) {
     return DIPL_SENATE_BLOCKING;
   }
   return DIPL_OK;
@@ -504,8 +512,6 @@ static void player_defaults(struct player *pplayer)
   pplayer->is_ready = FALSE;
   pplayer->nturns_idle = 0;
   pplayer->is_alive = TRUE;
-  pplayer->is_winner = FALSE;
-  pplayer->last_war_action = -1;
 
   pplayer->revolution_finishes = -1;
 
@@ -519,8 +525,7 @@ static void player_defaults(struct player *pplayer)
     }
   } players_iterate_end;
 
-  pplayer->style      = 0;
-  pplayer->music_style = -1;          /* even getting value 0 triggers change */
+  pplayer->city_style = 0;            /* should be first basic style */
   pplayer->cities = city_list_new();
   pplayer->units = unit_list_new();
 
@@ -532,6 +537,7 @@ static void player_defaults(struct player *pplayer)
   spaceship_init(&pplayer->spaceship);
 
   pplayer->ai_controlled = FALSE;
+  BV_CLR_ALL(pplayer->ai_common.handicaps);
   pplayer->ai_common.skill_level = 0;
   pplayer->ai_common.fuzzy = 0;
   pplayer->ai_common.expand = 100;
@@ -539,7 +545,6 @@ static void player_defaults(struct player *pplayer)
   player_slots_iterate(pslot) {
     pplayer->ai_common.love[player_slot_index(pslot)] = 1;
   } player_slots_iterate_end;
-  pplayer->ai_common.traits = NULL;
 
   pplayer->ai = NULL;
   pplayer->was_created = FALSE;
@@ -560,10 +565,6 @@ static void player_defaults(struct player *pplayer)
   pplayer->tile_known.bits = 0;
 
   pplayer->rgb = NULL;
-
-  multipliers_iterate(pmul) {
-    pplayer->multipliers[multiplier_index(pmul)] = pmul->def;
-  } multipliers_iterate_end;
 
   /* pplayer->server is initialised in
       ./server/plrhand.c:server_player_init()
@@ -653,7 +654,7 @@ void player_ruleset_close(struct player *pplayer)
   pplayer->government = NULL;
   pplayer->target_government = NULL;
   player_set_nation(pplayer, NULL);
-  pplayer->style = NULL;
+  pplayer->city_style = 0;
 }
 
 /****************************************************************************
@@ -746,7 +747,6 @@ struct player *player_by_number(const int player_id)
 /****************************************************************************
   Set the player's nation to the given nation (may be NULL).  Returns TRUE
   iff there was a change.
-  Doesn't check if the nation is legal wrt nationset.
 ****************************************************************************/
 bool player_set_nation(struct player *pplayer, struct nation_type *pnation)
 {
@@ -838,43 +838,6 @@ struct player *player_by_user(const char *name)
   return NULL;
 }
 
-/*************************************************************************
-  Check if pplayer could see all units on ptile if it had units.
-
-  See can_player_see_unit_at() for rules about when an unit is visible.
-**************************************************************************/
-bool can_player_see_hypotetic_units_at(const struct player *pplayer,
-                                       const struct tile *ptile)
-{
-  struct city *pcity;
-
-  /* Can't see invisible units. */
-  if (!fc_funcs->player_tile_vision_get(ptile, pplayer, V_INVIS)) {
-    return FALSE;
-  }
-
-  /* Can't see city units. */
-  pcity = tile_city(ptile);
-  if (pcity && !can_player_see_units_in_city(pplayer, pcity)
-      && unit_list_size(ptile->units) > 0) {
-    return FALSE;
-  }
-
-  /* Can't see non allied units in transports. */
-  unit_list_iterate(ptile->units, punit) {
-    if (unit_type(punit)->transport_capacity > 0
-        && unit_owner(punit) != pplayer) {
-
-      /* An ally could transport a non ally */
-      if (unit_list_size(punit->transporting) > 0) {
-        return FALSE;
-      }
-    }
-  } unit_list_iterate_end;
-
-  return TRUE;
-}
-
 /****************************************************************************
   Checks if a unit can be seen by pplayer at (x,y).
   A player can see a unit if he:
@@ -886,8 +849,7 @@ bool can_player_see_hypotetic_units_at(const struct player *pplayer,
 ****************************************************************************/
 bool can_player_see_unit_at(const struct player *pplayer,
 			    const struct unit *punit,
-                            const struct tile *ptile,
-                            bool is_transported)
+			    const struct tile *ptile)
 {
   struct city *pcity;
 
@@ -899,7 +861,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
   /* Don't show non-allied units that are in transports.  This is logical
    * because allied transports can also contain our units.  Shared vision
    * isn't taken into account. */
-  if (is_transported && unit_owner(punit) != pplayer
+  if (unit_transported(punit) && unit_owner(punit) != pplayer
       && !pplayers_allied(pplayer, unit_owner(punit))) {
     return FALSE;
   }
@@ -931,8 +893,7 @@ bool can_player_see_unit_at(const struct player *pplayer,
 bool can_player_see_unit(const struct player *pplayer,
 			 const struct unit *punit)
 {
-  return can_player_see_unit_at(pplayer, punit, unit_tile(punit),
-                                unit_transported(punit));
+  return can_player_see_unit_at(pplayer, punit, unit_tile(punit));
 }
 
 /****************************************************************************
@@ -1058,7 +1019,7 @@ bool player_in_city_map(const struct player *pplayer,
 int num_known_tech_with_flag(const struct player *pplayer,
                              enum tech_flag_id flag)
 {
-  return research_get(pplayer)->num_known_tech_with_flag[flag];
+  return player_research_get(pplayer)->num_known_tech_with_flag[flag];
 }
 
 /**************************************************************************
@@ -1136,6 +1097,20 @@ struct city *player_capital(const struct player *pplayer)
 }
 
 /**************************************************************************
+  AI players may have handicaps - allowing them to cheat or preventing
+  them from using certain algorithms.  This function returns whether the
+  player has the given handicap.  Human players are assumed to have no
+  handicaps.
+**************************************************************************/
+bool ai_handicap(const struct player *pplayer, enum handicap_type htype)
+{
+  if (!pplayer->ai_controlled) {
+    return TRUE;
+  }
+  return BV_ISSET(pplayer->ai_common.handicaps, htype);
+}
+
+/**************************************************************************
 Return the value normal_decision (a boolean), except if the AI is fuzzy,
 then sometimes flip the value.  The intention of this is that instead of
     if (condition) { action }
@@ -1164,13 +1139,13 @@ bool ai_fuzzy(const struct player *pplayer, bool normal_decision)
 
 /**************************************************************************
   Return a text describing an AI's love for you.  (Oooh, kinky!!)
+  These words should be adjectives which can fit in the sentence
+  "The x are y towards us"
+  "The Babylonians are respectful towards us"
 **************************************************************************/
 const char *love_text(const int love)
 {
   if (love <= - MAX_AI_LOVE * 90 / 100) {
-    /* TRANS: These words should be adjectives which can fit in the sentence
-       "The x are y towards us"
-       "The Babylonians are respectful towards us" */
     return Q_("?attitude:Genocidal");
   } else if (love <= - MAX_AI_LOVE * 70 / 100) {
     return Q_("?attitude:Belligerent");
@@ -1194,6 +1169,27 @@ const char *love_text(const int love)
     fc_assert(love > MAX_AI_LOVE * 90 / 100);
     return Q_("?attitude:Worshipful");
   }
+}
+
+/**************************************************************************
+  Return a diplomatic state as a human-readable string
+**************************************************************************/
+const char *diplstate_text(const enum diplstate_type type)
+{
+  static const char *ds_names[DS_LAST] = 
+  {
+    N_("?diplomatic_state:Armistice"),
+    N_("?diplomatic_state:War"), 
+    N_("?diplomatic_state:Cease-fire"),
+    N_("?diplomatic_state:Peace"),
+    N_("?diplomatic_state:Alliance"),
+    N_("?diplomatic_state:Never met"),
+    N_("?diplomatic_state:Team")
+  };
+
+  fc_assert_ret_val_msg(0 <= type && type < DS_LAST, NULL,
+                        "Bad diplstate_type: %d.", type);
+  return Q_(ds_names[type]);
 }
 
 /***************************************************************
@@ -1322,127 +1318,6 @@ bool are_diplstates_equal(const struct player_diplstate *pds1,
 	  && pds1->contact_turns_left == pds2->contact_turns_left);
 }
 
-/**************************************************************************
-  Return TRUE iff player1 has the diplomatic relation to player2
-**************************************************************************/
-bool is_diplrel_between(const struct player *player1,
-                        const struct player *player2,
-                        int diplrel)
-{
-  fc_assert(player1 != NULL);
-  fc_assert(player2 != NULL);
-
-  /* No relationship to it self. */
-  if (player1 == player2) {
-    return FALSE;
-  }
-
-  if (diplrel < DS_LAST) {
-    return player_diplstate_get(player1, player2)->type == diplrel;
-  }
-
-  switch (diplrel) {
-  case DRA_GIVES_SHARED_VISION:
-    return gives_shared_vision(player1, player2);
-  case DRA_RECEIVES_SHARED_VISION:
-    return gives_shared_vision(player2, player1);
-  case DRA_HOSTS_EMBASSY:
-    return player_has_embassy(player2, player1);
-  case DRA_HAS_EMBASSY:
-    return player_has_embassy(player1, player2);
-  case DRA_HOSTS_REAL_EMBASSY:
-    return player_has_real_embassy(player2, player1);
-  case DRA_HAS_REAL_EMBASSY:
-    return player_has_real_embassy(player1, player2);
-  case DRA_HAS_CASUS_BELLI:
-    return 0 < player_diplstate_get(player1, player2)->has_reason_to_cancel;
-  case DRA_PROVIDED_CASUS_BELLI:
-    return 0 < player_diplstate_get(player2, player1)->has_reason_to_cancel;
-  }
-
-  fc_assert_msg(FALSE, "diplrel_between(): invalid diplrel number %d.",
-                diplrel);
-
-  return FALSE;
-}
-
-/**************************************************************************
-  Return TRUE iff pplayer has the diplomatic relation to any living player
-**************************************************************************/
-bool is_diplrel_to_other(const struct player *pplayer, int diplrel)
-{
-  fc_assert(pplayer != NULL);
-
-  players_iterate_alive(oplayer) {
-    if (oplayer == pplayer) {
-      continue;
-    }
-    if (is_diplrel_between(pplayer, oplayer, diplrel)) {
-      return TRUE;
-    }
-  } players_iterate_alive_end;
-  return FALSE;
-}
-
-/**************************************************************************
-  Return the diplomatic relation that has the given (untranslated) rule
- name.
-**************************************************************************/
-int diplrel_by_rule_name(const char *value)
-{
-  /* Look for asymmetric diplomatic relations */
-  int diplrel = diplrel_asym_by_name(value, fc_strcasecmp);
-
-  if (diplrel != diplrel_asym_invalid()) {
-    return diplrel;
-  }
-
-  /* Look for symmetric diplomatic relations */
-  diplrel = diplstate_type_by_name(value, fc_strcasecmp);
-
-  /*
-   * Make sure DS_LAST isn't returned as DS_LAST is the first diplrel_asym.
-   *
-   * Can't happend now. This is in case that changes in the future. */
-  fc_assert_ret_val(diplrel != DS_LAST, diplrel_asym_invalid());
-
-  /*
-   * Make sure that diplrel_asym_invalid() is returned.
-   *
-   * Can't happend now. At the moment dpilrel_asym_invalid() is the same as
-   * diplstate_type_invalid(). This is in case that changes in the future.
-   */
-  if (diplrel != diplstate_type_invalid()) {
-    return diplrel;
-  }
-
-  return diplrel_asym_invalid();
-}
-
-/**************************************************************************
-  Return the (untranslated) rule name of the given diplomatic relation.
-**************************************************************************/
-const char *diplrel_rule_name(int value)
-{
-  if (value < DS_LAST) {
-    return diplstate_type_name(value);
-  } else {
-    return diplrel_asym_name(value);
-  }
-}
-
-/**************************************************************************
-  Return the translated name of the given diplomatic relation.
-**************************************************************************/
-const char *diplrel_name_translation(int value)
-{
-  if (value < DS_LAST) {
-    return diplstate_type_translated_name(value);
-  } else {
-    return _(diplrel_asym_name(value));
-  }
-}
-
 /***************************************************************************
   Return the number of pplayer2's visible units in pplayer's territory,
   from the point of view of pplayer.  Units that cannot be seen by pplayer
@@ -1486,6 +1361,54 @@ bool is_valid_username(const char *name)
           && fc_strcasecmp(name, ANON_USER_NAME) != 0);
 }
 
+/****************************************************************************
+  Returns AI level associated with level name
+****************************************************************************/
+enum ai_level ai_level_by_name(const char *name)
+{
+  enum ai_level level;
+
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
+    if (ai_level_names[level] != NULL) {
+      /* Only consider levels that really have names */
+      if (fc_strcasecmp(ai_level_names[level], name) == 0) {
+        return level;
+      }
+    }
+  }
+
+  /* No level matches name */
+  return AI_LEVEL_LAST;
+}
+
+/***************************************************************
+  Return localized name of the AI level
+***************************************************************/
+const char *ai_level_name(enum ai_level level)
+{
+  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+
+  if (ai_level_names[level] == NULL) {
+    return NULL;
+  }
+
+  return _(ai_level_names[level]);
+}
+
+/***************************************************************
+  Return cmd that sets given ai level
+***************************************************************/
+const char *ai_level_cmd(enum ai_level level)
+{
+  fc_assert_ret_val(level >= 0 && level < AI_LEVEL_LAST, NULL);
+
+  if (ai_level_names[level] == NULL) {
+    return NULL;
+  }
+
+  return ai_level_names[level];
+}
+
 /***************************************************************
   Return is AI can be set to given level
 ***************************************************************/
@@ -1496,7 +1419,8 @@ bool is_settable_ai_level(enum ai_level level)
     return FALSE;
   }
 
-  return TRUE;
+  /* It's usable if it has name */
+  return ai_level_cmd(level) != NULL;
 }
 
 /***************************************************************
@@ -1504,7 +1428,24 @@ bool is_settable_ai_level(enum ai_level level)
 ***************************************************************/
 int number_of_ai_levels(void)
 {
-  return AI_LEVEL_COUNT - 1; /* AI_LEVEL_AWAY is not real AI */
+  /* We determine this runtime instead of hardcoding correct answer.
+   * But as this is constant, we determine it only once. */
+  static int count = 0;
+  enum ai_level level;
+
+  if (count) {
+    /* Answer already known */
+    return count;
+  }
+
+  /* Determine how many levels are actually usable */
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
+    if (is_settable_ai_level(level)) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 /**************************************************************************

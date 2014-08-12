@@ -625,7 +625,7 @@ static SDL_Surface *create_unit_surface(struct unit *pUnit, bool support, int w,
                                 tileset_full_tile_width(tileset),
                                 tileset_full_tile_height(tileset));  
   
-  put_unit(pUnit, destcanvas, 1.0, 0, 0);
+  put_unit(pUnit, destcanvas, 0, 0);
   
   src_rect = get_smaller_surface_rect(destcanvas->surf);
   pSurf = create_surf_alpha(src_rect.w, src_rect.h, SDL_SWSURFACE);
@@ -725,7 +725,7 @@ static void create_present_supported_units_widget_list(struct unit_list *pList)
                 utype_name_translation(pUType),
                 pUType->attack_strength,
                 pUType->defense_strength,
-                move_points_text(pUType->move_rate, FALSE),
+                move_points_text(pUType->move_rate, NULL, NULL, FALSE),
                 (vetname != NULL ? "\n" : ""),
                 (vetname != NULL ? vetname : ""),
                 unit_activity_text(pUnit),
@@ -738,11 +738,11 @@ static void create_present_supported_units_widget_list(struct unit_list *pList)
 
       sz_strlcat(cBuf, "\n");
       sz_strlcat(cBuf, get_nearest_city_text(pNear_City, pCity_near_dist));
-      pSurf = adj_surf(create_unit_surface(pUnit, TRUE, w, h));
+      pSurf = adj_surf(create_unit_surface(pUnit, 1, w, h));
     } else {
-      pSurf = adj_surf(create_unit_surface(pUnit, FALSE, w, h));
+      pSurf = adj_surf(create_unit_surface(pUnit, 0, w, h));
     }
-
+        
     pStr = create_str16_from_char(cBuf, adj_font(10));
     pStr->style |= SF_CENTER;
     
@@ -1988,7 +1988,7 @@ static void redraw_info_city_dialog(struct widget *pCityWindow,
   step = 0;
   dest.x = pCityWindow->size.x + adj_size(10);
 
-  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+  for (i = 0; i < NUM_TRADE_ROUTES; i++) {
     if (pCity->trade[i]) {
       step += pCity->trade_value[i];
 

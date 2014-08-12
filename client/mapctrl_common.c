@@ -169,11 +169,10 @@ static void define_tiles_within_rectangle(bool append)
     }
   }
 
-  if (!(options.separate_unit_selection && found_any_cities)
+  if (!(separate_unit_selection && found_any_cities)
       && unit_list_size(units) > 0) {
     if (!append) {
       struct unit *punit = unit_list_get(units, 0);
-
       unit_focus_set(punit);
       unit_list_remove(units, punit);
     }
@@ -484,7 +483,7 @@ void release_goto_button(int canvas_x, int canvas_y)
 
   if (keyboardless_goto_active && hover_state == HOVER_GOTO && ptile) {
     do_unit_goto(ptile);
-    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, NULL, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, ORDER_LAST);
     update_unit_info_label(get_units_in_focus());
   }
   keyboardless_goto_active = FALSE;
@@ -625,7 +624,7 @@ void update_turn_done_button_state(void)
     if (waiting_for_end_turn
         || (NULL != client.conn.playing
             && client.conn.playing->ai_controlled
-            && !options.ai_manual_turn_done)) {
+            && !ai_manual_turn_done)) {
       send_turn_done();
     } else {
       update_turn_done_button(TRUE);

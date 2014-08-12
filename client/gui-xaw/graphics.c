@@ -85,7 +85,6 @@ void load_intro_gfx(void)
   int have_face;
   const char *motto = freeciv_motto();
   XFontSetExtents *exts;
-  const char *rev_ver = fc_svn_revision();
 
   /* metrics */
 
@@ -140,11 +139,9 @@ void load_intro_gfx(void)
 
   y += lin;
 
-  if (rev_ver != NULL) {
-    fc_snprintf(s, sizeof(s), "%s (%s)", VERSION_STRING, rev_ver);
-  } else {
-    fc_snprintf(s, sizeof(s), "%s", VERSION_STRING);
-  }
+  fc_snprintf(s, sizeof(s), "%d.%d.%d%s",
+	      MAJOR_VERSION, MINOR_VERSION,
+	      PATCH_VERSION, VERSION_LABEL);
   w = XmbTextEscapement(main_font_set, s, strlen(s));
   XSetForeground(display, font_gc,
 		 get_color(tileset, COLOR_OVERVIEW_UNKNOWN)->color.pixel);
@@ -666,12 +663,12 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
 		 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
 
   /* If we're using flags, put one on the tile */
-  if (!options.solid_color_behind_units) {
+  if(!solid_color_behind_units)  {
     struct sprite *flag = get_nation_flag_sprite(tileset, nation_of_player(client.conn.playing));
 
     XSetClipOrigin(display, civ_gc, 0,0);
     XSetClipMask(display, civ_gc, flag->mask);
-    XCopyArea(display, flag->pixmap, pm, civ_gc, 0, 0,
+    XCopyArea(display, flag->pixmap, pm, civ_gc, 0,0, 
     	      flag->width,flag->height, 0,0);
     XSetClipMask(display, civ_gc, None);
   }

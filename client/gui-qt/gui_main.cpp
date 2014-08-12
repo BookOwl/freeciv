@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,10 +16,6 @@
 #endif
 
 #ifdef AUDIO_SDL
-/* Though it would happily compile without this include,
- * it is needed for sound to work as long as SDL-1.2 mixer is
- * being used. It defines "main" macro to rename our main() so that
- * it can install SDL's own. */
 #include "SDL.h"
 #endif
 
@@ -27,8 +23,6 @@
 
 // Qt
 #include <QApplication>
-#include <QMessageBox>
-#include <QScrollBar>
 
 // utility
 #include "fciconv.h"
@@ -39,26 +33,13 @@
 #include "editgui_g.h"
 #include "ggz_g.h"
 #include "options.h"
-#include "tilespec.h"
-#include "sprite.h"
 
 // gui-qt
 #include "fc_client.h"
-#include "gui_main.h"
 #include "qtg_cxxside.h"
 
-
-static QApplication *qapp;
 static fc_client *freeciv_qt;
-const char *client_string = "gui-qt";
-
-const char * const gui_character_encoding = "UTF-8";
-const bool gui_use_transliteration = false;
-
-static QPixmap *unit_pixmap;
-
-void reset_unit_table(void);
-static void populate_unit_pixmap_table(void);
+static QApplication *qapp;
 
 /****************************************************************************
   Return fc_client instance
@@ -91,6 +72,7 @@ void qtg_ui_init()
 int main(int argc, char **argv)
 {
   setup_gui_funcs();
+
   return client_main(argc, argv);
 }
 
@@ -101,16 +83,8 @@ int main(int argc, char **argv)
 void qtg_ui_main(int argc, char *argv[])
 {
   qapp = new QApplication(argc, argv);
-  QPixmap *qpm = new QPixmap;
-  QIcon app_icon;
-
-  tileset_init(tileset);
-  tileset_load_tiles(tileset);
-  populate_unit_pixmap_table();
-  qpm = get_icon_sprite(tileset, ICON_FREECIV)->pm;
-  app_icon = ::QIcon(*qpm);
-  qapp->setWindowIcon(app_icon);
   freeciv_qt = new fc_client();
+
   freeciv_qt->main(qapp);
 }
 
@@ -136,7 +110,7 @@ void qtg_ui_exit()
 **************************************************************************/
 void qtg_real_conn_list_dialog_update()
 {
-  gui()->update_start_page();
+  /* PORTME */
 }
 
 /**************************************************************************
@@ -232,11 +206,11 @@ void qtg_real_focus_units_changed(void)
 ****************************************************************************/
 void qtg_add_idle_callback(void (callback)(void *), void *data)
 {
-  call_me_back *cb = new call_me_back; /* removed in mr_idler:idling() */
+  /* PORTME */
 
-  cb->callback = callback;
-  cb->data = data;
-  gui()->mr_idler.add_callback(cb);
+  /* This is a reasonable fallback if it's not ported. */
+  log_error("Unimplemented add_idle_callback.");
+  (callback)(data);
 }
 
 /****************************************************************************
@@ -287,78 +261,10 @@ void qtg_gui_ggz_embed_leave_table()
 void qtg_gui_ggz_embed_ensure_server()
 {}
 
-/****************************************************************************
+/**************************************************************************
   Updates a gui font style.
-****************************************************************************/
+**************************************************************************/
 void qtg_gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
-}
-
-/****************************************************************************
-  Returns gui type of the client
-****************************************************************************/
-enum gui_type qtg_get_gui_type()
-{
-  return GUI_QT;
-}
-
-/**************************************************************************
-  Called when the tileset is changed to reset the unit pixmap table.
-**************************************************************************/
-void reset_unit_table(void)
-{
- /* FIXME */
-}
-
-/**************************************************************************
-  Open dialog to confirm that user wants to quit client.
-**************************************************************************/
-void popup_quit_dialog()
-{
-  QMessageBox ask;
-  int ret;
-
-  ask.setText(_("Are you sure you want to quit?"));
-  ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
-  ask.setDefaultButton(QMessageBox::Cancel);
-  ask.setIcon(QMessageBox::Warning);
-  ret = ask.exec();
-
-  switch (ret) {
-  case QMessageBox::Cancel:
-    return;
-    break;
-  case QMessageBox::Ok:
-    qapp->quit();
-    break;
-  }
-}
-
-/**************************************************************************
-  Called to build the unit_below pixmap table.  This is the table on the
-  left of the screen that shows all of the inactive units in the current
-  tile.
-
-  It may be called again if the tileset changes.
-**************************************************************************/
-static void populate_unit_pixmap_table(void)
-{
-  unit_pixmap = new QPixmap(tileset_unit_width(tileset), 
-                            tileset_unit_height(tileset));
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void qtg_insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* There's separate entry about Qt in help menu.
-   * Should we enable this regardless? As then to place to find such information
-   * would be standard over clients. */
-
-  /*
-  cat_snprintf(outbuf, outlen, _("\nBuilt against Qt %s, using %s"),
-               QT_VERSION_STR, qVersion());
-  */
 }

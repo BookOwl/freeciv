@@ -47,7 +47,7 @@
                player_name(city_owner(_pcity)), _delta,                      \
                player_name(_pplayer),                                        \
                citizens_nation_get(_pcity, _pplayer->slot));
-void citizens_update(struct city *pcity, struct player *plr)
+void citizens_update(struct city *pcity)
 {
   int delta;
 
@@ -75,14 +75,9 @@ void citizens_update(struct city *pcity, struct player *plr)
   }
 
   if (delta > 0) {
-    if (plr != NULL) {
-      citizens_nation_add(pcity, plr->slot, delta);
-      log_citizens_add(pcity, delta, plr);
-    } else {
-      /* Add new citizens with the nationality of the current owner. */
-      citizens_nation_add(pcity, city_owner(pcity)->slot, delta);
-      log_citizens_add(pcity, delta, city_owner(pcity));
-    }
+    /* Add new citizens with the nationality of the current owner. */
+    citizens_nation_add(pcity, city_owner(pcity)->slot, delta);
+    log_citizens_add(pcity, delta, city_owner(pcity));
   } else {
     /* Removed citizens. */
     struct player_slot *city_nations[MAX_NUM_PLAYER_SLOTS];
@@ -166,59 +161,4 @@ void citizens_print(const struct city *pcity)
                  player_name(city_owner(pcity)), nationality,
                  player_name(pplayer));
   } citizens_iterate_end;
-}
-
-/*****************************************************************************
-  Return whether citizen should be converted this turn.
-*****************************************************************************/
-static bool citizen_convert_check(struct city *pcity)
-{
-  if (fc_rand(1000) + 1 > game.info.citizen_convert_speed) {
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/*****************************************************************************
-  Convert one (random) foreign citizen to the nationality of the owner.
-*****************************************************************************/
-void citizens_convert(struct city *pcity)
-{
-  struct player_slot *city_nations[MAX_NUM_PLAYER_SLOTS], *pslot;
-  struct player *pplayer;
-  int count = 0;
-
-  fc_assert_ret(pcity);
-
-  if (!game.info.citizen_nationality) {
-    return;
-  }
-
-  if (!citizen_convert_check(pcity)) {
-    return;
-  }
-
-  if (citizens_nation_foreign(pcity) == 0) {
-    /* Only our own citizens. */
-    return;
-  }
-
-  /* Create a list of foreign nationalities. */
-  citizens_foreign_iterate(pcity, pslot, nationality) {
-    if (nationality != 0) {
-      city_nations[count++] = pslot;
-    }
-  } citizens_foreign_iterate_end;
-
-  /* Now convert one citizens to the city owners nationality. */
-  pslot = city_nations[fc_rand(count)];
-  pplayer = player_slot_get_player(pslot);
-
-  fc_assert_ret(pplayer != NULL);
-
-  log_citizens("%s (size %d; %s): convert 1 citizen from %s",
-               city_name(pcity), city_size_get(pcity),
-               player_name(city_owner(pcity)), player_name(pplayer));
-  citizens_nation_move(pcity, pslot, city_owner(pcity)->slot, 1);
 }

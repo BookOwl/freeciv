@@ -51,7 +51,7 @@ glib_DEFUN([GLIB_LC_MESSAGES],
     AC_CACHE_CHECK([for LC_MESSAGES], am_cv_val_LC_MESSAGES,
       [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <locale.h>]], [[return LC_MESSAGES]])],[am_cv_val_LC_MESSAGES=yes],[am_cv_val_LC_MESSAGES=no])])
     if test $am_cv_val_LC_MESSAGES = yes; then
-      AC_DEFINE([HAVE_LC_MESSAGES], [1],
+      AC_DEFINE(HAVE_LC_MESSAGES, 1,
         [Define if your <locale.h> file defines LC_MESSAGES.])
     fi
   fi])
@@ -191,7 +191,7 @@ glib_DEFUN([GLIB_WITH_NLS],
       fi
   
       if test "$gt_cv_have_gettext" = "yes"; then
-	AC_DEFINE([HAVE_GETTEXT], [1],
+	AC_DEFINE(HAVE_GETTEXT,1,
 	  [Define if the GNU gettext() function is already present or preinstalled.])
 	GLIB_PATH_PROG_WITH_TEST(MSGFMT, msgfmt,
 	  [test -z "`$ac_dir/$ac_word -h 2>&1 | grep 'dv '`"], no)dnl
@@ -245,7 +245,7 @@ msgstr ""
     ])
 
     if test "$gt_cv_have_gettext" = "yes" ; then
-      AC_DEFINE([ENABLE_NLS], [1],
+      AC_DEFINE(ENABLE_NLS, 1,
         [always defined to indicate that i18n is enabled])
     fi
 
@@ -262,11 +262,12 @@ msgstr ""
       fi
     fi
 
-    AC_CONFIG_COMMANDS([default-1],[[for domain in $PODOMAINS ; do
-      case "$CONFIG_FILES" in *translations/${domain}/Makefile.in*)
-        sed -e "/POTFILES =/r translations/${domain}/POTFILES" translations/${domain}/Makefile.in > translations/${domain}/Makefile
-      esac
-    done]],[PODOMAINS="$PODOMAINS"])
+    # We need to process the po/ directory.
+    POSUB=po
+
+    AC_CONFIG_COMMANDS([default-1],[[case "$CONFIG_FILES" in *po/Makefile.in*)
+        sed -e "/POTFILES =/r po/POTFILES" po/Makefile.in > po/Makefile
+      esac]],[[]])
 
     dnl These rules are solely for the distribution goal.  While doing this
     dnl we only have to keep exactly one list of the available catalogs
@@ -356,28 +357,26 @@ glib_DEFUN([GLIB_GNU_GETTEXT],
    AC_SUBST(MKINSTALLDIRS)
 
    dnl Generate list of files to be processed by xgettext which will
-   dnl be included in translations/<domain>/Makefile.
-   for domain in $PODOMAINS ; do
-   test -d translations/${domain} || ${MKDIR_P} translations/${domain}
+   dnl be included in po/Makefile.
+   test -d po || mkdir po
    if test "x$srcdir" != "x."; then
      if test "x`echo $srcdir | sed 's@/.*@@'`" = "x"; then
        posrcprefix="$srcdir/"
      else
-       posrcprefix="../../$srcdir/"
+       posrcprefix="../$srcdir/"
      fi
    else
-     posrcprefix="../../"
+     posrcprefix="../"
    fi
-   rm -f translations/${domain}/POTFILES
+   rm -f po/POTFILES
    sed -e "/^#/d" -e "/^\$/d" -e "s,.*,	$posrcprefix& \\\\," -e "\$s/\(.*\) \\\\/\1/" \
-       < $srcdir/translations/${domain}/POTFILES.in > translations/${domain}/POTFILES
-   done
+	< $srcdir/po/POTFILES.in > po/POTFILES
   ])
 
 # AM_GLIB_DEFINE_LOCALEDIR(VARIABLE)
 # -------------------------------
 # Define VARIABLE to the location where catalog files will
-# be installed by translations/<domain>/Makefile.
+# be installed by po/Makefile.
 glib_DEFUN([GLIB_DEFINE_LOCALEDIR],
 [glib_REQUIRE([GLIB_GNU_GETTEXT])dnl
 glib_save_prefix="$prefix"
@@ -394,7 +393,7 @@ fi
 prefix="$glib_save_prefix"
 exec_prefix="$glib_save_exec_prefix"
 datarootdir="$glib_save_datarootdir"
-AC_DEFINE_UNQUOTED([$1], ["$localedir"],
+AC_DEFINE_UNQUOTED($1, "$localedir",
   [Define the location where the catalogs will be installed])
 ])
 

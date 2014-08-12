@@ -30,7 +30,6 @@
 
 /* common */
 #include "ai.h"
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "improvement.h"
@@ -38,7 +37,6 @@
 #include "packets.h"
 
 /* server */
-#include "citytools.h"
 #include "connecthand.h"
 #include "ggzserver.h"
 #include "maphand.h"
@@ -64,45 +62,45 @@
 #define startpos_list_iterate_end LIST_BOTH_ITERATE_END
 
 /****************************************************************************
-  Get role_id for given role character
-****************************************************************************/
-enum unit_role_id crole_to_role_id(char crole)
-{
-  switch(crole) {
-  case 'c':
-    return L_CITIES;
-  case 'w':
-    return L_SETTLERS;
-  case 'x':
-    return L_EXPLORER;
-  case 'k':
-    return L_GAMELOSS;
-  case 's':
-    return L_DIPLOMAT;
-  case 'f':
-    return L_FERRYBOAT;
-  case 'd':
-    return L_DEFEND_OK;
-  case 'D':
-    return L_DEFEND_GOOD;
-  case 'a':
-    return L_ATTACK_FAST;
-  case 'A':
-    return L_ATTACK_STRONG;
-  default: 
-    return 0;
-  }
-}
-
-/****************************************************************************
   Get unit_type for given role character
 ****************************************************************************/
 struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
 {
   struct unit_type *utype = NULL;
-  enum unit_role_id role = crole_to_role_id(crole);
+  enum unit_role_id role;
 
-  if (role == 0) {
+  switch(crole) {
+  case 'c':
+    role = L_CITIES;
+    break;
+  case 'w':
+    role = L_SETTLERS;
+    break;
+  case 'x':
+    role = L_EXPLORER;
+    break;
+  case 'k':
+    role = L_GAMELOSS;
+    break;
+  case 's':
+    role = L_DIPLOMAT;
+    break;
+  case 'f':
+    role = L_FERRYBOAT;
+    break;
+  case 'd':
+    role = L_DEFEND_OK;
+    break;
+  case 'D':
+    role = L_DEFEND_GOOD;
+    break;
+  case 'a':
+    role = L_ATTACK_FAST;
+    break;
+  case 'A':
+    role = L_ATTACK_STRONG;
+    break;
+  default: 
     fc_assert_ret_val(FALSE, NULL);
     return NULL;
   }
@@ -130,7 +128,6 @@ static struct tile *place_starting_unit(struct tile *starttile,
 {
   struct tile *ptile = NULL;
   struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-  bool hut_present = FALSE;
 
   if (utype != NULL) {
     iterate_outward(starttile, map.xsize + map.ysize, itertile) {
@@ -153,14 +150,8 @@ static struct tile *place_starting_unit(struct tile *starttile,
    * other cases, huts are avoided as start positions).  Remove any such hut,
    * and make sure to tell the client, since we may have already sent this
    * tile (with the hut) earlier: */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(ptile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
     log_verbose("Removed hut on start position for %s",
                 player_name(pplayer));
@@ -170,6 +161,19 @@ static struct tile *place_starting_unit(struct tile *starttile,
   map_show_circle(pplayer, ptile, game.server.init_vis_radius_sq);
 
   if (utype != NULL) {
+    /* We cannot currently handle sea units as start units.
+     * TODO: remove this code block when we can. */
+    if (utype_move_type(utype) == UMT_SEA) {
+      log_error("Sea moving start units are not yet supported, "
+                "%s not created.",
+                utype_rule_name(utype));
+      notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
+                    _("Sea moving start units are not yet supported. "
+                      "Nobody gets %s."),
+                    utype_name_translation(utype));
+      return NULL;
+    }
+
     (void) create_unit(pplayer, ptile, utype, FALSE, 0, 0);
     return ptile;
   }
@@ -211,12 +215,6 @@ void init_new_game(void)
   randomize_base64url_string(server.game_identifier,
                              sizeof(server.game_identifier));
 
-  /* Assign players to starting positions on the map.
-   * (In scenarios with restrictions on which nations can use which predefined
-   * start positions, this process tries to satisfy those restrictions, but
-   * does not guarantee to. Even if there is a solution to the matching
-   * problem, this algorithm may not find it.) */
-
   fc_assert(player_count() <= map_startpos_count());
 
   /* Convert the startposition hash table in a linked lists, as we mostly
@@ -240,8 +238,8 @@ void init_new_game(void)
   memset(player_startpos, 0, sizeof(player_startpos));
   log_verbose("Placing players at start positions.");
 
-  /* First assign start positions which have restrictions on which nations
-   * can use them. */
+  /* First assign start positions which requires certain nations only this
+   * one. */
   if (0 < startpos_list_size(targeted_list)) {
     log_verbose("Assigning matching nations.");
 
@@ -272,8 +270,6 @@ void init_new_game(void)
         } startpos_list_iterate_end;
 
         if (NULL != choice) {
-          /* Assign this start position to this player and remove
-           * both from consideration. */
           struct tile *ptile =
               startpos_tile(startpos_list_link_data(choice));
 
@@ -281,16 +277,14 @@ void init_new_game(void)
           startpos_list_erase(targeted_list, choice);
           players_to_place--;
           removed = TRUE;
-          log_verbose("Start position (%d, %d) exactly matches player %s (%s).",
+          log_verbose("Start position (%d, %d) matches player %s (%s).",
                       TILE_XY(ptile), player_name(pplayer),
                       nation_rule_name(pnation));
         }
       } players_iterate_end;
 
       if (!removed) {
-        /* Didn't find any 1:1 matches. For the next restricted start
-         * position, assign a random matching player. (This may create
-         * restrictions such that more 1:1 matches are possible.) */
+        /* Make arbitrary choice for a player. */
         struct startpos *psp = startpos_list_back(targeted_list);
         struct tile *ptile = startpos_tile(psp);
         struct player *rand_plr = NULL;
@@ -316,9 +310,7 @@ void init_new_game(void)
                       TILE_XY(ptile), player_name(rand_plr),
                       nation_rule_name(nation_of_player(rand_plr)));
         } else {
-          /* This start position cannot be assigned, given the assignments
-           * made so far. We may have to fall back to mismatched
-           * assignments. */
+          /* This start position cannot be assigned. */
           log_verbose("Start position (%d, %d) cannot be assigned for "
                       "any player, keeping for the moment...",
                       TILE_XY(ptile));
@@ -329,11 +321,11 @@ void init_new_game(void)
     } while (0 < players_to_place && 0 < startpos_list_size(targeted_list));
   }
 
-  /* Now assign unrestricted start positions to any remaining players. */
+  /* Now assign left start positions to every players. */
   if (0 < players_to_place && 0 < startpos_list_size(flexible_list)) {
     struct tile *ptile;
 
-    log_verbose("Assigning unrestricted start positions.");
+    log_verbose("Assigning random start positions.");
 
     startpos_list_shuffle(flexible_list); /* Randomize. */
     players_iterate(pplayer) {
@@ -356,14 +348,7 @@ void init_new_game(void)
   }
 
   if (0 < players_to_place && 0 < startpos_list_size(impossible_list)) {
-    /* We still have players to place, and we have some restricted start
-     * positions whose nation requirements can't be satisfied given existing
-     * assignments. Fall back to making assignments ignoring the positions'
-     * nation requirements. */
-
     struct tile *ptile;
-
-    log_verbose("Ignoring nation restrictions on remaining start positions.");
 
     startpos_list_shuffle(impossible_list); /* Randomize. */
     players_iterate(pplayer) {
@@ -376,8 +361,8 @@ void init_new_game(void)
       player_startpos[player_index(pplayer)] = ptile;
       players_to_place--;
       startpos_list_pop_front(impossible_list);
-      log_verbose("Start position (%d, %d) assigned to mismatched "
-                  "player %s (%s).", TILE_XY(ptile), player_name(pplayer),
+      log_verbose("Start position (%d, %d) assigned by default "
+                  "to player %s (%s).", TILE_XY(ptile), player_name(pplayer),
                   nation_rule_name(nation_of_player(pplayer)));
       if (0 == startpos_list_size(impossible_list)) {
         break;
@@ -402,12 +387,6 @@ void init_new_game(void)
     struct tile *ptile = player_startpos[player_index(pplayer)];
 
     fc_assert_action(NULL != ptile, continue);
-
-    /* Place first city */
-    if (game.server.start_city) {
-      create_city(pplayer, ptile, city_name_suggestion(pplayer, ptile),
-                  NULL);
-    }
 
     /* Place the first unit. */
     if (place_starting_unit(ptile, pplayer,
@@ -511,11 +490,13 @@ void send_game_info(struct conn_list *dest)
      * (and game.info.seconds_to_phasedone is relative to this).
      * Account for the difference. */
     ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
-        - timer_read_seconds(game.server.phase_timer);
+        - read_timer_seconds(game.server.phase_timer);
   } else {
     /* unused but at least initialized */
     ginfo.seconds_to_phasedone = -1.0;
   }
+
+  ginfo.trademindist_old = ginfo.trademindist_new;
 
   conn_list_iterate(dest, pconn) {
     send_packet_game_info(pconn, &ginfo);
@@ -605,7 +586,7 @@ int update_timeout(void)
 void increase_timeout_because_unit_moved(void)
 {
   if (game.info.timeout > 0 && game.server.timeoutaddenemymove > 0) {
-    double maxsec = (timer_read_seconds(game.server.phase_timer)
+    double maxsec = (read_timer_seconds(game.server.phase_timer)
 		     + (double) game.server.timeoutaddenemymove);
 
     if (maxsec > game.info.seconds_to_phasedone) {

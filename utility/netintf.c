@@ -348,11 +348,7 @@ static struct fc_sockaddr_list *net_lookup_getaddrinfo(const char *name,
       gafam = AF_INET6;
       break;
     case FC_ADDR_ANY:
-#ifndef IPV6_SUPPORT
-      gafam = AF_INET;
-#else
       gafam = AF_UNSPEC;
-#endif
       break;
     default:
       fc_assert(FALSE);
@@ -507,6 +503,118 @@ fz_FILE *fc_querysocket(int sock, void *buf, size_t size)
 #endif /* HAVE_FDOPEN */
 
   return fz_from_stream(fp);
+}
+
+/*************************************************************************
+  Returns a valid httpd server and port, plus the path to the resource
+  at the url location.
+*************************************************************************/
+const char *fc_lookup_httpd(char *server, int *port, const char *url)
+{
+  const char *purl, *str, *ppath, *pport;
+  const char *str2;
+  int chars_between = 0;
+
+  if ((purl = getenv("http_proxy")) && purl[0] != '\0') {
+    if (strncmp(purl, "http://", strlen("http://")) != 0) {
+      return NULL;
+    }
+    str = purl;
+  } else {
+    purl = NULL;
+    if (strncmp(url, "http://", strlen("http://")) != 0) {
+      return NULL;
+    }
+    str = url;
+  }
+
+  str += strlen("http://");
+
+  if (*str == '[') {
+    /* Literal IPv6 address (RFC 2732) */
+    str++;
+    str2 = strchr(str, ']') + 1;
+    if (!str2) {
+      str2 = str + strlen(str);
+    }
+    chars_between = 1;
+  } else {
+    str2 = str;
+  }
+
+  pport = strchr(str2, ':');
+  ppath = strchr(str2, '/');
+
+  /* snarf server. */
+  server[0] = '\0';
+
+  if (pport) {
+    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str-chars_between));
+  } else {
+    if (ppath) {
+      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str-chars_between));
+    } else {
+      strncat(server, str, MAX_LEN_ADDR);
+    }
+  }
+
+  /* snarf port. */
+  if (NULL == pport || !str_to_int(pport + 1, port)) {
+    *port = 80;
+  }
+
+  /* snarf path. */
+  if (!ppath) {
+    ppath = "/";
+  }
+
+  return (purl ? url : ppath);
+}
+
+/*************************************************************************
+  Returns TRUE if ch is an unreserved ASCII character.
+*************************************************************************/
+static bool is_url_safe(unsigned ch)
+{
+  const char *unreserved = "-_.!~*'|";
+
+  if ((ch>='a' && ch<='z') || (ch>='A' && ch<='Z') || (ch>='0' && ch<='9')) {
+    return TRUE;
+  } else {
+    return (strchr(unreserved, ch) != NULL);
+  }
+}
+
+/***************************************************************
+  URL-encode a string as per RFC 2396.
+  Should work for all ASCII based charsets: including UTF-8.
+***************************************************************/
+const char *fc_url_encode(const char *txt)
+{
+  static char buf[2048];
+  unsigned ch;
+  char *ptr;
+
+  /* in a worst case scenario every character needs "% HEX HEX" encoding. */
+  if (sizeof(buf) <= (3*strlen(txt))) {
+    return "";
+  }
+  
+  for (ptr = buf; *txt != '\0'; txt++) {
+    ch = (unsigned char) *txt;
+
+    if (is_url_safe(ch)) {
+      *ptr++ = *txt;
+    } else if (ch == ' ') {
+      *ptr++ = '+';
+    } else {
+      sprintf(ptr, "%%%2.2X", ch);
+      ptr += 3;
+    }
+  }
+  *ptr++ = '\0';
+
+  return buf;
 }
 
 /************************************************************************** 

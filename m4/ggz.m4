@@ -237,7 +237,7 @@ AC_DEFUN([AC_GGZ_VERSION],
 	save_ldflags=$LDFLAGS
 	save_cppflags=$CPPFLAGS
 	save_ldlibrary_path=$LD_LIBRARY_PATH
-	LDFLAGS=$LIBGGZ_ldflags
+	LDFLAGS=$LIBGGZ_LDFLAGS
 	LIBS=$LIB_GGZ
 	CPPFLAGS=$LIBGGZ_INCLUDES
 	LD_LIBRARY_PATH=$save_ldlibrary_path:$libggz_libraries
@@ -269,7 +269,7 @@ AC_DEFUN([AC_GGZ_VERSION],
 
 dnl ------------------------------------------------------------------------
 dnl Try to find the libggz headers and libraries.
-dnl $(LIBGGZ_ldflags) will be -L ... (if needed)
+dnl $(LIBGGZ_LDFLAGS) will be -L ... (if needed)
 dnl and $(LIBGGZ_INCLUDES) will be -I ... (if needed)
 dnl ------------------------------------------------------------------------
 dnl
@@ -349,10 +349,10 @@ else
   AC_SUBST(libggz_includes)
 
   LIBGGZ_INCLUDES="-I $libggz_includes"
-  LIBGGZ_ldflags="-L$libggz_libraries"
+  LIBGGZ_LDFLAGS="-L$libggz_libraries"
 
   AC_SUBST(LIBGGZ_INCLUDES)
-  AC_SUBST(LIBGGZ_ldflags)
+  AC_SUBST(LIBGGZ_LDFLAGS)
 
   LIB_GGZ='-lggz'
   AC_SUBST(LIB_GGZ)
@@ -506,8 +506,8 @@ if test "$have_ggz_config" != yes; then
     AC_SUBST(GGZ_CONFIG)
     AC_SUBST(ggzexecmoddir)
     AC_SUBST(ggzdatadir)
-    AC_DEFINE_UNQUOTED([GAMEDIR], ["${libdir}/ggz"], [Path where to install the games])
-    AC_DEFINE_UNQUOTED([GGZDATADIR], ["${datadir}/ggz"], [Path where the games should look for their data files])
+    AC_DEFINE_UNQUOTED(GAMEDIR, "${libdir}/ggz", [Path where to install the games])
+    AC_DEFINE_UNQUOTED(GGZDATADIR, "${datadir}/ggz", [Path where the games should look for their data files])
   else
     AC_MSG_RESULT([$have_ggz_config])
     if test "x$2" = "x"; then
@@ -533,9 +533,9 @@ else
     AC_SUBST(GGZ_CONFIG)
     AC_SUBST(ggzexecmoddir)
     AC_SUBST(ggzdatadir)
-    AC_DEFINE_UNQUOTED([GGZMODULECONFDIR], ["${sysconfdir}"], [Path where the game registry is located])
-    AC_DEFINE_UNQUOTED([GAMEDIR], ["${libdir}/ggz"], [Path where to install the games])
-    AC_DEFINE_UNQUOTED([GGZDATADIR], ["${datadir}/ggz"], [Path where the games should look for their data files])
+    AC_DEFINE_UNQUOTED(GGZMODULECONFDIR, "${sysconfdir}", [Path where the game registry is located])
+    AC_DEFINE_UNQUOTED(GAMEDIR, "${libdir}/ggz", [Path where to install the games])
+    AC_DEFINE_UNQUOTED(GGZDATADIR, "${datadir}/ggz", [Path where the games should look for their data files])
   else
     ac_cv_have_ggz_config="have_ggz_config=yes \
       ac_ggz_config=$ac_ggz_config"
@@ -555,13 +555,13 @@ else
     AC_SUBST(GGZ_CONFIG)
 
     ggzmoduleconfdir=`$GGZ_CONFIG --configdir`
-    AC_DEFINE_UNQUOTED([GGZMODULECONFDIR], ["${ggzmoduleconfdir}"], [Path where the game registry is located])
+    AC_DEFINE_UNQUOTED(GGZMODULECONFDIR, "${ggzmoduleconfdir}", [Path where the game registry is located])
     ggzexecmoddir=`$GGZ_CONFIG --gamedir`
-    AC_DEFINE_UNQUOTED([GAMEDIR], ["${ggzexecmoddir}"], [Path where to install the games])
+    AC_DEFINE_UNQUOTED(GAMEDIR, "${ggzexecmoddir}", [Path where to install the games])
     ggzdatadir=`$GGZ_CONFIG --datadir`
-    AC_DEFINE_UNQUOTED([GGZDATADIR], ["${ggzdatadir}"], [Path where the games should look for their data files])
+    AC_DEFINE_UNQUOTED(GGZDATADIR, "${ggzdatadir}", [Path where the games should look for their data files])
     packagesrcdir=`cd $srcdir && pwd`
-    AC_DEFINE_UNQUOTED([PACKAGE_SOURCE_DIR], ["${packagesrcdir}"], [Path where the source is located])
+    AC_DEFINE_UNQUOTED(PACKAGE_SOURCE_DIR, "${packagesrcdir}", [Path where the source is located])
 
     if test "$ggzmoduleconfdir" = ""; then
       AC_MSG_ERROR([ggz-config is unusable. Maybe LD_LIBRARY_PATH needs to be set.])
@@ -581,7 +581,7 @@ fi
 
 dnl ------------------------------------------------------------------------
 dnl Try to find the ggzmod headers and libraries.
-dnl $(GGZMOD_ldflags) will be -L ... (if needed)
+dnl $(GGZMOD_LDFLAGS) will be -L ... (if needed)
 dnl and $(GGZMOD_INCLUDES) will be -I ... (if needed)
 dnl ------------------------------------------------------------------------
 dnl
@@ -661,10 +661,10 @@ else
   AC_SUBST(ggzmod_includes)
 
   GGZMOD_INCLUDES="-I $ggzmod_includes"
-  GGZMOD_ldflags="-L$ggzmod_libraries"
+  GGZMOD_LDFLAGS="-L$ggzmod_libraries"
 
   AC_SUBST(GGZMOD_INCLUDES)
-  AC_SUBST(GGZMOD_ldflags)
+  AC_SUBST(GGZMOD_LDFLAGS)
 
   LIB_GGZMOD='-lggzmod'
   AC_SUBST(LIB_GGZMOD)
@@ -677,7 +677,7 @@ fi
 
 dnl ------------------------------------------------------------------------
 dnl Try to find the ggzdmod headers and libraries.
-dnl $(GGZDMOD_ldflags) will be -L ... (if needed)
+dnl $(GGZDMOD_LDFLAGS) will be -L ... (if needed)
 dnl and $(GGZDMOD_INCLUDES) will be -I ... (if needed)
 dnl ------------------------------------------------------------------------
 dnl
@@ -757,10 +757,10 @@ else
   AC_SUBST(ggzdmod_includes)
 
   GGZDMOD_INCLUDES="-I $ggzdmod_includes"
-  GGZDMOD_ldflags="-L$ggzdmod_libraries"
+  GGZDMOD_LDFLAGS="-L$ggzdmod_libraries"
 
   AC_SUBST(GGZDMOD_INCLUDES)
-  AC_SUBST(GGZDMOD_ldflags)
+  AC_SUBST(GGZDMOD_LDFLAGS)
 
   LIB_GGZDMOD='-lggzdmod'
   AC_SUBST(LIB_GGZDMOD)
@@ -853,10 +853,10 @@ else
   AC_SUBST(ggz_gtk_includes)
 
   GGZ_GTK_INCLUDES="-I $ggz_gtk_includes"
-  GGZ_GTK_ldflags="-L$ggz_gtk_libraries"
+  GGZ_GTK_LDFLAGS="-L$ggz_gtk_libraries"
 
   AC_SUBST(GGZ_GTK_INCLUDES)
-  AC_SUBST(GGZ_GTK_ldflags)
+  AC_SUBST(GGZ_GTK_LDFLAGS)
 
   LIB_GGZ_GTK='-lggz-gtk'
   AC_SUBST(LIB_GGZ_GTK)
@@ -952,7 +952,7 @@ if test "$have_ggzdconf" = yes || test "x$2" = "xforce"; then
 	AC_SUBST(ggzdconfdir)
 
 	ggzddatadir=${datadir}/${PACKAGE}
-	AC_DEFINE_UNQUOTED([GGZDDATADIR], ["${ggzddatadir}"], [Game server data directory])
+	AC_DEFINE_UNQUOTED(GGZDDATADIR, "${ggzddatadir}", [Game server data directory])
 	AC_SUBST(ggzddatadir)
 
 	if test "x${libdir}" = 'x${exec_prefix}/lib'; then
@@ -1011,7 +1011,7 @@ AC_DEFUN([AC_GGZ_CHECK_SERVER],
     fi
     if test "$ggz_server" = "yes"; then
       AC_GGZ_SERVER
-      AC_DEFINE([GGZ_SERVER], [1], [Server support for GGZ])
+      AC_DEFINE(GGZ_SERVER, 1, [Server support for GGZ])
     else
       if test "$try_ggz_server" = "yes"; then
         AC_MSG_ERROR([Could not configure GGZ server support. See above messages.])
@@ -1062,7 +1062,7 @@ AC_DEFUN([AC_GGZ_CHECK],
                     [ggz_client="no"])
     fi
     if test "$ggz_client" = "yes"; then
-      AC_DEFINE([GGZ_CLIENT], [1], [Client support for GGZ])
+      AC_DEFINE(GGZ_CLIENT, 1, [Client support for GGZ])
     else
       if test "$try_ggz_client" = "yes"; then
         AC_MSG_ERROR([Could not configure GGZ client support. See above messages.])
@@ -1075,7 +1075,7 @@ AC_DEFUN([AC_GGZ_CHECK],
     if test "x$1" = "xgtk"; then
       AC_GGZ_GTK([ggz_gtk="yes"])
       if test $ggz_gtk = "yes"; then
-        AC_DEFINE([GGZ_GTK], [1], [Support for embedded GGZ through libggz-gtk])
+        AC_DEFINE(GGZ_GTK, 1, [Support for embedded GGZ through libggz-gtk])
       fi
     fi
   fi
