@@ -71,7 +71,6 @@ extern char *scriptfile;
 extern char *savefile;
 extern char sound_plugin_name[512];
 extern char sound_set_name[512];
-extern char music_set_name[512];
 extern char server_host[512];
 extern char user_name[512];
 extern char password[MAX_LEN_PASSWORD];
@@ -80,10 +79,7 @@ extern int  server_port;
 extern bool auto_connect;
 extern bool auto_spawn;
 extern bool waiting_for_end_turn;
-
-#ifdef DEBUG
-extern bool hackless;
-#endif
+extern bool in_ggz;
 
 struct global_worklist_list;    /* Defined in global_worklist.[ch]. */
 

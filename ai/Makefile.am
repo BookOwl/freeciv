@@ -36,8 +36,5 @@ noinst_LTLIBRARIES = libaicommon.la
 
 libaicommon_la_SOURCES = \
 	aitraits.c	\
-	aitraits.h	\
-	difficulty.c	\
-	difficulty.h	\
-	handicaps.c	\
-	handicaps.h
+	aitraits.h
+

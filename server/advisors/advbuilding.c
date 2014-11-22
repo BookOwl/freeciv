@@ -19,7 +19,6 @@
 #include "rand.h"
 
 /* common */
-#include "ai.h"
 #include "city.h"
 #include "effects.h"
 #include "game.h"
@@ -40,9 +39,6 @@
 #include "advdata.h"
 #include "advtools.h"
 #include "infracache.h" /* adv_city */
-
-/* ai */
-#include "handicaps.h"
 
 #include "advbuilding.h"
 
@@ -83,7 +79,6 @@ static void calculate_city_clusters(struct player *pplayer)
 
     unit_tile_set(ghost, pcity->tile);
     pft_fill_unit_parameter(&parameter, ghost);
-    parameter.omniscience = !has_handicap(pplayer, H_MAP);
     pfm = pf_map_new(&parameter);
 
     pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
@@ -133,10 +128,10 @@ static void ba_human_wants(struct player *pplayer, struct city *wonder_city)
         if (pcity != wonder_city && is_wonder(pimprove)) {
           /* Only wonder city should build wonders! */
           pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
-        } else if (!is_coinage
-                    && (!can_city_build_improvement_later(pcity, pimprove)
-                        || (!is_improvement_productive(pcity, pimprove)))) {
-          /* Don't consider impossible or unproductive buildings */
+        } else if ((!is_coinage
+                    && !can_city_build_improvement_later(pcity, pimprove))
+                   || is_improvement_redundant(pcity, pimprove)) {
+          /* Don't consider impossible or redundant buildings */
           pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
         } else if (city_has_building(pcity, pimprove)) {
           /* Never want to build something we already have. */
@@ -157,7 +152,7 @@ static void ba_human_wants(struct player *pplayer, struct city *wonder_city)
   city_list_iterate(pplayer->cities, pcity) {
     improvement_iterate(pimprove) {
       if (pcity->server.adv->building_want[improvement_index(pimprove)] != 0) {
-        CITY_LOG(LOG_DEBUG, pcity, "want to build %s with " ADV_WANT_PRINTF, 
+        CITY_LOG(LOG_DEBUG, pcity, "want to build %s with %d", 
                  improvement_rule_name(pimprove),
                  pcity->server.adv->building_want[improvement_index(pimprove)]);
       }
@@ -191,8 +186,9 @@ void building_advisor(struct player *pplayer)
    || !is_wonder(wonder_city->production.value.building)
    || !can_city_build_improvement_now(wonder_city, 
                                       wonder_city->production.value.building)
-   || !is_improvement_productive(wonder_city,
-                                 wonder_city->production.value.building)) {
+   || is_improvement_redundant(wonder_city, 
+                               wonder_city->production.value.building)
+      ) {
     /* Find a new wonder city! */
     int best_candidate_value = 0;
     struct city *best_candidate = NULL;

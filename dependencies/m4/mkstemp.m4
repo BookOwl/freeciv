@@ -1,6 +1,6 @@
-#serial 23
+#serial 22
 
-# Copyright (C) 2001, 2003-2007, 2009-2014 Free Software Foundation, Inc.
+# Copyright (C) 2001, 2003-2007, 2009-2011 Free Software Foundation, Inc.
 # This file is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -16,7 +16,6 @@
 AC_DEFUN([gl_FUNC_MKSTEMP],
 [
   AC_REQUIRE([gl_STDLIB_H_DEFAULTS])
-  AC_REQUIRE([AC_CANONICAL_HOST]) dnl for cross-compiles
 
   AC_CHECK_FUNCS_ONCE([mkstemp])
   if test $ac_cv_func_mkstemp = yes; then
@@ -56,21 +55,12 @@ AC_DEFUN([gl_FUNC_MKSTEMP],
               return result;]])],
           [gl_cv_func_working_mkstemp=yes],
           [gl_cv_func_working_mkstemp=no],
-          [case "$host_os" in
-                     # Guess yes on glibc systems.
-             *-gnu*) gl_cv_func_working_mkstemp="guessing yes" ;;
-                     # If we don't know, assume the worst.
-             *)      gl_cv_func_working_mkstemp="guessing no" ;;
-           esac
-          ])
+          [gl_cv_func_working_mkstemp="guessing no"])
         rm -rf conftest.mkstemp
       ])
-    case "$gl_cv_func_working_mkstemp" in
-      *yes) ;;
-      *)
-        REPLACE_MKSTEMP=1
-        ;;
-    esac
+    if test "$gl_cv_func_working_mkstemp" != yes; then
+      REPLACE_MKSTEMP=1
+    fi
   else
     HAVE_MKSTEMP=0
   fi

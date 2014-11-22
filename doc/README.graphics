@@ -9,7 +9,7 @@ To use different graphics with Freeciv, use the '--tiles' argument to
 the Freeciv client. Eg, to use the 'engels' graphics, start the
 client as:
   
-    freeciv-gtk3 --tiles engels
+    freeciv-gtk2 --tiles engels
 
 What Freeciv actually does in this case is look for a file called
 'engels.tilespec' somewhere in your Freeciv data path. (See the file
@@ -97,27 +97,24 @@ options include:
                           height in isometric tileset
   small_tile_width      : the width of icon sprites
   small_tile_height     : the height of icon sprites
-  fog_style             : Specifies how fog is drawn.
-                          "Auto" :     Code automatically adds fog.
-                          "Sprite :    A single fog sprite is drawn on top of all
-                                       other sprites for fogged tiles. The
-                                       tx.fog sprite is used for this.
-                          "Darkness" : No fog, or fog from darkness_style = 4.
+  fogstyle              : Specifies how fog is drawn.
+                          0 : Code automatically adds fog.
+                          1 : A single fog sprite is drawn on top of all
+                              other sprites for fogged tiles. The
+                              tx.fog sprite is used for this.
+                          2 : No fog, or fog from darkness_style = 4.
   darkness_style        : Specifies how "encroaching darkness" is drawn.
-                          "None"           : No darkness.
-                          "IsoRect"        : A single sprite can be split into 4
-                                             parts, each containing the darkness
-                                             for that particular cardinal direction.
-                                             (Iso-view only.)
-                          "CardinalSingle" : Four different sprites exist, each
-                                             holding the darkness for a particular
-                                             direction. Any or all of the sprites
-                                             may be drawn.
-                          "CardinalFull"   : The sprite is chosen based on the vector
-                                             sum of the darkness in all 4 cardinal
-                                             directions. 15 different sprites are
-                                             needed.
-                          "Corner"         : Corner darkness & fog, 81 sprites needed.
+                          0 : No darkness.
+                          1 : A single sprite can be split into 4 parts, each
+                              containing the darkness for that particular
+                              cardinal direction. (Iso-view only.)
+                          2 : Four different sprites exist, each holding the
+                              darkness for a particular direction. Any or all
+                              of the sprites may be drawn.
+                          3 : The sprite is chosen based on the vector sum of
+                              the darkness in all 4 cardinal directions. 15
+                              different sprites are needed.
+                          4 : Corner darkness & fog, 81 sprites needed.
   unit_flag_offset_x   : Gives an offset from the tile origin at which to
   unit_flag_offset_y     draw flags behind units or cities. With isometric
   city_flag_offset_x     tilesets this should be non-zero so that the flag
@@ -219,33 +216,26 @@ more than 3 layers (either in this section or in the [tile_XXX] sections).
                            First letter of the match_type must be unique
                            within layer.
 
-  Extra options
+  Road options
   ------------
 
-  Tilespec should define style of extra graphics for each extra type in
-  section [extras] like:
+  Tilespec should define style of road graphics for each road type in
+  section [roads] like:
 
-  [extras]
+  [roads]
   styles =
-      { "name",          "style"
-        "road",          "RoadAllSeparate"
-        "rail",          "RoadAllSeparate"
-        "river",         "River"
-        "tx.irrigation", "Cardinals"
+      { "name", "style"
+        "road", "AllSeparate"
+        "rail", "AllSeparate"
       }
 
-  RoadAllSeparate    : A single sprite is drawn for every connection the tile has;
-                       only 8 sprites are needed.
-  RoadParityCombined : A single sprite is drawn for all cardinal connections and
-                       a second sprite is drawn for all diagonal connections;
-                       32 sprites are needed.
-  RoadAllCombined    : One sprite is drawn to show roads in all directions.
-                       There are thus 256 sprites (64 for a hex tileset).
-  River              : Cardinal connections are drawn, as well as delta at the coast
-  Single1            : Single sprite at layer Special1
-  Single2            : Single sprite at layer Special2
-  3Layer             : 3 Sprites, tagged <name>_bg, <name>_mg, and <name>_fg
-  Cardinals          : Sprite for each cardinal connection
+  AllSeparate    : A single sprite is drawn for every connection the tile has;
+                   only 8 sprites are needed.
+  ParityCombined : A single sprite is drawn for all cardinal connections and
+                   a second sprite is drawn for all diagonal connections;
+                   32 sprites are needed.
+  AllCombined    : One sprite is drawn to show roads in all directions.
+                   There are thus 256 sprites (64 for a hex tileset).
 
 ----------------------------------------------------------------------
 Individual spec files:
@@ -457,7 +447,8 @@ sprites.
     and irrigation. Additionally, there is support for drawing continuous
     farmland and irrigation (as is used in Civ3). Here there are 16
     irrigation sprites (and the same for farmland), starting with
-    tx.irrigation_n0s0e0w0 and running through tx.irrigation_n1s1e1w1.
+    tx.s_irrigation_n0s0e0w0 and running through tx.s_irrigation_n1s1e1w1.
     An appropriate sprite will be chosen depending on which adjacent tiles
     also have farmland/irrigation. If any of these sprites are not present,
     the default sprite will be used as a fallback.
+

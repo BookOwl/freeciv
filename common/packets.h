@@ -55,8 +55,17 @@ struct data_in;
 enum report_type {
   REPORT_WONDERS_OF_THE_WORLD,
   REPORT_TOP_5_CITIES,
-  REPORT_DEMOGRAPHIC,
-  REPORT_ACHIEVEMENTS
+  REPORT_DEMOGRAPHIC
+};
+
+/* Used in network protocol. */
+enum spaceship_place_type {
+  SSHIP_PLACE_STRUCTURAL,
+  SSHIP_PLACE_FUEL,
+  SSHIP_PLACE_PROPULSION,
+  SSHIP_PLACE_HABITATION,
+  SSHIP_PLACE_LIFE_SUPPORT,
+  SSHIP_PLACE_SOLAR_PANELS
 };
 
 /* Used in network protocol. */

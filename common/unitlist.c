@@ -123,22 +123,6 @@ bool can_units_do_activity(const struct unit_list *punits,
 }
 
 /****************************************************************************
-  Returns TRUE if any of the units can do the targeted activity.
-****************************************************************************/
-bool can_units_do_activity_targeted(const struct unit_list *punits,
-                                    enum unit_activity activity,
-                                    struct extra_type *pextra)
-{
-  unit_list_iterate(punits, punit) {
-    if (can_unit_do_activity_targeted(punit, activity, pextra)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
   Returns TRUE if any of the units can build any road.
 ****************************************************************************/
 bool can_units_do_any_road(const struct unit_list *punits)
@@ -149,6 +133,36 @@ bool can_units_do_any_road(const struct unit_list *punits)
         return TRUE;
       }
     } road_type_iterate_end;
+  } unit_list_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Returns TRUE if any of the units can do the base building activity
+****************************************************************************/
+bool can_units_do_base(const struct unit_list *punits,
+                       Base_type_id base)
+{
+  unit_list_iterate(punits, punit) {
+    if (can_unit_do_activity_base(punit, base)) {
+      return TRUE;
+    }
+  } unit_list_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Returns TRUE if any of the units can do the road building activity
+****************************************************************************/
+bool can_units_do_road(const struct unit_list *punits,
+                       Road_type_id road)
+{
+  unit_list_iterate(punits, punit) {
+    if (can_unit_do_activity_road(punit, road)) {
+      return TRUE;
+    }
   } unit_list_iterate_end;
 
   return FALSE;
@@ -166,6 +180,22 @@ bool can_units_do_base_gui(const struct unit_list *punits,
 
     if (pbase) {
       /* Some unit can build base of given gui_type */
+      return TRUE;
+    }
+  } unit_list_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Returns TRUE if any of the units can do the activity.
+****************************************************************************/
+bool can_units_do_diplomat_action(const struct unit_list *punits,
+				  enum diplomat_actions action)
+{
+  unit_list_iterate(punits, punit) {
+    if (is_diplomat_unit(punit)
+	&& diplomat_can_do_action(punit, action, unit_tile(punit))) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -211,7 +241,7 @@ bool units_are_occupied(const struct unit_list *punits)
 bool units_can_load(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (unit_can_load(punit)) {
+    if (transporter_for_unit(punit)) {
       return TRUE;
     }
   } unit_list_iterate_end;

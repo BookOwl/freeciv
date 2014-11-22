@@ -18,6 +18,7 @@
 /* client */
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 
 #include "chatline_g.h"
@@ -93,19 +94,19 @@ enum gui_type get_gui_type(void)
 }
 
 /**************************************************************************
-  Call  callback
+  Call isometric_view_supported callback
 **************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
+bool isometric_view_supported(void)
 {
-  funcs.insert_client_build_info(outbuf, outlen);
+  return funcs.isometric_view_supported();
 }
 
 /**************************************************************************
-  Call is_view_supported callback
+  Call overhead_view_supported callback
 **************************************************************************/
-bool is_view_supported(enum ts_type type)
+bool overhead_view_supported(void)
 {
-  return funcs.is_view_supported(type);
+  return funcs.overhead_view_supported();
 }
 
 /**************************************************************************
@@ -193,14 +194,6 @@ void canvas_free(struct canvas *store)
 }
 
 /**************************************************************************
-  Call canvas_set_zoom callback
-**************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  funcs.canvas_set_zoom(store, zoom);
-}
-
-/**************************************************************************
   Call canvas_copy callback
 **************************************************************************/
 void canvas_copy(struct canvas *dest, struct canvas *src,
@@ -263,6 +256,15 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
 			     int canvas_x, int canvas_y)
 {
   funcs.canvas_fill_sprite_area(pcanvas, psprite, pcolor, canvas_x, canvas_y);
+}
+
+/**************************************************************************
+  Call canvas_fog_sprite_area callback
+**************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  funcs.canvas_fog_sprite_area(pcanvas, psprite, canvas_x, canvas_y);
 }
 
 /**************************************************************************
@@ -481,6 +483,38 @@ void editgui_tileset_changed(void)
 void editgui_popdown_all(void)
 {
   funcs.editgui_popdown_all();
+}
+
+/**************************************************************************
+  Call gui_ggz_embed_ensure_server callback
+**************************************************************************/
+void gui_ggz_embed_ensure_server(void)
+{
+  funcs.gui_ggz_embed_ensure_server();
+}
+
+/**************************************************************************
+  Call add_ggz_input callback
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+  funcs.add_ggz_input(sock);
+}
+
+/**************************************************************************
+  Call remove_ggz_input callback
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  funcs.remove_ggz_input();
+}
+
+/****************************************************************************
+  Call gui_ggz_embed_leave_table callback
+****************************************************************************/
+void gui_ggz_embed_leave_table(void)
+{
+  funcs.gui_ggz_embed_leave_table();
 }
 
 /****************************************************************************

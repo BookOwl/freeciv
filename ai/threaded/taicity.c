@@ -27,9 +27,6 @@
 #include "unit.h"
 #include "workertask.h"
 
-/* server */
-#include "citytools.h"
-
 /* server/advisors */
 #include "autosettlers.h"
 #include "infracache.h"
@@ -56,18 +53,19 @@ struct tai_worker_task_req
 **************************************************************************/
 void tai_city_worker_requests_create(struct player *pplayer, struct city *pcity)
 {
-  struct worker_task *selected;
-  struct worker_task worked = { .ptile = NULL, .want = 0, .act = ACTIVITY_IDLE, .tgt = NULL };
-  struct worker_task unworked = { .ptile = NULL, .want = 0, .act = ACTIVITY_IDLE, .tgt = NULL };
-  int uw_max = 0;
-  int worst_worked = FC_INFINITY;
-  int old_worst_worked = FC_INFINITY;
+  struct worker_task task;
+
+  task.ptile = NULL;
+  task.want = 0;
+  /* The following values are always overridden if anything is chosen */
+  task.act = ACTIVITY_IDLE;
+  task.tgt.type = ATT_SPECIAL;
+  task.tgt.obj.spe = S_LAST;
 
   city_tile_iterate_index(city_map_radius_sq_get(pcity), city_tile(pcity),
                           ptile, cindex) {
     bool consider = TRUE;
     int orig_value;
-    bool potential_worst_worked = FALSE;
 
     if (!city_can_work_tile(pcity, ptile)) {
       continue;
@@ -88,12 +86,6 @@ void tai_city_worker_requests_create(struct player *pplayer, struct city *pcity)
 
     orig_value = city_tile_value(pcity, ptile, 0, 0);
 
-    if (tile_worked(ptile) == pcity
-        && orig_value < worst_worked) {
-      worst_worked = orig_value;
-      potential_worst_worked = TRUE;
-    }
-
     activity_type_iterate(act) {
       if (act == ACTIVITY_IRRIGATE
           || act == ACTIVITY_MINE
@@ -101,27 +93,12 @@ void tai_city_worker_requests_create(struct player *pplayer, struct city *pcity)
           || act == ACTIVITY_FALLOUT) {
         int value = adv_city_worker_act_get(pcity, cindex, act);
 
-        if (tile_worked(ptile) == pcity) {
-          if (value - orig_value > worked.want) {
-            worked.want  = value - orig_value;
-            worked.ptile = ptile;
-            worked.act   = act;
-            worked.tgt   = NULL;
-          }
-          if (value > old_worst_worked) {
-            /* After improvement it would not be the worst */
-            potential_worst_worked = FALSE;
-          } else {
-            worst_worked = value;
-          }
-        } else {
-          if (value > orig_value && value > uw_max) {
-            uw_max = value;
-            unworked.want  = value - orig_value;
-            unworked.ptile = ptile;
-            unworked.act   = act;
-            unworked.tgt   = NULL;
-          }
+        if (value - orig_value > task.want) {
+          task.want  = value - orig_value;
+          task.ptile = ptile;
+          task.act   = act;
+          task.tgt.type = ATT_SPECIAL;
+          task.tgt.obj.spe = S_LAST;
         }
       }
     } activity_type_iterate_end;
@@ -129,25 +106,22 @@ void tai_city_worker_requests_create(struct player *pplayer, struct city *pcity)
     road_type_iterate(proad) {
       int value;
       int extra;
-      struct extra_type *pextra;
 
       if (!player_can_build_road(proad, pplayer, ptile)) {
         continue;
       }
 
-      pextra = road_extra_get(proad);
-      value = adv_city_worker_extra_get(pcity, cindex, pextra);
+      value = adv_city_worker_road_get(pcity, cindex, proad);
 
-      if (road_provides_move_bonus(proad)) {
+      if (proad->move_mode != RMM_NO_BONUS) {
         int old_move_cost;
         int mc_multiplier = 1;
         int mc_divisor = 1;
-
         old_move_cost = tile_terrain(ptile)->movement_cost * SINGLE_MOVE;
 
         road_type_iterate(pold) {
           if (tile_has_road(ptile, pold)) {
-            if (road_provides_move_bonus(pold)
+            if (pold->move_mode != RMM_NO_BONUS
                 && pold->move_cost < old_move_cost) {
               old_move_cost = pold->move_cost;
             }
@@ -175,106 +149,44 @@ void tai_city_worker_requests_create(struct player *pplayer, struct city *pcity)
 
       value += extra;
 
-      if (tile_worked(ptile) == pcity) {
-        if (value - orig_value > worked.want) {
-          worked.want  = value - orig_value;
-          worked.ptile = ptile;
-          worked.act   = ACTIVITY_GEN_ROAD;
-          worked.tgt   = NULL;
-        }
-        if (value > old_worst_worked) {
-          /* After improvement it would not be the worst */
-          potential_worst_worked = FALSE;
-        } else {
-          worst_worked = value;
-        }
-      } else {
-        if (value > orig_value && value > uw_max) {
-          uw_max = value;
-          unworked.want  = value - orig_value;
-          unworked.ptile = ptile;
-          unworked.act   = ACTIVITY_GEN_ROAD;
-          unworked.tgt   = NULL;
-        }
+      if (value - orig_value > task.want) {
+        task.want  = value - orig_value;
+        task.ptile = ptile;
+        task.act   = ACTIVITY_GEN_ROAD;
+        task.tgt.type = ATT_ROAD;
+        task.tgt.obj.road = road_number(proad);
       }
     } road_type_iterate_end;
 
     base_type_iterate(pbase) {
       int value;
-      struct extra_type *pextra;
 
       if (!player_can_build_base(pbase, pplayer, ptile)) {
         continue;
       }
 
-      pextra = base_extra_get(pbase);
-      value = adv_city_worker_extra_get(pcity, cindex, pextra);
+      value = adv_city_worker_base_get(pcity, cindex, pbase);
 
-      if (tile_worked(ptile) == pcity) {
-        if (value - orig_value > worked.want) {
-          worked.want  = value - orig_value;
-          worked.ptile = ptile;
-          worked.act   = ACTIVITY_BASE;
-          worked.tgt   = NULL;
-        }
-        if (value > old_worst_worked) {
-          /* After improvement it would not be the worst */
-          potential_worst_worked = FALSE;
-        } else {
-          worst_worked = value;
-        }
-      } else {
-        if (value > orig_value && value > uw_max) {
-          uw_max = value;
-          unworked.want  = value - orig_value;
-          unworked.ptile = ptile;
-          unworked.act   = ACTIVITY_BASE;
-          unworked.tgt   = NULL;
-        }
+      if (value - orig_value > task.want) {
+        task.want  = value - orig_value;
+        task.ptile = ptile;
+        task.act   = ACTIVITY_BASE;
+        task.tgt.type = ATT_BASE;
+        task.tgt.obj.road = base_number(pbase);
       }
     } base_type_iterate_end;
-
-    if (potential_worst_worked) {
-      /* Would still be worst worked even if we improved *it*. */
-      old_worst_worked = worst_worked;
-    }
   } city_tile_iterate_end;
 
-  if (old_worst_worked < uw_max || worked.ptile == NULL) {
-    /* It's better to improve best yet unworked tile and take it to use after that,
-       than to improve already worked tile. */
-    selected = &unworked;
-  } else {
-    selected = &worked;
-  }
-
-  if (selected->ptile != NULL) {
+  if (task.ptile != NULL) {
     struct tai_worker_task_req *data = fc_malloc(sizeof(*data));
-    struct extra_type *target = NULL;
 
-    log_debug("%s: act %d at (%d,%d)", pcity->name, selected->act,
-              TILE_XY(selected->ptile));
-
-    if (selected->tgt == NULL) {
-      enum extra_cause cause = activity_to_extra_cause(selected->act);
-
-      if (cause != EC_NONE) {
-        target = next_extra_for_tile(selected->ptile, cause, pplayer, NULL);
-      } else {
-        enum extra_rmcause rmcause = activity_to_extra_rmcause(selected->act);
-
-        if (rmcause != ERM_NONE) {
-          target = prev_extra_in_tile(selected->ptile, rmcause, pplayer, NULL);
-        }
-      }
-    } else {
-      target = selected->tgt;
-    }
+    log_debug("%s: act %d at (%d,%d)", pcity->name, task.act,
+              TILE_XY(task.ptile));
 
     data->city_id = pcity->id;
-    data->task.ptile = selected->ptile;
-    data->task.act = selected->act;
-    data->task.tgt = target;
+    data->task.ptile = task.ptile;
+    data->task.act = task.act;
+    data->task.tgt = task.tgt;
 
     tai_send_req(TAI_REQ_WORKER_TASK, pplayer, data);
   }
@@ -295,11 +207,8 @@ void tai_req_worker_task_rcv(struct tai_req *req)
 
     log_debug("%s storing req for act %d at (%d,%d)",
               pcity->name, data->task.act, TILE_XY(data->task.ptile));
-    pcity->task_req.ptile = data->task.ptile;
-    pcity->task_req.act   = data->task.act;
-    pcity->task_req.tgt   = data->task.tgt;
-
-    /* Send info to observers */
-    package_and_send_worker_task(pcity);
+    pcity->server.task_req.ptile = data->task.ptile;
+    pcity->server.task_req.act   = data->task.act;
+    pcity->server.task_req.tgt   = data->task.tgt;
   }
 }

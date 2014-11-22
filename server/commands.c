@@ -318,14 +318,12 @@ static struct command commands[] = {
    CMD_ECHO_ADMINS, VCF_NONE, 0
   },
   {"create",	ALLOW_CTRL,
-   /* TRANS: translate text between <> and [] only */
-   N_("create <player name> [ai type]"),
+   /* TRANS: translate text between <> only */
+   N_("create <player-name> [ai type]"),
    N_("Create an AI player with a given name."),
    /* TRANS: don't translate text between single quotes */
    N_("With the 'create' command a new player with the given name is "
       "created.\n"
-      "If 'player name' is empty, random name will be assigned when the game "
-      "begins. Until then player will be known by id derived from its type.\n"
       "The 'ai type' parameter can be used to select which AI module will be "
       "used for the created player. This requires that Freeciv has been "
       "compiled with loadable AI module support and that the respective module "
@@ -342,16 +340,6 @@ static struct command commands[] = {
    N_("Set yourself in away mode. The AI will watch your back."),
    N_("The AI will govern your nation but do minimal changes."), NULL,
    CMD_ECHO_NONE, VCF_NONE, 50
-  },
-  {"handicapped",	ALLOW_CTRL,
-   /* TRANS: translate text between <> only */
-   N_("handicapped\n"
-      "handicapped <player-name>"),
-   N_("Set one or all AI players to 'handicapped'."),
-   N_("With no arguments, sets all AI players to skill level 'handicapped', "
-      "and sets the default level for any new AI players to 'handicapped'. "
-      "With an argument, sets the skill level for that player only."), NULL,
-   CMD_ECHO_ALL, VCF_NONE, 50
   },
   {"novice",	ALLOW_CTRL,
    /* TRANS: translate text between <> only */

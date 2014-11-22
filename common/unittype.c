@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,12 +28,11 @@
 #include "support.h"
 
 /* common */
-#include "ai.h"
 #include "game.h"
 #include "government.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
+#include "tech.h"
 #include "unitlist.h"
 
 #include "unittype.h"
@@ -218,16 +217,15 @@ bool unit_has_type_role(const struct unit *punit, enum unit_role_id role)
 }
 
 /****************************************************************************
-  Return whether the unit can take over enemy cities.
+  Return whether the unit can take over ennemy cities.
 ****************************************************************************/
 bool unit_can_take_over(const struct unit *punit)
 {
-  return unit_owner(punit)->ai_common.barbarian_type != ANIMAL_BARBARIAN
-    && utype_can_take_over(unit_type(punit));
+  return utype_can_take_over(unit_type(punit));
 }
 
 /****************************************************************************
-  Return whether the unit type can take over enemy cities.
+  Return whether the unit type can take over ennemy cities.
 ****************************************************************************/
 bool utype_can_take_over(const struct unit_type *punittype)
 {
@@ -257,228 +255,6 @@ bool utype_can_freely_unload(const struct unit_type *pcargotype,
 {
   return BV_ISSET(pcargotype->disembarks,
                   uclass_index(utype_class(ptranstype)));
-}
-
-/* Fake action representing any action at all. */
-#define ACTION_ANY ACTION_COUNT
-
-/* Cache of what generalized (ruleset defined) action enabler controlled
- * actions units of each type can perform. Checking if any action can be
- * done at all is done via the fake action ACTION_ANY. */
-static bv_unit_types unit_can_act_cache[ACTION_ANY + 1];
-
-/**************************************************************************
-  Cache what generalized (ruleset defined) action enabler controlled
-  actions a unit of the given type can perform.
-**************************************************************************/
-static void unit_can_act_cache_set(struct unit_type *putype)
-{
-  /* Clear old values. */
-  action_iterate(act_id) {
-    BV_CLR(unit_can_act_cache[act_id], utype_index(putype));
-  } action_iterate_end;
-  BV_CLR(unit_can_act_cache[ACTION_ANY], utype_index(putype));
-
-  /* See if the unit type can do an action controlled by generalized action
-   * enablers */
-  action_enablers_iterate(enabler) {
-    if (requirement_fulfilled_by_unit_type(putype,
-                                           &(enabler->actor_reqs))) {
-        BV_SET(unit_can_act_cache[enabler->action], utype_index(putype));
-        BV_SET(unit_can_act_cache[ACTION_ANY], utype_index(putype));
-      }
-  } action_enablers_iterate_end;
-}
-
-/**************************************************************************
-  Return TRUE iff units of this type can do actions controlled by
-  generalized (ruleset defined) action enablers.
-**************************************************************************/
-bool is_actor_unit_type(const struct unit_type *putype)
-{
-  return utype_can_do_action(putype, ACTION_ANY);
-}
-
-/**************************************************************************
-  Return TRUE iff units of the given type can do the specified generalized
-  (ruleset defined) action enabler controlled action.
-**************************************************************************/
-bool utype_can_do_action(const struct unit_type *putype,
-                         const int action_id)
-{
-  return BV_ISSET(unit_can_act_cache[action_id], utype_index(putype));
-}
-
-/* Cache if any action at all may be possible when the actor unit's state
- * is...
- * bit 0 to USP_COUNT - 1: Possible when the corresponding property is TRUE
- * bit USP_COUNT to ((USP_COUNT - 1) * 2): Possible when the corresponding
- * property is FALSE
- */
-BV_DEFINE(bv_unit_state_action_cache, ((USP_COUNT - 1) * 2));
-
-/* Caches for each unit type */
-static bv_unit_state_action_cache unit_state_action_cache[U_LAST];
-static bv_diplrel_all_reqs dipl_rel_action_cache[U_LAST][ACTION_COUNT];
-
-/**************************************************************************
-  Cache if any action may be possible for a unit of the type putype for
-  each unit state property. Since a unit state property could be ignored
-  both present and !present must be checked.
-**************************************************************************/
-static void unit_state_action_cache_set(struct unit_type *putype)
-{
-  struct requirement req;
-
-  /* The unit is not yet known to be allowed to perform any actions no
-   * matter what its unit state is. */
-  BV_CLR_ALL(unit_state_action_cache[utype_index(putype)]);
-
-  if (!is_actor_unit_type(putype)) {
-    /* Not an actor unit. */
-    return;
-  }
-
-  /* Common for every situation */
-  req.range = REQ_RANGE_LOCAL;
-  req.survives = FALSE;
-  req.source.kind = VUT_UNITSTATE;
-
-  for (req.source.value.unit_state = ustate_prop_begin();
-       req.source.value.unit_state != ustate_prop_end();
-       req.source.value.unit_state = ustate_prop_next(
-         req.source.value.unit_state)) {
-
-    /* No action will ever be possible in a specific unit state if the
-     * opposite unit state is required in all action enablers.
-     * No unit state except present and !present of the same property
-     * implies or conflicts with another so the tests can be simple. */
-    action_enablers_iterate(enabler) {
-      if (requirement_fulfilled_by_unit_type(putype,
-                                             &(enabler->actor_reqs))) {
-        /* Not required to be absent, so OK if present */
-        req.present = FALSE;
-        if (!is_req_in_vec(&req, &(enabler->actor_reqs))) {
-          BV_SET(unit_state_action_cache[utype_index(putype)],
-              requirement_unit_state_ereq(req.source.value.unit_state,
-                                         TRUE));
-        }
-
-        /* Not required to be present, so OK if absent */
-        req.present = TRUE;
-        if (!is_req_in_vec(&req, &(enabler->actor_reqs))) {
-          BV_SET(unit_state_action_cache[utype_index(putype)],
-                 requirement_unit_state_ereq(req.source.value.unit_state,
-                                            FALSE));
-        }
-      }
-    } action_enablers_iterate_end;
-  }
-}
-
-/**************************************************************************
-  Cache what actions may be possible for a unit of the type putype for
-  each local DiplRel variation. Since a diplomatic relationship could be
-  ignored both present and !present must be checked.
-
-  Note: since can_unit_act_when_local_diplrel_is() only supports querying
-  the local range no values for the other ranges are set.
-**************************************************************************/
-static void local_dipl_rel_action_cache_set(struct unit_type *putype)
-{
-  struct requirement req;
-  int putype_id = utype_index(putype);
-
-  /* The unit is not yet known to be allowed to perform any actions no
-   * matter what the diplomatic state is. */
-  action_iterate(action_id) {
-    BV_CLR_ALL(dipl_rel_action_cache[putype_id][action_id]);
-  } action_iterate_end;
-
-  if (!is_actor_unit_type(putype)) {
-    /* Not an actor unit. */
-    return;
-  }
-
-  /* Common for every situation */
-  req.range = REQ_RANGE_LOCAL;
-  req.survives = FALSE;
-  req.source.kind = VUT_DIPLREL;
-
-  /* DiplRel starts with diplstate_type and ends with diplrel_other */
-  for (req.source.value.diplrel = diplstate_type_begin();
-       req.source.value.diplrel != DRO_LAST;
-       req.source.value.diplrel++) {
-
-    /* No action will ever be possible in a specific diplomatic relation if
-     * its presence contradicts all action enablers.
-     * Everything was set to false above. It is therefore OK to only change
-     * the cache when units can do an action given a certain diplomatic
-     * relationship property value. */
-    action_enablers_iterate(enabler) {
-      if (requirement_fulfilled_by_unit_type(putype,
-                                             &(enabler->actor_reqs))) {
-        req.present = TRUE;
-        if (!does_req_contradicts_reqs(&req, &(enabler->actor_reqs))) {
-          BV_SET(dipl_rel_action_cache[putype_id][enabler->action],
-                 requirement_diplrel_ereq(req.source.value.unit_state,
-                                          REQ_RANGE_LOCAL, TRUE));
-        }
-
-        req.present = FALSE;
-        if (!does_req_contradicts_reqs(&req, &(enabler->actor_reqs))) {
-          BV_SET(dipl_rel_action_cache[putype_id][enabler->action],
-              requirement_diplrel_ereq(req.source.value.unit_state,
-                                       REQ_RANGE_LOCAL, FALSE));
-        }
-      }
-    } action_enablers_iterate_end;
-  }
-}
-
-/**************************************************************************
-  Cache if any action may be possible for a unit of the type putype given
-  the property tested for. Since a it could be ignored both present and
-  !present must be checked.
-**************************************************************************/
-void unit_type_action_cache_set(struct unit_type *ptype)
-{
-  unit_can_act_cache_set(ptype);
-  unit_state_action_cache_set(ptype);
-  local_dipl_rel_action_cache_set(ptype);
-}
-
-/**************************************************************************
-  Return TRUE iff there exists an (action enabler controlled) action that a
-  unit of the type punit_type can perform while its unit state property
-  prop has the value is_there.
-**************************************************************************/
-bool can_unit_act_when_ustate_is(const struct unit_type *punit_type,
-                                 const enum ustate_prop prop,
-                                 const bool is_there)
-{
-  return BV_ISSET(unit_state_action_cache[utype_index(punit_type)],
-      requirement_unit_state_ereq(prop, is_there));
-}
-
-/**************************************************************************
-  Return TRUE iff the given (action enabler controlled) action can be
-  performed by a unit of the given type while the given property of its
-  owner's diplomatic relationship to the target's owner has the given
-  value.
-
-  Note: since this only supports the local range no information for other
-  ranges are stored in dipl_rel_action_cache.
-**************************************************************************/
-bool can_utype_do_act_if_tgt_diplrel(const struct unit_type *punit_type,
-                                     const int action_id,
-                                     const int prop,
-                                     const bool is_there)
-{
-  int utype_id = utype_index(punit_type);
-
-  return BV_ISSET(dipl_rel_action_cache[utype_id][action_id],
-      requirement_diplrel_ereq(prop, REQ_RANGE_LOCAL, is_there));
 }
 
 /****************************************************************************
@@ -548,11 +324,19 @@ int unit_pop_value(const struct unit *punit)
 }
 
 /**************************************************************************
+  Return move type of the unit class
+**************************************************************************/
+enum unit_move_type uclass_move_type(const struct unit_class *pclass)
+{
+  return pclass->move_type;
+}
+
+/**************************************************************************
   Return move type of the unit type
 **************************************************************************/
 enum unit_move_type utype_move_type(const struct unit_type *punittype)
 {
-  return utype_class(punittype)->move_type;
+  return uclass_move_type(utype_class(punittype));
 }
 
 /**************************************************************************
@@ -871,9 +655,7 @@ bool can_player_build_unit_direct(const struct player *p,
       && punittype->need_government != government_of_player(p)) {
     return FALSE;
   }
-  if (research_invention_state(research_get(p),
-                               advance_number(punittype->require_advance))
-      != TECH_KNOWN) {
+  if (player_invention_state(p, advance_number(punittype->require_advance)) != TECH_KNOWN) {
     if (!is_barbarian(p)) {
       /* Normal players can never build units without knowing tech
        * requirements. */
@@ -1133,9 +915,7 @@ struct unit_type *best_role_unit(const struct city *pcity, int role)
 
   for(j=n_with_role[role]-1; j>=0; j--) {
     u = with_role[role][j];
-    if ((1 != utype_fuel(u) || uclass_has_flag(utype_class(u), UCF_MISSILE))
-        && can_city_build_unit_now(pcity, u)) {
-      /* Allow fuel==1 units when pathfinding can handle them. */
+    if (can_city_build_unit_now(pcity, u)) {
       return u;
     }
   }
@@ -1206,7 +986,6 @@ void unit_types_init(void)
     unit_types[i].helptext = NULL;
     unit_types[i].veteran = NULL;
     unit_types[i].bonuses = combat_bonus_list_new();
-    unit_types[i].disabled = FALSE;
   }
 }
 
@@ -1348,8 +1127,8 @@ void unit_classes_init(void)
   for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
     unit_classes[i].item_number = i;
     unit_classes[i].cache.refuel_bases = NULL;
-    unit_classes[i].cache.native_tile_extras = NULL;
-    unit_classes[i].cache.subset_movers = NULL;
+    unit_classes[i].cache.native_tile_bases = NULL;
+    unit_classes[i].cache.native_tile_roads = NULL;
   }
 }
 
@@ -1362,15 +1141,16 @@ void unit_classes_free(void)
 
   for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
     if (unit_classes[i].cache.refuel_bases != NULL) {
-      extra_type_list_destroy(unit_classes[i].cache.refuel_bases);
+      base_type_list_destroy(unit_classes[i].cache.refuel_bases);
       unit_classes[i].cache.refuel_bases = NULL;
     }
-    if (unit_classes[i].cache.native_tile_extras != NULL) {
-      extra_type_list_destroy(unit_classes[i].cache.native_tile_extras);
-      unit_classes[i].cache.native_tile_extras = NULL;
+    if (unit_classes[i].cache.native_tile_bases != NULL) {
+      base_type_list_destroy(unit_classes[i].cache.native_tile_bases);
+      unit_classes[i].cache.native_tile_bases = NULL;
     }
-    if (unit_classes[i].cache.subset_movers != NULL) {
-      unit_class_list_destroy(unit_classes[i].cache.subset_movers);
+    if (unit_classes[i].cache.native_tile_roads != NULL) {
+      road_type_list_destroy(unit_classes[i].cache.native_tile_roads);
+      unit_classes[i].cache.native_tile_roads = NULL;
     }
   }
 }
@@ -1523,154 +1303,23 @@ void utype_set_ai_data(struct unit_type *ptype, const struct ai_type *ai,
 ****************************************************************************/
 void set_unit_class_caches(struct unit_class *pclass)
 {
-  pclass->cache.refuel_bases = extra_type_list_new();
-  pclass->cache.native_tile_extras = extra_type_list_new();
-  pclass->cache.subset_movers = unit_class_list_new();
+  pclass->cache.refuel_bases = base_type_list_new();
+  pclass->cache.native_tile_bases = base_type_list_new();
+  pclass->cache.native_tile_roads = road_type_list_new();
 
-  extra_type_iterate(pextra) {
-    if (is_native_extra_to_uclass(pextra, pclass)) {
-      if (extra_has_flag(pextra, EF_REFUEL)) {
-        extra_type_list_append(pclass->cache.refuel_bases, pextra);
-      }
-      if (extra_has_flag(pextra, EF_NATIVE_TILE)) {
-        extra_type_list_append(pclass->cache.native_tile_extras, pextra);
+  base_type_iterate(pbase) {
+    if (is_native_base_to_uclass(pbase, pclass)) {
+      base_type_list_append(pclass->cache.refuel_bases, pbase);
+      if (base_has_flag(pbase, BF_NATIVE_TILE)) {
+        base_type_list_append(pclass->cache.native_tile_bases, pbase);
       }
     }
-  } extra_type_iterate_end;
+  } base_type_iterate_end;
 
-  unit_class_iterate(pcharge) {
-    bool subset_mover = TRUE;
-
-    terrain_type_iterate(pterrain) {
-      if (BV_ISSET(pterrain->native_to, uclass_index(pcharge))
-          && !BV_ISSET(pterrain->native_to, uclass_index(pclass))) {
-        subset_mover = FALSE;
-      }
-    } terrain_type_iterate_end;
-
-    if (subset_mover) {
-      extra_type_iterate(pextra) {
-        if (is_native_extra_to_uclass(pextra, pcharge)
-            && !is_native_extra_to_uclass(pextra, pclass)) {
-          subset_mover = FALSE;
-        }
-      } extra_type_list_iterate_end;
+  road_type_iterate(proad) {
+    if (is_native_road_to_uclass(proad, pclass)
+        && road_has_flag(proad, RF_NATIVE_TILE)) {
+      road_type_list_append(pclass->cache.native_tile_roads, proad);
     }
-
-    if (subset_mover) {
-      unit_class_list_append(pclass->cache.subset_movers, pcharge);
-    }
-  } unit_class_iterate_end;
-}
-
-/**************************************************************************
-  What move types nativity of this extra will give?
-**************************************************************************/
-static enum unit_move_type move_type_from_extra(struct extra_type *pextra,
-                                                struct unit_class *puc)
-{
-  bool land_allowed = TRUE;
-  bool sea_allowed = TRUE;
-
-  if (!extra_has_flag(pextra, EF_NATIVE_TILE)) {
-    return unit_move_type_invalid();
-  }
-  if (!is_native_extra_to_uclass(pextra, puc)) {
-    return unit_move_type_invalid();
-  }
-
-  if (is_extra_caused_by(pextra, EC_ROAD)
-      && road_has_flag(extra_road_get(pextra), RF_RIVER)) {
-    /* Natural rivers are created to land only */
-    sea_allowed = FALSE;
-  }
-
-  requirement_vector_iterate(&pextra->reqs, preq) {
-    if (preq->source.kind == VUT_TERRAINCLASS) {
-      if (!preq->present) {
-        if (preq->source.value.terrainclass == TC_LAND) {
-          land_allowed = FALSE;
-        } else if (preq->source.value.terrainclass == TC_OCEAN) {
-          sea_allowed = FALSE;
-        }
-      } else {
-        if (preq->source.value.terrainclass == TC_LAND) {
-          sea_allowed = FALSE;
-        } else if (preq->source.value.terrainclass == TC_OCEAN) {
-          land_allowed = FALSE;
-        }
-      }
-    } else if (preq->source.kind == VUT_TERRAIN) {
-     if (!preq->present) {
-        if (preq->source.value.terrain->tclass == TC_LAND) {
-          land_allowed = FALSE;
-        } else if (preq->source.value.terrain->tclass == TC_OCEAN) {
-          sea_allowed = FALSE;
-        }
-      } else {
-        if (preq->source.value.terrain->tclass == TC_LAND) {
-          sea_allowed = FALSE;
-        } else if (preq->source.value.terrain->tclass == TC_OCEAN) {
-          land_allowed = FALSE;
-        }
-      }
-    }
-  } requirement_vector_iterate_end;
-
-  if (land_allowed && sea_allowed) {
-    return UMT_BOTH;
-  }
-  if (land_allowed && !sea_allowed) {
-    return UMT_LAND;
-  }
-  if (!land_allowed && sea_allowed) {
-    return UMT_SEA;
-  }
-
-  return unit_move_type_invalid();
-}
-
-/****************************************************************************
-  Set move_type for unit class.
-****************************************************************************/
-void set_unit_move_type(struct unit_class *puclass)
-{
-  bool land_moving = FALSE;
-  bool sea_moving = FALSE;
-
-  extra_type_iterate(pextra) {
-    enum unit_move_type eut = move_type_from_extra(pextra, puclass);
-
-    if (eut == UMT_BOTH) {
-      land_moving = TRUE;
-      sea_moving = TRUE;
-    } else if (eut == UMT_LAND) {
-      land_moving = TRUE;
-    } else if (eut == UMT_SEA) {
-      sea_moving = TRUE;
-    }
-  } extra_type_iterate_end;
-
-  terrain_type_iterate(pterrain) {
-    bv_extras extras;
-
-    BV_CLR_ALL(extras);
-
-    if (is_native_to_class(puclass, pterrain, extras)) {
-      if (is_ocean(pterrain)) {
-        sea_moving = TRUE;
-      } else {
-        land_moving = TRUE;
-      }
-    }
-  } terrain_type_iterate_end;
-
-  if (land_moving && sea_moving) {
-    puclass->move_type = UMT_BOTH;
-  } else if (sea_moving) {
-    puclass->move_type = UMT_SEA;
-  } else {
-    /* If unit has no native terrains, it is considered land moving */
-    puclass->move_type = UMT_LAND;
-  }
+  } road_type_iterate_end;
 }

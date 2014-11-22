@@ -25,7 +25,7 @@ leaders = {
 
 flag = "miskito" 
 flag_alt = "-" 
-style = "Tropical"
+city_style = "Tropical"
 
 ruler_titles =
 { "government",     "male_title",       "female_title"

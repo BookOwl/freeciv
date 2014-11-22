@@ -33,7 +33,7 @@ ruler_titles = {
 }
 flag         = "taino"
 flag_alt     = "-"
-style        = "Tropical"
+city_style   = "Tropical"
 
 init_techs=""
 init_buildings=""

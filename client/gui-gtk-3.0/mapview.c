@@ -143,7 +143,7 @@ void update_info_label(void)
   }
 
   gtk_label_set_text(GTK_LABEL(main_label_info),
-                     get_info_label_text(!options.gui_gtk3_small_display_layout));
+                     get_info_label_text(!gui_gtk3_small_display_layout));
 
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
@@ -288,7 +288,7 @@ void get_overview_area_dimensions(int *width, int *height)
 void overview_size_changed(void)
 {
   gtk_widget_set_size_request(overview_canvas,
-                              options.overview.width, options.overview.height);
+			      overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 }
 
@@ -315,11 +315,11 @@ struct canvas *get_overview_window(void)
 gboolean overview_canvas_draw(GtkWidget *w, cairo_t *cr, gpointer data)
 {
   gpointer source = (can_client_change_view()) ?
-                     (gpointer)options.overview.window : (gpointer)radar_gfx_sprite;
+                     (gpointer)overview.window : (gpointer)radar_gfx_sprite;
 
   if (source) {
     cairo_surface_t *surface = (can_client_change_view()) ?
-                                options.overview.window->surface :
+                                overview.window->surface :
                                 radar_gfx_sprite->surface;
 
     cairo_set_source_surface(cr, surface, 0, 0);
@@ -365,7 +365,6 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
                               gpointer data)
 {
   map_canvas_resized(ev->width, ev->height);
-
   return TRUE;
 }
 
@@ -463,7 +462,7 @@ void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
 
   gtk_pixcomm_clear(p);
 
-  put_unit(punit, &canvas_store, 1.0, 0, 0);
+  put_unit(punit, &canvas_store, 0, 0);
 }
 
 
@@ -487,7 +486,7 @@ void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
 /**************************************************************************
   Put overlay tile to pixmap
 **************************************************************************/
-void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
+void pixmap_put_overlay_tile(GdkWindow *pixmap,
 			     int canvas_x, int canvas_y,
 			     struct sprite *ssprite)
 {
@@ -498,7 +497,6 @@ void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
   }
 
   cr = gdk_cairo_create(pixmap);
-  cairo_scale(cr, zoom, zoom);
   cairo_set_source_surface(cr, ssprite->surface, canvas_x, canvas_y);
   cairo_paint(cr);
   cairo_destroy(cr);
@@ -583,7 +581,7 @@ void put_cross_overlay_tile(struct tile *ptile)
   int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
-    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas), map_zoom,
+    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas),
 			    canvas_x, canvas_y,
 			    get_attention_crosshair_sprite(tileset));
   }

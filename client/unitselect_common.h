@@ -27,8 +27,10 @@ struct usdata {
 };
 
 #define SPECHASH_TAG usdata
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct usdata *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct usdata *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 #define usdata_hash_data_iterate(phash, data)                                \

@@ -46,7 +46,7 @@ ruler_titles = {
 
 flag="ireland"
 flag_alt = "-"
-style = "Celtic"
+city_style = "Celtic"
 
 init_techs=""
 init_buildings=""

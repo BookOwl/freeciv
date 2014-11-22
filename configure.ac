@@ -67,7 +67,7 @@ AC_DEFINE_UNQUOTED([FREECIV_DISTRIBUTOR], ["$FREECIV_DISTRIBUTOR"],
                    [Distribution this freeciv is built for])
 
 dnl Initialize automake stuff
-AM_INIT_AUTOMAKE([subdir-objects dist-bzip2 dist-zip])
+AM_INIT_AUTOMAKE([dist-bzip2 dist-zip])
 
 dnl Use Automake 1.11 silent rules by default if available
 dnl verbose build using  make V=1
@@ -193,13 +193,6 @@ AC_ARG_WITH([followtag],
 [FOLLOWTAG=${withval}])
 AC_DEFINE_UNQUOTED([FOLLOWTAG], ["${FOLLOWTAG}"], [Version tag to follow])
 
-AC_ARG_WITH([modlist],
-  AS_HELP_STRING([--with-modlist], [default modlist URL]),
-[modlist_url=${withval}])
-if test "x$modlist_url" != "x" ; then
-  AC_DEFINE_UNQUOTED([MODPACK_LIST_URL], ["${modlist_url}"], [Default modpack list URL])
-fi
-
 AC_ARG_WITH([desktopdir],
   AS_HELP_STRING([--with-desktopdir], [install desktop files to given dir]),
 [ DESKTOPDIR=${withval} ], [ DESKTOPDIR="\$(prefix)/share/applications" ])
@@ -243,40 +236,19 @@ dnl checks for MagickWand mapimg support
 dnl sets MAPIMG_WAND_CFLAGS, MAPIMG_WAND_LIBS
 FC_MAPIMG_MAGICKWAND
 
-AC_ARG_ENABLE([fcweb],
-  AS_HELP_STRING([--enable-fcweb], [build fcweb version of server [false]]),
-[case "${enableval}" in
-  yes)
-    fcweb=true ;;
-  no)
-    fcweb=false ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fcweb]) ;;
-esac], [fcweb=false])
-
-FC_WEB_CLIENT
-
 dnl no:   Do not compile client.
 dnl auto: Autodetect one.
 dnl all:  Autodetect as many as possible.
 dnl comma-separated-list: Detect these or abort.
 AC_ARG_ENABLE([client],
-  AS_HELP_STRING([--enable-client=auto/all/gtk2/gtk3/sdl/sdl2/xaw/qt/stub],
+  AS_HELP_STRING([--enable-client=auto/all/gtk2/gtk3/sdl/xaw/qt/stub],
                  [clients to compile [auto](list for multiple)]),
 [clients=${enableval}],
 [client=auto])
 
-if test "x$fcweb" = "xtrue" ; then
-  if test "x$clients" != "x" && test "x$clients" != "xauto" &&
-     test "x$clients" != "xno" ; then
-    AC_MSG_ERROR([One cannot enable any clients for freeciv-web build])
-  fi
-  clients=no
-fi
-
 gui_gtk2=no
 gui_gtk3=no
 gui_sdl=no
-gui_sdl2=no
 gui_xaw=no
 gui_qt=no
 gui_stub=no
@@ -300,8 +272,8 @@ for gui in $(echo $clients | $SED 's/,/ /g') ; do
          test "x$gui" = "xgtk-3.0" ; then
       gui_gtk3=yes
     elif test "x$gui" = "xgtk" ; then
-      AC_MSG_WARN([for requested client 'gtk' enabled gtk3-client, that has changed since earlier versions])
-      gui_gtk3=yes
+      AC_MSG_WARN([for requested client 'gtk' enabled gtk2-client, but that default changes in the future])
+      gui_gtk2=yes
     else
       if test ! -d "${srcdir}/client/gui-$gui" ; then
         AC_MSG_ERROR(bad value ${gui} for --enable-client)
@@ -497,7 +469,7 @@ dnl Check for libiconv (which is usually included in glibc, but may be
 dnl distributed separately).  The libcharset check must come after the
 dnl iconv check.  This whole thing must come before the gettext check below.
 AM_ICONV
-FC_LIBCHARSET
+AM_LIBCHARSET
 AM_LANGINFO_CODESET
 if test "$am_cv_func_iconv" != yes; then
   AC_MSG_ERROR([Iconv is missing. You can get libiconv from http://gnu.org/, \
@@ -508,31 +480,129 @@ LIBS="$LIBS $LIBICONV"
 dnl I18n support
 ALL_LINGUAS="ar bg cs ca da de el en_GB eo es et fa fi fr ga gd he hu id it ja 
 ko lt nl nb pl pt pt_BR ro ru sr sv tr uk zh_CN zh_TW"
-PODOMAINS="freeciv nations ruledit"
+PODOMAINS="freeciv nations"
 
-AM_GNU_GETTEXT([external], [need-ngettext])
+AC_ARG_ENABLE([nls],
+  AS_HELP_STRING([--disable-nls], [do not add localization support]),
+[case "${enableval}" in
+  yes) USE_NLS=yes ;;
+  no)  USE_NLS=no  ;;
+
+  dnl NLS disabled, but 'make dist' allowed. That dist will lack
+  dnl all generated localization files.
+  no-gmo-dist) USE_NLS=no
+               FORCE_DIST=yes ;;
+  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-nls]) ;;
+esac], [USE_NLS=yes])
+
+if test "$USE_NLS" = "yes" ; then
+  AM_GLIB_GNU_GETTEXT
+
+  dnl AM_GLIB_GNU_GETTEXT doesn't have all features we want
+  dnl or they don't behave correctly.
+  dnl Old gettext binaries don't understand plurals. (ngettext, msgid_plural)
+  dnl and there are some problems with missing ngettext.
+  dnl Is that ngettext part still true? AM_GLIB_GNU_GETTEXT does check for it
+
+  have_working_ngettext=0
+  AC_CHECK_LIB(c, ngettext,
+    [AC_MSG_CHECKING(whether libc's ngettext works at runtime)
+     FC_CHECK_NGETTEXT_RUNTIME(,have_working_ngettext=1,)],)
+
+  if test "$have_working_ngettext" = "0"; then
+    AC_CHECK_LIB([intl], [ngettext],
+      [AC_MSG_CHECKING([whether libintl's ngettext works at runtime])
+       FC_CHECK_NGETTEXT_RUNTIME(["-lintl"],[have_working_ngettext=1
+UTILITY_LIBS="${UTILITY_LIBS} -lintl"],)],)
+  fi
+
+  if test "$have_working_ngettext" = "0"; then
+    AC_MSG_ERROR(I haven't found a working ngettext function in your system. 
+Try --disable-nls. Read ABOUT-NLS.)
+  fi
+
+  if test "$IS_BETA_VERSION" = "1" || test "$IS_DEVEL_VERSION" = "1"; then
+    AC_MSG_CHECKING(for GNU xgettext version >= 0.10.36)
+    xgettext_version=`$XGETTEXT --version 2>&1 | grep GNU | head -n 1 | sed 's/"/ /g'`
+    AC_RUN_IFELSE([AC_LANG_SOURCE([[
+#include <stdio.h>
+
+const char *version = "$xgettext_version";
+int main()
+{
+  const char *p = version;
+  int major = 0, minor = 0, patch = 0;
+
+  while (*p != '\0' && (*p < '0' || *p > '9')) {
+    p++;
+  }
+  if (*p == '\0') {
+    return 1;
+  }
+  sscanf(p, "%d.%d.%d", &major, &minor, &patch);
+  if (major < 1 && (minor < 10 || (minor == 10 && patch < 36))) {
+    return 1;
+  }
+  return 0;
+}
+    ]])],[AC_MSG_RESULT(yes)
+    ],[
+     AC_MSG_RESULT(no)
+     AC_MSG_WARN(You may have problems with creating pox files. \
+Please update your gettext package.)   
+    
+    ],[echo error
+    ])
+
+    AC_MSG_CHECKING(for GNU msgfmt version >= 0.10.35)
+    msgfmt_version=`$MSGFMT --version 2>&1 | grep GNU | head -n 1 | sed 's/"/ /g'`
+    AC_RUN_IFELSE([AC_LANG_SOURCE([[
+#include <stdio.h>
+
+const char *version = "$msgfmt_version";
+
+int main()
+{
+  const char *p = version;
+  int major = 0, minor = 0, patch = 0;
+
+  while (*p != '\0' && (*p < '0' || *p > '9')) {
+    p++;
+  }
+  if (*p == '\0') {
+    return 1;
+  }
+  sscanf(p, "%d.%d.%d", &major, &minor, &patch);
+  if (major < 1 && (minor < 10 || (minor == 10 && patch < 35))) {
+    return 1;
+  }
+  return 0;
+}
+    ]])],[AC_MSG_RESULT(yes)
+    ],[
+    AC_MSG_RESULT(no)
+    AC_MSG_ERROR(You are unable to create *.gmo files.
+This is development version which doesn't include them. Please update your
+gettext package. We recommend you versions >= 0.10.38. Or use 
+--disable-nls instead.)
+    
+    ],[echo error
+    ])
+  fi
+else
+  dnl Setup POFILES even when NLS disabled.
+  dnl AM_GLIB_GNU_GETTEXT does this when NLS enabled.
+  for lang in $ALL_LINGUAS; do
+    POFILES="$POFILES $lang.po"
+  done
+  AC_SUBST([POFILES])
+fi
 
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([CURL], [libcurl >= 7.9.7],,
     [AC_MSG_ERROR([libcurl development files required])])
 UTILITY_CFLAGS="${UTILITY_CFLAGS} ${CURL_CFLAGS}"
 UTILITY_LIBS="${UTILITY_LIBS} ${CURL_LIBS}"
-
-AC_ARG_ENABLE([xml-registry],
-  AS_HELP_STRING([--enable-xml-registry], [build xml-backend for registry (WIP)]),
-[case "${enableval}" in
-  yes) XMLREGISTRY=yes ;;
-  no)  XMLREGISTRY=no  ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-xml-registry]) ;;
-esac], [XMLREGISTRY=no])
-
-if test "x$XMLREGISTRY" = "xyes" ; then
-  PKG_CHECK_MODULES([LIBXML2], [libxml-2.0],,
-      [AC_MSG_ERROR([libxml2 development files required])])
-  UTILITY_CFLAGS="${UTILITY_CFLAGS} ${LIBXML2_CFLAGS}"
-  UTILITY_LIBS="${UTILITY_LIBS} ${LIBXML2_LIBS}"
-  AC_DEFINE([HAVE_XML_REGISTRY], [1], [Build xml-backend for registry])
-fi
 
 dnl Set debug flags supported by compiler
 EXTRA_DEBUG_CFLAGS=""
@@ -548,10 +618,6 @@ AC_C99_VARIABLE_ARRAYS
 AC_C99_INITIALIZERS
 AC_C99_STDINT_H
 
-FC_C11_STATIC_ASSERT
-FC_C11_AT_QUICK_EXIT
-
-FC_CXX11_STATIC_ASSERT
 FC_CXX11_NULLPTR
 
 dnl BeOS-specific settings
@@ -665,8 +731,6 @@ if test "x$libxz_available" != "xtrue" ; then
   feature_xz=missing
 fi
 
-UTILITY_LIBS="${UTILITY_LIBS} ${LTLIBINTL}"
-
 AC_SUBST([UTILITY_CFLAGS])
 AC_SUBST([UTILITY_LIBS])
 AC_SUBST([COMMON_LIBS])
@@ -674,8 +738,7 @@ AC_SUBST([COMMON_LIBS])
 AC_ARG_ENABLE([crosser],
   AS_HELP_STRING([--enable-crosser], [build version to be used with crosser environment]),
 [case "${enableval}" in
-  yes) crosser=yes 
-       AC_DEFINE([CROSSER], [1], [this is crosser based build]) ;;
+  yes) crosser=yes ;;
   no)  crosser=no ;;
   *)   AC_MSG_ERROR([bad value ${enableval} for --enable-crosser]) ;;
 esac], [crosser=no])
@@ -745,17 +808,14 @@ if test "x$client" != "xno"; then
     AS_MESSAGE([checking for which clients to compile:...])
   fi
 
-  dnl Gtk-3.0-specific overrides
-  FC_GTK3_CLIENT
-
   dnl Gtk-2.0-specific overrides
   FC_GTK2_CLIENT
 
+  dnl Gtk-3.0-specific overrides
+  FC_GTK3_CLIENT
+
   dnl SDL-specific overrides
   FC_SDL_CLIENT
-
-  dnl SDL2-specific overrides
-  FC_SDL2_CLIENT
 
   dnl Xaw-specific overrides
   FC_XAW_CLIENT
@@ -765,11 +825,17 @@ if test "x$client" != "xno"; then
 
   dnl Stub-specific overrides
   if test "x$gui_stub" = "xyes" || test "x$client" = "xall" ; then
-    gui_stub=yes
-    if test "x$client" = "xauto" ; then
-      client=yes
+    found_client=yes
+
+    if test "x$found_client" = "xyes"; then
+      gui_stub=yes
+      if test "x$client" = "xauto" ; then
+        client=yes
+      fi
+      gui_stub_libs="-lm"
+    elif test "x$gui_stub" = "xyes"; then
+      AC_MSG_ERROR(specified client 'stub' not configurable)
     fi
-    gui_stub_libs="-lm"
   fi
 
   dnl If client still "auto", error out since we couldn't select any of them
@@ -782,7 +848,6 @@ if test "x$client" = "xall" ; then
   if test "x$gui_gtk2" = "xyes" ||
      test "x$gui_gtk3" = "xyes" ||
      test "x$gui_sdl" = "xyes" ||
-     test "x$gui_sdl2" = "xyes" ||
      test "x$gui_xaw" = "xyes" ||
      test "x$gui_qt" = "xyes" ||
      test "x$gui_stub" = "xyes" ; then
@@ -790,6 +855,22 @@ if test "x$client" = "xall" ; then
   else
     client=no
   fi
+fi
+
+dnl Check for GGZ
+if test "x$gui_gtk2" = "xyes" || test "x$gui_gtk3" = "xyes" ; then
+  AC_GGZ_CHECK("gtk")
+  if test "x$gui_gtk2" = "xyes" ; then
+    gui_gtk2_LIBS="$gui_gtk2_libs $LIB_GGZ_GTK"
+  fi
+  if test "x$gui_gtk3" = "xyes" ; then
+    gui_gtk3_libs="$gui_gtk3_libs $LIB_GGZ_GTK"
+  fi
+else
+  AC_GGZ_CHECK
+fi
+if test "$ggz_server" = "yes" ; then
+  AC_CHECK_FUNCS([chdir mkdtemp])
 fi
 
 FC_LD_FLAGS(["-Wl,-rpath=${lib_prefix}"], [], [LDFLAGS])
@@ -846,32 +927,6 @@ for mp in $(echo $fc_mp | $SED 's/,/ /g') ; do
   fi
 done
 
-if test "x$req_fcmp_gtk3" = "xyes" ||
-   test "x$modinst" = "xall" || test "x$modinst" = "xauto" ; then
-  AM_PATH_GTK_3_0([3.8.0],
-[
-  PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
-[
-  fcmp_gtk3=yes
-  fcmp_list="$fcmp_list gtk3"
-  mp_gtk3_cflags="$GTK3_CFLAGS $GHTREAD_CFLAGS"
-  mp_gtk3_libs="$GTK3_LIBS $GTHREAD_LIBS"
-  if test "x$MINGW32" = "xyes"; then
-    dnl Required to compile gtk3 on Windows platform
-    mp_gtk3_cflags="$mp_gtk3_cflags -mms-bitfields"
-    mp_gtk3_ldflags="$mp_gtk3_ldflags -mwindows"
-  fi
-
-  if test "x$modinst" = "xauto" ; then
-    modinst=found
-  fi
-])])
-fi
-
-if test "x$req_fcmp_gtk3" = "xyes" && test "x$fcmp_gtk3" != "xyes" ; then
-  AC_MSG_ERROR([Cannot build gtk3-version of freeciv-modpack as requested])
-fi
-
 if test "x$req_fcmp_gtk2" = "xyes" ||
    test "x$modinst" = "xauto" || test "x$modinst" = "xall" ; then
   AM_PATH_GTK_2_0([2.12.0],
@@ -896,6 +951,32 @@ fi
 
 if test "x$req_fcmp_gtk2" = "xyes" && test "x$fcmp_gtk2" != "xyes" ; then
   AC_MSG_ERROR([Cannot build gtk2-version of freeciv-modpack as requested])
+fi
+
+if test "x$req_fcmp_gtk3" = "xyes" ||
+   test "x$modinst" = "xall" || test "x$modinst" = "xauto" ; then
+  AM_PATH_GTK_3_0([3.0.0],
+[
+  PKG_CHECK_MODULES([GTHREAD], [gthread-2.0],
+[
+  fcmp_gtk3=yes
+  fcmp_list="$fcmp_list gtk3"
+  mp_gtk3_cflags="$GTK3_CFLAGS $GHTREAD_CFLAGS"
+  mp_gtk3_libs="$GTK3_LIBS $GTHREAD_LIBS"
+  if test "x$MINGW32" = "xyes"; then
+    dnl Required to compile gtk3 on Windows platform
+    mp_gtk3_cflags="$mp_gtk3_cflags -mms-bitfields"
+    mp_gtk3_ldflags="$mp_gtk3_ldflags -mwindows"
+  fi
+
+  if test "x$modinst" = "xauto" ; then
+    modinst=found
+  fi
+])])
+fi
+
+if test "x$req_fcmp_gtk3" = "xyes" && test "x$fcmp_gtk3" != "xyes" ; then
+  AC_MSG_ERROR([Cannot build gtk3-version of freeciv-modpack as requested])
 fi
 
 if test "x$req_fcmp_qt" = "xyes" ||
@@ -955,40 +1036,6 @@ AM_CONDITIONAL([MODINST_GTK2], [test "x$fcmp_gtk2" = "xyes"])
 AM_CONDITIONAL([MODINST_QT], [test "x$fcmp_qt" = "xyes"])
 AM_CONDITIONAL([MODINST_CLI], [test "x$fcmp_cli" = "xyes"])
 
-AC_ARG_ENABLE([ruledit],
-  AS_HELP_STRING([--enable-ruledit], [build freeciv-ruledit (WIP)]),
-[case "${enableval}" in
-  yes)  ruledit=yes ;;
-  no)   ruledit=no ;;
-  test) ruledit=test ;;
-  experimental)
-        AC_DEFINE([RULEDIT_EXPERIMENTAL], [1], [build experimental features to freeciv-ruledit])
-        ruledit=yes ;;
-  *)   AC_MSG_ERROR([bad value ${enableval} for --enable-ruledit]) ;;
-esac], [ruledit=test])
-if test "x$ruledit" = "xyes" || test "x$ruledit" = "xtest" ; then
-  if test "x$cxx_works" = "xyes" ; then
-    FC_QT5
-
-    if test "x$fc_qt5_usable" = "xtrue" ; then
-      ruledit_cppflags=$FC_QT5_CPPFLAGS
-      ruledit_cxxflags=$FC_QT5_CXXFLAGS
-      ruledit_libs=$FC_QT5_LIBS
-      ruledit=yes
-    elif test "x$ruledit" = "xyes" ; then
-      AC_MSG_ERROR([Qt5 not found for building freeciv-ruledit])
-    fi
-  elif test "x$ruledit" = "xyes" ; then
-    AC_MSG_ERROR([No working C++ compiler found for building freeciv-ruledit])
-  fi
-fi
-if test "x$ruledit" = "xtest" ; then
-  dnl Still not set to 'yes' so failed tests
-  ruledit=no
-  feature_ruledit=missing
-fi
-AM_CONDITIONAL([RULEDIT], [test "x$ruledit" = "xyes"])
-
 AC_SUBST([gui_gtk2_cflags])
 AC_SUBST([gui_gtk2_libs])
 AC_SUBST([gui_gtk2_ldflags])
@@ -998,9 +1045,6 @@ AC_SUBST([gui_gtk3_ldflags])
 AC_SUBST([gui_sdl_cflags])
 AC_SUBST([gui_sdl_libs])
 AC_SUBST([gui_sdl_ldflags])
-AC_SUBST([gui_sdl2_cflags])
-AC_SUBST([gui_sdl2_libs])
-AC_SUBST([gui_sdl2_ldflags])
 AC_SUBST([gui_xaw_cflags])
 AC_SUBST([gui_xaw_libs])
 AC_SUBST([gui_xaw_ldflags])
@@ -1024,9 +1068,6 @@ AC_SUBST([mp_gtk3_ldflags])
 AC_SUBST([mp_qt_cppflags])
 AC_SUBST([mp_qt_cxxflags])
 AC_SUBST([mp_qt_libs])
-AC_SUBST([ruledit_cppflags])
-AC_SUBST([ruledit_cxxflags])
-AC_SUBST([ruledit_libs])
 AC_SUBST([SOUND_CFLAGS])
 AC_SUBST([SOUND_LIBS])
 AC_SUBST([VERSION_WITHOUT_LABEL])
@@ -1034,7 +1075,6 @@ AC_SUBST([VERSION_LABEL])
 AC_SUBST([HOST_PATH_SEPARATOR])
 AM_CONDITIONAL(AUDIO_SDL, test "x$SDL_mixer" != "xno")
 AM_CONDITIONAL(CLIENT_GUI_SDL, test "x$gui_sdl" = "xyes")
-AM_CONDITIONAL(CLIENT_GUI_SDL2, test "x$gui_sdl2" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_2_0, test "x$gui_gtk2" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_GTK_3_0, test "x$gui_gtk3" = "xyes")
 AM_CONDITIONAL(CLIENT_GUI_XAW, test "x$gui_xaw" = "xyes")
@@ -1194,8 +1234,15 @@ if test -n "$WITH_EFENCE"; then
   fi])
 fi
 
+dnl Checks needed for Lua. Get rid of these if system lua is ever used.
+gl_FUNC_MKSTEMP
+if test x$gl_cv_func_working_mkstemp = xyes ; then
+  AC_DEFINE([HAVE_MKSTEMP], [1], [Have working mkstemp])
+fi
+AC_CHECK_FUNCS([isatty popen _longjmp _setjmp])
+
 AC_ARG_ENABLE([sys-lua],
-  AS_HELP_STRING([--enable-sys-lua], [use lua from system instead of one from freeciv tree [test]]),
+  AS_HELP_STRING([--enable-sys-lua], [use lua from system instead of one from freeciv tree [false]]),
 [case "${enableval}" in
   yes)
     sys_lua=true ;;
@@ -1204,7 +1251,7 @@ AC_ARG_ENABLE([sys-lua],
   test)
     sys_lua=test ;;
   *)   AC_MSG_ERROR([bad value ${enableval} for --enable-sys-lua]) ;;
-esac], [sys_lua=test])
+esac], [sys_lua=false])
 
 dnl There's wide divergence on what the pkg-config file for Lua is called
 dnl See http://lua-users.org/lists/lua-l/2008-09/msg00184.html
@@ -1219,14 +1266,7 @@ feature_syslua=missing
 sys_lua=false])])])
 fi
 
-if test "x$sys_lua" != "xtrue" ; then
-  dnl Checks needed for included lua.
-  gl_FUNC_MKSTEMP
-  if test x$gl_cv_func_working_mkstemp = xyes ; then
-    AC_DEFINE([HAVE_MKSTEMP], [1], [Have working mkstemp])
-  fi
-  AC_CHECK_FUNCS([isatty popen _longjmp _setjmp])
-
+if test "x$sys_lua" = "xfalse" ; then
   LUA_CFLAGS="-I\$(top_srcdir)/dependencies/lua-5.2/src"
   LUA_LIBS="\$(top_builddir)/dependencies/lua-5.2/src/liblua.la"
 fi
@@ -1255,42 +1295,13 @@ if test x$enable_fcdb = xyes ; then
   AC_SUBST([LUASQL_AS_DEPENDENCY])
 fi
 
-AC_ARG_ENABLE([sys-tolua-cmd],
-  AS_HELP_STRING([--enable-sys-tolua-cmd], [use tolua command from system instead of one from freeciv tree [true when cross-compiling]]),
-[case "${enableval}" in
-  yes)
-    sys_tolua_cmd=true ;;
-  no)
-    if test "x$cross_compiling" = "xyes" ; then
-      AC_MSG_ERROR([Must use external host tolua command when cross-compiling])
-    fi
-    sys_tolua_cmd=false ;;
-  *)
-    sys_tolua_cmd=${enableval} ;;
-esac], [
-if test "x$cross_compiling" = "xyes" ; then
-  sys_tolua_cmd=true
-else
-  sys_tolua_cmd=false
-fi])
-
-if test "x$sys_tolua_cmd" = "xtrue" ; then
-  AC_PATH_PROG([TOLUA], [tolua], [notfound])
-  if test x$TOLUA = xnotfound ; then
-    AC_MSG_ERROR([tolua command not found from the system])
-  fi
-elif test "x$sys_tolua_cmd" != "xfalse" ; then
-  TOLUA=$sys_tolua_cmd
-else
-  TOLUA="\$(top_builddir)/dependencies/tolua-5.2/src/bin/tolua$EXEEXT"
-fi
-
-AC_SUBST([TOLUA])
-
 TOLUA_CFLAGS="-I\$(top_srcdir)/dependencies/tolua-5.2/include"
 TOLUA_LIBS="\$(top_builddir)/dependencies/tolua-5.2/src/lib/libtolua.la"
 AC_SUBST([TOLUA_CFLAGS])
 AC_SUBST([TOLUA_LIBS])
+
+TOLUA="\$(top_builddir)/dependencies/tolua-5.2/src/bin/tolua$EXEEXT"
+AC_SUBST([TOLUA])
 
 dnl Freeciv uses a non-standard macro, Q_(), to handle cases of qualified
 dnl translatable strings and macro PL_() to handle plural forms.
@@ -1348,7 +1359,7 @@ AC_CONFIG_COMMANDS([fc_default-4],[[for domain in $PODOMAINS ; do
      else
        echo modifying translations/${domain}/Makefile add-comments/escape
        mv -f translations/${domain}/Makefile translations/${domain}/Makefile.tmp
-       sed -e 's/add-comments=TRANSLATORS:/add-comments="TRANS:" --escape/' translations/${domain}/Makefile.tmp > translations/${domain}/Makefile
+       sed -e 's/add-comments/add-comments="TRANS:" --escape/' translations/${domain}/Makefile.tmp > translations/${domain}/Makefile
        rm translations/${domain}/Makefile.tmp
      fi
    fi
@@ -1387,8 +1398,10 @@ AC_DEFINE_UNQUOTED([FC_STORE_CXXFLAGS], ['$CXXFLAGS'],
 
 AC_CONFIG_FILES([Makefile
           data/Makefile
+	  data/civclient.dsc
+	  data/civserver.dsc
+	  data/civserver.room
 	  data/hex2t/Makefile
-          data/hexemplio/Makefile
 	  data/amplio2/Makefile
 	  data/buildings/Makefile
 	  data/flags/Makefile
@@ -1398,13 +1411,10 @@ AC_CONFIG_FILES([Makefile
 	  data/isophex/Makefile
 	  data/isotrident/Makefile
 	  data/stdsounds/Makefile
-          data/stdmusic/Makefile
-          data/override/Makefile
 	  data/default/Makefile
 	  data/classic/Makefile
 	  data/multiplayer/Makefile
 	  data/experimental/Makefile
-          data/alien/Makefile
           data/civ2civ3/Makefile
 	  data/civ1/Makefile
 	  data/civ2/Makefile
@@ -1457,8 +1467,6 @@ AC_CONFIG_FILES([Makefile
 	  data/themes/gui-qt/oxygen/Makefile
 	  data/themes/gui-sdl/Makefile
 	  data/themes/gui-sdl/human/Makefile
-	  data/themes/gui-sdl2/Makefile
-	  data/themes/gui-sdl2/human/Makefile
 	  data/wonders/Makefile
 	  data/icons/Makefile
 	  utility/Makefile
@@ -1486,7 +1494,6 @@ AC_CONFIG_FILES([Makefile
 	  client/agents/Makefile
 	  client/include/Makefile
 	  client/gui-sdl/Makefile
-          client/gui-sdl2/Makefile
 	  client/gui-gtk-2.0/Makefile
 	  client/gui-gtk-3.0/Makefile
 	  client/gui-xaw/Makefile
@@ -1498,18 +1505,15 @@ AC_CONFIG_FILES([Makefile
 	  server/generator/Makefile
 	  server/scripting/Makefile
           tools/Makefile
-          tools/ruledit/Makefile
           translations/Makefile
 	  translations/freeciv/Makefile.in
 	  translations/nations/Makefile.in
-          translations/ruledit/Makefile.in
 	  doc/Makefile
 	  doc/man/Makefile
           doc/man/freeciv-client.6
           doc/man/freeciv-server.6
           doc/man/freeciv-manual.6
 	  doc/man/freeciv-modpack.6
-	  doc/man/freeciv-ruledit.6
 	  doc/ca/Makefile
 	  doc/de/Makefile
 	  doc/fr/Makefile
@@ -1522,16 +1526,14 @@ AC_CONFIG_FILES([Makefile
 	  client/freeciv.desktop:bootstrap/freeciv.desktop.in
           client/freeciv-gtk2.desktop:bootstrap/freeciv-gtk2.desktop.in
           client/freeciv-sdl.desktop:bootstrap/freeciv-sdl.desktop.in
-          client/freeciv-sdl2.desktop:bootstrap/freeciv-sdl2.desktop.in
           client/freeciv-qt.desktop:bootstrap/freeciv-qt.desktop.in
 	  server/freeciv-server.desktop:bootstrap/freeciv-server.desktop.in
-	  tools/freeciv-mp-gtk3.desktop:bootstrap/freeciv-mp-gtk3.desktop.in
 	  tools/freeciv-mp-gtk2.desktop:bootstrap/freeciv-mp-gtk2.desktop.in
+	  tools/freeciv-mp-gtk3.desktop:bootstrap/freeciv-mp-gtk3.desktop.in
 	  tools/freeciv-mp-qt.desktop:bootstrap/freeciv-mp-qt.desktop.in
           client/freeciv-gtk2.appdata.xml:bootstrap/freeciv-gtk2.appdata.xml.in
           client/freeciv-gtk3.appdata.xml:bootstrap/freeciv-gtk3.appdata.xml.in
           client/freeciv-sdl.appdata.xml:bootstrap/freeciv-sdl.appdata.xml.in
-          client/freeciv-sdl2.appdata.xml:bootstrap/freeciv-sdl2.appdata.xml.in
           client/freeciv-qt.appdata.xml:bootstrap/freeciv-qt.appdata.xml.in
           server/freeciv-server.appdata.xml:bootstrap/freeciv-server.appdata.xml.in
           tools/freeciv-mp-gtk2.appdata.xml:bootstrap/freeciv-mp-gtk2.appdata.xml.in
@@ -1539,8 +1541,38 @@ AC_CONFIG_FILES([Makefile
           tools/freeciv-mp-qt.appdata.xml:bootstrap/freeciv-mp-qt.appdata.xml.in])
 AC_CONFIG_FILES([fcgui:bootstrap/fcgui.in], [chmod +x fcgui])
 AC_CONFIG_FILES([fcser:bootstrap/fcser.in], [chmod +x fcser])
-if test "x$ruledit" = "xyes" ; then
-  AC_CONFIG_FILES([fcruledit:bootstrap/fcruledit.in], [chmod +x fcruledit])
+
+if test "$USE_NLS" != "yes" ; then
+
+  dnl Produced config.status will have constant value of FORCE_DIST,
+  dnl but it still checks 'if test x$FORCE_DIST = xyes'. We cannot
+  dnl do that check in configure when producing config.status.
+  AC_CONFIG_COMMANDS([translations/freeciv/Makefile], [
+    for domain in $PODOMAINS ; do
+    dnl Usually glib-gettext.m4:AM_GLIB_GNU_GETTEXT outputs commands to
+    dnl generate translations/${domain}/Makefile.
+    dnl If NLS is disabled, we generate one here.
+    rm -f translations/${domain}/Makefile
+
+    dnl - Add nonls_warn as dependency to dist -target
+    dnl - Remove dependencies from update-po, so it is never rebuilt
+    dnl - Set list of distributed files (no generated files)
+    sed -e 's/^dist distdir:.*/dist distdir: nonls_warn/' \
+        -e 's/^update-po:.*/update-po:/' \
+        -e 's/^DISTFILES =.*/DISTFILES = Makefile.in.in POTFILES.in POTFILES.skip \$(POFILES)/' \
+        translations/${domain}/Makefile.in > translations/${domain}/Makefile
+
+    dnl Create nonls_warn target.
+    echo >> translations/${domain}/Makefile
+    echo nonls_warn: >> translations/${domain}/Makefile
+    if test "x$FORCE_DIST" = "xyes" ; then
+      echo "	@echo Building dist without generated localization files!" >> translations/${domain}/Makefile
+    else
+      echo "	@echo Cannot build dist with NLS disabled! && /bin/false" >> translations/${domain}/Makefile
+    fi
+    done
+  ], [FORCE_DIST=$FORCE_DIST
+PODOMAINS="$PODOMAINS"])
 fi
 
 AC_OUTPUT
@@ -1561,16 +1593,12 @@ AC_MSG_NOTICE([
   Build freeciv client:  $client
 
   Maintained client frontends:
-    Gtk-3.0: $gui_gtk3
     Gtk-2.0: $gui_gtk2
+    Gtk-3.0: $gui_gtk3
     SDL:     $gui_sdl
     QT:      $gui_qt
     Xaw:     $gui_xaw
     Stub:    $gui_stub
-
-  In-development client frontends:
-  (these are not yet ready for general use)
-    SDL2:    $gui_sdl2
 
   == Server ==
   Build freeciv server:  $server
@@ -1582,7 +1610,6 @@ AC_MSG_NOTICE([
 
   == Tools ==
   Modpack installers:   $fcmp_list
-  Ruleset editor:        $ruledit
   Manual generator:      $fcmanual
 ])
 

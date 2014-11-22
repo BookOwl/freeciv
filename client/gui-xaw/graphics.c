@@ -56,18 +56,20 @@ static struct sprite *ctor_sprite(Pixmap mypixmap, int width, int height);
 static struct sprite *ctor_sprite_mask(Pixmap mypixmap, Pixmap mask, 
  				       int width, int height);
 
-/**************************************************************************
-  Return whether the client supports given view type
-**************************************************************************/
-bool is_view_supported(enum ts_type type)
+/***************************************************************************
+...
+***************************************************************************/
+bool isometric_view_supported(void)
 {
-  switch (type) {
-  case TS_ISOMETRIC:
-  case TS_OVERHEAD:
-    return TRUE;
-  }
+  return TRUE;
+}
 
-  return FALSE;
+/***************************************************************************
+...
+***************************************************************************/
+bool overhead_view_supported(void)
+{
+  return TRUE;
 }
 
 /***************************************************************************
@@ -664,12 +666,12 @@ Pixmap create_overlay_unit(const struct unit_type *punittype)
 		 tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
 
   /* If we're using flags, put one on the tile */
-  if (!options.solid_color_behind_units) {
+  if(!solid_color_behind_units)  {
     struct sprite *flag = get_nation_flag_sprite(tileset, nation_of_player(client.conn.playing));
 
     XSetClipOrigin(display, civ_gc, 0,0);
     XSetClipMask(display, civ_gc, flag->mask);
-    XCopyArea(display, flag->pixmap, pm, civ_gc, 0, 0,
+    XCopyArea(display, flag->pixmap, pm, civ_gc, 0,0, 
     	      flag->width,flag->height, 0,0);
     XSetClipMask(display, civ_gc, None);
   }

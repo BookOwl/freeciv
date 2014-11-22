@@ -4,7 +4,7 @@ Installing Freeciv:
 
 This file describes how to compile and install Freeciv. Last time we
 made sure this file is up to date was 16-Jul-06.
-Last minor update was 25-Aug-14.
+Last minor update was 06-Jun-14.
 
 There may be a localized version of this file in the ./doc directory,
 named INSTALL.<locale> (e.g., INSTALL.de).
@@ -76,7 +76,7 @@ out whether your system is suitable.  If in doubt, just try it.
 The svn version has additional requirements. A release version
 contains the generated files.
 
- - The programs from GNU gettext version 0.14 or better
+ - The programs from GNU gettext version 0.10.36 or better
 
    Especial the xgettext program is required to create the *.gmo
    files which aren't included in the svn tree.
@@ -152,6 +152,9 @@ will need to have the appropriate "development" packages installed.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
+   "Gtk+ 2" is the default client. If you don't specify any client with
+   "--enable-client" to configure, you will get "Gtk+ 2" client.
+
    The "Gtk+" library comes with two companion libraries:
 
      "Gdk":
@@ -188,7 +191,7 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    The "Glib" utility library provides non-graphical functions used by the
    "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
 
-   Freeciv requires a version of "Glib" greater or equal to 2.36
+   Freeciv requires a version of "Glib" greater or equal to 2.32
 
    If the Freeciv configure process tells you that you don't have the
    Glib library installed, then it may be obtained from here:
@@ -222,21 +225,18 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
-   "Gtk+ 3" is the default client. If you don't specify any client with
-   "--enable-client" to configure, you will get "Gtk+ 3" client.
-
    The "Gtk+" library comes with one companion libraries:
 
      "Gdk":
        Provides an abstraction layer over X-Windows/LinuxFB/Win32 to implement
        basic drawing functions, windows, clipping, etc.
 
-   Freeciv requires a version of "Gtk+" greater or equal to 3.8.0.
+   Freeciv requires a version of "Gtk+" greater or equal to 3.4.0.
 
    If the Freeciv configure process tells you that you don't have the
    Gtk+ library installed, then it may be obtained from here:
 
-     http://ftp.gnome.org/pub/gnome/sources/gtk+/3.12/gtk+-3.12.2.tar.xz
+     http://ftp.gnome.org/pub/gnome/sources/gtk+/3.8/gtk+-3.8.1.tar.xz
 
    "Gtk+" depends on the "Glib", "Atk", "Gdk-Pixbuf", and "Pango" libraries.
 
@@ -539,7 +539,7 @@ Freeciv, there are a few work-arounds you can try:
 2. You can try to install the latest version of GNU gettext.
    It may be obtained from here:
 
-      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.19.2.tar.xz
+      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.16.1.tar.gz
 
 
 6. Readline Support:

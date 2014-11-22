@@ -36,30 +36,12 @@ enum trade_route_type {
   TRT_NATIONAL_IC                     = 1, /* Intercontinental */
   TRT_IN                              = 2,
   TRT_IN_IC                           = 3, /* International intercontinental */
-  TRT_ALLY                            = 4,
-  TRT_ALLY_IC                         = 5,
-  TRT_ENEMY                           = 6,
-  TRT_ENEMY_IC                        = 7,
-  TRT_TEAM                            = 8,
-  TRT_TEAM_IC                         = 9,
-  TRT_LAST                            = 10
+  TRT_LAST                            = 4
 };
-
-#define SPECENUM_NAME traderoute_bonus_type
-#define SPECENUM_VALUE0 TBONUS_NONE
-#define SPECENUM_VALUE0NAME "None"
-#define SPECENUM_VALUE1 TBONUS_GOLD
-#define SPECENUM_VALUE1NAME "Gold"
-#define SPECENUM_VALUE2 TBONUS_SCIENCE
-#define SPECENUM_VALUE2NAME "Science"
-#define SPECENUM_VALUE3 TBONUS_BOTH
-#define SPECENUM_VALUE3NAME "Both"
-#include "specenum_gen.h"
 
 struct trade_route_settings {
   int trade_pct;
   enum traderoute_illegal_cancelling cancelling;
-  enum traderoute_bonus_type bonus_type;
 };
 
 int max_trade_routes(const struct city *pcity);

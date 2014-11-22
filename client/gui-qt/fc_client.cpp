@@ -43,6 +43,9 @@ fc_icons* fc_icons::m_instance = 0;
 ****************************************************************************/
 fc_client::fc_client() : QObject()
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
+#endif
   /**
    * Somehow freeciv-client-common asks to switch to page when all widgets
    * haven't been created yet by Qt, even constructor finished job,
@@ -89,13 +92,15 @@ fc_client::fc_client() : QObject()
   unit_sel = NULL;
   info_tile_wdg = NULL;
   opened_dialog = NULL;
+  current_unit_id = -1;
+  current_unit_target_id = -1;
   current_file = "";
   status_bar_queue.clear();
   quitting = false;
   pre_vote = NULL;
   x_vote = NULL;
   gtd = NULL;
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i <= PAGE_GGZ; i++) {
     pages_layout[i] = NULL;
     pages[i] = NULL;
   }
@@ -111,8 +116,8 @@ void fc_client::init()
   central_layout->setContentsMargins(2, 2, 2, 2);
 
   // General part not related to any single page
-  fc_fonts.init_fonts();
   history_pos = -1;
+  fc_fonts.init_fonts();
   menu_bar = new mr_menu();
   menu_bar->setup_menus();
   main_window->setMenuBar(menu_bar);
@@ -153,6 +158,8 @@ void fc_client::init()
   create_game_page();
   pages[PAGE_GAME]->setVisible(false);
 
+  // PAGE_GGZ
+  pages[PAGE_GGZ] = NULL;
   central_layout->addLayout(pages_layout[PAGE_MAIN], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_NETWORK], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_LOAD], 1, 1);
@@ -165,7 +172,6 @@ void fc_client::init()
   connect(switch_page_mapper, SIGNAL(mapped( int)),
                 this, SLOT(switch_page(int)));
   main_window->setVisible(true);
-  
 }
 
 /****************************************************************************
@@ -266,7 +272,7 @@ void fc_client::switch_page(int new_pg)
   }
   main_window->menuBar()->setVisible(false);
 
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i < PAGE_GGZ + 1; i++) {
     if (i == new_page) {
       show_children(pages_layout[i], true);
     } else {
@@ -285,7 +291,7 @@ void fc_client::switch_page(int new_pg)
     update_load_page();
     break;
   case PAGE_GAME:
-    if (options.fullscreen_mode){
+    if (fullscreen_mode){
       gui()->main_window->showFullScreen();
       gui()->mapview_wdg->showFullScreen();
     } else {
@@ -306,6 +312,7 @@ void fc_client::switch_page(int new_pg)
     connect_port_edit->setText(buf);
     connect_login_edit->setText(user_name);
     break;
+  case PAGE_GGZ:
   default:
     if (client.conn.used) {
       disconnect_from_server();
@@ -673,6 +680,7 @@ void fc_font::release_fonts()
     delete f;
   }
 }
+
 
 /****************************************************************************
   Adds new font or overwrite old one

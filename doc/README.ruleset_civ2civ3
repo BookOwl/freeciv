@@ -1,6 +1,6 @@
 
 ==========================================================
-Civ2Civ3 Ruleset for Freeciv v2.6 (Updated 18-Jul-2014)
+Civ2Civ3 Ruleset for Freeciv v2.5 (Updated 27-Jun-2014)
 ==========================================================
 
 
@@ -33,8 +33,7 @@ CORE CHANGES:
 - Every unit pays some kind of Upkeep cost. Under some governments, this upkeep is changed from Shields to Gold (similar to civ3).
 - A city can support as many Military units as its population size (min 4, max 20). Additional units cause waste of Food. If the city shrinks due to starvation, one of those extra units will be disbanded.
 - Units lose one Veteran level when upgraded.
-- Unlimited movement on rails delayed to maglev (available with Superconductors). Movement bonus on Railroads x6, on Roads x3, on Rivers x3 (non diagonal).
-- Added Trench and Airfield bases, required before you can build Fortress or Airbase, respectively. It prevents the construction of full bases in one single turn.
+- No infinite movement: Railroads x6, Roads x3, Rivers x3 (non diagonal).
 - Specialists output reduced to 2 (same as civ2). There are wonders that increase it to 3 for all players.
 - Enabled Tech Leakage: technologies are cheaper if already discovered by other nations you have Embassy with.
 - The cost of each Tech is equal to the number of steps needed to get the tech (Tech Cost = Base Cost * Number of Parents). It is a linear formula more similar to civ2, and it fits better the new reduced bonuses from Trade and Science.
@@ -94,29 +93,29 @@ TERRAIN:
 - Hills receive 1 Shield for free, and +2 from mines, same as civ3, (was 0 and +3).
 - Mountains give extra vision range. Cities can not be placed over Mountains. Land units starting the turn over a Mountain receive a -1 penalty to movement (this way it is not so good for cavalry to end the turn on Mountains).
 - Lake tiles receive for free +1 Food (2/0/2), while Harbours and Offshore Platforms do not affect them. Lakes do not enable wonders that needs a coastal city.
-- Deep ocean tiles must be mined in order to take advantage of the shield bonus from Offshore Platforms.
+- Deep Oceans produce no Food (1 Food with Harbour). Offshore Platforms increase the production only if there is a Buoy in the Deep Ocean tile.
 - Pollution may appear in Ocean tiles, and Transports can clean it without the need of Workers\Engineers. Jungles and Forests are not affected by Pollution nor by Global Warming.
 
 - Minimum city output = 1/0/0 (was 1/1/0). City central tile now produces +1 Shield.
 This way, no matter the tile where you place your city, you never waste any resource (for example, with classic rules, a city placed over bonused Grassland was wasting the Shield bonus).
 
-TILE      F/P/T  IRRIG(t)   MINE(t)    ROAD   MAX1   MAX2   TRANSFORM
-Deep      1/0/2  NO         NO         NO     2/0/2  2/1/2  No
-Ocean     1/0/2  NO         NO         NO     2/0/2  2/1/2  Swamp
-Lake     *2/0/2  NO         NO         NO     2/0/2  2/0/2  Swamp
-Swamp     1/0/0 *+1(5)     *NO         +0(4)  2/0/0  3/0/0 *Grass
-Glacier   0/0/0  NO         +1(10)     +0(4)  0/1/0  0/1/0  Tundra
-Tundra    1/0/0 *NO        *+1(5)     *+1(2)  1/1/1  1/1/1 *Plains
-Desert    0/1/0  +1(5)      +1(5)      +1(2)  0/2/1  0/3/1  Plains
-Plains    1/1/0  +1(5)      Forest(10) +1(2)  2/1/1  3/1/1  Grass
-Grassland 2/0/0  +1(5)      Forest(15) +1(2)  3/0/1  4/0/1 *Lake
-Jungle   *1/1/0 *Swamp(10) *NO         +0(4)  1/1/0  1/1/0 *Forest
-Forest    1/2/0  Plain(10) *Grass(15)  +0(4)  1/2/0  1/3/0 *Hills
-Hills    *1/1/0  +1(10)    *+2(10)     +0(4)  1/3/0  1/4/0  Plains
-Mountains 0/1/0  NO         +1(10)     +0(6)  0/2/0  0/3/0  Hills
+TILE      F/P/T  IRRIG(t)   MINE(t)    ROAD  *CITY   MAX1   MAX2 
+Deep     *0/0/2  NO         NO         NO            1/0/2  1/1/2
+Ocean     1/0/2  NO         NO         NO            2/0/2  2/1/2
+Lake     *2/0/2  NO         NO         NO            2/0/2  2/0/2
+Swamp     1/0/0 *+1(10)    *NO         +0(4)  2/1/0  2/0/0  3/0/0
+Glacier   0/0/0  NO         +1(10)     +0(4)         0/1/0  0/1/0
+Tundra    1/0/0 *NO        *+1(5)     *+1(2)  1/2/1  1/1/1  1/1/1
+Desert    0/1/0  +1(5)      +1(5)      +1(2)  1/2/1  0/2/1  0/3/1
+Plains    1/1/0  +1(5)      Forest(15) +1(2)  2/2/1  2/1/1  3/1/1
+Grassland 2/0/0  +1(5)      Forest(15) +1(2)  3/1/1  3/0/1  4/0/1
+Jungle   *1/1/0 *Swamp(5)  *NO         +0(4)  1/2/0  1/1/0  1/1/0
+Forest    1/2/0  Plain(10) *NO         +0(4)  1/3/0  1/2/0  1/3/0
+Hills    *1/1/0  +1(10)    *+2(10)     +0(4)  2/2/0  1/3/0  1/4/0
+Mountains 0/1/0  NO         +1(10)     +0(6)         0/2/0  0/3/0
 
 F/P/T = Food/Production/Trade; (t) = turns
-MAX1 = irrigated/mined/roaded/harbour; MAX2 = farmland/railroad/offshore.
+CITY = central city tile; MAX1 = irrigated/mined/roaded/harbour; MAX2 = farmland/railroad/offshore.
 * = Changes compared to classic ruleset. Most affected are Jungles, Swamps and Tundras.
 
 TIP: The optimal tiles to place your initial cities are those with MAX output equal or greater than 2/1/1, mainly those with bonus resources or rivers. Hills and Plains are always good places for cities, as well as Flood Desert (desert with river), or bonused Grassland. The best defense comes from cities placed on Hills with river.
@@ -176,7 +175,7 @@ Martial Law       +1       0        +1       +1       0        0        0       
 Civil war %       99       90       80       70       60       40       30       20       50       
 Empire Size       0        /14      /10      /12      /20      /16      /32      /24      /28      
 Special          +NoUpkeep +1 Move  +75%Gold +50%Gold +Tithes  +Bribe  +Brib/Sub +Subvert +NoUpkeep
-                 -50%Lux  (Land/Mil)(Palace) (Palace) -50%Sci  -Revolt -Rev/Sen  -Senate  (Cost=1) 
+                 -50%Lux   Land/Mil)(Palace) (Palace) -50%Sci  -Revolt -Rev/Sen  -Senate  (Cost=1) 
                  -NoTaxes                             +Fanatic         +Partisan          +Partisan 
                                                                                 
 Base Corruption   0%       30%      20%      10%      15%      25%      5%       0%       30%      
@@ -272,7 +271,7 @@ Settlers:  pop_cost = 2, cost = 30, upkeep = 1
 Migrants:  pop_cost = 1, cost = 10, upkeep = 1
 Workers:   pop_cost = 0, cost = 20, upkeep = 1
 
-- Non-military units now belongs to a new unit class ("Small land") that can not pillage, nor capture cities, and does not create Zones of Control that would affect the movements of enemy units.
+- Non-military units now belongs to a new unit class ("Small land") that can not pillage, nor capture cities.
 - Created a new unit class for Caravans and Freights ("Merchant") that can only travel on roads, railroads, rivers or ships. They can only establish Trade Routes to foreign cities. And they can be captured.
 - Land units can capture enemy Migrants (as slaves) and Caravans/Freights (as loot).
 - Wheeled units (new unit class "Big land") can't move to Mountains, Jungles and Swamps, unless they are travelling on a road. They do not get defensive bonuses from the terrain, can not perform pillage, and need Galleons or Transports to travel by sea.
@@ -291,10 +290,9 @@ Workers:   pop_cost = 0, cost = 20, upkeep = 1
 - Artillery and Howitzer receive the ability CityBuster, so their firepower is 1 in open field, and 2 against cities. Removed Ignore Walls for Howitzer (that would bypass the new city defense bonuses), and reduced movement to 1.
 - Bombers and Helicopters receive the Bombarder ability, so they can damage Land units, but they can not kill them, and can not be damaged while attacking. Note they still can kill or die against Sea units.
 Halved the attack so it is harder to bombard land enemies successfully. Increased hit points so it is still possible to kill naval units.
-- Air units can perform pillage (representing bombardment of infrastructure), and can be Airlifted from a city with an Airport to another. Increased defense of all Air units, in order to discourage the use of Land units to protect them.
-- Increased fuel of all Air units by one, in order to allow battles for air control. All Air unit lose 10% of HPs, like helicopters, when they end out of a city or airbase.
+- Air units can perform pillage (representing bombardment of infrastructure). Increased defense of all Air units, in order to discourage the use of Land units to protect them.
 - Helicopters can carry 1 infantry unit, and can only be attacked by Fighters (with no extra attack bonuses).
-- Nuclear weapons can be built with Nuclear Fission, but you need Advanced Flight to move them, and Rocketry to get max movement. Increased range of Cruise Missiles to 16, and they no longer cause unhappiness.
+- Nuclear weapons can be built with Nuclear Fission, but you need Advanced Flight to move them, and Rocketry to get max movement. Cruise Missile no longer cause unhappiness.
 - Readjusted many costs so units with better stats are always more expensive. At the same time, modern units always get better ratio Att/Cost or Def/Cost.
 
 UNIT            Att  Def  Mov  FP   HP   Cost   
@@ -340,13 +338,13 @@ AEGIS Cruiser   8    8    5   *1    30   100 *(x5 def anti-air\missile)
 Battleship      12   12   4   *1   *30   160 
 Submarine       12  *5    5   *1   *20  *70   Cargo 8, Invis
                          
-Fighter         4   *4    10  *1    20   60   Fuel 2
-Bomber         *6   *2    8   *1   *30  *100 *Bombard 3, Fuel 3, FieldUnit
+Fighter         4   *4    10  *1    20   60   Fuel 1
+Bomber         *6   *2    8   *1   *30  *100 *Bombard 3, Fuel 2, FieldUnit
 Helicopter     *5    3    6   *1   *30  *70  *Bombard 2,*Cargo 1
-Stealth Fighter 8   *8    14  *1    20   80   Fuel 2, Invis
-Stealth Bomber *9    5    12  *1   *30  *120 *Bombard 4, Fuel 3, FieldUnit, Invis
+Stealth Fighter 8   *8    14  *1    20   80   Fuel 1, Invis
+Stealth Bomber *9    5    12  *1   *30  *120 *Bombard 4, Fuel 2, FieldUnit, Invis
                          
-Cruise Missile  18   0   *16  *1(2) 10  *50  *CityBuster,*No FieldUnit
+Cruise Missile  18   0    12  *1(2) 10  *50  *CityBuster,*No FieldUnit
 Nuclear         99   0    16   1    10   160  Nuclear, FieldUnit
 
 FP = Firepower, HP = Hit Points
@@ -454,18 +452,7 @@ Changes:
 - Electricity allows Irrigation without adjacent water (as in civ3).
 - Removed effect that prevented extra output from cities where Irrigation and Mine were present at same time (no longer possible).
 - Reduced by one the gold upkeep of Aqueduct, Bank, Stock Exchange, Port Facility and SDI Defense.
-- Added Trench and Airfield bases, as pre-requisite for Fortress and Airbase, in order to prevent the construction of full bases in one single turn. Airbases and Fortresses can be built on river tiles again.
-- Introduced Maglev, available with Superconductors, that allows unlimited movement for Land units (except Big Land and Merchant classes).
-
-Terrain:
-- Readjusted terrain transformations. Designed so all useful alterations can be finished in 1 or 2 steps, and all effects from Global warming can be reversibly with terraforming.
-- Allowed early transformation from Forest to Grassland, so it is possible to transform Grass->Forest->Plain, and also Plain->Forest->Grass, with same working time (25).
-- Restored Food output of Deep oceans, so Global warming does not affect Oceans that much. Now oceans transformed to deep ocean would only lose their specials.
-- Harbors and Offshore Platform can be built adjacent to any oceanic tile again (same as classic rules), so Global warming does not affect them.
-- Reduced irrigation times in Swamps and Jungles. They represent the drainage of wetlands.
-- Re-enabled terraforming from Mountains to Hills, and from Grassland to Lake.
-It is still possible to transform any terrain to Hills by changing them to Forest first.
-- Deep ocean tiles must be mined in order to take advantage of the shield bonus from Offshore Platforms (buoys are no longer needed).
+- Airbases and Fortresses cannot be built on river tiles.
 
 Units:
 - Units automatically move to the target tile after a successful attack. Units with remaining movement points can continue moving after the attack.
@@ -473,13 +460,9 @@ Units:
 - Wheeled units (Big land) can conquer cities again, but do not take advantage of terrain defense bonuses. Wheeled units can move to fortress even if not roaded. Fixed bug that kept them from entering Glacier tiles.
 - Fortresses do not affect national borders, and do not protect against Air units nor Missiles (they do protect against Land and See units, included those with CityBuster). Airbases do protect against Air units (+100% defend bonus).
 - Rebalanced ancient units. Reduced defense of Archers to 1 and cost to 20 (no IgZoc). Reduced cost of Legion to 30. Increased attack of Chariot to 4, attack of Elephant to 3, and defense of Knights to 3.
-- Triremes can navigate rivers, but they are affected by ZoC rules while moving on a river. 
-- Caravel changed from (2/1) to (1/2), and cost restored to 40, in order to encourage peaceful exploration of the seas in the age of discovery. Reduced attack of Frigate and defense of Ironclad to 3 (was 4), and restored default costs.
-- Air units can perform pillage (representing bombardment of infrastructure), and can be Airlifted from a city with Airport to another. Increased defense of all Air units, in order to discourage the use of land units to protect them. Helicopters can only be attacked by Fighters (with no extra attack bonuses).
-- Increased fuel of all Air units by one, in order to allow battles for air control. All Air unit lose 10% of HPs, like helicopters, when they end out of city or airbase. Increased range of Cruise Missile to 16, so it is greater than movement of Stealth Fighters.
-- Zones of Control are not imposed by non-military units (Small Land and Merchant classes) nor by Air units or Missiles, so they do not affect the movements of enemy units.
+- Triremes can navigate rivers. Caravel changed from (2/1) to (1/2), and cost restored to 40, in order to encourage peaceful exploration of the seas in the age of discovery. Reduced attack of Frigate and defense of Ironclad to 3 (was 4), and restored default costs.
+- Air units can perform pillage (representing bombardment of infrastructure). Increased defense of all Air units, in order to discourage the use of land units to protect them. Helicopters can only be attacked by Fighters (with no extra attack bonuses).
 - Diplomats and Spies are invisible like submarines, but they pay upkeep costs like all other units.
-- Increased vision of Explorer and Partisan. 
 - Cheating AI level gets +50% defense bonus for units placed in land tiles outside cities\fortresses.
 
 

@@ -11,6 +11,8 @@ libdefaultai_la_SOURCES = \
 		advmilitary.h	\
 		advdiplomacy.c	\
 		advdiplomacy.h	\
+		advspace.c	\
+		advspace.h	\
 		aiair.c		\
 		aiair.h		\
 		aicity.c	\
@@ -40,9 +42,6 @@ libdefaultai_la_SOURCES = \
 		aiunit.c	\
 		aiunit.h	\
 		aidiplomat.c	\
-		aidiplomat.h	\
-		daieffects.c	\
-		daieffects.h
-
+		aidiplomat.h
 
 libdefaultai_la_LIBADD = -lm

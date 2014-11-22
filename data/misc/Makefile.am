@@ -18,8 +18,6 @@ pkgdata_DATA =          \
 	cursors.spec	\
 	editor.png	\
 	editor.spec	\
-	events.png	\
-	events.spec	\
 	flags-large.spec	\
 	flags.spec	\
 	governments.png \

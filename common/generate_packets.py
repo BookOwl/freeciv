@@ -59,7 +59,7 @@ def write_disclaimer(f):
 
 ''')
 
-def fc_open(name):
+def my_open(name):
     verbose("writing %s"%name)
     f=open(name,"w")
     write_disclaimer(f)
@@ -348,22 +348,22 @@ class Field:
     # Returns code which put this field.
     def get_put(self):
         if self.dataio_type=="bitvector":
-            return "DIO_BV_PUT(&dout, \"%(name)s\", packet->%(name)s);"%self.__dict__
+            return "DIO_BV_PUT(&dout, packet->%(name)s);"%self.__dict__
 
         if self.struct_type=="float" and not self.is_array:
-            return "  DIO_PUT(%(dataio_type)s, &dout, \"%(name)s\", real_packet->%(name)s, %(float_factor)d);"%self.__dict__
-
+            return "  dio_put_%(dataio_type)s(&dout, real_packet->%(name)s, %(float_factor)d);"%self.__dict__
+        
         if self.dataio_type in ["worklist"]:
-            return "  DIO_PUT(%(dataio_type)s, &dout, \"%(name)s\", &real_packet->%(name)s);"%self.__dict__
+            return "  dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s);"%self.__dict__
 
         if self.dataio_type in ["memory"]:
-            return "  DIO_PUT(%(dataio_type)s, &dout, \"%(name)s\", &real_packet->%(name)s, %(array_size_u)s);"%self.__dict__
-
+            return "  dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s, %(array_size_u)s);"%self.__dict__
+        
         arr_types=["string","bit_string","city_map","tech_list",
                    "unit_list","building_list"]
         if (self.dataio_type in arr_types and self.is_array==1) or \
            (self.dataio_type not in arr_types and self.is_array==0):
-            return "  DIO_PUT(%(dataio_type)s, &dout, \"%(name)s\", real_packet->%(name)s);"%self.__dict__
+            return "  dio_put_%(dataio_type)s(&dout, real_packet->%(name)s);"%self.__dict__
         if self.is_struct:
             if self.is_array==2:
                 c="dio_put_%(dataio_type)s(&dout, &real_packet->%(name)s[i][j]);"%self.__dict__
@@ -442,7 +442,7 @@ class Field:
     # Returns code which get this field.
     def get_get(self):
         if self.struct_type=="float" and not self.is_array:
-            return '''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s, %(float_factor)d)) {
+            return '''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s, %(float_factor)d)) {
   RECEIVE_PACKET_FIELD_ERROR(%(name)s);
 }'''%self.__dict__
         if self.dataio_type=="bitvector":
@@ -451,27 +451,27 @@ class Field:
 }'''%self.__dict__
         if self.dataio_type in ["string","bit_string","city_map"] and \
            self.is_array!=2:
-            return '''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", real_packet->%(name)s, sizeof(real_packet->%(name)s))) {
+            return '''if (!dio_get_%(dataio_type)s(&din, real_packet->%(name)s, sizeof(real_packet->%(name)s))) {
   RECEIVE_PACKET_FIELD_ERROR(%(name)s);
 }'''%self.__dict__
         if self.is_struct and self.is_array==0:
-            return '''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s)) {
+            return '''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s)) {
   RECEIVE_PACKET_FIELD_ERROR(%(name)s);
 }'''%self.__dict__
         if self.dataio_type in ["tech_list","unit_list","building_list"]:
-            return '''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", real_packet->%(name)s)) {
+            return '''if (!dio_get_%(dataio_type)s(&din, real_packet->%(name)s)) {
   RECEIVE_PACKET_FIELD_ERROR(%(name)s);
 }'''%self.__dict__
         if not self.is_array:
             if self.struct_type in ["int","bool"]:
-                return '''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s)) {
+                return '''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s)) {
   RECEIVE_PACKET_FIELD_ERROR(%(name)s);
 }'''%self.__dict__
             else:
                 return '''{
   int readin;
   
-  if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &readin)) {
+  if (!dio_get_%(dataio_type)s(&din, &readin)) {
     RECEIVE_PACKET_FIELD_ERROR(%(name)s);
   }
   real_packet->%(name)s = readin;
@@ -479,49 +479,49 @@ class Field:
 
         if self.is_struct:
             if self.is_array==2:
-                c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i][j])) {
+                c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i][j])) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
             else:
-                c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i])) {
+                c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i])) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
         elif self.dataio_type=="string":
-            c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", real_packet->%(name)s[i], sizeof(real_packet->%(name)s[i]))) {
+            c='''if (!dio_get_%(dataio_type)s(&din, real_packet->%(name)s[i], sizeof(real_packet->%(name)s[i]))) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
         elif self.struct_type=="float":
             if self.is_array==2:
-                c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i][j], %(float_factor)d)) {
+                c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i][j], %(float_factor)d)) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
             else:
-                c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i], %(float_factor)d)) {
+                c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i], %(float_factor)d)) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
         elif self.is_array==2:
             if self.struct_type in ["int","bool"]:
-                c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i][j])) {
+                c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i][j])) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
             else:
                 c='''{
       int readin;
   
-      if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &readin)) {
+      if (!dio_get_%(dataio_type)s(&din, &readin)) {
         RECEIVE_PACKET_FIELD_ERROR(%(name)s);
       }
       real_packet->%(name)s[i][j] = readin;
     }'''%self.__dict__
         elif self.struct_type in ["int","bool"]:
-            c='''if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &real_packet->%(name)s[i])) {
+            c='''if (!dio_get_%(dataio_type)s(&din, &real_packet->%(name)s[i])) {
       RECEIVE_PACKET_FIELD_ERROR(%(name)s);
     }'''%self.__dict__
         else:
             c='''{
       int readin;
   
-      if (!DIO_GET(%(dataio_type)s, &din, \"%(name)s\", &readin)) {
+      if (!dio_get_%(dataio_type)s(&din, &readin)) {
         RECEIVE_PACKET_FIELD_ERROR(%(name)s);
       }
       real_packet->%(name)s[i] = readin;
@@ -572,7 +572,7 @@ class Field:
 for (;;) {
   int i;
 
-  if (!DIO_GET(uint8, &din, \"%(name)s\", &i)) {
+  if (!dio_get_uint8(&din, &i)) {
     RECEIVE_PACKET_FIELD_ERROR(%(name)s);
   }
   if (i == 255) {
@@ -717,7 +717,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
         if len(self.key_fields)==0:
             return "#define hash_%(name)s hash_const\n\n"%self.__dict__
         else:
-            intro='''static genhash_val_t hash_%(name)s(const void *vkey)
+            intro='''static genhash_val_t hash_%(name)s(const void *vkey, size_t num_buckets)
 {
 '''%self.__dict__
 
@@ -732,7 +732,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
                 a="(%s << 8) ^ %s"%(keys[0], keys[1])
             else:
                 assert 0
-            body=body+('  return %s;\n'%a)
+            body=body+('  return ((%s) %% num_buckets);\n'%a)
             extro="}\n\n"
             return intro+body+extro
 
@@ -881,7 +881,7 @@ static char *stats_%(name)s_names[] = {%(names)s};
 '''%self.get_dict(vars())
 
         body=body+'''
-  DIO_BV_PUT(&dout, \"fields\", fields);
+  DIO_BV_PUT(&dout, fields);
 '''
 
         for field in self.key_fields:
@@ -1022,7 +1022,7 @@ class Packet:
         self.type=mo.group(1)
         self.name=self.type.lower()
         self.type_number=int(mo.group(2))
-        assert 0<=self.type_number<=65535
+        assert 0<=self.type_number<=255
         dummy=mo.group(3)
 
         del lines[0]
@@ -1576,9 +1576,9 @@ def main():
     output_h_name=target_root+"/common/packets_gen.h"
 
     if lazy_overwrite:
-        output_h=fc_open(output_h_name+".tmp")
+        output_h=my_open(output_h_name+".tmp")
     else:
-        output_h=fc_open(output_h_name)
+        output_h=my_open(output_h_name)
 
     output_h.write('''
 #ifdef __cplusplus
@@ -1586,7 +1586,6 @@ extern "C" {
 #endif /* __cplusplus */
 
 /* common */
-#include "actions.h"
 #include "disaster.h"
 
 ''')
@@ -1614,9 +1613,9 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
     ### writing packets_gen.c
     output_c_name=target_root+"/common/packets_gen.c"
     if lazy_overwrite:
-        output_c=fc_open(output_c_name+".tmp")
+        output_c=my_open(output_c_name+".tmp")
     else:
-        output_c=fc_open(output_c_name)
+        output_c=my_open(output_c_name)
 
     output_c.write('''
 #ifdef HAVE_CONFIG_H
@@ -1641,7 +1640,7 @@ void *get_packet_from_connection_helper(struct connection *pc, enum packet_type 
 
 #include "packets.h"
 
-static genhash_val_t hash_const(const void *vkey)
+static genhash_val_t hash_const(const void *vkey, size_t num_buckets)
 {
   return 0;
 }
@@ -1693,7 +1692,7 @@ static int stats_total_sent;
                 open(i,"w").write(new)
             os.remove(i+".tmp")
 
-    f=fc_open(target_root+"/server/hand_gen.h")
+    f=my_open(target_root+"/server/hand_gen.h")
     f.write('''
 #ifndef FC__HAND_GEN_H
 #define FC__HAND_GEN_H
@@ -1737,7 +1736,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 ''')
     f.close()
 
-    f=fc_open(target_root+"/client/packhand_gen.h")
+    f=my_open(target_root+"/client/packhand_gen.h")
     f.write('''
 #ifndef FC__PACKHAND_GEN_H
 #define FC__PACKHAND_GEN_H
@@ -1779,7 +1778,7 @@ bool client_handle_packet(enum packet_type type, const void *packet);
 ''')
     f.close()
 
-    f=fc_open(target_root+"/server/hand_gen.c")
+    f=my_open(target_root+"/server/hand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H
@@ -1835,7 +1834,7 @@ bool server_handle_packet(enum packet_type type, const void *packet,
 ''')
     f.close()
 
-    f=fc_open(target_root+"/client/packhand_gen.c")
+    f=my_open(target_root+"/client/packhand_gen.c")
     f.write('''
 
 #ifdef HAVE_CONFIG_H

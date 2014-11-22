@@ -23,7 +23,7 @@ ruler_titles = {
 
 flag = "cornwall"
 flag_alt = "england"
-style = "Celtic"
+city_style = "Celtic"
 
 init_techs=""
 init_buildings=""

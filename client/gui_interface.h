@@ -27,23 +27,20 @@ extern "C" {
 #include "canvas_g.h"
 #include "pages_g.h"
 
-/* client */
-#include "tilespec.h"
-
 struct gui_funcs {
   void (*ui_init)(void);
   void (*ui_main)(int argc, char *argv[]);
   void (*ui_exit)(void);
 
   enum gui_type (*get_gui_type)(void);
-  void (*insert_client_build_info)(char *outbuf, size_t outlen);
 
   void (*version_message)(char *vertext);
   void (*real_output_window_append)(const char *astring,
                                     const struct text_tag_list *tags,
                                     int conn_id);
 
-  bool (*is_view_supported)(enum ts_type type);
+  bool (*isometric_view_supported)(void);
+  bool (*overhead_view_supported)(void);
   void (*free_intro_radar_sprites)(void);
   struct sprite * (*load_gfxfile)(const char *filename);
   struct sprite * (*create_sprite)(int width, int height, struct color *pcolor);
@@ -59,7 +56,6 @@ struct gui_funcs {
 
   struct canvas *(*canvas_create)(int width, int height);
   void (*canvas_free)(struct canvas *store);
-  void (*canvas_set_zoom)(struct canvas *store, float zoom);
   void (*canvas_copy)(struct canvas *dest, struct canvas *src,
                       int src_x, int src_y, int dest_x, int dest_y, int width,
                       int height);
@@ -81,6 +77,9 @@ struct gui_funcs {
   void (*canvas_fill_sprite_area)(struct canvas *pcanvas,
                                   struct sprite *psprite, struct color *pcolor,
                                   int canvas_x, int canvas_y);
+  void (*canvas_fog_sprite_area)(struct canvas *pcanvas,
+                                 struct sprite *psprite,
+                                 int canvas_x, int canvas_y);
   void (*canvas_put_line)(struct canvas *pcanvas, struct color *pcolor,
                           enum line_type ltype, int start_x, int start_y,
                           int dx, int dy);
@@ -119,6 +118,11 @@ struct gui_funcs {
   void (*editgui_popup_properties)(const struct tile_list *tiles, int objtype);
   void (*editgui_tileset_changed)(void);
   void (*editgui_popdown_all)(void);
+
+  void (*gui_ggz_embed_ensure_server)(void);
+  void (*gui_ggz_embed_leave_table)(void);
+  void (*add_ggz_input)(int sock);
+  void (*remove_ggz_input)(void);
 
   void (*update_timeout_label)(void);
   void (*real_city_dialog_popup)(struct city *pcity);

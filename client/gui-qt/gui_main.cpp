@@ -37,6 +37,7 @@
 // client
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 #include "tilespec.h"
 #include "sprite.h"
@@ -224,6 +225,23 @@ void qtg_remove_net_input()
 }
 
 /**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void qtg_add_ggz_input(int sock)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void qtg_remove_ggz_input()
+{
+  /* PORTME */
+}
+
+/**************************************************************************
   Set one of the unit icons (specified by idx) in the information area
   based on punit.
 
@@ -299,6 +317,27 @@ static void apply_font(struct option *poption)
 }
 
 /****************************************************************************
+  Changes city label font
+****************************************************************************/
+void apply_city_font(option *poption)
+{
+  QFont *f;
+  QFont *remove_old;
+  QString s;
+
+  if (gui() && qtg_get_current_client_page() == PAGE_GAME) {
+    f = new QFont;
+    s = option_font_get(poption);
+    f->fromString(s);
+    s = option_name(poption);
+    remove_old = gui()->fc_fonts.get_font(s);
+    delete remove_old;
+    gui()->fc_fonts.set_font(s, f);
+    qtg_popdown_all_city_dialogs();
+  }
+}
+
+/****************************************************************************
   Stub for editor function
 ****************************************************************************/
 void qtg_editgui_tileset_changed()
@@ -332,6 +371,18 @@ void qtg_editgui_notify_object_changed(int objtype, int object_id, bool remove)
   Stub for editor function
 ****************************************************************************/
 void qtg_editgui_notify_object_created(int tag, int id)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void qtg_gui_ggz_embed_leave_table()
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void qtg_gui_ggz_embed_ensure_server()
 {}
 
 /****************************************************************************
@@ -383,27 +434,6 @@ void popup_quit_dialog()
   }
 }
 
-/****************************************************************************
-  Changes city label font
-****************************************************************************/
-void apply_city_font(option *poption)
-{
-  QFont *f;
-  QFont *remove_old;
-  QString s;
-
-  if (gui() && qtg_get_current_client_page() == PAGE_GAME) {
-    f = new QFont;
-    s = option_font_get(poption);
-    f->fromString(s);
-    s = option_name(poption);
-    remove_old = gui()->fc_fonts.get_font(s);
-    delete remove_old;
-    gui()->fc_fonts.set_font(s, f);
-    qtg_popdown_all_city_dialogs();
-  }
-}
-
 /**************************************************************************
   Called to build the unit_below pixmap table.  This is the table on the
   left of the screen that shows all of the inactive units in the current
@@ -415,19 +445,4 @@ static void populate_unit_pixmap_table(void)
 {
   unit_pixmap = new QPixmap(tileset_unit_width(tileset), 
                             tileset_unit_height(tileset));
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void qtg_insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* There's separate entry about Qt in help menu.
-   * Should we enable this regardless? As then to place to find such information
-   * would be standard over clients. */
-
-  /*
-  cat_snprintf(outbuf, outlen, _("\nBuilt against Qt %s, using %s"),
-               QT_VERSION_STR, qVersion());
-  */
 }

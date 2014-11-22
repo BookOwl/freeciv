@@ -82,9 +82,6 @@ def make_documentation(file):
  * defined by specnum user, to get name of the enum value. If the function
  * returns NULL, compiled in names are used.
  *
- * SPECENUM_BITVECTOR: specifies the name of a bit vector for the enum
- * values. It can not be used in combination with SPECENUM_BITWISE.
- *
  * Assuming SPECENUM_NAME were 'foo', including this file would provide
  * the definition for the enumeration type 'enum foo', and prototypes for
  * the following functions:
@@ -185,13 +182,6 @@ extern "C" {
 #define SPECENUM_VALUE(value) (value)
 #endif /* SPECENUM_BITWISE */
 
-#ifdef SPECENUM_BITVECTOR
-#include "bitvector.h"
-#ifdef SPECENUM_BITWISE
-#error SPECENUM_BITWISE and SPECENUM_BITVECTOR cannot both be defined.
-#endif /* SPECENUM_BITWISE */
-#endif /* SPECENUM_BITVECTOR */
-
 #undef SPECENUM_MIN_VALUE
 #undef SPECENUM_MAX_VALUE
 ''')
@@ -208,7 +198,6 @@ extern "C" {
     macros.append("SPECENUM_MIN_VALUE")
     macros.append("SPECENUM_MAX_VALUE")
     macros.append("SPECENUM_NAMEOVERRIDE")
-    macros.append("SPECENUM_BITVECTOR")
 
 def make_enum(file):
     file.write('''
@@ -507,13 +496,6 @@ SPECENUM_FOO(_translated_name)(enum SPECENUM_NAME enumerator)
 }
 ''')
 
-def make_bitvector(file):
-    file.write('''
-#ifdef SPECENUM_BITVECTOR
-BV_DEFINE(SPECENUM_BITVECTOR, (SPECENUM_MAX_VALUE + 1));
-#endif /* SPECENUM_BITVECTOR */
-''')
-
 def make_undef(file):
     for macro in macros:
         file.write('''
@@ -545,7 +527,6 @@ def main():
     make_name(output)
     make_by_name(output)
     make_translated_name(output)
-    make_bitvector(output)
     make_undef(output)
 
     output.write('''

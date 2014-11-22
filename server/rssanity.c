@@ -16,7 +16,6 @@
 #endif
 
 /* common */
-#include "achievements.h"
 #include "effects.h"
 #include "game.h"
 #include "government.h"
@@ -80,7 +79,7 @@ static bool sanity_check_req_individual(struct requirement *preq,
                   "%s (only great wonders supported)", list_for,
                   improvement_name_translation(pimprove));
         return FALSE;
-      } else if (preq->range > REQ_RANGE_TRADEROUTE && !is_wonder(pimprove)) {
+      } else if (preq->range > REQ_RANGE_CITY && !is_wonder(pimprove)) {
         log_error("%s: %s-ranged requirement not supported for "
                   "%s (only wonders supported)", list_for,
                   req_range_name(preq->range),
@@ -118,13 +117,14 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
     return TRUE;
   }
 
-  /* Add to counter for positive requirements. */
-  if (preq->present) {
+  /* Add to counter for positive requirements 
+     For negated requirements, there are no limitations */
+  if (!preq->negated) {
     reqs_of_type[preq->source.kind]++;
   }
   rc = reqs_of_type[preq->source.kind];
 
-  if (preq->range == REQ_RANGE_LOCAL && preq->present) {
+  if (preq->range == REQ_RANGE_LOCAL && !preq->negated) {
     local_reqs_of_type[preq->source.kind]++;
 
     switch (preq->source.kind) {
@@ -147,7 +147,7 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
     }
   }
 
-  if (rc > 1 && preq->present) {
+  if (rc > 1 && !preq->negated) {
     /* Multiple requirements of the same type */
     switch (preq->source.kind) {
      case VUT_GOVERNMENT:
@@ -156,14 +156,10 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
      case VUT_OTYPE:
      case VUT_SPECIALIST:
      case VUT_MINSIZE: /* Breaks nothing, but has no sense either */
-     case VUT_MINMOVES: /* Breaks nothing, but has no sense either */
-     case VUT_MINVETERAN: /* Breaks nothing, but has no sense either */
-     case VUT_MINHP: /* Breaks nothing, but has no sense either */
      case VUT_MINYEAR:
      case VUT_AI_LEVEL:
      case VUT_TERRAINALTER: /* Local range only */
      case VUT_CITYTILE:
-     case VUT_STYLE:
        /* There can be only one requirement of these types (with current
         * range limitations)
         * Requirements might be identical, but we consider multiple
@@ -194,39 +190,20 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
        }
        break;
 
-    case VUT_AGE:
-      /* There can be age of the city, unit, and player */
-      if (rc > 3) {
-        log_error("%s: Requirement list has more %s requirements than "
-                  "can ever be fullfilled.", list_for,
-                  universal_type_rule_name(&preq->source));
-        return FALSE;
-      }
-      break;
-
-     case VUT_EXTRA:
-       /* Note that there can be more than 1 extra / tile. */
-     case VUT_MAXTILEUNITS:
-       /* Can require different numbers on e.g. local/adjacent tiles. */
+     case VUT_SPECIAL:
+     case VUT_BASE:
+     case VUT_ROAD:
+       /* Note that there can be more than 1 special, road, or base / tile. */
      case VUT_NATION:
-       /* Can require multiple nations at Team/Alliance/World range. */
-     case VUT_NATIONGROUP:
-       /* Nations can be in multiple groups. */
+       /* Can require multiple nations at World range. */
      case VUT_NONE:
      case VUT_ADVANCE:
      case VUT_TECHFLAG:
      case VUT_IMPROVEMENT:
-     case VUT_UNITSTATE:
-       /* Can check different properties. */
      case VUT_UTFLAG:
      case VUT_UCFLAG:
      case VUT_TERRFLAG:
-     case VUT_BASEFLAG:
-     case VUT_ROADFLAG:
      case VUT_NATIONALITY:
-     case VUT_MINCULTURE:
-     case VUT_ACHIEVEMENT:
-     case VUT_DIPLREL:
        /* Can have multiple requirements of these types */
        break;
      case VUT_COUNT:
@@ -244,10 +221,10 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
 }
 
 /**************************************************************************
-  Sanity check requirement vector, including whether it's free of
+  Sanity check requirement list, including whether it's free of
   conflicting requirements.
-  'conjunctive' should be TRUE if the vector is an AND vector (all requirements
-  must be active), FALSE if it's a disjunctive (OR) vector.
+  'conjunctive' should be TRUE if the list is an AND list (all requirements
+  must be active), FALSE if it's a disjunctive (OR) list.
   max_tiles is number of tiles that can provide requirement. Value -1
   disables checking based on number of tiles.
 
@@ -258,6 +235,31 @@ static bool sanity_check_req_set(int reqs_of_type[], int local_reqs_of_type[],
           limitations for each requirement type
         - This function should check also problems caused by defining
           range to less than hardcoded max for requirement type
+**************************************************************************/
+static bool sanity_check_req_list(const struct requirement_list *preqs,
+                                  bool conjunctive, int max_tiles,
+                                  const char *list_for)
+{
+  int reqs_of_type[VUT_COUNT];
+  int local_reqs_of_type[VUT_COUNT];
+
+  /* Initialize requirement counters */
+  memset(reqs_of_type, 0, sizeof(reqs_of_type));
+  memset(local_reqs_of_type, 0, sizeof(local_reqs_of_type));
+
+  requirement_list_iterate(preqs, preq) {
+    if (!sanity_check_req_set(reqs_of_type, local_reqs_of_type, preq,
+                              conjunctive, max_tiles, list_for)) {
+      return FALSE;
+    }
+  } requirement_list_iterate_end;
+
+  return TRUE;
+}
+
+/**************************************************************************
+  Requirement vector version of requirement sanity checking. See
+  requirement list version for comments.
 **************************************************************************/
 static bool sanity_check_req_vec(const struct requirement_vector *preqs,
                                  bool conjunctive, int max_tiles,
@@ -278,19 +280,12 @@ static bool sanity_check_req_vec(const struct requirement_vector *preqs,
     requirement_vector_iterate(preqs, nreq) {
       if (are_requirements_opposites(preq, nreq)) {
         log_error("%s: %s ranged %s %s requirement \"%s\" "
-                  "required to be both present and absent.",
+                  "required to be both active and negated.",
                   list_for,
                   req_range_name(preq->range),
                   preq->survives ? "surviving" : "non surviving",
                   universal_type_rule_name(&preq->source),
                   universal_rule_name(&preq->source));
-        return FALSE;
-      }
-      if (are_requirements_contradictions(preq, nreq)) {
-        log_error("%s: Requirements {%s} and {%s} contradict each other.",
-                  list_for,
-                  req_to_fstring(preq),
-                  req_to_fstring(nreq));
         return FALSE;
       }
     } requirement_vector_iterate_end;
@@ -300,15 +295,50 @@ static bool sanity_check_req_vec(const struct requirement_vector *preqs,
 }
 
 /**************************************************************************
+  Check that requirement list and negated requirements list do not have
+  conflicting requirements or other problems.
+
+  Returns TRUE iff everything ok.
+**************************************************************************/
+static bool sanity_check_req_nreq_list(const struct requirement_list *preqs,
+                                       const struct requirement_list *pnreqs,
+                                       int one_tile,
+                                       const char *list_for)
+{
+  /* Check internal sanity of requirement list */
+  if (!sanity_check_req_list(preqs, TRUE, one_tile, list_for)) {
+    return FALSE;
+  }
+
+  /* There is no pnreqs in all cases */
+  if (pnreqs != NULL) {
+    sanity_check_req_list(preqs, FALSE, one_tile, list_for);
+    /* Check sanity between reqs and nreqs */
+    requirement_list_iterate(preqs, preq) {
+      requirement_list_iterate(pnreqs, pnreq) {
+        if (are_requirements_equal(preq, pnreq)) {
+          log_error("%s: Identical %s requirement in requirements and "
+                    "negated requirements.", list_for,
+                    universal_type_rule_name(&preq->source));
+          return FALSE;
+        }
+      } requirement_list_iterate_end;
+    } requirement_list_iterate_end;
+  }
+
+  return TRUE;
+}
+
+/**************************************************************************
   Sanity check callback for iterating effects cache.
 **************************************************************************/
-static bool effect_list_sanity_cb(const struct effect *peffect, void *data)
+static bool effect_list_sanity_cb(const struct effect *peffect)
 {
   int one_tile = -1; /* TODO: Determine correct value from effect.
                       *       -1 disables checking */
 
-  return sanity_check_req_vec(&peffect->reqs, TRUE, one_tile,
-                              effect_type_name(peffect->type));
+  return sanity_check_req_nreq_list(peffect->reqs, peffect->nreqs, one_tile,
+                                    effect_type_name(peffect->type));
 }
 
 /**************************************************************************
@@ -336,18 +366,12 @@ static bool rs_barbarian_units(void)
     ruleset_error(LOG_ERROR, "No role barbarian ship units");
     return FALSE;
   } else if (num_role_units(L_BARBARIAN_BOAT) > 0) {
-    bool sea_capable = FALSE;
-    struct unit_type *u = get_role_unit(L_BARBARIAN_BOAT, 0);
+    struct unit_type *u;
+    enum unit_move_type mt;
 
-    terrain_type_iterate(pterr) {
-      if(is_ocean(pterr)
-         && BV_ISSET(pterr->native_to, uclass_index(utype_class(u)))) {
-        sea_capable = TRUE;
-        break;
-      }
-    } terrain_type_iterate_end;
-
-    if (!sea_capable) {
+    u = get_role_unit(L_BARBARIAN_BOAT, 0);
+    mt = utype_move_type(u);
+    if (mt != UMT_SEA && mt != UMT_BOTH) {
       ruleset_error(LOG_ERROR,
                     "Barbarian boat (%s) needs to be able to move at sea.",
                     utype_rule_name(u));
@@ -410,26 +434,6 @@ static bool rs_common_units(void)
     ruleset_error(LOG_ERROR, "No role Firstbuild units");
   }
 
-  if (num_role_units(L_FERRYBOAT) > 0) {
-    bool sea_capable = FALSE;
-    struct unit_type *u = get_role_unit(L_FERRYBOAT, 0);
-
-    terrain_type_iterate(pterr) {
-      if(is_ocean(pterr)
-         && BV_ISSET(pterr->native_to, uclass_index(utype_class(u)))) {
-        sea_capable = TRUE;
-        break;
-      }
-    } terrain_type_iterate_end;
-
-    if (!sea_capable) {
-      ruleset_error(LOG_ERROR,
-                    "Ferryboat (%s) needs to be able to move at sea.",
-                    utype_rule_name(u));
-      return FALSE;
-    }
-  }
-
   return TRUE;
 }
 
@@ -448,45 +452,12 @@ bool sanity_check_ruleset_data(void)
                    * immediately so all errors get printed, not just first
                    * one. */
 
-  if (game.info.tech_cost_style == TECH_COST_CIV1CIV2
+  if (game.info.tech_cost_style == 0
       && game.info.free_tech_method == FTM_CHEAPEST) {
     ruleset_error(LOG_ERROR, "Cost based free tech method, but tech cost style "
                   "1 so all techs cost the same.");
     ok = FALSE;
   }
-
-  /* Advances. */
-  advance_iterate(A_FIRST, padvance) {
-    for (i = AR_ONE; i < AR_SIZE; i++) {
-      const struct advance *preq;
-
-      if (i == AR_ROOT) {
-        /* Self rootreq is a feature. */
-        continue;
-      }
-
-      preq = advance_requires(padvance, i);
-
-      if (A_NEVER == preq) {
-        continue;
-      } else if (preq == padvance) {
-        ruleset_error(LOG_ERROR, "Tech \"%s\" requires itself.",
-                      advance_rule_name(padvance));
-        ok = FALSE;
-        continue;
-      }
-
-      advance_req_iterate(preq, preqreq) {
-        if (preqreq == padvance) {
-          ruleset_error(LOG_ERROR,
-                        "Tech \"%s\" requires itself indirectly via \"%s\".",
-                        advance_rule_name(padvance),
-                        advance_rule_name(preq));
-          ok = FALSE;
-        }
-      } advance_req_iterate_end;
-    }
-  } advance_iterate_end;
 
   /* Check that all players can have their initial techs */
   nations_iterate(pnation) {
@@ -585,7 +556,7 @@ bool sanity_check_ruleset_data(void)
 
   /* Check requirement sets against conflicting requirements.
    * Effects use requirement lists */
-  if (!iterate_effect_cache(effect_list_sanity_cb, NULL)) {
+  if (!iterate_effect_cache(effect_list_sanity_cb)) {
     ruleset_error(LOG_ERROR,
                   "Effects have conflicting or invalid requirements!");
     ok = FALSE;
@@ -611,12 +582,6 @@ bool sanity_check_ruleset_data(void)
                     "Buildings have conflicting or invalid requirements!");
       ok = FALSE;
     }
-    if (!sanity_check_req_vec(&pimprove->obsolete_by, FALSE, -1,
-                              improvement_rule_name(pimprove))) {
-      ruleset_error(LOG_ERROR,
-                    "Buildings have conflicting or invalid obsolescence req!");
-      ok = FALSE;
-    }
   } improvement_iterate_end;
 
   /* Governments */
@@ -639,35 +604,34 @@ bool sanity_check_ruleset_data(void)
                     "Specialists have conflicting or invalid requirements!");
       ok = FALSE;
     }
+
+    /* Specialist rulenames are used as an entry name in savegames. */
+    if (!is_secfile_entry_name_valid(specialist_rule_name(psp))) {
+      ruleset_error(LOG_ERROR,
+                    "Specialist rule name \"%s\" unusable in savegames!",
+                    specialist_rule_name(psp));
+      ok = FALSE;
+    }
   } specialist_type_iterate_end;
 
-  /* Extras */
-  extra_type_iterate(pextra) {
-    if (!sanity_check_req_vec(&pextra->reqs, TRUE, -1,
-                              extra_rule_name(pextra))) {
+  /* Bases */
+  base_type_iterate(pbase) {
+    if (!sanity_check_req_vec(&pbase->reqs, TRUE, -1,
+                              base_rule_name(pbase))) {
       ruleset_error(LOG_ERROR,
-                    "Extras have conflicting or invalid requirements!");
+                    "Bases have conflicting or invalid requirements!");
       ok = FALSE;
     }
-    if (!sanity_check_req_vec(&pextra->rmreqs, TRUE, -1,
-                              extra_rule_name(pextra))) {
-      ruleset_error(LOG_ERROR,
-                    "Extras have conflicting or invalid removal requirements!");
-      ok = FALSE;
-    }
-  } extra_type_iterate_end;
+  } base_type_iterate_end;
 
   /* Roads */
   road_type_iterate(proad) {
-    road_type_list_iterate(proad->integrators, iroad) {
-      if (road_index(proad) != road_index(iroad)
-          && !BV_ISSET(iroad->integrates, road_index(proad))) {
-        ruleset_error(LOG_ERROR,
-                      "Road %s integrates with non integrating road %s!",
-                      road_name_translation(proad),
-                      road_name_translation(iroad));
-      }
-    } road_type_list_iterate_end;
+    if (!sanity_check_req_vec(&proad->reqs, TRUE, -1,
+                              road_rule_name(proad))) {
+      ruleset_error(LOG_ERROR,
+                    "Roads have conflicting or invalid requirements!");
+      ok = FALSE;
+    }
   } road_type_iterate_end;
 
   /* City styles */
@@ -680,52 +644,22 @@ bool sanity_check_ruleset_data(void)
     }
   }
 
-  /* Action enablers */
-  action_iterate(act) {
-    action_enabler_list_iterate(action_enablers_for_action(act), enabler) {
-      if (!sanity_check_req_vec(&(enabler->actor_reqs), TRUE, -1,
-                                "Action Enabler Actor Reqs")
-          || !sanity_check_req_vec(&(enabler->target_reqs), TRUE, -1,
-                                   "Action Enabler Target Reqs")) {
-        ruleset_error(LOG_ERROR,
-                      "Action Enablers have conflicting or invalid requirements!");
-        ok = FALSE;
-      }
-    } action_enabler_list_iterate_end;
-  } action_iterate_end;
-
-  /* There must be basic city style for each nation style to start with */
-  styles_iterate(pstyle) {
-    if (basic_city_style_for_style(pstyle) < 0) {
-      ruleset_error(LOG_ERROR,
-                    "There's no basic city style for nation style %s",
-                    style_rule_name(pstyle));
-      ok = FALSE;
-    }
-  } styles_iterate_end;
-
-  /* Music styles */
-  music_styles_iterate(pmus) {
-    if (!sanity_check_req_vec(&pmus->reqs, TRUE, -1, "Music Style")) {
-      ruleset_error(LOG_ERROR,
-                    "Music Styles have conflicting or invalid requirements!");
-      ok = FALSE;
-    }
-  } music_styles_iterate_end;
-
   terrain_type_iterate(pterr) {
-    if (pterr->animal != NULL) {
-      bv_extras no_extras;
-
-      BV_CLR_ALL(no_extras);
-
-      if (!is_native_to_class(utype_class(pterr->animal), pterr, no_extras)) {
-        ruleset_error(LOG_ERROR,
-                      "%s has %s as animal to appear, but it's not native to the terrain.",
-                      terrain_rule_name(pterr), utype_rule_name(pterr->animal));
-        ok = FALSE;
+    unit_class_iterate(uc) {
+      if (BV_ISSET(pterr->native_to, uclass_index(uc))) {
+        if (is_ocean(pterr) && uc->move_type == UMT_LAND) {
+          ruleset_error(LOG_ERROR,
+                        "Oceanic %s is native to land units.",
+                        terrain_rule_name(pterr));
+          ok = FALSE;
+        } else if (!is_ocean(pterr) && uc->move_type == UMT_SEA) {
+          ruleset_error(LOG_ERROR,
+                        "Non-oceanic %s is native to sea units.",
+                        terrain_rule_name(pterr));
+          ok = FALSE;
+        }
       }
-    }
+    } unit_class_iterate_end;
   } terrain_type_iterate_end;
 
   /* Check that all unit classes can exist somewhere */
@@ -741,13 +675,23 @@ bool sanity_check_ruleset_data(void)
       } terrain_type_iterate_end;
 
       if (!can_exist) {
-        extra_type_iterate(pextra) {
-          if (BV_ISSET(pextra->native_to, uclass_index(pclass))
-              && extra_has_flag(pextra, EF_NATIVE_TILE)) {
+        base_type_iterate(pbase) {
+          if (BV_ISSET(pbase->native_to, uclass_index(pclass))
+              && base_has_flag(pbase, BF_NATIVE_TILE)) {
             can_exist = TRUE;
             break;
           }
-        } extra_type_iterate_end;
+        } base_type_iterate_end;
+      }
+
+      if (!can_exist) {
+        road_type_iterate(proad) {
+          if (BV_ISSET(proad->native_to, uclass_index(pclass))
+             && road_has_flag(proad, RF_NATIVE_TILE)) {
+            can_exist = TRUE;
+            break;
+          }
+        } road_type_iterate_end;
       }
 
       if (!can_exist) {
@@ -758,16 +702,6 @@ bool sanity_check_ruleset_data(void)
       }
     }
   } unit_class_iterate_end;
-
-  achievements_iterate(pach) {
-    if (!pach->unique && pach->cons_msg == NULL) {
-      ruleset_error(LOG_ERROR,
-                    "Achievement %s has no message for consecutive gainers thouugh "
-                    "it's possible to be gained by multiple players",
-                    achievement_rule_name(pach));
-      ok = FALSE;
-    }
-  } achievements_iterate_end;
 
   if (ok) {
     ok = rs_common_units();

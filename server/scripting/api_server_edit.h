@@ -49,11 +49,10 @@ Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
 bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
                         const int mod);
 
-void api_edit_create_extra(lua_State *L, Tile *ptile, const char *name);
 void api_edit_create_base(lua_State *L, Tile *ptile, const char *name,
                           struct player *pplayer);
-void api_edit_create_road(lua_State *L, Tile *ptile, const char *name);
 
+void api_edit_create_road(lua_State *L, Tile *ptile, const char *name);
 void api_edit_tile_set_label(lua_State *L, Tile *ptile, const char *label);
 
 void api_edit_climate_change(lua_State *L, enum climate_change_type type,
@@ -64,8 +63,5 @@ Player *api_edit_civil_war(lua_State *L, Player *pplayer, int probability);
 void api_edit_player_victory(lua_State *L, Player *pplayer);
 bool api_edit_unit_move(lua_State *L, Unit *punit, Tile *ptile,
                         int movecost);
-
-void api_edit_city_add_history(lua_State *L, City *pcity, int amount);
-void api_edit_player_add_history(lua_State *L, Player *pplayer, int amount);
 
 #endif /* API_SERVER_EDIT_H */

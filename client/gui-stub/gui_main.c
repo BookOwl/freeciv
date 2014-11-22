@@ -28,6 +28,7 @@
 #include "gui_cbsetter.h"
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 
 #include "gui_main.h"
@@ -176,6 +177,23 @@ void gui_remove_net_input(void)
 }
 
 /**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void gui_add_ggz_input(int sock)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void gui_remove_ggz_input(void)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
   Set one of the unit icons (specified by idx) in the information area
   based on punit.
 
@@ -263,18 +281,23 @@ void gui_editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void gui_editgui_notify_object_created(int tag, int id)
 {}
 
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_gui_ggz_embed_leave_table(void)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_gui_ggz_embed_ensure_server(void)
+{}
+
+
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
 void gui_gui_update_font(const char *font_name, const char *font_value)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void gui_insert_client_build_info(char *outbuf, size_t outlen)
 {
   /* PORTME */
 }

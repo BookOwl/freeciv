@@ -9,7 +9,7 @@
 
 [datafile]
 description="Civ2Civ3 technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2014.September.14c"
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -47,9 +47,8 @@ options="+Freeciv-ruleset-Devel-2014.September.14c"
 ; helptext	= optional help text string (set units ruleset for examples)
 ; bonus_message = text seen when a player is the first to 
 ;                 discover an bonus tech.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
 ; Special values for req1 and req2 are "None" (first section below) 
 ; and "Never" (never available).  If only one tech is required, 
@@ -61,6 +60,9 @@ options="+Freeciv-ruleset-Devel-2014.September.14c"
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 ; "Claim_Ocean"    = Player claims ocean tiles even if they are not
 ;                    adjacent to border source
@@ -391,6 +393,7 @@ cost     = 10
 name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
 cost     = 380
@@ -662,7 +665,7 @@ req2     = "Metallurgy"
 flags    = ""
 graphic     = "a.railroad"
 graphic_alt = "-"
-helptext = _("Allows Settlers, Workers and Engineers to build railroads. Decreases one-time revenue from new trade routes.")
+helptext = _("Decreases one-time revenue from new trade routes.")
 cost     = 350
 
 [advance_recycling]
@@ -687,7 +690,7 @@ cost     = 400
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
 cost     = 350
@@ -772,7 +775,6 @@ req2     = "Laser"
 flags    = ""
 graphic     = "a.superconductors"
 graphic_alt = "-"
-helptext = _("Allows Settlers, Workers and Engineers to build maglevs.")
 cost     = 700
 
 [advance_tactics]
