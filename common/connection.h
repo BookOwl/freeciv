@@ -26,13 +26,7 @@ extern "C" {
 #include <sys/time.h>
 #endif
 
-#ifdef JSON_CONNECTION
-#include <jansson.h>
-#endif  /* JSON_CONNECTION */
-
-#ifndef JSON_CONNECTION
 #define USE_COMPRESSION
-#endif  /* JSON_CONNECTION */
 
 /**************************************************************************
   The connection struct and related stuff.
@@ -51,17 +45,15 @@ struct genhash;
 struct timer_list;
 struct conn_pattern_list;
 
-/* Used in the network protocol. */
 #define MAX_LEN_PACKET   4096
-#define MAX_LEN_CAPSTR    512
-#define MAX_LEN_PASSWORD  512 /* do not change this under any circumstances */
 
 #define MAX_LEN_BUFFER   (MAX_LEN_PACKET * 128)
+#define MAX_LEN_CAPSTR    512
+#define MAX_LEN_PASSWORD  512 /* do not change this under any circumstances */
 
 /****************************************************************************
   Command access levels for client-side use; at present, they are only
   used to control access to server commands typed at the client chatline.
-  Used in the network protocol.
 ****************************************************************************/
 #define SPECENUM_NAME cmdlevel
 /* User may issue no commands at all. */
@@ -123,11 +115,6 @@ struct socket_packet_buffer {
   unsigned char *data;
 };
 
-struct packet_header {
-  unsigned int length : 4;      /* Actually 'enum data_type' */
-  unsigned int type : 4;        /* Actually 'enum data_type' */
-};
-
 #define SPECVEC_TAG byte
 #define SPECVEC_TYPE unsigned char
 #include "specvec.h"
@@ -141,7 +128,6 @@ struct connection {
   int sock;
   bool used;
   bool established;		/* have negotiated initial packets */
-  struct packet_header packet_header;
   char *closing_reason;
 
   /* connection is "observer", not controller; may be observing
@@ -156,12 +142,9 @@ struct connection {
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
   struct timer *last_write;
-#ifdef JSON_CONNECTION
-  json_t *json_packet;
-#endif /* JSON_CONNECTION */
 
   double ping_time;
-
+  
   struct conn_list *self;     /* list with this connection as single element */
   char username[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];

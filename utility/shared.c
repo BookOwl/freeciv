@@ -239,7 +239,7 @@ bool is_option(const char *option_name,char *option)
   Like strcspn but also handles quotes, i.e. *reject chars are
   ignored if they are inside single or double quotes.
 ***************************************************************/
-static size_t fc_strcspn(const char *s, const char *reject)
+static size_t my_strcspn(const char *s, const char *reject)
 {
   bool in_single_quotes = FALSE, in_double_quotes = FALSE;
   size_t i, len = strlen(s);
@@ -300,7 +300,7 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
       break;
     }
 
-    len = fc_strcspn(str, delimiterset);
+    len = my_strcspn(str, delimiterset);
 
     if (token >= num_tokens) {
       break;
@@ -587,7 +587,7 @@ char *skip_leading_spaces(char *s)
   Removes leading spaces in string pointed to by 's'.
   Note 's' must point to writeable memory!
 ***************************************************************************/
-void remove_leading_spaces(char *s)
+static void remove_leading_spaces(char *s)
 {
   char *t;
 
@@ -605,7 +605,7 @@ void remove_leading_spaces(char *s)
   Terminates string pointed to by 's' to remove traling spaces;
   Note 's' must point to writeable memory!
 ***************************************************************************/
-void remove_trailing_spaces(char *s)
+static void remove_trailing_spaces(char *s)
 {
   char *t;
   size_t len;

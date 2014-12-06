@@ -216,8 +216,8 @@ static int write_socket_data(struct connection *pc,
   if (start > 0) {
     buf->ndata -= start;
     memmove(buf->data, buf->data+start, buf->ndata);
-    pc->last_write = timer_renew(pc->last_write, TIMER_USER, TIMER_ACTIVE);
-    timer_start(pc->last_write);
+    pc->last_write = renew_timer_start(pc->last_write,
+				       TIMER_USER, TIMER_ACTIVE);
   }
   return 0;
 }
@@ -240,7 +240,6 @@ void flush_connection_send_buffer_all(struct connection *pc)
 /**************************************************************************
   flush'em
 **************************************************************************/
-#ifndef JSON_CONNECTION
 static void flush_connection_send_buffer_packets(struct connection *pc)
 {
   if(pc && pc->used && pc->send_buffer->ndata >= MAX_LEN_PACKET) {
@@ -251,7 +250,6 @@ static void flush_connection_send_buffer_packets(struct connection *pc)
     }
   }
 }
-#endif /* JSON_CONNECTION */
 
 /****************************************************************************
   Add data to send to the connection.
@@ -292,8 +290,6 @@ bool connection_send_data(struct connection *pconn,
   }
 
   pconn->statistics.bytes_send += len;
-
-#ifndef JSON_CONNECTION
   if (0 < pconn->send_buffer->do_buffer_sends) {
     flush_connection_send_buffer_packets(pconn);
     if (!add_connection_data(pconn, data, len)) {
@@ -302,9 +298,7 @@ bool connection_send_data(struct connection *pconn,
       return FALSE;
     }
     flush_connection_send_buffer_packets(pconn);
-  } else
-#endif /* JSON_CONNECTION */
-  {
+  } else {
     flush_connection_send_buffer_all(pconn);
     if (!add_connection_data(pconn, data, len)) {
       log_verbose("cut connection %s due to huge send buffer (2)",
@@ -592,7 +586,6 @@ void connection_common_init(struct connection *pconn)
 {
   pconn->established = FALSE;
   pconn->used = TRUE;
-  packet_header_init(&pconn->packet_header);
   pconn->closing_reason = NULL;
   pconn->last_write = NULL;
   pconn->buffer = new_socket_packet_buffer();
@@ -629,7 +622,7 @@ void connection_common_close(struct connection *pconn)
     pconn->send_buffer = NULL;
 
     if (pconn->last_write) {
-      timer_destroy(pconn->last_write);
+      free_timer(pconn->last_write);
       pconn->last_write = NULL;
     }
 

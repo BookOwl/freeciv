@@ -1,11 +1,10 @@
 [nation_german]
 
-translation_domain="freeciv"
-
 name   = _("German")
 plural = _("?plural:Germans")
 groups  = "Modern", "European", "Core"
 
+; /* TRANS: Legend for nation in "core" set */
 legend = _("Germany was united in 1871 by the Prussian military \
 force. After World War I it became a republic, but fell into \
 Nazism in 1933 and started World War II. After the war it was split \
@@ -38,7 +37,7 @@ ruler_titles = {
 
 flag         = "germany"
 flag_alt     = "-"
-style        = "European"
+city_style   = "European"
 
 init_techs = ""
 init_buildings=""

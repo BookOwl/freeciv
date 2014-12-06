@@ -61,7 +61,6 @@ enum command_id {
   CMD_DETACH,
   CMD_CREATE,
   CMD_AWAY,
-  CMD_HANDICAPPED,
   CMD_NOVICE,
   CMD_EASY,
   CMD_NORMAL,
@@ -81,15 +80,15 @@ enum command_id {
   CMD_SURRENDER, /* not really harmful, info level */
   CMD_REMOVE,
   CMD_SAVE,
-#ifdef DEBUG
-  CMD_SCENSAVE,
-#endif
   CMD_LOAD,
   CMD_READ_SCRIPT,
   CMD_WRITE_SCRIPT,
   CMD_RESET,
   CMD_LUA,
   CMD_KICK,
+#ifdef DEBUG
+  CMD_OLDSAVE,
+#endif /* DEBUG */
   CMD_DELEGATE,
   CMD_FCDB,
   CMD_MAPIMG,

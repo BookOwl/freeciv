@@ -39,7 +39,6 @@
 #include "map.h"
 #include "movement.h"
 #include "nation.h"
-#include "research.h"
 #include "tech.h"
 #include "terrain.h"
 #include "unitlist.h"
@@ -59,9 +58,6 @@
 
 /* server/advisors */
 #include "advdata.h"
-
-/* ai */
-#include "difficulty.h"
 
 #include "barbarian.h"
 
@@ -91,11 +87,10 @@ bool is_sea_barbarian(struct player *pplayer)
 
   Dead barbarians forget the map and lose the money.
 **************************************************************************/
-struct player *create_barbarian_player(enum barbarian_type type)
+static struct player *create_barbarian_player(enum barbarian_type type)
 {
   struct player *barbarians;
   struct nation_type *nation;
-  struct research *presearch;
 
   players_iterate(barbarians) {
     if ((type == LAND_BARBARIAN && is_land_barbarian(barbarians))
@@ -129,17 +124,8 @@ struct player *create_barbarian_player(enum barbarian_type type)
   }
   server_player_init(barbarians, TRUE, TRUE);
 
-  nation = pick_a_nation(NULL, FALSE, FALSE, type);
-
-  /* Ruleset loading time checks should guarantee that there always is
-     suitable nation available */
-  fc_assert(nation != NULL);
-
+  nation = pick_a_nation(NULL, FALSE, TRUE, type);
   player_nation_defaults(barbarians, nation, TRUE);
-  if (game_was_started()) {
-    /* Find a color for the new player. */
-    assign_player_colors();
-  }
 
   server.nbarbarians++;
 
@@ -156,10 +142,9 @@ struct player *create_barbarian_player(enum barbarian_type type)
   barbarians->ai_controlled = TRUE;
   barbarians->ai_common.barbarian_type = type;
   set_ai_level_directer(barbarians, game.info.skill_level);
-
-  presearch = research_get(barbarians);
-  init_tech(presearch, TRUE);
-  give_initial_techs(presearch, 0);
+  init_tech(barbarians, TRUE);
+  give_global_initial_techs(barbarians);
+  give_nation_initial_techs(barbarians);
 
   /* Ensure that we are at war with everyone else */
   players_iterate(pplayer) {
@@ -180,11 +165,26 @@ struct player *create_barbarian_player(enum barbarian_type type)
                 player_name(barbarians));
 
   send_player_all_c(barbarians, NULL);
-  /* Send research info after player info, else the client will complain
-   * about invalid team. */
-  send_research_info(presearch, NULL);
 
   return barbarians;
+}
+
+/**************************************************************************
+  Check if a tile is land and free of enemy units
+**************************************************************************/
+static bool is_free_land(struct tile *ptile, struct player *who)
+{
+  return (!is_ocean_tile(ptile)
+	  && !is_non_allied_unit_tile((ptile), who));
+}
+
+/**************************************************************************
+  Check if a tile is sea and free of enemy units
+**************************************************************************/
+static bool is_free_sea(struct tile *ptile, struct player *who)
+{
+  return (is_ocean_tile(ptile)
+	  && !is_non_allied_unit_tile((ptile), who));
 }
 
 /**************************************************************************
@@ -294,14 +294,12 @@ bool unleash_barbarians(struct tile *ptile)
     dir_tiles[dir] = mapstep(ptile, dir);
     if (dir_tiles[dir] == NULL) {
       terrainc[dir] = terrain_class_invalid();
-    } else if (!is_non_allied_unit_tile(dir_tiles[dir], barbarians)) {
-      if (is_ocean_tile(dir_tiles[dir])) {
-        terrainc[dir] = TC_OCEAN;
-        ocean_tiles++;
-      } else {
-        terrainc[dir] = TC_LAND;
-        land_tiles++;
-      }
+    } else if (is_free_land(dir_tiles[dir], barbarians)) {
+      terrainc[dir] = TC_LAND;
+      land_tiles++;
+    } else if (is_free_sea(dir_tiles[dir], barbarians)) {
+      terrainc[dir] = TC_OCEAN;
+      ocean_tiles++;
     } else {
       terrainc[dir] = terrain_class_invalid();
     }
@@ -479,7 +477,6 @@ static void try_summon_barbarians(void)
   struct player *barbarians, *victim;
   struct unit_type *leader_type;
   int barb_count, really_created = 0;
-  bool hut_present = FALSE;
 
   /* We attempt the summons on a particular, random position.  If this is
    * an invalid position then the summons simply fails this time.  This means
@@ -526,15 +523,9 @@ static void try_summon_barbarians(void)
   }
   log_debug("Barbarians are willing to fight");
 
-  /* Remove huts in place of uprising */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(utile, pextra)) {
-      tile_remove_extra(utile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(utile, S_HUT)) {
+    /* remove the hut in place of uprising */
+    tile_clear_special(utile, S_HUT);
     update_tile_knowledge(utile);
   }
 
@@ -595,7 +586,7 @@ static void try_summon_barbarians(void)
     boat = find_a_unit_type(L_BARBARIAN_BOAT,-1);
 
     if (is_native_tile(boat, utile)
-        && (!utype_has_flag(boat, UTYF_TRIREME) || is_safe_ocean(utile))) {
+        && (!utype_has_flag(boat, F_TRIREME) || is_safe_ocean(utile))) {
       int cap;
 
       ptrans = create_unit(barbarians, utile, boat, 0, 0, -1);

@@ -5,7 +5,6 @@ pkgdatadir = $(datadir)/$(PACKAGE)/stdsounds
 
 pkgdata_DATA =          \
 	foot3.ogg	\
-	illegal.ogg	\
 	inh2o.ogg	\
 	LrgCan.ogg	\
 	LrgExpl.ogg	\

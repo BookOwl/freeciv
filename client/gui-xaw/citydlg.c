@@ -49,7 +49,6 @@
 #include "packets.h"
 #include "player.h"
 #include "specialist.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 
 /* client */
@@ -540,7 +539,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 
   if (tileset_tile_height(tileset)<45) dummy_improvement_list[5]=0;
 
-  if (options.concise_city_production) {
+  if (concise_city_production) {
     dummy_improvement_list[0] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXX";
   }
 
@@ -655,7 +654,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 			    XtNfromHoriz, 
 			    (XtArgVal)pdialog->map_canvas,
 			    XtNlabel,
-			    options.concise_city_production
+			    concise_city_production
 				? "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 				: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 			    NULL);
@@ -1393,7 +1392,7 @@ void present_units_callback(Widget w, XtPointer client_data,
 	|| !can_unit_do_activity(punit, ACTIVITY_FORTIFYING)) {
       XtSetSensitive(XtNameToWidget(wd, "*button3"), FALSE);
     }
-    if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       XtSetSensitive(XtNameToWidget(wd, "*button4"), FALSE);
     }
     if (punit->homecity == pcity->id) {
@@ -1468,7 +1467,7 @@ void trade_callback(Widget w, XtPointer client_data, XtPointer call_data)
 	      city_name(pdialog->pcity));
   bptr = end_of_strn(bptr, &nleft);
   
-  for (i = 0; i < MAX_TRADE_ROUTES; i++)
+  for (i = 0; i < NUM_TRADE_ROUTES; i++)
     if(pdialog->pcity->trade[i]) {
       struct city *pcity;
       x=1;
@@ -1660,7 +1659,7 @@ static void support_units_callback(Widget w, XtPointer client_data,
 			     disband_callback, punit->id, 1,
 			     present_units_cancel_callback, 0, 0,
 			     NULL);
-        if (unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+        if (unit_has_type_flag(punit, F_UNDISBANDABLE)) {
           XtSetSensitive(XtNameToWidget(wd, "*button3"), FALSE);
         }
       }
@@ -1747,7 +1746,7 @@ void city_dialog_update_supported_units(struct city_dialog *pdialog,
       continue;
 
     XawPixcommClear(pixcomm); /* STG */
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
     put_unit_pixmap_city_overlays(punit,
                                   XawPixcommPixmap(pixcomm),
                                   punit->upkeep, happy_cost);
@@ -1809,7 +1808,7 @@ void city_dialog_update_present_units(struct city_dialog *pdialog, int unitid)
       continue;
 
     XawPixcommClear(pixcomm); /* STG */
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
 
     xaw_expose_now(pixcomm);
 

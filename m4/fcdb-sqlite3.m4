@@ -8,12 +8,12 @@ AC_DEFUN([FC_FCDB_SQLITE3],
 
     FC_CHECK_SQLITE3(
     [
-      FCDB_SQLITE3_CFLAGS="$sqlite3_cflags"
-      FCDB_SQLITE3_LIBS="$sqlite3_ldflags"
+      FCDB_SQLITE3_CFLAGS="$SQLITE3_CFLAGS"
+      FCDB_SQLITE3_LIBS="$SQLITE3_LDFLAGS"
 
       AC_SUBST(FCDB_SQLITE3_CFLAGS)
 
-      AC_DEFINE([HAVE_FCDB_SQLITE3], [1], [Have Sqlite3 database backend])
+      AC_DEFINE(HAVE_FCDB_SQLITE3,1,[ ])
       fcdb_sqlite3=yes
     ],
     [

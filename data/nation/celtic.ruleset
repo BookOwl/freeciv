@@ -1,10 +1,9 @@
 [nation_celtic]
 
-translation_domain="freeciv"
-
 name=_("Celtic")
 plural=_("?plural:Celts")
 groups="Ancient", "European", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("The Celts were an Indo-European ethno-linguistic complex in Western\
  Europe, probably originating from the area between the upper Rhine and\
  upper Danube, from the Urnfield culture and the western group of the\
@@ -31,7 +30,7 @@ leaders = {
 
 flag="celtic"
 flag_alt = "-"
-style = "Celtic"
+city_style = "Celtic"
 
 ruler_titles = {
   "government",     "male_title",          "female_title"

@@ -24,7 +24,7 @@ ruler_titles = {
 
 flag="mauritania"
 flag_alt = "-"
-style = "babylonian"
+city_style = "babylonian"
 
 init_techs=""
 init_buildings=""

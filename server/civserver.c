@@ -53,9 +53,12 @@
 /* server */
 #include "aiiface.h"
 #include "console.h"
+#include "ggzserver.h"
 #include "meta.h"
 #include "sernet.h"
 #include "srv_main.h"
+
+#include "civserver.h"
 
 #ifdef GENERATING_MAC
 static void Mac_options(int argc);  /* don't need argv */
@@ -82,7 +85,10 @@ static void signal_handler(int sig)
 
   switch (sig) {
   case SIGINT:
-    if (timer && timer_read_seconds(timer) <= 1.0) {
+    if (with_ggz) {
+      save_and_exit(SIGINT);
+    }
+    if (timer && read_timer_seconds(timer) <= 1.0) {
       save_and_exit(SIGINT);
     } else {
       if (game.info.timeout == -1) {
@@ -94,8 +100,7 @@ static void signal_handler(int sig)
                      "within one second to make it exit."));
       }
     }
-    timer = timer_renew(timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(timer);
+    timer = renew_timer_start(timer, TIMER_USER, TIMER_ACTIVE);
     break;
 
 #ifdef SIGHUP
@@ -190,8 +195,6 @@ int main(int argc, char *argv[])
 #endif
   srvarg.announce = ANNOUNCE_DEFAULT;
 
-  game.server.meta_info.type[0] = '\0';
-
   /* no  we don't use GNU's getopt or even the "standard" getopt */
   /* yes we do have reasons ;)                                   */
   /* FIXME: and that are? */
@@ -233,7 +236,7 @@ int main(int argc, char *argv[])
       srvarg.metaserver_no_send = FALSE;      /* --Metaserver implies --meta */
     } else if ((option = get_option_malloc("--identity",
 					   argv, &inx, argc))) {
-      sz_strlcpy(srvarg.identity_name, option);
+      sz_strlcpy(srvarg.metaserver_name, option);
       free(option);
     } else if ((option = get_option_malloc("--port", argv, &inx, argc))) {
       if (!str_to_int(option, &srvarg.port)) {
@@ -245,10 +248,6 @@ int main(int argc, char *argv[])
       srvarg.bind_addr = option; /* Never freed. */
     } else if ((option = get_option_malloc("--Bind-meta", argv, &inx, argc))) {
       srvarg.bind_meta_addr = option; /* Never freed. */
-#ifdef FREECIV_WEB
-    } else if ((option = get_option_malloc("--type", argv, &inx, argc))) {
-      sz_strlcpy(game.server.meta_info.type, option);
-#endif /* FREECIV_WEB */
     } else if ((option = get_option_malloc("--read", argv, &inx, argc)))
       srvarg.script_filename = option; /* Never freed. */
     else if ((option = get_option_malloc("--quitidle", argv, &inx, argc))) {
@@ -377,7 +376,7 @@ int main(int argc, char *argv[])
     cmdhelp_add(help, "i",
                 /* TRANS: "identity" is exactly what user must type, do not translate. */
                 _("identity ADDR"),
-                _("Be known as ADDR at metaserver or LAN client"));
+                _("Be known as ADDR at metaserver"));
     cmdhelp_add(help, "l",
                 /* TRANS: "log" is exactly what user must type, do not translate. */
                 _("log FILE"),
@@ -388,12 +387,6 @@ int main(int argc, char *argv[])
                 /* TRANS: "Metaserver" is exactly what user must type, do not translate. */
                 _("Metaserver ADDR"),
                 _("Set ADDR as metaserver address"));
-#ifdef FREECIV_WEB
-    cmdhelp_add(help, "t",
-                /* TRANS: "Type" is exactly what user must type, do not translate. */
-                _("Type TYPE"),
-                _("Set TYPE as server type in metaserver"));
-#endif /* FREECIV_WEB */
     cmdhelp_add(help, "p",
                 /* TRANS: "port" is exactly what user must type, do not translate. */
                 _("port PORT"),
@@ -453,6 +446,7 @@ int main(int argc, char *argv[])
   /* disallow running as root -- too dangerous */
   dont_run_as_root(argv[0], "freeciv_server");
 
+  ggz_initialize();
   init_our_capability();
 
   /* have arguments, call the main server loop... */

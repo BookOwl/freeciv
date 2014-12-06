@@ -176,7 +176,6 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 {
   char buf[4 * MAX_LEN_NAME], plr_buf[4 * MAX_LEN_NAME];
   struct city *pcity;
-  const struct research *presearch = research_get(pdialog->pplayer);
 
   static char *tech_list_names_ptrs[A_LAST+1];
   static char tech_list_names[A_LAST+1][200];
@@ -254,20 +253,19 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  XtNlabel, buf,
 			  NULL);
 
-  switch (presearch->researching) {
+  switch (player_research_get(pdialog->pplayer)->researching) {
   case A_UNKNOWN:
     fc_snprintf(buf, sizeof(buf), _("Researching: (Unknown)"));
     break;
   case A_UNSET:
     fc_snprintf(buf, sizeof(buf), _("Researching: Unknown(%d/-)"),
-                presearch->bulbs_researched);
+		player_research_get(pdialog->pplayer)->bulbs_researched);
     break;
   default:
     fc_snprintf(buf, sizeof(buf), _("Researching: %s(%d/%d)"),
-                research_advance_name_translation(presearch,
-                                                  presearch->researching),
-                presearch->bulbs_researched,
-                presearch->client.researching_cost);
+		advance_name_researching(pdialog->pplayer),
+		player_research_get(pdialog->pplayer)->bulbs_researched,
+                player_research_get(pdialog->pplayer)->client.researching_cost);
     break;
   };
 
@@ -288,10 +286,8 @@ void create_intel_dialog(struct intel_dialog *pdialog, bool raise)
 			  NULL);
 
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_state(presearch, i)
-        == TECH_KNOWN) {
-      if (research_invention_state(research_get(client_player()), i)
-          == TECH_KNOWN) {
+    if (player_invention_state(pdialog->pplayer, i) == TECH_KNOWN) {
+      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
 	sz_strlcpy(tech_list_names[j], advance_name_translation(advance_by_number(i)));
       } else {
 	fc_snprintf(tech_list_names[j], sizeof(tech_list_names[j]),
@@ -507,7 +503,7 @@ void update_intel_diplo_dialog(struct intel_dialog *pdialog)
 		  "%-32s %-16s %-16s",
 		  player_name(other),
 		  nation_adjective_for_player(other),
-		  diplstate_type_translated_name(state->type));
+		  diplstate_text(state->type));
       namelist_ptrs[i] = namelist_text[i];
       i++;
     } players_iterate_end;

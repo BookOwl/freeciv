@@ -26,8 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -1439,10 +1438,6 @@ void option_gui_update(struct option *poption)
       && option_optset(poption) == option_dialog->optset.poptset
       && option_category(poption) == option_dialog->optset.category) {
     option_widget_update(poption);
-  }
-
-  if (!strcmp(option_name(poption), "nationset")) {
-    nationset_changed();
   }
 }
 

@@ -23,12 +23,9 @@ extern "C" {
 #include <sys/time.h>
 #endif
 
-/* utility */
-#include "fcthread.h"
 #include "shared.h"
 #include "timing.h"
 
-/* common */
 #include "connection.h"		/* struct conn_list */
 #include "fc_types.h"
 #include "player.h"
@@ -58,15 +55,11 @@ enum autosave_type {
   AS_TURN = 0,
   AS_GAME_OVER,
   AS_QUITIDLE,
-  AS_INTERRUPT,
-  AS_TIMER
+  AS_INTERRUPT
 };
 
-struct user_flag
-{
-  char *name;
-  char *helptxt;
-};
+#define CONTAMINATION_POLLUTION 1
+#define CONTAMINATION_FALLOUT   2
 
 /* The number of turns that the first user needs to be attached to a 
  * player for that user to be ranked as that player */
@@ -76,7 +69,6 @@ struct civ_game {
   struct packet_ruleset_control control;
   struct packet_scenario_info scenario;
   struct packet_game_info info;
-  struct packet_timeout_info tinfo;
 
   struct government *government_during_revolution;
 
@@ -95,11 +87,7 @@ struct civ_game {
   } rgame;
 
   union {
-    struct {
-      /* Only used at the client (./client/). */
-
-      bool ruleset_init;
-    } client;
+    /* Add client side when needed */
 
     struct {
       /* Only used in the server (./ai/ and ./server/). */
@@ -108,6 +96,7 @@ struct civ_game {
 
       /* Game settings & other data. */
 
+      bool allied_victory;
       enum city_names_mode allowed_city_names;
       enum plrcolor_mode plrcolormode;
       int aqueductloss;
@@ -120,8 +109,7 @@ struct civ_game {
       int conquercost;
       int contactturns;
       int diplchance;
-      int diplbulbcost;
-      int diplgoldcost;
+      int diplcost;
       int dispersion;
       int end_turn;
       bool endspaceship;
@@ -136,7 +124,6 @@ struct civ_game {
       int killunhomed;    /* slowly killing unhomed units */
       int maxconnectionsperhost;
       int max_players;
-      char nationset[MAX_LEN_NAME];
       int mgr_distance;
       bool mgr_foodneeded;
       int mgr_nationchance;
@@ -146,6 +133,7 @@ struct civ_game {
       int min_players;
       bool natural_city_names;
       int netwait;
+      int nuke_contamination;
       int num_phases;
       int occupychance;
       int onsetbarbarian;
@@ -157,17 +145,14 @@ struct civ_game {
       int revolution_length;
       int save_compress_level;
       enum fz_method save_compress_type;
+      int saveversion; /* save game version to use */
       int save_nturns;
-      int save_frequency;
       unsigned autosaves; /* FIXME: char would be enough, but current settings.c code wants to
                              write sizeof(unsigned) bytes */
       bool savepalace;
       bool homecaughtunits;
       char start_units[MAX_LEN_STARTUNIT];
-      bool start_city;
       int start_year;
-      int techloss_forgiveness;
-      int techloss_restore;
       int techlost_donor;
       int techlost_recv;
       int tcptimeout;
@@ -191,7 +176,6 @@ struct civ_game {
        * use. The "stored" value is a value the player can change; it won't
        * take effect until the next turn. */
       int phase_mode_stored;
-      struct timer *save_timer;
       char connectmsg[MAX_LEN_MSG];
       char save_name[MAX_LEN_NAME];
       bool scorelog;
@@ -232,21 +216,9 @@ struct civ_game {
       struct {
         bool user_message_set;
         char user_message[256];
-        char type[20];
       } meta_info;
 
-      struct {
-        fc_mutex city_list;
-      } mutexes;
-
       int first_timeout;
-
-      struct trait_limits default_traits[TRAIT_COUNT];
-      struct government *default_government;
-
-      struct {
-        char *nationlist;
-      } ruledit;
     } server;
   };
 
@@ -268,6 +240,9 @@ void game_reset(void);
 void game_ruleset_init(void);
 void game_ruleset_free(void);
 
+int game_next_year(int);
+void game_advance_year(void);
+
 int civ_population(const struct player *pplayer);
 struct city *game_city_by_name(const char *name);
 struct city *game_city_by_number(int id);
@@ -282,11 +257,10 @@ bool is_player_phase(const struct player *pplayer, int phase);
 
 const char *population_to_text(int thousand_citizen);
 
+const char *textyear(int year);
+
 int generate_save_name(const char *format, char *buf, int buflen,
                        const char *reason);
-
-void user_flag_init(struct user_flag *flag);
-void user_flag_free(struct user_flag *flag);
 
 extern struct civ_game game;
 
@@ -299,7 +273,6 @@ extern struct civ_game game;
 #define GAME_MAX_GOLD            50000
 
 #define GAME_DEFAULT_START_UNITS  "ccwwx"
-#define GAME_DEFAULT_START_CITY  FALSE
 
 #define GAME_DEFAULT_DISPERSION  0
 #define GAME_MIN_DISPERSION      0
@@ -327,8 +300,6 @@ extern struct civ_game game;
 #define GAME_MIN_AIFILL              0
 #define GAME_MAX_AIFILL              GAME_MAX_MAX_PLAYERS
 
-#define GAME_DEFAULT_NATIONSET       ""
-
 #define GAME_DEFAULT_FOODBOX         100
 #define GAME_MIN_FOODBOX             1
 #define GAME_MAX_FOODBOX             10000
@@ -341,13 +312,9 @@ extern struct civ_game game;
 #define GAME_MIN_SCIENCEBOX 1
 #define GAME_MAX_SCIENCEBOX 10000
 
-#define GAME_DEFAULT_DIPLBULBCOST    0
-#define GAME_MIN_DIPLBULBCOST        0
-#define GAME_MAX_DIPLBULBCOST        100
-
-#define GAME_DEFAULT_DIPLGOLDCOST    0
-#define GAME_MIN_DIPLGOLDCOST        0
-#define GAME_MAX_DIPLGOLDCOST        100
+#define GAME_DEFAULT_DIPLCOST        0
+#define GAME_MIN_DIPLCOST            0
+#define GAME_MAX_DIPLCOST            100
 
 #define GAME_DEFAULT_FOGOFWAR        TRUE
 
@@ -358,7 +325,7 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_BORDERS         BORDERS_ENABLED
 
-#define GAME_DEFAULT_HAPPYBORDERS    HB_NATIONAL
+#define GAME_DEFAULT_HAPPYBORDERS    TRUE
 
 #define GAME_DEFAULT_DIPLOMACY       DIPLO_FOR_ALL
 
@@ -373,14 +340,6 @@ extern struct civ_game game;
 #define GAME_DEFAULT_CONQUERCOST     0
 #define GAME_MIN_CONQUERCOST         0
 #define GAME_MAX_CONQUERCOST         100
-
-#define GAME_DEFAULT_TECHLOSSFG      -1
-#define GAME_MIN_TECHLOSSFG          -1
-#define GAME_MAX_TECHLOSSFG          200
-
-#define GAME_DEFAULT_TECHLOSSREST    50
-#define GAME_MIN_TECHLOSSREST        -1
-#define GAME_MAX_TECHLOSSREST        100
 
 #define GAME_DEFAULT_CITYMINDIST     2
 #define GAME_MIN_CITYMINDIST         1
@@ -402,10 +361,6 @@ extern struct civ_game game;
 #define GAME_DEFAULT_RAPTUREDELAY    1
 #define GAME_MIN_RAPTUREDELAY        1
 #define GAME_MAX_RAPTUREDELAY        99 /* 99 practicaly disables rapturing */
-
-#define GAME_DEFAULT_DISASTERS       10
-#define GAME_MIN_DISASTERS           0
-#define GAME_MAX_DISASTERS           1000
  
 #define GAME_DEFAULT_SAVEPALACE      TRUE
 
@@ -440,8 +395,7 @@ extern struct civ_game game;
 #define GAME_MIN_AQUEDUCTLOSS        0
 #define GAME_MAX_AQUEDUCTLOSS        100
 
-#define GAME_DEFAULT_KILLSTACK       TRUE
-#define GAME_DEFAULT_KILLCITIZEN     TRUE
+#define GAME_DEFAULT_KILLCITIZEN     (1 << UMT_LAND)
 
 #define GAME_DEFAULT_KILLUNHOMED     0
 #define GAME_MIN_KILLUNHOMED         0
@@ -471,7 +425,7 @@ extern struct civ_game game;
 #define GAME_DEFAULT_SCOREFILE       "freeciv-score.log"
 #define GAME_DEFAULT_SCORETURN       20
 
-#define GAME_DEFAULT_VICTORY_CONDITIONS (1 << VC_SPACERACE | 1 << VC_ALLIED)
+#define GAME_DEFAULT_SPACERACE       TRUE
 #define GAME_DEFAULT_END_SPACESHIP   TRUE
 
 #define GAME_DEFAULT_TURNBLOCK       TRUE
@@ -546,36 +500,29 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_AUTOATTACK      FALSE
 
-#ifdef FREECIV_WEB
-#define GAME_DEFAULT_RULESETDIR      "fcweb"
-#else  /* FREECIV_WEB */
-#define GAME_DEFAULT_RULESETDIR      "classic"
-#endif /* FREECIV_WEB */
+#define GAME_DEFAULT_RULESETDIR      "default"
 
+#define GAME_DEFAULT_SAVEVERSION     0
 #define GAME_DEFAULT_SAVE_NAME       "freeciv"
 #define GAME_DEFAULT_SAVETURNS       1
 #define GAME_MIN_SAVETURNS           1
 #define GAME_MAX_SAVETURNS           200
-#define GAME_DEFAULT_SAVEFREQUENCY   15
-#define GAME_MIN_SAVEFREQUENCY       2
-#define GAME_MAX_SAVEFREQUENCY       1440
 
 #define GAME_DEFAULT_AUTOSAVES       (1 << AS_TURN | 1 << AS_GAME_OVER | 1 << AS_QUITIDLE | 1 << AS_INTERRUPT)
 
-#define GAME_DEFAULT_SKILL_LEVEL     AI_LEVEL_EASY
-#define GAME_HARDCODED_DEFAULT_SKILL_LEVEL 3 /* that was 'easy' in old saves */
-#define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for oldest save games */
+#define GAME_DEFAULT_SKILL_LEVEL 3      /* easy */
+#define GAME_OLD_DEFAULT_SKILL_LEVEL 5  /* normal; for old save games */
 
-#define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOCqrb"
+#define GAME_DEFAULT_DEMOGRAPHY      "NASRLPEMOqrb"
 #define GAME_DEFAULT_ALLOW_TAKE      "HAhadOo"
 
 #define GAME_DEFAULT_EVENT_CACHE_TURNS    1
 #define GAME_MIN_EVENT_CACHE_TURNS        0
-#define GAME_MAX_EVENT_CACHE_TURNS        (GAME_MAX_END_TURN + 1)
+#define GAME_MAX_EVENT_CACHE_TURNS        9
 
 #define GAME_DEFAULT_EVENT_CACHE_MAX_SIZE   256
 #define GAME_MIN_EVENT_CACHE_MAX_SIZE        10
-#define GAME_MAX_EVENT_CACHE_MAX_SIZE     20000
+#define GAME_MAX_EVENT_CACHE_MAX_SIZE      1000
 
 #define GAME_DEFAULT_EVENT_CACHE_CHAT     TRUE
 
@@ -599,10 +546,9 @@ extern struct civ_game game;
 
 #define GAME_DEFAULT_PLRCOLORMODE PLRCOL_PLR_ORDER
 
-#define GAME_DEFAULT_REVOLENTYPE        REVOLEN_RANDOM
-#define GAME_DEFAULT_REVOLUTION_LENGTH  5
-#define GAME_MIN_REVOLUTION_LENGTH      1
-#define GAME_MAX_REVOLUTION_LENGTH      20
+#define GAME_DEFAULT_REVOLUTION_LENGTH 0
+#define GAME_MIN_REVOLUTION_LENGTH 0
+#define GAME_MAX_REVOLUTION_LENGTH 10
 
 #define GAME_START_YEAR -4000
 
@@ -610,15 +556,14 @@ extern struct civ_game game;
 
 #define GAME_MAX_READ_RECURSION 10 /* max recursion for the read command */
 
+#define GAME_DEFAULT_ALLIED_VICTORY TRUE
+
 #define GAME_DEFAULT_KICK_TIME 1800     /* 1800 seconds = 30 minutes. */
 #define GAME_MIN_KICK_TIME 0            /* 0 = disabling. */
 #define GAME_MAX_KICK_TIME 86400        /* 86400 seconds = 24 hours. */
 
 /* Max distance from the capital used to calculat the bribe cost. */
 #define GAME_UNIT_BRIBE_DIST_MAX 32
-
-/* Max number of recursive transports. */
-#define GAME_TRANSPORT_MAX_RECURSIVE 5
 
 /* ruleset settings */
 
@@ -709,9 +654,15 @@ extern struct civ_game game;
 #define RS_MIN_FOOD_COST                         0
 #define RS_MAX_FOOD_COST                         100
 
+#define RS_DEFAULT_GOLD_UPKEEP_STYLE             0
+#define RS_MIN_GOLD_UPKEEP_STYLE                 0
+#define RS_MAX_GOLD_UPKEEP_STYLE                 2
+
 #define RS_DEFAULT_SLOW_INVASIONS                TRUE
 
 #define RS_DEFAULT_TIRED_ATTACK                  FALSE
+
+#define RS_DEFAULT_KILLSTACK                     TRUE
 
 #define RS_DEFAULT_BASE_BRIBE_COST               750
 #define RS_MIN_BASE_BRIBE_COST                   0
@@ -727,6 +678,10 @@ extern struct civ_game game;
 #define RS_MIN_UPGRADE_VETERAN_LOSS              0
 #define RS_MAX_UPGRADE_VETERAN_LOSS              MAX_VET_LEVELS
 
+#define RS_DEFAULT_TECH_UPKEEP_STYLE     0
+#define RS_MIN_TECH_UPKEEP_STYLE         0
+#define RS_MAX_TECH_UPKEEP_STYLE         1
+
 #define RS_DEFAULT_TECH_UPKEEP_DIVIDER   100
 #define RS_MIN_TECH_UPKEEP_DIVIDER       1
 #define RS_MAX_TECH_UPKEEP_DIVIDER       100000
@@ -734,6 +689,14 @@ extern struct civ_game game;
 #define RS_DEFAULT_BASE_TECH_COST                20
 #define RS_MIN_BASE_TECH_COST                    0
 #define RS_MAX_BASE_TECH_COST                    200
+
+#define RS_DEFAULT_TECH_COST_STYLE               0
+#define RS_MIN_TECH_COST_STYLE                   0
+#define RS_MAX_TECH_COST_STYLE                   4
+
+#define RS_DEFAULT_TECH_LEAKAGE                  0
+#define RS_MIN_TECH_LEAKAGE                      0
+#define RS_MAX_TECH_LEAKAGE                      3
 
 #ifdef __cplusplus
 }

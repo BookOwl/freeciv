@@ -42,7 +42,8 @@ struct attr_key {
   int key, id, x, y;
 };
 
-static genhash_val_t attr_key_val(const struct attr_key *pkey);
+static genhash_val_t attr_key_val(const struct attr_key *pkey,
+                                  size_t num_buckets);
 static bool attr_key_comp(const struct attr_key *pkey1,
                           const struct attr_key *pkey2);
 static struct attr_key *attr_key_dup(const struct attr_key *pkey);
@@ -50,13 +51,13 @@ static void attr_key_destroy(struct attr_key *pkey);
 
 /* 'struct attribute_hash' and related functions. */
 #define SPECHASH_TAG attribute
-#define SPECHASH_IKEY_TYPE struct attr_key *
-#define SPECHASH_IDATA_TYPE void *
-#define SPECHASH_IKEY_VAL attr_key_val
-#define SPECHASH_IKEY_COMP attr_key_comp
-#define SPECHASH_IKEY_COPY attr_key_dup
-#define SPECHASH_IKEY_FREE attr_key_destroy
-#define SPECHASH_IDATA_FREE free
+#define SPECHASH_KEY_TYPE struct attr_key *
+#define SPECHASH_DATA_TYPE void *
+#define SPECHASH_KEY_VAL attr_key_val
+#define SPECHASH_KEY_COMP attr_key_comp
+#define SPECHASH_KEY_COPY attr_key_dup
+#define SPECHASH_KEY_FREE attr_key_destroy
+#define SPECHASH_DATA_FREE free
 #include "spechash.h"
 #define attribute_hash_values_iterate(hash, pvalue)                         \
   TYPED_HASH_DATA_ITERATE(void *, hash, pvalue)
@@ -71,9 +72,11 @@ static struct attribute_hash *attribute_hash = NULL;
 /****************************************************************************
   Hash function for attribute_hash.
 ****************************************************************************/
-static genhash_val_t attr_key_val(const struct attr_key *pkey)
+static genhash_val_t attr_key_val(const struct attr_key *pkey,
+                                  size_t num_buckets)
 {
-  return (genhash_val_t) pkey->id ^ pkey->x ^ pkey->y ^ pkey->key;
+  return (((genhash_val_t) pkey->id ^ pkey->x ^ pkey->y ^ pkey->key)
+          % num_buckets);
 }
 
 /****************************************************************************
@@ -269,7 +272,8 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
     int value_length;
     struct data_out dout;
 
-    if (!dio_get_uint32(&din, &value_length)) {
+    dio_get_uint32(&din, &value_length);
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 value_length dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -278,10 +282,12 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
                   "uint32 %lu value_length", (long unsigned) value_length);
 
     /* next 12 bytes */
-    if (!dio_get_uint32(&din, &key.key)
-        || !dio_get_uint32(&din, &key.id)
-        || !dio_get_sint16(&din, &key.x)
-        || !dio_get_sint16(&din, &key.y)) {
+    dio_get_uint32(&din, &key.key);
+    dio_get_uint32(&din, &key.id);
+    dio_get_sint16(&din, &key.x);
+    dio_get_sint16(&din, &key.y);
+
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 key dio_input_too_short");
       return A_SERIAL_FAIL;

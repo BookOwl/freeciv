@@ -14,47 +14,8 @@
 #ifndef FC__CHATLINE_H
 #define FC__CHATLINE_H
 
-#ifdef HAVE_CONFIG_H
-#include <fc_config.h>
-#endif
-
 extern "C" {
 #include "chatline_g.h"
 }
 
-//Qt
-#include <QTextBrowser>
-#include <QLineEdit>
-#include <QCheckBox>
-
-class QPushButton;
-
-QString apply_tags(QString str, const struct text_tag_list *tags);
-/***************************************************************************
-  Class for chat widget
-***************************************************************************/
-class chatwdg : public QWidget
-{
-  Q_OBJECT
-public:
-  chatwdg(QWidget *parent);
-  void append(QString str);
-  QLineEdit *chat_line;
-  void make_link(struct tile *ptile);
-private slots:
-  void send();
-  void state_changed(int state);
-  void rm_links();
-  void anchor_clicked(const QUrl &link);
-protected:
-  void paint(QPainter *painter, QPaintEvent *event);
-  void paintEvent(QPaintEvent *event);
-  bool eventFilter(QObject *obj, QEvent *event);
-private:
-  QTextBrowser *chat_output;
-  QPushButton *remove_links;
-  QCheckBox *cb;
-
-};
-
-#endif                        /* FC__CHATLINE_H */
+#endif				/* FC__CHATLINE_H */

@@ -11,44 +11,30 @@ AM_CPPFLAGS = \
 	$(MAPIMG_WAND_CFLAGS)
 
 libfreeciv_la_SOURCES = \
-		achievements.c	\
-		achievements.h	\
-		actions.c	\
-		actions.h	\
 		ai.c		\
 		ai.h		\
 		base.c		\
 		base.h		\
 		borders.c	\
 		borders.h	\
-		calendar.c	\
-		calendar.h	\
 		capstr.c	\
 		capstr.h	\
 		citizens.c	\
 		citizens.h	\
 		city.c		\
 		city.h		\
-		clientutils.c	\
-		clientutils.h	\
 		combat.c	\
 		combat.h	\
 		connection.c	\
 		connection.h	\
-		culture.c	\
-		culture.h	\
 		dataio.c	\
 		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
-		disaster.c	\
-		disaster.h	\
 		effects.c	\
 		effects.h	\
 		events.c	\
 		events.h	\
-		extras.c	\
-		extras.h	\
 		featured_text.c	\
 		featured_text.h	\
 		fc_cmdhelp.c	\
@@ -68,12 +54,8 @@ libfreeciv_la_SOURCES = \
 		map.h		\
 		mapimg.c	\
 		mapimg.h	\
-		metaknowledge.c \
-		metaknowledge.h \
 		movement.c	\
 		movement.h	\
-		multipliers.c   \
-		multipliers.h   \
 		name_translation.h \
 		nation.c        \
 		nation.h        \
@@ -95,8 +77,6 @@ libfreeciv_la_SOURCES = \
 		spaceship.h	\
 		specialist.c	\
 		specialist.h	\
-		style.c		\
-		style.h		\
 		team.c		\
 		team.h		\
 		tech.c		\
@@ -105,25 +85,18 @@ libfreeciv_la_SOURCES = \
 		terrain.h	\
 		tile.c		\
 		tile.h		\
-		traderoutes.c	\
-		traderoutes.h	\
-		traits.h	\
 		unit.c		\
 		unit.h		\
 		unitlist.c	\
 		unitlist.h	\
 		unittype.c	\
 		unittype.h	\
-		version.c	\
-		version.h	\
-		victory.c	\
-		victory.h	\
 		vision.c	\
 		vision.h	\
-		workertask.c	\
-		workertask.h	\
 		worklist.c	\
-		worklist.h
+		worklist.h	\
+		version.c	\
+		version.h
 
 EXTRA_DIST = \
 		packets.def	\
@@ -164,14 +137,7 @@ MAINTAINERCLEANFILES = \
 if SVNREV
 BUILT_SOURCES += fc_svnrev_gen.h
 endif
-if GITREV
-BUILT_SOURCES += fc_gitrev_gen.h
-endif
 
-.PHONY : fc_svnrev_gen.h fc_gitrev_gen.h
-
+.PHONY : fc_svnrev_gen.h
 fc_svnrev_gen.h :
 	"$(top_srcdir)/bootstrap/generate_svnrev.sh" "$(top_srcdir)" "$(top_builddir)"
-
-fc_gitrev_gen.h :
-	"$(top_srcdir)/bootstrap/generate_gitrev.sh" "$(top_srcdir)" "$(top_builddir)"

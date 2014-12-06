@@ -539,7 +539,6 @@ static struct editbar *editbar_create(void)
   editbar_add_tool_button(eb, ETT_TERRAIN);
   editbar_add_tool_button(eb, ETT_TERRAIN_RESOURCE);
   editbar_add_tool_button(eb, ETT_TERRAIN_SPECIAL);
-  editbar_add_tool_button(eb, ETT_ROAD);
   editbar_add_tool_button(eb, ETT_MILITARY_BASE);
   editbar_add_tool_button(eb, ETT_UNIT);
   editbar_add_tool_button(eb, ETT_CITY);
@@ -682,7 +681,7 @@ static void editbar_refresh(struct editbar *eb)
 }
 
 /****************************************************************************
-  Create a pixbuf containing a representative image for the given extra
+  Create a pixbuf containing a representative image for the given base
   type, to be used as an icon in the GUI.
 
   May return NULL on error.
@@ -690,7 +689,7 @@ static void editbar_refresh(struct editbar *eb)
   NB: You must call g_object_unref on the non-NULL return value when you
   no longer need it.
 ****************************************************************************/
-static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
+static GdkPixbuf *create_military_base_pixbuf(const struct base_type *pbase)
 {
   struct drawn_sprite sprs[80];
   int count, w, h, canvas_x, canvas_y;
@@ -711,8 +710,8 @@ static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
   canvas_x = 0;
   canvas_y = 0;
 
-  count = fill_basic_extra_sprite_array(tileset, sprs, pextra);
-  put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+  count = fill_basic_base_sprite_array(tileset, sprs, pbase);
+  put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
 
   return pixbuf;
 }
@@ -750,7 +749,7 @@ static GdkPixbuf *create_terrain_pixbuf(struct terrain *pterrain)
   for (i = 0; i < 3; i++) {
     count = fill_basic_terrain_layer_sprite_array(tileset, sprs,
                                                   i, pterrain);
-    put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+    put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
   }
 
   return pixbuf;
@@ -823,39 +822,24 @@ static void editbar_reload_tileset(struct editbar *eb)
   store = tvs->store;
   gtk_list_store_clear(store);
 
-  extra_type_by_cause_iterate(EC_SPECIAL, spe) {
+  tile_special_type_iterate(special) {
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
-                       TVS_COL_ID, spe->data.special_idx,
-                       TVS_COL_NAME, extra_name_translation(spe),
+                       TVS_COL_ID, special,
+                       TVS_COL_NAME, special_name_translation(special),
                        -1);
-    pixbuf = create_extra_pixbuf(spe);
-    if (pixbuf != NULL) {
-      gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(pixbuf);
+    sprite = get_basic_special_sprite(tileset, special);
+    if (sprite == NULL) {
+      continue;
     }
-  } extra_type_by_cause_iterate_end;
-
-  tvs = eb->tool_selectors[ETT_ROAD];
-  store = tvs->store;
-  gtk_list_store_clear(store);
-
-  road_type_iterate(proad) {
-    int id;
-
-    id = road_number(proad);
-
-    gtk_list_store_append(store, &iter);
-    gtk_list_store_set(store, &iter,
-                       TVS_COL_ID, id,
-                       TVS_COL_NAME, road_name_translation(proad),
-                       -1);
-    pixbuf = create_extra_pixbuf(road_extra_get(proad));
-    if (pixbuf != NULL) {
-      gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(pixbuf);
+    pixbuf = sprite_get_pixbuf(sprite);
+    if (pixbuf == NULL) {
+      continue;
     }
-  } road_type_iterate_end;
+
+    gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
+  } tile_special_type_iterate_end;
+
 
   /* Reload military bases. */
 
@@ -873,7 +857,7 @@ static void editbar_reload_tileset(struct editbar *eb)
                        TVS_COL_ID, id,
                        TVS_COL_NAME, base_name_translation(pbase),
                        -1);
-    pixbuf = create_extra_pixbuf(base_extra_get(pbase));
+    pixbuf = create_military_base_pixbuf(pbase);
     if (pixbuf != NULL) {
       gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
       g_object_unref(pixbuf);
@@ -1411,7 +1395,6 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
   struct resource *presource;
   struct unit_type *putype;
   struct base_type *pbase;
-  struct road_type *proad;
   const struct editor_sprites *sprites;
 
   sprites = get_editor_sprites(tileset);
@@ -1433,21 +1416,11 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
     }
     break;
   case ETT_TERRAIN_SPECIAL:
-    if (value >= 0) {
-      pixbuf = create_extra_pixbuf(special_extra_get(value));
-    }
-    break;
-  case ETT_ROAD:
-    proad = road_by_number(value);
-    if (proad != NULL) {
-      pixbuf = create_extra_pixbuf(road_extra_get(proad));
-    }
+    sprite = get_basic_special_sprite(tileset, value);
     break;
   case ETT_MILITARY_BASE:
     pbase = base_by_number(value);
-    if (pbase != NULL) {
-      pixbuf = create_extra_pixbuf(base_extra_get(pbase));
-    }
+    pixbuf = create_military_base_pixbuf(pbase);
     break;
   case ETT_UNIT:
     putype = utype_by_number(value);
@@ -1645,9 +1618,6 @@ static gboolean handle_edit_key_press_with_shift(GdkEventKey *ev)
   case GDK_S:
     editgui_run_tool_selection(ETT_TERRAIN_SPECIAL);
     break;
-  case GDK_P:
-    editgui_run_tool_selection(ETT_ROAD);
-    break;
   case GDK_M:
     editgui_run_tool_selection(ETT_MILITARY_BASE);
     break;
@@ -1691,9 +1661,6 @@ gboolean handle_edit_key_press(GdkEventKey *ev)
   case GDK_s:
     new_ett = ETT_TERRAIN_SPECIAL;
     break;
-  case GDK_p:
-    new_ett = ETT_ROAD;
-    break;
   case GDK_m:
     new_ett = ETT_MILITARY_BASE;
     break;
@@ -1706,7 +1673,7 @@ gboolean handle_edit_key_press(GdkEventKey *ev)
   case GDK_v:
     new_ett = ETT_VISION;
     break;
-  case GDK_b:
+  case GDK_p:
     new_ett = ETT_STARTPOS;
     break;
   case GDK_plus:

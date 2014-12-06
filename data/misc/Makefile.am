@@ -18,12 +18,8 @@ pkgdata_DATA =          \
 	cursors.spec	\
 	editor.png	\
 	editor.spec	\
-	events.png	\
-	events.spec	\
 	flags-large.spec	\
 	flags.spec	\
-	governments.png \
-	governments.spec \
 	icons.spec	\
 	intro.png	\
 	mpicon.png	\
@@ -36,8 +32,6 @@ pkgdata_DATA =          \
 	small.spec	\
 	space.png	\
 	space.spec	\
-	specialists.png	\
-	specialists.spec \
 	techs.png	\
 	techs.spec	\
 	treaty.png	\

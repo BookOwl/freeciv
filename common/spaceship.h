@@ -17,12 +17,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
-#include "bitvector.h"
 #include "support.h"            /* bool type */
-
-/* common */
-#include "fc_types.h"
 
 /**********************************************************************
 First, some ascii art showing the spaceship and relevant parts,
@@ -84,12 +79,9 @@ the one which must be there for P2 and P3).
 enum spaceship_state {SSHIP_NONE, SSHIP_STARTED,
 		      SSHIP_LAUNCHED, SSHIP_ARRIVED};
 
-#define NUM_SS_STRUCTURALS 32 /* Used in the network protocol. */
+#define NUM_SS_STRUCTURALS 32
 #define NUM_SS_COMPONENTS 16
 #define NUM_SS_MODULES 12
-
-/* Used in the network protocol. */
-BV_DEFINE(bv_spaceship_structure, NUM_SS_STRUCTURALS);
 
 struct player_spaceship {
   /* how many of each part built, including any "unplaced": */
@@ -97,7 +89,7 @@ struct player_spaceship {
   int components;
   int modules;
   /* which structurals placed: (array of booleans) */
-  bv_spaceship_structure structure;
+  bool structure[NUM_SS_STRUCTURALS];
   /* which components and modules placed: (may or may not be connected) */
   int fuel;
   int propulsion;
@@ -127,16 +119,6 @@ extern const struct sship_part_info modules_info[NUM_SS_MODULES];
 
 void spaceship_init(struct player_spaceship *ship);
 int num_spaceship_structurals_placed(const struct player_spaceship *ship);
-
-struct spaceship_component
-{
-  enum spaceship_place_type type;
-  int num;
-};
-
-bool next_spaceship_component(struct player *pplayer,
-                              struct player_spaceship *ship,
-                              struct spaceship_component *fill);
 
 #ifdef __cplusplus
 }

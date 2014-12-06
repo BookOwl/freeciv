@@ -24,8 +24,7 @@
 
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -1340,7 +1339,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   pStr = create_string16(NULL, 0, adj_font(10));
   pStr->style |= (SF_CENTER|TTF_STYLE_BOLD);
   pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
-
+    
   improvement_iterate(pImprove) {
     can_build = can_player_build_improvement_now(client.conn.playing, pImprove);
     can_eventually_build =
@@ -1361,11 +1360,10 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
       fc_snprintf(cBuf, sizeof(cBuf), "%s", improvement_name_translation(pImprove));
       copy_chars_to_string16(pStr, cBuf);
       pStr->style |= TTF_STYLE_BOLD;
-
       pText_Name = create_text_surf_smaller_that_w(pStr, pIcon->w - 4);
   
       if (is_wonder(pImprove)) {
-        if (improvement_obsolete(client.conn.playing, pImprove, pCity)) {
+        if (improvement_obsolete(client.conn.playing, pImprove)) {
           state = _("Obsolete");
         } else if (is_great_wonder(pImprove)) {
           if (great_wonder_is_built(pImprove)) {
@@ -1448,7 +1446,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   
       copy_chars_to_string16(pStr, cBuf);
       pStr->style &= ~TTF_STYLE_BOLD;
-
+  
       pText = create_text_surf_from_str16(pStr);
 
       /*-----------------*/
@@ -1524,7 +1522,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
 		    _("(%d/%d/%s)\n%d/%d %s\nnever"),
 		    pUnit->attack_strength,
                     pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, TRUE),
+                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
 		    pCity->shield_stock, utype_build_shield_cost(un),
 	  	    PL_("shield","shields", utype_build_shield_cost(un)));
         } else {
@@ -1532,7 +1530,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
 		    _("(%d/%d/%s)\n%d/%d %s\n%d %s"),
 		    pUnit->attack_strength,
                     pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, TRUE),
+                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
 		    pCity->shield_stock, utype_build_shield_cost(un), 
 	  	    PL_("shield","shields", utype_build_shield_cost(un)),
 		    turns, PL_("turn", "turns", turns));
@@ -1542,7 +1540,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
 		    _("(%d/%d/%s)\n%d %s"),
 		    pUnit->attack_strength,
                     pUnit->defense_strength,
-                    move_points_text(pUnit->move_rate, TRUE),
+                    move_points_text(pUnit->move_rate, NULL, NULL, FALSE),
 		    utype_build_shield_cost(un),
 		    PL_("shield","shields", utype_build_shield_cost(un)));
       }

@@ -148,7 +148,7 @@ static void inputline_return(GtkEntry *w, gpointer data)
   theinput = gtk_entry_get_text(w);
   
   if (*theinput) {
-    if (client_state() == C_S_RUNNING && options.gui_gtk3_allied_chat_only
+    if (client_state() == C_S_RUNNING && gui_gtk3_allied_chat_only
         && is_plain_public_message(theinput)) {
       char buf[MAX_LEN_MSG];
       fc_snprintf(buf, sizeof(buf), ". %s", theinput);
@@ -401,7 +401,7 @@ static gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
       return TRUE;
 
     case GDK_KEY_Tab:
-      if (options.gui_gtk3_chatline_autocompletion) {
+      if (gui_gtk3_chatline_autocompletion) {
         return chatline_autocomplete(GTK_EDITABLE(w));
       }
 
@@ -890,7 +890,7 @@ void real_output_window_append(const char *astring,
   gtk_text_buffer_insert(buf, &iter, "\n", -1);
   mark = gtk_text_buffer_create_mark(buf, NULL, &iter, TRUE);
 
-  if (options.gui_gtk3_show_chat_message_time) {
+  if (gui_gtk3_show_chat_message_time) {
     char timebuf[64];
     time_t now;
     struct tm *now_tm;
@@ -1117,6 +1117,7 @@ static void color_selected(GtkDialog *dialog, gint res, gpointer data)
 **************************************************************************/
 static void select_color_callback(GtkToolButton *button, gpointer data)
 {
+  char buf[64];
   GtkWidget *dialog, *chooser;
   /* "fg_color" or "bg_color". */
   const gchar *color_target = g_object_get_data(G_OBJECT(button),
@@ -1124,7 +1125,7 @@ static void select_color_callback(GtkToolButton *button, gpointer data)
   GdkRGBA *current_color = g_object_get_data(G_OBJECT(data), color_target);
 
   /* TRANS: "text" or "background". */
-  gchar *buf = g_strdup_printf(_("Select the %s color"),
+  fc_snprintf(buf, sizeof(buf), _("Select the %s color"),
               (const char *) g_object_get_data(G_OBJECT(button),
                                                "color_info"));
   dialog = gtk_dialog_new_with_buttons(buf, NULL, GTK_DIALOG_MODAL,
@@ -1144,7 +1145,6 @@ static void select_color_callback(GtkToolButton *button, gpointer data)
   }
 
   gtk_widget_show_all(dialog);
-  g_free(buf);
 }
 
 /**************************************************************************
@@ -1445,31 +1445,4 @@ void chatline_init(void)
   bbox = gtk_grid_new();
   gtk_container_add(GTK_CONTAINER(hbox), bbox);
   toolkit.button_box = bbox;
-}
-
-/**************************************************************************
-  Main thread side callback to print version message
-**************************************************************************/
-static gboolean version_message_main_thread(gpointer user_data)
-{
-  char *vertext = (char *)user_data;
-
-  output_window_append(ftc_client, vertext);
-
-  FC_FREE(vertext);
-
-  return G_SOURCE_REMOVE;
-}
-
-/**************************************************************************
-  Got version message from metaserver thread.
-**************************************************************************/
-void version_message(char *vertext)
-{
-  int len = strlen(vertext) + 1;
-  char *persistent = fc_malloc(len);
-
-  strncpy(persistent, vertext, len);
-
-  gdk_threads_add_idle(version_message_main_thread, persistent);
 }

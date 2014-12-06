@@ -41,14 +41,18 @@
 
 /* struct city_hash. */
 #define SPECHASH_TAG city
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct city *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct city *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 /* struct unit_hash. */
 #define SPECHASH_TAG unit
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct unit *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct unit *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 

@@ -22,24 +22,23 @@
 #ifndef FC__GUISTRING_H
 #define FC__GUISTRING_H
 
-/* SDL */
-#include <SDL.h>
-#include <SDL_ttf.h>
+#include "SDL.h"
 
 #include "fc_types.h"
 
+#include "SDL_ttf.h"
 #include "gui_main.h"
 
-#define SF_CENTER	0x10
-#define SF_CENTER_RIGHT	0x20
+#define SF_CENTER	8
+#define SF_CENTER_RIGHT	16
 
 /* styles:
 	TTF_STYLE_NORMAL	0
 	TTF_STYLE_BOLD		1
 	TTF_STYLE_ITALIC	2
 	TTF_STYLE_UNDERLINE	4
-	SF_CENTER	 	0x10	- use with multi string, must be > 0x0f
-	SF_CENTER_RIGHT		0x20	- use with multi string, must be > 0x0f
+	SF_CENTER	 	8	- use with multi string
+	SF_CENTER_RIGHT		16	- use with multi string
 */
 
 typedef struct SDL_String16 {

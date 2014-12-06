@@ -81,6 +81,8 @@
 #include "connectdlg_common.h"
 #include "connectdlg_g.h"
 #include "dialogs_g.h"		/* popdown_races_dialog() */
+#include "ggzclient.h"
+#include "ggz_g.h"
 #include "gui_main_g.h"		/* add_net_input(), remove_net_input() */
 #include "mapview_common.h"	/* unqueue_mapview_update */
 #include "menu_g.h"
@@ -108,6 +110,12 @@ static int name_count;
 **************************************************************************/
 static void close_socket_nomessage(struct connection *pc)
 {
+  if (with_ggz || in_ggz) {
+    remove_ggz_input();
+  }
+  if (in_ggz) {
+    gui_ggz_embed_leave_table();
+  }
   connection_common_close(pc);
   remove_net_input();
   popdown_races_dialog(); 
@@ -136,6 +144,9 @@ static void client_conn_close_callback(struct connection *pconn)
   log_error("Lost connection to server: %s.", reason);
   output_window_printf(ftc_client, _("Lost connection to server (%s)!"),
                        reason);
+  if (with_ggz) {
+    client_exit();
+  }
 }
 
 /**************************************************************************
@@ -162,8 +173,11 @@ static int get_server_address(const char *hostname, int port,
     fc_sockaddr_list_destroy(list);
   }
 
-  /* Any supported family will do */
+#ifdef IPV6_SUPPORT
   list = net_lookup_service(hostname, port, FC_ADDR_ANY);
+#else  /* IPV6_SUPPORT */
+  list = net_lookup_service(hostname, port, FC_ADDR_IPV4);
+#endif /* IPV6_SUPPORT */
 
   name_count = fc_sockaddr_list_size(list);
 
@@ -304,11 +318,13 @@ void disconnect_from_server(void)
     client_kill_server(TRUE);
   }
   output_window_append(ftc_client, _("Disconnected from server."));
-
-  if (options.save_options_on_exit) {
+  if (with_ggz) {
+    client_exit();
+  }
+  if (save_options_on_exit) {
     options_save();
   }
-}
+}  
 
 /****************************************************************************
   A wrapper around read_socket_data() which also handles the case the
@@ -399,12 +415,16 @@ void input_from_server(int fd)
 
     agents_freeze_hint();
     while (client.conn.used) {
-      void *packet = get_packet_from_connection(&client.conn, &type);
+      bool result;
+      void *packet = get_packet_from_connection(&client.conn,
+						&type, &result);
 
-      if (NULL != packet) {
+      if (result) {
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
       } else {
+        fc_assert(packet == NULL);
 	break;
       }
     }
@@ -440,11 +460,15 @@ void input_from_server_till_request_got_processed(int fd,
       enum packet_type type;
 
       while (TRUE) {
-	void *packet = get_packet_from_connection(&client.conn, &type);
-	if (NULL == packet) {
+	bool result;
+	void *packet = get_packet_from_connection(&client.conn,
+						  &type, &result);
+	if (!result) {
+          fc_assert(packet == NULL);
 	  break;
 	}
 
+        fc_assert_action(packet != NULL, break);
 	client_packet_input(packet, type);
 	free(packet);
 

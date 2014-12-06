@@ -129,7 +129,10 @@ fz_FILE *fc_querysocket(int sock, void *buf, size_t size);
 int find_next_free_port(int starting_port, enum fc_addr_family family,
                         char *net_interface, bool not_avail_ok);
 
-void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl);
+const char *fc_lookup_httpd(char *server, int *port, const char *url);
+const char *fc_url_encode(const char *txt);
+
+void sockaddr_debug(union fc_sockaddr *addr);
 int sockaddr_size(union fc_sockaddr *addr);
 bool sockaddr_ipv6(union fc_sockaddr *addr);
 

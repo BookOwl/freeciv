@@ -23,8 +23,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -888,12 +887,4 @@ bool popdown_conn_list_dialog(void)
   }
   
   return FALSE;
-}
-
-/**************************************************************************
-  Got version message from metaserver thread.
-**************************************************************************/
-void version_message(char *vertext)
-{
-  output_window_append(ftc_client, vertext);
 }

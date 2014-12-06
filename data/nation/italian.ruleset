@@ -1,10 +1,9 @@
 [nation_italian]
 
-translation_domain="freeciv"
-
 name = _("Italian")
 plural = _("?plural:Italians")
 groups="Medieval", "Modern", "European", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("The Italian nation was unified in 1870 CE after decades of\
  campaigning by indigenous nationalists. It was a monarchy under the\
  House of Savoy until 1922, then a fascist state until 1945 after which\
@@ -47,7 +46,7 @@ ruler_titles = {
 
 flag = "italy"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

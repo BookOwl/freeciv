@@ -11,10 +11,10 @@ noinst_HEADERS = \
 	diplodlg_g.h	\
 	editgui_g.h	\
 	finddlg_g.h	\
+	ggz_g.h		\
 	gotodlg_g.h	\
 	graphics_g.h	\
 	gui_main_g.h	\
-	gui_proto_constructor.h \
 	helpdlg_g.h	\
 	inteldlg_g.h	\
 	luaconsole_g.h	\

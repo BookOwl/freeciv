@@ -26,7 +26,7 @@ leaders = {
 }
 flag="mamluk"
 flag_alt = "-"
-style = "Babylonian"
+city_style = "Babylonian"
 
 ruler_titles = {
  "government",      "male_title",      "female_title"

@@ -34,7 +34,7 @@ ruler_titles = {
 
 flag="moluccas"
 flag_alt = "-"
-style = "Asian"
+city_style = "Asian"
 
 init_techs=""
 init_buildings=""

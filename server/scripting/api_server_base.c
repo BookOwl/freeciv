@@ -50,7 +50,7 @@ bool api_server_was_started(lua_State *L)
 }
 
 /*****************************************************************************
-  Save the game (a manual save is triggered).
+  Save the game (a manual save is triggert).
 *****************************************************************************/
 bool api_server_save(lua_State *L, const char *filename)
 {
@@ -62,24 +62,6 @@ bool api_server_save(lua_State *L, const char *filename)
   }
 
   save_game(filename, "User request (Lua)", FALSE);
-  return TRUE;
-}
-
-/*****************************************************************************
-  Play music track for player
-*****************************************************************************/
-bool api_play_music(lua_State *L, Player *pplayer, const char *tag)
-{
-  struct packet_play_music p;
-
-  LUASCRIPT_CHECK_STATE(L, FALSE);
-  LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
-  LUASCRIPT_CHECK_ARG_NIL(L, tag, 3, API_TYPE_STRING, FALSE);
-
-  strncpy(p.tag, tag, sizeof(p.tag));
-
-  lsend_packet_play_music(pplayer->connections, &p);
-
   return TRUE;
 }
 

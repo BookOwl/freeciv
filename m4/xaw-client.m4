@@ -14,11 +14,11 @@ AC_DEFUN([FC_XAW_CLIENT],
     dnl Determine the Xfuncproto control definitions:
     FC_CHECK_X_PROTO_DEFINE(FUNCPROTO)
     if test -n "$fc_x_proto_value"; then
-      AC_DEFINE_UNQUOTED([FUNCPROTO], [$fc_x_proto_value], [Xfuncproto])
+      AC_DEFINE_UNQUOTED(FUNCPROTO, $fc_x_proto_value, [Xfuncproto])
     fi
     FC_CHECK_X_PROTO_DEFINE(NARROWPROTO)
     if test -n "$fc_x_proto_value"; then
-      AC_DEFINE_UNQUOTED([NARROWPROTO], [$fc_x_proto_value], [Narrowproto])
+      AC_DEFINE_UNQUOTED(NARROWPROTO, $fc_x_proto_value, [Narrowproto])
     fi
 
     PKG_PROG_PKG_CONFIG
@@ -62,7 +62,7 @@ You may need to install a libpng "development" package.])
       fi
       dnl Some sites may put xpm.h in a directory whose parent isn't "X11"
       if test "x$xpm_h_no_x11" = "xyes"; then
-        AC_DEFINE([XPM_H_NO_X11], [1], [XPM support])
+        AC_DEFINE(XPM_H_NO_X11, 1, [XPM support])
       fi
     fi
 
@@ -88,8 +88,8 @@ You may need to install a libpng "development" package.])
 	  FC_CHECK_X_LIB(Xaw, main, , AC_MSG_ERROR(did not find Xaw library))
 	fi
 
-	gui_xaw_cflags="$X_CFLAGS"
-	gui_xaw_libs="$X_LIBS $X_EXTRA_LIBS"
+	GUI_xaw_CFLAGS="$X_CFLAGS"
+	GUI_xaw_LIBS="$X_LIBS $X_EXTRA_LIBS"
 
 	found_client=yes
       fi

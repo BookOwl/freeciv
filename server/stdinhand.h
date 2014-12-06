@@ -32,8 +32,10 @@ void cmd_reply(enum command_id cmd, struct connection *caller,
                enum rfc_status rfc_status, const char *format, ...)
                fc__attribute((__format__ (__printf__, 4, 5)));
 
-bool handle_stdin_input(struct connection *caller, char *str);
+bool handle_stdin_input(struct connection *caller, const char *str,
+                        bool check);
 void set_ai_level_direct(struct player *pplayer, enum ai_level level);
+void set_ai_level_directer(struct player *pplayer, enum ai_level level);
 bool read_init_script(struct connection *caller, char *script_filename,
                       bool from_cmdline, bool check);
 void show_players(struct connection *caller);
@@ -65,7 +67,11 @@ void notify_if_first_access_level_is_available(void);
 bool conn_is_kicked(struct connection *pconn, int *time_remaining);
 
 #ifdef HAVE_LIBREADLINE
+#ifdef HAVE_NEWLIBREADLINE
 char **freeciv_completion(const char *text, int start, int end);
+#else
+char **freeciv_completion(char *text, int start, int end);
+#endif
 #endif
 
 #endif /* FC__STDINHAND_H */

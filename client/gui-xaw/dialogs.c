@@ -144,11 +144,21 @@ void unit_select_all_callback(Widget w, XtPointer client_data,
 static int city_style_idx[64];     /* translation table basic style->city_style  */
 static int city_style_ridx[64];    /* translation table the other way            */
                                    /* they in fact limit the num of styles to 64 */
+static int b_s_num; /* num basic city styles, i.e. those that you can start with */
+
 
 /******************************************************************/
 
 int is_showing_pillage_dialog = FALSE;
 int unit_to_use_to_pillage;
+
+int caravan_city_id;
+int caravan_unit_id;
+
+struct city *pcity_caravan_dest;
+struct unit *punit_caravan;
+
+static Widget caravan_dialog;
 
 /****************************************************************
 ...
@@ -168,13 +178,10 @@ static void select_random_race(void)
   /* FIXME: this code should be done another way. -ev */
   while (1) {
     unsigned int race_toggle_index = fc_rand(nation_count());
-    const struct nation_type *pnation =
-      races_toggles_to_nations[race_toggle_index];
 
-    if (!pnation
-        || !is_nation_playable(pnation)
-        || !is_nation_pickable(pnation)
-        || pnation->player) {
+    if (!is_nation_playable(nation_by_number(race_toggle_index))
+	|| !nation_by_number(race_toggle_index)->is_available
+	|| nation_by_number(race_toggle_index)->player) {
       continue;
     }
     if (XtIsSensitive(races_toggles[race_toggle_index])) {
@@ -400,6 +407,92 @@ void popup_connect_msg(const char *headline, const char *message)
 /****************************************************************
 ...
 *****************************************************************/
+static void caravan_establish_trade_callback(Widget w, XtPointer client_data,
+					     XtPointer call_data)
+{
+  dsend_packet_unit_establish_trade(&client.conn, caravan_unit_id);
+  destroy_message_dialog(w);
+  caravan_dialog = 0;
+  process_caravan_arrival(NULL);
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
+static void caravan_help_build_wonder_callback(Widget w,
+					       XtPointer client_data,
+					       XtPointer call_data)
+{
+  dsend_packet_unit_help_build_wonder(&client.conn, caravan_unit_id);
+
+  destroy_message_dialog(w);
+  caravan_dialog = 0;
+  process_caravan_arrival(NULL);
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
+static void caravan_keep_moving_callback(Widget w, XtPointer client_data, 
+					 XtPointer call_data)
+{
+  destroy_message_dialog(w);
+  caravan_dialog = 0;
+  process_caravan_arrival(NULL);
+}
+
+
+/****************************************************************
+...
+*****************************************************************/
+void popup_caravan_dialog(struct unit *punit,
+			  struct city *phomecity, struct city *pdestcity)
+{
+  char buf[128];
+  
+  fc_snprintf(buf, sizeof(buf),
+              _("Your %s from %s reaches the city of %s.\nWhat now?"),
+              unit_name_translation(punit),
+              city_name(phomecity), city_name(pdestcity));
+  
+  caravan_city_id=pdestcity->id; /* callbacks need these */
+  caravan_unit_id=punit->id;
+  
+  caravan_dialog=popup_message_dialog(toplevel, "caravandialog", 
+			   buf,
+			   caravan_establish_trade_callback, 0, 0,
+			   caravan_help_build_wonder_callback, 0, 0,
+			   caravan_keep_moving_callback, 0, 0,
+			   NULL);
+  
+  if (!can_cities_trade(phomecity, pdestcity))
+    XtSetSensitive(XtNameToWidget(caravan_dialog, "*button0"), FALSE);
+  
+  if(!unit_can_help_build_wonder(punit, pdestcity))
+    XtSetSensitive(XtNameToWidget(caravan_dialog, "*button1"), FALSE);
+}
+
+/****************************************************************
+...
+*****************************************************************/
+bool caravan_dialog_is_open(int* unit_id, int* city_id)
+{
+  return BOOL_VAL(caravan_dialog);
+}
+
+/**************************************************************************
+  Updates caravan dialog
+**************************************************************************/
+void caravan_dialog_update(void)
+{
+/* PORT ME */
+}
+
+/****************************************************************
+...
+*****************************************************************/
 static void revolution_callback_yes(Widget w, XtPointer client_data, 
 				    XtPointer call_data)
 {
@@ -437,9 +530,10 @@ void popup_revolution_dialog(struct government *pgovernment)
 		       NULL);
 }
 
-/**************************************************************************
-  User requested closing of pillage dialog.
-**************************************************************************/
+
+/****************************************************************
+...
+*****************************************************************/
 static void pillage_callback(Widget w, XtPointer client_data, 
 			     XtPointer call_data)
 {
@@ -451,13 +545,16 @@ static void pillage_callback(Widget w, XtPointer client_data,
   if (client_data) {
     struct unit *punit = game_unit_by_number(unit_to_use_to_pillage);
     if (punit) {
-      struct extra_type *target;
+      Base_type_id pillage_base = -1;
       int what = XTPOINTER_TO_INT(client_data);
 
-      target = extra_by_number(what);
+      if (what > S_LAST) {
+        pillage_base = what - S_LAST - 1;
+        what = S_LAST;
+      }
 
       request_new_unit_activity_targeted(punit, ACTIVITY_PILLAGE,
-                                         target);
+					 what, pillage_base);
     }
   }
 
@@ -465,14 +562,15 @@ static void pillage_callback(Widget w, XtPointer client_data,
   is_showing_pillage_dialog = FALSE;
 }
 
-/**************************************************************************
-  Popup a dialog asking the unit which improvement they would like to
-  pillage.
-**************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras extras)
+/****************************************************************
+...
+*****************************************************************/
+void popup_pillage_dialog(struct unit *punit,
+			  bv_special may_pillage,
+                          bv_bases bases)
 {
   Widget shell, form, dlabel, button, prev;
-  struct extra_type *tgt;
+  int what;
 
   if (is_showing_pillage_dialog) {
     return;
@@ -488,26 +586,34 @@ void popup_pillage_dialog(struct unit *punit, bv_extras extras)
   dlabel = I_L(XtVaCreateManagedWidget("dlabel", labelWidgetClass, form, NULL));
 
   prev = dlabel;
-  while ((tgt = get_preferred_pillage(extras))) {
-    int what;
-    bv_extras what_extras;
+  while ((what = get_preferred_pillage(may_pillage, bases)) != S_LAST) {
+    bv_special what_bv;
+    bv_bases what_base;
 
-    BV_CLR_ALL(what_extras);
+    BV_CLR_ALL(what_bv);
+    BV_CLR_ALL(what_base);
 
-    what = extra_index(tgt);
-
-    BV_CLR(extras, what);
-    BV_SET(what_extras, what);
+    if (what > S_LAST) {
+      BV_SET(what_base, what % (S_LAST + 1));
+    } else {
+      BV_SET(what_bv, what);
+    }
 
     button =
       XtVaCreateManagedWidget ("button", commandWidgetClass, form,
                                XtNfromVert, prev,
                                XtNlabel,
-                               (XtArgVal)(get_infrastructure_text(what_extras)),
+                               (XtArgVal)(get_infrastructure_text(what_bv,
+                                                                  what_base)),
                                NULL);
     XtAddCallback(button, XtNcallback, pillage_callback,
                   INT_TO_XTPOINTER(what));
 
+    if (what > S_LAST) {
+      BV_CLR(bases, what - S_LAST - 1);
+    } else {
+      clear_special(&may_pillage, what);
+    }
     prev = button;
   }
   button =
@@ -534,7 +640,7 @@ static void unitdisband_callback_yes(Widget w, XtPointer client_data, XtPointer 
   }
 
   unit_list_iterate(punits, punit) {
-    if (!unit_has_type_flag(punit, UTYF_UNDISBANDABLE)) {
+    if (!unit_has_type_flag(punit, F_UNDISBANDABLE)) {
       request_unit_disband(punit);
     }
   } unit_list_iterate_end;
@@ -729,7 +835,7 @@ void unit_select_dialog_popup(struct tile *ptile)
     XFillRectangle(display, unit_select_pixmaps[i], fill_bg_gc,
 		   0, 0, tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
     store.pixmap = unit_select_pixmaps[i];
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
 
     nargs=0;
     XtSetArg(args[nargs], XtNbitmap, (XtArgVal)unit_select_pixmaps[i]);nargs++;
@@ -885,7 +991,7 @@ void create_races_dialog(struct player *pplayer)
   races_player = pplayer;
   maxracelen = 0;
   nations_iterate(pnation) {
-    if (is_nation_playable(pnation) && is_nation_pickable(pnation)) {
+    if (is_nation_playable(pnation)) {
       len = strlen(nation_adjective_translation(pnation));
       maxracelen = MAX(maxracelen, len);
     }
@@ -928,7 +1034,7 @@ void create_races_dialog(struct player *pplayer)
   j = 0;
   index = 0;
   nations_iterate(pnation) {
-    if (!is_nation_playable(pnation) || !is_nation_pickable(pnation)) {
+    if (!is_nation_playable(pnation)) {
       continue;
     }
 
@@ -1054,41 +1160,37 @@ void create_races_dialog(struct player *pplayer)
 
   /* find out styles that can be used at the game beginning */
   /* Limit of 64 city_styles should be deleted. -ev */
-  styles_iterate(pstyle) {
-    i = basic_city_style_for_style(pstyle);
-
-    if (i >= 0) {
-      int sn = style_number(pstyle);
-
-      city_style_idx[sn] = i;
-      city_style_ridx[i] = sn;
+  for (i = 0, b_s_num = 0; i < game.control.styles_count && i < 64; i++) {
+    if (!city_style_has_requirements(&city_styles[i])) {
+      city_style_idx[b_s_num] = i;
+      city_style_ridx[i] = b_s_num;
+      b_s_num++;
     }
-  } styles_iterate_end;
+  }
 
   races_style_label =
     I_L(XtVaCreateManagedWidget("racesstylelabel", 
-                                labelWidgetClass, 
-                                races_form,
-                                XtNfromVert, races_sex_form,
-                                /* XtNfromHoriz, races_toggles_viewport,*/
-                                NULL));
+				labelWidgetClass, 
+				races_form,
+				XtNfromVert, races_sex_form,
+/*				XtNfromHoriz, races_toggles_viewport,*/
+				NULL));  
 
   races_style_form =
     XtVaCreateManagedWidget("racesstyleform", 
-                            formWidgetClass, 
-                            races_form, 
-                            XtNfromVert, races_style_label,
-                            /* XtNfromHoriz, races_toggles_viewport,*/
-                            NULL);
+			    formWidgetClass, 
+			    races_form, 
+			    XtNfromVert, races_style_label,
+/*			    XtNfromHoriz, races_toggles_viewport,*/
+			    NULL);   
 
   free(races_style_toggles);
-  races_style_toggles = fc_calloc(game.control.num_styles, sizeof(Widget));
+  races_style_toggles = fc_calloc(b_s_num,sizeof(Widget));
 
-  for (i = 0; i < ((game.control.num_styles - 1) / per_row) + 1; i++) {
+  for( i = 0; i < ((b_s_num-1)/per_row)+1; i++) {
     index = i * per_row;
     fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
-
-    if (i == 0) {
+    if( i == 0 ) {
       races_style_toggles[index] =
 	XtVaCreateManagedWidget(namebuf,
 				toggleWidgetClass,
@@ -1110,11 +1212,9 @@ void create_races_dialog(struct player *pplayer)
 
     for( j = 1; j < per_row; j++) {
       index = i * per_row + j;
-      if (index >= game.control.num_styles) {
-        break;
-      }
+      if( index >= b_s_num ) break;
       fc_snprintf(namebuf, sizeof(namebuf), "racesstyle%d", index);
-      if (i == 0) {
+      if( i == 0 ) {
 	races_style_toggles[index] =
 	  XtVaCreateManagedWidget(namebuf,
 				  toggleWidgetClass,
@@ -1219,7 +1319,7 @@ void create_races_dialog(struct player *pplayer)
     }
   }
 
-  for (i = 0; i < game.control.num_styles; i++) {
+  for(i=0; i<b_s_num; i++) {
     XtVaSetValues(races_style_toggles[i], XtNlabel,
 		  (XtArgVal)city_style_name_translation(city_style_idx[i]), NULL);
   }
@@ -1235,15 +1335,6 @@ void racesdlg_key_ok(Widget w)
   Widget ok = XtNameToWidget(XtParent(XtParent(w)), "*racesokcommand");
   if (ok)
     x_simulate_button_click(ok);
-}
-
-/**************************************************************************
-  The server has changed the set of selectable nations.
-**************************************************************************/
-void races_update_pickable(bool nationset_change)
-{
-  /* FIXME handle this properly */
-  popdown_races_dialog();
 }
 
 /**************************************************************************
@@ -1270,7 +1361,7 @@ void races_toggles_set_sensitive(void)
       continue;
     }
 
-    if (is_nation_pickable(nation) && !nation->player) {
+    if (nation->is_available && !nation->player) {
       continue;
     }
 
@@ -1334,7 +1425,7 @@ void races_toggles_callback(Widget w, XtPointer client_data,
 
   x_simulate_button_click
   (
-   races_style_toggles[city_style_ridx[style_number(style_of_nation(race))]]
+   races_style_toggles[city_style_ridx[city_style_of_nation(race)]]
   );
 }
 
@@ -1419,18 +1510,16 @@ int races_style_buttons_get_current(void)
   int i;
   XtPointer dp, yadp;
 
-  if (game.control.num_styles == 1) {
+  if(b_s_num==1)
     return 0;
-  }
 
   if(!(dp=XawToggleGetCurrent(races_style_toggles[0])))
     return -1;
 
-  for (i = 0; i < game.control.num_styles; i++) {
+  for(i=0; i<b_s_num; i++) {
     XtVaGetValues(races_style_toggles[i], XtNradioData, &yadp, NULL);
-    if (dp == yadp) {
+    if(dp==yadp)
       return i;
-    }
   }
 
   return -1;
@@ -1484,8 +1573,8 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
     return;
   }
 
-  if ((selected_style = races_style_buttons_get_current()) == -1) {
-    output_window_append(ftc_client, _("You must select your style."));
+  if((selected_style=races_style_buttons_get_current())==-1) {
+    output_window_append(ftc_client, _("You must select your city style."));
     return;
   }
 
@@ -1501,8 +1590,7 @@ void races_ok_command_callback(Widget w, XtPointer client_data,
 				 player_number(races_player),
 				 nation_index(races_toggles_to_nations[selected_index]),
 				 selected_sex ? FALSE : TRUE,
-				 dp,
-                                 city_style_idx[selected_style]);
+				 dp, city_style_idx[selected_style]);
   popdown_races_dialog();
 }
 
@@ -1563,22 +1651,6 @@ void popup_tileset_suggestion_dialog(void)
 {
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain soundset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_soundset_suggestion_dialog(void)
-{
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain musicset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_musicset_suggestion_dialog(void)
-{
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -1602,20 +1674,4 @@ void popdown_all_game_dialogs(void)
   units_report_dialog_popdown();
   popdown_players_dialog();
   popdown_notify_dialog();
-}
-
-/****************************************************************
-  Player has gained a new tech.
-*****************************************************************/
-void show_tech_gained_dialog(Tech_type_id tech)
-{
-  /* PORTME */
-}
-
-/****************************************************************
-  Show tileset error dialog.
-*****************************************************************/
-void show_tileset_error(const char *msg)
-{
-  /* PORTME */
 }

@@ -17,11 +17,7 @@
 
 #include <stdlib.h>
 
-/* client */
 #include "tilespec.h"
-
-/* gui main header */
-#include "gui_stub.h"
 
 #include "graphics.h"
 
@@ -29,9 +25,18 @@ struct sprite *intro_gfx_sprite;
 struct sprite *radar_gfx_sprite;
 
 /****************************************************************************
-  Return whether the client supports given view type
+  Return whether the client supports isometric view (isometric tilesets).
 ****************************************************************************/
-bool gui_is_view_supported(enum ts_type type)
+bool isometric_view_supported(void)
+{
+  /* PORTME */
+  return FALSE;
+}
+
+/****************************************************************************
+  Return whether the client supports "overhead" (non-isometric) view.
+****************************************************************************/
+bool overhead_view_supported(void)
 {
   /* PORTME */
   return FALSE;
@@ -59,7 +64,7 @@ void load_cursors(void)
 /****************************************************************************
   Frees the introductory sprites.
 ****************************************************************************/
-void gui_free_intro_radar_sprites(void)
+void free_intro_radar_sprites(void)
 {
   if (intro_gfx_sprite) {
     free_sprite(intro_gfx_sprite);

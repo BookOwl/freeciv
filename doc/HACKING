@@ -29,7 +29,7 @@ server: (duh)
 client: common client code
 client/* (fx gui-gtk): a specific gui implementation of the client.
 data: graphics, rulesets and stuff
-translations: localization files
+po: localization files
 ai: the ai, later linked into the server.
 
 Freeciv is written in C.  Header files should be compatible with C++ so
@@ -177,15 +177,7 @@ independent functions such as dio_put_uint32() and de-serialized with
 functions like dio_get_uint32().
 
 A packet is constituted by header followed by the serialized structure
-data. The header contains the following fields (the sizes are defined in
-common/packets.c:packet_header_set()):
-
-uint16	:	length		(the length of the entire packet)
-uint16	:	type		(e.g. PACKET_TILE_INFO)
-
-For backward compatibility reasons, packets used for the initial protocol
-(notably before checking the capabilities) have different header fields
-sizes (defined in common/packets.c:packet_header_init()):
+data. The header contains the following fields:
 
 uint16	:	length		(the length of the entire packet)
 uint8	:	type		(e.g. PACKET_TILE_INFO)
