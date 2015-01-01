@@ -1,0 +1,36 @@
+## Process this file with automake to produce Makefile.in
+
+SUBDIRS = man ca de fr it ja nl sv
+
+docs =				\
+	BUGS			\
+	CodingStyle		\
+	FAQ			\
+	HACKING			\
+	INSTALL.Cygwin		\
+	HOWTOPLAY		\
+	README.achievements     \
+	README.actions		\
+	README.agents		\
+	README.AI		\
+	README.AI_modules	\
+	README.attributes 	\
+	README.cma		\
+	README.delta		\
+	README.effects		\
+	README.fcdb		\
+	README.graphics		\
+	README.nations		\
+	README.packaging	\
+	README.ruleset_alien	\
+	README.ruleset_experimental \
+	README.ruleset_multiplayer \
+	README.ruleset_civ2civ3	\
+	README.rulesets		\
+	README.scorelog		\
+	README.sound		\
+	TODO
+
+doc_DATA = $(docs)
+
+EXTRA_DIST = $(docs)
