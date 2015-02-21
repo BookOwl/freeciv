@@ -1,6 +1,6 @@
 AC_DEFUN([FC_DEBUG], [
 AC_ARG_ENABLE(debug,
-  AS_HELP_STRING([--enable-debug[[=no/some/yes/checks]]], [turn on debugging [[default=some]]]),
+[  --enable-debug[[=no/some/yes/checks]] turn on debugging [[default=some]]],
 [case "${enableval}" in
   yes)    enable_debug=yes ;;
   some)   enable_debug=some ;;
@@ -15,7 +15,6 @@ dnl ==========================================================================
 dnl debug level == no
 if test "x$enable_debug" = "xno"; then
   AC_DEFINE([NDEBUG], [1], [No debugging support at all])
-  AC_DEFINE([FREECIV_NDEBUG], [1], [No freeciv specific debugging support at all])
   FC_C_FLAGS([-O3 -fomit-frame-pointer], [], [EXTRA_DEBUG_CFLAGS])
   if test "x$cxx_works" = "xyes" ; then
     FC_CXX_FLAGS([-O3 -fomit-frame-pointer], [], [EXTRA_DEBUG_CXXFLAGS])
@@ -37,17 +36,16 @@ fi
 dnl ==========================================================================
 dnl debug level >= yes
 if test "x$enable_debug" = "xyes" -o "x$enable_debug" = "xchecks"; then
-  AC_DEFINE([FREECIV_DEBUG], [1], [Extra debugging support])
-  AC_DEFINE([DEBUG], [1], [Extra debugging support, backward compatibility macro])
+  AC_DEFINE([DEBUG], [1], [Extra debugging support])
   AC_DEFINE([LUA_USE_APICHECK], [1], [Lua Api checks])
 
   FC_C_FLAGS([-Werror -Wmissing-prototypes -Wmissing-declarations \
-              -Wformat -Wformat-security -Wnested-externs \
+              -Wformat -Wformat-security -Wnested-externs -Wno-deprecated-declarations \
               -Wno-tautological-compare],
              [], [EXTRA_DEBUG_CFLAGS])
   if test "x$cxx_works" = "xyes" ; then
     FC_CXX_FLAGS([-Werror -Wmissing-prototypes -Wmissing-declarations \
-                  -Wformat -Wformat-security \
+                  -Wformat -Wformat-security -Wno-deprecated-declarations \
                   -Wno-tautological-compare],
                  [], [EXTRA_DEBUG_CXXFLAGS])
   fi

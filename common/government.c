@@ -176,7 +176,7 @@ bool can_change_to_government(struct player *pplayer,
   }
 
   return are_reqs_active(pplayer, NULL, NULL, NULL, NULL, NULL, NULL,
-                         NULL, NULL, &gov->reqs, RPT_CERTAIN);
+			 &gov->reqs, RPT_CERTAIN);
 }
 
 
@@ -487,7 +487,6 @@ static inline void government_init(struct government *pgovern)
       ruler_title_hash_new_full(nation_hash_val, nation_hash_comp,
                                 NULL, NULL, NULL, ruler_title_destroy);
   requirement_vector_init(&pgovern->reqs);
-  pgovern->changed_to_times = 0;
 }
 
 /****************************************************************************

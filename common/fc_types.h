@@ -28,10 +28,8 @@ extern "C" {
  * Nothing in this file should require anything else from the common/
  * directory! */
 
-#define MAX_NUM_PLAYER_SLOTS 160 /* Used in the network protocol. */
-                                 /* Must be divisable by 32 or iterations
-                                  * in savegame2.c needs to be changed */
-#define MAX_NUM_BARBARIANS   10  /* 3, but slots reserved for future use. */
+#define MAX_NUM_PLAYER_SLOTS 128 /* Used in the network protocol. */
+#define MAX_NUM_BARBARIANS   2
 #define MAX_NUM_PLAYERS      MAX_NUM_PLAYER_SLOTS - MAX_NUM_BARBARIANS
 /* Used in the network protocol. */
 #define MAX_NUM_CONNECTIONS (2 * (MAX_NUM_PLAYER_SLOTS))
@@ -44,10 +42,8 @@ extern "C" {
 /* Used in the network protocol. See diplomat_success_vs_defender() */
 #define MAX_VET_LEVELS 20
 #define MAX_BASE_TYPES 32 /* Used in the network protocol. */
-#define MAX_ROAD_TYPES 16 /* Used in the network protocol. */
-#define MAX_EXTRA_TYPES (16 + MAX_BASE_TYPES + MAX_ROAD_TYPES)
+#define MAX_ROAD_TYPES 8 /* Used in the network protocol. */
 #define MAX_DISASTER_TYPES 10
-#define MAX_ACHIEVEMENT_TYPES 10
 #define MAX_NUM_LEADERS MAX_NUM_ITEMS /* Used in the network protocol. */
 #define MAX_NUM_NATION_SETS 32 /* Used in the network protocol.
                                 * RULESET_NATION_SETS packet may become too big
@@ -56,7 +52,6 @@ extern "C" {
 /* Used in the network protocol -- nation count is a UINT16 */
 #define MAX_NUM_NATIONS MAX_UINT16
 #define MAX_NUM_STARTPOS_NATIONS 1024 /* Used in the network protocol. */
-#define MAX_CALENDAR_FRAGMENTS 52     /* Used in the network protocol. */
 
 /* Changing these will probably break network compatability. */
 #define MAX_LEN_NAME     48
@@ -72,8 +67,6 @@ extern "C" {
 
 /* symbol to flag missing numbers for better debugging */
 #define IDENTITY_NUMBER_ZERO (0)
-
-enum override_bool { OVERRIDE_TRUE, OVERRIDE_FALSE, NO_OVERRIDE };
 
 /* A bitvector for all player slots. Used in the network protocol. */
 BV_DEFINE(bv_player, MAX_NUM_PLAYER_SLOTS);
@@ -159,7 +152,6 @@ struct specialist;
 struct terrain;
 struct tile;
 struct unit;
-struct achievement;
 
 
 /* Changing these will break network compatibility. */
@@ -173,6 +165,18 @@ struct achievement;
 /* Unit Class List, also 32-bit vector? */
 #define UCL_LAST 32 /* Used in the network protocol. */
 typedef int Unit_Class_id;
+
+/* This has to be put here for now, otherwise movement.h and unittype.h
+ * would have a recursive dependency. */
+#define SPECENUM_NAME unit_move_type
+#define SPECENUM_VALUE0 UMT_LAND
+#define SPECENUM_VALUE0NAME "Land"
+#define SPECENUM_VALUE1 UMT_SEA
+#define SPECENUM_VALUE1NAME "Sea"
+#define SPECENUM_VALUE2 UMT_BOTH
+#define SPECENUM_VALUE2NAME "Both"
+#include "specenum_gen.h"
+
 
 /* The direction8 gives the 8 possible directions.  These may be used in
  * a number of ways, for instance as an index into the DIR_DX/DIR_DY
@@ -221,70 +225,37 @@ typedef int Unit_Class_id;
  * cannot use specenum function call direction8_max(). */
 #define DIR8_MAGIC_MAX 8
 
-/* Used in the network protocol. */
-/* server/commands.c must match these */
-#define SPECENUM_NAME ai_level
-#define SPECENUM_VALUE0 AI_LEVEL_AWAY
-#define SPECENUM_VALUE0NAME N_("Away")
-#define SPECENUM_VALUE1 AI_LEVEL_HANDICAPPED
-#define SPECENUM_VALUE1NAME N_("Handicapped")
-#define SPECENUM_VALUE2 AI_LEVEL_NOVICE
-#define SPECENUM_VALUE2NAME N_("Novice")
-#define SPECENUM_VALUE3 AI_LEVEL_EASY
-#define SPECENUM_VALUE3NAME N_("Easy")
-#define SPECENUM_VALUE4 AI_LEVEL_NORMAL
-#define SPECENUM_VALUE4NAME N_("Normal")
-#define SPECENUM_VALUE5 AI_LEVEL_HARD
-#define SPECENUM_VALUE5NAME N_("Hard")
-#define SPECENUM_VALUE6 AI_LEVEL_CHEATING
-#define SPECENUM_VALUE6NAME N_("Cheating")
-
-#ifdef FREECIV_DEBUG
-#define SPECENUM_VALUE7 AI_LEVEL_EXPERIMENTAL
-#define SPECENUM_VALUE7NAME N_("Experimental")
-#endif /* FREECIV_DEBUG */
-
-#define SPECENUM_COUNT AI_LEVEL_COUNT
-#include "specenum_gen.h"
+/* AI levels. This must correspond to ai_level_names[] in player.c */
+enum ai_level {
+  AI_LEVEL_AWAY         = 1,
+  AI_LEVEL_NOVICE       = 2,
+  AI_LEVEL_EASY         = 3,
+  AI_LEVEL_NORMAL       = 5,
+  AI_LEVEL_HARD         = 7,
+  AI_LEVEL_CHEATING     = 8,
+  AI_LEVEL_EXPERIMENTAL = 10,
+  AI_LEVEL_LAST
+};
 
 #define AI_LEVEL_DEFAULT AI_LEVEL_NOVICE
 
-/* pplayer->ai.barbarian_type and nations use this enum. */
-#define SPECENUM_NAME barbarian_type
-#define SPECENUM_VALUE0 NOT_A_BARBARIAN
-#define SPECENUM_VALUE0NAME "None"
-#define SPECENUM_VALUE1 LAND_BARBARIAN
-#define SPECENUM_VALUE1NAME "Land"
-#define SPECENUM_VALUE2 SEA_BARBARIAN
-#define SPECENUM_VALUE2NAME "Sea"
-#define SPECENUM_VALUE3 ANIMAL_BARBARIAN
-#define SPECENUM_VALUE3NAME "Animal"
-#define SPECENUM_VALUE4 LAND_AND_SEA_BARBARIAN
-#define SPECENUM_VALUE4NAME "LandAndSea"
-#include "specenum_gen.h"
+/*
+ * pplayer->ai.barbarian_type and nations use this enum. Note that the values
+ * have to stay since they are used in savegames.
+ */
+enum barbarian_type {
+  NOT_A_BARBARIAN = 0,
+  LAND_BARBARIAN = 1,
+  SEA_BARBARIAN = 2
+};
 
 /*
  * Citytile requirement types. 
- *
- * Used in the network protocol
  */
 enum citytile_type {
   CITYT_CENTER,
   CITYT_LAST
 };
-
-/*
- * UnitState requirement property types.
- *
- * Used in the network protocol.
- */
-#define SPECENUM_NAME ustate_prop
-#define SPECENUM_VALUE0 USP_TRANSPORTED
-#define SPECENUM_VALUE0NAME "Transported"
-#define SPECENUM_VALUE1 USP_TRANSP_DEP
-#define SPECENUM_VALUE1NAME "TransportDependent"
-#define SPECENUM_COUNT USP_COUNT
-#include "specenum_gen.h"
 
 /* Sometimes we don't know (or don't care) if some requirements for effect
  * are currently fulfilled or not. This enum tells lower level functions
@@ -311,34 +282,22 @@ typedef union {
   struct terrain *terrain;
   struct unit_class *uclass;
   struct unit_type *utype;
-  struct extra_type *extra;
+  struct base_type *base;
+  struct road_type *road;
   struct resource *resource;
-  struct achievement *achievement;
-  struct nation_group *nationgroup;
-  struct nation_style *style;
 
   enum ai_level ai_level;
   enum citytile_type citytile;
   int minsize;
-  int minculture;
   int minyear;
   Output_type_id outputtype;
   int terrainclass;			/* enum terrain_class */
   int terrainalter;                     /* enum terrain_alteration */
+  int special;				/* enum tile_special_type */
   int unitclassflag;			/* enum unit_class_flag_id */
   int unitflag;				/* enum unit_flag_id */
   int terrainflag;                      /* enum terrain_flag_id */
   int techflag;                         /* enum tech_flag_id */
-  int baseflag;                         /* enum base_flag_id */
-  int roadflag;                         /* enum road_flag_id */
-  int diplrel;                          /* enum diplstate_type or
-                                           enum diplrel_other */
-  enum ustate_prop unit_state;
-  int minmoves;
-  int max_tile_units;
-  int minveteran;
-  int min_hit_points;
-  int age;
 } universals_u;
 
 /* The kind of universals_u (value_union_type was req_source_type).
@@ -352,76 +311,54 @@ typedef union {
 #define SPECENUM_VALUE2NAME "Gov"
 #define SPECENUM_VALUE3 VUT_IMPROVEMENT
 #define SPECENUM_VALUE3NAME "Building"
-#define SPECENUM_VALUE4 VUT_TERRAIN
-#define SPECENUM_VALUE4NAME "Terrain"
-#define SPECENUM_VALUE5 VUT_NATION
-#define SPECENUM_VALUE5NAME "Nation"
-#define SPECENUM_VALUE6 VUT_UTYPE
-#define SPECENUM_VALUE6NAME "UnitType"
-#define SPECENUM_VALUE7 VUT_UTFLAG
-#define SPECENUM_VALUE7NAME "UnitFlag"
-#define SPECENUM_VALUE8 VUT_UCLASS
-#define SPECENUM_VALUE8NAME "UnitClass"
-#define SPECENUM_VALUE9 VUT_UCFLAG
-#define SPECENUM_VALUE9NAME "UnitClassFlag"
-#define SPECENUM_VALUE10 VUT_OTYPE
-#define SPECENUM_VALUE10NAME "OutputType"
-#define SPECENUM_VALUE11 VUT_SPECIALIST
-#define SPECENUM_VALUE11NAME "Specialist"
+#define SPECENUM_VALUE4 VUT_SPECIAL
+#define SPECENUM_VALUE4NAME "Special"
+#define SPECENUM_VALUE5 VUT_TERRAIN
+#define SPECENUM_VALUE5NAME "Terrain"
+#define SPECENUM_VALUE6 VUT_NATION
+#define SPECENUM_VALUE6NAME "Nation"
+#define SPECENUM_VALUE7 VUT_UTYPE
+#define SPECENUM_VALUE7NAME "UnitType"
+#define SPECENUM_VALUE8 VUT_UTFLAG
+#define SPECENUM_VALUE8NAME "UnitFlag"
+#define SPECENUM_VALUE9 VUT_UCLASS
+#define SPECENUM_VALUE9NAME "UnitClass"
+#define SPECENUM_VALUE10 VUT_UCFLAG
+#define SPECENUM_VALUE10NAME "UnitClassFlag"
+#define SPECENUM_VALUE11 VUT_OTYPE
+#define SPECENUM_VALUE11NAME "OutputType"
+#define SPECENUM_VALUE12 VUT_SPECIALIST
+#define SPECENUM_VALUE12NAME "Specialist"
 /* Minimum size: at city range means city size */
-#define SPECENUM_VALUE12 VUT_MINSIZE
-#define SPECENUM_VALUE12NAME "MinSize"
+#define SPECENUM_VALUE13 VUT_MINSIZE
+#define SPECENUM_VALUE13NAME "MinSize"
 /* AI level of the player */
-#define SPECENUM_VALUE13 VUT_AI_LEVEL
-#define SPECENUM_VALUE13NAME "AI"
+#define SPECENUM_VALUE14 VUT_AI_LEVEL
+#define SPECENUM_VALUE14NAME "AI"
 /* More generic terrain type currently "Land" or "Ocean" */
-#define SPECENUM_VALUE14 VUT_TERRAINCLASS
-#define SPECENUM_VALUE14NAME "TerrainClass"
-#define SPECENUM_VALUE15 VUT_MINYEAR
-#define SPECENUM_VALUE15NAME "MinYear"
+#define SPECENUM_VALUE15 VUT_TERRAINCLASS
+#define SPECENUM_VALUE15NAME "TerrainClass"
+#define SPECENUM_VALUE16 VUT_BASE
+#define SPECENUM_VALUE16NAME "Base"
+#define SPECENUM_VALUE17 VUT_MINYEAR
+#define SPECENUM_VALUE17NAME "MinYear"
 /* Terrain alterations that are possible */
-#define SPECENUM_VALUE16 VUT_TERRAINALTER
-#define SPECENUM_VALUE16NAME "TerrainAlter"
+#define SPECENUM_VALUE18 VUT_TERRAINALTER
+#define SPECENUM_VALUE18NAME "TerrainAlter"
 /* Target tile is used by city. */
-#define SPECENUM_VALUE17 VUT_CITYTILE
-#define SPECENUM_VALUE17NAME "CityTile"
-#define SPECENUM_VALUE18 VUT_RESOURCE
-#define SPECENUM_VALUE18NAME "Resource"
-#define SPECENUM_VALUE19 VUT_TERRFLAG
-#define SPECENUM_VALUE19NAME "TerrainFlag"
-#define SPECENUM_VALUE20 VUT_NATIONALITY
-#define SPECENUM_VALUE20NAME "Nationality"
-#define SPECENUM_VALUE21 VUT_BASEFLAG
-#define SPECENUM_VALUE21NAME "BaseFlag"
-#define SPECENUM_VALUE22 VUT_ROADFLAG
-#define SPECENUM_VALUE22NAME "RoadFlag"
-#define SPECENUM_VALUE23 VUT_EXTRA
-#define SPECENUM_VALUE23NAME "Extra"
+#define SPECENUM_VALUE19 VUT_CITYTILE
+#define SPECENUM_VALUE19NAME "CityTile"
+/* Keep this last. */
+#define SPECENUM_VALUE20 VUT_ROAD
+#define SPECENUM_VALUE20NAME "Road"
+#define SPECENUM_VALUE21 VUT_RESOURCE
+#define SPECENUM_VALUE21NAME "Resource"
+#define SPECENUM_VALUE22 VUT_TERRFLAG
+#define SPECENUM_VALUE22NAME "TerrainFlag"
+#define SPECENUM_VALUE23 VUT_NATIONALITY
+#define SPECENUM_VALUE23NAME "Nationality"
 #define SPECENUM_VALUE24 VUT_TECHFLAG
 #define SPECENUM_VALUE24NAME "TechFlag"
-#define SPECENUM_VALUE25 VUT_ACHIEVEMENT
-#define SPECENUM_VALUE25NAME "Achievement"
-#define SPECENUM_VALUE26 VUT_DIPLREL
-#define SPECENUM_VALUE26NAME "DiplRel"
-#define SPECENUM_VALUE27 VUT_MAXTILEUNITS
-#define SPECENUM_VALUE27NAME "MaxUnitsOnTile"
-#define SPECENUM_VALUE28 VUT_STYLE
-#define SPECENUM_VALUE28NAME "Style"
-#define SPECENUM_VALUE29 VUT_MINCULTURE
-#define SPECENUM_VALUE29NAME "MinCulture"
-#define SPECENUM_VALUE30 VUT_UNITSTATE
-#define SPECENUM_VALUE30NAME "UnitState"
-#define SPECENUM_VALUE31 VUT_MINMOVES
-#define SPECENUM_VALUE31NAME "MinMoveFrags"
-#define SPECENUM_VALUE32 VUT_MINVETERAN
-#define SPECENUM_VALUE32NAME "MinVeteran"
-#define SPECENUM_VALUE33 VUT_MINHP
-#define SPECENUM_VALUE33NAME "MinHitPoints"
-#define SPECENUM_VALUE34 VUT_AGE
-#define SPECENUM_VALUE34NAME "Age"
-#define SPECENUM_VALUE35 VUT_NATIONGROUP
-#define SPECENUM_VALUE35NAME "NationGroup"
-/* Keep this last. */
 #define SPECENUM_COUNT VUT_COUNT
 #include "specenum_gen.h"
 
@@ -431,9 +368,9 @@ struct universal {
   enum universals_n kind;		/* formerly .type and .is_unit */
 };
 
+struct ai_choice;			/* incorporates universals_u */
+
 /* Used in the network protocol. */
-BV_DEFINE(bv_extras, MAX_EXTRA_TYPES);
-BV_DEFINE(bv_special, MAX_EXTRA_TYPES);
 BV_DEFINE(bv_bases, MAX_BASE_TYPES);
 BV_DEFINE(bv_roads, MAX_ROAD_TYPES);
 BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
@@ -453,10 +390,8 @@ BV_DEFINE(bv_startpos_nations, MAX_NUM_STARTPOS_NATIONS);
 #define SPECENUM_VALUE4NAME "xaw"
 #define SPECENUM_VALUE5 GUI_QT
 #define SPECENUM_VALUE5NAME "qt"
-#define SPECENUM_VALUE6 GUI_SDL2
-#define SPECENUM_VALUE6NAME "sdl2"
-#define SPECENUM_VALUE7 GUI_WEB
-#define SPECENUM_VALUE7NAME "web"
+#define SPECENUM_VALUE6 GUI_WEB
+#define SPECENUM_VALUE6NAME "web"
 #include "specenum_gen.h"
 
 /* Used in the network protocol. */
@@ -542,89 +477,24 @@ enum diplomacy_mode {
 };
 
 /* Used in the network protocol. */
-#define SPECENUM_NAME extra_category
-#define SPECENUM_VALUE0 ECAT_INFRA
-#define SPECENUM_VALUE0NAME "Infra"
-#define SPECENUM_VALUE1 ECAT_NATURAL
-#define SPECENUM_VALUE1NAME "Natural"
-#define SPECENUM_VALUE2 ECAT_NUISANCE
-#define SPECENUM_VALUE2NAME "Nuisance"
-#define SPECENUM_VALUE3 ECAT_BONUS
-#define SPECENUM_VALUE3NAME "Bonus"
-#define SPECENUM_COUNT ECAT_COUNT
-#include "specenum_gen.h"
-#define ECAT_NONE ECAT_COUNT
+enum tile_special_type {
+  S_IRRIGATION,
+  S_MINE,
+  S_POLLUTION,
+  S_HUT,
+  S_FARMLAND,
+  S_FALLOUT,
 
-/* Used in the network protocol. */
-#define SPECENUM_NAME extra_cause
-#define SPECENUM_VALUE0 EC_IRRIGATION
-#define SPECENUM_VALUE0NAME "Irrigation"
-#define SPECENUM_VALUE1 EC_MINE
-#define SPECENUM_VALUE1NAME "Mine"
-#define SPECENUM_VALUE2 EC_POLLUTION
-#define SPECENUM_VALUE2NAME "Pollution"
-#define SPECENUM_VALUE3 EC_HUT
-#define SPECENUM_VALUE3NAME "Hut"
-#define SPECENUM_VALUE4 EC_FALLOUT
-#define SPECENUM_VALUE4NAME "Fallout"
-#define SPECENUM_VALUE5 EC_BASE
-#define SPECENUM_VALUE5NAME "Base"
-#define SPECENUM_VALUE6 EC_ROAD
-#define SPECENUM_VALUE6NAME "Road"
-#define SPECENUM_VALUE7 EC_SPONTANEOUS
-#define SPECENUM_VALUE7NAME "Spontaneous"
-#define SPECENUM_COUNT EC_COUNT
-#include "specenum_gen.h"
-#define EC_NONE EC_COUNT
-#define EC_SPECIAL (EC_NONE + 1)
-#define EC_DEFENSIVE (EC_NONE + 2)
-#define EC_LAST (EC_NONE + 3)
+  /* internal values not saved */
+  S_LAST,
+  S_RESOURCE_VALID = S_LAST,
 
-/* Used in the network protocol. */
-#define SPECENUM_NAME extra_rmcause
-#define SPECENUM_VALUE0 ERM_PILLAGE
-#define SPECENUM_VALUE0NAME "Pillage"
-#define SPECENUM_VALUE1 ERM_CLEANPOLLUTION
-#define SPECENUM_VALUE1NAME "CleanPollution"
-#define SPECENUM_VALUE2 ERM_CLEANFALLOUT
-#define SPECENUM_VALUE2NAME "CleanFallout"
-#define SPECENUM_COUNT ERM_COUNT
-#include "specenum_gen.h"
-#define ERM_NONE ERM_COUNT
-
-/* Used in the network protocol. */
-#define SPECENUM_NAME achievement_type
-#define SPECENUM_VALUE0 ACHIEVEMENT_SPACESHIP
-#define SPECENUM_VALUE0NAME "Spaceship"
-#define SPECENUM_VALUE1 ACHIEVEMENT_MAP
-#define SPECENUM_VALUE1NAME "Map_Known"
-#define SPECENUM_VALUE2 ACHIEVEMENT_MULTICULTURAL
-#define SPECENUM_VALUE2NAME "Multicultural"
-#define SPECENUM_VALUE3 ACHIEVEMENT_CULTURED_CITY
-#define SPECENUM_VALUE3NAME "Cultured_City"
-#define SPECENUM_VALUE4 ACHIEVEMENT_CULTURED_NATION
-#define SPECENUM_VALUE4NAME "Cultured_Nation"
-#define SPECENUM_VALUE5 ACHIEVEMENT_LUCKY
-#define SPECENUM_VALUE5NAME "Lucky"
-#define SPECENUM_VALUE6 ACHIEVEMENT_HUTS
-#define SPECENUM_VALUE6NAME "Huts"
-#define SPECENUM_VALUE7 ACHIEVEMENT_METROPOLIS
-#define SPECENUM_VALUE7NAME "Metropolis"
-#define SPECENUM_VALUE8 ACHIEVEMENT_LITERATE
-#define SPECENUM_VALUE8NAME "Literate"
-#define SPECENUM_VALUE9 ACHIEVEMENT_LAND_AHOY
-#define SPECENUM_VALUE9NAME "Land_Ahoy"
-#define SPECENUM_COUNT ACHIEVEMENT_COUNT
-#include "specenum_gen.h"
-
-/* Used in the network protocol. */
-#define SPECENUM_NAME mood_type
-#define SPECENUM_VALUE0 MOOD_PEACEFUL
-#define SPECENUM_VALUE0NAME "Peaceful"
-#define SPECENUM_VALUE1 MOOD_COMBAT
-#define SPECENUM_VALUE1NAME "Combat"
-#define SPECENUM_COUNT MOOD_COUNT
-#include "specenum_gen.h"
+  S_OLD_FORTRESS,
+  S_OLD_AIRBASE,
+  S_OLD_ROAD,
+  S_OLD_RAILROAD,
+  S_OLD_RIVER
+};
 
 #ifdef __cplusplus
 }
@@ -636,6 +506,19 @@ enum test_result {
   TR_ALREADY_SOLD
 };
 
+enum act_tgt_type { ATT_SPECIAL, ATT_BASE, ATT_ROAD };
+
+union act_tgt_obj {
+  enum tile_special_type spe;
+  Base_type_id base;
+  Road_type_id road;
+};
+
+struct act_tgt {
+  enum act_tgt_type type;
+  union act_tgt_obj obj;
+};
+
 /* Road type compatibility with old specials based roads.
  * Used in the network protocol. */
 enum road_compat { ROCO_ROAD, ROCO_RAILROAD, ROCO_RIVER, ROCO_NONE };
@@ -645,77 +528,5 @@ enum road_compat { ROCO_ROAD, ROCO_RAILROAD, ROCO_RIVER, ROCO_NONE };
  * Changing this changes network protocol.
  */
 #define MAX_TRADE_ROUTES        5
-
-enum victory_condition_type
-{
-  VC_SPACERACE = 0,
-  VC_ALLIED,
-  VC_CULTURE
-};
-
-enum environment_upset_type
-{
-  EUT_GLOBAL_WARMING = 0,
-  EUT_NUCLEAR_WINTER
-};
-
-enum revolen_type {
-  REVOLEN_FIXED = 0,
-  REVOLEN_RANDOM,
-  REVOLEN_QUICKENING,
-  REVOLEN_RANDQUICK
-};
-
-enum happyborders_type {
-  HB_DISABLED = 0,
-  HB_NATIONAL,
-  HB_ALLIANCE
-};
-
-/* Used in network protocol. */
-enum spaceship_place_type {
-  SSHIP_PLACE_STRUCTURAL,
-  SSHIP_PLACE_FUEL,
-  SSHIP_PLACE_PROPULSION,
-  SSHIP_PLACE_HABITATION,
-  SSHIP_PLACE_LIFE_SUPPORT,
-  SSHIP_PLACE_SOLAR_PANELS
-};
-
-/* Used in the network protocol. */
-#define SPECENUM_NAME tech_cost_style
-#define SPECENUM_VALUE0 TECH_COST_CIV1CIV2
-#define SPECENUM_VALUE0NAME "Civ I|II"
-#define SPECENUM_VALUE1 TECH_COST_CLASSIC
-#define SPECENUM_VALUE1NAME "Classic"
-#define SPECENUM_VALUE2 TECH_COST_CLASSIC_PRESET
-#define SPECENUM_VALUE2NAME "Classic+"
-#define SPECENUM_VALUE3 TECH_COST_EXPERIMENTAL
-#define SPECENUM_VALUE3NAME "Experimental"
-#define SPECENUM_VALUE4 TECH_COST_EXPERIMENTAL_PRESET
-#define SPECENUM_VALUE4NAME "Experimental+"
-#include "specenum_gen.h"
-
-/* Used in the network protocol. */
-#define SPECENUM_NAME tech_leakage_style
-#define SPECENUM_VALUE0 TECH_LEAKAGE_NONE
-#define SPECENUM_VALUE0NAME "None"
-#define SPECENUM_VALUE1 TECH_LEAKAGE_EMBASSIES
-#define SPECENUM_VALUE1NAME "Embassies"
-#define SPECENUM_VALUE2 TECH_LEAKAGE_PLAYERS
-#define SPECENUM_VALUE2NAME "All Players"
-#define SPECENUM_VALUE3 TECH_LEAKAGE_NO_BARBS
-#define SPECENUM_VALUE3NAME "Normal Players"
-#include "specenum_gen.h"
-
-/* Used in the network protocol. */
-#define SPECENUM_NAME gold_upkeep_style
-#define SPECENUM_VALUE0 GOLD_UPKEEP_CITY
-#define SPECENUM_VALUE0NAME "City"
-#define SPECENUM_VALUE1 GOLD_UPKEEP_MIXED
-#define SPECENUM_VALUE1NAME "Mixed"
-#define SPECENUM_VALUE2 GOLD_UPKEEP_NATION
-#define SPECENUM_VALUE2NAME "Nation"
-#include "specenum_gen.h"
 
 #endif /* FC__FC_TYPES_H */

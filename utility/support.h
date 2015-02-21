@@ -57,9 +57,11 @@ extern "C" {
 #undef true
 #undef false
 #undef __bool_true_false_are_defined
+#define bool fc_bool
 #define true  1
 #define false 0
 #define __bool_true_false_are_defined 1
+typedef unsigned int fc_bool;
 #endif /* ! HAVE_STDBOOL_H */
 #endif /* ! __BEOS__ */
 #endif /* __cplusplus */
@@ -173,8 +175,6 @@ char fc_tolower(char c);
 void fc_uname(char *buf, size_t len);
 
 const char *fc_basename(const char *path);
-
-int fc_at_quick_exit(void (*func)(void));
 
 #ifdef __cplusplus
 }

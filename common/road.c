@@ -15,8 +15,11 @@
 #include <fc_config.h>
 #endif
 
+/* utility */
+#include "fcintl.h"
+#include "string_vector.h"
+
 /* common */
-#include "extras.h"
 #include "fc_types.h"
 #include "game.h"
 #include "movement.h"
@@ -24,6 +27,8 @@
 #include "unittype.h"
 
 #include "road.h"
+
+static struct road_type roads[MAX_ROAD_TYPES];
 
 /**************************************************************************
   Return the road id.
@@ -45,17 +50,7 @@ Road_type_id road_index(const struct road_type *proad)
 {
   fc_assert_ret_val(NULL != proad, -1);
 
-  /* FIXME: */
-  /* return proad - roads; */
-  return road_number(proad);
-}
-
-/**************************************************************************
-  Return extra that road is.
-**************************************************************************/
-struct extra_type *road_extra_get(const struct road_type *proad)
-{
-  return proad->self;
+  return proad - roads;
 }
 
 /**************************************************************************
@@ -71,71 +66,24 @@ Road_type_id road_count(void)
 ****************************************************************************/
 struct road_type *road_by_number(Road_type_id id)
 {
-  struct extra_type_list *roads;
+  fc_assert_ret_val(id >= 0 && id < game.control.num_road_types, NULL);
 
-  roads = extra_type_list_by_cause(EC_ROAD);
-
-  if (roads == NULL || id < 0 || id >= extra_type_list_size(roads)) {
-    return NULL;
-  }
-
-  return extra_road_get(extra_type_list_get(roads, id));
-}
-
-/****************************************************************************
-  This function is passed to road_type_list_sort() to sort a list of roads
-  in ascending move_cost (faster roads first).
-****************************************************************************/
-int compare_road_move_cost(const struct road_type *const *p,
-                           const struct road_type *const *q)
-{
-  const struct road_type *proad = *p, *qroad = *q;
-
-  if (proad->move_cost > qroad->move_cost) {
-    return -1; /* q is faster */
-  } else if (proad->move_cost == qroad->move_cost) {
-    return 0;
-  } else {
-    return 1; /* p is faster */
-  }
+  return &roads[id];
 }
 
 /****************************************************************************
   Initialize road_type structures.
 ****************************************************************************/
-void road_type_init(struct extra_type *pextra, int idx)
+void road_types_init(void)
 {
-  struct road_type *proad;
+  int i;
 
-  proad = fc_malloc(sizeof(*proad));
-
-  pextra->data.road = proad;
-
-  requirement_vector_init(&proad->first_reqs);
-
-  proad->id = idx;
-  proad->integrators = NULL;
-  proad->self = pextra;
-}
-
-
-/****************************************************************************
-  Initialize the road integrators cache
-****************************************************************************/
-void road_integrators_cache_init(void)
-{
-  road_type_iterate(proad) {
-    proad->integrators = road_type_list_new();
-    /* Roads always integrate with themselves. */
-    road_type_list_append(proad->integrators, proad);
-    road_type_iterate(oroad) {
-      if (BV_ISSET(proad->integrates, road_index(oroad))) {
-        road_type_list_append(proad->integrators, oroad);
-      }
-    } road_type_iterate_end;
-    road_type_list_unique(proad->integrators);
-    road_type_list_sort(proad->integrators, &compare_road_move_cost);
-  } road_type_iterate_end;
+  for (i = 0; i < MAX_ROAD_TYPES; i++) {
+    roads[i].id = i;
+    requirement_vector_init(&roads[i].reqs);
+    roads[i].hiders = NULL;
+    roads[i].helptext = NULL;
+  }
 }
 
 /****************************************************************************
@@ -144,11 +92,14 @@ void road_integrators_cache_init(void)
 void road_types_free(void)
 {
   road_type_iterate(proad) {
-    requirement_vector_free(&proad->first_reqs);
-
-    if (proad->integrators != NULL) {
-      road_type_list_destroy(proad->integrators);
-      proad->integrators = NULL;
+    requirement_vector_free(&proad->reqs);
+    if (proad->hiders != NULL) {
+      road_type_list_destroy(proad->hiders);
+      proad->hiders = NULL;
+    }
+    if (NULL != proad->helptext) {
+      strvec_destroy(proad->helptext);
+      proad->helptext = NULL;
     }
   } road_type_iterate_end;
 }
@@ -183,29 +134,17 @@ struct road_type *road_by_compat_special(enum road_compat compat)
 /****************************************************************************
   Return translated name of this road type.
 ****************************************************************************/
-const char *road_name_translation(struct road_type *proad)
+const char *road_name_translation(struct road_type *road)
 {
-  struct extra_type *pextra = road_extra_get(proad);
-
-  if (pextra == NULL) {
-    return NULL;
-  }
-
-  return extra_name_translation(pextra);
+  return name_translation(&road->name);
 }
 
 /****************************************************************************
   Return untranslated name of this road type.
 ****************************************************************************/
-const char *road_rule_name(const struct road_type *proad)
+const char *road_rule_name(const struct road_type *road)
 {
-  struct extra_type *pextra = road_extra_get(proad);
-
-  if (pextra == NULL) {
-    return NULL;
-  }
-
-  return extra_rule_name(pextra);
+  return rule_name(&road->name);
 }
 
 /**************************************************************************
@@ -214,13 +153,15 @@ const char *road_rule_name(const struct road_type *proad)
 **************************************************************************/
 struct road_type *road_type_by_rule_name(const char *name)
 {
-  struct extra_type *pextra = extra_type_by_rule_name(name);
+  const char *qs = Qn_(name);
 
-  if (pextra == NULL) {
-    return NULL;
-  }
+  road_type_iterate(proad) {
+    if (!fc_strcasecmp(road_rule_name(proad), qs)) {
+      return proad;
+    }
+  } road_type_iterate_end;
 
-  return extra_road_get(pextra);
+  return NULL;
 }
 
 /**************************************************************************
@@ -229,13 +170,22 @@ struct road_type *road_type_by_rule_name(const char *name)
 **************************************************************************/
 struct road_type *road_type_by_translated_name(const char *name)
 {
-  struct extra_type *pextra = extra_type_by_translated_name(name);
+  road_type_iterate(proad) {
+    if (0 == strcmp(road_name_translation(proad), name)) {
+      return proad;
+    }
+  } road_type_iterate_end;
 
-  if (pextra == NULL) {
-    return NULL;
-  }
+  return NULL;
+}
 
-  return extra_road_get(pextra);
+/****************************************************************************
+  Is road native to unit class?
+****************************************************************************/
+bool is_native_road_to_uclass(const struct road_type *proad,
+                              const struct unit_class *pclass)
+{
+  return BV_ISSET(proad->native_to, uclass_index(pclass));
 }
 
 /****************************************************************************
@@ -244,7 +194,7 @@ struct road_type *road_type_by_translated_name(const char *name)
 bool road_can_be_built(const struct road_type *proad, const struct tile *ptile)
 {
 
-  if (!(road_extra_get(proad)->buildable)) {
+ if (!proad->buildable) {
     /* Road type not buildable. */
     return FALSE;
   }
@@ -264,9 +214,9 @@ bool road_can_be_built(const struct road_type *proad, const struct tile *ptile)
 /****************************************************************************
   Tells if player can build road to tile with suitable unit.
 ****************************************************************************/
-bool can_build_road_base(const struct road_type *proad,
-                         const struct player *pplayer,
-                         const struct tile *ptile)
+static bool can_build_road_base(const struct road_type *proad,
+                                const struct player *pplayer,
+                                const struct tile *ptile)
 {
   if (!road_can_be_built(proad, ptile)) {
     return FALSE;
@@ -289,54 +239,6 @@ bool can_build_road_base(const struct road_type *proad,
 }
 
 /****************************************************************************
-  Tells if player and optionally unit have road building requirements
-  fulfilled.
-****************************************************************************/
-static bool are_road_reqs_fulfilled(const struct road_type *proad,
-                                    const struct player *pplayer,
-                                    const struct unit *punit,
-                                    const struct tile *ptile)
-{
-  struct extra_type *pextra = road_extra_get(proad);
-  const struct unit_type *utype;
-
-  if (punit == NULL) {
-    utype = NULL;
-  } else {
-    utype = unit_type(punit);
-  }
-
-  if (requirement_vector_size(&proad->first_reqs) > 0) {
-    bool beginning = TRUE;
-
-    road_type_list_iterate(proad->integrators, iroad) {
-      adjc_iterate(ptile, adjc_tile) {
-        if (tile_has_road(adjc_tile, iroad)) {
-          beginning = FALSE;
-          break;
-        }
-      } adjc_iterate_end;
-
-      if (!beginning) {
-        break;
-      }
-    } road_type_list_iterate_end;
-
-    if (beginning) {
-      if (!are_reqs_active(pplayer, tile_owner(ptile), NULL, NULL, ptile,
-                           punit, utype, NULL, NULL,
-                           &proad->first_reqs, RPT_POSSIBLE)) {
-        return FALSE;
-      }
-    }
-  }
-
-  return are_reqs_active(pplayer, tile_owner(ptile), NULL, NULL, ptile,
-                         punit, utype, NULL, NULL, &pextra->reqs,
-                         RPT_POSSIBLE);
-}
-
-/****************************************************************************
   Tells if player can build road to tile with suitable unit.
 ****************************************************************************/
 bool player_can_build_road(const struct road_type *proad,
@@ -347,13 +249,15 @@ bool player_can_build_road(const struct road_type *proad,
     return FALSE;
   }
 
-  return are_road_reqs_fulfilled(proad, pplayer, NULL, ptile);
+  return are_reqs_active(pplayer, NULL, NULL, ptile,
+                         NULL, NULL, NULL, &proad->reqs,
+                         RPT_POSSIBLE);
 }
 
 /****************************************************************************
   Tells if unit can build road on tile.
 ****************************************************************************/
-bool can_build_road(struct road_type *proad,
+bool can_build_road(const struct road_type *proad,
 		    const struct unit *punit,
 		    const struct tile *ptile)
 {
@@ -363,7 +267,9 @@ bool can_build_road(struct road_type *proad,
     return FALSE;
   }
 
-  return are_road_reqs_fulfilled(proad, pplayer, punit, ptile);
+  return are_reqs_active(pplayer, NULL, NULL, ptile,
+                         unit_type(punit), NULL, NULL, &proad->reqs,
+                         RPT_CERTAIN);
 }
 
 /****************************************************************************
@@ -459,6 +365,36 @@ int count_river_type_near_tile(const struct tile *ptile,
 }
 
 /****************************************************************************
+  Is there road of the given type cardinally near tile?
+  (Does not check ptile itself.)
+****************************************************************************/
+bool is_road_card_near(const struct tile *ptile, const struct road_type *proad)
+{
+  cardinal_adjc_iterate(ptile, adjc_tile) {
+    if (tile_has_road(adjc_tile, proad)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Is there road of the given type near tile?
+  (Does not check ptile itself.)
+****************************************************************************/
+bool is_road_near_tile(const struct tile *ptile, const struct road_type *proad)
+{
+  adjc_iterate(ptile, adjc_tile) {
+    if (tile_has_road(adjc_tile, proad)) {
+      return TRUE;
+    }
+  } adjc_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
   Check if road provides effect
 ****************************************************************************/
 bool road_has_flag(const struct road_type *proad, enum road_flag_id flag)
@@ -467,47 +403,11 @@ bool road_has_flag(const struct road_type *proad, enum road_flag_id flag)
 }
 
 /****************************************************************************
-  Returns TRUE iff any cardinally adjacent tile contains a road with
-  the given flag (does not check ptile itself).
-****************************************************************************/
-bool is_road_flag_card_near(const struct tile *ptile, enum road_flag_id flag)
-{
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    road_type_iterate(proad) {
-      if (road_has_flag(proad, flag) && tile_has_road(adjc_tile, proad)) {
-        return TRUE;
-      }
-    } road_type_iterate_end;
-  } cardinal_adjc_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Returns TRUE iff any adjacent tile contains a road with the given flag
-  (does not check ptile itself).
-****************************************************************************/
-bool is_road_flag_near_tile(const struct tile *ptile, enum road_flag_id flag)
-{
-  adjc_iterate(ptile, adjc_tile) {
-    road_type_iterate(proad) {
-      if (road_has_flag(proad, flag) && tile_has_road(adjc_tile, proad)) {
-        return TRUE;
-      }
-    } road_type_iterate_end;
-  } adjc_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
   Is tile native to road?
 ****************************************************************************/
 bool is_native_tile_to_road(const struct road_type *proad,
                             const struct tile *ptile)
 {
-  struct extra_type *pextra;
-
   if (road_has_flag(proad, RF_RIVER)) {
     if (!terrain_has_flag(tile_terrain(ptile), TER_CAN_HAVE_RIVER)) {
       return FALSE;
@@ -516,33 +416,39 @@ bool is_native_tile_to_road(const struct road_type *proad,
     return FALSE;
   }
 
-  pextra = road_extra_get(proad);
+  return are_reqs_active(NULL, NULL, NULL, ptile,
+                         NULL, NULL, NULL, &proad->reqs, RPT_POSSIBLE);
+}
+ 
+/****************************************************************************
+  Returns next road that unit or player can build to tile.
+****************************************************************************/
+struct road_type *next_road_for_tile(struct tile *ptile, struct player *pplayer,
+                                     struct unit *punit)
+{
+  fc_assert(punit != NULL || pplayer != NULL);
 
-  return are_reqs_active(NULL, NULL, NULL, NULL, ptile,
-                         NULL, NULL, NULL, NULL,
-                         &pextra->reqs, RPT_POSSIBLE);
+  road_type_iterate(proad) {
+    if (!tile_has_road(ptile, proad)) {
+      if (punit != NULL) {
+        if (can_build_road(proad, punit, ptile)) {
+          return proad;
+        }
+      } else {
+        if (player_can_build_road(proad, pplayer, ptile)) {
+          return proad;
+        }
+      }
+    }
+  } road_type_iterate_end;
+
+  return NULL;
 }
 
 /****************************************************************************
-  Is extra cardinal only road.
+  Is road type cardinal only.
 ****************************************************************************/
-bool is_cardinal_only_road(const struct extra_type *pextra)
+bool is_cardinal_only_road(const struct road_type *proad)
 {
-  const struct road_type *proad;
-
-  if (!is_extra_caused_by(pextra, EC_ROAD)) {
-    return FALSE;
-  }
-
-  proad = extra_road_get_const(pextra);
-
   return proad->move_mode == RMM_CARDINAL || proad->move_mode == RMM_RELAXED;
-}
-
-/****************************************************************************
-  Does road type provide move bonus
-****************************************************************************/
-bool road_provides_move_bonus(const struct road_type *proad)
-{
-  return proad->move_cost >= 0;
 }

@@ -59,8 +59,6 @@
 
 static void pixmap_put_overlay_tile(Pixmap pixmap, int x, int y,
  				    struct sprite *ssprite);
-static void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
-                                   int canvas_x, int canvas_y);
 
 /* the intro picture is held in this pixmap, which is scaled to
    the screen size */
@@ -85,8 +83,8 @@ void overview_size_changed(void)
 {
   Dimension h, w;
 
-  XtVaSetValues(overview_canvas, XtNwidth, options.overview.width, XtNheight,
-                options.overview.height, NULL);
+  XtVaSetValues(overview_canvas, XtNwidth, overview.width, XtNheight,
+		overview.height, NULL);
 
   XtVaGetValues(left_column_form, XtNheight, &h, NULL);
   XtVaSetValues(map_form, XtNheight, h, NULL);
@@ -97,7 +95,7 @@ void overview_size_changed(void)
 }
 
 /**************************************************************************
-  Create a canvas of the given size.
+...
 **************************************************************************/
 struct canvas *canvas_create(int width, int height)
 {
@@ -109,21 +107,12 @@ struct canvas *canvas_create(int width, int height)
 }
 
 /**************************************************************************
-  Free any resources associated with this canvas and the canvas struct
-  itself.
+...
 **************************************************************************/
 void canvas_free(struct canvas *store)
 {
   XFreePixmap(display, store->pixmap);
   free(store);
-}
-
-/****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* xaw-client has no zoom support */
 }
 
 /****************************************************************************
@@ -486,8 +475,8 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
 /****************************************************************************
   Fill the area covered by the sprite with the given color.
 ****************************************************************************/
-static void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
-                                   int canvas_x, int canvas_y)
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
 {
   if (psprite->has_mask) {
     XSetClipOrigin(display, fill_tile_gc, canvas_x, canvas_y);
@@ -653,8 +642,7 @@ void gui_flush(void)
 void update_map_canvas_scrollbars(void)
 {
   float shown_h, top_h, shown_v, top_v;
-  float xmin, ymin, xmax, ymax;
-  int xsize, ysize;
+  int xmin, ymin, xmax, ymax, xsize, ysize;
   int scroll_x, scroll_y;
 
   get_mapview_scroll_window(&xmin, &ymin, &xmax, &ymax, &xsize, &ysize);
@@ -782,7 +770,7 @@ static void pixmap_put_overlay_tile(Pixmap pixmap, int canvas_x, int canvas_y,
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
     pixmap_put_overlay_tile(XtWindow(map_canvas), canvas_x, canvas_y,
@@ -797,8 +785,7 @@ void scrollbar_jump_callback(Widget w, XtPointer client_data,
 			     XtPointer percent_ptr)
 {
   float percent=*(float*)percent_ptr;
-  float xmin, ymin, xmax, ymax;
-  int xsize, ysize;
+  int xmin, ymin, xmax, ymax, xsize, ysize;
   int scroll_x, scroll_y;
 
   if (!can_client_change_view()) {

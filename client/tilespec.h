@@ -44,46 +44,6 @@ struct resource;
   TYPED_VECTOR_ITERATE(struct sprite *, sprite_vec, psprite)
 #define sprite_vector_iterate_end VECTOR_ITERATE_END
 
-#define SPECENUM_NAME ts_type
-#define SPECENUM_VALUE0 TS_OVERHEAD
-#define SPECENUM_VALUE0NAME N_("Overhead")
-#define SPECENUM_VALUE1 TS_ISOMETRIC
-#define SPECENUM_VALUE1NAME N_("Isometric")
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME fog_style
-/* Fog is automatically appended by the code. */
-#define SPECENUM_VALUE0 FOG_AUTO
-#define SPECENUM_VALUE0NAME "Auto"
-/* A single fog sprite is provided by the tileset (tx.fog). */
-#define SPECENUM_VALUE1 FOG_SPRITE
-#define SPECENUM_VALUE1NAME "Sprite"
-/* No fog, or fog derived from darkness style. */
-#define SPECENUM_VALUE2 FOG_DARKNESS
-#define SPECENUM_VALUE2NAME "Darkness"
-#include "specenum_gen.h"
-
-#define SPECENUM_NAME darkness_style
-/* No darkness sprites are drawn. */
-#define SPECENUM_VALUE0 DARKNESS_NONE
-#define SPECENUM_VALUE0NAME "None"
-/* 1 sprite that is split into 4 parts and treated as a darkness4.  Only
- * works in iso-view. */
-#define SPECENUM_VALUE1 DARKNESS_ISORECT
-#define SPECENUM_VALUE1NAME "IsoRect"
-/* 4 sprites, one per direction.  More than one sprite per tile may be
- * drawn. */
-#define SPECENUM_VALUE2 DARKNESS_CARD_SINGLE
-#define SPECENUM_VALUE2NAME "CardinalSingle"
-/* 15=2^4-1 sprites.  A single sprite is drawn, chosen based on whether
- * there's darkness in _each_ of the cardinal directions. */
-#define SPECENUM_VALUE3 DARKNESS_CARD_FULL
-#define SPECENUM_VALUE3NAME "CardinalFull"
-/* Corner darkness & fog.  3^4 = 81 sprites. */
-#define SPECENUM_VALUE4 DARKNESS_CORNER
-#define SPECENUM_VALUE4NAME "Corner"
-#include "specenum_gen.h"
-
 /* An edge is the border between two tiles.  This structure represents one
  * edge.  The tiles are given in the same order as the enumeration name. */
 enum edge_type {
@@ -137,7 +97,6 @@ enum mapview_layer {
   LAYER_CITYBAR,
   LAYER_FOCUS_UNIT,
   LAYER_GOTO,
-  LAYER_WORKERTASK,
   LAYER_EDITOR,
   LAYER_COUNT
 };
@@ -156,8 +115,6 @@ enum mapview_layer {
 
 #define NUM_TILES_PROGRESS 8
 
-#define MAX_NUM_CITIZEN_SPRITES 6
-
 enum arrow_type {
   ARROW_RIGHT,
   ARROW_PLUS,
@@ -171,8 +128,6 @@ extern struct tileset *tileset;
 
 struct strvec;
 const struct strvec *get_tileset_list(void);
-
-void tileset_error(enum log_level level, const char *format, ...);
 
 struct tileset *tileset_read_toplevel(const char *tileset_name, bool verbose);
 void tileset_init(struct tileset *t);
@@ -198,8 +153,10 @@ void tileset_setup_tile_type(struct tileset *t,
 			     const struct terrain *pterrain);
 void tileset_setup_resource(struct tileset *t,
 			    const struct resource *presource);
-void tileset_setup_extra(struct tileset *t,
-                         struct extra_type *pextra);
+void tileset_setup_road(struct tileset *t,
+                        struct road_type *proad);
+void tileset_setup_base(struct tileset *t,
+                        const struct base_type *pbase);
 void tileset_setup_government(struct tileset *t,
 			      struct government *gov);
 void tileset_setup_nation_flag(struct tileset *t, 
@@ -224,6 +181,12 @@ int fill_basic_terrain_layer_sprite_array(struct tileset *t,
                                           struct drawn_sprite *sprs,
                                           int layer,
                                           struct terrain *pterrain);
+int fill_basic_road_sprite_array(const struct tileset *t,
+                                 struct drawn_sprite *sprs,
+                                 const struct road_type *proad);
+int fill_basic_base_sprite_array(const struct tileset *t,
+                                 struct drawn_sprite *sprs,
+                                 const struct base_type *pbase);
 
 double get_focus_unit_toggle_timeout(const struct tileset *t);
 void reset_focus_unit_state(struct tileset *t);
@@ -306,8 +269,6 @@ struct editor_sprites {
     *military_base;
 };
 
-#define NUM_WALL_TYPES 7
-
 struct sprite *get_spaceship_sprite(const struct tileset *t,
 				    enum spaceship_part part);
 struct sprite *get_citizen_sprite(const struct tileset *t,
@@ -356,10 +317,9 @@ struct sprite *get_unit_upkeep_sprite(const struct tileset *t,
 struct sprite *get_basic_fog_sprite(const struct tileset *t);
 struct sprite *get_resource_sprite(const struct tileset *t,
                                    const struct resource *presouce);
-int fill_basic_extra_sprite_array(const struct tileset *t,
-                                  struct drawn_sprite *sprs,
-                                  const struct extra_type *pextra);
-struct sprite *get_event_sprite(const struct tileset *t, enum event_type event);
+struct sprite *get_basic_special_sprite(const struct tileset *t,
+                                        enum tile_special_type special);
+struct sprite *get_basic_mine_sprite(const struct tileset *t);
 
 struct sprite *tiles_lookup_sprite_tag_alt(struct tileset *t,
                                            enum log_level level,

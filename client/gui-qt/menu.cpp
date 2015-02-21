@@ -37,6 +37,9 @@
 #include "control.h"
 #include "helpdata.h"
 
+// client/include
+#include "helpdlg_g.h"
+
 // gui-qt
 #include "qtg_cxxside.h"
 #include "fc_client.h"
@@ -87,7 +90,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile *newtile = tile_virtual_new(ptile);
   const char *text;
 
-  tile_apply_activity(newtile, activity, NULL);
+  tile_apply_activity(newtile, activity);
   text = tile_get_info_text(newtile, FALSE, 0);
   tile_virtual_destroy(newtile);
   return text;
@@ -439,7 +442,7 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("Fullscreen"));
   act->setShortcut(QKeySequence(tr("alt+return")));
   act->setCheckable(true);
-  act->setChecked(options.gui_qt_fullscreen);
+  act->setChecked(fullscreen_mode);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_fullscreen()));
   menu->addSeparator();
   minimap_status = menu->addAction(_("Minimap"));
@@ -460,49 +463,49 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("City Outlines"));
   act->setShortcut(QKeySequence(tr("Ctrl+y")));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_outlines);
+  act->setChecked(draw_city_outlines);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_outlines()));
   act = menu->addAction(_("City Output"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_output);
+  act->setChecked(draw_city_output);
   act->setShortcut(QKeySequence(tr("ctrl+w")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_output()));
   act = menu->addAction(_("Map Grid"));
   act->setShortcut(QKeySequence(tr("ctrl+g")));
   act->setCheckable(true);
-  act->setChecked(options.draw_map_grid);
+  act->setChecked(draw_map_grid);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_map_grid()));
   act = menu->addAction(_("National Borders"));
   act->setCheckable(true);
-  act->setChecked(options.draw_borders);
+  act->setChecked(draw_borders);
   act->setShortcut(QKeySequence(tr("ctrl+b")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_borders()));
   act = menu->addAction(_("City Full Bar"));
   act->setCheckable(true);
-  act->setChecked(options.draw_full_citybar);
+  act->setChecked(draw_full_citybar);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_fullbar()));
   act = menu->addAction(_("City Names"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_names);
+  act->setChecked(draw_city_names);
   act->setShortcut(QKeySequence(tr("ctrl+n")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_names()));
   act = menu->addAction(_("City Growth"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_growth);
+  act->setChecked(draw_city_growth);
   act->setShortcut(QKeySequence(tr("ctrl+r")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_growth()));
   act = menu->addAction(_("City Production Levels"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_productions);
+  act->setChecked(draw_city_productions);
   act->setShortcut(QKeySequence(tr("ctrl+p")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_production()));
   act = menu->addAction(_("City Buy Cost"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_buycost);
+  act->setChecked(draw_city_buycost);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_buycost()));
   act = menu->addAction(_("City Traderoutes"));
   act->setCheckable(true);
-  act->setChecked(options.draw_city_trade_routes);
+  act->setChecked(draw_city_trade_routes);
   act->setShortcut(QKeySequence(tr("ctrl+d")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_traderoutes()));
 
@@ -668,16 +671,12 @@ void mr_menu::setup_menus()
   /* Combat Menu */
   menu = this->addMenu(_("Combat"));
   act = menu->addAction(_("Fortify Unit"));
-  menu_list.insertMulti(FORTIFY, act);
+  menu_list.insertMulti(FORTRESS, act);
   act->setShortcut(QKeySequence(tr("f")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_fortify()));
-  act = menu->addAction(_("Build Type A Base"));
-  menu_list.insertMulti(FORTRESS, act);
-  act->setShortcut(QKeySequence(tr("shift+f")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_fortress()));
   act = menu->addAction(_("Build Type B Base"));
   menu_list.insertMulti(AIRBASE, act);
-  act->setShortcut(QKeySequence(tr("shift+e")));
+  act->setShortcut(QKeySequence(tr("e")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_airbase()));
   menu->addSeparator();
   act = menu->addAction(_("Pillage"));
@@ -795,9 +794,6 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("Spaceship"));
   act->setShortcut(QKeySequence(tr("F12")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_spaceship()));
-
-  act = menu->addAction(_("Achievements"));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_achievements()));
 
   /* Help Menu */
   menu = this->addMenu(_("Help"));
@@ -927,7 +923,7 @@ void mr_menu::menus_sensitive()
   QHash <munit, QAction *>::iterator i;
   struct unit_list *punits = NULL;
   struct road_type *proad;
-  struct extra_type *tgt;
+  struct act_tgt tgt;
   bool any_cities = false;
   bool city_on_tile;
   bool units_all_same_tile = true;
@@ -1018,37 +1014,16 @@ void mr_menu::menus_sensitive()
 
         if (units_all_same_tile) {
           struct unit *punit = unit_list_get(punits, 0);
-
           pterrain = tile_terrain(unit_tile(punit));
           if (pterrain->mining_result != T_NONE
               && pterrain->mining_result != pterrain) {
             i.value()->setText(
               QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                      (unit_tile(punit), ACTIVITY_MINE))));
-          } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)){
-            struct extra_type *pextra = NULL;
-
-            /* FIXME: this overloading doesn't work well with multiple focus
-             * units. */
-            unit_list_iterate(punits, punit) {
-              pextra = next_extra_for_tile(unit_tile(punit), EC_MINE,
-                                           unit_owner(punit), punit);
-              if (pextra != NULL) {
-                break;
-              }
-            } unit_list_iterate_end;
-
-            if (pextra != NULL) {
-              /* TRANS: Build mine of specific type */
-              i.value()->setText(QString(_("Build %1"))
-                .arg(extra_name_translation(pextra)));
-            } else {
-              i.value()->setText(QString(_("Build Mine")));
-            }
+              /* TRANS: Transfrom terrain to specific type */
+              arg(QString(get_tile_change_menu_text
+                          (unit_tile(punit), ACTIVITY_MINE))));
           } else {
-            i.value()->setText(QString(_("Build Mine")));
+            i.value()->setText(_("Build Mine"));
           }
         }
         break;
@@ -1059,38 +1034,21 @@ void mr_menu::menus_sensitive()
         }
         if (units_all_same_tile) {
           struct unit *punit = unit_list_get(punits, 0);
-
           pterrain = tile_terrain(unit_tile(punit));
           if (pterrain->irrigation_result != T_NONE
               && pterrain->irrigation_result != pterrain) {
             i.value()->setText(QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                      (unit_tile(punit), ACTIVITY_IRRIGATE))));
-          } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)){
-            struct extra_type *pextra = NULL;
-
-            /* FIXME: this overloading doesn't work well with multiple focus
-             * units. */
-            unit_list_iterate(punits, punit) {
-              pextra = next_extra_for_tile(unit_tile(punit), EC_IRRIGATION,
-                                           unit_owner(punit), punit);
-              if (pextra != NULL) {
-                break;
-              }
-            } unit_list_iterate_end;
-
-            if (pextra != NULL) {
-              /* TRANS: Build irrigation of specific type */
-              i.value()->setText(QString(_("Build %1"))
-                .arg(extra_name_translation(pextra)));
-            } else {
-              i.value()->setText(QString(_("Build Irrigation")));
-            }
+                               /* TRANS: Transfrom terrain to specific type */
+                               arg(QString(get_tile_change_menu_text
+                                           (unit_tile(punit),
+                                           ACTIVITY_IRRIGATE))));
+          } else if (tile_has_special(unit_tile(punit), S_IRRIGATION)
+                     && player_knows_techs_with_flag(unit_owner(punit),
+                                                     TF_FARMLAND)) {
+            i.value()->setText(QString(_("Build Farmland")));
           } else {
             i.value()->setText(QString(_("Build Irrigation")));
           }
-          
         }
         break;
 
@@ -1108,9 +1066,9 @@ void mr_menu::menus_sensitive()
           if (pterrain->transform_result != T_NONE
               && pterrain->transform_result != pterrain) {
             i.value()->setText(QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                              (unit_tile(punit), ACTIVITY_TRANSFORM))));
+                        /* TRANS: Transfrom terrain to specific type */
+                        arg(QString(get_tile_change_menu_text
+                        (unit_tile(punit), ACTIVITY_TRANSFORM))));
           } else {
             i.value()->setText(_("Transform Terrain"));
           }
@@ -1143,15 +1101,15 @@ void mr_menu::menus_sensitive()
         }
         break;
 
-      case FORTIFY:
-        if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
+      case FORTRESS:
+        if (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
+            || can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
           i.value()->setEnabled(true);
         }
-        break;
-
-      case FORTRESS:
-        if (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)) {
-          i.value()->setEnabled(true);
+        if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
+          i.value()->setText(_("Fortify Unit"));
+        } else {
+          i.value()->setText(_("Build Type A Base"));
         }
         break;
 
@@ -1212,11 +1170,12 @@ void mr_menu::menus_sensitive()
       case CONNECT_ROAD:
         proad = road_by_compat_special(ROCO_ROAD);
         if (proad != NULL) {
-          tgt = road_extra_get(proad);
+          tgt.type = ATT_ROAD;
+          tgt.obj.road = road_number(proad);
         } else {
           break;
         }
-        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt)) {
+        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, &tgt)) {
           i.value()->setEnabled(true);
         }
         break;
@@ -1229,27 +1188,19 @@ void mr_menu::menus_sensitive()
       case CONNECT_RAIL:
         proad = road_by_compat_special(ROCO_RAILROAD);
         if (proad != NULL) {
-          tgt = road_extra_get(proad);
+          tgt.type = ATT_ROAD;
+          tgt.obj.road = road_number(proad);
         } else {
           break;
         }
-        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt)) {
+        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, &tgt)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case CONNECT_IRRIGATION:
-        {
-          struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-          if (extra_type_list_size(extras) > 0) {
-            struct extra_type *pextra;
-
-            pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-            if (can_units_do_connect(punits, ACTIVITY_IRRIGATE, pextra)) {
-              i.value()->setEnabled(true);
-            }
-          }
+        if (can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL)) {
+          i.value()->setEnabled(true);
         }
         break;
 
@@ -1278,7 +1229,7 @@ void mr_menu::menus_sensitive()
         break;
 
       case ORDER_DIPLOMAT_DLG:
-        if (can_units_act_against_own_tile(punits)) {
+        if (can_units_do_diplomat_action(punits, DIPLOMAT_ANY_ACTION)) {
           i.value()->setEnabled(true);
         }
         break;
@@ -1378,8 +1329,8 @@ void mr_menu::slot_build_city()
        get an eventual error message from the server if we try. */
     if (unit_can_add_or_build_city(punit)) {
       request_unit_build_city(punit);
-    } else if (utype_can_do_action(unit_type(punit), ACTION_HELP_WONDER)) {
-      request_unit_caravan_action(punit, ACTION_HELP_WONDER);
+    } else if (unit_has_type_flag(punit, UTYF_HELP_WONDER)) {
+      request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
     }
   } unit_list_iterate_end;
 }
@@ -1400,12 +1351,8 @@ void mr_menu::slot_clean_pollution()
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *pextra;
-
-    pextra = prev_extra_in_tile(unit_tile(punit), ERM_CLEANPOLLUTION,
-                                unit_owner(punit), punit);
-    if (pextra != NULL) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_POLLUTION, pextra);
+    if (can_unit_do_activity(punit, ACTIVITY_POLLUTION)) {
+      request_new_unit_activity(punit, ACTIVITY_POLLUTION);
     } else if (can_unit_paradrop(punit)) {
       /* FIXME: This is getting worse, we use a key_unit_*() function
        * which assign the order for all units!  Very bad! */
@@ -1419,15 +1366,7 @@ void mr_menu::slot_clean_pollution()
 ***************************************************************************/
 void mr_menu::slot_conn_irrigation()
 {
-  struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-  if (extra_type_list_size(extras) > 0) {
-    struct extra_type *pextra;
-
-    pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-    key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-  }
+  key_unit_connect(ACTIVITY_IRRIGATE, NULL);
 }
 
 /***************************************************************************
@@ -1436,21 +1375,12 @@ void mr_menu::slot_conn_irrigation()
 void mr_menu::slot_conn_rail()
 {
   struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
-
+  struct act_tgt tgt;
   if (prail != NULL) {
-    struct extra_type *tgt;
-
-    tgt = road_extra_get(prail);
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    tgt.type = ATT_ROAD;
+    tgt.obj.road = road_number(prail);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
-}
-
-/***************************************************************************
-  Action "BUILD FORTRESS"
-***************************************************************************/
-void mr_menu::slot_unit_fortress()
-{
-  key_unit_fortress();
 }
 
 /***************************************************************************
@@ -1467,12 +1397,11 @@ void mr_menu::slot_unit_airbase()
 void mr_menu::slot_conn_road()
 {
   struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
+  struct act_tgt tgt;
   if (proad != NULL) {
-    struct extra_type *tgt;
-
-    tgt = road_extra_get(proad);
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    tgt.type = ATT_ROAD;
+    tgt.obj.road = road_number(proad);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
 }
 
@@ -1522,23 +1451,27 @@ void mr_menu::slot_auto_settler()
 *****************************************************************/
 void mr_menu::slot_build_road()
 {
+  struct act_tgt tgt;
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                 EC_ROAD,
+    struct road_type *proad = next_road_for_tile(unit_tile(punit),
                                                  unit_owner(punit),
                                                  punit);
     bool building_road = false;
 
-    if (tgt != NULL
-        && can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt)) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt);
-      building_road = true;
+    if (proad != NULL) {
+      tgt.type = ATT_ROAD;
+      tgt.obj.road = road_number(proad);
+
+      if (can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, &tgt)) {
+        request_new_unit_activity_road(punit, proad);
+        building_road = true;
+      }
     }
 
     if (!building_road && unit_can_est_trade_route_here(punit)) {
-      request_unit_caravan_action(punit, ACTION_TRADE_ROUTE);
+      request_unit_caravan_action(punit, PACKET_UNIT_ESTABLISH_TRADE);
     }
   } unit_list_iterate_end;
 }
@@ -1559,13 +1492,23 @@ void mr_menu::slot_build_mine()
   key_unit_mine();
 }
 /****************************************************************
-  Action "FORTIFY"
+  Action "FORTIFY AND BUILD BASE A (USUALLY FORTRESS)"
 *****************************************************************/
 void mr_menu::slot_unit_fortify()
 {
-  key_unit_fortify();
-}
+  unit_list_iterate(get_units_in_focus(), punit) {
+    /* FIXME: this can provide different actions for different units...
+     * not good! */
+    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
+                                                   punit, unit_tile(punit));
 
+    if (pbase && can_unit_do_activity_base(punit, pbase->item_number)) {
+      request_new_unit_activity_base(punit, pbase);
+    } else {
+      request_unit_fortify(punit);
+    }
+  } unit_list_iterate_end;
+}
 /****************************************************************
   Action "SENTRY"
 *****************************************************************/
@@ -1697,13 +1640,13 @@ void mr_menu::slot_center_view()
 ***************************************************************************/
 void mr_menu::slot_fullscreen()
 {
-  if (!options.gui_qt_fullscreen) {
+  if (!fullscreen_mode){
     gui()->showFullScreen();
     gui()->mapview_wdg->showFullScreen();
   } else {
     gui()->showNormal();
   }
-  options.gui_qt_fullscreen = !options.gui_qt_fullscreen;
+  fullscreen_mode = !fullscreen_mode;
 }
 
 /***************************************************************************
@@ -1764,7 +1707,7 @@ void mr_menu::slot_minimap_view()
 }
 
 /****************************************************************
-  Action "SHOW BORDERS"
+  Action "SHOW DEMOGRAPGHICS REPORT"
 *****************************************************************/
 void mr_menu::slot_borders()
 {
@@ -1954,14 +1897,6 @@ void mr_menu::slot_filter_other()
 void mr_menu::slot_demographics()
 {
   send_report_request(REPORT_DEMOGRAPHIC);
-}
-
-/****************************************************************
-  Action "SHOW ACHIEVEMENTS REPORT"
-*****************************************************************/
-void mr_menu::slot_achievements()
-{
-  send_report_request(REPORT_ACHIEVEMENTS);
 }
 
 /****************************************************************

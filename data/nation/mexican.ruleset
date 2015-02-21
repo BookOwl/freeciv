@@ -55,7 +55,7 @@ ruler_titles = {
 
 flag="mexico"
 flag_alt = "-"
-style = "Babylonian"
+city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""

@@ -27,7 +27,7 @@ ruler_titles = {
 
 flag="greece_ancient"
 flag_alt = "greece"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

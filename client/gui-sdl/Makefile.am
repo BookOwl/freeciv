@@ -4,14 +4,13 @@ noinst_LTLIBRARIES = libgui-sdl.la
 
 AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility \
         -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(srcdir)/../agents \
-	-I$(top_srcdir)/dependencies/tinycthread \
         $(gui_sdl_cflags)
 
 libgui_sdl_la_SOURCES = \
-	action_dialog.c \
 	alphablit.c	\
 	canvas.c	\
 	canvas.h	\
+	caravan_dialog.c \
 	chatline.c	\
 	chatline.h	\
 	citydlg.c	\
@@ -28,6 +27,7 @@ libgui_sdl_la_SOURCES = \
 	dialogs.h	\
 	diplodlg.c	\
 	diplodlg.h	\
+	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\
 	gotodlg.c	\
@@ -45,8 +45,12 @@ libgui_sdl_la_SOURCES = \
 	gui_string.h	\
 	gui_tilespec.c	\
 	gui_tilespec.h  \
+	happiness.c	\
+	happiness.h	\
 	helpdlg.c	\
 	helpdlg.h	\
+	inputdlg.c	\
+	inputdlg.h	\
 	inteldlg.c	\
 	inteldlg.h	\
 	luaconsole.c	\

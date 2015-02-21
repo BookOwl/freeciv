@@ -25,7 +25,6 @@
 #include "mem.h"
 
 /* common */
-#include "ai.h"
 #include "diptreaty.h"
 #include "events.h"
 #include "game.h"
@@ -54,6 +53,14 @@
 #include "script_server.h"
 
 #include "diplhand.h"
+
+#define SPECLIST_TAG treaty
+#define SPECLIST_TYPE struct Treaty
+#include "speclist.h"
+
+#define treaty_list_iterate(list, p) \
+    TYPED_LIST_ITERATE(struct Treaty, list, p)
+#define treaty_list_iterate_end  LIST_ITERATE_END
 
 static struct treaty_list *treaties = NULL;
 
@@ -180,30 +187,26 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
           }
           break;
 	case CLAUSE_ADVANCE:
-          if (!research_invention_gettable(research_get(pother),
-                   pclause->value, game.info.tech_trade_allow_holes)) {
+          if (!player_invention_reachable(pother, pclause->value, FALSE)) {
 	    /* It is impossible to give a technology to a civilization that
-	     * can not possess it (the client should enforce this). */
+	     * can never possess it (the client should enforce this). */
             log_error("Treaty: %s can't have tech %s",
                       nation_rule_name(nation_of_player(pother)),
-                      advance_rule_name(advance_by_number(pclause->value)));
+                      advance_name_by_player(pplayer, pclause->value));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
                           _("The %s can't accept %s."),
                           nation_plural_for_player(pother),
-                          advance_name_translation(advance_by_number
-                                                   (pclause->value)));
+			  advance_name_for_player(pplayer, pclause->value));
 	    return;
           }
-          if (research_invention_state(research_get(pplayer), pclause->value)
-              != TECH_KNOWN) {
+	  if (player_invention_state(pplayer, pclause->value) != TECH_KNOWN) {
             log_error("Nation %s try to give unknown tech %s to nation %s.",
                       nation_rule_name(nation_of_player(pplayer)),
-                      advance_rule_name(advance_by_number(pclause->value)),
+                      advance_name_by_player(pplayer, pclause->value),
                       nation_rule_name(nation_of_player(pother)));
             notify_player(pplayer, NULL, E_DIPLOMACY, ftc_server,
 			  _("You don't have tech %s, you can't accept treaty."),
-                          advance_name_translation(advance_by_number
-                                                   (pclause->value)));
+			  advance_name_for_player(pplayer, pclause->value));
 	    return;
 	  }
 	  break;
@@ -408,58 +411,37 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
                       player_name(pgiver));
         break;
       case CLAUSE_ADVANCE:
-        {
-          /* It is possible that two players open the diplomacy dialog
-           * and try to give us the same tech at the same time. This
-           * should be handled discreetly instead of giving a core dump. */
-          struct research *presearch = research_get(pdest);
-          const char *advance_name;
+        /* It is possible that two players open the diplomacy dialog
+         * and try to give us the same tech at the same time. This
+         * should be handled discreetly instead of giving a core dump. */
+        if (player_invention_state(pdest, pclause->value) == TECH_KNOWN) {
+          log_verbose("Nation %s already know tech %s, "
+                      "that %s want to give them.",
+                      nation_rule_name(nation_of_player(pdest)),
+                      advance_name_by_player(pplayer, pclause->value),
+                      nation_rule_name(nation_of_player(pgiver)));
+          break;
+        }
+        notify_player(pdest, NULL, E_TECH_GAIN, ftc_server,
+                      _("You are taught the knowledge of %s."),
+                      advance_name_for_player(pdest, pclause->value));
 
-          if (research_invention_state(presearch, pclause->value)
-              == TECH_KNOWN) {
-            log_verbose("Nation %s already know tech %s, "
-                        "that %s want to give them.",
-                        nation_rule_name(nation_of_player(pdest)),
-                        advance_rule_name(advance_by_number(pclause->value)),
-                        nation_rule_name(nation_of_player(pgiver)));
-            break;
-          }
-          advance_name =  advance_name_translation(advance_by_number
-                                                   (pclause->value));
-          notify_player(pdest, NULL, E_TECH_GAIN, ftc_server,
-                        _("You are taught the knowledge of %s."),
-                        advance_name);
-
-          if (tech_transfer(pdest, pgiver, pclause->value)) {
-            char research_name[MAX_LEN_NAME * 2];
-
-            research_pretty_name(presearch, research_name,
-                                 sizeof(research_name));
-            notify_research(presearch, pdest, E_TECH_GAIN, ftc_server,
-                            _("You have acquired %s thanks to the %s "
-                              "diplomacy with the %s."),
-                            advance_name,
-                            nation_plural_for_player(pdest),
-                            nation_plural_for_player(pgiver));
-            notify_research_embassies
-                (presearch, pgiver, E_TECH_EMBASSY, ftc_server,
-                 _("The %s have acquired %s from the %s."),
-                 research_name,
-                 advance_name,
-                 nation_plural_for_player(pgiver));
-
-            script_tech_learned(presearch, pdest,
-                                advance_by_number(pclause->value), "traded");
-            research_apply_penalty(presearch, pclause->value,
-                                   game.server.diplbulbcost);
-            found_new_tech(presearch, pclause->value, FALSE, TRUE);
-          }
+        if (tech_transfer(pdest, pgiver, pclause->value)) {
+          notify_embassies(pdest, pgiver, NULL, E_TECH_GAIN, ftc_server,
+                           _("The %s have acquired %s from the %s."),
+                           nation_plural_for_player(pdest),
+                           advance_name_for_player(pdest, pclause->value),
+                           nation_plural_for_player(pgiver));
+          script_tech_learned(pdest, advance_by_number(pclause->value),
+                              "traded");
+          do_dipl_cost(pdest, pclause->value);
+          found_new_tech(pdest, pclause->value, FALSE, TRUE);
         }
         break;
       case CLAUSE_GOLD:
         {
           int received = pclause->value
-                         * (100 - game.server.diplgoldcost) / 100;
+                         * (100 - game.server.diplcost) / 100;
           pgiver->economic.gold -= pclause->value;
           pdest->economic.gold += received;
           notify_player(pdest, NULL, E_DIPLOMACY, ftc_server,
@@ -606,6 +588,9 @@ void handle_diplomacy_accept_treaty_req(struct player *pplayer,
          * within radius of our own city. */
         worker_refresh_required = TRUE;
 	break;
+      case CLAUSE_LAST:
+        log_error("Received bad clause type");
+        break;
       }
 
     } clause_list_iterate_end;
@@ -642,8 +627,6 @@ void establish_embassy(struct player *pplayer, struct player *aplayer)
   send_player_all_c(pplayer, aplayer->connections);
   /* INFO_EMBASSY level info */
   send_player_all_c(aplayer, pplayer->connections);
-  /* Send research info */
-  send_research_info(research_get(aplayer), pplayer->connections);
 }
 
 /**************************************************************************
@@ -882,12 +865,4 @@ void reject_all_treaties(struct player *pplayer)
 					  FALSE,
 					  FALSE);
   } players_iterate_end;
-}
-
-/**************************************************************************
-  Get treaty list
-**************************************************************************/
-struct treaty_list *get_all_treaties(void)
-{
-  return treaties;
 }

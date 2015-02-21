@@ -53,7 +53,7 @@ do
 done
 }
 
-for domain in freeciv nations ruledit
+for domain in freeciv nations
 do
   echo
   echo "$domain"

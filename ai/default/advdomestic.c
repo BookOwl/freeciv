@@ -49,13 +49,11 @@
 
 /* ai */
 #include "aitraits.h"
-#include "handicaps.h"
 
 /* ai/default */
 #include "advmilitary.h"
 #include "aicity.h"
 #include "aidata.h"
-#include "ailog.h"
 #include "aiplayer.h"
 #include "aitech.h"
 #include "aitools.h"
@@ -85,7 +83,7 @@ static void dai_choose_help_wonder(struct ai_type *ait,
   struct unit_type *unit_type;
   struct city *wonder_city = game_city_by_number(ai->wonder_city);
 
-  if (num_role_units(action_get_role(ACTION_HELP_WONDER)) == 0) {
+  if (num_role_units(UTYF_HELP_WONDER) == 0) {
     /* No such units available in the ruleset */
     return;
   }
@@ -102,7 +100,7 @@ static void dai_choose_help_wonder(struct ai_type *ait,
 
   /* Count existing caravans */
   unit_list_iterate(pplayer->units, punit) {
-    if (unit_can_do_action(punit, ACTION_HELP_WONDER)
+    if (unit_has_type_flag(punit, UTYF_HELP_WONDER)
         && tile_continent(unit_tile(punit)) == continent)
       caravans++;
   } unit_list_iterate_end;
@@ -110,23 +108,19 @@ static void dai_choose_help_wonder(struct ai_type *ait,
   /* Count caravans being built */
   city_list_iterate(pplayer->cities, acity) {
     if (VUT_UTYPE == acity->production.kind
-        && utype_can_do_action(acity->production.value.utype,
-                               ACTION_HELP_WONDER)
+        && utype_has_flag(acity->production.value.utype, UTYF_HELP_WONDER)
         && tile_continent(acity->tile) == continent) {
       caravans++;
     }
   } city_list_iterate_end;
 
-  unit_type = best_role_unit(pcity, action_get_role(ACTION_HELP_WONDER));
+  unit_type = best_role_unit(pcity, UTYF_HELP_WONDER);
 
   if (!unit_type) {
     /* We cannot build such units yet
      * but we will consider it to stimulate science */
-    unit_type = get_role_unit(action_get_role(ACTION_HELP_WONDER), 0);
+    unit_type = get_role_unit(UTYF_HELP_WONDER, 0);
   }
-
-  fc_assert_msg(utype_can_do_action(unit_type, ACTION_HELP_WONDER),
-                "Non existence of wonder helper unit not caught");
 
   /* Check if wonder needs a little help. */
   if (build_points_left(wonder_city) 
@@ -146,17 +140,14 @@ static void dai_choose_help_wonder(struct ai_type *ait,
     if (want > choice->want) {
       /* This sets our tech want in cases where we cannot actually build
        * the unit. */
-      unit_type = dai_wants_role_unit(ait, pplayer, pcity,
-                                      action_get_role(ACTION_HELP_WONDER),
-                                      want);
+      unit_type = dai_wants_role_unit(pplayer, pcity, UTYF_HELP_WONDER, want);
       if (unit_type != NULL) {
         choice->want = want;
         choice->type = CT_CIVILIAN;
         choice->value.utype = unit_type;
       } else {
         CITY_LOG(LOG_DEBUG, pcity,
-                 "would but could not build ACTION_HELP_WONDER unit, "
-                 "bumped reqs");
+                 "would but could not build UTYF_HELP_WONDER unit, bumped reqs");
       }
     }
   }
@@ -167,7 +158,7 @@ static void dai_choose_help_wonder(struct ai_type *ait,
   If pplayer is not advanced enough to build caravans, the corresponding
   tech will be stimulated.
 ****************************************************************************/
-static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
+static void dai_choose_trade_route(struct city *pcity,
                                    struct adv_choice *choice,
                                    struct adv_data *ai)
 {
@@ -194,8 +185,7 @@ static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
     return;
   }
 
-  if (num_role_units(action_get_role(ACTION_TRADE_ROUTE)) == 0
-      && num_role_units(action_get_role(ACTION_MARKETPLACE)) == 0) {
+  if (num_role_units(UTYF_TRADE_ROUTE) == 0) {
     /* No such units available in the ruleset */
     return;
   }
@@ -274,37 +264,18 @@ static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
     return;
   }
 
-  unit_type = best_role_unit(pcity, action_get_role(ACTION_TRADE_ROUTE));
-
-  if (!unit_type) {
-    /* Can't establish trade route yet. What about entering a market
-     * place? */
-    /* TODO: Should a future unit capable of establishing trade routes be
-     * prioritized above a present unit capable of entering a market place?
-     * In that case this should be below the check for a future unit
-     * capable of establishing a trade route. */
-    unit_type = best_role_unit(pcity, action_get_role(ACTION_MARKETPLACE));
-  }
+  unit_type = best_role_unit(pcity, UTYF_TRADE_ROUTE);
 
   if (!unit_type) {
     /* We cannot build such units yet
      * but we will consider it to stimulate science */
-    unit_type = get_role_unit(action_get_role(ACTION_TRADE_ROUTE), 0);
+    unit_type = get_role_unit(UTYF_TRADE_ROUTE, 0);
   }
-
-  if (!unit_type) {
-    /* We'll never be able to establish a trade route. Consider a unit that
-     * can enter the market place in stead to stimulate science. */
-    unit_type = get_role_unit(action_get_role(ACTION_MARKETPLACE), 0);
-  }
-
-  fc_assert_msg(unit_type,
-                "Non existance of trade unit not caught");
 
   trade_routes = city_num_trade_routes(pcity);
   /* Count also caravans enroute to establish traderoutes */
   unit_list_iterate(pcity->units_supported, punit) {
-    if (unit_can_do_action(punit, ACTION_TRADE_ROUTE)) {
+    if (unit_has_type_flag(punit, UTYF_TRADE_ROUTE)) {
       trade_routes++;
     }
   } unit_list_iterate_end;
@@ -313,22 +284,13 @@ static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
 
   /* We consider only initial benefit from establishing trade route.
    * We may actually get only initial benefit if both cities already
-   * have four trade routes, if there already is route between them
-   * or if the Establish Trade Route action is illegal. */
-
-  /* The calculations of get_caravan_enter_city_trade_bonus() have to be
-   * duplicated here because the city traded with is imaginary. */
+   * have four trade routes, or if there already is route between them. */
 
   /* We assume that we are creating trade route to city with 75% of
    * pcitys trade 10 squares away. */
   income = (10 + 10) * (1.75 * pcity->surplus[O_TRADE]) / 24 * 3;
   bonus = get_city_bonus(pcity, EFT_TRADE_REVENUE_BONUS);
   income = (float)income * pow(2.0, (double)bonus / 1000.0);
-
-  if (!utype_can_do_action(unit_type, ACTION_TRADE_ROUTE)) {
-    /* Enter Marketplace has less initial income. */
-    income = (income + 2) / 3;
-  }
 
   if (dest_city_nat_same_cont) {
     pct = trade_route_type_trade_pct(TRT_NATIONAL);
@@ -372,18 +334,15 @@ static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
    * This method helps us out of deadlocks of completely stalled
    * scientific progress.
    */
-  if (pplayer->economic.science < 50 && trade_routes < max_routes
-      && utype_can_do_action(unit_type, ACTION_TRADE_ROUTE)) {
+  if (pplayer->economic.science < 50 && trade_routes < max_routes) {
     want *=
       (6 - pplayer->economic.science/10) * (6 - pplayer->economic.science/10);
   }
 
-  if (trade_routes == 0 && max_routes > 0
-      && utype_can_do_action(unit_type, ACTION_TRADE_ROUTE)) {
+  if (trade_routes == 0 && max_routes > 0) {
     /* If we have no trade routes at all, we are certainly creating a new one. */
     want += trader_trait;
-  } else if (trade_routes < max_routes
-             && utype_can_do_action(unit_type, ACTION_TRADE_ROUTE)) {
+  } else if (trade_routes < max_routes) {
     /* Possibly creating a new trade route */
     want += trader_trait / 4;
   }
@@ -398,16 +357,7 @@ static void dai_choose_trade_route(struct ai_type *ait, struct city *pcity,
   if (want > choice->want) {
     /* This sets our tech want in cases where we cannot actually build
      * the unit. */
-    unit_type = dai_wants_role_unit(ait, pplayer, pcity,
-                                    action_get_role(ACTION_TRADE_ROUTE),
-                                    want);
-
-    if (unit_type == NULL) {
-      unit_type = dai_wants_role_unit(ait, pplayer, pcity,
-                                      action_get_role(ACTION_MARKETPLACE),
-                                      want);
-    }
-
+    unit_type = dai_wants_role_unit(pplayer, pcity, UTYF_TRADE_ROUTE, want);
     if (unit_type != NULL) {
       choice->want = want;
       choice->type = CT_CIVILIAN;
@@ -438,8 +388,7 @@ void domestic_advisor_choose_build(struct ai_type *ait, struct player *pplayer,
   init_choice(choice);
 
   /* Find out desire for workers (terrain improvers) */
-  settler_type = dai_role_utype_for_terrain_class(pcity, UTYF_SETTLERS,
-                                                  TC_LAND);
+  settler_type = dai_role_utype_for_move_type(pcity, UTYF_SETTLERS, UMT_LAND);
 
   /* The worker want is calculated in aicity.c called from
    * dai_manage_cities.  The expand value is the % that the AI should
@@ -458,75 +407,73 @@ void domestic_advisor_choose_build(struct ai_type *ait, struct player *pplayer,
     if (settler_want > 0) {
       CITY_LOG(LOG_DEBUG, pcity, "desires terrain improvers with passion %d", 
                settler_want);
-      dai_choose_role_unit(ait, pplayer, pcity, choice, CT_CIVILIAN,
+      dai_choose_role_unit(pplayer, pcity, choice, CT_CIVILIAN,
                            UTYF_SETTLERS, settler_want, FALSE);
     }
     /* Terrain improvers don't use boats (yet) */
 
   } else if (!settler_type && settler_want > 0) {
     /* Can't build settlers. Lets stimulate science */
-    dai_wants_role_unit(ait, pplayer, pcity, UTYF_SETTLERS, settler_want);
+    dai_wants_role_unit(pplayer, pcity, UTYF_SETTLERS, settler_want);
   }
 
   /* Find out desire for city founders */
   /* Basically, copied from above and adjusted. -- jjm */
-  if (!game.scenario.prevent_new_cities) {
-    founder_type = best_role_unit(pcity, UTYF_CITIES);
+  founder_type = best_role_unit(pcity, UTYF_CITIES);
 
-    /* founder_want calculated in aisettlers.c */
-    founder_want = city_data->founder_want;
+  /* founder_want calculated in aisettlers.c */
+  founder_want = city_data->founder_want;
 
-    if (ai->wonder_city == pcity->id) {
-      founder_want /= 5;
-    }
+  if (ai->wonder_city == pcity->id) {
+    founder_want /= 5;
+  }
     
-    if (ai->max_num_cities <= city_list_size(pplayer->cities)) {
-      founder_want /= 100;
+  if (ai->max_num_cities <= city_list_size(pplayer->cities)) {
+    founder_want /= 100;
+  }
+
+  /* Adjust founder want by traits */
+  founder_want *= ai_trait_get_value(TRAIT_EXPANSIONIST, pplayer)
+    / TRAIT_DEFAULT_VALUE;
+
+  if (founder_type
+      && (pcity->id != ai->wonder_city
+          || founder_type->pop_cost == 0)
+      && pcity->surplus[O_FOOD] >= utype_upkeep_cost(founder_type,
+                                                     pplayer, O_FOOD)) {
+
+    if (founder_want > choice->want) {
+      CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d",
+               founder_want);
+      dai_choose_role_unit(pplayer, pcity, choice, CT_CIVILIAN,
+                           UTYF_CITIES, founder_want,
+                           city_data->founder_boat);
+
+    } else if (founder_want < -choice->want) {
+      /* We need boats to colonize! */
+      /* We might need boats even if there are boats free,
+       * if they are blockaded or in inland seas. */
+      struct ai_plr *ai = dai_plr_data_get(ait, pplayer, NULL);
+
+      CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d and asks"
+	       " for a new boat (%d of %d free)",
+	       -founder_want, ai->stats.available_boats, ai->stats.boats);
+
+      /* First fill choice with founder information */
+      choice->want = 0 - founder_want;
+      choice->type = CT_CIVILIAN;
+      choice->value.utype = founder_type; /* default */
+      choice->need_boat = TRUE;
+
+      /* Then try to overwrite it with ferryboat information
+       * If no ferryboat is found, above founder choice stays. */
+      dai_choose_role_unit(pplayer, pcity, choice, CT_CIVILIAN,
+                           L_FERRYBOAT, -founder_want, TRUE);
     }
-
-    /* Adjust founder want by traits */
-    founder_want *= ai_trait_get_value(TRAIT_EXPANSIONIST, pplayer)
-      / TRAIT_DEFAULT_VALUE;
-
-    if (founder_type
-        && (pcity->id != ai->wonder_city
-            || founder_type->pop_cost == 0)
-        && pcity->surplus[O_FOOD] >= utype_upkeep_cost(founder_type,
-                                                       pplayer, O_FOOD)) {
-
-      if (founder_want > choice->want) {
-        CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d",
-                 founder_want);
-        dai_choose_role_unit(ait, pplayer, pcity, choice, CT_CIVILIAN,
-                             UTYF_CITIES, founder_want,
-                             city_data->founder_boat);
-
-      } else if (founder_want < -choice->want) {
-        /* We need boats to colonize! */
-        /* We might need boats even if there are boats free,
-         * if they are blockaded or in inland seas. */
-        struct ai_plr *ai = dai_plr_data_get(ait, pplayer, NULL);
-
-        CITY_LOG(LOG_DEBUG, pcity, "desires founders with passion %d and asks"
-                 " for a new boat (%d of %d free)",
-                 -founder_want, ai->stats.available_boats, ai->stats.boats);
-
-        /* First fill choice with founder information */
-        choice->want = 0 - founder_want;
-        choice->type = CT_CIVILIAN;
-        choice->value.utype = founder_type; /* default */
-        choice->need_boat = TRUE;
-
-        /* Then try to overwrite it with ferryboat information
-         * If no ferryboat is found, above founder choice stays. */
-        dai_choose_role_unit(ait, pplayer, pcity, choice, CT_CIVILIAN,
-                             L_FERRYBOAT, -founder_want, TRUE);
-      }
-    } else if (!founder_type
-               && (founder_want > choice->want || founder_want < -choice->want)) {
-      /* Can't build founders. Lets stimulate science */
-      dai_wants_role_unit(ait, pplayer, pcity, UTYF_CITIES, founder_want);
-    }
+  } else if (!founder_type
+             && (founder_want > choice->want || founder_want < -choice->want)) {
+    /* Can't build founders. Lets stimulate science */
+    dai_wants_role_unit(pplayer, pcity, UTYF_CITIES, founder_want);
   }
 
   {
@@ -544,7 +491,7 @@ void domestic_advisor_choose_build(struct ai_type *ait, struct player *pplayer,
 
     init_choice(&cur);
     /* Consider building caravan-type units for trade route */
-    dai_choose_trade_route(ait, pcity, &cur, ai);
+    dai_choose_trade_route(pcity, &cur, ai);
     copy_if_better_choice(&cur, choice);
   }
 
@@ -579,21 +526,14 @@ void dai_wonder_city_distance(struct ai_type *ait, struct player *pplayer,
     return;
   }
 
-  punittype = best_role_unit_for_player(pplayer,
-      action_get_role(ACTION_HELP_WONDER));
-
+  punittype = best_role_unit_for_player(pplayer, UTYF_HELP_WONDER);
   if (!punittype) {
     return;
   }
-
-  fc_assert_msg(utype_can_do_action(punittype, ACTION_HELP_WONDER),
-                "Non existence of wonder helper unit not caught");
-
   ghost = unit_virtual_create(pplayer, wonder_city, punittype, 0);
   maxrange = unit_move_rate(ghost) * 7;
 
   pft_fill_unit_parameter(&parameter, ghost);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {

@@ -29,7 +29,7 @@ ruler_titles = {
 }
 flag="alsace"
 flag_alt = "-"
-style = "european"
+city_style = "european"
 
 init_techs=""
 init_buildings=""

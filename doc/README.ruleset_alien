@@ -53,9 +53,6 @@ This list is incomplete
 - Road type "Tunnel" provides 35% defense bonus for units
   inside
 
-- Burrow Tubes can be built only to connect existing burrow tubes, first
-  one needs to be adjacent to a land tile
-
 - Amphibious and Antigravity units kill citizens after succesfull
   attack against a city, Burrowing units do not
 
@@ -111,5 +108,3 @@ This list is incomplete
   transport Earthly and Amphibious units through Radiating tiles
 
 - Water Engineer build_cost increased to 40, like other City Founding units
-
-- Hex topology is used by default

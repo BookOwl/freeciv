@@ -37,7 +37,6 @@ struct ai_type;
  * Used in the network protocol. */
 #define U_LAST MAX_NUM_ITEMS
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME unit_class_flag_id
 #define SPECENUM_VALUE0 UCF_TERRAIN_SPEED
 #define SPECENUM_VALUE0NAME "TerrainSpeed"
@@ -77,33 +76,19 @@ struct ai_type;
 /* Kills citizens upon successful attack against a city */
 #define SPECENUM_VALUE14 UCF_KILLCITIZEN
 #define SPECENUM_VALUE14NAME "KillCitizen"
-/* Can be airlifted */
-#define SPECENUM_VALUE15 UCF_AIRLIFTABLE
-#define SPECENUM_VALUE15NAME "Airliftable"
 /* keep this last */
 #define SPECENUM_COUNT UCF_COUNT
-#define SPECENUM_BITVECTOR bv_unit_class_flags
-#include "specenum_gen.h"
-
-/* Used in savegame processing and clients. */
-#define SPECENUM_NAME unit_move_type
-#define SPECENUM_VALUE0 UMT_LAND
-#define SPECENUM_VALUE0NAME "Land"
-#define SPECENUM_VALUE1 UMT_SEA
-#define SPECENUM_VALUE1NAME "Sea"
-#define SPECENUM_VALUE2 UMT_BOTH
-#define SPECENUM_VALUE2NAME "Both"
 #include "specenum_gen.h"
 
 /* Used in the network protocol. */
 BV_DEFINE(bv_unit_classes, UCL_LAST);
+BV_DEFINE(bv_unit_class_flags, UCF_COUNT);
 
 enum hut_behavior { HUT_NORMAL, HUT_NOTHING, HUT_FRIGHTEN };
 
 enum move_level { MOVE_NONE, MOVE_PARTIAL, MOVE_FULL };
 
-struct extra_type_list;
-struct unit_class_list;
+struct base_type_list;
 
 struct unit_class {
   Unit_Class_id item_number;
@@ -121,9 +106,9 @@ struct unit_class {
   } adv;
 
   struct {
-    struct extra_type_list *refuel_bases;
-    struct extra_type_list *native_tile_extras;
-    struct unit_class_list *subset_movers;
+    struct base_type_list *refuel_bases;
+    struct base_type_list *native_tile_bases;
+    struct road_type_list *native_tile_roads;
   } cache;
 };
 
@@ -137,14 +122,12 @@ struct unit_class {
  * Used in the network protocol.
  */
 #define SPECENUM_NAME unit_type_flag_id
-/* Cannot fortify even if class can */
-#define SPECENUM_VALUE0 UTYF_CANT_FORTIFY
+#define SPECENUM_VALUE0 UTYF_TRADE_ROUTE
 /* TRANS: this and following strings are 'unit type flags', which may rarely
  * be presented to the player in ruleset help text */
-#define SPECENUM_VALUE0NAME N_("Cant_Fortify")
-/* Unit has no ZOC */
-#define SPECENUM_VALUE1 UTYF_NOZOC
-#define SPECENUM_VALUE1NAME N_("HasNoZOC")
+#define SPECENUM_VALUE0NAME N_("TradeRoute")
+#define SPECENUM_VALUE1 UTYF_HELP_WONDER
+#define SPECENUM_VALUE1NAME N_("HelpWonder")
 #define SPECENUM_VALUE2 UTYF_IGZOC
 /* TRANS: unit type flag (rarely shown): "ignore zones of control" */
 #define SPECENUM_VALUE2NAME N_("IgZOC")
@@ -155,121 +138,121 @@ struct unit_class {
 #define SPECENUM_VALUE4NAME N_("IgTer")
 #define SPECENUM_VALUE5 UTYF_ONEATTACK
 #define SPECENUM_VALUE5NAME N_("OneAttack")
-#define SPECENUM_VALUE6 UTYF_FIELDUNIT
-#define SPECENUM_VALUE6NAME N_("FieldUnit")
-#define SPECENUM_VALUE7 UTYF_MARINES
-#define SPECENUM_VALUE7NAME N_("Marines")
+/* Ignores EFT_DEFEND_BONUS (for example city walls) */
+/* TRANS: unit type flag (rarely shown): "ignore walls */
+#define SPECENUM_VALUE6 UTYF_IGWALL
+#define SPECENUM_VALUE6NAME N_("IgWall")
+#define SPECENUM_VALUE7 UTYF_FIELDUNIT
+#define SPECENUM_VALUE7NAME N_("FieldUnit")
+#define SPECENUM_VALUE8 UTYF_MARINES
+#define SPECENUM_VALUE8NAME N_("Marines")
 /* Invisible except when adjacent (Submarine) */
-#define SPECENUM_VALUE8 UTYF_PARTIAL_INVIS
-#define SPECENUM_VALUE8NAME N_("Partial_Invis")
+#define SPECENUM_VALUE9 UTYF_PARTIAL_INVIS
+#define SPECENUM_VALUE9NAME N_("Partial_Invis")
 /* Does not include ability to found cities */
-#define SPECENUM_VALUE9 UTYF_SETTLERS
-#define SPECENUM_VALUE9NAME N_("Settlers")
-#define SPECENUM_VALUE10 UTYF_DIPLOMAT
-#define SPECENUM_VALUE10NAME N_("Diplomat")
+#define SPECENUM_VALUE10 UTYF_SETTLERS
+#define SPECENUM_VALUE10NAME N_("Settlers")
+#define SPECENUM_VALUE11 UTYF_DIPLOMAT
+#define SPECENUM_VALUE11NAME N_("Diplomat")
 /* Trireme sinking effect */
-#define SPECENUM_VALUE11 UTYF_TRIREME
-#define SPECENUM_VALUE11NAME N_("Trireme")
+#define SPECENUM_VALUE12 UTYF_TRIREME
+#define SPECENUM_VALUE12NAME N_("Trireme")
 /* Nuclear attack effect */
-#define SPECENUM_VALUE12 UTYF_NUCLEAR
-#define SPECENUM_VALUE12NAME N_("Nuclear")
+#define SPECENUM_VALUE13 UTYF_NUCLEAR
+#define SPECENUM_VALUE13NAME N_("Nuclear")
 /* Enhanced spy abilities */
-#define SPECENUM_VALUE13 UTYF_SPY
-#define SPECENUM_VALUE13NAME N_("Spy")
-#define SPECENUM_VALUE14 UTYF_PARATROOPERS
-#define SPECENUM_VALUE14NAME N_("Paratroopers")
+#define SPECENUM_VALUE14 UTYF_SPY
+#define SPECENUM_VALUE14NAME N_("Spy")
+#define SPECENUM_VALUE15 UTYF_PARATROOPERS
+#define SPECENUM_VALUE15NAME N_("Paratroopers")
 /* Can build cities */
-#define SPECENUM_VALUE15 UTYF_CITIES
-#define SPECENUM_VALUE15NAME N_("Cities")
+#define SPECENUM_VALUE16 UTYF_CITIES
+#define SPECENUM_VALUE16NAME N_("Cities")
 /* Cannot attack vs non-native tiles even if class can */
-#define SPECENUM_VALUE16 UTYF_ONLY_NATIVE_ATTACK
-#define SPECENUM_VALUE16NAME N_("Only_Native_Attack")
+#define SPECENUM_VALUE17 UTYF_ONLY_NATIVE_ATTACK
+#define SPECENUM_VALUE17NAME N_("Only_Native_Attack")
 /* unit can add to city population */
-#define SPECENUM_VALUE17 UTYF_ADD_TO_CITY
-#define SPECENUM_VALUE17NAME N_("AddToCity")
+#define SPECENUM_VALUE18 UTYF_ADD_TO_CITY
+#define SPECENUM_VALUE18NAME N_("AddToCity")
 /* Only Fundamentalist government can build these units */
-#define SPECENUM_VALUE18 UTYF_FANATIC
-#define SPECENUM_VALUE18NAME N_("Fanatic")
+#define SPECENUM_VALUE19 UTYF_FANATIC
+#define SPECENUM_VALUE19NAME N_("Fanatic")
 /* Losing this unit means losing the game */
-#define SPECENUM_VALUE19 UTYF_GAMELOSS
-#define SPECENUM_VALUE19NAME N_("GameLoss")
+#define SPECENUM_VALUE20 UTYF_GAMELOSS
+#define SPECENUM_VALUE20NAME N_("GameLoss")
 /* A player can only have one unit of this type */
-#define SPECENUM_VALUE20 UTYF_UNIQUE
-#define SPECENUM_VALUE20NAME N_("Unique")
+#define SPECENUM_VALUE21 UTYF_UNIQUE
+#define SPECENUM_VALUE21NAME N_("Unique")
+/* Cannot be bribed */
+#define SPECENUM_VALUE22 UTYF_UNBRIBABLE
+#define SPECENUM_VALUE22NAME N_("Unbribable")
 /* Cannot be disbanded, won't easily go away */
-#define SPECENUM_VALUE21 UTYF_UNDISBANDABLE
-#define SPECENUM_VALUE21NAME N_("Undisbandable")
+#define SPECENUM_VALUE23 UTYF_UNDISBANDABLE
+#define SPECENUM_VALUE23NAME N_("Undisbandable")
 /* Always wins diplomatic contests */
-#define SPECENUM_VALUE22 UTYF_SUPERSPY
-#define SPECENUM_VALUE22NAME N_("SuperSpy")
+#define SPECENUM_VALUE24 UTYF_SUPERSPY
+#define SPECENUM_VALUE24NAME N_("SuperSpy")
 /* Has no homecity */
-#define SPECENUM_VALUE23 UTYF_NOHOME
-#define SPECENUM_VALUE23NAME N_("NoHome")
+#define SPECENUM_VALUE25 UTYF_NOHOME
+#define SPECENUM_VALUE25NAME N_("NoHome")
 /* Cannot increase veteran level */
-#define SPECENUM_VALUE24 UTYF_NO_VETERAN
-#define SPECENUM_VALUE24NAME N_("NoVeteran")
+#define SPECENUM_VALUE26 UTYF_NO_VETERAN
+#define SPECENUM_VALUE26NAME N_("NoVeteran")
 /* Has the ability to bombard */
-#define SPECENUM_VALUE25 UTYF_BOMBARDER
-#define SPECENUM_VALUE25NAME N_("Bombarder")
+#define SPECENUM_VALUE27 UTYF_BOMBARDER
+#define SPECENUM_VALUE27NAME N_("Bombarder")
 /* Gets double firepower against cities */
-#define SPECENUM_VALUE26 UTYF_CITYBUSTER
-#define SPECENUM_VALUE26NAME N_("CityBuster")
+#define SPECENUM_VALUE28 UTYF_CITYBUSTER
+#define SPECENUM_VALUE28NAME N_("CityBuster")
 /* Unit cannot be built (barb leader etc) */
-#define SPECENUM_VALUE27 UTYF_NOBUILD
-#define SPECENUM_VALUE27NAME N_("NoBuild")
+#define SPECENUM_VALUE29 UTYF_NOBUILD
+#define SPECENUM_VALUE29NAME N_("NoBuild")
 /* Firepower set to 1 when EFT_DEFEND_BONUS applies
  * (for example, land unit attacking city with walls) */
-#define SPECENUM_VALUE28 UTYF_BADWALLATTACKER
-#define SPECENUM_VALUE28NAME N_("BadWallAttacker")
+#define SPECENUM_VALUE30 UTYF_BADWALLATTACKER
+#define SPECENUM_VALUE30NAME N_("BadWallAttacker")
 /* Firepower set to 1 and attackers x2 when in city */
-#define SPECENUM_VALUE29 UTYF_BADCITYDEFENDER
-#define SPECENUM_VALUE29NAME N_("BadCityDefender")
+#define SPECENUM_VALUE31 UTYF_BADCITYDEFENDER
+#define SPECENUM_VALUE31NAME N_("BadCityDefender")
 /* Only barbarians can build this unit */
-#define SPECENUM_VALUE30 UTYF_BARBARIAN_ONLY
-#define SPECENUM_VALUE30NAME N_("BarbarianOnly")
+#define SPECENUM_VALUE32 UTYF_BARBARIAN_ONLY
+#define SPECENUM_VALUE32NAME N_("BarbarianOnly")
 /* upkeep can switch from shield to gold */
-#define SPECENUM_VALUE31 UTYF_SHIELD2GOLD
-#define SPECENUM_VALUE31NAME N_("Shield2Gold")
+#define SPECENUM_VALUE33 UTYF_SHIELD2GOLD
+#define SPECENUM_VALUE33NAME N_("Shield2Gold")
+/* Unit can be captured */
+#define SPECENUM_VALUE34 UTYF_CAPTURABLE
+#define SPECENUM_VALUE34NAME N_("Capturable")
+/* Unit can capture other */
+#define SPECENUM_VALUE35 UTYF_CAPTURER
+#define SPECENUM_VALUE35NAME N_("Capturer")
 
-#define SPECENUM_VALUE32 UTYF_USER_FLAG_1
-#define SPECENUM_VALUE33 UTYF_USER_FLAG_2
-#define SPECENUM_VALUE34 UTYF_USER_FLAG_3
-#define SPECENUM_VALUE35 UTYF_USER_FLAG_4
-#define SPECENUM_VALUE36 UTYF_USER_FLAG_5
-#define SPECENUM_VALUE37 UTYF_USER_FLAG_6
-#define SPECENUM_VALUE38 UTYF_USER_FLAG_7
-#define SPECENUM_VALUE39 UTYF_USER_FLAG_8
-#define SPECENUM_VALUE40 UTYF_USER_FLAG_9
-#define SPECENUM_VALUE41 UTYF_USER_FLAG_10
-#define SPECENUM_VALUE42 UTYF_USER_FLAG_11
-#define SPECENUM_VALUE43 UTYF_USER_FLAG_12
-#define SPECENUM_VALUE44 UTYF_USER_FLAG_13
-#define SPECENUM_VALUE45 UTYF_USER_FLAG_14
-#define SPECENUM_VALUE46 UTYF_USER_FLAG_15
-#define SPECENUM_VALUE47 UTYF_USER_FLAG_16
-#define SPECENUM_VALUE48 UTYF_USER_FLAG_17
-#define SPECENUM_VALUE49 UTYF_USER_FLAG_18
-#define SPECENUM_VALUE50 UTYF_USER_FLAG_19
-#define SPECENUM_VALUE51 UTYF_USER_FLAG_20
-#define SPECENUM_VALUE52 UTYF_USER_FLAG_21
-#define SPECENUM_VALUE53 UTYF_USER_FLAG_22
-#define SPECENUM_VALUE54 UTYF_USER_FLAG_23
-#define SPECENUM_VALUE55 UTYF_USER_FLAG_24
-#define SPECENUM_VALUE56 UTYF_USER_FLAG_25
-#define SPECENUM_VALUE57 UTYF_USER_FLAG_26
-#define SPECENUM_VALUE58 UTYF_USER_FLAG_27
-#define SPECENUM_VALUE59 UTYF_USER_FLAG_28
-#define SPECENUM_VALUE60 UTYF_USER_FLAG_29
-#define SPECENUM_VALUE61 UTYF_USER_FLAG_30
-#define SPECENUM_VALUE62 UTYF_USER_FLAG_31
-#define SPECENUM_VALUE63 UTYF_USER_FLAG_32
+#define SPECENUM_VALUE36 UTYF_USER_FLAG_1
+#define SPECENUM_VALUE37 UTYF_USER_FLAG_2
+#define SPECENUM_VALUE38 UTYF_USER_FLAG_3
+#define SPECENUM_VALUE39 UTYF_USER_FLAG_4
+#define SPECENUM_VALUE40 UTYF_USER_FLAG_5
+#define SPECENUM_VALUE41 UTYF_USER_FLAG_6
+#define SPECENUM_VALUE42 UTYF_USER_FLAG_7
+#define SPECENUM_VALUE43 UTYF_USER_FLAG_8
+#define SPECENUM_VALUE44 UTYF_USER_FLAG_9
+#define SPECENUM_VALUE45 UTYF_USER_FLAG_10
+#define SPECENUM_VALUE46 UTYF_USER_FLAG_11
+#define SPECENUM_VALUE47 UTYF_USER_FLAG_12
+#define SPECENUM_VALUE48 UTYF_USER_FLAG_13
+#define SPECENUM_VALUE49 UTYF_USER_FLAG_14
+#define SPECENUM_VALUE50 UTYF_USER_FLAG_15
+#define SPECENUM_VALUE51 UTYF_USER_FLAG_16
 /* Note that first role must have value next to last flag */
 
-#define UTYF_LAST_USER_FLAG UTYF_USER_FLAG_32
+#define UTYF_LAST_USER_FLAG UTYF_USER_FLAG_16
 #define MAX_NUM_USER_UNIT_FLAGS (UTYF_LAST_USER_FLAG - UTYF_USER_FLAG_1 + 1)
 #define SPECENUM_NAMEOVERRIDE
-#define SPECENUM_BITVECTOR bv_unit_type_flags
 #include "specenum_gen.h"
+
+#define UTYF_MAX 64 /* Used in the network protocol. */
+
+FC_STATIC_ASSERT(UTYF_LAST_USER_FLAG < UTYF_MAX, too_many_unit_flags);
 
 
 /* Unit "roles": these are similar to unit flags but differ in that
@@ -286,75 +269,78 @@ struct unit_class {
 #define L_FIRST (UTYF_LAST_USER_FLAG + 1)
 
 #define SPECENUM_NAME unit_role_id
+/* Hack: on S2_5 only, L_FIRST role value in specenum (VALUE52) is
+ * not used due to a bug discovered after the network protocol was
+ * frozen (gna bug #22272) */
 /* is built first when city established */
-#define SPECENUM_VALUE64 L_FIRSTBUILD
-#define SPECENUM_VALUE64NAME N_("FirstBuild")
+#define SPECENUM_VALUE53 L_FIRSTBUILD
+#define SPECENUM_VALUE53NAME N_("FirstBuild")
 /* initial explorer unit */
-#define SPECENUM_VALUE65 L_EXPLORER
-#define SPECENUM_VALUE65NAME N_("Explorer")
+#define SPECENUM_VALUE54 L_EXPLORER
+#define SPECENUM_VALUE54NAME N_("Explorer")
 /* can be found in hut */
-#define SPECENUM_VALUE66 L_HUT
-#define SPECENUM_VALUE66NAME N_("Hut")
+#define SPECENUM_VALUE55 L_HUT
+#define SPECENUM_VALUE55NAME N_("Hut")
 /* can be found in hut, global tech required */
-#define SPECENUM_VALUE67 L_HUT_TECH
-#define SPECENUM_VALUE67NAME N_("HutTech")
+#define SPECENUM_VALUE56 L_HUT_TECH
+#define SPECENUM_VALUE56NAME N_("HutTech")
 /* is created in Partisan circumstances */
-#define SPECENUM_VALUE68 L_PARTISAN
-#define SPECENUM_VALUE68NAME N_("Partisan")
+#define SPECENUM_VALUE57 L_PARTISAN
+#define SPECENUM_VALUE57NAME N_("Partisan")
 /* ok on defense (AI) */
-#define SPECENUM_VALUE69 L_DEFEND_OK
-#define SPECENUM_VALUE69NAME N_("DefendOk")
+#define SPECENUM_VALUE58 L_DEFEND_OK
+#define SPECENUM_VALUE58NAME N_("DefendOk")
 /* primary purpose is defense (AI) */
-#define SPECENUM_VALUE70 L_DEFEND_GOOD
-#define SPECENUM_VALUE70NAME N_("DefendGood")
+#define SPECENUM_VALUE59 L_DEFEND_GOOD
+#define SPECENUM_VALUE59NAME N_("DefendGood")
 /* quick attacking unit (Horse..Armor) (unused)*/
-#define SPECENUM_VALUE71 L_ATTACK_FAST
-#define SPECENUM_VALUE71NAME N_("AttackFast")
+#define SPECENUM_VALUE60 L_ATTACK_FAST
+#define SPECENUM_VALUE60NAME N_("AttackFast")
 /* powerful attacking unit (Catapult..) (unused) */
-#define SPECENUM_VALUE72 L_ATTACK_STRONG
-#define SPECENUM_VALUE72NAME N_("AttackStrong")
+#define SPECENUM_VALUE61 L_ATTACK_STRONG
+#define SPECENUM_VALUE61NAME N_("AttackStrong")
 /* is useful for ferrying (AI) */
-#define SPECENUM_VALUE73 L_FERRYBOAT
-#define SPECENUM_VALUE73NAME N_("FerryBoat")
+#define SPECENUM_VALUE62 L_FERRYBOAT
+#define SPECENUM_VALUE62NAME N_("FerryBoat")
 /* barbarians unit, land only */
-#define SPECENUM_VALUE74 L_BARBARIAN
-#define SPECENUM_VALUE74NAME N_("Barbarian")
+#define SPECENUM_VALUE63 L_BARBARIAN
+#define SPECENUM_VALUE63NAME N_("Barbarian")
 /* barbarians unit, global tech required */
-#define SPECENUM_VALUE75 L_BARBARIAN_TECH
-#define SPECENUM_VALUE75NAME N_("BarbarianTech")
+#define SPECENUM_VALUE64 L_BARBARIAN_TECH
+#define SPECENUM_VALUE64NAME N_("BarbarianTech")
 /* barbarian boat */
-#define SPECENUM_VALUE76 L_BARBARIAN_BOAT
-#define SPECENUM_VALUE76NAME N_("BarbarianBoat")
+#define SPECENUM_VALUE65 L_BARBARIAN_BOAT
+#define SPECENUM_VALUE65NAME N_("BarbarianBoat")
 /* what barbarians should build */
-#define SPECENUM_VALUE77 L_BARBARIAN_BUILD
-#define SPECENUM_VALUE77NAME N_("BarbarianBuild")
+#define SPECENUM_VALUE66 L_BARBARIAN_BUILD
+#define SPECENUM_VALUE66NAME N_("BarbarianBuild")
 /* barbarians build when global tech */
-#define SPECENUM_VALUE78 L_BARBARIAN_BUILD_TECH
-#define SPECENUM_VALUE78NAME N_("BarbarianBuildTech")
+#define SPECENUM_VALUE67 L_BARBARIAN_BUILD_TECH
+#define SPECENUM_VALUE67NAME N_("BarbarianBuildTech")
 /* barbarian leader */
-#define SPECENUM_VALUE79 L_BARBARIAN_LEADER
-#define SPECENUM_VALUE79NAME N_("BarbarianLeader")
+#define SPECENUM_VALUE68 L_BARBARIAN_LEADER
+#define SPECENUM_VALUE68NAME N_("BarbarianLeader")
 /* sea raider unit */
-#define SPECENUM_VALUE80 L_BARBARIAN_SEA
-#define SPECENUM_VALUE80NAME N_("BarbarianSea")
+#define SPECENUM_VALUE69 L_BARBARIAN_SEA
+#define SPECENUM_VALUE69NAME N_("BarbarianSea")
 /* sea raider unit, global tech required */
-#define SPECENUM_VALUE81 L_BARBARIAN_SEA_TECH
-#define SPECENUM_VALUE81NAME N_("BarbarianSeaTech")
+#define SPECENUM_VALUE70 L_BARBARIAN_SEA_TECH
+#define SPECENUM_VALUE70NAME N_("BarbarianSeaTech")
 /* can found cities */
-#define SPECENUM_VALUE82 L_CITIES
-#define SPECENUM_VALUE82NAME N_("Cities")
+#define SPECENUM_VALUE71 L_CITIES
+#define SPECENUM_VALUE71NAME N_("Cities")
 /* can improve terrain */
-#define SPECENUM_VALUE83 L_SETTLERS
-#define SPECENUM_VALUE83NAME N_("Settlers")
+#define SPECENUM_VALUE72 L_SETTLERS
+#define SPECENUM_VALUE72NAME N_("Settlers")
 /* loss results in loss of game */
-#define SPECENUM_VALUE84 L_GAMELOSS
-#define SPECENUM_VALUE84NAME N_("GameLoss")
+#define SPECENUM_VALUE73 L_GAMELOSS
+#define SPECENUM_VALUE73NAME N_("GameLoss")
 /* can do diplomat actions */
-#define SPECENUM_VALUE85 L_DIPLOMAT
-#define SPECENUM_VALUE85NAME N_("Diplomat")
+#define SPECENUM_VALUE74 L_DIPLOMAT
+#define SPECENUM_VALUE74NAME N_("Diplomat")
 /* AI hunter type unit */
-#define SPECENUM_VALUE86 L_HUNTER
-#define SPECENUM_VALUE86NAME N_("Hunter")
+#define SPECENUM_VALUE75 L_HUNTER
+#define SPECENUM_VALUE75NAME N_("Hunter")
 #define L_LAST (L_HUNTER+1)
 
 #include "specenum_gen.h"
@@ -364,6 +350,7 @@ struct unit_class {
 FC_STATIC_ASSERT(L_LAST - L_FIRST <= L_MAX, too_many_unit_roles);
 
 /* Used in the network protocol. */
+BV_DEFINE(bv_unit_type_flags, UTYF_MAX);
 BV_DEFINE(bv_unit_type_roles, L_MAX);
 
 /* Used in the network protocol. */
@@ -391,8 +378,6 @@ struct combat_bonus {
     TYPED_LIST_ITERATE(struct combat_bonus, bonuslist, pbonus)
 #define combat_bonus_list_iterate_end LIST_ITERATE_END
 
-BV_DEFINE(bv_unit_types, U_LAST);
-
 struct veteran_level {
   struct name_translation name; /* level/rank name */
   int power_fact; /* combat/work speed/diplomatic power factor (in %) */
@@ -410,7 +395,6 @@ struct veteran_system {
 struct unit_type {
   Unit_type_id item_number;
   struct name_translation name;
-  bool disabled;                        /* Does not really exist - hole in improvments array */
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
   char sound_move[MAX_LEN_NAME];
@@ -422,7 +406,6 @@ struct unit_type {
   int attack_strength;
   int defense_strength;
   int move_rate;
-  int unknown_move_cost; /* See utype_unknown_move_cost(). */
 
   struct advance *require_advance;	/* may be NULL */
   struct impr_type *need_improvement;	/* may be NULL */
@@ -474,10 +457,6 @@ struct unit_type {
 
   struct strvec *helptext;
 
-  struct {
-    bool igwall;
-  } adv;
-
   void *ais[FC_AI_LAST];
 };
 
@@ -520,19 +499,6 @@ bool utype_can_freely_load(const struct unit_type *pcargotype,
                            const struct unit_type *ptranstype);
 bool utype_can_freely_unload(const struct unit_type *pcargotype,
                              const struct unit_type *ptranstype);
-
-bool is_actor_unit_type(const struct unit_type *putype);
-bool utype_can_do_action(const struct unit_type *putype,
-                         const int action_id);
-bool utype_acts_hostile(const struct unit_type *putype);
-
-bool can_unit_act_when_ustate_is(const struct unit_type *punit_type,
-                                 const enum ustate_prop prop,
-                                 const bool is_there);
-bool can_utype_do_act_if_tgt_diplrel(const struct unit_type *punit_type,
-                                     const int action_id,
-                                     const int prop,
-                                     const bool is_there);
 
 /* Functions to operate on various flag and roles. */
 typedef bool (*role_unit_callback)(struct unit_type *ptype, void *data);
@@ -605,7 +571,7 @@ int unit_pop_value(const struct unit *punit);
 int utype_pop_value(const struct unit_type *punittype);
 
 enum unit_move_type utype_move_type(const struct unit_type *punittype);
-void set_unit_move_type(struct unit_class *puclass);
+enum unit_move_type uclass_move_type(const struct unit_class *pclass);
 
 /* player related unit functions */
 int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
@@ -626,8 +592,6 @@ bool can_player_build_unit_now(const struct player *p,
 			       const struct unit_type *punittype);
 
 #define utype_fuel(ptype) (ptype)->fuel
-
-bool utype_is_cityfounder(struct unit_type *utype);
 
 /* Initialization and iteration */
 void unit_types_init(void);
@@ -652,9 +616,6 @@ void *utype_ai_data(const struct unit_type *ptype, const struct ai_type *ai);
 void utype_set_ai_data(struct unit_type *ptype, const struct ai_type *ai,
                        void *data);
 
-void unit_type_action_cache_set(struct unit_type *ptype);
-void unit_type_action_cache_init(void);
-
 /* Initialization and iteration */
 void unit_classes_init(void);
 void unit_classes_free(void);
@@ -674,22 +635,6 @@ const struct unit_class *unit_class_array_last(void);
     }									\
   }									\
 }
-
-#define SPECLIST_TAG unit_class
-#define SPECLIST_TYPE struct unit_class
-#include "speclist.h"
-
-#define unit_class_list_iterate(uclass_list, pclass) \
-  TYPED_LIST_ITERATE(struct unit_class, uclass_list, pclass)
-#define unit_class_list_iterate_end LIST_ITERATE_END
-
-#define SPECLIST_TAG unit_type
-#define SPECLIST_TYPE struct unit_type
-#include "speclist.h"
-
-#define unit_type_list_iterate(utype_list, ptype) \
-  TYPED_LIST_ITERATE(struct unit_type, utype_list, ptype)
-#define unit_type_list_iterate_end LIST_ITERATE_END
 
 #ifdef __cplusplus
 }

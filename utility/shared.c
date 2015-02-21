@@ -112,10 +112,6 @@ static char *grouping_sep = NULL;
 static const char base64url[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-static struct strvec *data_dir_names = NULL;
-static struct strvec *save_dir_names = NULL;
-static struct strvec *scenario_dir_names = NULL;
-
 static int compare_file_mtime_ptrs(const struct fileinfo *const *ppa,
                                    const struct fileinfo *const *ppb);
 
@@ -243,7 +239,7 @@ bool is_option(const char *option_name,char *option)
   Like strcspn but also handles quotes, i.e. *reject chars are
   ignored if they are inside single or double quotes.
 ***************************************************************/
-static size_t fc_strcspn(const char *s, const char *reject)
+static size_t my_strcspn(const char *s, const char *reject)
 {
   bool in_single_quotes = FALSE, in_double_quotes = FALSE;
   size_t i, len = strlen(s);
@@ -304,7 +300,7 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
       break;
     }
 
-    len = fc_strcspn(str, delimiterset);
+    len = my_strcspn(str, delimiterset);
 
     if (token >= num_tokens) {
       break;
@@ -936,25 +932,6 @@ static struct strvec *base_get_dirs(const char *dir_list)
 }
 
 /***************************************************************************
-  Free data dir name vectors.
-***************************************************************************/
-void free_data_dir_names(void)
-{
-  if (data_dir_names != NULL) {
-    strvec_destroy(data_dir_names);
-    data_dir_names = NULL;
-  }
-  if (save_dir_names != NULL) {
-    strvec_destroy(save_dir_names);
-    save_dir_names = NULL;
-  }
-  if (scenario_dir_names != NULL) {
-    strvec_destroy(scenario_dir_names);
-    scenario_dir_names = NULL;
-  }
-}
-
-/***************************************************************************
   Returns a list of data directory paths, in the order in which they should
   be searched.  These paths are specified internally or may be set as the
   environment variable $FREECIV_DATA PATH (a separated list of directories,
@@ -968,10 +945,12 @@ void free_data_dir_names(void)
 ***************************************************************************/
 const struct strvec *get_data_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == data_dir_names) {
+  if (NULL == dirs) {
     const char *path;
 
     if ((path = getenv(FREECIV_DATA_PATH)) && '\0' == path[0]) {
@@ -987,14 +966,14 @@ const struct strvec *get_data_dirs(void)
                 FREECIV_PATH, DEFAULT_DATA_PATH);
       path = NULL;
     }
-    data_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_DATA_PATH);
-    strvec_remove_duplicate(data_dir_names, strcmp); /* Don't set a path both. */
-    strvec_iterate(data_dir_names, dirname) {
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_DATA_PATH);
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Data path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return data_dir_names;
+  return dirs;
 }
 
 /***************************************************************************
@@ -1011,10 +990,12 @@ const struct strvec *get_data_dirs(void)
 ***************************************************************************/
 const struct strvec *get_save_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == save_dir_names) {
+  if (NULL == dirs) {
     const char *path;
     bool from_freeciv_path = FALSE;
 
@@ -1035,25 +1016,25 @@ const struct strvec *get_save_dirs(void)
         from_freeciv_path = TRUE;
       }
     }
-    save_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SAVE_PATH);
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_SAVE_PATH);
     if (from_freeciv_path) {
       /* Then also append a "/saves" suffix to every directory. */
       char buf[512];
       size_t i;
 
-      for (i = 0; i < strvec_size(save_dir_names); i++) {
-        path = strvec_get(save_dir_names, i);
+      for (i = 0; i < strvec_size(dirs); i++) {
+        path = strvec_get(dirs, i);
         fc_snprintf(buf, sizeof(buf), "%s/saves", path);
-        strvec_insert(save_dir_names, ++i, buf);
+        strvec_insert(dirs, ++i, buf);
       }
     }
-    strvec_remove_duplicate(save_dir_names, strcmp); /* Don't set a path both. */
-    strvec_iterate(save_dir_names, dirname) {
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Save path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return save_dir_names;
+  return dirs;
 }
 
 /***************************************************************************
@@ -1070,10 +1051,12 @@ const struct strvec *get_save_dirs(void)
 ***************************************************************************/
 const struct strvec *get_scenario_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == scenario_dir_names) {
+  if (NULL == dirs) {
     const char *path;
     bool from_freeciv_path = FALSE;
 
@@ -1094,7 +1077,7 @@ const struct strvec *get_scenario_dirs(void)
         from_freeciv_path = TRUE;
       }
     }
-    scenario_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SCENARIO_PATH);
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_SCENARIO_PATH);
     if (from_freeciv_path) {
       /* Then also append subdirs every directory. */
       const char *subdirs[] = {
@@ -1104,21 +1087,21 @@ const struct strvec *get_scenario_dirs(void)
       const char **subdir;
       size_t i;
 
-      for (i = 0; i < strvec_size(scenario_dir_names); i++) {
-        path = strvec_get(scenario_dir_names, i);
+      for (i = 0; i < strvec_size(dirs); i++) {
+        path = strvec_get(dirs, i);
         for (subdir = subdirs; NULL != *subdir; subdir++) {
           fc_snprintf(buf, sizeof(buf), "%s/%s", path, *subdir);
-          strvec_insert(scenario_dir_names, ++i, buf);
+          strvec_insert(dirs, ++i, buf);
         }
       }
     }
-    strvec_remove_duplicate(scenario_dir_names, strcmp);      /* Don't set a path both. */
-    strvec_iterate(scenario_dir_names, dirname) {
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Scenario path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return scenario_dir_names;
+  return dirs;
 }
 
 /***************************************************************************

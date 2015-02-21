@@ -17,13 +17,13 @@
 
 #include "fc_types.h"
 
-#ifndef FREECIV_NDEBUG
+#ifndef NDEBUG
 #define CHECK_GUARD(ait, guard) aiguard_check_guard(ait, guard)
 #define CHECK_CHARGE_UNIT(ait, charge) aiguard_check_charge_unit(ait, charge)
-#else  /* FREECIV_NDEBUG */
+#else
 #define CHECK_GUARD(ait, guard) (void)0
 #define CHECK_CHARGE_UNIT(ait, charge) (void)0
-#endif /* FREECIV_NDEBUG */
+#endif
 
 void aiguard_check_guard(struct ai_type *ait, const struct unit *guard);
 void aiguard_check_charge_unit(struct ai_type *ait, const struct unit *charge);

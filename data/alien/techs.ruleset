@@ -2,8 +2,7 @@
 
 [datafile]
 description="Alien World technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -41,9 +40,8 @@ format_version=10
 ; helptext	= optional help text string (set units ruleset for examples)
 ; bonus_message = text seen when a player is the first to 
 ;                 discover an bonus tech.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; cost		= if tech_cost_style is set to 2, this field is read for
+;		  information on how much a tech costs
 ;
 ; Special values for req1 and req2 are "None" (first section below) 
 ; and "Never" (never available).  If only one tech is required, 
@@ -55,6 +53,9 @@ format_version=10
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 ; "Claim_Ocean"    = Player claims ocean tiles even if they are not
 ;                    adjacent to border source
@@ -116,12 +117,10 @@ req2        = "Cyber Aliens"
 flags       = ""
 graphic     = "a.burrowing"
 graphic_alt = "-"
-helptext    = _("\
-Since it seems to be impossible to fly in this world, we\
- focus on opposite direction. Burrowing through earth is possible.\n\n\
- In addition to making first burrowing units available, knowledge of this\
- tech allows mining of Thick Mountains.\
-")
+helptext    = _("Since it seems to be impossible to fly in this world, we \
+focus on opposite direction. Burrowing through earth is possible.\n\n
+In addition to making first burrowing units available, knowledge of this \
+tech allows mining of Thick Mountains.")
 
 [advance_brain_development]
 name        = _("Brain Development")
@@ -520,7 +519,7 @@ graphic_alt = "-"
 ; /* xgettext:no-c-format */
 helptext    = _("Turns out we can make alien lifeforms edible.\n\n\
 Engineers can build Farmland, which increases tile food production by 50%.")
-flags       = ""
+flags       = "Farmland"
 
 [advance_radiation_resistance]
 name        = _("Radiation Resistance");

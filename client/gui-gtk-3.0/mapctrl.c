@@ -76,7 +76,7 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 					   gpointer data)
 {
   struct tmousepos *mousepos = data;
-  float x, y;
+  gint x, y;
   struct tile *ptile;
 
   ptile = canvas_pos_to_tile(mousepos->x, mousepos->y);
@@ -217,7 +217,7 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
   if (ev->button == 1 || ev->button == 3) {
     release_goto_button(ev->x, ev->y);
   }
-  if (ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
+  if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
     release_right_button(ev->x, ev->y,
                          (ev->state & GDK_SHIFT_MASK) != 0);
   }
@@ -402,7 +402,7 @@ void update_rect_at_mouse_pos(void)
 **************************************************************************/
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
-  if (options.gui_gtk3_mouse_over_map_focus && !gtk_widget_has_focus(map_canvas)) {
+  if (gui_gtk3_mouse_over_map_focus && !gtk_widget_has_focus(map_canvas)) {
     gtk_widget_grab_focus(map_canvas);
   }
 

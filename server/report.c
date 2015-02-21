@@ -28,8 +28,6 @@
 #include "support.h"
 
 /* common */
-#include "achievements.h"
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "government.h"
@@ -133,8 +131,8 @@ static int get_literacy(const struct player *pplayer);
 static int get_production(const struct player *pplayer);
 static int get_economics(const struct player *pplayer);
 static int get_pollution(const struct player *pplayer);
-static int get_mil_service(const struct player *pplayer);
-static int get_culture(const struct player *pplayer);
+static int get_mil_service(const 
+                           struct player *pplayer);
 
 static const char *area_to_text(int value);
 static const char *percent_to_text(int value);
@@ -143,7 +141,6 @@ static const char *economics_to_text(int value);
 static const char *science_to_text(int value);
 static const char *mil_service_to_text(int value);
 static const char *pollution_to_text(int value);
-static const char *culture_to_text(int value);
 
 #define GOOD_PLAYER(p) ((p)->is_alive && !is_barbarian(p))
 
@@ -166,8 +163,7 @@ static struct dem_row {
   {'P', N_("Production"),       get_production,  production_to_text,  TRUE },
   {'E', N_("Economics"),        get_economics,   economics_to_text,   TRUE },
   {'M', N_("Military Service"), get_mil_service, mil_service_to_text, FALSE },
-  {'O', N_("Pollution"),        get_pollution,   pollution_to_text,   FALSE },
-  {'C', N_("Culture"),          get_culture,     culture_to_text,     TRUE }
+  {'O', N_("Pollution"),        get_pollution,   pollution_to_text,   FALSE }
 };
 
 /* Demographics columns. */
@@ -243,7 +239,7 @@ static void historian_generic(enum historian_type which_news)
 	break;
       case HISTORIAN_ADVANCED:
 	size[j].value
-	  = pplayer->score.techs + research_get(pplayer)->future_tech;
+	  = pplayer->score.techs + player_research_get(pplayer)->future_tech;
 	break;
       case HISTORIAN_MILITARY:
 	size[j].value = pplayer->score.units;
@@ -280,7 +276,7 @@ static void historian_generic(enum historian_type which_news)
     fc_strlcat(buffer, "\n", sizeof(buffer));
   }
   fc_snprintf(title, sizeof(title), _(historian_message[which_news]),
-              calendar_text(),
+              textyear(game.info.year),
               _(historian_name[fc_rand(ARRAY_SIZE(historian_name))]));
   page_conn_etype(game.est_connections, _("Historian Publishes!"),
 		  title, buffer, E_BROADCAST_REPORT);
@@ -590,14 +586,12 @@ static int get_settlers(const struct player *pplayer)
 {
   int result = 0;
 
-  if (!game.scenario.prevent_new_cities) {
-    /* count up settlers */
-    unit_list_iterate(pplayer->units, punit) {
-      if (unit_has_type_flag(punit, UTYF_CITIES)) {
-        result++;
-      }
-    } unit_list_iterate_end;
-  }
+  /* count up settlers */
+  unit_list_iterate(pplayer->units, punit) {
+    if (unit_has_type_flag(punit, UTYF_CITIES)) {
+      result++;
+    }
+  } unit_list_iterate_end;
 
   return result;
 }
@@ -775,14 +769,6 @@ static int get_total_score(const struct player *pplayer)
   return pplayer->score.game;
 }
 
-/****************************************************************************
-  Culture score
-****************************************************************************/
-static int get_culture(const struct player *pplayer)
-{
-  return pplayer->score.culture;
-}
-
 /**************************************************************************
   Construct string containing value and its unit.
 **************************************************************************/
@@ -862,16 +848,6 @@ static const char *mil_service_to_text(int value)
 static const char *pollution_to_text(int value)
 {
   return value_units(value, PL_(" ton", " tons", value));
-}
-
-/**************************************************************************
-  Construct string containing value followed by unit suitable for
-  culture stats.
-**************************************************************************/
-static const char *culture_to_text(int value)
-{
-  /* TRANS: Unit(s) of culture */
-  return value_units(value, PL_(" act", " acts", value));
 }
 
 /**************************************************************************
@@ -1028,7 +1004,7 @@ void report_demographics(struct connection *pconn)
     fc_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
                 nation_adjective_for_player(pplayer),
                 government_name_for_player(pplayer),
-                calendar_text());
+                textyear(game.info.year));
   } else {
     civbuf[0] = '\0';
   }
@@ -1047,36 +1023,6 @@ void report_demographics(struct connection *pconn)
   }
 
   page_conn(pconn->self, _("Demographics Report:"), civbuf, buffer);
-}
-
-/*************************************************************************
-  Send achievements list
-*************************************************************************/
-void report_achievements(struct connection *pconn)
-{
-  char civbuf[1024];
-  char buffer[4096];
-  struct player *pplayer = pconn->playing;
-
-  if (pplayer == NULL) {
-    return;
-  }
-
-  fc_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
-              nation_adjective_for_player(pplayer),
-              government_name_for_player(pplayer),
-              calendar_text());
-
-  buffer[0] = '\0';
-
-  achievements_iterate(pach) {
-    if (achievement_player_has(pach, pplayer)) {
-      cat_snprintf(buffer, sizeof(buffer), "%s\n",
-                   achievement_name_translation(pach));
-    }
-  } achievements_iterate_end;
-
-  page_conn(pconn->self, _("Achievements List:"), civbuf, buffer);
 }
 
 /**************************************************************************
@@ -1362,8 +1308,6 @@ void log_civ_score_now(void)
     {"unitsbuilt",      get_units_built}, /* New tags since 2.3.0. */
     {"unitskilled",     get_units_killed},
     {"unitslost",       get_units_lost},
-
-    {"culture",         get_culture}      /* New tag in 2.6.0. */
   };
 
   if (!game.server.scorelog) {
@@ -1428,7 +1372,7 @@ void log_civ_score_now(void)
 
   if (game.info.turn > score_log->last_turn) {
     fprintf(score_log->fp, "turn %d %d %s\n", game.info.turn, game.info.year,
-            calendar_text());
+            textyear(game.info.year));
     score_log->last_turn = game.info.turn;
   }
 
@@ -1535,7 +1479,6 @@ void report_final_scores(struct conn_list *dest)
     /* TRANS: "sq. mi." is abbreviation for "square miles" */
     { N_("Settled Area\n(sq. mi.)"),    get_settledarea },
     { N_("Literacy\n(%)"),              get_literacy },
-    { N_("Culture\n"),                  get_culture },
     { N_("Spaceship\n"),                get_spaceship },
     { N_("Built Units\n"),              get_units_built },
     { N_("Killed Units\n"),             get_units_killed },
@@ -1583,8 +1526,6 @@ void report_final_scores(struct conn_list *dest)
     for (j = 0; j < score_categories_num; j++) {
       ppacket.category_score[j] = score_categories[j].score(pplayer);
     }
-
-    ppacket.winner = pplayer->is_winner;
 
     lsend_packet_endgame_player(dest, &ppacket);
   }

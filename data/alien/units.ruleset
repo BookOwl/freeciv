@@ -2,21 +2,15 @@
 
 [datafile]
 description="Alien World unit data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom unit type flags. There can be up to 16 of these.
 ; name          = rule name; not translateable, but may be displayed in
 ;                 some circumstances
 ; helptxt       = displayed in the help for units with this flag (optional)
-flags =
-  { "name", "helptxt"
-    _("TradeRoute"), _("Can establish trade routes (must travel to target city).")
-    _("HelpWonder"), _("Can help build wonders (adding its full shield cost).")
-    _("Capturer"),   _("Can capture some enemy units.")
-    _("Capturable"), _("Can be captured by some enemy units.")
-  }
+; flags =
+;   { "name", "helptxt" }
 
 [veteran_system]
 ; What are the names of the levels?
@@ -58,6 +52,12 @@ veteran_move_bonus = 0, 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
+; move_type     = Where unit moves; "Land", "Sea", or "Both".
+;                 This is optional field. If it's not
+;                 given, move type is automatically determined from native
+;                 terrains. You need to set it only if you want to set move
+;                 type "Both" for unit that has no native Land terrains or
+;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects (whole movement points)
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or native base
 ; non_native_def_pct = Defense power percentage applying when defending on
@@ -83,8 +83,7 @@ veteran_move_bonus = 0, 0, 0
 ; "CollectRansom"  = Unit can collect ransom when killing lone barbarian leader
 ; "ZOC"            = Unit is subject to ZOC rules. Unit type flag "IgZOC" can
 ;                    override this
-; "CanFortify"     = Unit can fortify at land tiles. Unit type flag
-;                   "Cant_Fortify" can override this
+; "CanFortify"     = Unit can fortify at land tiles
 ; "CanPillage"     = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
@@ -98,7 +97,6 @@ veteran_move_bonus = 0, 0, 0
 ; "KillCitizen"       = Upon successful attack against a city, unit kills one
 ;                       citizen. The effect "Unit_No_Lose_Pop" and the server
 ;                       setting 'killcitizen' can disable this.
-; "Airliftable"       = Unit may be airlifted
 ;
 ; */ <-- avoid gettext warnings
 
@@ -108,7 +106,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "DamageSlows", "TerrainSpeed", "CanFortify", "ZOC",
                 "CollectRansom", "BuildAnywhere", "CanOccupyCity",
-                "CanPillage", "TerrainDefense", "KillCitizen","Airliftable"
+                "CanPillage", "TerrainDefense", "KillCitizen"
 
 [unitclass_native]
 name          = _("?unitclass:Native")
@@ -116,7 +114,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "DamageSlows", "TerrainSpeed", "CanFortify", "ZOC",
                 "CollectRansom", "BuildAnywhere", "CanOccupyCity",
-                "CanPillage", "TerrainDefense", "KillCitizen","Airliftable"
+                "CanPillage", "TerrainDefense", "KillCitizen"
 
 [unitclass_sea]
 name          = _("?unitclass:Sea")
@@ -143,7 +141,7 @@ flags         = "Unreachable", "KillCitizen"
 name          = _("?unitclass:Burrowing")
 min_speed     = 1
 hp_loss_pct   = 0
-flags         = "Unreachable", "DamageSlows", "CanPillage","Airliftable"
+flags         = "Unreachable", "DamageSlows", "CanPillage"
 
 [unitclass_missile]
 name          = _("?unitclass:Missile")
@@ -250,32 +248,31 @@ flags         = "Missile", "DoesntOccupyTile"
 ;
 ; ** Flags **
 ;
+; "HelpWonder"	= can help build wonders
+; "TradeRoute"	= can establish trade routes
 ; "IgZOC"       = ignore Zones of Control (ZOC) even if unit class has
 ;                 "ZOC" flag
-; "HasNoZOC"	= unit has no Zone of Control (ZOC), thus any unit can move
-;		  around it freely
 ; "NonMil"      = a non-military unit: no attacks; no martial law; can enter
 ;                 peaceful borders; DoesntOccupyTile
 ; "IgTer"       = use constant move cost defined in igter_cost (terrain.ruleset)
 ;                 rather than terrain/road etc cost, unless terrain cost is
 ;                 less
 ; "OneAttack"	= can only make a single attack, regardless of movement points
+; "IgWall"	= ignore effect of city walls
 ; "FieldUnit"	= cause unhappiness even when not being aggressive
 ; "AttackAny"   = can attack unreachable units
 ; "Marines"	= can attack from non-native tile (from transport or city)
 ; "Partial_Invis" = visible only to adjancent units; does not hide transported
 ;		  units other than missiles
 ; "Settlers"	= can irrigate and build roads
-; "Diplomat"	= can defend against diplomat actions (see diplchance
-;                 server option)
-; "Spy"		= enhanced diplomat actions. _Must_ be "Diplomat" also
+; "Diplomat"	= can do diplomat actions (see diplchance server option)
+; "Spy"		= can do poison and sabotage, _must_ be "Diplomat" also
 ; "Trireme"	= (sea only) cannot leave shoreline
 ; "Nuclear"	= nuke!
 ; "Paratroopers"= can paradrop
 ; "Cities"      = can disband to produce a city (initial population city_size)
 ; "Only_Native_Attack" = cannot attack targets on non-native tiles even if
 ;                 unit class can
-; "Cant_Fortify" =  cannot fortify even if unit class has "CanFortify" flag
 ; "AddToCity"   = can disband to add pop_cost population to a city
 ;                 (see cities.ruleset for limitation of this ability)
 ; "Fanatic"	= can only be built by governments that allow them
@@ -284,6 +281,7 @@ flags         = "Missile", "DoesntOccupyTile"
 ;		  the same time; barbarians cannot use this at present
 ; "GameLoss"	= losing one of these units means you lose the game, but it
 ;		  is produced without homecity and upkeep
+; "Unbribable"	= this unit cannot be bribed
 ; "Undisbandable" = this unit cannot be disbanded, will not drown, and will not
 ;		  disband due to lack of shields to upkeep it in homecity;
 ;		  if not given enough food to upkeep it, homecity will shrink 
@@ -311,6 +309,9 @@ flags         = "Missile", "DoesntOccupyTile"
 ;                 rule)
 ; "BarbarianOnly" = only barbarians can build this unit
 ; "Shield2Gold" = Switch from shield upkeep to gold upkeep possible
+; "Capturable"  = can be captured by units with "Capturer" flag
+; "Capturer"    = can capture units with flag "Capturable" instead of
+;                 fighting them
 ;
 ; Following flag strings require extra fields:
 ;  "Paratroopers"
@@ -444,7 +445,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Settlers", "Cant_Fortify", "NonMil"
+flags         = "Settlers", "NonMil"
 roles         = "Settlers"
 helptext      = _("\
 This is Earth technology engineer.\
@@ -475,7 +476,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Settlers", "Cant_Fortify", "NonMil"
+flags         = "Settlers", "NonMil"
 roles         = "Settlers"
 helptext      = _("\
 Native version of the Engineer unit.\
@@ -507,7 +508,7 @@ uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
 city_size     = 2
-flags         = "Cities", "Settlers", "Cant_Fortify", "NonMil"
+flags         = "Cities", "Settlers", "NonMil"
 roles         = "Cities", "Settlers"
 helptext      = _("\
 Amphibious Engineer that can also establish new cities on Ocean. \

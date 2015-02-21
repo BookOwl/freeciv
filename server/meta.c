@@ -113,18 +113,6 @@ const char *get_meta_message_string(void)
 }
 
 /*************************************************************************
- The server metaserver type
-*************************************************************************/
-static const char *get_meta_type_string(void)
-{
-  if (game.server.meta_info.type[0] != '\0') {
-    return game.server.meta_info.type;
-  }
-
-  return NULL;
-}
-
-/*************************************************************************
  The metaserver message set by user
 *************************************************************************/
 const char *get_user_meta_message_string(void)
@@ -242,7 +230,7 @@ static void send_metaserver_post(void *arg)
     addr = srvarg.bind_addr;
   }
 
-  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, NULL, addr)) {
+  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, addr)) {
     con_puts(C_METAERROR, _("Error connecting to metaserver"));
     metaserver_failed();
   }
@@ -281,11 +269,7 @@ static bool send_to_metaserver(enum meta_flag flag)
     sz_strlcpy(host, "unknown");
   }
 
-  if (game.control.version[0] != '\0') {
-    fc_snprintf(rs, sizeof(rs), "%s %s", game.control.name, game.control.version);
-  } else {
-    sz_strlcpy(rs, game.control.name);
-  }
+  sz_strlcpy(rs, game.control.name);
 
   /* Freed in metaserver thread function send_metaserver_post() */
   post = netfile_start_post();
@@ -298,11 +282,6 @@ static bool send_to_metaserver(enum meta_flag flag)
   if (flag == META_GOODBYE) {
     netfile_add_form_int(post, "bye", 1);
   } else {
-    const char *srvtype = get_meta_type_string();
-
-    if (srvtype != NULL) {
-      netfile_add_form_str(post, "type", srvtype);
-    }
     netfile_add_form_str(post, "version", VERSION_STRING);
     netfile_add_form_str(post, "patches",
                          get_meta_patches_string());

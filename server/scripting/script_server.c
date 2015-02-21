@@ -103,41 +103,11 @@ bool script_server_do_string(struct connection *caller, const char *str)
 }
 
 /*****************************************************************************
-  Load script to a buffer
-*****************************************************************************/
-bool script_server_load_file(const char *filename, char **buf)
-{
-  FILE *ffile;
-  struct stat stats;
-  char *buffer;
-
-  fc_stat(filename, &stats);
-  ffile = fc_fopen(filename, "r");
-
-  if (ffile != NULL) {
-    int len;
-
-    buffer = fc_malloc(stats.st_size + 1);
-
-    len = fread(buffer, 1, stats.st_size, ffile);
-
-    if (len == stats.st_size) {
-      buffer[len] = '\0';
-
-      *buf = buffer;
-    }
-    fclose(ffile);
-  }
-
-  return 1;
-}  
-
-/*****************************************************************************
   Parse and execute the script at filename.
 *****************************************************************************/
 bool script_server_do_file(struct connection *caller, const char *filename)
 {
-  int status = 1;
+  int status;
   struct connection *save_caller;
   luascript_log_func_t save_output_fct;
 
@@ -391,26 +361,10 @@ static void script_server_signal_create(void)
   luascript_signal_create(fcl, "unit_lost", 3,
                           API_TYPE_UNIT, API_TYPE_PLAYER, API_TYPE_STRING);
 
-  luascript_signal_create(fcl, "disaster", 3,
-                          API_TYPE_DISASTER, API_TYPE_CITY, API_TYPE_BOOL);
-
-  luascript_signal_create(fcl, "achievement_gained", 3,
-                          API_TYPE_ACHIEVEMENT, API_TYPE_PLAYER,
-                          API_TYPE_BOOL);
+  luascript_signal_create(fcl, "disaster", 2,
+                          API_TYPE_DISASTER, API_TYPE_CITY);
 
   luascript_signal_create(fcl, "map_generated", 0);
-
-  luascript_signal_create(fcl, "action_started_unit_unit", 3,
-                          API_TYPE_ACTION,
-                          API_TYPE_UNIT, API_TYPE_UNIT);
-
-  luascript_signal_create(fcl, "action_started_unit_units", 3,
-                          API_TYPE_ACTION,
-                          API_TYPE_UNIT, API_TYPE_TILE);
-
-  luascript_signal_create(fcl, "action_started_unit_city", 3,
-                          API_TYPE_ACTION,
-                          API_TYPE_UNIT, API_TYPE_CITY);
 }
 
 /*****************************************************************************

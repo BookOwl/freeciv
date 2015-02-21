@@ -26,7 +26,7 @@ ruler_titles = {
 
 flag="cuba"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

@@ -2,10 +2,7 @@
 
 noinst_LTLIBRARIES = libdefaultai.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore \
- -I$(top_srcdir)/server -I$(top_srcdir)/server/advisors -I$(top_srcdir)/ai \
- -I$(top_srcdir)/server/generator \
- -I$(top_srcdir)/dependencies/tinycthread
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/common/aicore -I$(top_srcdir)/server -I$(top_srcdir)/server/advisors -I$(top_srcdir)/ai -I$(top_srcdir)/server/generator
 
 libdefaultai_la_SOURCES = \
 		advdomestic.c	\
@@ -14,6 +11,8 @@ libdefaultai_la_SOURCES = \
 		advmilitary.h	\
 		advdiplomacy.c	\
 		advdiplomacy.h	\
+		advspace.c	\
+		advspace.h	\
 		aiair.c		\
 		aiair.h		\
 		aicity.c	\
@@ -43,9 +42,6 @@ libdefaultai_la_SOURCES = \
 		aiunit.c	\
 		aiunit.h	\
 		aidiplomat.c	\
-		aidiplomat.h	\
-		daieffects.c	\
-		daieffects.h
-
+		aidiplomat.h
 
 libdefaultai_la_LIBADD = -lm

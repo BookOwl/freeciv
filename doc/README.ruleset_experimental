@@ -106,18 +106,6 @@ this file.
 
 - Paratroopers may paradrop to Transports on any oceanic tile.
 
-- Several achievements are enabled.
-
-- Some buildings accumulate culture
-
-- An explorer can establish an embassy to another player
-
-- Workers and Engineers can fortify
-
-- AI players get their traits randomly assigned from a limited range
-
-- Being part of a unit stack won't protect against spy actions.
-
 
 2. Use the new ruleset
    -------------------
@@ -125,7 +113,7 @@ this file.
 To play a game with the experimental rules, start the server with:
        ./fcser -r data/experimental.serv
 or a single player game with
-       ./freeciv-gtk3 -r data/experimental.serv
+       ./freeciv-gtk2 -r data/experimental.serv
 (and any other command-line arguments you normally use)
 
 Start the client normally.  The client must be network-compatible

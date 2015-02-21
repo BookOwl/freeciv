@@ -31,14 +31,12 @@
 
 /* common */
 #include "city.h"
-#include "game.h"
 #include "government.h"
 #include "movement.h"
 #include "specialist.h"
 #include "tech.h"
 #include "unit.h"
 #include "map.h"
-#include "research.h"
 #include "version.h"
 
 /* client */
@@ -74,7 +72,8 @@ static GtkWidget *help_itable;
 static GtkWidget *help_wtable;
 static GtkWidget *help_utable;
 static GtkWidget *help_ttable;
-static GtkWidget *help_etable;
+static GtkWidget *help_btable;
+static GtkWidget *help_rtable;
 static GtkWidget *help_tree;
 static GtkTreeStore *tstore;
 
@@ -86,7 +85,8 @@ static GtkWidget *help_ilabel[6];
 static GtkWidget *help_wlabel[6];
 static GtkWidget *help_ulabel[5][5];
 static GtkWidget *help_tlabel[4][5];
-static GtkWidget *help_elabel[6];
+static GtkWidget *help_blabel[4];
+static GtkWidget *help_rlabel[4];
 
 static bool help_advances[A_LAST];
 
@@ -117,16 +117,22 @@ static const char *help_tlabel_name[4][5] =
     { N_("Trans. Rslt/Time:"),	NULL, NULL, NULL,                       NULL }
 };
 
-static const char *help_elabel_name[6] =
-/* TRANS: Label for build cost for extras in help. Will be followed by
+static const char *help_blabel_name[4] =
+/* TRANS: Label for build cost for bases in help. Will be followed by
  * something like "3 MP" (where MP = Movement Points) */
 { N_("Build:"), NULL,
-/* TRANS: Extra conflicts in help. Will be followed by a list of extras
+/* TRANS: Base conflicts in help. Will be followed by a list of bases
  * that can't be built on the same tile as this one. */
-  N_("Conflicts with:"), NULL,
-/* TRANS: Extra bonus in help. Will be followed by food/production/trade
+  N_("Conflicts with:"), NULL };
+
+static const char *help_rlabel_name[4] =
+/* TRANS: Label for build cost for roads in help. Will be followed by
+ * something like "3 MP" (where MP = Movement Points) */
+{ N_("Build:"), NULL,
+/* TRANS: Road bonus in help. Will be followed by food/production/trade
  * stats like "0/0/+1", "0/+50%/0" */
   N_("Bonus (F/P/T):"), NULL };
+
 
 #define REQ_LABEL_NONE _("None")
 #define REQ_LABEL_NEVER _("(Never)")
@@ -198,7 +204,6 @@ discovered: red >2 turns, yellow 1 turn, green 0 turns (discovered).
 **************************************************************************/
 static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
 {
-  const struct research *presearch;
   int	        bg;
   int           turns_to_tech;
   bool          original;
@@ -225,10 +230,8 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
     return;
   }
 
-  presearch = research_get(client_player());
-
   bg = COLOR_REQTREE_BACKGROUND;
-  switch (research_invention_state(presearch, tech)) {
+  switch (player_invention_state(client.conn.playing, tech)) {
   case TECH_UNKNOWN:
     bg = COLOR_REQTREE_UNKNOWN;
     break;
@@ -239,7 +242,7 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
     bg = COLOR_REQTREE_PREREQS_KNOWN;
     break;
   }
-  turns_to_tech = research_goal_unknown_techs(presearch, tech);
+  turns_to_tech = num_unknown_techs_for_goal(client.conn.playing, tech);
 
   /* l is the original in the tree. */
   original = !help_advances[tech];
@@ -248,9 +251,7 @@ static void create_tech_tree(int tech, int levels, GtkTreeIter *parent)
   help_advances[tech] = TRUE;
 
   g_value_init(&value, G_TYPE_STRING);
-  g_value_set_static_string(&value,
-                            research_advance_name_translation(presearch,
-                                                              tech));
+  g_value_set_static_string(&value, advance_name_for_player(client.conn.playing, tech));
   gtk_tree_store_set_value(tstore, &l, 0, &value);
   g_value_unset(&value);
 
@@ -286,8 +287,7 @@ static void help_tech_tree_activated_callback(GtkTreeView *view,
 
   gtk_tree_model_get_iter(GTK_TREE_MODEL(tstore), &it, path);
   gtk_tree_model_get(GTK_TREE_MODEL(tstore), &it, 2, &tech, -1);
-  select_help_item_string(advance_name_translation(advance_by_number(tech)),
-                          HELP_TECH);
+  select_help_item_string(advance_name_for_player(client.conn.playing, tech), HELP_TECH);
 }
 
 /**************************************************************************
@@ -371,7 +371,8 @@ static void help_box_hide(void)
   gtk_widget_hide(help_wtable);
   gtk_widget_hide(help_utable);
   gtk_widget_hide(help_ttable);
-  gtk_widget_hide(help_etable);
+  gtk_widget_hide(help_btable);
+  gtk_widget_hide(help_rtable);
 
   gtk_widget_hide(help_tile); /* FIXME: twice? */
 
@@ -624,16 +625,28 @@ static void create_help_dialog(void)
     }
   }
 
-  help_etable = gtk_table_new(2, 4, FALSE);
-  gtk_box_pack_start(GTK_BOX(help_box), help_etable, FALSE, FALSE, 0);
+  help_btable = gtk_table_new(1, 4, FALSE);
+  gtk_box_pack_start(GTK_BOX(help_box), help_btable, FALSE, FALSE, 0);
 
-  for (i = 0; i < 6; i++) {
-    help_elabel[i] =
-      gtk_label_new(help_elabel_name[i] ? _(help_elabel_name[i]) : "");
-    gtk_table_attach_defaults(GTK_TABLE(help_etable),
-                              help_elabel[i], i % 4, (i % 4) + 1, i / 4, i / 4 + 1);
-    gtk_widget_set_name(help_elabel[i], "help_label");
-    gtk_widget_show(help_elabel[i]);
+  for (i = 0; i < 4; i++) {
+    help_blabel[i] =
+      gtk_label_new(help_blabel_name[i] ? _(help_blabel_name[i]) : "");
+    gtk_table_attach_defaults(GTK_TABLE(help_btable),
+                              help_blabel[i], i, i+1, 0, 1);
+    gtk_widget_set_name(help_blabel[i], "help_label");
+    gtk_widget_show(help_blabel[i]);
+  }
+
+  help_rtable = gtk_table_new(1, 2, FALSE);
+  gtk_box_pack_start(GTK_BOX(help_box), help_rtable, FALSE, FALSE, 0);
+
+  for (i = 0; i < 4; i++) {
+    help_rlabel[i] =
+      gtk_label_new(help_rlabel_name[i] ? _(help_rlabel_name[i]) : "");
+    gtk_table_attach_defaults(GTK_TABLE(help_rtable),
+                              help_rlabel[i], i, i+1, 0, 1);
+    gtk_widget_set_name(help_rlabel[i], "help_label");
+    gtk_widget_show(help_rlabel[i]);
   }
 
   help_vbox = gtk_vbox_new(FALSE, 1);
@@ -751,7 +764,7 @@ static void help_update_improvement(const struct help_item *pitem,
      * to be extended.  Remember MAX_NUM_REQS is a compile-time
      * definition. */
     requirement_vector_iterate(&imp->reqs, preq) {
-      if (!preq->present) {
+      if (preq->negated) {
         continue;
       }
       req = universal_name_translation(&preq->source, req_buf, sizeof(req_buf));
@@ -798,7 +811,7 @@ static void help_update_wonder(const struct help_item *pitem,
      * definition. */
     i = 0;
     requirement_vector_iterate(&imp->reqs, preq) {
-      if (!preq->present) {
+      if (preq->negated) {
         continue;
       }
       gtk_label_set_text(GTK_LABEL(help_wlabel[3 + i]),
@@ -807,15 +820,12 @@ static void help_update_wonder(const struct help_item *pitem,
       i++;
       break;
     } requirement_vector_iterate_end;
-    gtk_label_set_text(GTK_LABEL(help_wlabel[5]), REQ_LABEL_NEVER);
-    requirement_vector_iterate(&imp->obsolete_by, pobs) {
-      if (pobs->source.kind == VUT_ADVANCE) {
-        gtk_label_set_text(GTK_LABEL(help_wlabel[5]),
-                           advance_name_translation
-                               (pobs->source.value.advance));
-        break;
-      }
-    } requirement_vector_iterate_end;
+    if (valid_advance(imp->obsolete_by)) {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[5]),
+			 advance_name_for_player(client.conn.playing, advance_number(imp->obsolete_by)));
+    } else {
+      gtk_label_set_text(GTK_LABEL(help_wlabel[5]), REQ_LABEL_NEVER);
+    }
 /*    create_tech_tree(help_improvement_tree, 0, imp->tech_req, 3);*/
   }
   else {
@@ -864,7 +874,8 @@ static void help_update_unit_type(const struct help_item *pitem,
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][1]), REQ_LABEL_NEVER);
     } else {
       gtk_label_set_text(GTK_LABEL(help_ulabel[4][1]),
-                         advance_name_translation(utype->require_advance));
+			 advance_name_for_player(client.conn.playing,
+				       advance_number(utype->require_advance)));
     }
 /*    create_tech_tree(help_improvement_tree, 0, advance_number(utype->require_advance), 3);*/
     if (U_NOT_OBSOLETED == utype->obsoleted_by) {
@@ -1004,21 +1015,18 @@ static void help_update_tech(const struct help_item *pitem, char *title)
 	  gtk_widget_show_all(hbox);
 	}
       } requirement_vector_iterate_end;
-      requirement_vector_iterate(&pimprove->obsolete_by, pobs) {
-        if (pobs->source.kind == VUT_ADVANCE
-            && pobs->source.value.advance == padvance) {
-          hbox = gtk_hbox_new(FALSE, 0);
-          gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
-          w = gtk_label_new(_("Obsoletes"));
-          gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
-          w = help_slink_new(improvement_name_translation(pimprove),
-                             is_great_wonder(pimprove)
-                             ? HELP_WONDER
-                             : HELP_IMPROVEMENT);
-          gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
-          gtk_widget_show_all(hbox);
-        }
-      } requirement_vector_iterate_end;
+      if (padvance == pimprove->obsolete_by) {
+        hbox = gtk_hbox_new(FALSE, 0);
+        gtk_container_add(GTK_CONTAINER(help_vbox), hbox);
+        w = gtk_label_new(_("Obsoletes"));
+        gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
+        w = help_slink_new(improvement_name_translation(pimprove),
+			   is_great_wonder(pimprove)
+			   ? HELP_WONDER
+			   : HELP_IMPROVEMENT);
+        gtk_box_pack_start(GTK_BOX(hbox), w, FALSE, FALSE, 0);
+        gtk_widget_show_all(hbox);
+      }
     } improvement_iterate_end;
 
     unit_type_iterate(punittype) {
@@ -1172,25 +1180,23 @@ static void help_update_terrain(const struct help_item *pitem,
 }
 
 /**************************************************************************
-  Help page for extras.
+  Help page for bases.
 **************************************************************************/
-static void help_update_extra(const struct help_item *pitem, char *title)
+static void help_update_base(const struct help_item *pitem, char *title)
 {
   char buf[8192];
-  struct extra_type *pextra = extra_type_by_translated_name(title);
+  struct base_type *pbase = base_type_by_translated_name(title);
 
-  create_help_page(HELP_EXTRA);
+  create_help_page(HELP_BASE);
 
-  if (pextra == NULL) {
+  if (!pbase) {
     strcat(buf, pitem->text);
   } else {
-    struct road_type *proad = extra_road_get(pextra);
-
     /* Cost to build */
-    if (pextra->buildable) {
-      if (pextra->build_time != 0) {
+    if (pbase->buildable) {
+      if (pbase->build_time != 0) {
         /* TRANS: "MP" = movement points */
-        sprintf(buf, _("%d MP"), pextra->build_time);
+        sprintf(buf, _("%d MP"), pbase->build_time);
       } else {
         /* TRANS: Build time depends on terrain. */
         sprintf(buf, _("Terrain specific"));
@@ -1198,24 +1204,56 @@ static void help_update_extra(const struct help_item *pitem, char *title)
     } else {
       sprintf(buf, "-");
     }
-    gtk_label_set_text(GTK_LABEL(help_elabel[1]), buf);
+    gtk_label_set_text(GTK_LABEL(help_blabel[1]), buf);
     /* Conflicting bases */
     buf[0] = '\0';
-    extra_type_iterate(pextra2) {
-      if (!can_extras_coexist(pextra, pextra2)) {
+    base_type_iterate(pbase2) {
+      if (!can_bases_coexist(pbase, pbase2)) {
         if (buf[0] != '\0') {
           strcat(buf, "/");
         }
-        strcat(buf, extra_name_translation(pextra2));
+        strcat(buf, base_name_translation(pbase2));
       }
-    } extra_type_iterate_end;
-    /* TRANS: "Conflicts with: (none)" (extras) */
-    gtk_label_set_text(GTK_LABEL(help_elabel[3]), buf[0] ? buf : _("(none)"));
+    } base_type_iterate_end;
+    /* TRANS: "Conflicts with: (none)" (bases) */
+    gtk_label_set_text(GTK_LABEL(help_blabel[3]), buf[0] ? buf : _("(none)"));
+    helptext_base(buf, sizeof(buf), client.conn.playing, pitem->text, pbase);
+  }
+  gtk_widget_show(help_btable);
 
+  gtk_text_buffer_set_text(help_text, buf, -1);
+  gtk_widget_show(help_text_sw);
+}
+
+/**************************************************************************
+  Help page for roads.
+**************************************************************************/
+static void help_update_road(const struct help_item *pitem, char *title)
+{
+  char buf[8192];
+  struct road_type *proad = road_type_by_translated_name(title);
+
+  create_help_page(HELP_ROAD);
+
+  if (!proad) {
+    strcat(buf, pitem->text);
+  } else {
+    /* Cost to build */
+    if (proad->buildable) {
+      if (proad->build_time != 0) {
+        /* TRANS: "MP" = movement points */
+        sprintf(buf, _("%d MP"), proad->build_time);
+      } else {
+        /* TRANS: Build time depends on terrain. */
+        sprintf(buf, _("Terrain specific"));
+      }
+    } else {
+      sprintf(buf, "-");
+    }
+    gtk_label_set_text(GTK_LABEL(help_rlabel[1]), buf);
     /* Bonus */
-    if (proad != NULL) {
+    {
       const char *bonus = NULL;
-
       output_type_iterate(o) {
         if (proad->tile_incr[o] > 0) {
           /* TRANS: Road bonus depends on terrain. */
@@ -1230,14 +1268,11 @@ static void help_update_extra(const struct help_item *pitem, char *title)
         /* TRANS: No output bonus from a road */
         bonus = _("None");
       }
-      gtk_label_set_text(GTK_LABEL(help_elabel[5]), bonus);
-    } else {
-      gtk_label_set_text(GTK_LABEL(help_elabel[5]), _("None"));
+      gtk_label_set_text(GTK_LABEL(help_rlabel[3]), bonus);
     }
-
-    helptext_extra(buf, sizeof(buf), client.conn.playing, pitem->text, pextra);
+    helptext_road(buf, sizeof(buf), client.conn.playing, pitem->text, proad);
   }
-  gtk_widget_show(help_etable);
+  gtk_widget_show(help_rtable);
 
   gtk_text_buffer_set_text(help_text, buf, -1);
   gtk_widget_show(help_text_sw);
@@ -1332,8 +1367,11 @@ static void help_update_dialog(const struct help_item *pitem)
   case HELP_TERRAIN:
     help_update_terrain(pitem, top);
     break;
-  case HELP_EXTRA:
-    help_update_extra(pitem, top);
+  case HELP_BASE:
+    help_update_base(pitem, top);
+    break;
+  case HELP_ROAD:
+    help_update_road(pitem, top);
     break;
   case HELP_SPECIALIST:
     help_update_specialist(pitem, top);

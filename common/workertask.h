@@ -21,7 +21,7 @@ struct worker_task
 {
   struct tile *ptile;
   enum unit_activity act;
-  struct extra_type *tgt;
+  struct act_tgt tgt;
   int want;
 };
 

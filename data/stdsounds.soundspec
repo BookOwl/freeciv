@@ -1,6 +1,6 @@
 [soundspec]
 ; Format and options of this spec file:
-options = "+Freeciv-soundspec-Devel-2014.Mar.13"
+options = "+soundspec"
 
 [info]
 artists = "\
@@ -193,7 +193,7 @@ m_trireme = "stdsounds/inh2o.ogg" ; [pox]
 ;w_womens_suffrage = ""
 
 
-; This list contains all events up to E_ACHIEVEMENT
+; This list contains all events up to E_DISASTER
 ; (as numbered in common/events.h), in the sorted order.
 ; Alphabetical sorting is based on these tag names,
 ; as the message names and contents change. {was}
@@ -237,7 +237,6 @@ e_bad_command = "stdsounds/illegal.ogg" ; [fcol]
 ;e_enemy_diplomat_poison = ""
 ;e_enemy_diplomat_sabotage = ""
 ;e_enemy_diplomat_theft = ""
-;e_enemy_spy_steal_gold = ""
 ;e_first_contact = ""
 ;e_game_end = ""
 ;e_game_start = ""
@@ -267,7 +266,6 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_my_diplomat_poison = ""
 ;e_my_diplomat_sabotage = ""
 ;e_my_diplomat_theft = ""
-;e_my_spy_steal_gold = ""
 ;e_nation_selected = ""
 ;e_new_government = ""
 ;e_next_year = ""
@@ -278,11 +276,9 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_revolt_start = ""
 ;e_setting = ""
 ;e_spaceship = ""
-;e_tech_embassy = ""
 ;e_tech_gain = ""
 ;e_tech_goal = ""
 ;e_tech_learned = ""
-;e_tech_lost = ""
 ;e_treaty_alliance = ""
 ;e_treaty_broken = ""
 ;e_treaty_ceasefire = ""
@@ -305,7 +301,6 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_unit_win_att = ""
 ;e_uprising = ""
 ;e_disaster = ""
-;e_achievement = ""
 ;e_vote_new = ""
 ;e_vote_resolved = ""
 ;e_vote_aborted = ""
@@ -316,7 +311,7 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_wonder_will_be_built = ""
 ;e_worklist = ""
 
-;e_extra_spread = ""
-
 ; This pseudo-event is only used in the sound system.
 ;e_game_quit = ""
+
+;music_start = ""

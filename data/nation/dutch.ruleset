@@ -43,7 +43,7 @@ ruler_titles = {
 
 flag="netherlands"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

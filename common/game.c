@@ -27,30 +27,24 @@
 #include "cm.h"
 
 /* common */
-#include "ai.h"
-#include "achievements.h"
-#include "actions.h"
+#include "base.h"
 #include "city.h"
 #include "connection.h"
 #include "disaster.h"
-#include "extras.h"
 #include "government.h"
 #include "idex.h"
 #include "map.h"
-#include "multipliers.h"
 #include "nation.h"
 #include "packets.h"
 #include "player.h"
 #include "research.h"
 #include "spaceship.h"
 #include "specialist.h"
-#include "style.h"
 #include "tech.h"
 #include "terrain.h"
 #include "traderoutes.h"
 #include "unit.h"
 #include "unitlist.h"
-#include "victory.h"
 
 #include "game.h"
 
@@ -265,9 +259,6 @@ static void game_defaults(void)
   game.control.num_unit_classes        = 0;
   game.control.num_unit_types          = 0;
   game.control.num_disaster_types      = 0;
-  game.control.num_achievement_types   = 0;
-  game.control.num_styles              = 0;
-  game.control.num_music_styles        = 0;
   game.control.prefered_tileset[0]     = '\0';
   game.control.resource_count          = 0;
   game.control.styles_count            = 0;
@@ -298,7 +289,6 @@ static void game_defaults(void)
   game.info.globalwarming    = 0;
   game.info.global_warming   = GAME_DEFAULT_GLOBAL_WARMING;
   game.info.gold             = GAME_DEFAULT_GOLD;
-  game.info.revolentype      = GAME_DEFAULT_REVOLENTYPE;
   game.info.government_during_revolution_id = G_MAGIC; /* flag */
   game.info.happyborders     = GAME_DEFAULT_HAPPYBORDERS;
   game.info.heating          = 0;
@@ -317,7 +307,7 @@ static void game_defaults(void)
   game.info.shieldbox        = GAME_DEFAULT_SHIELDBOX;
   game.info.skill_level      = GAME_DEFAULT_SKILL_LEVEL;
   game.info.slow_invasions   = RS_DEFAULT_SLOW_INVASIONS;
-  game.info.victory_conditions = GAME_DEFAULT_VICTORY_CONDITIONS;
+  game.info.spacerace        = GAME_DEFAULT_SPACERACE;
   game.info.team_pooled_research = GAME_DEFAULT_TEAM_POOLED_RESEARCH;
   game.info.tech             = GAME_DEFAULT_TECHLEVEL;
   game.info.timeout          = GAME_DEFAULT_TIMEOUT;
@@ -336,8 +326,6 @@ static void game_defaults(void)
   game.scenario.name[0] = '\0';
   game.scenario.players = TRUE;
   game.scenario.startpos_nations = FALSE;
-  game.scenario.handmade = FALSE;
-  game.scenario.prevent_new_cities = FALSE;
 
   /* Veteran system. */
   game.veteran = NULL;
@@ -348,6 +336,7 @@ static void game_defaults(void)
   if (is_server()) {
     /* All settings only used by the server (./server/ and ./ai/ */
     sz_strlcpy(game.server.allow_take, GAME_DEFAULT_ALLOW_TAKE);
+    game.server.allied_victory    = GAME_DEFAULT_ALLIED_VICTORY;
     game.server.allowed_city_names = GAME_DEFAULT_ALLOWED_CITY_NAMES;
     game.server.aqueductloss      = GAME_DEFAULT_AQUEDUCTLOSS;
     game.server.auto_ai_toggle    = GAME_DEFAULT_AUTO_AI_TOGGLE;
@@ -362,8 +351,7 @@ static void game_defaults(void)
     }
     sz_strlcpy(game.server.demography, GAME_DEFAULT_DEMOGRAPHY);
     game.server.diplchance        = GAME_DEFAULT_DIPLCHANCE;
-    game.server.diplbulbcost      = GAME_DEFAULT_DIPLBULBCOST;
-    game.server.diplgoldcost      = GAME_DEFAULT_DIPLGOLDCOST;
+    game.server.diplcost          = GAME_DEFAULT_DIPLCOST;
     game.server.dispersion        = GAME_DEFAULT_DISPERSION;
     game.server.endspaceship      = GAME_DEFAULT_END_SPACESHIP;
     game.server.end_turn          = GAME_DEFAULT_END_TURN;
@@ -382,7 +370,6 @@ static void game_defaults(void)
     game.server.max_players       = GAME_DEFAULT_MAX_PLAYERS;
     game.server.meta_info.user_message[0] = '\0';
     game.server.meta_info.user_message_set = FALSE;
-    /* Do not clear meta_info.type here as it's already set to correct value */
     game.server.mgr_distance      = GAME_DEFAULT_MGR_DISTANCE;
     game.server.mgr_foodneeded    = GAME_DEFAULT_MGR_FOODNEEDED;
     game.server.mgr_nationchance  = GAME_DEFAULT_MGR_NATIONCHANCE;
@@ -446,8 +433,7 @@ void game_init(void)
   game_ruleset_init();
   idex_init();
   cm_init();
-  researches_init();
-  universal_found_functions_init();
+  player_researches_init();
 }
 
 /****************************************************************************
@@ -474,7 +460,6 @@ void game_free(void)
   idex_free();
   team_slots_free();
   game_ruleset_free();
-  researches_free();
   cm_free();
 }
 
@@ -498,7 +483,6 @@ void game_reset(void)
 
     map_init();
     idex_init();
-    researches_init();
   }
 }
 
@@ -510,11 +494,10 @@ void game_ruleset_init(void)
   nation_sets_groups_init();
   ruleset_cache_init();
   disaster_types_init();
-  achievements_init();
-  actions_init();
   trade_route_types_init();
   terrains_init();
-  extras_init();
+  base_types_init();
+  road_types_init();
   improvements_init();
   techs_init();
   unit_classes_init();
@@ -523,7 +506,6 @@ void game_ruleset_init(void)
   user_unit_type_flags_init();
   user_terrain_flags_init();
   user_tech_flags_init();
-  multipliers_init();
 }
 
 /***************************************************************
@@ -531,8 +513,6 @@ void game_ruleset_init(void)
 ***************************************************************/
 void game_ruleset_free(void)
 {
-  int i;
-
   CALL_FUNC_EACH_AI(units_ruleset_close);
 
   /* Clear main structures which can points to the ruleset dependent
@@ -551,19 +531,15 @@ void game_ruleset_free(void)
   unit_type_flags_free();
   role_unit_precalcs_free();
   improvements_free();
-  extras_free();
-  music_styles_free();
+  base_types_free();
+  road_types_free();
   city_styles_free();
-  styles_free();
-  actions_free();
-  achievements_free();
   disaster_types_free();
   terrains_free();
   user_tech_flags_free();
   user_terrain_flags_free();
   ruleset_cache_free();
   nation_sets_groups_free();
-  multipliers_free();
 
   /* Destroy the default veteran system. */
   veteran_system_destroy(game.veteran);
@@ -573,15 +549,6 @@ void game_ruleset_free(void)
   if (game.plr_bg_color != NULL) {
     rgbcolor_destroy(game.plr_bg_color);
     game.plr_bg_color = NULL;
-  }
-
-  if (is_server() && game.server.ruledit.nationlist != NULL) {
-    free(game.server.ruledit.nationlist);
-    game.server.ruledit.nationlist = NULL;
-  }
-
-  for (i = 0; i < MAX_CALENDAR_FRAGMENTS; i++) {
-    game.info.calendar_fragment_name[i][0] = '\0';
   }
 }
 
@@ -603,6 +570,69 @@ void initialize_globals(void)
       } city_built_iterate_end;
     } city_list_iterate_end;
   } players_iterate_end;
+}
+
+/***************************************************************
+  Returns the next year in the game.
+***************************************************************/
+int game_next_year(int year)
+{
+  int increase = get_world_bonus(EFT_TURN_YEARS);
+  const int slowdown = (game.info.spacerace
+			? get_world_bonus(EFT_SLOW_DOWN_TIMELINE) : 0);
+
+  if (game.info.year_0_hack) {
+    /* hacked it to get rid of year 0 */
+    year = 0;
+    game.info.year_0_hack = FALSE;
+  }
+
+    /* !McFred: 
+       - want year += 1 for spaceship.
+    */
+
+  /* test game with 7 normal AI's, gen 4 map, foodbox 10, foodbase 0: 
+   * Gunpowder about 0 AD
+   * Railroad  about 500 AD
+   * Electricity about 1000 AD
+   * Refining about 1500 AD (212 active units)
+   * about 1750 AD
+   * about 1900 AD
+   */
+
+  /* Note the slowdown operates even if Enable_Space is not active.  See
+   * README.effects for specifics. */
+  if (slowdown >= 3) {
+    if (increase > 1) {
+      increase = 1;
+    }
+  } else if (slowdown >= 2) {
+    if (increase > 2) {
+      increase = 2;
+    }
+  } else if (slowdown >= 1) {
+    if (increase > 5) {
+      increase = 5;
+    }
+  }
+
+  year += increase;
+
+  if (year == 0 && game.info.calendar_skip_0) {
+    year = 1;
+    game.info.year_0_hack = TRUE;
+  }
+
+  return year;
+}
+
+/***************************************************************
+  Advance the game year.
+***************************************************************/
+void game_advance_year(void)
+{
+  game.info.year = game_next_year(game.info.year);
+  game.info.turn++;
 }
 
 /**************************************************************************
@@ -647,8 +677,27 @@ const char *population_to_text(int thousand_citizen)
   return big_int_to_text(thousand_citizen, game.info.pop_report_zeroes - 1);
 }
 
+/****************************************************************************
+  Produce a statically allocated textual representation of the given
+  year.
+****************************************************************************/
+const char *textyear(int year)
+{
+  static char y[32];
+  if (year < 0) {
+    /* TRANS: <year> <label> -> "1000 BC" */
+    fc_snprintf(y, sizeof(y), _("%d %s"), -year,
+                game.info.negative_year_label);
+  } else {
+    /* TRANS: <year> <label> -> "1000 AD" */
+    fc_snprintf(y, sizeof(y), _("%d %s"), year,
+                game.info.positive_year_label);
+  }
+  return y;
+}
+
 /**************************************************************************
-  Return a string containing the save year.
+  Return a string conaining the save year.
 **************************************************************************/
 static char *year_suffix(void)
 {

@@ -33,7 +33,7 @@ ruler_titles = {
 
 flag="luxembourg"
 flag_alt = "netherlands"
-style = "european"
+city_style = "european"
 
 init_techs=""
 init_buildings=""

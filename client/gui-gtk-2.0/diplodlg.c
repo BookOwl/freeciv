@@ -34,7 +34,6 @@
 #include "map.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
 
 /* client */
 #include "chatline.h"
@@ -207,7 +206,7 @@ static void popup_diplomacy_dialog(int other_player_id, int initiated_from)
   if (player_by_number(initiated_from) == client.conn.playing) {
     /* we have to raise the diplomacy meeting tab as well as the selected
      * meeting. */
-    fc_assert_ret(dipl_main != NULL);
+    fc_assert_ret(dipl_main)
     gui_dialog_raise(dipl_main->dialog);
     gui_dialog_raise(pdialog->dialog);
 
@@ -270,8 +269,6 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
 
   /* Trading: advances */
   if (game.info.trading_tech) {
-    const struct research *gresearch = research_get(pgiver);
-    const struct research *oresearch = research_get(pother);
     GtkWidget *advance_item;
     GList *sorting_list = NULL;
 
@@ -281,12 +278,10 @@ static void popup_add_menu(GtkMenuShell *parent, gpointer data)
     advance_iterate(A_FIRST, padvance) {
       Tech_type_id i = advance_number(padvance);
 
-      if (research_invention_state(gresearch, i) == TECH_KNOWN
-          && research_invention_gettable(oresearch, i,
-                                         game.info.tech_trade_allow_holes)
-          && (research_invention_state(oresearch, i) == TECH_UNKNOWN
-              || research_invention_state(oresearch, i)
-                 == TECH_PREREQS_KNOWN)) {
+      if (player_invention_state(pgiver, i) == TECH_KNOWN
+          && player_invention_reachable(pother, i, FALSE)
+          && (player_invention_state(pother, i) == TECH_UNKNOWN
+              || player_invention_state(pother, i) == TECH_PREREQS_KNOWN)) {
         sorting_list = g_list_prepend(sorting_list, padvance);
       }
     } advance_iterate_end;
@@ -954,22 +949,17 @@ static void diplomacy_dialog_tech_callback(GtkWidget *w, gpointer data)
     /* All techs. */
     struct player *pgiver = player_by_number(giver);
     struct player *pdest = player_by_number(dest);
-    const struct research *dresearch, *gresearch;
 
     fc_assert_ret(NULL != pgiver);
     fc_assert_ret(NULL != pdest);
 
-    dresearch = research_get(pdest);
-    gresearch = research_get(pgiver);
     advance_iterate(A_FIRST, padvance) {
       Tech_type_id i = advance_number(padvance);
 
-      if (research_invention_state(gresearch, i) == TECH_KNOWN
-          && research_invention_gettable(dresearch, i,
-                                         game.info.tech_trade_allow_holes)
-          && (research_invention_state(dresearch, i) == TECH_UNKNOWN
-              || research_invention_state(dresearch, i)
-                 == TECH_PREREQS_KNOWN)) {
+      if (player_invention_state(pgiver, i) == TECH_KNOWN
+          && player_invention_reachable(pdest, i, FALSE)
+          && (player_invention_state(pdest, i) == TECH_UNKNOWN
+              || player_invention_state(pdest, i) == TECH_PREREQS_KNOWN)) {
         dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
                                                  CLAUSE_ADVANCE, i);
       }

@@ -22,8 +22,7 @@
 #ifndef FC__UNISTRING_H
 #define FC__UNISTRING_H
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 size_t unistrlen(const Uint16 *pUniString);
 Uint16 *unistrcpy(Uint16 *pToUniString, const Uint16 *pFromUniString);

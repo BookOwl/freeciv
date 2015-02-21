@@ -29,13 +29,13 @@
 all: gtk3-installer gtk2-installer sdl-installer qt-installer
 
 gtk3-installer:
-	make GUI=gtk3 FCMP=gtk3 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-gtk3
+	make GUI=gtk3 FCMP=gtk3 wrap-gtk3
 
 gtk2-installer:
-	make GUI=gtk2 FCMP=gtk2 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-gtk2
+	make GUI=gtk2 FCMP=gtk2 wrap-gtk2
 
 sdl-installer:
-	make GUI=sdl FCMP=gtk3 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-sdl
+	make GUI=sdl FCMP=gtk2 wrap-sdl
 
 qt-installer:
 	make GUI=qt FCMP=qt wrap-qt
@@ -51,7 +51,7 @@ build-freeciv-common:
 	# create build directory
 	mkdir -p build-$(GUI)
 	# configure
-	cd build-$(GUI); ../../../configure --enable-client=$(GUI) --with-followtag="win32-S3_0" --enable-fcdb=sqlite3 --enable-fcmp=$(FCMP) $(EXTRA_CONFIG)
+	cd build-$(GUI); ../../../configure --enable-client=$(GUI) --with-followtag="win32" --enable-fcdb=sqlite3 --enable-fcmp=$(FCMP) $(EXTRA_CONFIG)
 	# make
 	make -C build-$(GUI)
 
@@ -77,8 +77,8 @@ install-freeciv-common:
 	mv install-$(GUI)/usr/local/share/doc install-$(GUI)/doc
 	# delete unneeded files
 	rm -r install-$(GUI)/usr
-	# strip 'freeciv-manual', 'freeciv-mp-<gui>', and freeciv-ruledit executables
-	strip install-$(GUI)/freeciv-m* install-$(GUI)/freeciv-ruledit.exe
+	# strip 'freeciv-manual' and 'freeciv-mp-<gui>' executables
+	strip install-$(GUI)/freeciv-m*
 	# add start menu files
 	cp freeciv-server.cmd freeciv-mp-$(FCMP).cmd freeciv-$(GUI).cmd Freeciv.url install-$(GUI)/
 
@@ -96,7 +96,6 @@ install-freeciv-sdl: install-freeciv-common
 	cp /opt/un-fonts/COPYING install-sdl/data/themes/gui-sdl/human/COPYING.UnDotum
 
 install-freeciv-qt: install-freeciv-common
-	cp freeciv-ruledit.cmd install-$(GUI)/
 
 # install Freeciv environment
 
@@ -148,12 +147,12 @@ install-env-common:
 	# add DLLs
 	cp -R $(addprefix /bin/, $(COMMON_DLLS)) install-$(GUI)
 
-DEFAULT_FCMP_DLLS := \
+GTK3_DLLS := \
 	libgdk-3-0.dll \
 	libgtk-3-0.dll
 
-install-env-default-fcmp: install-env-common
-	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
+install-env-gtk3: install-env-common
+	cp -R $(addprefix /bin/, $(GTK3_DLLS)) install-$(GUI)
 	# add additional GTK+3 files
 	mkdir -p install-$(GUI)/etc
 	cp -R /etc/gtk-3.0 install-$(GUI)/etc/
@@ -162,15 +161,13 @@ install-env-default-fcmp: install-env-common
 	cp -R /share/locale install-$(GUI)/share/
 	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk30.mo -delete
 
-install-env-gtk3: install-env-default-fcmp
-
-GTK2_DLLS := \
+DEFAULT_FCMP_DLLS := \
 	libgdk-win32-2.0-0.dll \
 	libgtk-win32-2.0-0.dll
 
-install-env-gtk2: install-env-common
+install-env-default-fcmp: install-env-common
 	# add DLLs
-	cp -R $(addprefix /bin/, $(GTK2_DLLS)) install-$(GUI)
+	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
 	# add additional GTK+2 files
 	mkdir -p install-$(GUI)/etc
 	cp -R /etc/gtk-2.0 install-$(GUI)/etc/
@@ -178,6 +175,8 @@ install-env-gtk2: install-env-common
 	cp -R /lib/gtk-2.0/2.10.0 install-$(GUI)/lib/gtk-2.0/
 	cp -R /share/locale install-$(GUI)/share/
 	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk20.mo -delete
+
+install-env-gtk2: install-env-default-fcmp
 
 SDL_DLLS := \
 	libpng12-0.dll \

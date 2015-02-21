@@ -111,7 +111,7 @@ void unit_list_refresh_vision(struct unit_list *punitlist);
 void bounce_unit(struct unit *punit, bool verbose);
 void unit_assign_specific_activity_target(struct unit *punit,
                                           enum unit_activity *activity,
-                                          struct extra_type **target);
+                                          struct act_tgt *target);
 void unit_forget_last_activity(struct unit *punit);
 
 /* creation/deletion/upgrading */
@@ -136,7 +136,8 @@ struct unit *unit_change_owner(struct unit *punit, struct player *pplayer,
 void package_unit(struct unit *punit, struct packet_unit_info *packet);
 void package_short_unit(struct unit *punit,
 			struct packet_unit_short_info *packet,
-                        enum unit_info_use packet_use, int info_city_id);
+			enum unit_info_use packet_use, int info_city_id,
+			bool new_serial_num);
 void send_unit_info(struct conn_list *dest, struct unit *punit);
 void send_all_known_units(struct conn_list *dest);
 void unit_goes_out_of_sight(struct player *pplayer, struct unit *punit);
@@ -153,9 +154,5 @@ bool execute_orders(struct unit *punit);
 
 bool unit_can_do_action_now(const struct unit *punit);
 void unit_did_action(struct unit *punit);
-
-bool unit_can_be_retired(struct unit *punit);
-
-void unit_activities_cancel_all_illegal(const struct tile *ptile);
 
 #endif  /* FC__UNITTOOLS_H */

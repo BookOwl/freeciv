@@ -25,6 +25,12 @@ extern "C" {
 #include "log.h"
 #include "support.h" /* bool, fc__attribute */
 
+#ifdef HAVE_CONFIG_H
+#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
+#error Files including fcintl.h should also include fc_config.h directly
+#endif
+#endif
+
 /* Changing these will break network compatability! */
 #define MAX_LEN_ADDR     256	/* see also MAXHOSTNAMELEN and RFC 1123 2.1 */
 #define MAX_LEN_PATH    4095
@@ -154,8 +160,6 @@ char *user_username(char *buf, size_t bufsz);
 const struct strvec *get_data_dirs(void);
 const struct strvec *get_save_dirs(void);
 const struct strvec *get_scenario_dirs(void);
-
-void free_data_dir_names(void);
 
 struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix);
 struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,

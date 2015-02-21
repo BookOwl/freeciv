@@ -31,7 +31,6 @@
 #include "player.h"
 #include "research.h"
 #include "unit.h"
-#include "victory.h"
 
 /* common/aicore */
 #include "cm.h"
@@ -50,15 +49,10 @@
 #include "advtools.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "advdiplomacy.h"
 #include "advmilitary.h"
 #include "advspace.h"
 #include "aicity.h"
-#include "aidata.h"
-#include "ailog.h"
 #include "aiplayer.h"
 #include "aitech.h"
 #include "aitools.h"
@@ -99,14 +93,13 @@
 **************************************************************************/
 static void dai_manage_spaceship(struct player *pplayer)
 {
-  if (victory_enabled(VC_SPACERACE)) {
+  if (game.info.spacerace) {
     if (pplayer->spaceship.state == SSHIP_STARTED) {
-      adv_spaceship_autoplace(pplayer, &pplayer->spaceship);
-
+      dai_spaceship_autoplace(pplayer, &pplayer->spaceship);
       /* if we have built the best possible spaceship  -- AJS 19990610 */
-      if ((pplayer->spaceship.structurals == NUM_SS_STRUCTURALS)
-          && (pplayer->spaceship.components == NUM_SS_COMPONENTS)
-          && (pplayer->spaceship.modules == NUM_SS_MODULES))
+      if ((pplayer->spaceship.structurals == NUM_SS_STRUCTURALS) &&
+        (pplayer->spaceship.components == NUM_SS_COMPONENTS) &&
+        (pplayer->spaceship.modules == NUM_SS_MODULES))
         handle_spaceship_launch(pplayer);
     }
   }
@@ -144,16 +137,12 @@ void dai_calc_data(const struct player *pplayer, int *trade, int *expenses,
     }
   } city_list_iterate_end;
 
-  switch (game.info.gold_upkeep_style) {
-  case GOLD_UPKEEP_CITY:
-    break;
-  case GOLD_UPKEEP_MIXED:
-  case GOLD_UPKEEP_NATION:
-    /* Account for units with gold upkeep paid for by the nation. */
+  if (game.info.gold_upkeep_style > 0) {
+    /* Account for units with gold upkeep paid for by the nation.
+     * (game.info.gold_upkeep_style = 1 & 2) */
     unit_list_iterate(pplayer->units, punit) {
       *expenses += punit->upkeep[O_GOLD];
     } unit_list_iterate_end;
-    break;
   }
 }
 
@@ -211,9 +200,9 @@ enum celebration {
 *****************************************************************************/
 static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
 {
-  int maxrate = (has_handicap(pplayer, H_RATES)
+  int maxrate = (ai_handicap(pplayer, H_RATES)
                  ? get_player_bonus(pplayer, EFT_MAX_RATES) : 100);
-  struct research *research = research_get(pplayer);
+  struct player_research *research = player_research_get(pplayer);
   enum celebration celebrate = AI_CELEBRATION_UNCHECKED;
   struct adv_data *ai = adv_data_get(pplayer, NULL);
   int can_celebrate = 0, total_cities = 0;
@@ -447,7 +436,7 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
    * this is ignored. Maybe we need ruleset AI hints. */
   /* TODO: Allow celebrate individual cities? No modpacks use this yet. */
   if (get_player_bonus(pplayer, EFT_RAPTURE_GROW) > 0
-      && !has_handicap(pplayer, H_AWAY)
+      && !ai_handicap(pplayer, H_AWAY)
       && 100 > rate_tax_min + rate_sci_min) {
     celebrate = AI_CELEBRATION_NO;
 
@@ -692,40 +681,38 @@ static void dai_manage_taxes(struct ai_type *ait, struct player *pplayer)
 /**************************************************************************
   Change the government form, if it can and there is a good reason.
 **************************************************************************/
-static void dai_manage_government(struct ai_type *ait, struct player *pplayer)
+static void dai_manage_government(struct player *pplayer)
 {
-  struct adv_data *adv = adv_data_get(pplayer, NULL);
+  struct adv_data *ai = adv_data_get(pplayer, NULL);
 
-  if (!pplayer->is_alive || has_handicap(pplayer, H_AWAY)) {
+  if (!pplayer->is_alive || ai_handicap(pplayer, H_AWAY)) {
     return;
   }
 
-  if (adv->goal.revolution != government_of_player(pplayer)) {
-    dai_government_change(pplayer, adv->goal.revolution); /* change */
+  if (ai->goal.revolution != government_of_player(pplayer)) {
+    dai_government_change(pplayer, ai->goal.revolution); /* change */
   }
 
   /* Crank up tech want */
-  if (adv->goal.govt.req == A_UNSET
-      || research_invention_state(research_get(pplayer),
-                                  adv->goal.govt.req) == TECH_KNOWN) {
+  if (ai->goal.govt.req == A_UNSET
+      || player_invention_state(pplayer, ai->goal.govt.req) == TECH_KNOWN) {
     return; /* already got it! */
-  } else if (adv->goal.govt.val > 0) {
+  } else if (ai->goal.govt.val > 0) {
     /* We have few cities in the beginning, compensate for this to ensure
      * that we are sufficiently forward-looking. */
-    int want = MAX(adv->goal.govt.val, 100);
+    int want = MAX(ai->goal.govt.val, 100);
     struct nation_type *pnation = nation_of_player(pplayer);
-    struct ai_plr *plr_data = def_ai_player_data(pplayer, ait);
 
     if (government_of_player(pplayer) == pnation->init_government) {
       /* Default government is the crappy one we start in (like Despotism).
        * We want something better pretty soon! */
       want += 25 * game.info.turn;
     }
-    plr_data->tech_want[adv->goal.govt.req] += want;
-    TECH_LOG(ait, LOG_DEBUG, pplayer, advance_by_number(adv->goal.govt.req), 
-             "dai_manage_government() + %d for %s",
+    pplayer->ai_common.tech_want[ai->goal.govt.req] += want;
+    TECH_LOG(LOG_DEBUG, pplayer, advance_by_number(ai->goal.govt.req), 
+             "ai_manage_government() + %d for %s",
              want,
-             government_rule_name(adv->goal.govt.gov));
+             government_rule_name(ai->goal.govt.gov));
   }
 }
 
@@ -762,9 +749,8 @@ void dai_do_first_activities(struct ai_type *ait, struct player *pplayer)
 void dai_do_last_activities(struct ai_type *ait, struct player *pplayer)
 {
   TIMING_LOG(AIT_ALL, TIMER_START);
-  dai_clear_tech_wants(ait, pplayer);
 
-  dai_manage_government(ait, pplayer);
+  dai_manage_government(pplayer);
   TIMING_LOG(AIT_TAXES, TIMER_START);
   dai_manage_taxes(ait, pplayer);
   TIMING_LOG(AIT_TAXES, TIMER_STOP);
@@ -772,7 +758,7 @@ void dai_do_last_activities(struct ai_type *ait, struct player *pplayer)
   dai_manage_cities(ait, pplayer);
   TIMING_LOG(AIT_CITIES, TIMER_STOP);
   TIMING_LOG(AIT_TECH, TIMER_START);
-  dai_manage_tech(ait, pplayer); 
+  dai_manage_tech(pplayer); 
   TIMING_LOG(AIT_TECH, TIMER_STOP);
   dai_manage_spaceship(pplayer);
 

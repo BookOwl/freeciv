@@ -4,15 +4,12 @@ pkgsysconfdir = $(sysconfdir)/$(PACKAGE)
 
 if CLIENT
 CLIENT_FILES =				\
+	hex2t.tilespec			\
 	amplio2.tilespec		\
 	cimpletoon.tilespec		\
-	hex2t.tilespec			\
-	hexemplio.tilespec		\
 	isophex.tilespec		\
 	isotrident.tilespec		\
-	toonhex.tilespec		\
 	trident.tilespec		\
-	stdmusic.musicspec		\
 	stdsounds.soundspec		\
 	helpdata.txt
 if CLIENT_GUI_XAW
@@ -40,7 +37,6 @@ SERVER_FILES = \
 	default.serv \
 	experimental.serv \
 	multiplayer.serv \
-	alien.serv \
 	civ2civ3.serv
 
 SERVER_CONF = database.lua
@@ -58,16 +54,16 @@ EXTRA_DIST = \
 	freeciv-client.png \
 	freeciv.rc-2.0	\
 	gtk_menus.xml	\
+	civserver.dsc.in	\
+	civclient.dsc.in	\
+	civserver.room.in	\
 	database.lua	\
+	hex2t.tilespec	\
 	amplio2.tilespec \
 	cimpletoon.tilespec \
-	hex2t.tilespec	\
-	hexemplio.tilespec	\
 	isophex.tilespec	\
 	isotrident.tilespec \
-	toonhex.tilespec	\
 	trident.tilespec	\
-	stdmusic.musicspec	\
 	stdsounds.soundspec	\
 	helpdata.txt	\
 	civ1.serv	\
@@ -76,18 +72,17 @@ EXTRA_DIST = \
 	default.serv	\
 	experimental.serv \
 	multiplayer.serv \
-	alien.serv \
 	civ2civ3.serv
 
 if CLIENT
 CLIENTDATADIRS = amplio2 misc flags buildings cimpletoon isotrident trident\
- isophex hex2t hexemplio stdsounds stdmusic themes wonders
+ isophex hex2t stdsounds themes wonders
 else
 CLIENTDATADIRS = 
 endif
 
 if SERVER
-SERVERDATADIRS = default classic civ1 civ2 experimental multiplayer alien civ2civ3 scenarios nation
+SERVERDATADIRS = default classic civ1 civ2 experimental multiplayer civ2civ3 scenarios nation
 else
 SERVERDATADIRS = 
 endif
@@ -101,4 +96,20 @@ endif
 icondir = $(prefix)/share/pixmaps
 icon_DATA=$(ICONS)
 
-SUBDIRS = icons $(CLIENTDATADIRS) $(SERVERDATADIRS) override
+SUBDIRS = icons $(CLIENTDATADIRS) $(SERVERDATADIRS)
+
+if GGZ_CLIENT
+install-data-local:
+	$(GGZ_CONFIG) -D --install --modfile=civclient.dsc --force
+
+uninstall-local:
+	$(GGZ_CONFIG) -D --remove --modfile=civclient.dsc
+endif
+
+if GGZ_SERVER
+ggzroom_DATA = civserver.room
+ggzroomdir = $(ggzdconfdir)/rooms/
+
+ggzgame_DATA = civserver.dsc
+ggzgamedir = $(ggzdconfdir)/games/
+endif

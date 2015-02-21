@@ -270,18 +270,13 @@ void diplo_wdg::show_menu(int player)
 
   /* Trading: advances */
   if (game.info.trading_tech) {
-    const struct research *gresearch = research_get(pgiver);
-    const struct research *oresearch = research_get(pother);
     adv_menu = menu.addMenu(_("Advances"));
     advance_iterate(A_FIRST, padvance) {
       Tech_type_id i = advance_number(padvance);
-
-      if (research_invention_state(gresearch, i) == TECH_KNOWN
-          && research_invention_gettable(oresearch, i,
-                                         game.info.tech_trade_allow_holes)
-          && (research_invention_state(oresearch, i) == TECH_UNKNOWN
-              || research_invention_state(oresearch, i)
-                 == TECH_PREREQS_KNOWN)) {
+      if (player_invention_state(pgiver, i) == TECH_KNOWN
+          && player_invention_reachable(pother, i, FALSE)
+          && (player_invention_state(pother, i) == TECH_UNKNOWN
+              || player_invention_state(pother, i) == TECH_PREREQS_KNOWN)) {
         adv_list.insert(advance_name_translation(padvance), padvance);
       }
     } advance_iterate_end;
@@ -511,7 +506,6 @@ void diplo_wdg::give_advance(int tech)
 void diplo_wdg::all_advances()
 {
   int giver, dest, other;
-  const struct research *dresearch, *gresearch;
 
   giver = curr_player;
   if (curr_player == player1) {
@@ -533,22 +527,17 @@ void diplo_wdg::all_advances()
   fc_assert_ret(NULL != pgiver);
   fc_assert_ret(NULL != pdest);
 
-   dresearch = research_get(pdest);
-   gresearch = research_get(pgiver);
+  advance_iterate(A_FIRST, padvance) {
+    Tech_type_id i = advance_number(padvance);
 
-   advance_iterate(A_FIRST, padvance) {
-     Tech_type_id i = advance_number(padvance);
-
-     if (research_invention_state(gresearch, i) == TECH_KNOWN
-         && research_invention_gettable(dresearch, i,
-                                        game.info.tech_trade_allow_holes)
-         && (research_invention_state(dresearch, i) == TECH_UNKNOWN
-             || research_invention_state(dresearch, i)
-                == TECH_PREREQS_KNOWN)) {
-       dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
-                                                CLAUSE_ADVANCE, i);
-     }
-   } advance_iterate_end;
+    if (player_invention_state(pgiver, i) == TECH_KNOWN
+        && player_invention_reachable(pdest, i, FALSE)
+        && (player_invention_state(pdest, i) == TECH_UNKNOWN
+            || player_invention_state(pdest, i) == TECH_PREREQS_KNOWN)) {
+      dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+                                               CLAUSE_ADVANCE, i);
+    }
+  } advance_iterate_end;
 }
 
 /****************************************************************************

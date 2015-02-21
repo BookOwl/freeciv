@@ -181,7 +181,7 @@ data. The header contains the following fields (the sizes are defined in
 common/packets.c:packet_header_set()):
 
 uint16	:	length		(the length of the entire packet)
-uint16	:	type		(e.g. PACKET_TILE_INFO)
+uint8	:	type		(e.g. PACKET_TILE_INFO)
 
 For backward compatibility reasons, packets used for the initial protocol
 (notably before checking the capabilities) have different header fields
@@ -1204,10 +1204,10 @@ Debugging has to be activated on compile time by adding the option
 '--enable-debug=no/some/yes/checks' to the configure script. The different
 options have the following meaning:
 
-  no:     no debugging enabled(FREECIV_NDEBUG and NDEBUG are defined)
+  no:     no debugging enabled(NDEBUG is defined)
           additional compiler flags for optimisation (-O3 -fomit-frame-pointer)
-  some:   default build (neither FREECIV_NDEBUG nor FREECIV_DEBUG is defined)
-  yes:    debugging enable (FREECIV_DEBUG is defined)
+  some:   default build (neither NDEBUG nor DEBUG is defined)
+  yes:    debugging enable (DEBUG is defined)
           debugging log level available (4, log_debug())
           additional compiler flags:
             -Werror -Wmissing-prototypes -Wmissing-declarations

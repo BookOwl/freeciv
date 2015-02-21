@@ -72,7 +72,7 @@ leaders = {
 
 flag="dahomey"
 flag_alt = "-"
-style = "tropical"
+city_style = "tropical"
 
 init_techs=""
 init_buildings=""

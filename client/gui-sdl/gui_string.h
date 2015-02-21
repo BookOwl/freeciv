@@ -22,12 +22,11 @@
 #ifndef FC__GUISTRING_H
 #define FC__GUISTRING_H
 
-/* SDL */
-#include <SDL.h>
-#include <SDL_ttf.h>
+#include "SDL.h"
 
 #include "fc_types.h"
 
+#include "SDL_ttf.h"
 #include "gui_main.h"
 
 #define SF_CENTER	0x10
