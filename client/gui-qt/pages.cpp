@@ -55,7 +55,7 @@ void qtg_real_set_client_page(enum client_pages page)
   "default", and if the user changes this then set_ruleset() should be
   called.
 ****************************************************************************/
-void qtg_set_rulesets(int num_rulesets, char **rulesets)
+void qtg_gui_set_rulesets(int num_rulesets, char **rulesets)
 {
   /* PORTME */
 }
@@ -93,8 +93,9 @@ void fc_client::create_main_page(void)
   QFontMetrics fm(f);
   int row = 0;
 #if IS_BETA_VERSION
-  QFont *fe = fc_fonts.get_font("gui_qt_font_beta_label");
   QPalette warn_color;
+  QFont *fe;
+  fe = fc_fonts.get_font("gui_qt_font_beta_label");
   QLabel *beta_label = new QLabel(beta_message());
   beta_label->setFont(*fe);
 #endif /* IS_BETA_VERSION */
@@ -1226,7 +1227,7 @@ void fc_client::update_start_page()
         str = pplayer->username;
 
         if (pplayer->ai_controlled) {
-          str = str + " <" + (ai_level_translated_name(pplayer->ai_common.skill_level))
+          str = str + " <" + (ai_level_name(pplayer->ai_common.skill_level))
               + ">";
         }
 
@@ -1335,7 +1336,11 @@ void fc_client::update_start_page()
 
   detach_item->addChildren(items);
   start_players_tree->insertTopLevelItem(2, detach_item);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
   start_players_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+#else
+  start_players_tree->header()->setResizeMode(QHeaderView::ResizeToContents);
+#endif
   start_players_tree->expandAll();
   update_obs_button();
 }
@@ -1442,9 +1447,9 @@ void fc_client::start_page_menu(QPoint pos)
           submenu_AI.setTitle(_("Set difficulty"));
           menu.addMenu(&submenu_AI);
 
-          for (level = 0; level < AI_LEVEL_COUNT; level++) {
+          for (level = 0; level < AI_LEVEL_LAST; level++) {
             if (is_settable_ai_level(static_cast < ai_level > (level))) {
-              level_name = ai_level_translated_name(static_cast < ai_level > (level));
+              level_name = ai_level_name(static_cast < ai_level > (level));
               level_cmd = ai_level_cmd(static_cast < ai_level > (level));
               action = new QAction(QString(level_name), start_players);
               str = "/" + QString(level_cmd) + " " + sp;

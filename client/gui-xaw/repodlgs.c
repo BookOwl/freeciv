@@ -198,7 +198,7 @@ void create_science_dialog(bool make_modal)
   int num_list, j = 0, flag = 0;
 
   if (NULL != client.conn.playing) {
-    struct research *research = research_get(client_player());
+    struct player_research *research = player_research_get(client.conn.playing);
 
     if (research->researching == A_UNSET) {
       fc_snprintf(current_text, sizeof(current_text),
@@ -209,9 +209,8 @@ void create_science_dialog(bool make_modal)
     } else {
       fc_snprintf(current_text, sizeof(current_text),
 		  _("Researching %s: %d/%d"),
-                  research_advance_name_translation(research,
-                                                    research->researching),
-                  research->bulbs_researched,
+		  advance_name_researching(client.conn.playing),
+		  research->bulbs_researched,
                   research->client.researching_cost);
     }
 
@@ -224,12 +223,12 @@ void create_science_dialog(bool make_modal)
       fc_snprintf(goal_text, sizeof(goal_text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(research->tech_goal)),
-                  research_goal_unknown_techs(research,
-                                              research->tech_goal));
+		  num_unknown_techs_for_goal(client.conn.playing,
+					     research->tech_goal));
     }
 
     advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == research_invention_state(research, i)) {
+      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
 	tech_list_names_ptrs[j] = advance_name_translation(advance_by_number(i));
 	j++;
       }
@@ -319,7 +318,7 @@ void create_science_dialog(bool make_modal)
 
     advance_index_iterate(A_FIRST, i) {
       if (TECH_PREREQS_KNOWN ==
-            research_invention_state(research, i)) {
+            player_invention_state(client.conn.playing, i)) {
 	Widget entry =
 	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
 				  smeBSBObjectClass,
@@ -337,9 +336,9 @@ void create_science_dialog(bool make_modal)
 
     flag = 0;
     advance_index_iterate(A_FIRST, i) {
-      if (research_invention_reachable(research, i)
-          && TECH_KNOWN != research_invention_state(research, i)
-          && (11 > research_goal_unknown_techs(research, i)
+      if (player_invention_reachable(client.conn.playing, i, TRUE)
+	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
+	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
 	      || i == research->tech_goal)) {
 	Widget entry =
 	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
@@ -470,7 +469,7 @@ void real_science_report_dialog_update(void)
     static const char *tech_list_names_ptrs[A_LAST + 1];
     int j, flag;
     const char *report_title;
-    struct research *research = research_get(client_player());
+    struct player_research *research = player_research_get(client.conn.playing);
     
     /* TRANS: Research report title */
     report_title = get_report_title_plus(_("Research"), science_dialog_text());
@@ -486,9 +485,8 @@ void real_science_report_dialog_update(void)
     } else {
       fc_snprintf(text, sizeof(text),
 		  _("Researching %s: %d/%d"),
-                  research_advance_name_translation(research,
-                                                    research->researching),
-                  research->bulbs_researched,
+		  advance_name_researching(client.conn.playing),
+		  research->bulbs_researched,
                   research->client.researching_cost);
     }
 
@@ -503,15 +501,15 @@ void real_science_report_dialog_update(void)
       fc_snprintf(text, sizeof(text),
 		  _("Goal: %s (%d steps)"),
 		  advance_name_translation(advance_by_number(research->tech_goal)),
-                  research_goal_unknown_techs(research,
-                                              research->tech_goal));
+		  num_unknown_techs_for_goal(client.conn.playing,
+					     research->tech_goal));
     }
 
     xaw_set_label(science_goal_label, text);
 
     j=0;
     advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == research_invention_state(research, i)) {
+      if (TECH_KNOWN == player_invention_state(client.conn.playing, i)) {
 	tech_list_names_ptrs[j]=advance_name_translation(advance_by_number(i));
 	j++;
       }
@@ -531,7 +529,7 @@ void real_science_report_dialog_update(void)
     flag=0;
     advance_index_iterate(A_FIRST, i) {
       if (TECH_PREREQS_KNOWN ==
-            research_invention_state(research, i)) {
+            player_invention_state(client.conn.playing, i)) {
 	Widget entry=
 	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),
 				  smeBSBObjectClass,
@@ -554,9 +552,9 @@ void real_science_report_dialog_update(void)
     
     flag=0;
     advance_index_iterate(A_FIRST, i) {
-      if (research_invention_reachable(research, i)
-          && TECH_KNOWN != research_invention_state(research, i)
-          && (11 > research_goal_unknown_techs(research, i)
+      if (player_invention_reachable(client.conn.playing, i, TRUE)
+	  && TECH_KNOWN != player_invention_state(client.conn.playing, i)
+	  && (11 > num_unknown_techs_for_goal(client.conn.playing, i)
 	      || i == research->tech_goal)) {
 	Widget entry=
 	  XtVaCreateManagedWidget(advance_name_translation(advance_by_number(i)),

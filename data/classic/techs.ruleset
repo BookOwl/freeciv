@@ -9,8 +9,7 @@
 
 [datafile]
 description="Classic technology data for Freeciv (as Civ2, minus a few)"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -48,9 +47,8 @@ format_version=10
 ; helptext	= optional help text string (set units ruleset for examples)
 ; bonus_message = text seen when a player is the first to 
 ;                 discover an bonus tech.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
 ; Special values for req1 and req2 are "None" (first section below) 
 ; and "Never" (never available).  If only one tech is required, 
@@ -62,6 +60,9 @@ format_version=10
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 ; "Claim_Ocean"    = Player claims ocean tiles even if they are not
 ;                    adjacent to border source
@@ -112,9 +113,9 @@ graphic_alt = "-"
 name     = _("Automobile")
 req1     = "Combustion"
 req2     = "Steel"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.automobile"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_banking]
 name     = _("Banking")
@@ -357,9 +358,9 @@ graphic_alt = "-"
 name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
-helptext = _("Population will start contributing to pollution.")
 
 [advance_invention]
 name     = _("Invention")
@@ -447,9 +448,9 @@ graphic_alt = "-"
 name     = _("Mass Production")
 req1     = "Automobile"
 req2     = "The Corporation"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.mass_production"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_mathematics]
 name     = _("Mathematics")
@@ -563,9 +564,9 @@ graphic_alt = "-"
 name     = _("Plastics")
 req1     = "Refining"
 req2     = "Space Flight"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.plastics"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_polytheism]
 name     = _("Polytheism")
@@ -621,7 +622,7 @@ graphic_alt = "-"
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
 

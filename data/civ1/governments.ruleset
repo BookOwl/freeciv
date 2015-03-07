@@ -14,8 +14,7 @@
 
 [datafile]
 description="Civilization I governments data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [governments]
 during_revolution="Anarchy"
@@ -186,21 +185,3 @@ Because (happy) citizens of Democracy believe strongly in the\
  Democratic civilizations cannot be bribed, and Democratic cities\
  cannot be incited to revolt by enemy Diplomats and Spies.\
 ")
-
-; /* <-- avoid gettext warnings
-;
-; Multipliers
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for savegames, rulesets etc; if not
-;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming
-;                           an extra after a ruleset has been released.
-; default                 = default value
-; start                   = minimal value
-; stop                    = maximum value
-; step                    = minimum increase/decrease
-; helptext                = optional help text string; should escape all raw 
-;                           newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings

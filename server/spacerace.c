@@ -23,7 +23,6 @@
 #include "shared.h"
 
 /* common */
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "packets.h"

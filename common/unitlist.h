@@ -70,17 +70,17 @@ bool can_units_do(const struct unit_list *punits,
 		  bool (can_fn)(const struct unit *punit));
 bool can_units_do_activity(const struct unit_list *punits,
 			   enum unit_activity activity);
-bool can_units_do_activity_targeted(const struct unit_list *punits,
-                                    enum unit_activity activity,
-                                    struct extra_type *pextra);
 bool can_units_do_any_road(const struct unit_list *punits);
+bool can_units_do_base(const struct unit_list *punits,
+                       Base_type_id base);
+bool can_units_do_road(const struct unit_list *punits,
+                       Road_type_id road);
 bool can_units_do_base_gui(const struct unit_list *punits,
                            enum base_gui_type base_gui);
+bool can_units_do_diplomat_action(const struct unit_list *punits,
+				  enum diplomat_actions action);
 bool units_have_type_flag(const struct unit_list *punits,
                           enum unit_type_flag_id flag, bool has_flag);
-bool units_contain_cityfounder(const struct unit_list *punits);
-bool units_can_do_action(const struct unit_list *punits,
-                         int action_id, bool can_do);
 bool units_are_occupied(const struct unit_list *punits);
 bool units_can_load(const struct unit_list *punits);
 bool units_can_unload(const struct unit_list *punits);

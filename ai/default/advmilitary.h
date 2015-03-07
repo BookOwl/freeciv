@@ -13,12 +13,8 @@
 #ifndef FC__ADVMILITARY_H
 #define FC__ADVMILITARY_H
 
-/* common */
 #include "fc_types.h"
 #include "unittype.h"
-
-/* server/advisors */
-#include "advdata.h"
 
 struct unit_type *dai_choose_defender_versus(struct city *pcity,
                                              struct unit *attacker);
@@ -34,10 +30,6 @@ int assess_defense_unit(struct ai_type *ait, struct city *pcity,
 int assess_defense(struct ai_type *ait, struct city *pcity);
 int dai_unit_defence_desirability(struct ai_type *ait,
                                   const struct unit_type *punittype);
-int dai_unit_attack_desirability(struct ai_type *ait,
-                                 const struct unit_type *punittype);
-bool dai_process_defender_want(struct ai_type *ait, struct player *pplayer,
-                               struct city *pcity, unsigned int danger,
-                               struct adv_choice *choice);
+int dai_unit_attack_desirability(const struct unit_type *punittype);
 
 #endif  /* FC__ADVMILITARY_H */

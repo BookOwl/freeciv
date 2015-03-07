@@ -35,16 +35,11 @@
 #include "unittools.h"
 
 /* server/advisors */
-#include "advbuilding.h"
 #include "advgoto.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "aicity.h"
 #include "aiplayer.h"
-#include "ailog.h"
 #include "aitools.h"
 #include "aiunit.h"
 
@@ -65,7 +60,6 @@ static struct tile *find_nearest_airbase(const struct unit *punit,
   struct pf_map *pfm;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   pf_map_move_costs_iterate(pfm, ptile, move_cost, TRUE) {
@@ -200,7 +194,6 @@ static int find_something_to_bomb(struct ai_type *ait, struct unit *punit,
   int best = 0;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   /* Let's find something to bomb */
@@ -210,12 +203,12 @@ static int find_something_to_bomb(struct ai_type *ait, struct unit *punit,
       break;
     }
 
-    if (has_handicap(pplayer, H_MAP) && !map_is_known(ptile, pplayer)) {
+    if (ai_handicap(pplayer, H_MAP) && !map_is_known(ptile, pplayer)) {
       /* The target tile is unknown */
       continue;
     }
 
-    if (has_handicap(pplayer, H_FOG) 
+    if (ai_handicap(pplayer, H_FOG) 
         && !map_is_known_and_seen(ptile, pplayer, V_MAIN)) {
       /* The tile is fogged */
       continue;
@@ -265,7 +258,6 @@ static struct tile *dai_find_strategic_airbase(struct ai_type *ait,
   int best_worth = 0, target_worth;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
   pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
     if (move_cost >= punit->moves_left) {
@@ -393,15 +385,7 @@ void dai_manage_airunit(struct ai_type *ait, struct player *pplayer,
       /* We could use ai_military_findvictim here, but I don't trust it... */
       unit_activity_handling(punit, ACTIVITY_IDLE);
       if (is_tiles_adjacent(unit_tile(punit), dst_tile)) {
-        if (is_action_enabled_unit_on_units(ACTION_CAPTURE_UNITS,
-                                            punit, dst_tile)) {
-          /* Choose capture. */
-          handle_unit_do_action(unit_owner(punit),
-                                punit->id, tile_index(dst_tile),
-                                0, ACTION_CAPTURE_UNITS);
-        } else {
-          (void) unit_move_handling(punit, dst_tile, TRUE, FALSE);
-        }
+        (void) unit_move_handling(punit, dst_tile, TRUE, FALSE);
       }
     } else if ((dst_tile = dai_find_strategic_airbase(ait, punit, &path))) {
       log_debug("%s will fly to (%i, %i) (%s) to fight there",
@@ -442,7 +426,7 @@ bool dai_choose_attacker_air(struct ai_type *ait, struct player *pplayer,
   bool want_something = FALSE;
 
   /* This AI doesn't know to build planes */
-  if (has_handicap(pplayer, H_NOPLANES)) {
+  if (ai_handicap(pplayer, H_NOPLANES)) {
     return FALSE;
   }
 
@@ -466,12 +450,6 @@ bool dai_choose_attacker_air(struct ai_type *ait, struct player *pplayer,
       /* We don't consider this a plane */
       continue;
     }
-
-    /* Temporary hack because pathfinding can't handle Fighters. */
-    if (!uclass_has_flag(pclass, UCF_MISSILE) && 1 == utype_fuel(punittype)) {
-      continue;
-    }
-
     if (can_city_build_unit_now(pcity, punittype)) {
       struct unit *virtual_unit = 
 	unit_virtual_create(pplayer, pcity, punittype,

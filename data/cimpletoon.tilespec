@@ -2,7 +2,7 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2015-Jan-28"
+options = "+Freeciv-2.5-tilespec"
 
 ; A simple name for the tileset specified by this file:
 name = "cimpletoon"
@@ -21,9 +21,9 @@ small_tile_height  = 20
 type = "isometric"
 is_hex = FALSE
 
-; Blended fog
-fog_style      = "Darkness"
-darkness_style = "Corner"
+; Fogstyle 2, darkness_style 4 : blended fog
+fogstyle = 2
+darkness_style = 4
 ; Which terrain layer darkness is drawn top of (0-2)
 darkness_layer = 0
  
@@ -33,13 +33,9 @@ unit_flag_offset_y = 16
 city_flag_offset_x = 2
 city_flag_offset_y = 9
 
-; offset the units by this amount
+; offset the units by this amount when drawing units
 unit_offset_x = 19
 unit_offset_y = 18
-
-; offset the cities by this amount
-city_offset_x = 0
-city_offset_y = 0
 
 ; offset the city bar text by this amount (from the city tile origin)
 citybar_offset_y = 30
@@ -69,11 +65,8 @@ files =
   "amplio2/ocean.spec",
   "amplio2/water.spec",
   "amplio2/tiles.spec",
-  "amplio2/upkeep.spec",
-  "amplio2/activities.spec",
   "amplio2/fog.spec",
   "misc/small.spec",
-  "misc/events.spec",
   "misc/governments.spec",
   "misc/specialists.spec",
   "amplio2/veterancy.spec",
@@ -121,6 +114,7 @@ num_layers = 1
 layer0_match_type = "shallow"
 layer0_match_with = "land"
 layer0_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 [tile_coast]
 blend_layer = 1
@@ -131,6 +125,7 @@ layer0_sprite_type = "corner"
 layer1_match_type = "water"
 layer1_match_with = "ice"
 layer1_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 [tile_floor]
 blend_layer = 0
@@ -141,6 +136,7 @@ layer0_sprite_type = "corner"
 layer1_match_type = "water"
 layer1_match_with = "ice"
 layer1_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 ; Land graphics referenced by terrain.ruleset
 ;
@@ -151,11 +147,13 @@ num_layers = 3
 layer0_match_type = "shallow"
 layer1_match_type = "ice"
 layer2_match_type = "ice"
+mine_sprite = "tx.oil_mine"
 
 [tile_desert]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
 [tile_forest]
 blend_layer = 1
@@ -163,11 +161,13 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
+mine_sprite = "tx.mine"
 
 [tile_grassland]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_hills]
 blend_layer = 1
@@ -175,6 +175,7 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "hills"
 layer1_match_with = "hills"
+mine_sprite = "tx.mine"
 
 [tile_jungle]
 blend_layer = 1
@@ -182,6 +183,7 @@ num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
+mine_sprite = "tx.mine"
 
 [tile_mountains]
 blend_layer = 1
@@ -191,44 +193,36 @@ layer1_match_type = "hills"
 layer1_match_with = "hills"
 layer1_is_tall = TRUE
 layer1_offset_y = 6
+mine_sprite = "tx.mine"
 
 [tile_plains]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_swamp]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_tundra]
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
 [tile_inaccessible]
 blend_layer = 0
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
-[extras]
+[roads]
 styles =
-    { "name",          "style"
-      "road.road",     "RoadAllSeparate"
-      "road.rail",     "RoadAllSeparate"
-      "road.river",    "River"
-      "tx.irrigation", "Cardinals"
-      "tx.farmland",   "Cardinals"
-      "tx.mine",       "Single1"
-      "tx.oil_mine",   "Single1"
-      "tx.pollution",  "Single2"
-      "tx.fallout",    "Single2"
-      "tx.village",    "Single1"
-      "base.fort",     "3Layer"
-      "base.fortress", "3Layer"
-      "base.airfield", "3Layer"
-      "base.airbase",  "3Layer"
-      "base.buoy",     "3layer"
-      "base.ruins",    "3Layer"
+    { "name",  "style"
+      "road.road",  "AllSeparate"
+      "road.rail",  "AllSeparate"
+      "road.river", "River"
     }

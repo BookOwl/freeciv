@@ -490,7 +490,6 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
                        const char *replace)
 {
   size_t len_max;
-  bool success;
 
   fc_assert_ret_val(str != NULL, NULL);
   fc_assert_ret_val(len != NULL, NULL);
@@ -506,9 +505,8 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
     str = fc_realloc(str, len_max);
   }
 
-  success = fc_strrep(str, (*len), search, replace);
   /* should never happen */
-  fc_assert_ret_val_msg(success == TRUE, NULL,
+  fc_assert_ret_val_msg(fc_strrep(str, (*len), search, replace), NULL,
                         "Can't replace '%s' by '%s' in '%s'. To small "
                         "size after reallocation: %lu.", search, replace,
                         str, (long unsigned int)*len);
@@ -1188,16 +1186,4 @@ const char *fc_basename(const char *path)
   fc_strlcpy(buf, path, sizeof(buf));
 
   return basename(buf);
-}
-
-/*****************************************************************
-  Set quick_exit() callback if possible.
-*****************************************************************/
-int fc_at_quick_exit(void (*func)(void))
-{
-#ifdef HAVE_AT_QUICK_EXIT
-  return at_quick_exit(func);
-#else  /* HAVE_AT_QUICK_EXIT */
-  return -1;
-#endif /* HAVE_AT_QUICK_EXIT */
 }

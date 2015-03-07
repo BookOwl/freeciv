@@ -17,20 +17,17 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
 #include "support.h"
-
-/* common */
-#include "vision.h"
 
 struct player;
 struct tile;
+enum vision_layer;
 struct color;
-struct extra_type;
+struct base_type;
 
 /* The existence of each function should be checked in interface_init()! */
 struct functions {
-  void (*destroy_extra)(struct tile *ptile, struct extra_type *pextra);
+  void (*destroy_base)(struct tile *ptile, struct base_type *pbase);
   /* Returns iff the player 'pplayer' has the vision in the layer
      'vision' at tile given by 'ptile'. */
   bool (*player_tile_vision_get)(const struct tile *ptile,
@@ -43,7 +40,6 @@ const extern struct functions *fc_funcs;
 
 struct functions *fc_interface_funcs(void);
 void fc_interface_init(void);
-void free_libfreeciv(void);
 
 #ifdef __cplusplus
 }

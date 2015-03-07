@@ -24,7 +24,6 @@ extern "C" {
 }
 
 // Forward declarations
-struct canvas;
 struct help_item;
 
 class QFrame;
@@ -48,10 +47,8 @@ class help_dialog : public QDialog
 public:
   help_dialog(QWidget *parent = 0);
   void update_fonts();
-
 public slots:
   void set_topic(const help_item *item);
-
 private slots:
   void item_changed(QTreeWidgetItem *item);
 };
@@ -107,6 +104,8 @@ class help_widget : public QWidget
   void set_topic_specialist(const help_item *item, const char *title);
   void set_topic_government(const help_item *item, const char *title);
   void set_topic_nation(const help_item *item, const char *title);
+  void set_topic_road(const help_item *item, const char *title);
+  void set_topic_base(const help_item *item, const char *title);
 
 public:
   help_widget(QWidget *parent = 0);

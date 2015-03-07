@@ -23,8 +23,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "bitvector.h"
@@ -82,6 +81,8 @@ extern void popdown_diplomat_dialog(void);
 extern void popdown_incite_dialog(void);
 extern void popdown_bribe_dialog(void);
 
+extern void popdown_caravan_dialog(void);
+
 void popdown_advanced_terrain_dialog(void);
 int advanced_terrain_window_dlg_callback(struct widget *pWindow);
 int exit_advanced_terrain_dlg_callback(struct widget *pWidget);
@@ -100,14 +101,14 @@ static void popdown_unit_disband_dlg(void);
   Place window near given tile on screen.
 ***********************************************************************/
 void put_window_near_map_tile(struct widget *pWindow,
-                              int window_width, int window_height,
-                              struct tile *ptile)
+  		int window_width, int window_height, struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
   int window_x = 0, window_y = 0;
-
+  
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
-    if (canvas_x + tileset_tile_width(tileset) + window_width >= Main.screen->w) {
+    if (canvas_x + tileset_tile_width(tileset) + window_width >= Main.screen->w)
+    {
       if (canvas_x - window_width < 0) {
 	window_x = (Main.screen->w - window_width) / 2;
       } else {
@@ -144,6 +145,7 @@ void put_window_near_map_tile(struct widget *pWindow,
 ***********************************************************************/
 void popdown_all_game_dialogs(void)
 {
+  popdown_caravan_dialog();  
   unit_select_dialog_popdown();
   popdown_advanced_terrain_dialog();
   popdown_terrain_info_dialog();
@@ -1262,14 +1264,14 @@ static int exit_terrain_info_dialog_callback(struct widget *pButton)
 const char *sdl_get_tile_defense_info_text(struct tile *ptile)
 {
   static char buffer[64];
-  int bonus = (tile_terrain(ptile)->defense_bonus - 10) * 10;
-
-  extra_type_iterate(pextra) {
-    if (tile_has_extra(ptile, pextra)
-        && pextra->category == ECAT_NATURAL) {
-      bonus += pextra->defense_bonus;
+  int bonus = (tile_terrain(ptile)->defense_bonus - 10) * 10;    
+  
+  road_type_iterate(proad) {
+    if (tile_has_road(ptile, proad)
+        && road_has_flag(proad, RF_NATURAL)) {
+      bonus += proad->defense_bonus;
     }
-  } extra_type_iterate_end;
+  } road_type_iterate_end;
 
   fc_snprintf(buffer, sizeof(buffer), _("Terrain Defense Bonus: +%d%% "), bonus);
 
@@ -2168,9 +2170,21 @@ static int pillage_callback(struct widget *pWidget)
 
     if (pUnit)
     {
-      struct extra_type *target = extra_by_number(what);
+      struct act_tgt target;
 
-      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE, target);
+      if (what >= S_LAST + game.control.num_base_types) {
+        target.type = ATT_ROAD;
+        target.obj.road = what - S_LAST - game.control.num_base_types;
+      } else if (what >= S_LAST) {
+        target.type = ATT_BASE;
+        target.obj.base = what - S_LAST;
+      } else {
+        target.type = ATT_SPECIAL;
+        target.obj.spe = what;
+      }
+
+      request_new_unit_activity_targeted(pUnit, ACTIVITY_PILLAGE,
+                                         &target);
     }
   }  
   return -1;
@@ -2206,12 +2220,15 @@ static void popdown_pillage_dialog(void)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *pUnit, bv_extras extras)
+void popup_pillage_dialog(struct unit *pUnit,
+			  bv_special spe,
+                          bv_bases bases,
+                          bv_roads roads)
 {
   struct widget *pWindow = NULL, *pBuf = NULL;
   SDL_String16 *pStr;
   SDL_Rect area;
-  struct extra_type *tgt;
+  struct act_tgt tgt;
 
   if (pPillage_Dlg) {
     return;
@@ -2250,13 +2267,27 @@ void popup_pillage_dialog(struct unit *pUnit, bv_extras extras)
   add_to_gui_list(ID_PILLAGE_DLG_EXIT_BUTTON, pBuf);
   /* ---------- */
 
-  while ((tgt = get_preferred_pillage(extras))) {
+  while (get_preferred_pillage(&tgt, spe, bases, roads)) {
     const char *name = NULL;
-    int what;
+    int what = S_LAST;
 
-    BV_CLR(extras, extra_index(tgt));
-    name = extra_name_translation(tgt);
-    what = extra_index(tgt);
+    switch (tgt.type) {
+      case ATT_SPECIAL:
+        name = special_name_translation(tgt.obj.spe);
+        clear_special(&spe, tgt.obj.spe);
+        what = tgt.obj.spe;
+        break;
+      case ATT_BASE:
+        name = base_name_translation(base_by_number(tgt.obj.base));
+        BV_CLR(bases, tgt.obj.base);
+        what = tgt.obj.base + S_LAST;
+        break;
+      case ATT_ROAD:
+        name = road_name_translation(road_by_number(tgt.obj.road));
+        BV_CLR(roads, tgt.obj.road);
+        what = tgt.obj.road + S_LAST + game.control.num_base_types;
+        break;
+    }
 
     fc_assert(name != NULL);
 
@@ -2635,7 +2666,7 @@ static struct ADVANCED_DLG *pNationDlg = NULL;
 static struct SMALL_DLG *pHelpDlg = NULL;
   
 struct NAT {
-  unsigned char nation_style;      /* selected style */
+  unsigned char nation_city_style; /* selected city style */
   unsigned char selected_leader;   /* if not unique -> selected leader */
   Nation_type_id nation;           /* selected nation */
   bool leader_sex;                 /* selected leader sex */
@@ -2696,7 +2727,7 @@ static int races_dialog_ok_callback(struct widget *pStart_Button)
     dsend_packet_nation_select_req(&client.conn, player_number(races_player),
                                    pSetup->nation,
                                    pSetup->leader_sex, pStr,
-                                   pSetup->nation_style);
+                                   pSetup->nation_city_style);
     FC_FREE(pStr);
   
     popdown_races_dialog();  
@@ -2891,25 +2922,24 @@ static int races_dialog_cancel_callback(struct widget *pButton)
 }
 
 /**************************************************************************
-  User interacted with style widget.
+  User interacted with city style widget.
 **************************************************************************/
-static int style_callback(struct widget *pWidget)
+static int city_style_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
     struct NAT *pSetup = (struct NAT *)(pNationDlg->pEndWidgetList->data.ptr);
     struct widget *pGUI = get_widget_pointer_form_main_list(MAX_ID - 1000 -
-                                                            pSetup->nation_style);
-
+                                              pSetup->nation_city_style);
     set_wstate(pGUI, FC_WS_NORMAL);
     widget_redraw(pGUI);
     widget_mark_dirty(pGUI);
-
+    
     set_wstate(pWidget, FC_WS_DISABLED);
     widget_redraw(pWidget);
     widget_mark_dirty(pWidget);
-
-    pSetup->nation_style = MAX_ID - 1000 - pWidget->ID;
-
+    
+    pSetup->nation_city_style = MAX_ID - 1000 - pWidget->ID;
+    
     flush_dirty();
     pSellected_Widget = NULL;
   }
@@ -2962,11 +2992,11 @@ static int nation_button_callback(struct widget *pNationButton)
     pSetup->nation = MAX_ID - pNationButton->ID;
   
     change_nation_label();
-
-    enable(MAX_ID - 1000 - pSetup->nation_style);
-    pSetup->nation_style = style_number(style_of_nation(nation_by_number(pSetup->nation)));
-    disable(MAX_ID - 1000 - pSetup->nation_style);
-
+  
+    enable(MAX_ID - 1000 - pSetup->nation_city_style);
+    pSetup->nation_city_style = city_style_of_nation(nation_by_number(pSetup->nation));
+    disable(MAX_ID - 1000 - pSetup->nation_city_style);
+    
     select_random_leader(pSetup->nation);
     
     redraw_group(pNationDlg->pBeginWidgetList, pNationDlg->pEndWidgetList, 0);
@@ -3188,7 +3218,6 @@ void popup_races_dialog(struct player *pplayer)
   struct NAT *pSetup;
   SDL_Rect area;
   int i;
-  struct nation_type *pnat;
   struct widget *nationsets = NULL;
   int natinfo_y, natinfo_h;
 
@@ -3353,16 +3382,15 @@ void popup_races_dialog(struct player *pplayer)
 
   /* nation name */
   pSetup->nation = fc_rand(get_playable_nation_count());
-  pnat = nation_by_number(pSetup->nation);
-  pSetup->nation_style = style_number(style_of_nation(pnat));
-
-  copy_chars_to_string16(pStr, nation_plural_translation(pnat));
+  pSetup->nation_city_style = city_style_of_nation(nation_by_number(pSetup->nation));
+  
+  copy_chars_to_string16(pStr, nation_plural_translation(nation_by_number(pSetup->nation)));
   change_ptsize16(pStr, adj_font(24));
   pStr->render = 2;
   pStr->fgcol = *get_theme_color(COLOR_THEME_NATIONDLG_TEXT);
-
-  pTmp_Surf_zoomed = adj_surf(get_nation_flag_surface(pnat));
-
+  
+  pTmp_Surf_zoomed = adj_surf(get_nation_flag_surface(nation_by_number(pSetup->nation)));
+  
   pWidget = create_iconlabel(pTmp_Surf_zoomed, pWindow->dst, pStr,
                              (WF_ICON_ABOVE_TEXT|WF_ICON_CENTER|WF_FREE_GFX));
   if (nationsets == NULL) {
@@ -3413,28 +3441,51 @@ void popup_races_dialog(struct player *pplayer)
   /* ---------------------------------------------------------- */
   i = 0;
   zoom = DEFAULT_ZOOM * 1.0;
+  while (i < game.control.styles_count) {
+    if (!city_style_has_requirements(&city_styles[i])) {
+      pTmp_Surf = get_sample_city_surface(i);
 
-  len = 0;
-  styles_iterate(pstyle) {
-    i = basic_city_style_for_style(pstyle);
+      if (pTmp_Surf->w > 48) {
+        zoom = DEFAULT_ZOOM * (48.0 / pTmp_Surf->w);
+      }
+      
+      pTmp_Surf_zoomed = zoomSurface(get_sample_city_surface(i), zoom, zoom, 0);
 
-    pTmp_Surf = get_sample_city_surface(i);
-
-    if (pTmp_Surf->w > 48) {
-      zoom = DEFAULT_ZOOM * (48.0 / pTmp_Surf->w);
+      pWidget = create_icon2(pTmp_Surf_zoomed, pWindow->dst, WF_RESTORE_BACKGROUND);
+      pWidget->action = city_style_callback;
+      if (i != pSetup->nation_city_style) {
+        set_wstate(pWidget, FC_WS_NORMAL);
+      }
+      len = pWidget->size.w;
+      add_to_gui_list(MAX_ID - 1000 - i, pWidget);
+      i++;
+      break;
     }
+    i++;
+  }
 
-    pTmp_Surf_zoomed = zoomSurface(get_sample_city_surface(i), zoom, zoom, 0);
+  len += adj_size(3);
+  zoom = DEFAULT_ZOOM * 1.0;
+  
+  for (; (i < game.control.styles_count && i < 64); i++) {
+    if (!city_style_has_requirements(&city_styles[i])) {
+      pTmp_Surf = get_sample_city_surface(i);
+      
+      if (pTmp_Surf->w > 48) {
+        zoom = DEFAULT_ZOOM * (48.0 / pTmp_Surf->w);
+      }
+      
+      pTmp_Surf_zoomed = zoomSurface(get_sample_city_surface(i), zoom, zoom, 0);
 
-    pWidget = create_icon2(pTmp_Surf_zoomed, pWindow->dst, WF_RESTORE_BACKGROUND);
-    pWidget->action = style_callback;
-    if (i != pSetup->nation_style) {
-      set_wstate(pWidget, FC_WS_NORMAL);
+      pWidget = create_icon2(pTmp_Surf_zoomed, pWindow->dst, WF_RESTORE_BACKGROUND);
+      pWidget->action = city_style_callback;
+      if (i != pSetup->nation_city_style) {
+        set_wstate(pWidget, FC_WS_NORMAL);
+      }
+      len += (pWidget->size.w + adj_size(3));
+      add_to_gui_list(MAX_ID - 1000 - i, pWidget);
     }
-    len += pWidget->size.w;
-    add_to_gui_list(MAX_ID - 1000 - i, pWidget);
-  } styles_iterate_end;
-
+  }
   pLast_City_Style = pWidget;
   /* ---------------------------------------------------------- */
   
@@ -3554,17 +3605,19 @@ void popup_races_dialog(struct player *pplayer)
   pBuf = pBuf->prev;
   pBuf->size.x = area.x + area.w / 2 + (area.w/2 - pBuf->size.w) / 2;
   pBuf->size.y = pBuf->next->size.y + pBuf->next->size.h + adj_size(20);
-
-  /* First Style Button */
+  
+  /* First City Style Button */
   pBuf = pBuf->prev;
   pBuf->size.x = area.x + area.w / 2 + (area.w/2 - len) / 2 - adj_size(20);
   pBuf->size.y = pBuf->next->size.y + pBuf->next->size.h + adj_size(20);
-
-  /* Rest Style Buttons */
-  while (pBuf != pLast_City_Style) {
-    pBuf = pBuf->prev;
-    pBuf->size.x = pBuf->next->size.x + pBuf->next->size.w + adj_size(3);
-    pBuf->size.y = pBuf->next->size.y;
+  
+  /* Rest City Style Buttons */
+  if (pBuf != pLast_City_Style) {
+    do {
+      pBuf = pBuf->prev;
+      pBuf->size.x = pBuf->next->size.x + pBuf->next->size.w + adj_size(3);
+      pBuf->size.y = pBuf->next->size.y;
+    } while (pLast_City_Style != pBuf);
   }
   
   putline(pWindow->theme,
@@ -3678,9 +3731,9 @@ void races_toggles_set_sensitive()
       set_wstate(pSetup->pName_Edit, FC_WS_NORMAL);
     }
     change_nation_label();
-    enable(MAX_ID - 1000 - pSetup->nation_style);
-    pSetup->nation_style = style_number(style_of_nation(nation_by_number(pSetup->nation)));
-    disable(MAX_ID - 1000 - pSetup->nation_style);
+    enable(MAX_ID - 1000 - pSetup->nation_city_style);
+    pSetup->nation_city_style = city_style_of_nation(nation_by_number(pSetup->nation));
+    disable(MAX_ID - 1000 - pSetup->nation_city_style);
     select_random_leader(pSetup->nation);
   }
   redraw_group(pNationDlg->pBeginWidgetList, pNationDlg->pEndWidgetList, 0);
@@ -3700,14 +3753,6 @@ void popup_tileset_suggestion_dialog(void)
   user and load.
 *****************************************************************/
 void popup_soundset_suggestion_dialog(void)
-{
-}
-
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain muicset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_musicset_suggestion_dialog(void)
 {
 }
 
@@ -3735,14 +3780,4 @@ void show_tech_gained_dialog(Tech_type_id tech)
 void show_tileset_error(const char *msg)
 {
   /* PORTME */
-}
-
-/****************************************************************
-  Give a warning when user is about to edit scenario with manually
-  set properties.
-*****************************************************************/
-bool handmade_scenario_warning(void)
-{
-  /* Just tell the client common code to handle this. */
-  return FALSE;
 }

@@ -85,11 +85,12 @@ unit_item::unit_item(QWidget *parent, struct unit *punit,
   supported = supp;
   unit_pixmap = NULL;
   qunit = punit;
+
   if (punit) {
     unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
                                     tileset_tile_height(tileset) * 3 / 2);
     unit_pixmap->map_pixmap.fill(Qt::transparent);
-    put_unit(punit, unit_pixmap, 1.0, 0, 0);
+    put_unit(punit, unit_pixmap, 0, 0);
     if (supported) {
       put_unit_city_overlays(punit, unit_pixmap, 0,
                              tileset_tile_height(tileset),
@@ -345,7 +346,7 @@ void unit_item::enterEvent(QEvent *event)
     unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
                                     tileset_tile_height(tileset) * 3 / 2);
     unit_pixmap->map_pixmap.fill(QColor(200, 200, 200));
-    put_unit(qunit, unit_pixmap, 1.0, 0, 0);
+    put_unit(qunit, unit_pixmap, 0, 0);
     if (supported) {
       put_unit_city_overlays(qunit, unit_pixmap, 0,
                              tileset_tile_height(tileset),
@@ -367,7 +368,7 @@ void unit_item::leaveEvent(QEvent *event)
     unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
                                     tileset_tile_height(tileset) * 3 / 2);
     unit_pixmap->map_pixmap.fill(Qt::transparent);
-    put_unit(qunit, unit_pixmap, 1.0, 0, 0);
+    put_unit(qunit, unit_pixmap, 0, 0);
     if (supported) {
       put_unit_city_overlays(qunit, unit_pixmap, 0,
                              tileset_tile_height(tileset),
@@ -700,7 +701,7 @@ city_dialog::city_dialog(QWidget *parent): QDialog(parent)
     info_list << _("Food:") << _("Prod:") << _("Trade:") << _("Gold:")
               << _("Luxury:") << _("Science:") << _("Granary:")
               << _("Change in:") << _("Corruption:") << _("Waste:")
-              << _("Culture:") << _("Pollution:") << _("Plague Risk:");
+              << _("Pollution:") << _("Plague Risk:");
     info_nr = info_list.count();
     info_widget->setMinimumHeight(tileset_tile_height(tileset) * 3 +
                                   2 * fm.height() + 2 * scroll_height + 50);
@@ -1761,7 +1762,7 @@ void city_dialog::update_nation_table()
         break;
       case 2:
         item->setText(nation_adjective_for_player
-                      (player_slot_get_player(pslot)));
+                     (player_slot_get_player(pslot)));
         break;
       default:
         break;
@@ -1788,7 +1789,7 @@ void city_dialog::update_info_label()
 
   enum { FOOD = 0, SHIELD = 2, TRADE = 4, GOLD = 6, LUXURY = 8, SCIENCE = 10,
          GRANARY = 12, GROWTH = 14, CORRUPTION = 16, WASTE = 18,
-         CULTURE = 20, POLLUTION = 22, ILLNESS = 24
+         POLLUTION = 20, ILLNESS = 22
        };
 
   /* fill the buffers with the necessary info */
@@ -1821,10 +1822,8 @@ void city_dialog::update_info_label()
                               sizeof(buf[SCIENCE + 1]));
   get_city_dialog_output_text(pcity, O_LUXURY, buf[LUXURY + 1],
                               sizeof(buf[LUXURY + 1]));
-  get_city_dialog_culture_text(pcity, buf[CULTURE + 1],
-                               sizeof(buf[CULTURE + 1]));
-  get_city_dialog_pollution_text(pcity, buf[POLLUTION + 1],
-                                 sizeof(buf[POLLUTION + 1]));
+  get_city_dialog_pollution_text(pcity, buf[POLLUTION+1],
+                                 sizeof(buf[POLLUTION +1]));
   get_city_dialog_illness_text(pcity, buf[ILLNESS + 1],
                                sizeof(buf[ILLNESS + 1]));
 
@@ -1847,8 +1846,6 @@ void city_dialog::update_info_label()
   fc_snprintf(buf[CORRUPTION], sizeof(buf[CORRUPTION]), "%4d",
               pcity->waste[O_TRADE]);
   fc_snprintf(buf[WASTE], sizeof(buf[WASTE]), "%4d", pcity->waste[O_SHIELD]);
-  fc_snprintf(buf[CULTURE], sizeof(buf[CULTURE]), "%4d",
-              pcity->client.culture);
   fc_snprintf(buf[POLLUTION], sizeof(buf[POLLUTION]), "%4d",
               pcity->pollution);
 
@@ -1864,10 +1861,8 @@ void city_dialog::update_info_label()
   get_city_dialog_output_text(pcity, O_FOOD, buffer, sizeof(buffer));
   for (int i = 0; i < NUM_INFO_FIELDS; i++) {
     int j = 2 * i;
-
     qlt[i]->setText(QString(buf[2 * i]));
-
-    if (j != GROWTH && j != GRANARY && j != WASTE && j != CORRUPTION) {
+    if (j != GROWTH && j != GRANARY && j!= WASTE && j!= CORRUPTION){
       qlt[i]->setToolTip(QString(buf[2 * i + 1]));
     }
   }
@@ -2447,10 +2442,10 @@ void city_dialog::save_worklist()
   struct global_worklist *gw;
   bool ok;
   QString text = QInputDialog::getText(this,
-                                      _("Save current worklist"),
-                                      _("What should we name new worklist?"),
-                                      QLineEdit::Normal,
-                                      _("New worklist"), &ok);
+                                       _("Save current worklist"),
+                                       _("What should we name new worklist?"),
+                                       QLineEdit::Normal,
+                                       _("New worklist"), &ok);
 
   if (ok && !text.isEmpty()) {
     gw = global_worklist_new(text.toLocal8Bit().data());

@@ -14,10 +14,6 @@
 #ifndef FC__SETTINGS_H
 #define FC__SETTINGS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #include "shared.h"
 
 #include "game.h"
@@ -86,8 +82,6 @@ struct sset_val_name {
 #define SPECENUM_VALUE4 SSET_BITWISE
 #include "specenum_gen.h"
 
-enum setting_default_level { SETDEF_INTERNAL, SETDEF_RULESET, SETDEF_CHANGED };
-
 /* forward declaration */
 struct setting;
 
@@ -113,12 +107,6 @@ const char *setting_value_name(const struct setting *pset, bool pretty,
 const char *setting_default_name(const struct setting *pset, bool pretty,
                                  char *buf, size_t buf_len);
 
-void setting_set_to_default(struct setting *pset);
-
-int read_enum_value(const struct setting *pset);
-const char *setting_enum_secfile_str(secfile_data_t data, int val);
-const char *setting_bitwise_secfile_str(secfile_data_t data, int bit);
-
 /* Type SSET_BOOL setting functions. */
 bool setting_bool_set(struct setting *pset, const char *val,
                       struct connection *caller, char *reject_msg,
@@ -126,7 +114,6 @@ bool setting_bool_set(struct setting *pset, const char *val,
 bool setting_bool_validate(const struct setting *pset, const char *val,
                            struct connection *caller, char *reject_msg,
                            size_t reject_msg_len);
-bool setting_bool_get(struct setting *pset);
 
 /* Type SSET_INT setting functions. */
 int setting_int_min(const struct setting *pset);
@@ -137,7 +124,6 @@ bool setting_int_set(struct setting *pset, int val,
 bool setting_int_validate(const struct setting *pset, int val,
                           struct connection *caller, char *reject_msg,
                           size_t reject_msg_len);
-int setting_int_get(struct setting *pset);
 
 /* Type SSET_STRING setting functions. */
 bool setting_str_set(struct setting *pset, const char *val,
@@ -146,7 +132,6 @@ bool setting_str_set(struct setting *pset, const char *val,
 bool setting_str_validate(const struct setting *pset, const char *val,
                           struct connection *caller, char *reject_msg,
                           size_t reject_msg_len);
-char *setting_str_get(struct setting *pset);
 
 /* Type SSET_ENUM setting functions. */
 const char *setting_enum_val(const struct setting *pset, int val,
@@ -167,11 +152,10 @@ bool setting_bitwise_set(struct setting *pset, const char *val,
 bool setting_bitwise_validate(const struct setting *pset, const char *val,
                               struct connection *caller, char *reject_msg,
                               size_t reject_msg_len);
-int setting_bitwise_get(struct setting *pset);
 
 void setting_action(const struct setting *pset);
 
-bool setting_non_default(const struct setting *pset);
+bool setting_changed(const struct setting *pset);
 bool setting_locked(const struct setting *pset);
 void setting_lock_set(struct setting *pset, bool lock);
 
@@ -199,8 +183,7 @@ void setting_lock_set(struct setting *pset, bool lock);
 }
 
 void settings_game_start(void);
-void settings_game_save(struct section_file *file, const char *section,
-                        bool scenario);
+void settings_game_save(struct section_file *file, const char *section);
 void settings_game_load(struct section_file *file, const char *section);
 bool settings_game_reset(void);
 
@@ -219,13 +202,5 @@ void send_server_setting(struct conn_list *dest, const struct setting *pset);
 void send_server_settings(struct conn_list *dest);
 void send_server_hack_level_settings(struct conn_list *dest);
 void send_server_setting_control(struct connection *pconn);
-
-void setting_changed(struct setting *pset);
-enum setting_default_level setting_get_setdef(struct setting *pset);
-void settings_consider_all_changed(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif				/* FC__SETTINGS_H */

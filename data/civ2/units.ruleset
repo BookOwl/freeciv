@@ -11,8 +11,7 @@
 
 [datafile]
 description="Civ2 unit_type data for Freeciv (approximate)"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom unit type flags. There can be up to 16 of these.
@@ -26,8 +25,6 @@ flags =
     _("AirAttacker"), _("Very bad at attacking AEGIS.")
     _("Horse"), _("Attack value halved when attacking Pikemen.")
     _("Helicopter"), _("Defends very badly against Fighters.")
-    _("TradeRoute"), _("Can establish trade routes (must travel to target city).")
-    _("HelpWonder"), _("Can help build wonders (adding its full shield cost).")
   }
 
 [veteran_system]
@@ -70,6 +67,12 @@ veteran_move_bonus = 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
+; move_type     = Where unit moves; "Land", "Sea", or "Both".
+;                 This is optional field. If it's not
+;                 given, move type is automatically determined from native
+;                 terrains. You need to set it only if you want to set move
+;                 type "Both" for unit that has no native Land terrains or
+;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects (whole movement points)
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or native base
 ; non_native_def_pct = Defense power percentage applying when defending on
@@ -95,8 +98,7 @@ veteran_move_bonus = 0, 0
 ; "CollectRansom" = Unit can collect ransom when killing lone barbarian leader
 ; "ZOC"           = Unit is subject to ZOC rules. Unit type flag "IgZOC" can
 ;                   override this
-; "CanFortify"    = Unit can fortify at land tiles. Unit type flag
-;                   "Cant_Fortify" can override this
+; "CanFortify"    = Unit can fortify at land tiles
 ; "CanPillage"    = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
@@ -110,7 +112,6 @@ veteran_move_bonus = 0, 0
 ; "KillCitizen"       = Upon successful attack against a city, unit kills one
 ;                       citizen. The effect "Unit_No_Lose_Pop" and the server
 ;                       setting 'killcitizen' can disable this.
-; "Airliftable"       = Unit may be airlifted
 ;
 ; */ <-- avoid gettext warnings
 
@@ -129,7 +130,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
                 "CollectRansom", "ZOC", "CanFortify", "CanPillage",
-                "TerrainDefense", "KillCitizen", "Airliftable"
+                "TerrainDefense", "KillCitizen"
 
 [unitclass_sea]
 ; /* TRANS: Unit class: used adjectivally */
@@ -284,7 +285,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 1
 uk_gold       = 0
-flags         = "Settlers", "Cant_Fortify", "NonMil", "Airbase", "AddToCity", "Cities", "NoVeteran"
+flags         = "Settlers", "NonMil", "Airbase", "AddToCity", "Cities", "NoVeteran"
 roles         = "Settlers", "Cities"
 helptext      = _("\
 Settlers are one of the key units in the game, as they are your main \
@@ -345,7 +346,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 1
 uk_gold       = 0
-flags         = "Settlers", "Cant_Fortify", "NonMil", "Transform", "Airbase", "AddToCity", "Cities", "NoVeteran"
+flags         = "Settlers", "NonMil", "Transform", "Airbase", "AddToCity", "Cities", "NoVeteran"
 roles         = "Settlers", "Cities"
 helptext      = _("\
 Engineers are similar to Settlers, but they work twice as fast and\
@@ -1184,12 +1185,11 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = ""
+flags         = "IgWall"
 roles         = "AttackStrong"
 helptext      = _("\
 Howitzers are upgraded artillery with improved\
  defensive as well as offensive capabilities.\
- They can shoot over city walls, ignoring their effect.\
 ")
 
 [unit_fighter]

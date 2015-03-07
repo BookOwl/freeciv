@@ -26,13 +26,7 @@ extern "C" {
 #include <sys/time.h>
 #endif
 
-#ifdef FREECIV_JSON_CONNECTION
-#include <jansson.h>
-#endif  /* FREECIV_JSON_CONNECTION */
-
-#ifndef FREECIV_JSON_CONNECTION
 #define USE_COMPRESSION
-#endif  /* FREECIV_JSON_CONNECTION */
 
 /**************************************************************************
   The connection struct and related stuff.
@@ -47,10 +41,9 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 
-struct conn_pattern_list;
 struct genhash;
-struct packet_handlers;
 struct timer_list;
+struct conn_pattern_list;
 
 /* Used in the network protocol. */
 #define MAX_LEN_PACKET   4096
@@ -157,12 +150,9 @@ struct connection {
   struct socket_packet_buffer *buffer;
   struct socket_packet_buffer *send_buffer;
   struct timer *last_write;
-#ifdef FREECIV_JSON_CONNECTION
-  json_t *json_packet;
-#endif /* FREECIV_JSON_CONNECTION */
 
   double ping_time;
-
+  
   struct conn_list *self;     /* list with this connection as single element */
   char username[MAX_LEN_NAME];
   char addr[MAX_LEN_ADDR];
@@ -260,7 +250,7 @@ struct connection {
   struct {
     struct genhash **sent;
     struct genhash **received;
-    const struct packet_handlers *handlers;
+    int *variant;
   } phs;
 
 #ifdef USE_COMPRESSION
@@ -299,7 +289,6 @@ struct connection *conn_by_number(int id);
 struct socket_packet_buffer *new_socket_packet_buffer(void);
 void connection_common_init(struct connection *pconn);
 void connection_common_close(struct connection *pconn);
-void conn_set_capability(struct connection *pconn, const char *capability);
 void free_compression_queue(struct connection *pconn);
 void conn_reset_delta_state(struct connection *pconn);
 

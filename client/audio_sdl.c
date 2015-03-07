@@ -17,9 +17,8 @@
 
 #include <string.h>
 
-/* SDL */
-#include <SDL.h>
-#include <SDL_mixer.h>
+#include "SDL.h"
+#include "SDL_mixer.h"
 
 /* utility */
 #include "log.h"
@@ -46,31 +45,31 @@ const size_t buf_size = 1024;
 
 static Mix_Music *mus = NULL;
 static struct sample samples[MIX_CHANNELS];
-static double sdl_audio_volume;
+static double my_volume;
 
 /**************************************************************************
   Set the volume.
 **************************************************************************/
-static void sdl_audio_set_volume(double volume)
+static void my_set_volume(double volume)
 {
   Mix_VolumeMusic(volume * MIX_MAX_VOLUME);
   Mix_Volume(-1, volume * MIX_MAX_VOLUME);
-  sdl_audio_volume = volume;
+  my_volume = volume;
 }
 
 /**************************************************************************
   Get the volume.
 **************************************************************************/
-static double sdl_audio_get_volume(void)
+static double my_get_volume(void)
 {
-  return sdl_audio_volume;
+  return my_volume;
 }
 
 /**************************************************************************
   Play sound
 **************************************************************************/
-static bool sdl_audio_play(const char *const tag, const char *const fullpath,
-                           bool repeat, audio_finished_callback cb)
+static bool my_play(const char *const tag, const char *const fullpath,
+		    bool repeat)
 {
   int i, j;
   Mix_Chunk *wave = NULL;
@@ -90,14 +89,9 @@ static bool sdl_audio_play(const char *const tag, const char *const fullpath,
       log_error("Can't open file \"%s\"", fullpath);
     }
 
-    if (cb == NULL) {
-      Mix_PlayMusic(mus, -1);	/* -1 means loop forever */
-    } else {
-      Mix_PlayMusic(mus, 0);
-      Mix_HookMusicFinished(cb);
-    }
+    Mix_PlayMusic(mus, -1);	/* -1 means loop forever */
     log_verbose("Playing file \"%s\" on music channel", fullpath);
-    /* in case we did a sdl_audio_stop() recently; add volume controls later */
+    /* in case we did a my_stop() recently; add volume controls later */
     Mix_VolumeMusic(MIX_MAX_VOLUME);
 
   } else {
@@ -143,7 +137,7 @@ static bool sdl_audio_play(const char *const tag, const char *const fullpath,
 /**************************************************************************
   Stop music
 **************************************************************************/
-static void sdl_audio_stop(void)
+static void my_stop(void)
 {
   /* fade out over 2 sec */
   Mix_FadeOutMusic(2000);
@@ -154,7 +148,7 @@ static void sdl_audio_stop(void)
   WARNING: If a channel is looping, it will NEVER exit! Always call
   music_stop() first!
 **************************************************************************/
-static void sdl_audio_wait(void)
+static void my_wait(void)
 {
   while (Mix_Playing(-1) != 0) {
     SDL_Delay(100);
@@ -194,12 +188,12 @@ static int init_sdl_audio(void)
 /**************************************************************************
   Clean up.
 **************************************************************************/
-static void sdl_audio_shutdown(void)
+static void my_shutdown(void)
 {
   int i;
 
-  sdl_audio_stop();
-  sdl_audio_wait();
+  my_stop();
+  my_wait();
 
   /* remove all buffers */
   for (i = 0; i < MIX_CHANNELS; i++) {
@@ -217,7 +211,7 @@ static void sdl_audio_shutdown(void)
 /**************************************************************************
   Initialize.
 **************************************************************************/
-static bool sdl_audio_init(void)
+static bool my_init(void)
 {
   /* Initialize variables */
   const int audio_rate = MIX_DEFAULT_FREQUENCY;
@@ -241,7 +235,7 @@ static bool sdl_audio_init(void)
     samples[i].wave = NULL;
   }
   /* sanity check, for now; add volume controls later */
-  sdl_audio_set_volume(sdl_audio_volume);
+  my_set_volume(my_volume);
   return TRUE;
 }
 
@@ -255,13 +249,13 @@ void audio_sdl_init(void)
 
   sz_strlcpy(self.name, "sdl");
   sz_strlcpy(self.descr, "Simple DirectMedia Library (SDL) mixer plugin");
-  self.init = sdl_audio_init;
-  self.shutdown = sdl_audio_shutdown;
-  self.stop = sdl_audio_stop;
-  self.wait = sdl_audio_wait;
-  self.play = sdl_audio_play;
-  self.set_volume = sdl_audio_set_volume;
-  self.get_volume = sdl_audio_get_volume;
+  self.init = my_init;
+  self.shutdown = my_shutdown;
+  self.stop = my_stop;
+  self.wait = my_wait;
+  self.play = my_play;
+  self.set_volume = my_set_volume;
+  self.get_volume = my_get_volume;
   audio_add_plugin(&self);
-  sdl_audio_volume = 1.0;
+  my_volume = 1.0;
 }

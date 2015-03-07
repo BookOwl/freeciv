@@ -22,8 +22,7 @@
 #ifndef FC__GUI_TILESPEC_H
 #define FC__GUI_TILESPEC_H
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 #include "tilespec.h"
 
@@ -182,8 +181,11 @@ struct City_Icon {
   SDL_Surface *pFemale_Unhappy;
   SDL_Surface *pMale_Angry;
   SDL_Surface *pFemale_Angry;
+	
+  SDL_Surface *pSpec_Lux; /* Elvis */
+  SDL_Surface *pSpec_Tax; /* TaxMan */
+  SDL_Surface *pSpec_Sci; /* Scientist */
 
-  SDL_Surface *specialists[SP_MAX];
 };
 
 extern struct Theme *pTheme;

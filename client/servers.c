@@ -96,7 +96,7 @@ struct server_scan {
     fc_mutex mutex;
 
     const char *urlpath;
-    struct netfile_write_cb_data mem;
+    FILE *fp; /* temp file */
   } meta;
 };
 
@@ -220,7 +220,7 @@ static bool meta_read_response(struct server_scan *scan)
   char str[4096];
   struct server_list *srvrs;
 
-  f = fz_from_memory(scan->meta.mem.mem, scan->meta.mem.size, TRUE);
+  f = fz_from_stream(scan->meta.fp);
   if (NULL == f) {
     fc_snprintf(str, sizeof(str),
                 _("Failed to read the metaserver data from %s."),
@@ -236,8 +236,8 @@ static bool meta_read_response(struct server_scan *scan)
   scan->srvrs.servers = srvrs;
   fc_release_mutex(&scan->srvrs.mutex);
 
-  /* 'f' (hence 'meta.mem.mem') was closed in parse_metaserver_data(). */
-  scan->meta.mem.mem = NULL;
+  /* 'f' (hence 'meta.fp') was closed in parse_metaserver_data(). */
+  scan->meta.fp = NULL;
 
   if (NULL == srvrs) {
     fc_snprintf(str, sizeof(str),
@@ -259,22 +259,45 @@ static void metaserver_scan(void *arg)
 {
   struct server_scan *scan = arg;
 
-  if (!begin_metaserver_scan(scan)) {
-    fc_allocate_mutex(&scan->meta.mutex);
-    scan->meta.status = SCAN_STATUS_ERROR;
-  } else {
-    if (!meta_read_response(scan)) {
-      fc_allocate_mutex(&scan->meta.mutex);
-      scan->meta.status = SCAN_STATUS_ERROR;
-    } else {
-      fc_allocate_mutex(&scan->meta.mutex);
-      if (scan->meta.status == SCAN_STATUS_WAITING) {
-        scan->meta.status = SCAN_STATUS_DONE;
-      }
+  if (!scan->meta.fp) {
+#ifdef WIN32_NATIVE
+    char filename[MAX_PATH];
+
+    GetTempPath(sizeof(filename), filename);
+    cat_snprintf(filename, sizeof(filename), "fctmp%d", fc_rand(1000));
+
+    scan->meta.fp = fc_fopen(filename, "w+b");
+#else
+    scan->meta.fp = tmpfile();
+#endif /* WIN32_NATIVE */
+
+    if (!scan->meta.fp) {
+      scan->error_func(scan, _("Could not open temp file."));
     }
   }
 
-  fc_release_mutex(&scan->meta.mutex);
+  if (scan->meta.fp) {
+
+    if (!begin_metaserver_scan(scan)) {
+      fc_allocate_mutex(&scan->meta.mutex);
+      scan->meta.status = SCAN_STATUS_ERROR;
+    } else {
+
+      rewind(scan->meta.fp);
+
+      if (!meta_read_response(scan)) {
+        fc_allocate_mutex(&scan->meta.mutex);
+        scan->meta.status = SCAN_STATUS_ERROR;
+      } else {
+        fc_allocate_mutex(&scan->meta.mutex);
+        if (scan->meta.status == SCAN_STATUS_WAITING) {
+          scan->meta.status = SCAN_STATUS_DONE;
+        }
+      }
+    }
+
+    fc_release_mutex(&scan->meta.mutex);
+  }
 }
 
 /****************************************************************************
@@ -291,7 +314,7 @@ static bool begin_metaserver_scan(struct server_scan *scan)
   post = netfile_start_post();
   netfile_add_form_str(post, "client_cap", our_capability);
 
-  if (!netfile_send_post(metaserver, post, NULL, &scan->meta.mem, NULL)) {
+  if (!netfile_send_post(metaserver, post, scan->meta.fp, NULL)) {
     scan->error_func(scan, _("Error connecting to metaserver"));
     retval = FALSE;
   }
@@ -345,7 +368,7 @@ static void delete_server_list(struct server_list *server_list)
 static bool begin_lanserver_scan(struct server_scan *scan)
 {
   union fc_sockaddr addr;
-  struct raw_data_out dout;
+  struct data_out dout;
   int sock, opt = 1;
 #ifndef HAVE_WINSOCK
   unsigned char buffer[MAX_LEN_PACKET];
@@ -389,15 +412,21 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   group = get_multicast_group(announce == ANNOUNCE_IPV6);
   memset(&addr, 0, sizeof(addr));
 
-#ifdef IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
+  if (family == AF_INET) {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &addr.saddr_in4.sin_addr);
+#else  /* HAVE_INET_ATON */
+    addr.saddr_in4.sin_addr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (family == AF_INET6) {
     addr.saddr.sa_family = AF_INET6;
     inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else
-#endif /* IPv6 Support */
-  if (family == AF_INET) {
-    fc_inet_aton(group, &addr.saddr_in4.sin_addr, FALSE);
+  } else if (family == AF_INET) {
+    inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
+#endif /* IPv6 support */
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
   } else {
@@ -427,7 +456,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
 
   dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8_raw(&dout, SERVER_LAN_VERSION);
+  dio_put_uint8(&dout, SERVER_LAN_VERSION);
   size = dio_output_used(&dout);
  
 
@@ -446,13 +475,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
   /* Create a socket for listening for server packets. */
   if ((scan->sock = socket(family, SOCK_DGRAM, 0)) < 0) {
-    char errstr[2048];
-
-    fc_snprintf(errstr, sizeof(errstr),
-                _("Opening socket to listen LAN announcements failed:\n%s"),
-                fc_strerror(fc_get_errno()));
-    scan->error_func(scan, errstr);
-
+    scan->error_func(scan, fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
@@ -486,45 +509,34 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
 
   if (bind(scan->sock, &addr.saddr, sockaddr_size(&addr)) < 0) {
-    char errstr[2048];
-
-    fc_snprintf(errstr, sizeof(errstr),
-                _("Binding socket to listen LAN announcements failed:\n%s"),
-                fc_strerror(fc_get_errno()));
-    scan->error_func(scan, errstr);
-
+    scan->error_func(scan, fc_strerror(fc_get_errno()));
     return FALSE;
   }
 
-#ifdef IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
+  {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &mreq4.imr_multiaddr);
+#else  /* HAVE_INET_ATON */
+    mreq4.imr_multiaddr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (family == AF_INET6) {
     inet_pton(AF_INET6, group, &mreq6.ipv6mr_multiaddr.s6_addr);
     mreq6.ipv6mr_interface = 0; /* TODO: Interface selection */
 
     if (setsockopt(scan->sock, IPPROTO_IPV6, FC_IPV6_ADD_MEMBERSHIP,
                    (const char*)&mreq6, sizeof(mreq6)) < 0) {
-      char errstr[2048];
-
-      fc_snprintf(errstr, sizeof(errstr),
-                  _("Adding membership for IPv6 LAN announcement group failed:\n%s"),
-                fc_strerror(fc_get_errno()));
-      scan->error_func(scan, errstr);
+      scan->error_func(scan, fc_strerror(fc_get_errno()));
     }
-  } else
+  } else {
+    inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
 #endif /* IPv6 support */
-  {
-    fc_inet_aton(group, &mreq4.imr_multiaddr, FALSE);
     mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
 
     if (setsockopt(scan->sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
                    (const char*)&mreq4, sizeof(mreq4)) < 0) {
-      char errstr[2048];
-
-      fc_snprintf(errstr, sizeof(errstr),
-                  _("Adding membership for IPv4 LAN announcement group failed:\n%s"),
-                  fc_strerror(fc_get_errno()));
-      scan->error_func(scan, errstr);
-
+      scan->error_func(scan, fc_strerror(fc_get_errno()));
       return FALSE;
     }
   }
@@ -572,18 +584,18 @@ get_lan_server_list(struct server_scan *scan)
       break;
     }
 
-    dio_get_uint8_raw(&din, &type);
+    dio_get_uint8(&din, &type);
     if (type != SERVER_LAN_VERSION) {
       continue;
     }
-    dio_get_string_raw(&din, servername, sizeof(servername));
-    dio_get_string_raw(&din, portstr, sizeof(portstr));
+    dio_get_string(&din, servername, sizeof(servername));
+    dio_get_string(&din, portstr, sizeof(portstr));
     port = atoi(portstr);
-    dio_get_string_raw(&din, version, sizeof(version));
-    dio_get_string_raw(&din, status, sizeof(status));
-    dio_get_string_raw(&din, players, sizeof(players));
-    dio_get_string_raw(&din, humans, sizeof(humans));
-    dio_get_string_raw(&din, message, sizeof(message));
+    dio_get_string(&din, version, sizeof(version));
+    dio_get_string(&din, status, sizeof(status));
+    dio_get_string(&din, players, sizeof(players));
+    dio_get_string(&din, humans, sizeof(humans));
+    dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
       bool nameinfo = FALSE;
@@ -799,7 +811,7 @@ void server_scan_finish(struct server_scan *scan)
   }
 
   if (scan->type == SERVER_SCAN_GLOBAL) {
-    /* Signal metaserver scan thread to stop */
+    /* Signal metserver scan thread to stop */
     fc_allocate_mutex(&scan->meta.mutex);
     scan->meta.status = SCAN_STATUS_ABORT;
     fc_release_mutex(&scan->meta.mutex);
@@ -823,9 +835,9 @@ void server_scan_finish(struct server_scan *scan)
       fc_release_mutex(&scan->srvrs.mutex);
     }
 
-    if (scan->meta.mem.mem) {
-      FC_FREE(scan->meta.mem.mem);
-      scan->meta.mem.mem = NULL;
+    if (scan->meta.fp) {
+      fclose(scan->meta.fp);
+      scan->meta.fp = NULL;
     }
   } else {
     if (scan->sock >= 0) {

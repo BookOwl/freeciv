@@ -32,7 +32,7 @@ ruler_titles = {
 
 flag="sicily"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

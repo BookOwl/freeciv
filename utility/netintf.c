@@ -257,20 +257,20 @@ void fc_nonblock(int sockfd)
 /***************************************************************************
   Write information about socaddr to debug log.
 ***************************************************************************/
-void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
+void sockaddr_debug(union fc_sockaddr *addr)
 {
 #ifdef IPV6_SUPPORT
   char buf[INET6_ADDRSTRLEN] = "Unknown";
 
   if (addr->saddr.sa_family == AF_INET6) { 
     inet_ntop(AF_INET6, &addr->saddr_in6.sin6_addr, buf, INET6_ADDRSTRLEN);
-    log_base(lvl, "Host: %s, Port: %d (IPv6)",
-             buf, ntohs(addr->saddr_in6.sin6_port));
+    log_debug("Host: %s, Port: %d (IPv6)",
+              buf, ntohs(addr->saddr_in6.sin6_port));
     return;
   } else if (addr->saddr.sa_family == AF_INET) {
     inet_ntop(AF_INET, &addr->saddr_in4.sin_addr, buf, INET_ADDRSTRLEN);
-    log_base(lvl, "Host: %s, Port: %d (IPv4)",
-             buf, ntohs(addr->saddr_in4.sin_port));
+    log_debug("Host: %s, Port: %d (IPv4)",
+              buf, ntohs(addr->saddr_in4.sin_port));
     return;
   }
 #else  /* IPv6 support */
@@ -279,8 +279,8 @@ void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
 
     buf = inet_ntoa(addr->saddr_in4.sin_addr);
 
-    log_base(lvl, "Host: %s, Port: %d",
-             buf, ntohs(addr->saddr_in4.sin_port));
+    log_debug("Host: %s, Port: %d",
+	      buf, ntohs(addr->saddr_in4.sin_port));
 
     return;
   }
@@ -427,12 +427,19 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
     return addrs;
   }
 
-  if (fc_inet_aton(name, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+  if (inet_aton(name, &sock4->sin_addr) != 0) {
     fc_sockaddr_list_append(addrs, result);
 
     return addrs;
   }
+#else  /* HAVE_INET_ATON */
+  if ((sock4->sin_addr.s_addr = inet_addr(name)) != INADDR_NONE) {
+    fc_sockaddr_list_append(addrs, result);
 
+    return addrs;
+  }
+#endif /* HAVE_INET_ATON */
   hp = gethostbyname(name);
   if (!hp || hp->h_addrtype != AF_INET) {
     FC_FREE(result);
@@ -447,34 +454,6 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
 
 #endif /* !HAVE_GETADDRINFO */
 
-}
-
-/*************************************************************************
-  Convert internet IPv4 host address to binary form and store it to inp.
-  Return FALSE on failure if possible, i.e., FALSE is guarantee that it
-  failed but TRUE is not guarantee that it succeeded.
-*************************************************************************/
-bool fc_inet_aton(const char *cp, struct in_addr *inp, bool addr_none_ok)
-{
-#ifdef IPV6_SUPPORT
-  /* Use inet_pton() */
-  if (!inet_pton(AF_INET, cp, &inp->s_addr)) {
-    return FALSE;
-  }
-#else  /* IPv6 Support */
-#ifdef HAVE_INET_ATON
-  if (!inet_aton(cp, inp)) {
-    return FALSE;
-  }
-#else  /* HAVE_INET_ATON */
-  inp->s_addr = inet_addr(cp);
-  if (!addr_none_ok && inp->s_addr == INADDR_NONE) {
-    return FALSE;
-  }
-#endif /* HAVE_INET_ATON */
-#endif /* IPv6 Support */
-
-  return TRUE;
 }
 
 /*************************************************************************
@@ -624,7 +603,12 @@ int find_next_free_port(int starting_port, enum fc_addr_family family,
     sock4->sin_family = AF_INET;
     sock4->sin_port = htons(port);
     if (net_interface != NULL) {
-      if (!fc_inet_aton(net_interface, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+      if (inet_aton(net_interface, &sock4->sin_addr) == 0) {
+#else /* HAVE_INET_ATON */
+      sock4->sin_addr.s_addr = inet_addr(net_interface);
+      if (sock4->sin_addr.s_addr == INADDR_NONE) {
+#endif /* HAVE_INET_ATON */
         struct hostent *hp;
 
         hp = gethostbyname(net_interface);

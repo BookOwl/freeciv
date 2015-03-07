@@ -159,8 +159,7 @@ static void update_players_menu(void)
       default:
 	gtk_widget_set_sensitive(players_war_command,
 				 can_client_issue_orders()
-                                 && !players_on_same_team(player_by_number(plrno),
-                                                          client.conn.playing));
+				 && player_by_number(plrno) != client.conn.playing);
       }
     } else {
       gtk_widget_set_sensitive(players_war_command, FALSE);
@@ -168,8 +167,7 @@ static void update_players_menu(void)
 
     gtk_widget_set_sensitive(players_vision_command,
 			     can_client_issue_orders()
-			     && gives_shared_vision(client.conn.playing, plr)
-                             && !players_on_same_team(client.conn.playing, plr));
+			     && gives_shared_vision(client.conn.playing, plr));
 
     gtk_widget_set_sensitive(players_meet_command, can_meet_with_player(plr));
     gtk_widget_set_sensitive(players_int_command, can_intel_with_player(plr));
@@ -306,7 +304,7 @@ static void toggle_view(GtkCheckMenuItem* item, gpointer data)
 *************************************************************************/
 static void toggle_dead_players(GtkCheckMenuItem* item, gpointer data)
 {
-  options.player_dlg_show_dead_players = 
+  player_dlg_show_dead_players = 
     gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item));
   real_players_dialog_update();
 }
@@ -392,10 +390,10 @@ static GtkWidget* create_show_menu(void)
   
   item = gtk_check_menu_item_new_with_label(Q_("?show:Dead Players"));
   gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),
-                                 options.player_dlg_show_dead_players);
+                                 player_dlg_show_dead_players);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   g_signal_connect(item, "toggled", G_CALLBACK(toggle_dead_players), NULL);
-
+  
   return menu;
 }
 
@@ -545,9 +543,9 @@ void create_players_dialog(void)
   sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_translated_name(level);
+      const char *level_name = ai_level_name(level);
 
       item = gtk_menu_item_new_with_label(level_name);
       g_signal_connect(item, "activate",
@@ -688,7 +686,7 @@ static void fill_row(GtkListStore *store, GtkTreeIter *it,
 **************************************************************************/
 static bool player_should_be_shown(const struct player *pplayer)
 {
-  return NULL != pplayer && (options.player_dlg_show_dead_players
+  return NULL != pplayer && (player_dlg_show_dead_players
                              || pplayer->is_alive)
          && (!is_barbarian(pplayer));
 }

@@ -2,8 +2,7 @@
 
 [datafile]
 description="Alien World cities data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -94,3 +93,51 @@ nationality   = TRUE            ; account for the nationality of the citizens
 convert_speed = 50              ; base probability 50/1000 -> once every 20 turns
 partisans_pct = 0               ; percentage of own nationality to inspire partisans
                                 ; if 0, original city owner information is used instead
+
+; /* <-- avoid gettext warnings
+;
+; City styles define the way cities are drawn
+;
+; name          = translatable name as seen by user
+; rule_name     = (optional) name for savegames, rulesets etc; if not
+;                 present, 'name' is used. Since the name used in savegames
+;                 must not change, use this when renaming a city style after a
+;                 ruleset has been released.
+; graphic     = group of tiles to use, see cities spec for
+;               more info on city tiles
+; oceanic_graphic      = group of tiles to use for oceanic cities. If this
+;                        is omitted, same graphics as for land cities is used
+; citizens_graphic     = group of citizens tiles to use, see citizens/small
+;                        spec for more info on citizens tiles
+; reqs        = requirements for this city style (see README.effects)
+; replaced_by = which style replaced this one
+;
+; */ <-- avoid gettext warnings
+
+[citystyle_human]
+name        = _("?citystyle:Human")
+graphic     = "city.human"
+graphic_alt = "city.classical"
+oceanic_graphic      = "city.ocean"
+oceanic_graphic_alt  = "city.classical"
+citizens_graphic     = "human"
+citizens_graphic_alt = "ancient"
+reqs =
+   { "type", "name", "range"
+; No requirements
+   }
+replaced_by = "Dual"
+
+[citystyle_dual]
+name        = _("?citystyle:Dual")
+graphic     = "city.dual"
+graphic_alt = "city.modern"
+oceanic_graphic      = "city.ocean"
+oceanic_graphic_alt  = "city.modern"
+citizens_graphic     = "dual"
+citizens_graphic_alt = "modern"
+reqs =
+   { "type", "name", "range"
+     "Tech", "Alien Rights", "Player"
+   }
+replaced_by = "-"
