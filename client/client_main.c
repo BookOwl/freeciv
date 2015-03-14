@@ -51,7 +51,6 @@
 #include "netintf.h"
 #include "packets.h"
 #include "player.h"
-#include "research.h"
 #include "version.h"
 
 /* client/include */
@@ -82,9 +81,9 @@
 #include "control.h" 
 #include "editor.h"
 #include "global_worklist.h"
+#include "ggzclient.h"
 #include "helpdata.h"           /* boot_help_texts() */
 #include "mapview_common.h"
-#include "music.h"
 #include "options.h"
 #include "overview_common.h"
 #include "packhand.h"
@@ -129,7 +128,6 @@ char *savefile = NULL;
 static char tileset_name[512] = "\0";
 char sound_plugin_name[512] = "\0";
 char sound_set_name[512] = "\0";
-char music_set_name[512] = "\0";
 char server_host[512] = "\0";
 char user_name[512] = "\0";
 char password[MAX_LEN_PASSWORD] = "\0";
@@ -137,6 +135,7 @@ char metaserver[512] = "\0";
 int  server_port = -1;
 bool auto_connect = FALSE; /* TRUE = skip "Connect to Freeciv Server" dialog */
 bool auto_spawn = FALSE; /* TRUE = skip main menu, start local server */
+bool in_ggz = FALSE;
 enum announce_type announce;
 
 struct civclient client;
@@ -150,10 +149,6 @@ bool waiting_for_end_turn = FALSE;
  * TRUE between receiving PACKET_END_TURN and PACKET_BEGIN_TURN
  */
 static bool server_busy = FALSE;
-
-#ifdef DEBUG
-bool hackless = FALSE;
-#endif
 
 /**************************************************************************
   Convert a text string from the internal to the data encoding, when it
@@ -212,20 +207,11 @@ static void charsets_init(void)
 }
 
 /**************************************************************************
- This is called at program exit in any emergency. This is registered
- as at_quick_exit() callback, so no destructor kind of actions here
-**************************************************************************/
-static void emergency_exit(void)
-{
-  client_kill_server(TRUE);
-}
-
-/**************************************************************************
  This is called at program exit.
 **************************************************************************/
 static void at_exit(void)
 {
-  emergency_exit();
+  client_kill_server(TRUE);
   fc_shutdown_network();
   update_queue_free();
   fc_destroy_ow_mutex();
@@ -269,7 +255,6 @@ static void client_game_free(void)
   free_help_texts();
   attribute_free();
   agents_free();
-  game.client.ruleset_init = FALSE;
   game_free();
   /* update_queue_init() is correct at this point. The queue is reset to
      a clean state which is also needed if the client is not connected to
@@ -319,20 +304,18 @@ int client_main(int argc, char *argv[])
 
   /* Load win32 post-crash debugger */
 #ifdef WIN32_NATIVE
-# ifndef FREECIV_NDEBUG
+# ifndef NDEBUG
   if (LoadLibrary("exchndl.dll") == NULL) {
-#  ifdef FREECIV_DEBUG
+#  ifdef DEBUG
     fprintf(stderr, "exchndl.dll could not be loaded, no crash debugger\n");
-#  endif /* FREECIV_DEBUG */
+#  endif /* DEBUG */
   }
-# endif /* FREECIV_NDEBUG */
+# endif /* NDEBUG */
 #endif /* WIN32_NATIVE */
 
   i_am_client(); /* Tell to libfreeciv that we are client */
 
   fc_interface_init_client();
-
-  game.client.ruleset_init = FALSE;
 
   /* Ensure that all AIs are initialized to unused state
    * Not using ai_type_iterate as it would stop at
@@ -373,36 +356,32 @@ int client_main(int argc, char *argv[])
                     "(IPv4/IPv6/none)"));
       cmdhelp_add(help, "a", "autoconnect",
                   _("Skip connect dialog"));
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       cmdhelp_add(help, "d",
                   /* TRANS: "debug" is exactly what user must type, do not translate. */
                   _("debug NUM"),
                   _("Set debug log level (%d to %d, or "
                     "%d:file1,min,max:...)"), LOG_FATAL, LOG_DEBUG,
                   LOG_DEBUG);
-#else  /* FREECIV_DEBUG */
+#else
       cmdhelp_add(help, "d",
                   /* TRANS: "debug" is exactly what user must type, do not translate. */
                   _("debug NUM"),
                   _("Set debug log level (%d to %d)"),
                   LOG_FATAL, LOG_VERBOSE);
-#endif /* FREECIV_DEBUG */
-#ifndef FREECIV_NDEBUG
+#endif /* DEBUG */
+#ifndef NDEBUG
       cmdhelp_add(help, "F",
                   /* TRANS: "Fatal" is exactly what user must type, do not translate. */
                   _("Fatal [SIGNAL]"),
                   _("Raise a signal on failed assertion"));
-#endif /* FREECIV_NDEBUG */
+#endif /* NDEBUG */
       cmdhelp_add(help, "f",
                   /* TRANS: "file" is exactly what user must type, do not translate. */
                   _("file FILE"),
                   _("Load saved game FILE"));
       cmdhelp_add(help, "h", "help",
                   _("Print a summary of the options"));
-#ifdef DEBUG
-      cmdhelp_add(help, "H", "Hackless",
-                  _("Do not request hack access to local, but not spawned, server"));
-#endif /* DEBUG */
       cmdhelp_add(help, "l",
                   /* TRANS: "log" is exactly what user must type, do not translate. */
                   _("log FILE"),
@@ -436,10 +415,6 @@ int client_main(int argc, char *argv[])
                   /* TRANS: "Sound" is exactly what user must type, do not translate. */
                   _("Sound FILE"),
                   _("Read sound tags from FILE"));
-      cmdhelp_add(help, "m",
-                  /* TRANS: "music" is exactly what user must type, do not translate. */
-                  _("music FILE"),
-                  _("Read music tags from FILE"));
       cmdhelp_add(help, "t",
                   /* TRANS: "tiles" is exactly what user must type, do not translate. */
                   _("tiles FILE"),
@@ -453,16 +428,12 @@ int client_main(int argc, char *argv[])
       cmdhelp_destroy(help);
 
       exit(EXIT_SUCCESS);
-    } else if (is_option("--version", argv[i])) {
+    } else if (is_option("--version",argv[i])) {
       fc_fprintf(stderr, "%s %s\n", freeciv_name_version(), client_string);
       exit(EXIT_SUCCESS);
-#ifdef FREECIV_DEBUG
-    } else if (is_option("--Hackless", argv[i])) {
-      hackless = TRUE;
-#endif /* FREECIV_DEBUG */
     } else if ((option = get_option_malloc("--log", argv, &i, argc))) {
       logfile = option; /* never free()d */
-#ifndef FREECIV_NDEBUG
+#ifndef NDEBUG
     } else if (is_option("--Fatal", argv[i])) {
       if (i + 1 >= argc || '-' == argv[i + 1][0]) {
         fatal_assertions = SIGABRT;
@@ -474,7 +445,7 @@ int client_main(int argc, char *argv[])
         fc_fprintf(stderr, _("Try using --help.\n"));
         exit(EXIT_FAILURE);
       }
-#endif /* FREECIV_NDEBUG */
+#endif /* NDEBUG */
     } else  if ((option = get_option_malloc("--read", argv, &i, argc))) {
       scriptfile = option; /* never free()d */
     } else if ((option = get_option_malloc("--file", argv, &i, argc))) {
@@ -488,9 +459,6 @@ int client_main(int argc, char *argv[])
       free(option);
     } else if ((option = get_option_malloc("--Sound", argv, &i, argc))) {
       sz_strlcpy(sound_set_name, option);
-      free(option);
-    } else if ((option = get_option_malloc("--music", argv, &i, argc))) {
-      sz_strlcpy(music_set_name, option);
       free(option);
     } else if ((option = get_option_malloc("--Plugin", argv, &i, argc))) {
       sz_strlcpy(sound_plugin_name, option);
@@ -564,15 +532,15 @@ int client_main(int argc, char *argv[])
 
   /* after log_init: */
 
-  (void)user_username(options.default_user_name, MAX_LEN_NAME);
-  if (!is_valid_username(options.default_user_name)) {
-    char buf[sizeof(options.default_user_name)];
+  (void)user_username(default_user_name, MAX_LEN_NAME);
+  if (!is_valid_username(default_user_name)) {
+    char buf[sizeof(default_user_name)];
 
-    fc_snprintf(buf, sizeof(buf), "_%s", options.default_user_name);
+    fc_snprintf(buf, sizeof(buf), "_%s", default_user_name);
     if (is_valid_username(buf)) {
-      sz_strlcpy(options.default_user_name, buf);
+      sz_strlcpy(default_user_name, buf);
     } else {
-      fc_snprintf(options.default_user_name, sizeof(options.default_user_name),
+      fc_snprintf(default_user_name, sizeof(default_user_name),
                   "player%d", fc_rand(10000));
     }
   }
@@ -591,7 +559,6 @@ int client_main(int argc, char *argv[])
 
   /* register exit handler */ 
   atexit(at_exit);
-  fc_at_quick_exit(emergency_exit);
 
   init_our_capability();
   init_player_dlg_common();
@@ -603,43 +570,34 @@ int client_main(int argc, char *argv[])
   script_client_init();
 
   if (tileset_name[0] == '\0') {
-    sz_strlcpy(tileset_name, options.default_tileset_name);
+    sz_strlcpy(tileset_name, default_tileset_name);
   }
-  if (sound_set_name[0] == '\0') {
-    sz_strlcpy(sound_set_name, options.default_sound_set_name);
-  }
-  if (music_set_name[0] == '\0') {
-    sz_strlcpy(music_set_name, options.default_music_set_name);
-  }
-  if (sound_plugin_name[0] == '\0') {
-    sz_strlcpy(sound_plugin_name, options.default_sound_plugin_name); 
-  }
-  if (server_host[0] == '\0') {
-    sz_strlcpy(server_host, options.default_server_host); 
-  }
-  if (user_name[0] == '\0') {
-    sz_strlcpy(user_name, options.default_user_name); 
-  }
+  if (sound_set_name[0] == '\0') 
+    sz_strlcpy(sound_set_name, default_sound_set_name); 
+  if (sound_plugin_name[0] == '\0')
+    sz_strlcpy(sound_plugin_name, default_sound_plugin_name); 
+  if (server_host[0] == '\0')
+    sz_strlcpy(server_host, default_server_host); 
+  if (user_name[0] == '\0')
+    sz_strlcpy(user_name, default_user_name); 
   if (metaserver[0] == '\0') {
     /* FIXME: Find a cleaner way to achieve this. */
     /* www.cazfi.net/freeciv/metaserver/ was default metaserver
      * over one release when meta.freeciv.org was unavailable. */
     const char *oldaddr = "http://www.cazfi.net/freeciv/metaserver/";
-    if (0 == strcmp(options.default_metaserver, oldaddr)) {
+    if (0 == strcmp(default_metaserver, oldaddr)) {
       log_normal(_("Updating old metaserver address \"%s\"."), oldaddr);
-      sz_strlcpy(options.default_metaserver, DEFAULT_METASERVER_OPTION);
+      sz_strlcpy(default_metaserver, DEFAULT_METASERVER_OPTION);
       log_normal(_("Default metaserver has been set to value \"%s\"."),
                  DEFAULT_METASERVER_OPTION);
     }
-    if (0 == strcmp(options.default_metaserver, DEFAULT_METASERVER_OPTION)) {
-      sz_strlcpy(metaserver, FREECIV_META_URL);
+    if (0 == strcmp(default_metaserver, DEFAULT_METASERVER_OPTION)) {
+      sz_strlcpy(metaserver, META_URL);
     } else {
-      sz_strlcpy(metaserver, options.default_metaserver);
+      sz_strlcpy(metaserver, default_metaserver);
     }
   }
-  if (server_port == -1) {
-    server_port = options.default_server_port;
-  }
+  if (server_port == -1) server_port = default_server_port;
 
   /* This seed is not saved anywhere; randoms in the client should
      have cosmetic effects only (eg city name suggestions).  --dwp */
@@ -649,8 +607,10 @@ int client_main(int argc, char *argv[])
 
   tilespec_try_read(tileset_name, user_tileset);
 
-  audio_real_init(sound_set_name, music_set_name, sound_plugin_name);
-  start_menu_music("music_menu", NULL);
+  audio_real_init(sound_set_name, sound_plugin_name);
+  audio_play_music("music_start", NULL);
+
+  ggz_initialize();
 
   editor_init();
 
@@ -675,7 +635,7 @@ void client_exit(void)
     client_remove_all_cli_conn();
   }
 
-  if (options.save_options_on_exit) {
+  if (save_options_on_exit) {
     options_save();
   }
   
@@ -696,7 +656,6 @@ void client_exit(void)
   conn_list_destroy(game.est_connections);
 
   registry_module_close();
-  free_libfreeciv();
   free_nls();
 
   backtrace_deinit();
@@ -812,10 +771,8 @@ void set_client_state(enum client_states newstate)
   }
 
   if (oldstate == C_S_RUNNING && newstate != C_S_PREPARING) {
-    stop_style_music();
-
     /* Back to menu */
-    start_menu_music("music_menu", NULL);
+    audio_play_music("music_start", NULL);
   }
 
   civclient_state = newstate;
@@ -843,7 +800,9 @@ void set_client_state(enum client_states newstate)
       }
     }
 
-    set_client_page(PAGE_MAIN);
+    if (!with_ggz) {
+      set_client_page(in_ggz ? PAGE_GGZ : PAGE_MAIN);
+    }
     break;
 
   case C_S_PREPARING:
@@ -872,14 +831,15 @@ void set_client_state(enum client_states newstate)
   case C_S_RUNNING:
     if (oldstate == C_S_PREPARING) {
       popdown_races_dialog();
-      stop_menu_music();     /* stop intro sound loop. */
+      audio_stop();     /* stop intro sound loop. */
     }
 
     init_city_report_game_data();
     options_dialogs_set();
     create_event(NULL, E_GAME_START, ftc_client, _("Game started."));
+    precalc_tech_data();
     if (pplayer) {
-      research_update(research_get(pplayer));
+      player_research_update(pplayer);
     }
     role_unit_precalcs();
     boot_help_texts(pplayer);   /* reboot with player */
@@ -901,10 +861,9 @@ void set_client_state(enum client_states newstate)
     unit_focus_update();
     update_unit_info_label(get_units_in_focus());
 
-    if (options.auto_center_each_turn) {
+    if (auto_center_each_turn) {
       center_on_something();
     }
-    start_style_music();
     break;
 
   case C_S_OVER:
@@ -925,8 +884,9 @@ void set_client_state(enum client_states newstate)
       /* From C_S_PREPARING. */
       init_city_report_game_data();
       options_dialogs_set();
+      precalc_tech_data();
       if (pplayer) {
-        research_update(research_get(pplayer));
+        player_research_update(pplayer);
       }
       role_unit_precalcs();
       boot_help_texts(pplayer);            /* reboot */
@@ -1239,7 +1199,7 @@ static void fc_interface_init_client(void)
 {
   struct functions *funcs = fc_interface_funcs();
 
-  funcs->destroy_extra = NULL;
+  funcs->destroy_base = NULL;
   funcs->player_tile_vision_get = client_map_is_known_and_seen;
   funcs->gui_color_free = color_free;
 

@@ -21,7 +21,7 @@
  * it is needed for sound to work as long as SDL-1.2 mixer is
  * being used. It defines "main" macro to rename our main() so that
  * it can install SDL's own. */
-#include <SDL.h>
+#include "SDL.h"
 #endif
 
 #include <stdio.h>
@@ -64,12 +64,13 @@
 #include "clinet.h"
 #include "control.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
 
 /* gui-xaw */
-#include "xaw_actions.h"
+#include "actions.h"
 #include "colors.h"
 #include "dialogs.h"
 #include "graphics.h"
@@ -246,7 +247,7 @@ static int myerr(Display *p, XErrorEvent *e)
   Print extra usage information, including one line help on each option,
   to stderr.
 **************************************************************************/
-static void print_usage(void)
+static void print_usage(const char *argv0)
 {
   /* add client-specific usage information here */
   fc_fprintf(stderr,
@@ -259,7 +260,7 @@ static void print_usage(void)
 }
 
 /**************************************************************************
-  Handle commandline options specific to this gui
+  Parse and enact any client-specific options.
 **************************************************************************/
 static void parse_options(int argc, char **argv)
 {
@@ -267,7 +268,7 @@ static void parse_options(int argc, char **argv)
 
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      print_usage();
+      print_usage(argv[0]);
       exit(EXIT_SUCCESS);
     } else {
       fc_fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
@@ -301,7 +302,7 @@ void ui_init(void)
 /****************************************************************************
   Extra initializers for client options.
 ****************************************************************************/
-void options_extra_init(void)
+void gui_options_extra_init(void)
 {
   /* Nothing to do. */
 }
@@ -868,6 +869,23 @@ void remove_net_input(void)
 }
 
 /**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
 ...
 **************************************************************************/
 void end_turn_callback(Widget w, XtPointer client_data, XtPointer call_data)
@@ -910,7 +928,7 @@ void set_unit_icon(int idx, struct unit *punit)
   if (punit) {
     struct canvas store = {XawPixcommPixmap(w)};
 
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
     xaw_expose_now(w);
   }
 }
@@ -1123,26 +1141,23 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void editgui_notify_object_created(int tag, int id)
 {}
 
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_leave_table(void)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_ensure_server(void)
+{}
+
+
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
 void gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
 }

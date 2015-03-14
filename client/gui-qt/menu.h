@@ -50,7 +50,6 @@ enum munit {
   PILLAGE,
   BUILD,
   ROAD,
-  FORTIFY,
   FORTRESS,
   AIRBASE,
   POLLUTION,
@@ -197,7 +196,6 @@ private slots:
 
   /*used by combat menu*/
   void slot_unit_fortify();
-  void slot_unit_fortress();
   void slot_unit_airbase();
   void slot_pillage();
   void slot_action();
@@ -239,7 +237,6 @@ private slots:
   void slot_show_research_tab();
   void slot_spaceship();
   void slot_demographics();
-  void slot_achievements();
   void slot_top_five();
   void slot_traveler();
   void slot_show_chat();

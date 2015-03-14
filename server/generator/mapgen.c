@@ -1623,13 +1623,13 @@ static void make_huts(int number)
     /* Add a hut.  But not on a polar area, on an ocean, or too close to
      * another hut. */
     if ((ptile = rand_map_pos_characteristic(WC_ALL, TT_NFROZEN, MC_NONE))) {
-      struct extra_type *phut = rand_extra_for_tile(ptile, EC_HUT);
-
-      number--;
-      if (phut != NULL) {
-        tile_add_extra(ptile, phut);
+      if (is_ocean_tile(ptile)) {
+	map_set_placed(ptile); /* not good for a hut */
+      } else {
+	number--;
+	tile_set_special(ptile, S_HUT);
+	set_placed_near_pos(ptile, 3);
       }
-      set_placed_near_pos(ptile, 3);
     }
   }
   destroy_placed_map();
@@ -2290,9 +2290,8 @@ static void initworld(struct gen234_state *pstate)
     tile_set_terrain(ptile, deepest_ocean);
     tile_set_continent(ptile, 0);
     map_set_placed(ptile); /* not a land tile */
-    BV_CLR_ALL(ptile->extras);
+    tile_clear_all_specials(ptile);
     tile_set_owner(ptile, NULL, NULL);
-    ptile->extras_owner = NULL;
   } whole_map_iterate_end;
 
   if (HAS_POLES) {
@@ -2603,7 +2602,8 @@ struct fair_tile {
   enum fair_tile_flag flags;
   struct terrain *pterrain;
   struct resource *presource;
-  bv_extras extras;
+  bv_special specials;
+  bv_roads roads;
   int startpos_team_id;
 };
 
@@ -2957,7 +2957,8 @@ static bool fair_map_copy(struct fair_tile *ptarget, int tx, int ty,
     if (pstile->pterrain != NULL) {
       pttile->pterrain = pstile->pterrain;
       pttile->presource = pstile->presource;
-      pttile->extras = pstile->extras;
+      pttile->specials = pstile->specials;
+      pttile->roads = pstile->roads;
     }
     if (pstile->flags & FTF_STARTPOS) {
       pttile->startpos_team_id = startpos_team_id;
@@ -3070,6 +3071,7 @@ static void fair_map_make_resources(struct fair_tile *pmap)
     for (r = pftile->pterrain->resources; *r != NULL; r++) {
       if (fc_rand(++j) == 0) {
         pftile->presource = *r;
+        BV_SET(pftile->specials, S_RESOURCE_VALID);
       }
     }
     /* Note that 'pftile->presource' might be NULL if there is no suitable
@@ -3092,8 +3094,6 @@ static void fair_map_make_resources(struct fair_tile *pmap)
 static void fair_map_make_huts(struct fair_tile *pmap)
 {
   struct fair_tile *pftile;
-  struct tile *pvtile = tile_virtual_new(NULL);
-  struct extra_type *phut;
   int i, j, k;
 
   for (i = map.server.huts, j = 0;
@@ -3114,27 +3114,16 @@ static void fair_map_make_huts(struct fair_tile *pmap)
     }
 
     i--;
-    if (pftile->pterrain == NULL) {
-      continue; /* Not an used tile. */
+    if (pftile->pterrain == NULL || pftile->flags & FTF_OCEAN) {
+      continue; /* Not an used tile, or sea tile. */
     }
 
-    pvtile->index = pftile - pmap;
-    tile_set_terrain(pvtile, pftile->pterrain);
-    tile_set_resource(pvtile, pftile->presource);
-    pvtile->extras = pftile->extras;
-
-    phut = rand_extra_for_tile(pvtile, EC_HUT);
-    if (phut != NULL) {
-      tile_add_extra(pvtile, phut);
-      pftile->extras = pvtile->extras;
-      pftile->flags |= FTF_HAS_HUT;
-      square_iterate(index_to_tile(pftile - pmap), 3, ptile) {
-        pmap[tile_index(ptile)].flags |= FTF_NO_HUT;
-      } square_iterate_end;
-    }
+    set_special(&pftile->specials, S_HUT);
+    pftile->flags |= FTF_HAS_HUT;
+    square_iterate(index_to_tile(pftile - pmap), 3, ptile) {
+      pmap[tile_index(ptile)].flags |= FTF_NO_HUT;
+    } square_iterate_end;
   }
-
-  tile_virtual_destroy(pvtile);
 }
 
 /****************************************************************************
@@ -3285,7 +3274,7 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
               * map.num_cardinal_dirs) / 200);
     int length_max = 3, length, l;
     enum direction8 dir;
-    int extra_idx;
+    int road_idx;
     int dirs_num;
     bool cardinal_only;
     bool connectable_river_around, ocean_around;
@@ -3299,11 +3288,11 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
       }
 
       priver = river_types[fc_rand(river_type_count)];
-      extra_idx = extra_index(road_extra_get(priver));
-      if (BV_ISSET(pftile->extras, extra_idx)) {
+      road_idx = road_index(priver);
+      if (BV_ISSET(pftile->roads, road_idx)) {
         continue;
       }
-      cardinal_only = is_cardinal_only_road(road_extra_get(priver));
+      cardinal_only = is_cardinal_only_road(priver);
 
       river_around = 0;
       connectable_river_around = FALSE;
@@ -3317,7 +3306,7 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
         if (pftile2->flags & FTF_OCEAN) {
           ocean_around = TRUE;
           break;
-        } else if (BV_ISSET(pftile2->extras, extra_idx)) {
+        } else if (BV_ISSET(pftile2->roads, road_idx)) {
           river_around++;
           if (!cardinal_only || is_cardinal_dir(map.valid_dirs[j])) {
             connectable_river_around = TRUE;
@@ -3334,7 +3323,7 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
         log_debug("Adding river at (%d, %d)",
                   index_to_map_pos_x(pftile - pisland),
                   index_to_map_pos_y(pftile - pisland));
-        BV_SET(pftile->extras, extra_idx);
+        BV_SET(pftile->roads, road_idx);
         continue;
       }
 
@@ -3375,7 +3364,7 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
               if (!cardinal_only || is_cardinal_dir(map.valid_dirs[k])) {
                 ocean_around = TRUE;
               }
-            } else if (BV_ISSET(pftile3->extras, extra_idx)) {
+            } else if (BV_ISSET(pftile3->roads, road_idx)) {
               river_around++;
               if (!cardinal_only || is_cardinal_dir(map.valid_dirs[k])) {
                 connectable_river_around = TRUE;
@@ -3407,7 +3396,7 @@ static struct fair_tile *fair_map_island_new(int size, int startpos_num)
                 direction8_name(dir),
                 length);
       for (;;) {
-        BV_SET(pftile->extras, extra_idx);
+        BV_SET(pftile->roads, road_idx);
         length--;
         if (pftile == pend) {
           fc_assert(length == 0);
@@ -3534,10 +3523,10 @@ static bool map_generate_fair_islands(void)
 
   whole_map_iterate(ptile) {
     tile_set_terrain(ptile, deepest_ocean);
+    tile_set_resource(ptile, NULL);
     tile_set_continent(ptile, 0);
-    BV_CLR_ALL(ptile->extras);
+    tile_clear_all_specials(ptile);
     tile_set_owner(ptile, NULL, NULL);
-    ptile->extras_owner = NULL;
   } whole_map_iterate_end;
 
   i = 0;
@@ -3600,7 +3589,8 @@ static bool map_generate_fair_islands(void)
       }
       pftile->pterrain = tile_terrain(ptile);
       pftile->presource = tile_resource(ptile);
-      pftile->extras = tile_extras(ptile);
+      pftile->specials = tile_specials(ptile);
+      pftile->roads = tile_roads(ptile);
     } whole_map_iterate_end;
 
     /* Create main player island. */
@@ -3769,7 +3759,12 @@ static bool map_generate_fair_islands(void)
   /* Finalize the map. */
   for (i = 0; i < MAP_INDEX_SIZE; i++) {
     /* Mark all tiles as assigned, for adding resources and huts. */
-    pmap[i].flags |= FTF_ASSIGNED;
+    struct fair_tile *pftile = pmap + i;
+
+    if (pftile->pterrain == deepest_ocean) {
+      pftile->flags |= FTF_OCEAN;
+    }
+    pftile->flags |= FTF_ASSIGNED;
   }
   if (map.server.riches > 0) {
     fair_map_make_resources(pmap);
@@ -3786,7 +3781,8 @@ static bool map_generate_fair_islands(void)
     fc_assert(pftile->pterrain != NULL);
     tile_set_terrain(ptile, pftile->pterrain);
     tile_set_resource(ptile, pftile->presource);
-    ptile->extras = pftile->extras;
+    tile_set_specials(ptile, pftile->specials);
+    ptile->roads = pftile->roads;
     if (pftile->flags & FTF_STARTPOS) {
       struct startpos *psp = map_startpos_new(ptile);
 

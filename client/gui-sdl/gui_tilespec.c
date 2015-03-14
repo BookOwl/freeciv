@@ -23,16 +23,11 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
 #include "log.h"
-
-/* common */
-#include "research.h"
-#include "specialist.h"
 
 /* client */
 #include "client_main.h"
@@ -80,9 +75,6 @@ do {							\
  *******************************************************************************/
 static void reload_small_citizens_icons(int style)
 {
-  int i;
-  int spe_max;
-
   /* free info icons */
   FREESURFACE(pIcons->pMale_Content);
   FREESURFACE(pIcons->pFemale_Content);
@@ -92,12 +84,11 @@ static void reload_small_citizens_icons(int style)
   FREESURFACE(pIcons->pFemale_Unhappy);
   FREESURFACE(pIcons->pMale_Angry);
   FREESURFACE(pIcons->pFemale_Angry);
-
-  spe_max = specialist_count();
-  for (i = 0; i < spe_max; i++) {
-    FREESURFACE(pIcons->specialists[i]);
-  }
-
+  
+  FREESURFACE(pIcons->pSpec_Lux); /* Elvis */
+  FREESURFACE(pIcons->pSpec_Tax); /* TaxMan */
+  FREESURFACE(pIcons->pSpec_Sci); /* Scientist */
+  
   /* allocate icons */
   pIcons->pMale_Happy = adj_surf(get_citizen_surface(CITIZEN_HAPPY, 0));
   pIcons->pFemale_Happy = adj_surf(get_citizen_surface(CITIZEN_HAPPY, 1));
@@ -107,10 +98,9 @@ static void reload_small_citizens_icons(int style)
   pIcons->pFemale_Unhappy = adj_surf(get_citizen_surface(CITIZEN_UNHAPPY, 1));
   pIcons->pMale_Angry = adj_surf(get_citizen_surface(CITIZEN_ANGRY, 0));
   pIcons->pFemale_Angry = adj_surf(get_citizen_surface(CITIZEN_ANGRY, 1));
-
-  for (i = 0; i < spe_max; i++) {
-    pIcons->specialists[i] = adj_surf(get_citizen_surface(CITIZEN_SPECIALIST + i, 0));
-  }
+  pIcons->pSpec_Lux = get_tax_surface(O_LUXURY);
+  pIcons->pSpec_Tax = get_tax_surface(O_GOLD);
+  pIcons->pSpec_Sci = get_tax_surface(O_SCIENCE);
 }
 
 /* ================================================================================= */
@@ -211,9 +201,6 @@ void tilespec_setup_city_icons(void)
 ***********************************************************************/
 void tilespec_free_city_icons(void)
 {
-  int i;
-  int spe_max;
-
   if (!pIcons) {
     return;
   }
@@ -228,10 +215,9 @@ void tilespec_free_city_icons(void)
   FREESURFACE(pIcons->pMale_Angry);
   FREESURFACE(pIcons->pFemale_Angry);
 
-  spe_max = specialist_count();
-  for (i = 0; i < spe_max; i++) {
-    FREESURFACE(pIcons->specialists[i]);
-  }
+  FREESURFACE(pIcons->pSpec_Lux); /* Elvis */
+  FREESURFACE(pIcons->pSpec_Tax); /* TaxMan */
+  FREESURFACE(pIcons->pSpec_Sci); /* Scientist */
 
   FC_FREE(pIcons);
 }
@@ -445,10 +431,10 @@ SDL_Surface * get_tech_icon(Tech_type_id tech)
 **************************************************************************/
 SDL_Color *get_tech_color(Tech_type_id tech_id)
 {
-  if (research_invention_gettable(research_get(client_player()),
-                                  tech_id, TRUE)) {
-    switch (research_invention_state(research_get(client_player()),
-                                     tech_id)) {
+  if (player_invention_reachable(client.conn.playing, tech_id, FALSE))
+  {
+    switch (player_invention_state(client.conn.playing, tech_id))
+    {
       case TECH_UNKNOWN:
         return get_game_color(COLOR_REQTREE_UNKNOWN);
       case TECH_KNOWN:

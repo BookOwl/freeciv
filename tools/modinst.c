@@ -24,9 +24,6 @@
 #include "rand.h"
 #include "registry.h"
 
-/* common */
-#include "fc_interface.h"
-
 /* modinst */
 #include "mpdb.h"
 
@@ -193,6 +190,5 @@ void fcmp_deinit(void)
   registry_module_close();
   fc_shutdown_network();
   log_close();
-  free_libfreeciv();
   free_nls();
 }

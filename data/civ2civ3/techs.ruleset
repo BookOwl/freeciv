@@ -9,8 +9,7 @@
 
 [datafile]
 description="Civ2Civ3 technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -48,9 +47,8 @@ format_version=10
 ; helptext	= optional help text string (set units ruleset for examples)
 ; bonus_message = text seen when a player is the first to 
 ;                 discover an bonus tech.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
 ; Special values for req1 and req2 are "None" (first section below) 
 ; and "Never" (never available).  If only one tech is required, 
@@ -62,6 +60,9 @@ format_version=10
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
 ; "Claim_Ocean"    = Player claims ocean tiles even if they are not
 ;                    adjacent to border source
@@ -278,7 +279,10 @@ req2     = "Theory of Gravity"
 flags    = ""
 graphic     = "a.electricity"
 graphic_alt = "-"
-helptext = _("Allows irrigation without adjacent water, improves the effect of Amphitheatres, and increases city vision radius.")
+helptext = _("\
+Allows irrigation without an adjacent water source, improves the \
+effect of Amphitheaters, and increases city vision radius.\
+")
 cost     = 310
 
 [advance_electronics]
@@ -393,6 +397,7 @@ cost     = 10
 name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
 cost     = 380
@@ -404,7 +409,7 @@ req2     = "Literacy"
 flags    = ""
 graphic     = "a.invention"
 graphic_alt = "-"
-helptext = _("Halves upgrade cost of your units.")
+helptext = _("Halves the upgrade cost of your units.")
 cost     = 120
 
 [advance_iron_working]
@@ -514,7 +519,10 @@ flags    = ""
 graphic     = "a.medicine"
 graphic_alt = "-"
 ; /* xgettext:no-c-format */
-helptext = _("Reduces by 30% the chance of illness in your cities.")
+helptext = _("\
+Reduces the risk of plague in your cities by 30% of the base chance \
+(this is additive with the benefits of any buildings).\
+")
 cost     = 120
 
 [advance_metallurgy]
@@ -664,7 +672,13 @@ req2     = "Metallurgy"
 flags    = ""
 graphic     = "a.railroad"
 graphic_alt = "-"
-helptext = _("Allows Settlers, Workers and Engineers to build railroads. Decreases one-time revenue from new trade routes.")
+helptext = _("\
+Halves one-time revenue from new trade routes.\
+"), _("\
+For Despotism or Tribal governments, cancels the penalty to worked \
+tiles with output greater than 2 (as if all your cities were always \
+celebrating).\
+")
 cost     = 350
 
 [advance_recycling]
@@ -689,7 +703,7 @@ cost     = 400
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
 cost     = 350
@@ -774,7 +788,6 @@ req2     = "Laser"
 flags    = ""
 graphic     = "a.superconductors"
 graphic_alt = "-"
-helptext = _("Allows Settlers, Workers and Engineers to build maglevs.")
 cost     = 700
 
 [advance_tactics]
@@ -793,7 +806,10 @@ req2     = "Industrialization"
 flags    = ""
 graphic     = "a.the_corporation"
 graphic_alt = "-"
-helptext = _("Decreases one-time the Corruption of trade caused by distance to Capital.")
+helptext = _("\
+Halves the corruption of trade related to distance from the capital \
+(or eliminates it for Federation governments).\
+")
 cost     = 400
 
 [advance_the_republic]
@@ -840,7 +856,9 @@ req2     = "Pottery"
 flags    = ""
 graphic     = "a.trade"
 graphic_alt = "-"
-helptext = _("Decreases one-time the Waste of shields caused by distance to Capital.")
+helptext = _("\
+Halves the waste of production related to distance from the capital.\
+")
 cost     = 40
 
 [advance_university]

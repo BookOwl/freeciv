@@ -32,9 +32,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* SDL */
-#include <SDL_byteorder.h>
-#include <SDL_types.h>
+#include "SDL_byteorder.h"
+#include "SDL_types.h"
 
 #ifdef HAVE_LIBCHARSET
 #include <libcharset.h>
@@ -65,11 +64,11 @@
 **************************************************************************/
 static const char *get_display_encoding(void)
 {
-  if (is_bigendian()) {
-    return "UTF-16BE";
-  } else {
-    return "UTF-16LE";
-  }
+#if SDL_BYTEORDER == SDL_LIL_ENDIAN
+  return "UTF-16LE";
+#else
+  return "UTF-16BE";
+#endif
 }
 
 /**************************************************************************

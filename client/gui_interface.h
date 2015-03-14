@@ -27,24 +27,20 @@ extern "C" {
 #include "canvas_g.h"
 #include "pages_g.h"
 
-/* client */
-#include "tilespec.h"
-
 struct gui_funcs {
   void (*ui_init)(void);
   void (*ui_main)(int argc, char *argv[]);
   void (*ui_exit)(void);
 
   enum gui_type (*get_gui_type)(void);
-  void (*insert_client_build_info)(char *outbuf, size_t outlen);
-  void (*adjust_default_options)(void);
 
   void (*version_message)(char *vertext);
   void (*real_output_window_append)(const char *astring,
                                     const struct text_tag_list *tags,
                                     int conn_id);
 
-  bool (*is_view_supported)(enum ts_type type);
+  bool (*isometric_view_supported)(void);
+  bool (*overhead_view_supported)(void);
   void (*free_intro_radar_sprites)(void);
   struct sprite * (*load_gfxfile)(const char *filename);
   struct sprite * (*create_sprite)(int width, int height, struct color *pcolor);
@@ -60,7 +56,6 @@ struct gui_funcs {
 
   struct canvas *(*canvas_create)(int width, int height);
   void (*canvas_free)(struct canvas *store);
-  void (*canvas_set_zoom)(struct canvas *store, float zoom);
   void (*canvas_copy)(struct canvas *dest, struct canvas *src,
                       int src_x, int src_y, int dest_x, int dest_y, int width,
                       int height);
@@ -82,6 +77,9 @@ struct gui_funcs {
   void (*canvas_fill_sprite_area)(struct canvas *pcanvas,
                                   struct sprite *psprite, struct color *pcolor,
                                   int canvas_x, int canvas_y);
+  void (*canvas_fog_sprite_area)(struct canvas *pcanvas,
+                                 struct sprite *psprite,
+                                 int canvas_x, int canvas_y);
   void (*canvas_put_line)(struct canvas *pcanvas, struct color *pcolor,
                           enum line_type ltype, int start_x, int start_y,
                           int dx, int dy);
@@ -94,9 +92,9 @@ struct gui_funcs {
                           enum client_font font, struct color *pcolor,
                           const char *text);
 
-  void (*set_rulesets)(int num_rulesets, char **rulesets);
-  void (*options_extra_init)(void);
-  void (*server_connect)(void);
+  void (*gui_set_rulesets)(int num_rulesets, char **rulesets);
+  void (*gui_options_extra_init)(void);
+  void (*gui_server_connect)(void);
   void (*add_net_input)(int sock);
   void (*remove_net_input)(void);
   void (*real_conn_list_dialog_update)(void);
@@ -121,12 +119,16 @@ struct gui_funcs {
   void (*editgui_tileset_changed)(void);
   void (*editgui_popdown_all)(void);
 
+  void (*gui_ggz_embed_ensure_server)(void);
+  void (*gui_ggz_embed_leave_table)(void);
+  void (*add_ggz_input)(int sock);
+  void (*remove_ggz_input)(void);
+
   void (*update_timeout_label)(void);
   void (*real_city_dialog_popup)(struct city *pcity);
   void (*real_city_dialog_refresh)(struct city *pcity);
   void (*popdown_city_dialog)(struct city *pcity);
   void (*popdown_all_city_dialogs)(void);
-  bool (*handmade_scenario_warning)(void);
   void (*refresh_unit_city_dialogs)(struct unit *punit);
   bool (*city_dialog_is_open)(struct city *pcity);
 

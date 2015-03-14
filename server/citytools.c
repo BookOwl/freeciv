@@ -33,7 +33,6 @@
 #include "base.h"
 #include "citizens.h"
 #include "city.h"
-#include "culture.h"
 #include "events.h"
 #include "game.h"
 #include "government.h"
@@ -43,7 +42,6 @@
 #include "movement.h"
 #include "player.h"
 #include "requirements.h"
-#include "research.h"
 #include "road.h"
 #include "specialist.h"
 #include "tech.h"
@@ -976,7 +974,7 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
   const citizens old_taker_content_citizens = player_content_citizens(ptaker);
   const citizens old_giver_content_citizens = player_content_citizens(pgiver);
   bool taker_had_no_cities = (city_list_size(ptaker->cities) == 0);
-  bool new_extras;
+  bool new_roads, new_bases;
   const int units_num = unit_list_size(pcenter->units);
   bv_player *could_see_unit = (units_num > 0
                                ? fc_malloc(sizeof(*could_see_unit)
@@ -1003,7 +1001,7 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
   CALL_PLR_AI_FUNC(city_lost, pcity->owner, pcity->owner, pcity);
 
   /* Forget old tasks */
-  clear_worker_task(pcity);
+  worker_task_init(&pcity->server.task_req);
 
   /* Activate AI control of the new owner. */
   CALL_PLR_AI_FUNC(city_got, ptaker, ptaker, pcity);
@@ -1067,7 +1065,7 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
   /* city_thaw_workers_queue() later */
 
   pcity->owner = ptaker;
-  map_claim_ownership(pcenter, ptaker, pcenter, TRUE);
+  map_claim_ownership(pcenter, ptaker, pcenter);
   city_list_prepend(ptaker->cities, pcity);
 
   /* Hide/reveal units. Do it after vision have been given to taker, city
@@ -1121,7 +1119,8 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
   maybe_make_contact(pcenter, ptaker);
 
   if (city_remains) {
-    struct extra_type *upgradet;
+    struct road_type *upgradet_road;
+    struct base_type *upgradet_base;
 
     if (raze) {
       raze_city(pcity);
@@ -1150,26 +1149,41 @@ bool transfer_city(struct player *ptaker, struct city *pcity,
     /* What wasn't obsolete for the old owner may be so now. */
     remove_obsolete_buildings_city(pcity, TRUE);
 
-    new_extras = upgrade_city_extras(pcity, &upgradet);
+    new_roads = upgrade_city_roads(pcity, &upgradet_road);
+    new_bases = upgrade_city_bases(pcity, &upgradet_base);
 
-    if (new_extras) {
+    if (new_roads || new_bases) {
       const char *clink = city_link(pcity);
 
       notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
                     _("The people in %s are stunned by your "
                       "technological insight!"),
                     clink);
-
-      if (upgradet != NULL) {
-        notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
-                      _("Workers spontaneously gather and upgrade "
-                        "%s with %s."),
-                      clink, extra_name_translation(upgradet));
-      } else {
-        notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
-                      _("Workers spontaneously gather and upgrade "
-                        "%s infrastructure."),
-                      clink);
+      if (new_roads) {
+        if (upgradet_road != NULL) {
+          notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
+                        _("Workers spontaneously gather and upgrade "
+                          "%s with %s."),
+                        clink, road_name_translation(upgradet_road));
+        } else {
+          notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
+                        _("Workers spontaneously gather and upgrade "
+                          "%s roads."),
+                        clink);
+        }
+      }
+      if (new_bases) {
+        if (upgradet_base != NULL) {
+          notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
+                        _("Workers spontaneously gather and upgrade "
+                          "%s with %s."),
+                        clink, base_name_translation(upgradet_base));
+        } else {
+          notify_player(ptaker, pcenter, E_CITY_TRANSFER, ftc_server,
+                        _("Workers spontaneously gather and upgrade "
+                          "%s bases."),
+                        clink);
+        }
       }
       update_tile_knowledge(pcenter);
     }
@@ -1412,20 +1426,30 @@ void create_city(struct player *pplayer, struct tile *ptile,
   /* Update citizens. */
   citizens_update(pcity, nationality);
 
-  /* Destroy any extras that don't belong in the city. */
-  extra_type_iterate(pextra) {
-    if (tile_has_extra(ptile, pextra)
-        && !is_native_tile_to_extra(pextra, ptile)) {
-      destroy_extra(ptile, pextra);
+  /* Remove any roads that don't belong in the city. */
+  road_type_iterate(proad) {
+    if (tile_has_road(ptile, proad)
+        && !is_native_tile_to_road(proad, ptile)) {
+      tile_remove_road(ptile, proad);
     }
-  } extra_type_iterate_end;
+  } road_type_iterate_end;
+  /* Build any roads that the city should have. */
+  upgrade_city_roads(pcity, NULL);
 
-  /* Build any extras that the city should have. */
-  upgrade_city_extras(pcity, NULL);
+  /* Destroy any bases that don't belong in the city. */
+  base_type_iterate(pbase) {
+    if (tile_has_base(ptile, pbase)
+        && !is_native_tile_to_base(pbase, ptile)) {
+      destroy_base(ptile, pbase);
+    }
+  } base_type_iterate_end;
+
+  /* Build any bases that the city should have. */
+  upgrade_city_bases(pcity, NULL);
 
   /* Claim the ground we stand on */
   tile_set_owner(ptile, saved_owner, saved_claimer);
-  map_claim_ownership(ptile, pplayer, ptile, TRUE);
+  map_claim_ownership(ptile, pplayer, ptile);
 
   /* Before arranging workers to show unknown land */
   pcity->server.vision = vision_new(pplayer, ptile);
@@ -1492,8 +1516,6 @@ void create_city(struct player *pplayer, struct tile *ptile,
 
   script_server_signal_emit("city_built", 1,
                             API_TYPE_CITY, pcity);
-
-  CALL_PLR_AI_FUNC(city_got, pplayer, pplayer, pcity);
 }
 
 /**************************************************************************
@@ -1510,8 +1532,6 @@ void remove_city(struct city *pcity)
   const citizens old_content_citizens = player_content_citizens(powner);
   struct dbv tile_processed;
   struct tile_list *process_queue;
-
-  CALL_PLR_AI_FUNC(city_lost, powner, powner, pcity);
 
   BV_CLR_ALL(had_small_wonders);
   city_built_iterate(pcity, pimprove) {
@@ -1671,13 +1691,21 @@ dbv_free(&tile_processed);
   game_remove_city(pcity);
   fc_release_mutex(&game.server.mutexes.city_list);
 
-  /* Remove any extras that were only there because the city was there. */
-  extra_type_iterate(pextra) {
-    if (tile_has_extra(pcenter, pextra)
-        && !is_native_tile_to_extra(pextra, pcenter)) {
-      tile_remove_extra(pcenter, pextra);
+  /* Remove any roads that were only there because the city was there. */
+  road_type_iterate(proad) {
+    if (tile_has_road(pcenter, proad)
+        && !is_native_tile_to_road(proad, pcenter)) {
+      tile_remove_road(pcenter, proad);
     }
-  } extra_type_iterate_end;
+  } road_type_iterate_end;
+
+  /* Remove any bases that were only there because the city was there. */
+  base_type_iterate(pbase) {
+    if (tile_has_base(pcenter, pbase)
+        && !is_native_tile_to_base(pbase, pcenter)) {
+      tile_remove_base(pcenter, pbase);
+    }
+  } base_type_iterate_end;
 
   players_iterate(other_player) {
     if (map_is_known_and_seen(pcenter, other_player, V_MAIN)) {
@@ -1801,7 +1829,6 @@ void unit_enter_city(struct unit *punit, struct city *pcity, bool passenger)
               + (coins * (city_size_get(pcity))) / 200);
   pplayer->economic.gold += coins;
   cplayer->economic.gold -= coins;
-  send_player_info_c(pplayer, pplayer->connections);
   send_player_info_c(cplayer, cplayer->connections);
   if (pcity->original != pplayer) {
     if (coins > 0) {
@@ -1858,6 +1885,7 @@ void unit_enter_city(struct unit *punit, struct city *pcity, bool passenger)
   }
 
   steal_a_tech(pplayer, cplayer, A_UNSET);
+  send_player_info_c(pplayer, pplayer->connections);
 
   /* We transfer the city first so that it is in a consistent state when
    * the size is reduced. */
@@ -1901,16 +1929,6 @@ static bool player_has_trade_route_with_city(struct player *pplayer,
 }
 
 /**************************************************************************
- Which wall gfx city should display?
-**************************************************************************/
-static int city_got_citywalls(const struct city *pcity)
-{
-  int walls = get_city_bonus(pcity, EFT_VISIBLE_WALLS);
-
-  return walls > 0 ? walls : 0;
-}
-
-/**************************************************************************
   Suppress sending cities during game_load() and end_phase()
 **************************************************************************/
 bool send_city_suppression(bool now)
@@ -1939,7 +1957,6 @@ static void package_dumb_city(struct player* pplayer, struct tile *ptile,
 
   packet->occupied = pdcity->occupied;
   packet->walls = pdcity->walls;
-  packet->style = pdcity->style;
   packet->city_image = pdcity->city_image;
 
   packet->happy = pdcity->happy;
@@ -2085,7 +2102,7 @@ void send_city_info(struct player *dest, struct city *pcity)
   if (game.info.team_pooled_research
       && player_list_size(team_members(powner->team)) > 1) {
     /* We want to send the new total bulbs production of the team. */
-    send_research_info(research_get(powner), NULL);
+    send_player_info_c(powner, NULL);
   }
 }
 
@@ -2225,9 +2242,6 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
     fc_assert(cit == packet->size);
   }
 
-  packet->history = pcity->history;
-  packet->culture = city_culture(pcity);
-
   if (packet->size != ppl) {
     static bool recursion = FALSE;
 
@@ -2299,7 +2313,6 @@ void package_city(struct city *pcity, struct packet_city_info *packet,
   packet->was_happy = pcity->was_happy;
 
   packet->walls = city_got_citywalls(pcity);
-  packet->style = pcity->style;
   packet->city_image = get_city_bonus(pcity, EFT_CITY_IMAGE);
 
   BV_CLR_ALL(packet->improvements);
@@ -2331,7 +2344,6 @@ bool update_dumb_city(struct player *pplayer, struct city *pcity)
   bool walls = city_got_citywalls(pcity);
   bool happy = city_happy(pcity);
   bool unhappy = city_unhappy(pcity);
-  int style = pcity->style;
   int city_image = get_city_bonus(pcity, EFT_CITY_IMAGE);
 
   BV_CLR_ALL(improvements);
@@ -2356,22 +2368,20 @@ bool update_dumb_city(struct player *pplayer, struct city *pcity)
               TILE_XY(city_tile(pcity)), player_name(pplayer));
     pdcity->identity = pcity->id;   /* ?? */
   } else if (pdcity->occupied == occupied
-             && pdcity->walls == walls
-             && pdcity->happy == happy
-             && pdcity->unhappy == unhappy
-             && pdcity->style == style
-             && pdcity->city_image == city_image
-             && BV_ARE_EQUAL(pdcity->improvements, improvements)
-             && vision_site_size_get(pdcity) == city_size_get(pcity)
-             && vision_site_owner(pdcity) == city_owner(pcity)
-             && 0 == strcmp(pdcity->name, city_name(pcity))) {
+	  && pdcity->walls == walls
+	  && pdcity->happy == happy
+	  && pdcity->unhappy == unhappy
+          && pdcity->city_image == city_image
+	  && BV_ARE_EQUAL(pdcity->improvements, improvements)
+          && vision_site_size_get(pdcity) == city_size_get(pcity)
+	  && vision_site_owner(pdcity) == city_owner(pcity)
+	  && 0 == strcmp(pdcity->name, city_name(pcity))) {
     return FALSE;
   }
 
   vision_site_update_from_city(pdcity, pcity);
   pdcity->occupied = occupied;
   pdcity->walls = walls;
-  pdcity->style = style;
   pdcity->city_image = city_image;
   pdcity->happy = happy;
   pdcity->unhappy = unhappy;
@@ -2879,8 +2889,8 @@ void city_landlocked_sell_coastal_improvements(struct tile *ptile)
 	requirement_vector_iterate(&pimprove->reqs, preq) {
 	  if ((VUT_TERRAIN == preq->source.kind
                || VUT_TERRAINCLASS == preq->source.kind)
-              && !is_req_active(city_owner(pcity), NULL, pcity, NULL,
-                                NULL, NULL, NULL, NULL, NULL,
+	      && !is_req_active(city_owner(pcity), pcity, NULL,
+				NULL, NULL, NULL, NULL,
 				preq, TRUE)) {
             int price = impr_sell_gold(pimprove);
 
@@ -3032,48 +3042,4 @@ bool city_map_update_radius_sq(struct city *pcity)
   citylog_map_workers(LOG_DEBUG, pcity);
 
   return TRUE;
-}
-
-/**************************************************************************
-  Clear worker task from the city and inform owner
-**************************************************************************/
-void clear_worker_task(struct city *pcity)
-{
-  struct packet_worker_task packet;
-
-  worker_task_init(&pcity->task_req);
-
-  packet.city_id = pcity->id;
-  packet.tile_id = -1;
-  packet.activity = ACTIVITY_IDLE;
-  packet.tgt = 0;
-  packet.want = 0;
-
-  lsend_packet_worker_task(city_owner(pcity)->connections, &packet);
-  lsend_packet_worker_task(game.glob_observers, &packet);
-}
-
-/**************************************************************************
-  Send city worker task to owner
-**************************************************************************/
-void package_and_send_worker_task(struct city *pcity)
-{
-  struct packet_worker_task packet;
-
-  packet.city_id = pcity->id;
-  if (pcity->task_req.ptile == NULL) {
-    packet.tile_id = -1;
-  } else {
-    packet.tile_id = tile_index(pcity->task_req.ptile);
-  }
-  packet.activity = pcity->task_req.act;
-  if (pcity->task_req.tgt == NULL) {
-    packet.tgt = -1;
-  } else {
-    packet.tgt = extra_number(pcity->task_req.tgt);
-  }
-  packet.want = pcity->task_req.want;
-
-  lsend_packet_worker_task(city_owner(pcity)->connections, &packet);
-  lsend_packet_worker_task(game.glob_observers, &packet);
 }

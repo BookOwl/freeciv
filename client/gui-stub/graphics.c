@@ -26,11 +26,21 @@
 #include "graphics.h"
 
 struct sprite *intro_gfx_sprite;
+struct sprite *radar_gfx_sprite;
 
 /****************************************************************************
-  Return whether the client supports given view type
+  Return whether the client supports isometric view (isometric tilesets).
 ****************************************************************************/
-bool gui_is_view_supported(enum ts_type type)
+bool gui_isometric_view_supported(void)
+{
+  /* PORTME */
+  return FALSE;
+}
+
+/****************************************************************************
+  Return whether the client supports "overhead" (non-isometric) view.
+****************************************************************************/
+bool gui_overhead_view_supported(void)
 {
   /* PORTME */
   return FALSE;
@@ -43,6 +53,7 @@ void load_intro_gfx(void)
 {
   /* PORTME */
   intro_gfx_sprite = load_gfxfile(tileset_main_intro_filename(tileset));
+  radar_gfx_sprite = load_gfxfile(tileset_mini_intro_filename(tileset));
 }
 
 /****************************************************************************
@@ -62,5 +73,9 @@ void gui_free_intro_radar_sprites(void)
   if (intro_gfx_sprite) {
     free_sprite(intro_gfx_sprite);
     intro_gfx_sprite = NULL;
+  }
+  if (radar_gfx_sprite) {
+    free_sprite(radar_gfx_sprite);
+    radar_gfx_sprite = NULL;
   }
 }

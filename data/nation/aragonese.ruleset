@@ -32,7 +32,7 @@ ruler_titles = {
 
 flag="aragon"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

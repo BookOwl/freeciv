@@ -28,8 +28,7 @@
 #include "traderoutes.h"
 
 const char *trade_route_type_names[] = {
-  "National", "NationalIC", "IN", "INIC", "Ally", "AllyIC",
-  "Enemy", "EnemyIC", "Team", "TeamIC"
+  "National", "NationalIC", "IN", "INIC"
 };
 
 const char *traderoute_cancelling_type_names[] = {
@@ -54,51 +53,10 @@ int max_trade_routes(const struct city *pcity)
 enum trade_route_type cities_trade_route_type(const struct city *pcity1,
                                               const struct city *pcity2)
 {
-  struct player *plr1 = city_owner(pcity1);
-  struct player *plr2 = city_owner(pcity2);
-
-  if (plr1 != plr2) {
-    struct player_diplstate *ds = player_diplstate_get(plr1, plr2);
-
+  if (city_owner(pcity1) != city_owner(pcity2)) {
     if (city_tile(pcity1)->continent != city_tile(pcity2)->continent) {
-      switch (ds->type) {
-      case DS_ALLIANCE:
-        return TRT_ALLY_IC;
-      case DS_WAR:
-        return TRT_ENEMY_IC;
-      case DS_TEAM:
-        return TRT_TEAM_IC;
-      case DS_ARMISTICE:
-      case DS_CEASEFIRE:
-      case DS_PEACE:
-      case DS_NO_CONTACT:
-        return TRT_IN_IC;
-      case DS_LAST:
-        fc_assert(ds->type != DS_LAST);
-        return TRT_IN_IC;
-      }
-      fc_assert(FALSE);
-
       return TRT_IN_IC;
     } else {
-      switch (ds->type) {
-      case DS_ALLIANCE:
-        return TRT_ALLY;
-      case DS_WAR:
-        return TRT_ENEMY;
-      case DS_TEAM:
-        return TRT_TEAM;
-      case DS_ARMISTICE:
-      case DS_CEASEFIRE:
-      case DS_PEACE:
-      case DS_NO_CONTACT:
-        return TRT_IN;
-      case DS_LAST:
-        fc_assert(ds->type != DS_LAST);
-        return TRT_IN;
-      }
-      fc_assert(FALSE);
-
       return TRT_IN;
     }
   } else {
@@ -365,12 +323,11 @@ int city_num_trade_routes(const struct city *pcity)
   trade route and also when you simply sell your trade goods at the
   new city.
 
-  If you change this calculation remember to also update its duplication
-  in dai_choose_trade_route()
+  Note if you trade with a city you already have a trade route with,
+  you'll only get 1/3 of this value.
 **************************************************************************/
 int get_caravan_enter_city_trade_bonus(const struct city *pc1, 
-                                       const struct city *pc2,
-                                       const bool establish_trade)
+                                       const struct city *pc2)
 {
   int tb, bonus;
 
@@ -386,13 +343,6 @@ int get_caravan_enter_city_trade_bonus(const struct city *pc1,
   bonus = get_city_bonus(pc1, EFT_TRADE_REVENUE_BONUS);
   
   tb = (float)tb * pow(2.0, (double)bonus / 1000.0);
-
-  if (!establish_trade) {
-    /* There will only be a full bonus if a new trade route is
-     * established. The one time bonus from Enter Marketplace is about one
-     * third of the one time bonus from Establish Trade Route. */
-    tb = (tb + 2) / 3;
-  }
 
   return tb;
 }

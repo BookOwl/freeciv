@@ -2363,7 +2363,7 @@ SDL_Surface * create_sellect_tech_icon(SDL_String16 *pStr, Tech_type_id tech_id,
   /* create label surface */
   pSurf = create_surf_alpha(w, h, SDL_SWSURFACE);
   
-  if (tech_id == research_get(client_player())->researching)
+  if (tech_id == player_research_get(client.conn.playing)->researching)
   {
     color.unused = 180;
   } else {
@@ -2533,7 +2533,6 @@ void real_science_report_dialog_update(void)
   SDL_Color bg_color = {255, 255, 255, 136};
 
   if (pScienceDlg) {
-    const struct research *presearch = research_get(client_player());
     char cBuf[128];
     SDL_String16 *pStr;
     SDL_Surface *pSurf;
@@ -2552,17 +2551,17 @@ void real_science_report_dialog_update(void)
     pChangeResearchButton = pWindow->prev;
     pChangeResearchGoalButton = pWindow->prev->prev;
     
-    if (A_UNSET != presearch->researching) {
-      cost = presearch->client.researching_cost;
+    if (A_UNSET != player_research_get(client.conn.playing)->researching) {
+      cost = player_research_get(client_player())->client.researching_cost;
     } else {
       cost = 0;
     }        
     
     /* update current research icons */
     FREESURFACE(pChangeResearchButton->theme);
-    pChangeResearchButton->theme = get_tech_icon(presearch->researching);
+    pChangeResearchButton->theme = get_tech_icon(player_research_get(client.conn.playing)->researching);
     FREESURFACE(pChangeResearchGoalButton->theme);
-    pChangeResearchGoalButton->theme = get_tech_icon(presearch->tech_goal);
+    pChangeResearchGoalButton->theme = get_tech_icon(player_research_get(client.conn.playing)->tech_goal);
     
     /* redraw Window */
     widget_redraw(pWindow);
@@ -2597,9 +2596,8 @@ void real_science_report_dialog_update(void)
     
     /* current research text */
     fc_snprintf(cBuf, sizeof(cBuf), "%s: %s",
-                research_advance_name_translation(presearch,
-                                                  presearch->researching),
-                get_science_target_text(NULL));
+      advance_name_researching(client.conn.playing),
+      get_science_target_text(NULL));
 
     copy_chars_to_string16(pStr, cBuf);
     
@@ -2632,10 +2630,15 @@ void real_science_report_dialog_update(void)
              dest.x - 1, dest.y - 1, dest.x + dest.w, dest.y + dest.h,
              get_theme_color(COLOR_THEME_SCIENCEDLG_FRAME));
   
-    if (cost > adj_size(286)) {
-      cost = adj_size(286) * ((float) presearch->bulbs_researched / cost);
-    } else {
-      cost = (float) cost * ((float) presearch->bulbs_researched / cost);
+    if (cost > adj_size(286))
+    {
+      cost =
+        adj_size(286) * ((float) player_research_get(client.conn.playing)->bulbs_researched / cost);
+    }
+    else
+    {
+      cost =
+        (float)cost * ((float)player_research_get(client.conn.playing)->bulbs_researched/cost);
     }
   
     dest.y += adj_size(2);
@@ -2653,8 +2656,7 @@ void real_science_report_dialog_update(void)
     improvement_iterate(pImprove) {
       requirement_vector_iterate(&pImprove->reqs, preq) {
         if (VUT_ADVANCE == preq->source.kind
-            && (advance_number(preq->source.value.advance)
-                == presearch->researching)) {
+         && advance_number(preq->source.value.advance) == player_research_get(client.conn.playing)->researching) {
           pSurf = adj_surf(get_building_surface(pImprove));
           alphablit(pSurf, NULL, pWindow->dst->surface, &dest);
           dest.x += pSurf->w + 1;
@@ -2667,8 +2669,7 @@ void real_science_report_dialog_update(void)
     /* units */
     unit_type_iterate(un) {
       pUnit = un;
-      if (advance_number(pUnit->require_advance)
-          == presearch->researching) {
+      if (advance_number(pUnit->require_advance) == player_research_get(client.conn.playing)->researching) {
         SDL_Surface *surf = get_unittype_surface(un, direction8_invalid());
         int w = surf->w;
 
@@ -2704,10 +2705,14 @@ void real_science_report_dialog_update(void)
     /* -------------------------------- */
     
     /* Goals */
-    if (A_UNSET != presearch->tech_goal) {
+    if (A_UNSET != player_research_get(client.conn.playing)->tech_goal)
+    {
       /* current goal text */
-      copy_chars_to_string16(pStr, research_advance_name_translation
-                                       (presearch, presearch->tech_goal));
+      fc_snprintf(cBuf, sizeof(cBuf), "%s",
+        advance_name_for_player(client.conn.playing,
+          player_research_get(client.conn.playing)->tech_goal));
+      
+      copy_chars_to_string16(pStr, cBuf);
       pSurf = create_text_surf_from_str16(pStr);
       
       dest.x = pChangeResearchGoalButton->size.x + pChangeResearchGoalButton->size.w + adj_size(10);
@@ -2717,8 +2722,7 @@ void real_science_report_dialog_update(void)
       
       FREESURFACE(pSurf);
       
-      copy_chars_to_string16(pStr, get_science_goal_text
-                             (presearch->tech_goal));
+      copy_chars_to_string16(pStr, get_science_goal_text(player_research_get(client.conn.playing)->tech_goal));
       pSurf = create_text_surf_from_str16(pStr);
       
       dest.x = pChangeResearchGoalButton->size.x + pChangeResearchGoalButton->size.w + adj_size(10);
@@ -2732,8 +2736,7 @@ void real_science_report_dialog_update(void)
       improvement_iterate(pImprove) {
 	requirement_vector_iterate(&pImprove->reqs, preq) {  
           if (VUT_ADVANCE == preq->source.kind
-              && (advance_number(preq->source.value.advance)
-                  == presearch->tech_goal)) {
+           && advance_number(preq->source.value.advance) == player_research_get(client.conn.playing)->tech_goal) {
             pSurf = adj_surf(get_building_surface(pImprove));
             alphablit(pSurf, NULL, pWindow->dst->surface, &dest);
             dest.x += pSurf->w + 1;
@@ -2746,7 +2749,7 @@ void real_science_report_dialog_update(void)
       /* units */
       unit_type_iterate(un) {
         pUnit = un;
-        if (advance_number(pUnit->require_advance) == presearch->tech_goal) {
+        if (advance_number(pUnit->require_advance) == player_research_get(client.conn.playing)->tech_goal) {
           SDL_Surface *surf = get_unittype_surface(un, direction8_invalid());
           int w = surf->w;
 
@@ -2839,11 +2842,10 @@ static int change_research_goal_dialog_callback(struct widget *pWindow)
 }
 
 /**************************************************************************
-  Popup dialog to change current research.
+  ...
 **************************************************************************/
 static void popup_change_research_dialog(void)
 {
-  const struct research *presearch = research_get(client_player());
   struct widget *pBuf = NULL;
   struct widget *pWindow;
   SDL_String16 *pStr;
@@ -2851,12 +2853,13 @@ static void popup_change_research_dialog(void)
   int max_col, max_row, col, i, count = 0, h;
   SDL_Rect area;
 
-  if (is_future_tech(presearch->researching)) {
+  if (is_future_tech(player_research_get(client.conn.playing)->researching)) {
     return;
   }
     
   advance_index_iterate(A_FIRST, i) {
-    if (!research_invention_gettable(presearch, i, FALSE)) {
+    if (!player_invention_reachable(client.conn.playing, i, FALSE)
+     || TECH_PREREQS_KNOWN != player_invention_state(client.conn.playing, i)) {
       continue;
     }
     count++;
@@ -2924,7 +2927,8 @@ static void popup_change_research_dialog(void)
   count = 0;
   h = col * max_row;
   advance_index_iterate(A_FIRST, i) {
-    if (!research_invention_gettable(presearch, i, FALSE)) {
+    if (!player_invention_reachable(client.conn.playing, i, FALSE)
+     || TECH_PREREQS_KNOWN != player_invention_state(client.conn.playing, i)) {
       continue;
     }
     
@@ -3025,11 +3029,10 @@ static int change_research_goal_callback(struct widget *pWidget)
 }
 
 /**************************************************************************
-  Popup dialog to change research goal.
+  ...
 **************************************************************************/
 static void popup_change_research_goal_dialog(void)
 {
-  const struct research *presearch = research_get(client_player());
   struct widget *pBuf = NULL;
   struct widget *pWindow;
   SDL_String16 *pStr;
@@ -3042,10 +3045,10 @@ static void popup_change_research_goal_dialog(void)
    * hist will hold afterwards the techid of the current choice
    */
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(presearch, i)
-        && TECH_KNOWN != research_invention_state(presearch, i)
-        && (11 > research_goal_unknown_techs(presearch, i)
-            || i == presearch->tech_goal)) {
+    if (player_invention_reachable(client.conn.playing, i, TRUE)
+        && TECH_KNOWN != player_invention_state(client.conn.playing, i)
+	&& (11 > num_unknown_techs_for_goal(client.conn.playing, i)
+	    || i == player_research_get(client.conn.playing)->tech_goal)) {
       count++;
     }
   } advance_index_iterate_end;
@@ -3116,10 +3119,10 @@ static void popup_change_research_goal_dialog(void)
   count = 0;
   h = col * max_row;
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(presearch, i)
-        && TECH_KNOWN != research_invention_state(presearch, i)
-        && (11 > (num = research_goal_unknown_techs(presearch, i))
-            || i == presearch->tech_goal)) {
+    if (player_invention_reachable(client.conn.playing, i, TRUE)
+        && TECH_KNOWN != player_invention_state(client.conn.playing, i)
+	&& (11 > (num = num_unknown_techs_for_goal(client.conn.playing, i))
+	    || i == player_research_get(client.conn.playing)->tech_goal)) {
 
       count++;
       fc_snprintf(cBuf, sizeof(cBuf), "%s\n%d %s",
@@ -3255,7 +3258,6 @@ static int popdown_science_dialog_callback(struct widget *pWidget)
 **************************************************************************/
 void science_report_dialog_popup(bool raise)
 {
-  const struct research *presearch;
   struct widget *pWidget, *pWindow;
   struct widget *pChangeResearchButton;
   struct widget *pChangeResearchGoalButton;
@@ -3269,8 +3271,6 @@ void science_report_dialog_popup(bool raise)
   if (pScienceDlg) {
     return;
   }
-
-  presearch = research_get(client_player());
 
   /* disable research button */
   pWidget = get_research_widget();
@@ -3305,18 +3305,18 @@ void science_report_dialog_popup(bool raise)
                       (Main.screen->h - pWindow->size.h) / 2);
 
   add_to_gui_list(ID_SCIENCE_DLG_WINDOW, pWindow);
-
+  
   /* count number of researchable techs */
   count = 0;
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(presearch, i)
-        && TECH_KNOWN != research_invention_state(presearch, i)) {
-      count++;
+    if (player_invention_reachable(client.conn.playing, i, TRUE)
+     && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
+	count++;
     }
   }  advance_index_iterate_end;
 
   /* current research icon */
-  pTechIcon = get_tech_icon(presearch->researching);
+  pTechIcon = get_tech_icon(player_research_get(client.conn.playing)->researching);
   pChangeResearchButton = create_icon2(pTechIcon, pWindow->dst, WF_RESTORE_BACKGROUND | WF_FREE_THEME);
 
   pChangeResearchButton->action = popup_change_research_dialog_callback;
@@ -3327,9 +3327,9 @@ void science_report_dialog_popup(bool raise)
   add_to_gui_list(ID_SCIENCE_DLG_CHANGE_REASARCH_BUTTON, pChangeResearchButton);
 
   /* current research goal icon */
-  pTechIcon = get_tech_icon(presearch->tech_goal);
+  pTechIcon = get_tech_icon(player_research_get(client.conn.playing)->tech_goal);
   pChangeResearchGoalButton = create_icon2(pTechIcon, pWindow->dst, WF_RESTORE_BACKGROUND | WF_FREE_THEME);
-
+  
   pChangeResearchGoalButton->action = popup_change_research_goal_dialog_callback;
   if (count > 0) {
     set_wstate(pChangeResearchGoalButton, FC_WS_NORMAL);

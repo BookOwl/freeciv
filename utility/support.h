@@ -24,8 +24,6 @@ extern "C" {
   See also mem.h, netintf.h, rand.h, and see support.c for more comments.
 ***********************************************************************/
 
-#include <freeciv_config.h>
-
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -52,18 +50,19 @@ extern "C" {
 #include <posix/be_prim.h>
 #define __bool_true_false_are_defined 1
 #else
-#ifdef FREECIV_HAVE_STDBOOL_H
+#ifdef HAVE_STDBOOL_H
 #include <stdbool.h>
 #else /* Implement <stdbool.h> ourselves */
 #undef bool
 #undef true
 #undef false
 #undef __bool_true_false_are_defined
-#define bool unsigned int
+#define bool fc_bool
 #define true  1
 #define false 0
 #define __bool_true_false_are_defined 1
-#endif /* ! FREECIV_HAVE_STDBOOL_H */
+typedef unsigned int fc_bool;
+#endif /* ! HAVE_STDBOOL_H */
 #endif /* ! __BEOS__ */
 #endif /* __cplusplus */
 
@@ -176,17 +175,6 @@ char fc_tolower(char c);
 void fc_uname(char *buf, size_t len);
 
 const char *fc_basename(const char *path);
-
-static bool inline is_bigendian(void)
-{
-#ifdef WORDS_BIGENDIAN 
-  return TRUE;
-#else  /* WORDS_BIGENDIAN */
-  return FALSE;
-#endif /* WORDS_BIGENDIAN */
-}
-
-int fc_at_quick_exit(void (*func)(void));
 
 #ifdef __cplusplus
 }

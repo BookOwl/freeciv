@@ -47,7 +47,6 @@
 #include "editgui.h"
 #include "editprop.h"
 #include "finddlg.h"
-#include "gamedlgs.h"
 #include "gotodlg.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
@@ -297,27 +296,11 @@ static void report_demographic_callback(GtkAction *action, gpointer data)
 }
 
 /****************************************************************
-  Action "REPORT_ACHIEVEMENTS" callback.
-*****************************************************************/
-static void report_achievements_callback(GtkAction *action, gpointer data)
-{
-  send_report_request(REPORT_ACHIEVEMENTS);
-}
-
-/****************************************************************
   Action "HELP_LANGUAGE" callback.
 *****************************************************************/
 static void help_language_callback(GtkAction *action, gpointer data)
 {
   popup_help_dialog_string(HELP_LANGUAGES_ITEM);
-}
-
-/****************************************************************
-  Action "HELP_POLICIES" callback.
-*****************************************************************/
-static void help_policies_callback(GtkAction *action, gpointer data)
-{
-  popup_help_dialog_string(HELP_MULTIPLIER_ITEM);
 }
 
 /****************************************************************
@@ -510,7 +493,7 @@ static void help_about_callback(GtkAction *action, gpointer data)
 static void save_options_on_exit_callback(GtkToggleAction *action,
                                           gpointer data)
 {
-  options.save_options_on_exit = gtk_toggle_action_get_active(action);
+  save_options_on_exit = gtk_toggle_action_get_active(action);
 }
 
 /****************************************************************
@@ -531,7 +514,7 @@ static void edit_mode_callback(GtkToggleAction *action, gpointer data)
 static void show_city_outlines_callback(GtkToggleAction *action,
                                         gpointer data)
 {
-  if (options.draw_city_outlines ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_outlines ^ gtk_toggle_action_get_active(action)) {
     key_city_outlines_toggle();
   }
 }
@@ -541,7 +524,7 @@ static void show_city_outlines_callback(GtkToggleAction *action,
 *****************************************************************/
 static void show_city_output_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_city_output ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_output ^ gtk_toggle_action_get_active(action)) {
     key_city_output_toggle();
   }
 }
@@ -551,7 +534,7 @@ static void show_city_output_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_map_grid_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_map_grid ^ gtk_toggle_action_get_active(action)) {
+  if (draw_map_grid ^ gtk_toggle_action_get_active(action)) {
     key_map_grid_toggle();
   }
 }
@@ -562,7 +545,7 @@ static void show_map_grid_callback(GtkToggleAction *action, gpointer data)
 static void show_national_borders_callback(GtkToggleAction *action,
                                            gpointer data)
 {
-  if (options.draw_borders ^ gtk_toggle_action_get_active(action)) {
+  if (draw_borders ^ gtk_toggle_action_get_active(action)) {
     key_map_borders_toggle();
   }
 }
@@ -573,7 +556,7 @@ static void show_national_borders_callback(GtkToggleAction *action,
 static void show_native_tiles_callback(GtkToggleAction *action,
                                        gpointer data)
 {
-  if (options.draw_native ^ gtk_toggle_action_get_active(action)) {
+  if (draw_native ^ gtk_toggle_action_get_active(action)) {
     key_map_native_toggle();
   }
 }
@@ -584,7 +567,7 @@ static void show_native_tiles_callback(GtkToggleAction *action,
 static void show_city_full_bar_callback(GtkToggleAction *action,
                                         gpointer data)
 {
-  if (options.draw_full_citybar ^ gtk_toggle_action_get_active(action)) {
+  if (draw_full_citybar ^ gtk_toggle_action_get_active(action)) {
     key_city_full_bar_toggle();
     view_menu_update_sensitivity();
   }
@@ -595,7 +578,7 @@ static void show_city_full_bar_callback(GtkToggleAction *action,
 *****************************************************************/
 static void show_city_names_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_city_names ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_names ^ gtk_toggle_action_get_active(action)) {
     key_city_names_toggle();
     view_menu_update_sensitivity();
   }
@@ -606,7 +589,7 @@ static void show_city_names_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_city_growth_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_city_growth ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_growth ^ gtk_toggle_action_get_active(action)) {
     key_city_growth_toggle();
   }
 }
@@ -617,7 +600,7 @@ static void show_city_growth_callback(GtkToggleAction *action, gpointer data)
 static void show_city_productions_callback(GtkToggleAction *action,
                                            gpointer data)
 {
-  if (options.draw_city_productions ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_productions ^ gtk_toggle_action_get_active(action)) {
     key_city_productions_toggle();
     view_menu_update_sensitivity();
   }
@@ -629,7 +612,7 @@ static void show_city_productions_callback(GtkToggleAction *action,
 static void show_city_buy_cost_callback(GtkToggleAction *action,
                                         gpointer data)
 {
-  if (options.draw_city_buycost ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_buycost ^ gtk_toggle_action_get_active(action)) {
     key_city_buycost_toggle();
   }
 }
@@ -640,7 +623,7 @@ static void show_city_buy_cost_callback(GtkToggleAction *action,
 static void show_city_trade_routes_callback(GtkToggleAction *action,
                                             gpointer data)
 {
-  if (options.draw_city_trade_routes ^ gtk_toggle_action_get_active(action)) {
+  if (draw_city_trade_routes ^ gtk_toggle_action_get_active(action)) {
     key_city_trade_routes_toggle();
   }
 }
@@ -650,7 +633,7 @@ static void show_city_trade_routes_callback(GtkToggleAction *action,
 *****************************************************************/
 static void show_terrain_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_terrain ^ gtk_toggle_action_get_active(action)) {
+  if (draw_terrain ^ gtk_toggle_action_get_active(action)) {
     key_terrain_toggle();
     view_menu_update_sensitivity();
   }
@@ -661,7 +644,7 @@ static void show_terrain_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_coastline_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_coastline ^ gtk_toggle_action_get_active(action)) {
+  if (draw_coastline ^ gtk_toggle_action_get_active(action)) {
     key_coastline_toggle();
   }
 }
@@ -671,7 +654,7 @@ static void show_coastline_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_road_rails_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_roads_rails ^ gtk_toggle_action_get_active(action)) {
+  if (draw_roads_rails ^ gtk_toggle_action_get_active(action)) {
     key_roads_rails_toggle();
   }
 }
@@ -681,7 +664,7 @@ static void show_road_rails_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_irrigation_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_irrigation ^ gtk_toggle_action_get_active(action)) {
+  if (draw_irrigation ^ gtk_toggle_action_get_active(action)) {
     key_irrigation_toggle();
   }
 }
@@ -691,7 +674,7 @@ static void show_irrigation_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_mine_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_mines ^ gtk_toggle_action_get_active(action)) {
+  if (draw_mines ^ gtk_toggle_action_get_active(action)) {
     key_mines_toggle();
   }
 }
@@ -701,7 +684,7 @@ static void show_mine_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_bases_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_fortress_airbase ^ gtk_toggle_action_get_active(action)) {
+  if (draw_fortress_airbase ^ gtk_toggle_action_get_active(action)) {
     key_bases_toggle();
   }
 }
@@ -711,7 +694,7 @@ static void show_bases_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_specials_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_specials ^ gtk_toggle_action_get_active(action)) {
+  if (draw_specials ^ gtk_toggle_action_get_active(action)) {
     key_specials_toggle();
   }
 }
@@ -721,7 +704,7 @@ static void show_specials_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_pollution_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_pollution ^ gtk_toggle_action_get_active(action)) {
+  if (draw_pollution ^ gtk_toggle_action_get_active(action)) {
     key_pollution_toggle();
   }
 }
@@ -731,7 +714,7 @@ static void show_pollution_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_cities_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_cities ^ gtk_toggle_action_get_active(action)) {
+  if (draw_cities ^ gtk_toggle_action_get_active(action)) {
     key_cities_toggle();
   }
 }
@@ -741,7 +724,7 @@ static void show_cities_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_units_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_units ^ gtk_toggle_action_get_active(action)) {
+  if (draw_units ^ gtk_toggle_action_get_active(action)) {
     key_units_toggle();
     view_menu_update_sensitivity();
   }
@@ -753,7 +736,7 @@ static void show_units_callback(GtkToggleAction *action, gpointer data)
 static void show_unit_solid_bg_callback(GtkToggleAction *action,
                                         gpointer data)
 {
-  if (options.solid_color_behind_units ^ gtk_toggle_action_get_active(action)) {
+  if (solid_color_behind_units ^ gtk_toggle_action_get_active(action)) {
     key_unit_solid_bg_toggle();
   }
 }
@@ -764,7 +747,7 @@ static void show_unit_solid_bg_callback(GtkToggleAction *action,
 static void show_unit_shields_callback(GtkToggleAction *action,
                                        gpointer data)
 {
-  if (options.draw_unit_shields ^ gtk_toggle_action_get_active(action)) {
+  if (draw_unit_shields ^ gtk_toggle_action_get_active(action)) {
     key_unit_shields_toggle();
   }
 }
@@ -774,7 +757,7 @@ static void show_unit_shields_callback(GtkToggleAction *action,
 *****************************************************************/
 static void show_focus_unit_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_focus_unit ^ gtk_toggle_action_get_active(action)) {
+  if (draw_focus_unit ^ gtk_toggle_action_get_active(action)) {
     key_focus_unit_toggle();
     view_menu_update_sensitivity();
   }
@@ -785,7 +768,7 @@ static void show_focus_unit_callback(GtkToggleAction *action, gpointer data)
 *****************************************************************/
 static void show_fog_of_war_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.draw_fog_of_war ^ gtk_toggle_action_get_active(action)) {
+  if (draw_fog_of_war ^ gtk_toggle_action_get_active(action)) {
     key_fog_of_war_toggle();
     view_menu_update_sensitivity();
   }
@@ -797,8 +780,8 @@ static void show_fog_of_war_callback(GtkToggleAction *action, gpointer data)
 static void show_better_fog_of_war_callback(GtkToggleAction *action,
                                             gpointer data)
 {
-  if (options.gui_gtk2_better_fog ^ gtk_toggle_action_get_active(action)) {
-    options.gui_gtk2_better_fog ^= 1;
+  if (gui_gtk2_better_fog ^ gtk_toggle_action_get_active(action)) {
+    gui_gtk2_better_fog ^= 1;
     update_map_canvas_visible();
   }
 }
@@ -808,10 +791,10 @@ static void show_better_fog_of_war_callback(GtkToggleAction *action,
 *****************************************************************/
 static void full_screen_callback(GtkToggleAction *action, gpointer data)
 {
-  if (options.gui_gtk2_fullscreen ^ gtk_toggle_action_get_active(action)) {
-    options.gui_gtk2_fullscreen ^= 1;
+  if (fullscreen_mode ^ gtk_toggle_action_get_active(action)) {
+    fullscreen_mode ^= 1;
 
-    if (options.gui_gtk2_fullscreen) {
+    if (fullscreen_mode) {
       gtk_window_fullscreen(GTK_WINDOW(toplevel));
     } else {
       gtk_window_unfullscreen(GTK_WINDOW(toplevel));
@@ -1052,9 +1035,8 @@ static void build_city_callback(GtkAction *action, gpointer data)
        get an eventual error message from the server if we try. */
     if (unit_can_add_or_build_city(punit)) {
       request_unit_build_city(punit);
-    } else if (utype_can_do_action(unit_type(punit),
-                                   ACTION_HELP_WONDER)) {
-      request_unit_caravan_action(punit, ACTION_HELP_WONDER);
+    } else if (unit_has_type_flag(punit, UTYF_HELP_WONDER)) {
+      request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
     }
   } unit_list_iterate_end;
 }
@@ -1083,20 +1065,22 @@ static void build_road_callback(GtkAction *action, gpointer data)
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                 EC_ROAD,
+    struct road_type *proad = next_road_for_tile(unit_tile(punit),
                                                  unit_owner(punit),
                                                  punit);
     bool building_road = FALSE;
 
-    if (tgt != NULL
-        && can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt)) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt);
-      building_road = TRUE;
+    if (proad != NULL) {
+      struct act_tgt tgt = { .type = ATT_ROAD, .obj.road = road_number(proad) };
+
+      if (can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, &tgt)) {
+        request_new_unit_activity_road(punit, proad);
+        building_road = TRUE;
+      }
     }
 
     if (!building_road && unit_can_est_trade_route_here(punit)) {
-      request_unit_caravan_action(punit, ACTION_TRADE_ROUTE);
+      request_unit_caravan_action(punit, PACKET_UNIT_ESTABLISH_TRADE);
     }
   } unit_list_iterate_end;
 }
@@ -1112,7 +1096,7 @@ static void build_irrigation_callback(GtkAction *action, gpointer data)
 /****************************************************************
   Action "BUILD_MINE" callback.
 *****************************************************************/
-static void build_mine_callback(GtkAction *action, gpointer data)
+static void build_mine_callack(GtkAction *action, gpointer data)
 {
   key_unit_mine();
 }
@@ -1125,11 +1109,10 @@ static void connect_road_callback(GtkAction *action, gpointer data)
   struct road_type *proad = road_by_compat_special(ROCO_ROAD);
 
   if (proad != NULL) {
-    struct extra_type *tgt;
+    struct act_tgt tgt = { .type = ATT_ROAD,
+                           .obj.road = road_number(proad) };
 
-    tgt = road_extra_get(proad);
-
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
 }
 
@@ -1141,28 +1124,19 @@ static void connect_rail_callback(GtkAction *action, gpointer data)
   struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
 
   if (prail != NULL) {
-    struct extra_type *tgt;
+    struct act_tgt tgt = { .type = ATT_ROAD,
+                           .obj.road = road_number(prail) };
 
-    tgt = road_extra_get(prail);
-
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
 }
 
 /****************************************************************
   Action "CONNECT_IRRIGATION" callback.
 *****************************************************************/
-static void connect_irrigation_callback(GtkAction *action, gpointer data)
+static void connect_irrigation_callack(GtkAction *action, gpointer data)
 {
-  struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-  if (extra_type_list_size(extras) > 0) {
-    struct extra_type *pextra;
-
-    pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-    key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-  }
+  key_unit_connect(ACTIVITY_IRRIGATE, NULL);
 }
 
 /****************************************************************
@@ -1181,12 +1155,8 @@ static void clean_pollution_callback(GtkAction *action, gpointer data)
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *pextra;
-
-    pextra = prev_extra_in_tile(unit_tile(punit), ERM_CLEANPOLLUTION,
-                                unit_owner(punit), punit);
-    if (pextra != NULL) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_POLLUTION, pextra);
+    if (can_unit_do_activity(punit, ACTIVITY_POLLUTION)) {
+      request_new_unit_activity(punit, ACTIVITY_POLLUTION);
     } else if (can_unit_paradrop(punit)) {
       /* FIXME: This is getting worse, we use a key_unit_*() function
        * which assign the order for all units!  Very bad! */
@@ -1208,16 +1178,17 @@ static void clean_fallout_callback(GtkAction *action, gpointer data)
 *****************************************************************/
 static void build_fortress_callback(GtkAction *action, gpointer data)
 {
-  key_unit_fortress();
-}
-
-/****************************************************************
-  Action "FORTIFY" callback.
-*****************************************************************/
-static void fortify_callback(GtkAction *action, gpointer data)
-{
   unit_list_iterate(get_units_in_focus(), punit) {
-    request_unit_fortify(punit);
+    /* FIXME: this can provide different actions for different units...
+     * not good! */
+    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
+                                                   punit, unit_tile(punit));
+
+    if (pbase && can_unit_do_activity_base(punit, pbase->item_number)) {
+      request_new_unit_activity_base(punit, pbase);
+    } else {
+      request_unit_fortify(punit);
+    }
   } unit_list_iterate_end;
 }
 
@@ -1262,14 +1233,6 @@ static void tax_rate_callback(GtkAction *action, gpointer data)
 }
 
 /****************************************************************
-  Action "MULTIPLIERS" callback.
-*****************************************************************/
-static void multiplier_callback(GtkAction *action, gpointer data)
-{
-  popup_multiplier_dialog();
-}
-
-/****************************************************************
   The player has chosen a government from the menu.
 *****************************************************************/
 static void government_callback(GtkMenuItem *item, gpointer data)
@@ -1282,10 +1245,10 @@ static void government_callback(GtkMenuItem *item, gpointer data)
 ****************************************************************************/
 static void base_callback(GtkMenuItem *item, gpointer data)
 {
-  struct extra_type *pextra = data;
+  struct base_type *pbase = data;
 
   unit_list_iterate(get_units_in_focus(), punit) {
-    request_new_unit_activity_targeted(punit, ACTIVITY_BASE, pextra);
+    request_new_unit_activity_base(punit, pbase);
   } unit_list_iterate_end;
 }
 
@@ -1294,11 +1257,10 @@ static void base_callback(GtkMenuItem *item, gpointer data)
 ****************************************************************************/
 static void road_callback(GtkMenuItem *item, gpointer data)
 {
-  struct extra_type *pextra = data;
+  struct road_type *proad = data;
 
   unit_list_iterate(get_units_in_focus(), punit) {
-    request_new_unit_activity_targeted(punit, ACTIVITY_GEN_ROAD,
-                                       pextra);
+    request_new_unit_activity_road(punit, proad);
   } unit_list_iterate_end;
 }
 
@@ -1455,8 +1417,6 @@ static GtkActionGroup *get_safe_group(void)
        NULL, NULL, G_CALLBACK(help_combat_callback)},
       {"HELP_ZOC", NULL, _("Zones of Control"),
        NULL, NULL, G_CALLBACK(help_zoc_callback)},
-      {"HELP_POLICIES", NULL, _("Policies"),
-       NULL, NULL, G_CALLBACK(help_policies_callback)},
       {"HELP_GOVERNMENT", NULL, _("Government"),
        NULL, NULL, G_CALLBACK(help_government_callback)},
       {"HELP_DIPLOMACY", NULL, _("Diplomacy"),
@@ -1690,14 +1650,14 @@ static GtkActionGroup *get_unit_group(void)
       {"BUILD_IRRIGATION", NULL, _("Build _Irrigation"),
        "i", NULL, G_CALLBACK(build_irrigation_callback)},
       {"BUILD_MINE", NULL, _("Build _Mine"),
-       "m", NULL, G_CALLBACK(build_mine_callback)},
+       "m", NULL, G_CALLBACK(build_mine_callack)},
 
       {"CONNECT_ROAD", NULL, _("Connect With Roa_d"),
        "<Shift>r", NULL, G_CALLBACK(connect_road_callback)},
       {"CONNECT_RAIL", NULL, _("Connect With Rai_l"),
        "<Shift>l", NULL, G_CALLBACK(connect_rail_callback)},
       {"CONNECT_IRRIGATION", NULL, _("Connect With Irri_gation"),
-       "<Shift>i", NULL, G_CALLBACK(connect_irrigation_callback)},
+       "<Shift>i", NULL, G_CALLBACK(connect_irrigation_callack)},
 
       {"TRANSFORM_TERRAIN", NULL, _("Transf_orm Terrain"),
        "o", NULL, G_CALLBACK(transform_terrain_callack)},
@@ -1707,12 +1667,10 @@ static GtkActionGroup *get_unit_group(void)
        "n", NULL, G_CALLBACK(clean_fallout_callback)},
 
       /* Combat menu. */
-      {"FORTIFY", NULL, _("Fortify"),
-       "f", NULL, G_CALLBACK(fortify_callback)},
       {"BUILD_FORTRESS", NULL, _("Build Type A Base"),
-       "<Shift>f", NULL, G_CALLBACK(build_fortress_callback)},
+       "f", NULL, G_CALLBACK(build_fortress_callback)},
       {"BUILD_AIRBASE", NULL, _("Build Type B Base"),
-       "<Shift>e", NULL, G_CALLBACK(build_airbase_callback)},
+       "e", NULL, G_CALLBACK(build_airbase_callback)},
 
       {"DO_PILLAGE", NULL, _("_Pillage"),
        "<Shift>p", NULL, G_CALLBACK(do_pillage_callback)},
@@ -1750,8 +1708,6 @@ static GtkActionGroup *get_playing_group(void)
       /* Civilization menu. */
       {"TAX_RATE", NULL, _("_Tax Rates..."),
        "<Control>t", NULL, G_CALLBACK(tax_rate_callback)},
-       {"POLICIES", NULL, _("Policies"),
-       NULL, NULL, G_CALLBACK(multiplier_callback)},
       /* Civilization/Government menu. */
       {"START_REVOLUTION", NULL, _("_Revolution..."),
        "<Shift><Control>r", NULL, G_CALLBACK(government_callback)},
@@ -1790,9 +1746,7 @@ static GtkActionGroup *get_player_group(void)
        "F6", NULL, G_CALLBACK(report_research_callback)},
 
       {"REPORT_SPACESHIP", NULL, _("_Spaceship"),
-       "F12", NULL, G_CALLBACK(report_spaceship_callback)},
-      {"REPORT_ACHIEVEMENTS", NULL, _("_Achievements"),
-       "asterisk", NULL, G_CALLBACK(report_achievements_callback)}
+       "F12", NULL, G_CALLBACK(report_spaceship_callback)}
     };
 
     group = gtk_action_group_new("PlayerGroup");
@@ -1992,24 +1946,24 @@ static void view_menu_update_sensitivity(void)
   /* The "full" city bar (i.e. the new way of drawing the
    * city name), can draw the city growth even without drawing
    * the city name. But the old method cannot. */
-  if (options.draw_full_citybar) {
+  if (draw_full_citybar) {
     menus_set_sensitive(safe_group, "SHOW_CITY_GROWTH", TRUE);
     menus_set_sensitive(safe_group, "SHOW_CITY_TRADE_ROUTES", TRUE);
   } else {
-    menus_set_sensitive(safe_group, "SHOW_CITY_GROWTH", options.draw_city_names);
+    menus_set_sensitive(safe_group, "SHOW_CITY_GROWTH", draw_city_names);
     menus_set_sensitive(safe_group, "SHOW_CITY_TRADE_ROUTES",
-                        options.draw_city_names);
+                        draw_city_names);
   }
 
   menus_set_sensitive(safe_group, "SHOW_CITY_BUY_COST",
-                      options.draw_city_productions);
-  menus_set_sensitive(safe_group, "SHOW_COASTLINE", !options.draw_terrain);
+                      draw_city_productions);
+  menus_set_sensitive(safe_group, "SHOW_COASTLINE", !draw_terrain);
   menus_set_sensitive(safe_group, "SHOW_UNIT_SOLID_BG",
-                      options.draw_units || options.draw_focus_unit);
+                      draw_units || draw_focus_unit);
   menus_set_sensitive(safe_group, "SHOW_UNIT_SHIELDS",
-                      options.draw_units || options.draw_focus_unit);
-  menus_set_sensitive(safe_group, "SHOW_FOCUS_UNIT", !options.draw_units);
-  menus_set_sensitive(safe_group, "SHOW_BETTER_FOG_OF_WAR", options.draw_fog_of_war);
+                      draw_units || draw_focus_unit);
+  menus_set_sensitive(safe_group, "SHOW_FOCUS_UNIT", !draw_units);
+  menus_set_sensitive(safe_group, "SHOW_BETTER_FOG_OF_WAR", draw_fog_of_war);
 }
 
 /****************************************************************************
@@ -2024,7 +1978,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile *newtile = tile_virtual_new(ptile);
   const char *text;
 
-  tile_apply_activity(newtile, activity, NULL);
+  tile_apply_activity(newtile, activity);
   text = tile_get_info_text(newtile, FALSE, 0);
   tile_virtual_destroy(newtile);
   return text;
@@ -2044,9 +1998,8 @@ void real_menus_update(void)
   GtkMenu *menu;
   char acttext[128], irrtext[128], mintext[128], transtext[128];
   struct terrain *pterrain;
-  bool conn_possible;
+  bool road_conn_possible;
   struct road_type *proad;
-  struct extra_type_list *extras;
 
   if (NULL == ui_manager && !can_client_change_view()) {
     return;
@@ -2125,10 +2078,6 @@ void real_menus_update(void)
         gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
                                  can_change_to_government(client_player(),
                                                           pgov));
-      } else {
-        /* Revolution without target government */
-        gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
-                                 game.info.revolentype != REVOLEN_QUICKENING);
       }
     }
     g_list_free(list);
@@ -2143,16 +2092,15 @@ void real_menus_update(void)
   /* Set base sensitivity. */
   if ((menu = find_action_menu(unit_group, "MENU_BUILD_BASE"))) {
     GList *list, *iter;
-    struct extra_type *pextra;
+    struct base_type *pbase;
 
     list = gtk_container_get_children(GTK_CONTAINER(menu));
     for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      pextra = g_object_get_data(G_OBJECT(iter->data), "base");
-      if (NULL != pextra) {
+      pbase = g_object_get_data(G_OBJECT(iter->data), "base");
+      if (NULL != pbase) {
         gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
-                                 can_units_do_activity_targeted(punits,
-                                                                ACTIVITY_BASE,
-                                                                pextra));
+                                 can_units_do_base(punits,
+                                                   base_number(pbase)));
       }
     }
     g_list_free(list);
@@ -2161,16 +2109,15 @@ void real_menus_update(void)
   /* Set road sensitivity. */
   if ((menu = find_action_menu(unit_group, "MENU_BUILD_PATH"))) {
     GList *list, *iter;
-    struct extra_type *pextra;
+    struct road_type *proad;
 
     list = gtk_container_get_children(GTK_CONTAINER(menu));
     for (iter = list; NULL != iter; iter = g_list_next(iter)) {
-      pextra = g_object_get_data(G_OBJECT(iter->data), "road");
-      if (NULL != pextra) {
+      proad = g_object_get_data(G_OBJECT(iter->data), "road");
+      if (NULL != proad) {
         gtk_widget_set_sensitive(GTK_WIDGET(iter->data),
-                                 can_units_do_activity_targeted(punits,
-                                                                ACTIVITY_GEN_ROAD,
-                                                                pextra));
+                                 can_units_do_road(punits,
+                                                   road_number(proad)));
       }
     }
     g_list_free(list);
@@ -2182,7 +2129,7 @@ void real_menus_update(void)
             (can_units_do(punits, unit_can_add_or_build_city)
              || can_units_do(punits, unit_can_help_build_wonder_here)));
   menus_set_sensitive(unit_group, "GO_BUILD_CITY",
-                      units_contain_cityfounder(punits));
+                      units_have_type_flag(punits, UTYF_CITIES, TRUE));
   menus_set_sensitive(unit_group, "BUILD_ROAD",
                       (can_units_do_any_road(punits)
                        || can_units_do(punits,
@@ -2193,11 +2140,10 @@ void real_menus_update(void)
                       can_units_do_activity(punits, ACTIVITY_MINE));
   menus_set_sensitive(unit_group, "TRANSFORM_TERRAIN",
                       can_units_do_activity(punits, ACTIVITY_TRANSFORM));
-  menus_set_sensitive(unit_group, "FORTIFY",
-                      can_units_do_activity(punits,
-                                            ACTIVITY_FORTIFYING));
   menus_set_sensitive(unit_group, "BUILD_FORTRESS",
-                      can_units_do_base_gui(punits, BASE_GUI_FORTRESS));
+                      (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
+                       || can_units_do_activity(punits,
+                                                ACTIVITY_FORTIFYING)));
   menus_set_sensitive(unit_group, "BUILD_AIRBASE",
                       can_units_do_base_gui(punits, BASE_GUI_AIRBASE));
   menus_set_sensitive(unit_group, "CLEAN_POLLUTION",
@@ -2234,46 +2180,37 @@ void real_menus_update(void)
 
   proad = road_by_compat_special(ROCO_ROAD);
   if (proad != NULL) {
-    struct extra_type *tgt;
+    struct act_tgt tgt = { .type = ATT_ROAD,
+                           .obj.road = road_number(proad) }; 
 
-    tgt = road_extra_get(proad);
-
-    conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt);
+    road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
+                                              &tgt);
   } else {
-    conn_possible = FALSE;
+    road_conn_possible = FALSE;
   }
-  menus_set_sensitive(unit_group, "CONNECT_ROAD", conn_possible);
+  menus_set_sensitive(unit_group, "CONNECT_ROAD", road_conn_possible);
 
   proad = road_by_compat_special(ROCO_RAILROAD);
   if (proad != NULL) {
-    struct extra_type *tgt;
+    struct act_tgt tgt = { .type = ATT_ROAD,
+                           .obj.road = road_number(proad) }; 
 
-    tgt = road_extra_get(proad);
-
-    conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt);
+    road_conn_possible = can_units_do_connect(punits, ACTIVITY_GEN_ROAD,
+                                              &tgt);
   } else {
-    conn_possible = FALSE;
+    road_conn_possible = FALSE;
   }
-  menus_set_sensitive(unit_group, "CONNECT_RAIL", conn_possible);
+  menus_set_sensitive(unit_group, "CONNECT_RAIL", road_conn_possible);
 
-  extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-  if (extra_type_list_size(extras) > 0) { 
-    struct extra_type *tgt;
-
-    tgt = extra_type_list_get(extras, 0);
-    conn_possible = can_units_do_connect(punits, ACTIVITY_IRRIGATE, tgt);
-  } else {
-    conn_possible = FALSE;
-  }
-  menus_set_sensitive(unit_group, "CONNECT_IRRIGATION", conn_possible);
-
+  menus_set_sensitive(unit_group, "CONNECT_IRRIGATION",
+                      can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL));
   menus_set_sensitive(unit_group, "DIPLOMAT_ACTION",
-                      can_units_act_against_own_tile(punits));
+                      can_units_do_diplomat_action(punits,
+                                                   DIPLOMAT_ANY_ACTION));
   menus_set_sensitive(unit_group, "EXPLODE_NUKE",
                       units_have_type_flag(punits, UTYF_NUCLEAR, TRUE));
 
-  if (units_can_do_action(punits, ACTION_HELP_WONDER, TRUE)) {
+  if (units_have_type_flag(punits, UTYF_HELP_WONDER, TRUE)) {
     menus_rename(unit_group, "BUILD_CITY", _("Help _Build Wonder"));
   } else {
     bool city_on_tile = FALSE;
@@ -2295,26 +2232,25 @@ void real_menus_update(void)
     }
   }
 
-  if (units_can_do_action(punits, ACTION_TRADE_ROUTE, TRUE)) {
+  if (units_have_type_flag(punits, UTYF_TRADE_ROUTE, TRUE)) {
     menus_rename(unit_group, "BUILD_ROAD", _("Establish Trade _Route"));
   } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
     char road_item[500];
-    struct extra_type *pextra = NULL;
+    struct road_type *proad = NULL;
 
     /* FIXME: this overloading doesn't work well with multiple focus
      * units. */
     unit_list_iterate(punits, punit) {
-      pextra = next_extra_for_tile(unit_tile(punit), EC_ROAD,
-                                   unit_owner(punit), punit);
-     if (pextra != NULL) {
+     proad = next_road_for_tile(unit_tile(punit), unit_owner(punit), punit);
+     if (proad != NULL) {
         break;
       }
     } unit_list_iterate_end;
 
-    if (pextra != NULL) {
+    if (proad != NULL) {
       /* TRANS: Build road of specific type (Road/Railroad) */
       snprintf(road_item, sizeof(road_item), _("Build %s"),
-               extra_name_translation(pextra));
+               road_name_translation(proad));
       menus_rename(unit_group, "BUILD_ROAD", road_item);
     }
   } else {
@@ -2371,26 +2307,10 @@ void real_menus_update(void)
       fc_snprintf(irrtext, sizeof(irrtext), _("Change to %s"),
                   get_tile_change_menu_text(unit_tile(punit),
                                             ACTIVITY_IRRIGATE));
-    } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
-      struct extra_type *pextra = NULL;
-
-      /* FIXME: this overloading doesn't work well with multiple focus
-       * units. */
-      unit_list_iterate(punits, punit) {
-        pextra = next_extra_for_tile(unit_tile(punit), EC_IRRIGATION,
-                                     unit_owner(punit), punit);
-        if (pextra != NULL) {
-          break;
-        }
-      } unit_list_iterate_end;
-
-      if (pextra != NULL) {
-        /* TRANS: Build irrigation of specific type */
-        snprintf(irrtext, sizeof(irrtext), _("Build %s"),
-                 extra_name_translation(pextra));
-      } else {
-        sz_strlcpy(irrtext, _("Build _Irrigation"));
-      }
+    } else if (tile_has_special(unit_tile(punit), S_IRRIGATION)
+               && player_knows_techs_with_flag(unit_owner(punit),
+                                               TF_FARMLAND)) {
+      sz_strlcpy(irrtext, _("Bu_ild Farmland"));
     } else {
       sz_strlcpy(irrtext, _("Build _Irrigation"));
     }
@@ -2399,26 +2319,6 @@ void real_menus_update(void)
         && pterrain->mining_result != pterrain) {
       fc_snprintf(mintext, sizeof(mintext), _("Change to %s"),
                   get_tile_change_menu_text(unit_tile(punit), ACTIVITY_MINE));
-    } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)) {
-      struct extra_type *pextra = NULL;
-
-      /* FIXME: this overloading doesn't work well with multiple focus
-       * units. */
-      unit_list_iterate(punits, punit) {
-        pextra = next_extra_for_tile(unit_tile(punit), EC_MINE,
-                                     unit_owner(punit), punit);
-        if (pextra != NULL) {
-          break;
-        }
-      } unit_list_iterate_end;
-
-      if (pextra != NULL) {
-        /* TRANS: Build mine of specific type */
-        snprintf(mintext, sizeof(mintext), _("Build %s"),
-                 extra_name_translation(pextra));
-      } else {
-        sz_strlcpy(mintext, _("Build _Mine"));
-      }
     } else {
       sz_strlcpy(mintext, _("Build _Mine"));
     }
@@ -2440,6 +2340,12 @@ void real_menus_update(void)
   menus_rename(unit_group, "BUILD_IRRIGATION", irrtext);
   menus_rename(unit_group, "BUILD_MINE", mintext);
   menus_rename(unit_group, "TRANSFORM_TERRAIN", transtext);
+
+  if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
+    menus_rename(unit_group, "BUILD_FORTRESS", _("_Fortify Unit"));
+  } else {
+    menus_rename(unit_group, "BUILD_FORTRESS", _("Build Type A Base"));
+  }
 
   if (units_have_type_flag(punits, UTYF_PARATROOPERS, TRUE)) {
     menus_rename(unit_group, "CLEAN_POLLUTION", _("Drop _Paratrooper"));
@@ -2478,7 +2384,7 @@ void real_menus_init(void)
                       can_client_access_hack()
                       && C_S_RUNNING <= client_state());
 
-  menus_set_active(safe_group, "SAVE_OPTIONS_ON_EXIT", options.save_options_on_exit);
+  menus_set_active(safe_group, "SAVE_OPTIONS_ON_EXIT", save_options_on_exit);
   menus_set_sensitive(safe_group, "SERVER_OPTIONS", client.conn.established);
 
   menus_set_sensitive(safe_group, "LEAVE",
@@ -2549,12 +2455,10 @@ void real_menus_init(void)
 
     /* Add new base entries. */
     base_type_iterate(p) {
-      struct extra_type *pextra = base_extra_get(p);
-
-      if (pextra->buildable) {
-        item = gtk_menu_item_new_with_label(extra_name_translation(pextra));
-        g_object_set_data(G_OBJECT(item), "base", pextra);
-        g_signal_connect(item, "activate", G_CALLBACK(base_callback), pextra);
+      if (p->buildable) {
+        item = gtk_menu_item_new_with_label(base_name_translation(p));
+        g_object_set_data(G_OBJECT(item), "base", p);
+        g_signal_connect(item, "activate", G_CALLBACK(base_callback), p);
         gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
         gtk_widget_show(item);
       }
@@ -2574,12 +2478,10 @@ void real_menus_init(void)
 
     /* Add new road entries. */
     road_type_iterate(r) {
-      struct extra_type *pextra = road_extra_get(r);
-
-      if (pextra->buildable) {
-        item = gtk_menu_item_new_with_label(extra_name_translation(pextra));
-        g_object_set_data(G_OBJECT(item), "road", pextra);
-        g_signal_connect(item, "activate", G_CALLBACK(road_callback), pextra);
+      if (r->buildable) {
+        item = gtk_menu_item_new_with_label(road_name_translation(r));
+        g_object_set_data(G_OBJECT(item), "road", r);
+        g_signal_connect(item, "activate", G_CALLBACK(road_callback), r);
         gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
         gtk_widget_show(item);
       }
@@ -2593,45 +2495,45 @@ void real_menus_init(void)
                       game.info.changable_tax
                       && can_client_issue_orders());
 
-  menus_set_active(safe_group, "SHOW_CITY_OUTLINES", options.draw_city_outlines);
-  menus_set_active(safe_group, "SHOW_CITY_OUTPUT", options.draw_city_output);
-  menus_set_active(safe_group, "SHOW_MAP_GRID", options.draw_map_grid);
-  menus_set_active(safe_group, "SHOW_NATIONAL_BORDERS", options.draw_borders);
+  menus_set_active(safe_group, "SHOW_CITY_OUTLINES", draw_city_outlines);
+  menus_set_active(safe_group, "SHOW_CITY_OUTPUT", draw_city_output);
+  menus_set_active(safe_group, "SHOW_MAP_GRID", draw_map_grid);
+  menus_set_active(safe_group, "SHOW_NATIONAL_BORDERS", draw_borders);
   menus_set_sensitive(safe_group, "SHOW_NATIONAL_BORDERS",
                       BORDERS_DISABLED != game.info.borders);
-  menus_set_active(safe_group, "SHOW_NATIVE_TILES", options.draw_native);
-  menus_set_active(safe_group, "SHOW_CITY_FULL_BAR", options.draw_full_citybar);
-  menus_set_active(safe_group, "SHOW_CITY_NAMES", options.draw_city_names);
-  menus_set_active(safe_group, "SHOW_CITY_GROWTH", options.draw_city_growth);
+  menus_set_active(safe_group, "SHOW_NATIVE_TILES", draw_native);
+  menus_set_active(safe_group, "SHOW_CITY_FULL_BAR", draw_full_citybar);
+  menus_set_active(safe_group, "SHOW_CITY_NAMES", draw_city_names);
+  menus_set_active(safe_group, "SHOW_CITY_GROWTH", draw_city_growth);
   menus_set_active(safe_group, "SHOW_CITY_PRODUCTIONS",
-                   options.draw_city_productions);
-  menus_set_active(safe_group, "SHOW_CITY_BUY_COST", options.draw_city_buycost);
+                   draw_city_productions);
+  menus_set_active(safe_group, "SHOW_CITY_BUY_COST", draw_city_buycost);
   menus_set_active(safe_group, "SHOW_CITY_TRADE_ROUTES",
-                   options.draw_city_trade_routes);
-  menus_set_active(safe_group, "SHOW_TERRAIN", options.draw_terrain);
-  menus_set_active(safe_group, "SHOW_COASTLINE", options.draw_coastline);
-  menus_set_active(safe_group, "SHOW_PATHS", options.draw_roads_rails);
-  menus_set_active(safe_group, "SHOW_IRRIGATION", options.draw_irrigation);
-  menus_set_active(safe_group, "SHOW_MINES", options.draw_mines);
-  menus_set_active(safe_group, "SHOW_BASES", options.draw_fortress_airbase);
-  menus_set_active(safe_group, "SHOW_SPECIALS", options.draw_specials);
-  menus_set_active(safe_group, "SHOW_POLLUTION", options.draw_pollution);
-  menus_set_active(safe_group, "SHOW_CITIES", options.draw_cities);
-  menus_set_active(safe_group, "SHOW_UNITS", options.draw_units);
+                   draw_city_trade_routes);
+  menus_set_active(safe_group, "SHOW_TERRAIN", draw_terrain);
+  menus_set_active(safe_group, "SHOW_COASTLINE", draw_coastline);
+  menus_set_active(safe_group, "SHOW_PATHS", draw_roads_rails);
+  menus_set_active(safe_group, "SHOW_IRRIGATION", draw_irrigation);
+  menus_set_active(safe_group, "SHOW_MINES", draw_mines);
+  menus_set_active(safe_group, "SHOW_BASES", draw_fortress_airbase);
+  menus_set_active(safe_group, "SHOW_SPECIALS", draw_specials);
+  menus_set_active(safe_group, "SHOW_POLLUTION", draw_pollution);
+  menus_set_active(safe_group, "SHOW_CITIES", draw_cities);
+  menus_set_active(safe_group, "SHOW_UNITS", draw_units);
   menus_set_active(safe_group, "SHOW_UNIT_SOLID_BG",
-                   options.solid_color_behind_units);
-  menus_set_active(safe_group, "SHOW_UNIT_SHIELDS", options.draw_unit_shields);
-  menus_set_active(safe_group, "SHOW_FOCUS_UNIT", options.draw_focus_unit);
-  menus_set_active(safe_group, "SHOW_FOG_OF_WAR", options.draw_fog_of_war);
+                   solid_color_behind_units);
+  menus_set_active(safe_group, "SHOW_UNIT_SHIELDS", draw_unit_shields);
+  menus_set_active(safe_group, "SHOW_FOCUS_UNIT", draw_focus_unit);
+  menus_set_active(safe_group, "SHOW_FOG_OF_WAR", draw_fog_of_war);
   if (tileset_use_hard_coded_fog(tileset)) {
     menus_set_visible(safe_group, "SHOW_BETTER_FOG_OF_WAR", TRUE, TRUE);
     menus_set_active(safe_group, "SHOW_BETTER_FOG_OF_WAR",
-                     options.gui_gtk2_better_fog);
+                     gui_gtk2_better_fog);
   } else {
     menus_set_visible(safe_group, "SHOW_BETTER_FOG_OF_WAR", FALSE, FALSE);
   }
 
   view_menu_update_sensitivity();
 
-  menus_set_active(safe_group, "FULL_SCREEN", options.gui_gtk2_fullscreen);
+  menus_set_active(safe_group, "FULL_SCREEN", fullscreen_mode);
 }

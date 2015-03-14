@@ -33,7 +33,6 @@
 #include "timing.h"
 
 /* common */
-#include "calendar.h"
 #include "connection.h"
 #include "fc_types.h"
 #include "game.h"
@@ -1854,7 +1853,7 @@ static struct img *img_new(struct mapdef *mapdef, int topo, int xsize, int ysize
   pimg->turn = game.info.turn;
   fc_snprintf(pimg->title, sizeof(pimg->title),
               _("Turn: %4d - Year: %10s"), game.info.turn,
-              calendar_text());
+              textyear(game.info.year));
 
   pimg->mapsize.x = xsize; /* x size of the map */
   pimg->mapsize.y = ysize; /* y size of the map */

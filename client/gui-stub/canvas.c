@@ -39,14 +39,6 @@ void gui_canvas_free(struct canvas *store)
 }
 
 /****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void gui_canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* PORTME */
-}
-
-/****************************************************************************
   Copies an area from the source canvas to the destination canvas.
 ****************************************************************************/
 void gui_canvas_copy(struct canvas *dest, struct canvas *src,
@@ -105,6 +97,15 @@ void gui_canvas_put_rectangle(struct canvas *pcanvas,
 void gui_canvas_fill_sprite_area(struct canvas *pcanvas,
                                  struct sprite *psprite, struct color *pcolor,
                                  int canvas_x, int canvas_y)
+{
+  /* PORTME */
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void gui_canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+                                int canvas_x, int canvas_y)
 {
   /* PORTME */
 }

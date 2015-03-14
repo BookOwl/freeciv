@@ -24,7 +24,7 @@
 #endif
 
 /* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "astring.h"
@@ -32,7 +32,6 @@
 #include "log.h"
 
 /* common */
-#include "calendar.h"
 #include "game.h"
 #include "goto.h"
 #include "government.h"
@@ -333,26 +332,18 @@ void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
     /* TRANS: Research report action */
     fc_snprintf(cBuf, sizeof(cBuf), "%s (%s)\n%s (%d/%d)", _("Research"), "F6",
                                     _("None"), 0, 0);
+  } else if (A_UNSET != player_research_get(client.conn.playing)->researching) {
+    /* TRANS: Research report action */
+    fc_snprintf(cBuf, sizeof(cBuf), "%s (%s)\n%s (%d/%d)", _("Research"), "F6",
+		advance_name_researching(client.conn.playing),
+		player_research_get(client.conn.playing)->bulbs_researched,
+                player_research_get(client_player())->client.researching_cost);
   } else {
-    const struct research *presearch = research_get(client_player());
-
-    if (A_UNSET != presearch->researching) {
-      /* TRANS: Research report action */
-      fc_snprintf(cBuf, sizeof(cBuf), "%s (%s)\n%s (%d/%d)",
-                  _("Research"), "F6",
-                  research_advance_name_translation(presearch,
-                                                    presearch->researching),
-                  presearch->bulbs_researched,
-                  presearch->client.researching_cost);
-    } else {
-      /* TRANS: Research report action */
-      fc_snprintf(cBuf, sizeof(cBuf), "%s (%s)\n%s (%d/%d)",
-                  _("Research"), "F6",
-                  research_advance_name_translation(presearch,
-                                                    presearch->researching),
-                  presearch->bulbs_researched,
-                  0);
-    }
+    /* TRANS: Research report action */
+    fc_snprintf(cBuf, sizeof(cBuf), "%s (%s)\n%s (%d/%d)", _("Research"), "F6",
+		advance_name_researching(client.conn.playing),
+		player_research_get(client.conn.playing)->bulbs_researched,
+		0);
   }
 
   copy_chars_to_string16(pBuf->info_label, cBuf);
@@ -377,7 +368,7 @@ void overview_size_changed(void)
   if (overview_canvas) {
     canvas_free(overview_canvas);
   }      
-  overview_canvas = canvas_create(options.overview.width, options.overview.height);
+  overview_canvas = canvas_create(overview.width, overview.height);
   
   resize_minimap();
 }
@@ -422,20 +413,20 @@ void update_info_label(void)
                   "Gold %d "),
                 nation_adjective_for_player(client.conn.playing),
                 population_to_text(civ_population(client.conn.playing)),
-                calendar_text(),
+                textyear(game.info.year),
                 client.conn.playing->economic.gold);
-#else /* SMALL_SCREEN */
+#else
     fc_snprintf(buffer, sizeof(buffer),
                 _("%s Population: %s  Year: %s  "
                   "Gold %d Tax: %d Lux: %d Sci: %d "),
                 nation_adjective_for_player(client.conn.playing),
                 population_to_text(civ_population(client.conn.playing)),
-                calendar_text(),
+                textyear(game.info.year),
                 client.conn.playing->economic.gold,
                 client.conn.playing->economic.tax,
                 client.conn.playing->economic.luxury,
                 client.conn.playing->economic.science);
-#endif /* SMALL_SCREEN */
+#endif
     /* convert to unistr and create text surface */
     copy_chars_to_string16(pText, buffer);
     pTmp = create_text_surf_from_str16(pText);
@@ -794,7 +785,7 @@ void redraw_unit_info_label(struct unit_list *punitlist)
           destcanvas = canvas_create(tileset_full_tile_width(tileset),
                                      tileset_full_tile_height(tileset));
   
-          put_unit(aunit, destcanvas, 1.0, 0, 0);
+          put_unit(aunit, destcanvas, 0, 0);
           
           pTmpSurf = adj_surf(destcanvas->surf);
           
@@ -1160,9 +1151,6 @@ SDL_Surface *create_city_map(struct city *pCity)
   return city_map_canvas->surf;
 }
 
-/**************************************************************************
-  Return surface containing terrain of the tile.
-**************************************************************************/
 SDL_Surface *get_terrain_surface(struct tile *ptile)
 {
   /* tileset dimensions might have changed, so create a new canvas each time */
@@ -1174,7 +1162,7 @@ SDL_Surface *get_terrain_surface(struct tile *ptile)
   terrain_canvas = canvas_create_with_alpha(tileset_full_tile_width(tileset),
                                             tileset_full_tile_height(tileset));
 
-  put_terrain(ptile, terrain_canvas, 1.0, 0, 0);
+  put_terrain(ptile, terrain_canvas, 0, 0);
   
   return terrain_canvas->surf;
 }

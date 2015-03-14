@@ -4,7 +4,6 @@ translation_domain="freeciv"
 
 name = _("Madmen")
 plural = _("?plural:Madmen")
-groups = "Barbarian"
 legend = _("They have escaped society, and attack it for no sane reason.")
 
 leaders = {
@@ -14,7 +13,7 @@ leaders = {
 
 flag = "madmen"
 flag_alt = "barbarian"
-style = "Human"
+city_style = "Human"
 
 color.r = 153
 color.g =  17

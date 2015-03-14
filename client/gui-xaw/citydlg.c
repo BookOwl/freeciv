@@ -540,7 +540,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 
   if (tileset_tile_height(tileset)<45) dummy_improvement_list[5]=0;
 
-  if (options.concise_city_production) {
+  if (concise_city_production) {
     dummy_improvement_list[0] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXX";
   }
 
@@ -655,7 +655,7 @@ struct city_dialog *create_city_dialog(struct city *pcity)
 			    XtNfromHoriz, 
 			    (XtArgVal)pdialog->map_canvas,
 			    XtNlabel,
-			    options.concise_city_production
+			    concise_city_production
 				? "XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 				: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
 			    NULL);
@@ -1747,7 +1747,7 @@ void city_dialog_update_supported_units(struct city_dialog *pdialog,
       continue;
 
     XawPixcommClear(pixcomm); /* STG */
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
     put_unit_pixmap_city_overlays(punit,
                                   XawPixcommPixmap(pixcomm),
                                   punit->upkeep, happy_cost);
@@ -1809,7 +1809,7 @@ void city_dialog_update_present_units(struct city_dialog *pdialog, int unitid)
       continue;
 
     XawPixcommClear(pixcomm); /* STG */
-    put_unit(punit, &store, 1.0, 0, 0);
+    put_unit(punit, &store, 0, 0);
 
     xaw_expose_now(pixcomm);
 

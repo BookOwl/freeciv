@@ -19,7 +19,7 @@ leaders = {
 
 flag="ryukyu"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""

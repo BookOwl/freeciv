@@ -36,7 +36,7 @@ ruler_titles = {
 
 flag="toltec"
 flag_alt = "aztec"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

@@ -13,12 +13,9 @@
 #ifndef FC__ADVTOOLS_H
 #define FC__ADVTOOLS_H
 
-typedef float adv_want;
-#define ADV_WANT_PRINTF "%f"
-
 #define MORT 24
 
-adv_want amortize(adv_want benefit, int delay);
+int amortize(int benefit, int delay);
 
 /*
  * To prevent integer overflows the product "power * hp * firepower"

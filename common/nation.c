@@ -42,6 +42,25 @@ struct nation_set {
   char description[MAX_LEN_MSG];
 };
 
+/* Nation group structure. */
+struct nation_group {
+  struct name_translation name;
+
+  union {
+    struct {
+      /* Only used in the server (./server/). */
+
+      /* How much the AI will try to select a nation in the same group */
+      int match;
+    } server;
+
+    struct {
+      /* Only used at the client. */
+      /* Nothing yet. */
+    } client;
+  };
+};
+
 static struct nation_type *nations = NULL;
 
 static int num_nation_sets;
@@ -646,12 +665,12 @@ void nations_free(void)
 }
 
 /****************************************************************************
-  Returns nation's style.
+  Returns nation's city style.
 ****************************************************************************/
-struct nation_style *style_of_nation(const struct nation_type *pnation)
+int city_style_of_nation(const struct nation_type *pnation)
 {
   NATION_CHECK(pnation, return 0);
-  return pnation->style;
+  return pnation->city_style;
 }
 
 /****************************************************************************
@@ -985,15 +1004,6 @@ struct nation_group *nation_group_by_rule_name(const char *name)
 }
 
 /****************************************************************************
-  Set whether this group should appear in the nation selection UI.
-****************************************************************************/
-void nation_group_set_hidden(struct nation_group *pgroup, bool hidden)
-{
-  fc_assert_ret(NULL != pgroup);
-  pgroup->hidden = hidden;
-}
-
-/****************************************************************************
   Set how much the AI will try to select a nation in the same group.
   Server only function.
 ****************************************************************************/
@@ -1002,15 +1012,6 @@ void nation_group_set_match(struct nation_group *pgroup, int match)
   fc_assert_ret(is_server());
   fc_assert_ret(NULL != pgroup);
   pgroup->server.match = match;
-}
-
-/****************************************************************************
-  Return whether this group should appear in the nation selection UI.
-****************************************************************************/
-bool is_nation_group_hidden(struct nation_group *pgroup)
-{
-  fc_assert_ret_val(NULL != pgroup, TRUE);
-  return pgroup->hidden;
 }
 
 /****************************************************************************

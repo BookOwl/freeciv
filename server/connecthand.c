@@ -351,8 +351,8 @@ bool handle_login_request(struct connection *pconn,
              req->patch_version, req->version_label);
   log_verbose("Client caps: %s", req->capability);
   log_verbose("Server caps: %s", our_capability);
-  conn_set_capability(pconn, req->capability);
-
+  sz_strlcpy(pconn->capability, req->capability);
+  
   /* Make sure the server has every capability the client needs */
   if (!has_capabilities(our_capability, req->capability)) {
     fc_snprintf(msg, sizeof(msg),
@@ -613,25 +613,6 @@ static bool connection_attach_real(struct connection *pconn,
     }
 
     send_player_info_c(pplayer, game.est_connections);
-
-    /* Remove from global observers list, if was there */
-    conn_list_remove(game.glob_observers, pconn);
-  } else if (pplayer == NULL) {
-    /* Global observer */
-    bool already = FALSE;
-
-    fc_assert(observing);
-
-    conn_list_iterate(game.glob_observers, pconn2) {
-      if (pconn2 == pconn) {
-        already = TRUE;
-        break;
-      }
-    } conn_list_iterate_end;
-
-    if (!already) {
-      conn_list_append(game.glob_observers, pconn);
-    }
   }
 
   /* We don't want the connection's username on another player. */
