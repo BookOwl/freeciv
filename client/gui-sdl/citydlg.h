@@ -22,8 +22,7 @@
 #ifndef FC__CITYDLG_H
 #define FC__CITYDLG_H
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 #include "citydlg_g.h"
 #include "effects.h"

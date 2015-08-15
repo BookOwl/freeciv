@@ -24,8 +24,7 @@
 
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -1340,7 +1339,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
   pStr = create_string16(NULL, 0, adj_font(10));
   pStr->style |= (SF_CENTER|TTF_STYLE_BOLD);
   pStr->bgcol = (SDL_Color) {0, 0, 0, 0};
-
+    
   improvement_iterate(pImprove) {
     can_build = can_player_build_improvement_now(client.conn.playing, pImprove);
     can_eventually_build =
@@ -1365,7 +1364,7 @@ void popup_worklist_editor(struct city *pCity, struct global_worklist *pGWL)
       pText_Name = create_text_surf_smaller_that_w(pStr, pIcon->w - 4);
   
       if (is_wonder(pImprove)) {
-        if (improvement_obsolete(client.conn.playing, pImprove, pCity)) {
+        if (improvement_obsolete(client.conn.playing, pImprove)) {
           state = _("Obsolete");
         } else if (is_great_wonder(pImprove)) {
           if (great_wonder_is_built(pImprove)) {

@@ -50,7 +50,6 @@ enum munit {
   PILLAGE,
   BUILD,
   ROAD,
-  FORTIFY,
   FORTRESS,
   AIRBASE,
   POLLUTION,
@@ -70,7 +69,6 @@ enum munit {
   NUKE,
   UPGRADE,
   SETTLER,
-  MIGRANT,
   SAVE
 };
 
@@ -169,7 +167,6 @@ private slots:
   /*used by work menu*/
   void slot_build_city();
   void slot_go_build_city();
-  void slot_go_join_city();
   void slot_auto_settler();
   void slot_build_road();
   void slot_build_irrigation();
@@ -199,11 +196,9 @@ private slots:
 
   /*used by combat menu*/
   void slot_unit_fortify();
-  void slot_unit_fortress();
   void slot_unit_airbase();
   void slot_pillage();
   void slot_action();
-  void slot_nuke();
 
   /*used by view menu*/
   void slot_center_view();
@@ -242,7 +237,6 @@ private slots:
   void slot_show_research_tab();
   void slot_spaceship();
   void slot_demographics();
-  void slot_achievements();
   void slot_top_five();
   void slot_traveler();
   void slot_show_chat();

@@ -35,7 +35,6 @@
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
-#include "shared.h"
 #include "support.h"
 
 /* commmon */
@@ -62,27 +61,16 @@
  * All compressed packets this size or greater are sent as a jumbo packet.
  */
 #define JUMBO_BORDER 		(64*1024-COMPRESSION_BORDER-1)
+#endif
 
 #define log_compress    log_debug
 #define log_compress2   log_debug
-
-#endif /* USE_COMPRESSION */
 
 /* 
  * Valid values are 0, 1 and 2. For 2 you have to set generate_stats
  * to 1 in generate_packets.py.
  */
 #define PACKET_SIZE_STATISTICS 0
-
-extern const char *const packet_functional_capability;
-
-#define SPECHASH_TAG packet_handler
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct packet_handlers *
-#define SPECHASH_IDATA_FREE (packet_handler_hash_data_free_fn_t) free
-#include "spechash.h"
-
-static struct packet_handler_hash *packet_handlers = NULL;
 
 #ifdef USE_COMPRESSION
 static int stat_size_alone = 0;
@@ -135,7 +123,7 @@ static bool conn_compression_flush(struct connection *pconn)
 
   compressed_packet_len = compressed_size + (jumbo ? 6 : 2);
   if (compressed_packet_len < pconn->compression.queue.size) {
-    struct raw_data_out dout;
+    struct data_out dout;
 
     log_compress("COMPRESS: compressed %lu bytes to %ld (level %d)",
                  (unsigned long) pconn->compression.queue.size,
@@ -151,7 +139,7 @@ static bool conn_compression_flush(struct connection *pconn)
       log_compress("COMPRESS: sending %ld as normal", compressed_size);
 
       dio_output_init(&dout, header, sizeof(header));
-      dio_put_uint16_raw(&dout, 2 + compressed_size + COMPRESSION_BORDER);
+      dio_put_uint16(&dout, 2 + compressed_size + COMPRESSION_BORDER);
       connection_send_data(pconn, header, sizeof(header));
       connection_send_data(pconn, compressed, compressed_size);
     } else {
@@ -161,8 +149,8 @@ static bool conn_compression_flush(struct connection *pconn)
 
       log_compress("COMPRESS: sending %ld as jumbo", compressed_size);
       dio_output_init(&dout, header, sizeof(header));
-      dio_put_uint16_raw(&dout, JUMBO_SIZE);
-      dio_put_uint32_raw(&dout, 6 + compressed_size);
+      dio_put_uint16(&dout, JUMBO_SIZE);
+      dio_put_uint32(&dout, 6 + compressed_size);
       connection_send_data(pconn, header, sizeof(header));
       connection_send_data(pconn, compressed, compressed_size);
     }
@@ -364,8 +352,8 @@ int send_packet_data(struct connection *pc, unsigned char *data, int len,
   packet is written in 'ptype'. On error, the connection is closed and
   the function returns NULL.
 **************************************************************************/
-void *get_packet_from_connection_raw(struct connection *pc,
-                                     enum packet_type *ptype)
+void *get_packet_from_connection(struct connection *pc,
+                                 enum packet_type *ptype)
 {
   int len_read;
   int whole_packet_len;
@@ -379,7 +367,6 @@ void *get_packet_from_connection_raw(struct connection *pc,
   int header_size = 0;
 #endif
   void *data;
-  void *(*receive_handler)(struct connection *);
 
   if (!pc->used) {
     return NULL;		/* connection was closed, stop reading */
@@ -391,7 +378,7 @@ void *get_packet_from_connection_raw(struct connection *pc,
   }
 
   dio_input_init(&din, pc->buffer->data, pc->buffer->ndata);
-  dio_get_type_raw(&din, pc->packet_header.length, &len_read);
+  dio_get_type(&din, pc->packet_header.length, &len_read);
 
   /* The non-compressed case */
   whole_packet_len = len_read;
@@ -404,7 +391,7 @@ void *get_packet_from_connection_raw(struct connection *pc,
     compressed_packet = TRUE;
     header_size = 6;
     if (dio_input_remaining(&din) >= 4) {
-      dio_get_uint32_raw(&din, &whole_packet_len);
+      dio_get_uint32(&din, &whole_packet_len);
       log_compress("COMPRESS: got a jumbo packet of size %d",
                    whole_packet_len);
     } else {
@@ -501,18 +488,8 @@ void *get_packet_from_connection_raw(struct connection *pc,
     return NULL;
   }
 
-  dio_get_type_raw(&din, pc->packet_header.type, &utype.itype);
+  dio_get_type(&din, pc->packet_header.type, &utype.itype);
   utype.type = utype.itype;
-
-  if (utype.type < 0
-      || utype.type >= PACKET_LAST
-      || (receive_handler = pc->phs.handlers->receive[utype.type]) == NULL) {
-    log_verbose("Received unsupported packet type %d (%s). The connection "
-                "will be closed now.",
-                utype.type, packet_name(utype.type));
-    connection_close(pc, _("unsupported packet type"));
-    return NULL;
-  }
 
   log_packet("got packet type=(%s)%d len=%d from %s",
              packet_name(utype.type), utype.itype, whole_packet_len,
@@ -568,7 +545,7 @@ void *get_packet_from_connection_raw(struct connection *pc,
     }
   }
 #endif /* PACKET_SIZE_STATISTICS */
-  data = receive_handler(pc);
+  data = get_packet_from_connection_helper(pc, utype.type);
   if (!data) {
     connection_close(pc, _("incompatible packet contents"));
     return NULL;
@@ -586,7 +563,7 @@ void remove_packet_from_buffer(struct socket_packet_buffer *buffer)
   int len;
 
   dio_input_init(&din, buffer->data, buffer->ndata);
-  dio_get_uint16_raw(&din, &len);
+  dio_get_uint16(&din, &len);
   memmove(buffer->data, buffer->data + len, buffer->ndata - len);
   buffer->ndata -= len;
   log_debug("remove_packet_from_buffer: remove %d; remaining %d",
@@ -616,7 +593,7 @@ static inline void packet_header_set(struct packet_header *packet_header)
   fc_assert(packet_header->type == DIOT_UINT8);
 
   packet_header->length = DIOT_UINT16;
-  packet_header->type = DIOT_UINT16;
+  packet_header->type = DIOT_UINT8;
 }
 
 /****************************************************************************
@@ -655,8 +632,8 @@ bool packet_check(struct data_in *din, struct connection *pc)
     int type, len;
 
     dio_input_rewind(din);
-    dio_get_type_raw(din, pc->packet_header.length, &len);
-    dio_get_type_raw(din, pc->packet_header.type, &type);
+    dio_get_type(din, pc->packet_header.length, &len);
+    dio_get_type(din, pc->packet_header.type, &type);
 
     log_packet("received long packet (type %d, len %d, rem %lu) from %s",
                type,
@@ -789,79 +766,4 @@ void pre_send_packet_player_attribute_chunk(struct connection *pc,
   log_packet("sending attribute chunk %d/%d %d",
              packet->offset, packet->total_length, packet->chunk_length);
 
-}
-
-/****************************************************************************
-  Destroy the packet handler hash table.
-****************************************************************************/
-static void packet_handlers_free(void)
-{
-  if (packet_handlers != NULL) {
-    packet_handler_hash_destroy(packet_handlers);
-    packet_handlers = NULL;
-  }
-}
-
-/****************************************************************************
-  Returns the packet handlers variant with no special capability.
-****************************************************************************/
-const struct packet_handlers *packet_handlers_initial(void)
-{
-  static struct packet_handlers default_handlers;
-  static bool initialized = FALSE;
-
-  if (!initialized) {
-    memset(&default_handlers, 0, sizeof(default_handlers));
-    packet_handlers_fill_initial(&default_handlers);
-    initialized = TRUE;
-  }
-
-  return &default_handlers;
-}
-
-/****************************************************************************
-  Returns the packet handlers variant for 'capability'.
-****************************************************************************/
-const struct packet_handlers *packet_handlers_get(const char *capability)
-{
-  struct packet_handlers *phandlers;
-  char functional_capability[MAX_LEN_CAPSTR] = "";
-  char *tokens[MAX_LEN_CAPSTR / 2];
-  int tokens_num;
-  int i;
-
-  fc_assert(strlen(capability) < sizeof(functional_capability));
-
-  /* Get functional network capability string. */
-  tokens_num = get_tokens(capability, tokens, ARRAY_SIZE(tokens), " \t\n,");
-  qsort(tokens, tokens_num, sizeof(*tokens), compare_strings_ptrs);
-  for (i = 0; i < tokens_num; i++) {
-    if (!has_capability(tokens[i], packet_functional_capability)) {
-      continue;
-    }
-    if (functional_capability[0] != '\0') {
-      sz_strlcat(functional_capability, " ");
-    }
-    sz_strlcat(functional_capability, tokens[i]);
-  }
-  free_tokens(tokens, tokens_num);
-
-  /* Ensure the hash table is created. */
-  if (packet_handlers == NULL) {
-    packet_handlers = packet_handler_hash_new();
-    atexit(packet_handlers_free);
-  }
-
-  /* Lookup handlers for the capabilities or create new handlers. */
-  if (!packet_handler_hash_lookup(packet_handlers, functional_capability,
-                                  &phandlers)) {
-    phandlers = fc_malloc(sizeof(*phandlers));
-    memcpy(phandlers, packet_handlers_initial(), sizeof(*phandlers));
-    packet_handlers_fill_capability(phandlers, functional_capability);
-    packet_handler_hash_insert(packet_handlers, functional_capability,
-                               phandlers);
-  }
-
-  fc_assert(phandlers != NULL);
-  return phandlers;
 }

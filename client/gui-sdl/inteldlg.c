@@ -15,8 +15,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -193,7 +192,8 @@ void popdown_intel_dialog(struct player *p)
 /**************************************************************************
   Popdown all intelligence dialogs
 **************************************************************************/
-void popdown_intel_dialogs(void) {
+void popdown_intel_dialogs(void)
+{
   dialog_list_iterate(dialog_list, pdialog) {
     popdown_intel_dialog(pdialog->pplayer);
   } dialog_list_iterate_end;
@@ -205,7 +205,6 @@ void popdown_intel_dialogs(void) {
 ****************************************************************************/
 void update_intel_dialog(struct player *p)
 {
-  const struct research *mresearch, *presearch;
   struct intel_dialog *pdialog = get_intel_dialog(p);
       
   struct widget *pWindow = NULL, *pBuf = NULL, *pLast;
@@ -217,7 +216,7 @@ void update_intel_dialog(struct player *p)
   int n = 0, count = 0, col;
   struct city *pCapital;
   SDL_Rect area;
-  struct research *research;
+  struct player_research* research;
       
   if (pdialog) {
 
@@ -296,7 +295,7 @@ void update_intel_dialog(struct player *p)
     /* ---------- */
     
     pCapital = player_capital(p);
-    research = research_get(p);
+    research = player_research_get(p);
     change_ptsize16(pStr, adj_font(10));
     pStr->style &= ~TTF_STYLE_BOLD;
 
@@ -327,9 +326,7 @@ void update_intel_dialog(struct player *p)
                   /* TRANS: "unknown" location */
                   NULL != pCapital ? city_name(pCapital) : _("(unknown)"),
                   p->economic.gold, p->economic.tax, p->economic.science,
-                  p->economic.luxury,
-                  research_advance_name_translation(research,
-                                                    research->researching),
+                  p->economic.luxury, advance_name_researching(p),
                   research->bulbs_researched,
                   research->client.researching_cost);
       break;
@@ -346,12 +343,10 @@ void update_intel_dialog(struct player *p)
     FREESURFACE(pTmpSurf);
     n = 0;
     pLast = pBuf;
-    mresearch = research_get(client_player());
-    presearch = research_get(p);
     advance_index_iterate(A_FIRST, i) {
-      if (TECH_KNOWN == research_invention_state(presearch, i)
-          && research_invention_reachable(mresearch, i)
-          && TECH_KNOWN != research_invention_state(mresearch, i)) {
+      if (TECH_KNOWN == player_invention_state(p, i)
+       && player_invention_reachable(client.conn.playing, i, FALSE)
+       && TECH_KNOWN != player_invention_state(client.conn.playing, i)) {
 
         pBuf = create_icon2(get_tech_icon(i), pWindow->dst,
                             WF_RESTORE_BACKGROUND | WF_WIDGET_HAS_INFO_LABEL

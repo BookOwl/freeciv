@@ -119,4 +119,6 @@ extern bool force_end_of_sniff;
 
 void update_nations_with_startpos(void);
 
+int current_turn_timeout(void);
+
 #endif /* FC__SRV_MAIN_H */

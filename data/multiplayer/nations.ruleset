@@ -9,20 +9,7 @@
 
 [datafile]
 description="Multiplayer nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-nationlist = "default/nationlist.ruleset"
-
-; List of nations to embed to main nations.ruleset despite separate nationlist
-; being used for other nations.
-embedded_nations = "barbarian", "pirate"
+options="+Freeciv-2.5-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
@@ -30,15 +17,8 @@ embedded_nations = "barbarian", "pirate"
 default_government = "Despotism"
 
 [default_traits]
-;expansionist_min = 50
-;expansionist_max = 50
-;trader_min = 50
-;trader_max = 50
-;aggressive_min = 50
-;aggressive_max = 50
+;expansionist = 50
+;trader = 50
+;aggressive = 50
 
-; Please keep [ruledit] section in sync with these includes
 *include "default/nationlist.ruleset"
-; This ruleset uses model of two separate barbarian nations
-*include "nation/barbarian.ruleset"
-*include "nation/pirate.ruleset"

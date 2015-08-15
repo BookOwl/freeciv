@@ -46,7 +46,7 @@
 #include "tilespec.h"
 
 /* Selection Rectangle */
-static float rec_anchor_x, rec_anchor_y;  /* canvas coordinates for anchor */
+static int rec_anchor_x, rec_anchor_y;  /* canvas coordinates for anchor */
 static struct tile *rec_canvas_center_tile;
 static int rec_corner_x, rec_corner_y;  /* corner to iterate from */
 static int rec_w, rec_h;                /* width, heigth in pixels */
@@ -119,8 +119,7 @@ static void define_tiles_within_rectangle(bool append)
   /* Iteration direction */
   const int inc_x = (rec_w > 0 ? half_W : -half_W);
   const int inc_y = (rec_h > 0 ? half_H : -half_H);
-  int x, y, xx, yy;
-  float x2, y2;
+  int x, y, x2, y2, xx, yy;
   struct unit_list *units = unit_list_new();
   const struct city *pcity;
   bool found_any_cities = FALSE;
@@ -151,7 +150,7 @@ static void define_tiles_within_rectangle(bool append)
        */
       tile_to_canvas_pos(&x2, &y2, ptile);
 
-      if ((yy % 2) != 0 && ((rec_corner_x % W) ^ abs((int)x2 % W)) != 0) {
+      if ((yy % 2) != 0 && ((rec_corner_x % W) ^ abs(x2 % W)) != 0) {
 	continue;
       }
 
@@ -170,11 +169,10 @@ static void define_tiles_within_rectangle(bool append)
     }
   }
 
-  if (!(options.separate_unit_selection && found_any_cities)
+  if (!(separate_unit_selection && found_any_cities)
       && unit_list_size(units) > 0) {
     if (!append) {
       struct unit *punit = unit_list_get(units, 0);
-
       unit_focus_set(punit);
       unit_list_remove(units, punit);
     }
@@ -196,7 +194,7 @@ static void define_tiles_within_rectangle(bool append)
 /**************************************************************************
  Called when mouse pointer moves and rectangle is active.
 **************************************************************************/
-void update_selection_rectangle(float canvas_x, float canvas_y)
+void update_selection_rectangle(int canvas_x, int canvas_y)
 {
   const int W = tileset_tile_width(tileset),    half_W = W / 2;
   const int H = tileset_tile_height(tileset),   half_H = H / 2;
@@ -485,8 +483,7 @@ void release_goto_button(int canvas_x, int canvas_y)
 
   if (keyboardless_goto_active && hover_state == HOVER_GOTO && ptile) {
     do_unit_goto(ptile);
-    set_hover_state(NULL, HOVER_NONE,
-                    ACTIVITY_LAST, NULL, ACTION_COUNT, ORDER_LAST);
+    set_hover_state(NULL, HOVER_NONE, ACTIVITY_LAST, NULL, ORDER_LAST);
     update_unit_info_label(get_units_in_focus());
   }
   keyboardless_goto_active = FALSE;
@@ -506,7 +503,7 @@ void maybe_activate_keyboardless_goto(int canvas_x, int canvas_y)
       && !same_pos(keyboardless_goto_start_tile, ptile)
       && can_client_issue_orders()) {
     keyboardless_goto_active = TRUE;
-    request_unit_goto(ORDER_LAST, ACTION_COUNT);
+    request_unit_goto(ORDER_LAST);
   }
 }
 
@@ -628,7 +625,7 @@ void update_turn_done_button_state(void)
     if (waiting_for_end_turn
         || (NULL != client.conn.playing
             && client.conn.playing->ai_controlled
-            && !options.ai_manual_turn_done)) {
+            && !ai_manual_turn_done)) {
       send_turn_done();
     } else {
       update_turn_done_button(TRUE);
@@ -647,6 +644,7 @@ void update_line(int canvas_x, int canvas_y)
   case HOVER_GOTO:
   case HOVER_PATROL:
   case HOVER_CONNECT:
+  case HOVER_NUKE:
     ptile = canvas_pos_to_tile(canvas_x, canvas_y);
 
     is_valid_goto_draw_line(ptile);
@@ -668,6 +666,7 @@ void overview_update_line(int overview_x, int overview_y)
   case HOVER_GOTO:
   case HOVER_PATROL:
   case HOVER_CONNECT:
+  case HOVER_NUKE:
     overview_to_map_pos(&x, &y, overview_x, overview_y);
     ptile = map_pos_to_tile(x, y);
 

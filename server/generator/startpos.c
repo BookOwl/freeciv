@@ -49,11 +49,9 @@ static int *islands_index;
 ****************************************************************************/
 static int get_tile_value(struct tile *ptile)
 {
-  int value;
-  int irrig_bonus = 0;
-  int mine_bonus = 0;
+  int value, irrig_bonus, mine_bonus;
+  struct tile *vtile;
   struct tile *roaded;
-  struct extra_type *pextra;
 
   /* Give one point for each food / shield / trade produced. */
   value = 0;
@@ -67,47 +65,35 @@ static int get_tile_value(struct tile *ptile)
     struct unit_type *start_worker = get_role_unit(L_SETTLERS, 0);
 
     road_type_iterate(proad) {
-      struct extra_type *pextra;
-
-      pextra = road_extra_get(proad);
       if (road_can_be_built(proad, roaded)
-          && are_reqs_active(NULL, NULL, NULL, NULL, roaded,
-                             NULL, start_worker, NULL, NULL, NULL,
-                             &pextra->reqs, RPT_CERTAIN)) {
+          && are_reqs_active(NULL, NULL, NULL, roaded,
+                             start_worker, NULL, NULL, &proad->reqs,
+                             RPT_CERTAIN)) {
         tile_add_road(roaded, proad);
       }
     } road_type_iterate_end;
   }
 
-  pextra = next_extra_for_tile(roaded, EC_IRRIGATION, NULL, NULL);
+  vtile = tile_virtual_new(roaded);
 
-  if (pextra != NULL) {
-    struct tile *vtile;
+  tile_apply_activity(vtile, ACTIVITY_IRRIGATE);
+  irrig_bonus = -value;
+  output_type_iterate(o) {
+    irrig_bonus += city_tile_output(NULL, vtile, FALSE, o);
+  } output_type_iterate_end;
 
-    vtile = tile_virtual_new(roaded);
-    tile_apply_activity(vtile, ACTIVITY_IRRIGATE, pextra);
-    irrig_bonus = -value;
-    output_type_iterate(o) {
-      irrig_bonus += city_tile_output(NULL, vtile, FALSE, o);
-    } output_type_iterate_end;
-    tile_virtual_destroy(vtile);
-  }
-
-  pextra = next_extra_for_tile(roaded, EC_MINE, NULL, NULL);
+  tile_virtual_destroy(vtile);
 
   /* Same set of roads used with mine as with irrigation. */
-  if (pextra != NULL) {
-    struct tile *vtile;
+  vtile = tile_virtual_new(roaded);
 
-    vtile = tile_virtual_new(roaded);
-    tile_apply_activity(vtile, ACTIVITY_MINE, pextra);
-    mine_bonus = -value;
-    output_type_iterate(o) {
-      mine_bonus += city_tile_output(NULL, vtile, FALSE, o);
-    } output_type_iterate_end;
-    tile_virtual_destroy(vtile);
-  }
+  tile_apply_activity(vtile, ACTIVITY_MINE);
+  mine_bonus = -value;
+  output_type_iterate(o) {
+    mine_bonus += city_tile_output(NULL, vtile, FALSE, o);
+  } output_type_iterate_end;
 
+  tile_virtual_destroy(vtile);
   tile_virtual_destroy(roaded);
 
   value += MAX(0, MAX(mine_bonus, irrig_bonus)) / 2;
@@ -199,7 +185,7 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
   }
 
   /* Don't start on a hut. */
-  if (tile_has_cause_extra(ptile, EC_HUT)) {
+  if (tile_has_special(ptile, S_HUT)) {
     return FALSE;
   }
 

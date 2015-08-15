@@ -37,8 +37,7 @@
 #include <winsock.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fciconv.h"
@@ -54,6 +53,8 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "editgui_g.h"
+#include "ggzclient.h"
+#include "ggz_g.h"
 #include "tilespec.h"
 #include "update_queue.h"
 
@@ -108,6 +109,7 @@ int city_productions_font_size = 12;
 
 /* ================================ Private ============================ */
 static int net_socket = -1;
+static int ggz_socket = -1;
 static bool autoconnect = FALSE;
 static bool is_map_scrolling = FALSE;
 static enum direction8 scroll_dir;
@@ -115,17 +117,19 @@ static enum direction8 scroll_dir;
 static struct mouse_button_behavior button_behavior;
   
 static SDL_Event *pNet_User_Event = NULL;
+static SDL_Event *pGGZ_User_Event = NULL;
 static SDL_Event *pAnim_User_Event = NULL;
 static SDL_Event *pInfo_User_Event = NULL;
 static SDL_Event *pMap_Scroll_User_Event = NULL;
 
-static void print_usage(void);
+static void print_usage(const char *argv0);
 static void parse_options(int argc, char **argv);
 static int check_scroll_area(int x, int y);
       
 enum USER_EVENT_ID {
   EVENT_ERROR = 0,
   NET,
+  GGZ,
   ANIM,
   TRY_AUTO_CONNECT,
   SHOW_WIDGET_INFO_LABBEL,
@@ -162,7 +166,7 @@ void set_city_names_font_sizes(int my_city_names_font_size,
   Print extra usage information, including one line help on each option,
   to stderr. 
 **************************************************************************/
-static void print_usage(void)
+static void print_usage(const char *argv0)
 {
   /* add client-specific usage information here */
   fc_fprintf(stderr,
@@ -176,8 +180,8 @@ static void print_usage(void)
 }
 
 /**************************************************************************
-  Search for command line options. right now, it's just help
-  semi-useless until we have options that aren't the same across all clients.
+ search for command line options. right now, it's just help
+ semi-useless until we have options that aren't the same across all clients.
 **************************************************************************/
 static void parse_options(int argc, char **argv)
 {
@@ -186,15 +190,15 @@ static void parse_options(int argc, char **argv)
     
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      print_usage();
+      print_usage(argv[0]);
       exit(EXIT_SUCCESS);
     } else if (is_option("--fullscreen", argv[i])) {
-      options.gui_sdl_fullscreen = TRUE;
+      gui_sdl_fullscreen = TRUE;
     } else if (is_option("--eventthread", argv[i])) {
       /* init events in other thread ( only linux and BeOS ) */  
       SDL_InitSubSystem(SDL_INIT_EVENTTHREAD);
     } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
-      sz_strlcpy(options.gui_sdl_default_theme_name, option);
+      sz_strlcpy(gui_sdl_default_theme_name, option);
     } else {
       fc_fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
       exit(EXIT_FAILURE);
@@ -261,19 +265,15 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
             flush_dirty();
             return ID_ERROR;
 
-        case SDLK_F11:
-          send_report_request(REPORT_DEMOGRAPHIC);
+	  case SDLK_F11:
+            send_report_request(REPORT_DEMOGRAPHIC);
           return ID_ERROR;
 
-        case SDLK_F12:
-          popup_spaceship_dialog(client.conn.playing);
+	  case SDLK_F12:
+            popup_spaceship_dialog(client.conn.playing);
           return ID_ERROR;
 
-        case SDLK_ASTERISK:
-          send_report_request(REPORT_ACHIEVEMENTS);
-          return ID_ERROR;
-
-        default:
+	  default:
 	  return ID_ERROR;
 	}
       }
@@ -374,7 +374,7 @@ static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void
   }
 
 #ifndef UNDER_CE
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     check_scroll_area(pMotionEvent->x, pMotionEvent->y);
   }
 #endif /* UNDER_CE */
@@ -531,17 +531,20 @@ Uint16 gui_event_loop(void *pData,
   while (ID == ID_ERROR) {
     /* ========================================= */
     /* net check with 10ms delay event loop */
-    if (net_socket >= 0) {
+    if ((net_socket >= 0) || (ggz_socket >= 0)) {
       FD_ZERO(&civfdset);
-
+      
       if (net_socket >= 0) {
         FD_SET(net_socket, &civfdset);
+      }
+      if (ggz_socket >= 0) {
+        FD_SET(ggz_socket, &civfdset);
       }
       
       tv.tv_sec = 0;
       tv.tv_usec = 10000;/* 10ms*/
     
-      result = fc_select(net_socket + 1, &civfdset, NULL, NULL, &tv);
+      result = fc_select(MAX(net_socket, ggz_socket) + 1, &civfdset, NULL, NULL, &tv);
       if (result < 0) {
         if (errno != EINTR) {
 	  break;
@@ -552,6 +555,9 @@ Uint16 gui_event_loop(void *pData,
         if (result > 0) {
 	  if ((net_socket >= 0) && FD_ISSET(net_socket, &civfdset)) {
 	    SDL_PushEvent(pNet_User_Event);
+	  }
+	  if ((ggz_socket >= 0) && FD_ISSET(ggz_socket, &civfdset)) {
+	    SDL_PushEvent(pGGZ_User_Event);
 	  }
 	}
       }
@@ -696,6 +702,9 @@ Uint16 gui_event_loop(void *pData,
           switch(Main.event.user.code) {
             case NET:
               input_from_server(net_socket);
+            break;
+            case GGZ:
+              input_from_ggz(ggz_socket);
             break;
             case ANIM:
               update_button_hold_state();
@@ -847,12 +856,12 @@ static void real_resize_window_callback(void *data)
   struct widget *widget;
   Uint32 flags = Main.screen->flags;
 
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     flags |= SDL_FULLSCREEN;
   } else {
     flags &= ~SDL_FULLSCREEN;
   }
-  set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height, flags);
+  set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height, flags);
 
   if (C_S_RUNNING == client_state()) {
     /* Move units window to botton-right corner. */
@@ -893,7 +902,7 @@ static void resize_window_callback(struct option *poption)
   Extra initializers for client options. Here we make set the callback
   for the specific gui-sdl options.
 ****************************************************************************/
-void options_extra_init(void)
+void gui_options_extra_init(void)
 {
   struct option *poption;
 
@@ -941,6 +950,7 @@ int main(int argc, char **argv)
 void ui_main(int argc, char *argv[])
 {
   SDL_Event __Net_User_Event;
+  SDL_Event __GGZ_User_Event;
   SDL_Event __Anim_User_Event;
   SDL_Event __Info_User_Event;
   SDL_Event __Flush_User_Event;
@@ -953,6 +963,12 @@ void ui_main(int argc, char *argv[])
   __Net_User_Event.user.data1 = NULL;
   __Net_User_Event.user.data2 = NULL;
   pNet_User_Event = &__Net_User_Event;
+
+  __GGZ_User_Event.type = SDL_USEREVENT;
+  __GGZ_User_Event.user.code = GGZ;
+  __GGZ_User_Event.user.data1 = NULL;
+  __GGZ_User_Event.user.data2 = NULL;
+  pGGZ_User_Event = &__GGZ_User_Event;
 
   __Anim_User_Event.type = SDL_USEREVENT;
   __Anim_User_Event.user.code = EVENT_ERROR;
@@ -1001,19 +1017,19 @@ void ui_main(int argc, char *argv[])
     
   setup_auxiliary_tech_icons();
   
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE
         /* set 320x240 fullscreen */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
       #else  /* UNDER_CE */
         /* small screen on desktop -> don't set 320x240 fullscreen mode */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif /* UNDER_CE */
     #else  /* SMALL_SCREEN */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
     #endif /* SMALL_SCREEN */
     
@@ -1021,14 +1037,14 @@ void ui_main(int argc, char *argv[])
     
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE    
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #else  /* UNDER_CE */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
       #endif /* UNDER_CE */
     #else  /* SMALL_SCREEN */
-    set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+    set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
       SDL_SWSURFACE | SDL_ANYFORMAT);
     #endif /* SMALL_SCREEN */
     
@@ -1147,6 +1163,25 @@ void remove_net_input(void)
   update_mouse_cursor(CURSOR_DEFAULT);
 }
 
+/**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+  log_debug("GGZ Connection UP (%d)", sock);
+  ggz_socket = sock;
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  log_debug("GGZ Connection DOWN... ");
+  ggz_socket = (-1);
+}
+
 /****************************************************************************
   Enqueue a callback to be called during an idle moment.  The 'callback'
   function should be called sometimes soon, and passed the 'data' pointer
@@ -1198,26 +1233,23 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void editgui_notify_object_created(int tag, int id)
 {}
 
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_leave_table(void)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_ensure_server(void)
+{}
+
+
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
 void gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
 }

@@ -17,8 +17,7 @@
 
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"

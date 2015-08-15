@@ -18,9 +18,7 @@
 #include <stdarg.h>
 
 /* common */
-#include "map.h"
 #include "player.h"
-#include "research.h"
 
 /* server */
 #include "notify.h"
@@ -57,42 +55,6 @@ void dai_unit_log(struct ai_type *ait, char *buffer, int buflength,
 
   fc_snprintf(buffer, buflength, "%d %d",
               unit_data->bodyguard, unit_data->ferryboat);
-}
-
-/**************************************************************************
-  Log player tech messages.
-**************************************************************************/
-void real_tech_log(struct ai_type *ait, const char *file, const char *function,
-                   int line, enum log_level level, bool notify,
-                   const struct player *pplayer, struct advance *padvance,
-                   const char *msg, ...)
-{
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  struct ai_plr *plr_data;
-
-  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
-    return;
-  }
-
-  plr_data = def_ai_player_data(pplayer, ait);
-  fc_snprintf(buffer, sizeof(buffer), "%s::%s (want " ADV_WANT_PRINTF ", dist %d) ",
-              player_name(pplayer),
-              advance_rule_name(padvance),
-              plr_data->tech_want[advance_index(padvance)],
-              research_goal_unknown_techs(research_get(pplayer),
-                                          advance_number(padvance)));
-
-  va_start(ap, msg);
-  fc_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
-  }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
 }
 
 /**************************************************************************

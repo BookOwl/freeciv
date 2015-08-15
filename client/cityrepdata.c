@@ -478,12 +478,14 @@ static const char *cr_entry_trade_routes(const struct city *pcity,
                                          const void *data)
 {
   static char buf[16];
-  int num = 0, value = 0;
+  int num = 0, value = 0, i;
 
-  trade_routes_iterate(pcity, proute) {
-    num++;
-    value += proute->value;
-  } trade_routes_iterate_end;
+  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    if (0 != pcity->trade[i]) {
+      num++;
+      value += pcity->trade_value[i];
+    }
+  }
 
   if (0 == num) {
     sz_strlcpy(buf, "0");
@@ -517,7 +519,7 @@ static const char *cr_entry_building(const struct city *pcity,
   static char buf[128];
   const char *from_worklist =
     worklist_is_empty(&pcity->worklist) ? "" :
-    options.concise_city_production ? "+" : _("(worklist)");
+    concise_city_production ? "+" : _("(worklist)");
 
   if (city_production_has_flag(pcity, IF_GOLD)) {
     fc_snprintf(buf, sizeof(buf), "%s (%d)%s",

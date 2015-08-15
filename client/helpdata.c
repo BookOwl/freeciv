@@ -35,18 +35,14 @@
 #include "support.h"
 
 /* common */
-#include "achievements.h"
-#include "actions.h"
-#include "calendar.h"
 #include "city.h"
 #include "effects.h"
 #include "game.h"
 #include "government.h"
 #include "map.h"
 #include "movement.h"
-#include "multipliers.h"
+#include "packets.h"
 #include "requirements.h"
-#include "research.h"
 #include "road.h"
 #include "specialist.h"
 #include "unit.h"
@@ -65,8 +61,8 @@
 /* This must be in same order as enum in helpdlg_g.h */
 static const char * const help_type_names[] = {
   "(Any)", "(Text)", "Units", "Improvements", "Wonders",
-  "Techs", "Terrain", "Extras", "Specialists", "Governments",
-  "Ruleset", "Nations", "Multipliers", NULL
+  "Techs", "Terrain", "Bases", "Roads", "Specialists", "Governments",
+  "Ruleset", "Nations", NULL
 };
 
 /*define MAX_LAST (MAX(MAX(MAX(A_LAST,B_LAST),U_LAST),terrain_count()))*/
@@ -202,11 +198,7 @@ static bool insert_veteran_help(char *outbuf, size_t outlen,
 ****************************************************************************/
 static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
 {
-  if (!game.client.ruleset_init) {
-    return FALSE;
-  }
-
-  if (0 == strcmp(name, "TerrainAlterations")) {
+  if (0 == strcmp (name, "TerrainAlterations")) {
     int clean_pollution_time = -1, clean_fallout_time = -1;
     bool terrain_independent_extras = FALSE;
 
@@ -221,7 +213,6 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
         char irrigation_time[4], mining_time[4], transform_time[4];
         const char *terrain, *irrigation_result,
                    *mining_result,*transform_result;
-        struct universal for_terr = { .kind = VUT_TERRAIN, .value = { .terrain = pterrain }};
 
         fc_snprintf(irrigation_time, sizeof(irrigation_time),
                     "%d", pterrain->irrigation_time);
@@ -232,18 +223,15 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
         terrain = terrain_name_translation(pterrain);
         irrigation_result = 
           (pterrain->irrigation_result == pterrain
-           || pterrain->irrigation_result == T_NONE
-           || effect_cumulative_max(EFT_IRRIG_TF_POSSIBLE, &for_terr) <= 0) ? ""
+           || pterrain->irrigation_result == T_NONE) ? ""
           : terrain_name_translation(pterrain->irrigation_result);
         mining_result =
           (pterrain->mining_result == pterrain
-           || pterrain->mining_result == T_NONE
-           || effect_cumulative_max(EFT_MINING_TF_POSSIBLE, &for_terr) <= 0) ? ""
+           || pterrain->mining_result == T_NONE) ? ""
           : terrain_name_translation(pterrain->mining_result);
         transform_result =
           (pterrain->transform_result == pterrain
-           || pterrain->transform_result == T_NONE
-           || effect_cumulative_max(EFT_TRANSFORM_POSSIBLE, &for_terr) <= 0) ? ""
+           || pterrain->transform_result == T_NONE) ? ""
           : terrain_name_translation(pterrain->transform_result);
         /* Use get_internal_string_length() for correct alignment with
          * multibyte character encodings */
@@ -260,40 +248,34 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
             (pterrain->transform_result == T_NONE) ? "-" : transform_time,
             transform_result);
 
-        if (clean_pollution_time != 0) {
-          if (clean_pollution_time < 0) {
-            clean_pollution_time = pterrain->clean_pollution_time;
-          } else {
-            if (clean_pollution_time != pterrain->clean_pollution_time) {
-              clean_pollution_time = 0; /* give up */
-            }
-          }
-        }
-        if (clean_fallout_time != 0) {
-          if (clean_fallout_time < 0) {
-            clean_fallout_time = pterrain->clean_fallout_time;
-          } else {
-            if (clean_fallout_time != pterrain->clean_fallout_time) {
-              clean_fallout_time = 0; /* give up */
-            }
-          }
-        }
+	if (clean_pollution_time != 0 &&
+	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
+	  if (clean_pollution_time < 0)
+	    clean_pollution_time = pterrain->clean_pollution_time;
+	  else
+	    if (clean_pollution_time != pterrain->clean_pollution_time)
+	      clean_pollution_time = 0; /* give up */
+	}
+	if (clean_fallout_time != 0 &&
+	    !terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
+	  if (clean_fallout_time < 0)
+	    clean_fallout_time = pterrain->clean_fallout_time;
+	  else
+	    if (clean_fallout_time != pterrain->clean_fallout_time)
+	      clean_fallout_time = 0; /* give up */
+	}
       }
     } terrain_type_iterate_end;
 
     base_type_iterate(b) {
-      struct extra_type *pextra = base_extra_get(b);
-
-      if (pextra->buildable && pextra->build_time > 0) {
+      if (b->buildable && b->build_time > 0) {
         terrain_independent_extras = TRUE;
         break;
       }
     } base_type_iterate_end;
     if (!terrain_independent_extras) {
       road_type_iterate(r) {
-        struct extra_type *pextra = road_extra_get(r);
-
-        if (pextra->buildable && pextra->build_time > 0) {
+        if (r->buildable && r->build_time > 0) {
           terrain_independent_extras = TRUE;
           break;
         }
@@ -320,29 +302,24 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
 	cat_snprintf(outbuf, outlen,
 		     _("\nClean fallout      %3d"), clean_fallout_time);
       road_type_iterate(r) {
-        struct extra_type *pextra = road_extra_get(r);
-
-        if (pextra->buildable && pextra->build_time > 0) {
+        if (r->buildable && r->build_time > 0) {
           const char *name = road_name_translation(r);
 
           cat_snprintf(outbuf, outlen,
                        "\n%s%*s %3d",
                        name,
                        MAX(0, 18 - (int)get_internal_string_length(name)), "",
-                       pextra->build_time);
+                       r->build_time);
         }
       } road_type_iterate_end;
       base_type_iterate(b) {
-        struct extra_type *pextra = base_extra_get(b);
-
-        if (pextra->buildable && pextra->build_time > 0) {
+        if (b->buildable && b->build_time > 0) {
           const char *name = base_name_translation(b);
-
           cat_snprintf(outbuf, outlen,
                        "\n%s%*s %3d",
                        name,
                        MAX(0, 18 - (int)get_internal_string_length(name)), "",
-                       pextra->build_time);
+                       b->build_time);
         }
       } base_type_iterate_end;
     }
@@ -353,14 +330,11 @@ static bool insert_generated_text(char *outbuf, size_t outlen, const char *name)
         _("This ruleset has no default veteran levels defined."));
   } else if (0 == strcmp (name, "FreecivVersion")) {
     const char *ver = freeciv_name_version();
-
     cat_snprintf(outbuf, outlen,
                  /* TRANS: First %s is version string, e.g.,
                   * "Freeciv version 2.3.0-beta1 (beta version)" (translated).
                   * Second %s is client_string, e.g., "gui-gtk-2.0". */
                  _("This is %s, %s client."), ver, client_string);
-    insert_client_build_info(outbuf, outlen);
-
     return TRUE;
   }
   log_error("Unknown directive '$%s' in help", name);
@@ -379,10 +353,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
                                struct player *pplayer,
                                const struct requirement *preq)
 {
-  if (preq->quiet) {
-    return FALSE;
-  }
-
   switch (preq->source.kind) {
   case VUT_NONE:
     return FALSE;
@@ -390,74 +360,37 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_ADVANCE:
     switch (preq->range) {
     case REQ_RANGE_PLAYER:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      _("Requires knowledge of the technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
+                     advance_name_for_player(pplayer, advance_number
+                                             (preq->source.value.advance)));
       } else {
         cat_snprintf(buf, bufsz,
                      _("Prevented by knowledge of the technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
-      }
-      return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that a player on your team knows the "
-                       "technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Prevented if any player on your team knows the "
-                       "technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that a player allied to you knows the "
-                       "technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Prevented if any player allied to you knows the "
-                       "technology %s.\n"),
-                     advance_name_translation(preq->source.value.advance));
+                     advance_name_for_player(pplayer, advance_number
+                                             (preq->source.value.advance)));
       }
       return TRUE;
     case REQ_RANGE_WORLD:
-      if (preq->survives) {
-        if (preq->present) {
-          cat_snprintf(buf, bufsz,
-                       _("Requires that someone has discovered the "
-                         "technology %s.\n"),
-                       advance_name_translation(preq->source.value.advance));
-        } else {
-          cat_snprintf(buf, bufsz,
-                       _("Requires that no-one has yet discovered the "
-                        "technology %s.\n"),
-                       advance_name_translation(preq->source.value.advance));
-        }
+      if (!preq->negated) {
+        cat_snprintf(buf, bufsz,
+                     _("Requires that someone has discovered the "
+                       "technology %s.\n"),
+                     advance_name_for_player(pplayer, advance_number
+                                             (preq->source.value.advance)));
       } else {
-        if (preq->present) {
-          cat_snprintf(buf, bufsz,
-                       _("Requires that some player knows the "
-                         "technology %s.\n"),
-                       advance_name_translation(preq->source.value.advance));
-        } else {
-          cat_snprintf(buf, bufsz,
-                       _("Requires that no player knows the "
-                         "technology %s.\n"),
-                       advance_name_translation(preq->source.value.advance));
-        }
+        cat_snprintf(buf, bufsz,
+                     _("Requires that no-one has yet discovered the "
+                       "technology %s.\n"),
+                     advance_name_for_player(pplayer, advance_number
+                                             (preq->source.value.advance)));
       }
       return TRUE;
     case REQ_RANGE_LOCAL:
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -468,7 +401,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_TECHFLAG:
     switch (preq->range) {
     case REQ_RANGE_PLAYER:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) tech flag. */
                      _("Requires knowledge of a technology with the "
@@ -482,38 +415,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
                      tech_flag_id_translated_name(preq->source.value.techflag));
       }
       return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) tech flag. */
-                     _("Requires that a player on your team knows "
-                       "a technology with the \"%s\" flag.\n"),
-                     tech_flag_id_translated_name(preq->source.value.techflag));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) tech flag. */
-                     _("Prevented if any player on your team knows "
-                       "any technology with the \"%s\" flag.\n"),
-                     tech_flag_id_translated_name(preq->source.value.techflag));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) tech flag. */
-                     _("Requires that a player allied to you knows "
-                       "a technology with the \"%s\" flag.\n"),
-                     tech_flag_id_translated_name(preq->source.value.techflag));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) tech flag. */
-                     _("Prevented if any player allied to you knows "
-                       "any technology with the \"%s\" flag.\n"),
-                     tech_flag_id_translated_name(preq->source.value.techflag));
-      }
-      return TRUE;
     case REQ_RANGE_WORLD:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) tech flag. */
                      _("Requires that some player knows a technology "
@@ -531,7 +434,6 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -543,7 +445,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     if (preq->range != REQ_RANGE_PLAYER) {
       break;
     }
-    if (preq->present) {
+    if (!preq->negated) {
       cat_snprintf(buf, bufsz, _("Requires the %s government.\n"),
                    government_name_translation(preq->source.value.govern));
     } else {
@@ -552,87 +454,12 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     return TRUE;
 
-  case VUT_ACHIEVEMENT:
-    switch (preq->range) {
-    case REQ_RANGE_PLAYER:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz, _("Requires you to have achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      } else {
-        cat_snprintf(buf, bufsz, _("Not available once you have achieved "
-                                   "\"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      }
-      return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz, _("Requires that at least one of your "
-                                   "team-mates has achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      } else {
-        cat_snprintf(buf, bufsz, _("Not available if any of your team-mates "
-                                   "has achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz, _("Requires that at least one of your allies "
-                                   "has achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      } else {
-        cat_snprintf(buf, bufsz, _("Not available if any of your allies has "
-                                   "achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      }
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz, _("Requires that at least one player "
-                                   "has achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      } else {
-        cat_snprintf(buf, bufsz, _("Not available if any player has "
-                                   "achieved \"%s\".\n"),
-                     achievement_name_translation(preq->source.value.achievement));
-      }
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_ACTION:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz, _("Applies to the \"%s\" action.\n"),
-                     action_name_translation(preq->source.value.action));
-      } else {
-        cat_snprintf(buf, bufsz, _("Doesn't apply to the \"%s\""
-                                   " action.\n"),
-                     action_name_translation(preq->source.value.action));
-      }
-      return TRUE;
-    default:
-      /* Not supported. */
-      break;
-    }
-    break;
-
   case VUT_IMPROVEMENT:
     switch (preq->range) {
     case REQ_RANGE_WORLD:
       if (is_great_wonder(preq->source.value.building)) {
         if (preq->survives) {
-          if (preq->present) {
+          if (!preq->negated) {
             if (can_improvement_go_obsolete(preq->source.value.building)) {
               cat_snprintf(buf, bufsz,
                            /* TRANS: %s is a wonder */
@@ -666,7 +493,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
           }
         } else {
           /* Non-surviving requirement */
-          if (preq->present) {
+          if (!preq->negated) {
             if (can_improvement_go_obsolete(preq->source.value.building)) {
               cat_snprintf(buf, bufsz,
                            /* TRANS: %s is a wonder */
@@ -703,163 +530,10 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       /* non-great-wonder world-ranged requirements not supported */
       break;
-    case REQ_RANGE_ALLIANCE:
-      if (is_wonder(preq->source.value.building)) {
-        if (preq->survives) {
-          if (preq->present) {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone who is currently allied to "
-                             "you to have built %s at some point, and for "
-                             "it not to have been rendered obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone who is currently allied to "
-                             "you to have built %s at some point.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          } else {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone currently allied to you "
-                             "has ever built %s, unless it would be "
-                             "obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone currently allied to you "
-                             "has ever built %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          }
-        } else {
-          /* Non-surviving requirement */
-          if (preq->present) {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone allied to you to own %s, "
-                             "and for it not to have been rendered "
-                             "obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone allied to you to own %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          } else {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone allied to you owns %s, "
-                             "unless it is obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone allied to you owns %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          }
-        }
-        return TRUE;
-      }
-      /* non-wonder alliance-ranged requirements not supported */
-      break;
-    case REQ_RANGE_TEAM:
-      if (is_wonder(preq->source.value.building)) {
-        if (preq->survives) {
-          if (preq->present) {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone on your team to have "
-                             "built %s at some point, and for it not "
-                             "to have been rendered obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone on your team to have "
-                             "built %s at some point.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          } else {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone on your team has ever "
-                             "built %s, unless it would be obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone on your team has ever "
-                             "built %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          }
-        } else {
-          /* Non-surviving requirement */
-          if (preq->present) {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone on your team to own %s, "
-                             "and for it not to have been rendered "
-                             "obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Requires someone on your team to own %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          } else {
-            if (can_improvement_go_obsolete(preq->source.value.building)) {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone on your team owns %s, "
-                             "unless it is obsolete.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            } else {
-              cat_snprintf(buf, bufsz,
-                           /* TRANS: %s is a wonder */
-                           _("Prevented if someone on your team owns %s.\n"),
-                           improvement_name_translation
-                           (preq->source.value.building));
-            }
-          }
-        }
-        return TRUE;
-      }
-      /* non-wonder team-ranged requirements not supported */
-      break;
     case REQ_RANGE_PLAYER:
       if (is_wonder(preq->source.value.building)) {
         if (preq->survives) {
-          if (preq->present) {
+          if (!preq->negated) {
             if (can_improvement_go_obsolete(preq->source.value.building)) {
               cat_snprintf(buf, bufsz,
                            /* TRANS: %s is a wonder */
@@ -893,7 +567,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
           }
         } else {
           /* Non-surviving requirement */
-          if (preq->present) {
+          if (!preq->negated) {
             if (can_improvement_go_obsolete(preq->source.value.building)) {
               cat_snprintf(buf, bufsz,
                            /* TRANS: %s is a wonder */
@@ -931,7 +605,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       break;
     case REQ_RANGE_CONTINENT:
       if (is_wonder(preq->source.value.building)) {
-        if (preq->present) {
+        if (!preq->negated) {
           if (can_improvement_go_obsolete(preq->source.value.building)) {
             cat_snprintf(buf, bufsz,
                          /* TRANS: %s is a wonder */
@@ -968,43 +642,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       /* surviving or non-wonder continent-ranged requirements not supported */
       break;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        if (can_improvement_go_obsolete(preq->source.value.building)) {
-          /* Should only apply to wonders */
-          cat_snprintf(buf, bufsz,
-                       /* TRANS: %s is a building or wonder */
-                       _("Requires %s in the city or a trade partner "
-                         "(and not yet obsolete).\n"),
-                       improvement_name_translation
-                       (preq->source.value.building));
-        } else {
-          cat_snprintf(buf, bufsz,
-                       /* TRANS: %s is a building or wonder */
-                       _("Requires %s in the city or a trade partner.\n"),
-                       improvement_name_translation
-                       (preq->source.value.building));
-        }
-      } else {
-        if (can_improvement_go_obsolete(preq->source.value.building)) {
-          /* Should only apply to wonders */
-          cat_snprintf(buf, bufsz,
-                       /* TRANS: %s is a building or wonder */
-                       _("Prevented by %s in the city or a trade partner "
-                         "(unless it is obsolete).\n"),
-                       improvement_name_translation
-                       (preq->source.value.building));
-        } else {
-          cat_snprintf(buf, bufsz,
-                       /* TRANS: %s is a building or wonder */
-                       _("Prevented by %s in the city or a trade partner.\n"),
-                       improvement_name_translation
-                       (preq->source.value.building));
-        }
-      }
-      return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         if (can_improvement_go_obsolete(preq->source.value.building)) {
           /* Should only apply to wonders */
           cat_snprintf(buf, bufsz,
@@ -1038,7 +677,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      _("Only applies to \"%s\" buildings.\n"),
                      improvement_name_translation
@@ -1058,75 +697,60 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     break;
 
-  case VUT_EXTRA:
+  case VUT_SPECIAL:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Requires %s on the tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     Q_("?special:Requires %s on the tile.\n"),
+                     special_name_translation(preq->source.value.special));
       } else {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Prevented by %s on the tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     Q_("?special:Prevented by %s on the tile.\n"),
+                     special_name_translation(preq->source.value.special));
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Requires %s on the tile or a cardinally "
+                     Q_("?special:Requires %s on the tile or a cardinally "
                         "adjacent tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     special_name_translation(preq->source.value.special));
         } else {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Prevented by %s on the tile or any cardinally "
-                        "adjacent tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     Q_("?special:Prevented by %s on the tile or any "
+                        "cardinally adjacent tile.\n"),
+                     special_name_translation(preq->source.value.special));
         }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Requires %s on the tile or an adjacent "
+                     Q_("?special:Requires %s on the tile or an adjacent "
                         "tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     special_name_translation(preq->source.value.special));
       } else {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Prevented by %s on the tile or any adjacent "
-                        "tile.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     Q_("?special:Prevented by %s on the tile or any "
+                        "adjacent tile.\n"),
+                     special_name_translation(preq->source.value.special));
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Requires %s on a tile within the city "
+                     Q_("?special:Requires %s on a tile within the city "
                         "radius.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     special_name_translation(preq->source.value.special));
       } else {
         cat_snprintf(buf, bufsz,
-                     Q_("?extra:Prevented by %s on any tile within the city "
-                        "radius.\n"),
-                     extra_name_translation(preq->source.value.extra));
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     Q_("?extra:Requires %s on a tile within the city "
-                        "radius, or the city radius of a trade partner.\n"),
-                     extra_name_translation(preq->source.value.extra));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     Q_("?extra:Prevented by %s on any tile within the city "
-                        "radius or the city radius of a trade partner.\n"),
-                     extra_name_translation(preq->source.value.extra));
+                     Q_("?special:Prevented by %s on any tile within the "
+                        "city radius.\n"),
+                     special_name_translation(preq->source.value.special));
       }
       return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1137,7 +761,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_TERRAIN:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz, Q_("?terrain:Requires %s on the tile.\n"),
                      terrain_name_translation(preq->source.value.terrain));
       } else {
@@ -1146,7 +770,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?terrain:Requires %s on the tile or a cardinally "
                         "adjacent tile.\n"),
@@ -1159,7 +783,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?terrain:Requires %s on the tile or an adjacent "
                         "tile.\n"),
@@ -1172,7 +796,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?terrain:Requires %s on a tile within the city "
                         "radius.\n"),
@@ -1181,26 +805,11 @@ static bool insert_requirement(char *buf, size_t bufsz,
         cat_snprintf(buf, bufsz,
                      Q_("?terrain:Prevented by %s on any tile within the city "
                         "radius.\n"),
-                     terrain_name_translation(preq->source.value.terrain));
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     Q_("?terrain:Requires %s on a tile within the city "
-                        "radius, or the city radius of a trade partner.\n"),
-                     terrain_name_translation(preq->source.value.terrain));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     Q_("?terrain:Prevented by %s on any tile within the city "
-                        "radius or the city radius of a trade partner.\n"),
                      terrain_name_translation(preq->source.value.terrain));
       }
       return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1211,7 +820,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_RESOURCE:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?resource:Requires %s on the tile.\n"),
                      resource_name_translation(preq->source.value.resource));
@@ -1222,7 +831,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?resource:Requires %s on the tile or a cardinally "
                         "adjacent tile.\n"),
@@ -1235,7 +844,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?resource:Requires %s on the tile or an adjacent "
                         "tile.\n"),
@@ -1248,7 +857,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      Q_("?resource:Requires %s on a tile within the "
                         "city radius.\n"),
@@ -1257,26 +866,11 @@ static bool insert_requirement(char *buf, size_t bufsz,
         cat_snprintf(buf, bufsz,
                      Q_("?resource:Prevented by %s on any tile within the "
                         "city radius.\n"),
-                     resource_name_translation(preq->source.value.resource));
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     Q_("?resource:Requires %s on a tile within the "
-                        "city radius or the city radius of a trade partner.\n"),
-                     resource_name_translation(preq->source.value.resource));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     Q_("?resource:Prevented by %s on any tile within the "
-                        "city radius or the city radius of a trade partner.\n"),
                      resource_name_translation(preq->source.value.resource));
       }
       return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1287,7 +881,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_NATION:
     switch (preq->range) {
     case REQ_RANGE_PLAYER:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: "... playing as the Swedes." */
                      _("Requires that you are playing as the %s.\n"),
@@ -1299,37 +893,9 @@ static bool insert_requirement(char *buf, size_t bufsz,
                      nation_plural_translation(preq->source.value.nation));
       }
       return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "... same team as the Indonesians." */
-                     _("Requires that you are on the same team as "
-                       "the %s.\n"),
-                     nation_plural_translation(preq->source.value.nation));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "... same team as the Greeks." */
-                     _("Requires that you are not on the same team as "
-                       "the %s.\n"),
-                     nation_plural_translation(preq->source.value.nation));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "... allied with the Koreans." */
-                     _("Requires that you are allied with the %s.\n"),
-                     nation_plural_translation(preq->source.value.nation));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "... allied with the Danes." */
-                     _("Requires that you are not allied with the %s.\n"),
-                     nation_plural_translation(preq->source.value.nation));
-      }
-      return TRUE;
     case REQ_RANGE_WORLD:
       if (preq->survives) {
-        if (preq->present) {
+        if (!preq->negated) {
           cat_snprintf(buf, bufsz,
                        /* TRANS: "Requires the Apaches to have ..." */
                        _("Requires the %s to have been in the game.\n"),
@@ -1342,7 +908,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
                        nation_plural_translation(preq->source.value.nation));
         }
       } else {
-        if (preq->present) {
+        if (!preq->negated) {
           cat_snprintf(buf, bufsz,
                        /* TRANS: "Requires the Belgians in the game." */
                        _("Requires the %s in the game.\n"),
@@ -1359,115 +925,17 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
       break;
     }
     break;
-
-  case VUT_NATIONGROUP:
-    switch (preq->range) {
-    case REQ_RANGE_PLAYER:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: nation group: "... playing African nation." */
-                     _("Requires that you are playing %s nation.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: nation group: "... playing Imaginary nation." */
-                     _("Prevented if you are playing %s nation.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      }
-      return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: nation group: "Requires Medieval nation ..." */
-                     _("Requires %s nation on your team.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Prevented by %s nation on your team.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: nation group: "Requires Modern nation ..." */
-                     _("Requires %s nation in alliance with you.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Prevented if %s nation is in alliance with you.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      }
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: nation group: "Requires Asian nation ..." */
-                     _("Requires %s nation in the game.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Prevented by %s nation in the game.\n"),
-                     nation_group_name_translation(preq->source.value.nationgroup));
-      }
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_STYLE:
-    if (preq->range != REQ_RANGE_PLAYER) {
-      break;
-    }
-    if (preq->present) {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: "Requires that you are playing Asian style 
-                    * nation." */
-                   _("Requires that you are playing %s style nation.\n"),
-                   style_name_translation(preq->source.value.style));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   /* TRANS: "Requires that you are not playing Classical
-                    * style nation." */
-                   _("Requires that you are not playing %s style nation.\n"),
-                   style_name_translation(preq->source.value.style));
-    }
-    return TRUE;
 
   case VUT_NATIONALITY:
     switch (preq->range) {
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "Requires at least one Barbarian citizen ..." */
-                     _("Requires at least one %s citizen in the city or a "
-                       "trade partner.\n"),
-                     nation_adjective_translation(preq->source.value.nationality));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: "... no Pirate citizens ..." */
-                     _("Requires that there are no %s citizens in "
-                       "the city or any trade partners.\n"),
-                     nation_adjective_translation(preq->source.value.nationality));
-      }
-      return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: "Requires at least one Barbarian citizen ..." */
                      _("Requires at least one %s citizen in the city.\n"),
@@ -1481,90 +949,10 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_WORLD:
-    case REQ_RANGE_ALLIANCE:
-    case REQ_RANGE_TEAM:
     case REQ_RANGE_PLAYER:
     case REQ_RANGE_LOCAL:
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
-    break;
-
-  case VUT_DIPLREL:
-    switch (preq->range) {
-    case REQ_RANGE_PLAYER:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that your diplomatic relationship to at "
-                       "least one other living player is %s.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that no diplomatic relationship you have "
-                       "to any living player is %s.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      }
-      return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that somebody on your team has %s "
-                       "diplomatic relationship to another living player.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that nobody on your team has %s "
-                       "diplomatic relationship to another living player.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that somebody in your alliance has %s "
-                       "diplomatic relationship to another living player.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that nobody in your alliance has %s "
-                       "diplomatic relationship to another living player.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      }
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires the diplomatic relationship %s between two "
-                       "living players.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Requires the absence of the diplomatic "
-                       "relationship %s between any living players.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      }
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that your diplomatic relationship to the "
-                       "other player is %s.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     _("Requires that your diplomatic relationship to the "
-                       "other player isn't %s.\n"),
-                     diplrel_name_translation(preq->source.value.diplrel));
-      }
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1575,7 +963,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_UTYPE:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         /* TRANS: %s is a single kind of unit (e.g., "Settlers"). */
         cat_snprintf(buf, bufsz, Q_("?unit:Requires %s.\n"),
                      utype_name_translation(preq->source.value.utype));
@@ -1588,11 +976,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1610,7 +995,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
          * types with those flags. */
         if (role_units_translations(&astr, preq->source.value.unitflag,
                                     TRUE)) {
-          if (preq->present) {
+          if (!preq->negated) {
             /* TRANS: %s is a list of unit types separated by "or". */
             cat_snprintf(buf, bufsz, Q_("?ulist:Requires %s.\n"),
                          astr_str(&astr));
@@ -1627,11 +1012,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1642,7 +1024,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_UCLASS:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         /* TRANS: %s is a single unit class (e.g., "Air"). */
         cat_snprintf(buf, bufsz, Q_("?uclass:Requires %s units.\n"),
                      uclass_name_translation(preq->source.value.uclass));
@@ -1655,11 +1037,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -1683,7 +1062,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
 
       switch (preq->range) {
       case REQ_RANGE_LOCAL:
-        if (preq->present) {
+        if (!preq->negated) {
           /* TRANS: %s is a list of unit classes separated by "or". */
           cat_snprintf(buf, bufsz, Q_("?uclasslist:Requires %s units.\n"),
                        astr_str(&list));
@@ -1698,11 +1077,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
       case REQ_RANGE_CADJACENT:
       case REQ_RANGE_ADJACENT:
       case REQ_RANGE_CITY:
-      case REQ_RANGE_TRADEROUTE:
       case REQ_RANGE_CONTINENT:
       case REQ_RANGE_PLAYER:
-      case REQ_RANGE_TEAM:
-      case REQ_RANGE_ALLIANCE:
       case REQ_RANGE_WORLD:
       case REQ_RANGE_COUNT:
         /* Not supported. */
@@ -1715,132 +1091,11 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     break;
 
-  case VUT_UNITSTATE:
-    {
-      switch (preq->range) {
-      case REQ_RANGE_LOCAL:
-        switch (preq->source.value.unit_state) {
-        case USP_TRANSPORTED:
-          if (preq->present) {
-            cat_snprintf(buf, bufsz,
-                         _("Requires that the unit is transported.\n"));
-          } else {
-            cat_snprintf(buf, bufsz,
-                         _("Requires that the unit isn't transported.\n"));
-          }
-          return TRUE;
-        case USP_LIVABLE_TILE:
-          if (preq->present) {
-            cat_snprintf(buf, bufsz,
-                         _("Requires that the unit is on livable tile.\n"));
-          } else {
-            cat_snprintf(buf, bufsz,
-                         _("Requires that the unit isn't on livable tile.\n"));
-          }
-          return TRUE;
-        case USP_COUNT:
-          fc_assert_msg(preq->source.value.unit_state != USP_COUNT,
-                        "Invalid unit state property.");
-        }
-        break;
-      case REQ_RANGE_CADJACENT:
-      case REQ_RANGE_ADJACENT:
-      case REQ_RANGE_CITY:
-      case REQ_RANGE_TRADEROUTE:
-      case REQ_RANGE_CONTINENT:
-      case REQ_RANGE_PLAYER:
-      case REQ_RANGE_TEAM:
-      case REQ_RANGE_ALLIANCE:
-      case REQ_RANGE_WORLD:
-      case REQ_RANGE_COUNT:
-        /* Not supported. */
-        break;
-      }
-    }
-    break;
-
-  case VUT_MINMOVES:
-    {
-      switch (preq->range) {
-      case REQ_RANGE_LOCAL:
-        if (preq->present) {
-          cat_snprintf(buf, bufsz,
-                       /* %s is numeric move points; it may have a
-                        * fractional part ("1 1/3 MP"). */
-                       _("Requires that the unit has at least %s MP left.\n"),
-                       move_points_text(preq->source.value.minmoves, TRUE));
-        } else {
-          cat_snprintf(buf, bufsz,
-                       /* %s is numeric move points; it may have a
-                        * fractional part ("1 1/3 MP"). */
-                       _("Requires that the unit has less than %s MP left.\n"),
-                       move_points_text(preq->source.value.minmoves, TRUE));
-        }
-        return TRUE;
-      case REQ_RANGE_CADJACENT:
-      case REQ_RANGE_ADJACENT:
-      case REQ_RANGE_CITY:
-      case REQ_RANGE_TRADEROUTE:
-      case REQ_RANGE_CONTINENT:
-      case REQ_RANGE_PLAYER:
-      case REQ_RANGE_TEAM:
-      case REQ_RANGE_ALLIANCE:
-      case REQ_RANGE_WORLD:
-      case REQ_RANGE_COUNT:
-        /* Not supported. */
-        break;
-      }
-    }
-    break;
-
-  case VUT_MINVETERAN:
-    if (preq->range != REQ_RANGE_LOCAL) {
-      break;
-    }
-    /* FIXME: this would be better with veteran level names, but that's
-     * potentially unit type dependent. */
-    if (preq->present) {
-      cat_snprintf(buf, bufsz,
-                   PL_("Requires a unit with at least %d veteran level.\n",
-                       "Requires a unit with at least %d veteran levels.\n",
-                       preq->source.value.minveteran),
-                   preq->source.value.minveteran);
-    } else {
-      cat_snprintf(buf, bufsz,
-                   PL_("Requires a unit with fewer than %d veteran level.\n",
-                       "Requires a unit with fewer than %d veteran levels.\n",
-                       preq->source.value.minveteran),
-                   preq->source.value.minveteran);
-    }
-    return TRUE;
-
-    case VUT_MINHP:
-      if (preq->range != REQ_RANGE_LOCAL) {
-        break;
-      }
-
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a unit with at least %d hit point left.\n",
-                         "Requires a unit with at least %d hit points left.\n",
-                         preq->source.value.min_hit_points),
-                     preq->source.value.min_hit_points);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a unit with fewer than %d hit point "
-                         "left.\n",
-                         "Requires a unit with fewer than %d hit points "
-                         "left.\n",
-                         preq->source.value.min_hit_points),
-                     preq->source.value.min_hit_points);
-      }
-      return TRUE;
-
   case VUT_OTYPE:
     if (preq->range != REQ_RANGE_LOCAL) {
       break;
     }
-    if (preq->present) {
+    if (!preq->negated) {
       /* TRANS: "Applies only to Food." */
       cat_snprintf(buf, bufsz, Q_("?output:Applies only to %s.\n"),
                    get_output_name(preq->source.value.outputtype));
@@ -1855,7 +1110,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     if (preq->range != REQ_RANGE_LOCAL) {
       break;
     }
-    if (preq->present) {
+    if (!preq->negated) {
       /* TRANS: "Applies only to Scientists." */
       cat_snprintf(buf, bufsz, Q_("?specialist:Applies only to %s.\n"),
                    specialist_plural_translation(preq->source.value.specialist));
@@ -1867,267 +1122,45 @@ static bool insert_requirement(char *buf, size_t bufsz,
     return TRUE;
 
   case VUT_MINSIZE:
-    switch (preq->range) {
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a minimum city size of %d for this "
-                         "city or a trade partner.\n",
-                         "Requires a minimum city size of %d for this "
-                         "city or a trade partner.\n",
-                         preq->source.value.minsize),
-                     preq->source.value.minsize);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires the city size to be less than %d "
-                         "for this city and all trade partners.\n",
-                         "Requires the city size to be less than %d "
-                         "for this city and all trade partners.\n",
-                         preq->source.value.minsize),
-                     preq->source.value.minsize);
-      }
-      return TRUE;
-    case REQ_RANGE_CITY:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a minimum city size of %d.\n",
-                         "Requires a minimum city size of %d.\n",
-                         preq->source.value.minsize),
-                     preq->source.value.minsize);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires the city size to be less than %d.\n",
-                         "Requires the city size to be less than %d.\n",
-                         preq->source.value.minsize),
+    if (preq->range != REQ_RANGE_CITY) {
+      break;
+    }
+    if (!preq->negated) {
+      cat_snprintf(buf, bufsz,
+                   PL_("Requires a minimum city size of %d.\n",
+                       "Requires a minimum city size of %d.\n",
+                       preq->source.value.minsize),
                    preq->source.value.minsize);
-      }
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
+    } else {
+      cat_snprintf(buf, bufsz,
+                   PL_("Requires the city size to be less than %d.\n",
+                       "Requires the city size to be less than %d.\n",
+                       preq->source.value.minsize),
+                   preq->source.value.minsize);
     }
-
-  case VUT_MINCULTURE:
-    switch (preq->range) {
-    case REQ_RANGE_CITY:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a minimum culture of %d in the city.\n",
-                         "Requires a minimum culture of %d in the city.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires the culture in the city to be less "
-                         "than %d.\n",
-                         "Requires the culture in the city to be less "
-                         "than %d.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires a minimum culture of %d in this city or "
-                         "a trade partner.\n",
-                         "Requires a minimum culture of %d in this city or "
-                         "a trade partner.\n",
-                         preq->source.value.minculture),
-                      preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires the culture in this city and all trade "
-                         "partners to be less than %d.\n",
-                         "Requires the culture in this city and all trade "
-                         "partners to be less than %d.\n",
-                         preq->source.value.minculture),
-                      preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_PLAYER:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires your nation to have culture "
-                         "of at least %d.\n",
-                         "Requires your nation to have culture "
-                         "of at least %d.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Prevented if your nation has culture of "
-                         "%d or more.\n",
-                         "Prevented if your nation has culture of "
-                         "%d or more.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_TEAM:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires someone on your team to have culture of "
-                         "at least %d.\n",
-                         "Requires someone on your team to have culture of "
-                         "at least %d.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Prevented if anyone on your team has culture of "
-                         "%d or more.\n",
-                         "Prevented if anyone on your team has culture of "
-                         "%d or more.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_ALLIANCE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires someone in your current alliance to "
-                         "have culture of at least %d.\n",
-                         "Requires someone in your current alliance to "
-                         "have culture of at least %d.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Prevented if anyone in your current alliance has "
-                         "culture of %d or more.\n",
-                         "Prevented if anyone in your current alliance has "
-                         "culture of %d or more.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_WORLD:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires that some player has culture of at "
-                         "least %d.\n",
-                         "Requires that some player has culture of at "
-                         "least %d.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("Requires that no player has culture of %d "
-                         "or more.\n",
-                         "Requires that no player has culture of %d "
-                         "or more.\n",
-                         preq->source.value.minculture),
-                     preq->source.value.minculture);
-      }
-      return TRUE;
-    case REQ_RANGE_LOCAL:
-    case REQ_RANGE_CADJACENT:
-    case REQ_RANGE_ADJACENT:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_COUNT:
-      break;
-    }
-    break;
-
-  case VUT_MAXTILEUNITS:
-    switch (preq->range) {
-    case REQ_RANGE_LOCAL:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("At most %d unit may be present on the tile.\n",
-                         "At most %d units may be present on the tile.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("There must be more than %d unit present on "
-                         "the tile.\n",
-                         "There must be more than %d units present on "
-                         "the tile.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      }
-      return TRUE;
-    case REQ_RANGE_CADJACENT:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("The tile or at least one cardinally adjacent tile "
-                         "must have %d unit or fewer.\n",
-                         "The tile or at least one cardinally adjacent tile "
-                         "must have %d units or fewer.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("The tile and all cardinally adjacent tiles must "
-                         "have more than %d unit each.\n",
-                         "The tile and all cardinally adjacent tiles must "
-                         "have more than %d units each.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      }
-      return TRUE;
-    case REQ_RANGE_ADJACENT:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     PL_("The tile or at least one adjacent tile must have "
-                         "%d unit or fewer.\n",
-                         "The tile or at least one adjacent tile must have "
-                         "%d units or fewer.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      } else {
-        cat_snprintf(buf, bufsz,
-                     PL_("The tile and all adjacent tiles must have more "
-                         "than %d unit each.\n",
-                         "The tile and all adjacent tiles must have more "
-                         "than %d units each.\n",
-                         preq->source.value.max_tile_units),
-                     preq->source.value.max_tile_units);
-      }
-      return TRUE;
-    case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
-    case REQ_RANGE_CONTINENT:
-    case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
-    case REQ_RANGE_WORLD:
-    case REQ_RANGE_COUNT:
-      /* Not supported. */
-      break;
-    }
+    return TRUE;
 
   case VUT_AI_LEVEL:
     if (preq->range != REQ_RANGE_PLAYER) {
       break;
     }
-    if (preq->present) {
+    if (!preq->negated) {
       cat_snprintf(buf, bufsz,
-                   /* TRANS: AI level (e.g., "Handicapped") */
+                   /* TRANS: AI level (e.g., "Easy") */
                    _("Applies to %s AI players.\n"),
-                   ai_level_translated_name(preq->source.value.ai_level));
+                   ai_level_name(preq->source.value.ai_level));
     } else {
       cat_snprintf(buf, bufsz,
                    /* TRANS: AI level (e.g., "Cheating") */
                    _("Does not apply to %s AI players.\n"),
-                   ai_level_translated_name(preq->source.value.ai_level));
+                   ai_level_name(preq->source.value.ai_level));
     }
     return TRUE;
 
   case VUT_TERRAINCLASS:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a terrain class */
                      Q_("?terrainclass:Requires %s terrain on the tile.\n"),
@@ -2142,7 +1175,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a terrain class */
                      Q_("?terrainclass:Requires %s terrain on the tile or a "
@@ -2159,7 +1192,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a terrain class */
                      Q_("?terrainclass:Requires %s terrain on the tile or an "
@@ -2176,7 +1209,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a terrain class */
                      Q_("?terrainclass:Requires %s terrain on a tile within "
@@ -2192,29 +1225,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
                      (preq->source.value.terrainclass));
       }
       return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a terrain class */
-                     Q_("?terrainclass:Requires %s terrain on a tile within "
-                        "the city radius or the city radius of a trade "
-                        "partner.\n"),
-                     terrain_class_name_translation
-                     (preq->source.value.terrainclass));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a terrain class */
-                     Q_("?terrainclass:Prevented by %s terrain on any tile "
-                        "within the city radius or the city radius of a trade "
-                        "partner.\n"),
-                     terrain_class_name_translation
-                     (preq->source.value.terrainclass));
-      }
-      return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -2225,7 +1237,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
   case VUT_TERRFLAG:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) terrain flag. */
                      _("Requires terrain with the \"%s\" flag on the tile.\n"),
@@ -2239,7 +1251,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) terrain flag. */
                      _("Requires terrain with the \"%s\" flag on the "
@@ -2254,7 +1266,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) terrain flag. */
                      _("Requires terrain with the \"%s\" flag on the "
@@ -2269,7 +1281,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      /* TRANS: %s is a (translateable) terrain flag. */
                      _("Requires terrain with the \"%s\" flag on a tile "
@@ -2283,27 +1295,8 @@ static bool insert_requirement(char *buf, size_t bufsz,
                      terrain_flag_id_translated_name(preq->source.value.terrainflag));
       }
       return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) terrain flag. */
-                     _("Requires terrain with the \"%s\" flag on a tile "
-                       "within the city radius or the city radius of "
-                       "a trade partner.\n"),
-                     terrain_flag_id_translated_name(preq->source.value.terrainflag));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) terrain flag. */
-                     _("Prevented by terrain with the \"%s\" flag on any tile "
-                       "within the city radius or the city radius of "
-                       "a trade partner.\n"),
-                     terrain_flag_id_translated_name(preq->source.value.terrainflag));
-      }
-      return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -2311,88 +1304,60 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     break;
 
-  case VUT_BASEFLAG:
+  case VUT_BASE:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Requires a base with the \"%s\" flag on the tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Requires %s on the tile.\n"),
+                     base_name_translation(preq->source.value.base));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Prevented by a base with the \"%s\" flag on the "
-                       "tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Prevented by %s on the tile.\n"),
+                     base_name_translation(preq->source.value.base));
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Requires a base with the \"%s\" flag on the "
-                       "tile or a cardinally adjacent tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Requires %s on the tile or a "
+                        "cardinally adjacent tile.\n"),
+                     base_name_translation(preq->source.value.base));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Prevented by a base with the \"%s\" flag on "
-                       "the tile or any cardinally adjacent tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Prevented by %s on the tile or any "
+                       "cardinally adjacent tile.\n"),
+                     base_name_translation(preq->source.value.base));
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Requires a base with the \"%s\" flag on the "
-                       "tile or an adjacent tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Requires %s on the tile or an "
+                        "adjacent tile.\n"),
+                     base_name_translation(preq->source.value.base));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Prevented by a base with the \"%s\" flag on "
-                       "the tile or any adjacent tile.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Prevented by %s on the tile or any "
+                        "adjacent tile.\n"),
+                     base_name_translation(preq->source.value.base));
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Requires a base with the \"%s\" flag on a tile "
-                       "within the city radius.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Requires %s on a tile within the city "
+                        "radius.\n"),
+                     base_name_translation(preq->source.value.base));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Prevented by a base with the \"%s\" flag on any tile "
-                       "within the city radius.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Requires a base with the \"%s\" flag on a tile "
-                       "within the city radius or the city radius of a "
-                       "trade partner.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) base flag. */
-                     _("Prevented by a base with the \"%s\" flag on any tile "
-                       "within the city radius or the city radius of a "
-                       "trade partner.\n"),
-                     base_flag_id_translated_name(preq->source.value.baseflag));
+                     Q_("?base:Prevented by %s on any tile within the "
+                        "city radius.\n"),
+                     base_name_translation(preq->source.value.base));
       }
       return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -2400,88 +1365,60 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     break;
 
-  case VUT_ROADFLAG:
+  case VUT_ROAD:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Requires a road with the \"%s\" flag on the tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Requires %s on the tile.\n"),
+                     road_name_translation(preq->source.value.road));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Prevented by a road with the \"%s\" flag on the "
-                       "tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Prevented by %s on the tile.\n"),
+                     road_name_translation(preq->source.value.road));
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Requires a road with the \"%s\" flag on the "
-                       "tile or a cardinally adjacent tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Requires %s on the tile or a "
+                        "cardinally adjacent tile.\n"),
+                     road_name_translation(preq->source.value.road));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Prevented by a road with the \"%s\" flag on "
-                       "the tile or any cardinally adjacent tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Prevented by %s on the tile or any "
+                        "cardinally adjacent tile.\n"),
+                     road_name_translation(preq->source.value.road));
       }
       return TRUE;
     case REQ_RANGE_ADJACENT:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Requires a road with the \"%s\" flag on the "
-                       "tile or an adjacent tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Requires %s on the tile or an "
+                        "adjacent tile.\n"),
+                     road_name_translation(preq->source.value.road));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Prevented by a road with the \"%s\" flag on "
-                       "the tile or any adjacent tile.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Prevented by %s on the tile or any "
+                        "adjacent tile.\n"),
+                     road_name_translation(preq->source.value.road));
       }
       return TRUE;
     case REQ_RANGE_CITY:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Requires a road with the \"%s\" flag on a tile "
-                       "within the city radius.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Requires %s on a tile within the city "
+                        "radius.\n"),
+                     road_name_translation(preq->source.value.road));
       } else {
         cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Prevented by a road with the \"%s\" flag on any tile "
-                       "within the city radius.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
-      }
-      return TRUE;
-    case REQ_RANGE_TRADEROUTE:
-      if (preq->present) {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Requires a road with the \"%s\" flag on a tile "
-                       "within the city radius or the city radius of a "
-                       "trade partner.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
-      } else {
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: %s is a (translateable) road flag. */
-                     _("Prevented by a road with the \"%s\" flag on any tile "
-                       "within the city radius or the city radius of a "
-                       "trade partner.\n"),
-                     road_flag_id_translated_name(preq->source.value.roadflag));
+                     Q_("?road:Prevented by %s on any tile within the "
+                        "city radius.\n"),
+                     road_name_translation(preq->source.value.road));
       }
       return TRUE;
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -2493,7 +1430,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     if (preq->range != REQ_RANGE_WORLD) {
       break;
     }
-    if (preq->present) {
+    if (!preq->negated) {
       cat_snprintf(buf, bufsz,
                    _("Requires the game to have reached the year %s.\n"),
                    textyear(preq->source.value.minyear));
@@ -2505,56 +1442,28 @@ static bool insert_requirement(char *buf, size_t bufsz,
     }
     return TRUE;
 
-  case VUT_TOPO:
-    if (preq->range != REQ_RANGE_WORLD) {
-      break;
-    }
-    if (preq->present) {
-      cat_snprintf(buf, bufsz,
-                   _("Requires %s map.\n"),
-                   _(topo_flag_name(preq->source.value.topo_property)));
-    } else {
-      cat_snprintf(buf, bufsz,
-                   _("Prevented on %s map.\n"),
-                   _(topo_flag_name(preq->source.value.topo_property)));
-    }
-    return TRUE;
-
-  case VUT_AGE:
-    if (preq->present) {
-      cat_snprintf(buf, bufsz,
-                   _("Requires age of %d turns.\n"),
-                   preq->source.value.age);
-    } else {
-      cat_snprintf(buf, bufsz,
-                   _("Prevented if age is over %d turns.\n"),
-                   preq->source.value.age);
-    }
-    return TRUE;
-
   case VUT_TERRAINALTER:
     switch (preq->range) {
     case REQ_RANGE_LOCAL:
-      if (preq->present) {
+      if (!preq->negated) {
         cat_snprintf(buf, bufsz,
                      _("Requires terrain on which alteration %s is "
                        "possible.\n"),
-                     Q_(terrain_alteration_name(preq->source.value.terrainalter)));
+                     terrain_alteration_name_translation
+                     (preq->source.value.terrainalter));
       } else {
         cat_snprintf(buf, bufsz,
                      _("Prevented by terrain on which alteration %s "
                        "can be made.\n"),
-                     Q_(terrain_alteration_name(preq->source.value.terrainalter)));
+                     terrain_alteration_name_translation
+                     (preq->source.value.terrainalter));
       }
       return TRUE;
     case REQ_RANGE_CADJACENT:
     case REQ_RANGE_ADJACENT:
     case REQ_RANGE_CITY:
-    case REQ_RANGE_TRADEROUTE:
     case REQ_RANGE_CONTINENT:
     case REQ_RANGE_PLAYER:
-    case REQ_RANGE_TEAM:
-    case REQ_RANGE_ALLIANCE:
     case REQ_RANGE_WORLD:
     case REQ_RANGE_COUNT:
       /* Not supported. */
@@ -2563,65 +1472,15 @@ static bool insert_requirement(char *buf, size_t bufsz,
     break;
 
   case VUT_CITYTILE:
-    if (preq->source.value.citytile == CITYT_LAST) {
+    if (preq->range != REQ_RANGE_LOCAL) {
       break;
-    } else {
-      static char *tile_property = NULL;
-
-      switch (preq->source.value.citytile) {
-      case CITYT_CENTER:
-        tile_property = "city centers";
-        break;
-      case CITYT_CLAIMED:
-        tile_property = "claimed tiles";
-        break;
-      case CITYT_LAST:
-        fc_assert(preq->source.value.citytile != CITYT_LAST);
-        break;
-      }
-
-      switch (preq->range) {
-      case REQ_RANGE_LOCAL:
-        if (preq->present) {
-          cat_snprintf(buf, bufsz,
-                       _("Applies only to %s.\n"), tile_property);
-        } else {
-          cat_snprintf(buf, bufsz,
-                       _("Does not apply to %s.\n"), tile_property);
-        }
-        return TRUE;
-      case REQ_RANGE_CADJACENT:
-        if (preq->present) {
-          cat_snprintf(buf, bufsz, _("Applies only to %s and "
-                                     "cardinally adjacent tiles.\n"),
-                       tile_property);
-        } else {
-          cat_snprintf(buf, bufsz, _("Does not apply to %s or "
-                                     "cardinally adjacent tiles.\n"),
-                       tile_property);
-        }
-        return TRUE;
-      case REQ_RANGE_ADJACENT:
-        if (preq->present) {
-          cat_snprintf(buf, bufsz, _("Applies only to %s and "
-                                     "adjacent tiles.\n"), tile_property);
-        } else {
-          cat_snprintf(buf, bufsz, _("Does not apply to %s or "
-                                     "adjacent tiles.\n"), tile_property);
-        }
-        return TRUE;
-      case REQ_RANGE_CITY:
-      case REQ_RANGE_TRADEROUTE:
-      case REQ_RANGE_CONTINENT:
-      case REQ_RANGE_PLAYER:
-      case REQ_RANGE_TEAM:
-      case REQ_RANGE_ALLIANCE:
-      case REQ_RANGE_WORLD:
-      case REQ_RANGE_COUNT:
-        /* Not supported. */
-        break;
-      }
     }
+    if (!preq->negated) {
+      cat_snprintf(buf, bufsz, _("Applies only to city centers.\n"));
+    } else {
+      cat_snprintf(buf, bufsz, _("Does not apply to city centers.\n"));
+    }
+    return TRUE;
 
   case VUT_COUNT:
     break;
@@ -2631,7 +1490,7 @@ static bool insert_requirement(char *buf, size_t bufsz,
     char text[256];
 
     log_error("%s requirement %s in range %d is not supported in helpdata.c.",
-              preq->present ? "Present" : "Absent",
+              preq->negated ? "Absent" : "Present",
               universal_name_translation(&preq->source, text, sizeof(text)),
               preq->range);
   }
@@ -2660,14 +1519,14 @@ static void insert_allows_single(struct universal *psource,
   /* FIXME: show other data like range and survives. */
 
   requirement_vector_iterate(psubjreqs, req) {
-    if (!req->quiet && are_universals_equal(psource, &req->source)) {
-      if (req->present) {
+    if (are_universals_equal(psource, &req->source)) {
+      if (!req->negated) {
         /* psource enables the subject, but other sources may
          * also be required (or required to be absent). */
         requirement_vector_iterate(psubjreqs, coreq) {
-          if (!coreq->quiet && !are_universals_equal(psource, &coreq->source)) {
+          if (!are_universals_equal(psource, &coreq->source)) {
             universal_name_translation(&coreq->source, buf2, sizeof(buf2));
-            strvec_append(coreq->present ? coreqs : conoreqs, buf2);
+            strvec_append(coreq->negated ? conoreqs : coreqs, buf2);
           }
         } requirement_vector_iterate_end;
 
@@ -2828,7 +1687,7 @@ void boot_help_texts(struct player *pplayer)
   /* need to do something like this or bad things happen */
   popdown_help_dialog();
 
-  if (!booted) {
+  if(!booted) {
     log_verbose("Booting help texts");
   } else {
     /* free memory allocated last time booted */
@@ -2853,7 +1712,6 @@ void boot_help_texts(struct player *pplayer)
 
   if (NULL != sec) {
     section_list_iterate(sec, psection) {
-      char help_text_buffer[MAX_LEN_PACKET];
       const char *sec_name = section_name(psection);
       const char *gen_str = secfile_lookup_str(sf, "%s.generate", sec_name);
       
@@ -2864,8 +1722,8 @@ void boot_help_texts(struct player *pplayer)
         if (!booted) {
           continue; /* on initial boot data tables are empty */
         }
-        for (i = 2; help_type_names[i]; i++) {
-          if (strcmp(gen_str, help_type_names[i]) == 0) {
+        for(i=2; help_type_names[i]; i++) {
+          if(strcmp(gen_str, help_type_names[i])==0) {
             current_type = i;
             break;
           }
@@ -2898,7 +1756,7 @@ void boot_help_texts(struct player *pplayer)
               if (valid_advance_by_number(i)) {
                 pitem = new_help_item(current_type);
                 fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            advance_name_translation(advance_by_number(i)));
+                            advance_name_for_player(pplayer, i));
                 pitem->topic = fc_strdup(name);
                 pitem->text = fc_strdup("");
                 help_list_append(category_nodes, pitem);
@@ -2917,37 +1775,47 @@ void boot_help_texts(struct player *pplayer)
               }
             } terrain_type_iterate_end;
             break;
-          case HELP_EXTRA:
+          case HELP_BASE:
+            base_type_iterate(pbase) {
+              pitem = new_help_item(current_type);
+              fc_snprintf(name, sizeof(name), "%*s%s", level, "",
+                          base_name_translation(pbase));
+              pitem->topic = fc_strdup(name);
+              pitem->text = fc_strdup("");
+              help_list_append(category_nodes, pitem);
+            } base_type_iterate_end;
+            break;
+          case HELP_ROAD:
             {
-              const char **cats;
-              size_t ncats;
-              cats = secfile_lookup_str_vec(sf, &ncats,
-                                            "%s.categories", sec_name);
-              extra_type_iterate(pextra) {
-                /* If categories not specified, don't filter */
-                if (cats) {
-                  bool include = FALSE;
-                  const char *cat = extra_category_name(pextra->category);
-                  int i;
-
-                  for (i = 0; i < ncats; i++) {
-                    if (fc_strcasecmp(cats[i], cat) == 0) {
-                      include = TRUE;
-                      break;
-                    }
+              bool filter, natural;
+              {
+                const char *filterstr = secfile_lookup_str(sf, "%s.filter",
+                                                           sec_name);
+                if (!filterstr) {
+                  filter = FALSE;
+                } else {
+                  filter = TRUE;
+                  if (fc_strcasecmp(filterstr, "Natural") == 0) {
+                    natural = TRUE;
+                  } else if (fc_strcasecmp(filterstr, "NonNatural") == 0) {
+                    natural = FALSE;
+                  } else {
+                    log_error("bad road help filter \"%s\"", filterstr);
+                    filter = FALSE;
                   }
-                  if (!include) {
-                    continue;
-                  }
+                }
+              }
+              road_type_iterate(proad) {
+                if (filter && road_has_flag(proad, RF_NATURAL) != natural) {
+                  continue;
                 }
                 pitem = new_help_item(current_type);
                 fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                            extra_name_translation(pextra));
+                            road_name_translation(proad));
                 pitem->topic = fc_strdup(name);
                 pitem->text = fc_strdup("");
                 help_list_append(category_nodes, pitem);
-              } extra_type_iterate_end;
-              FC_FREE(cats);
+              } road_type_iterate_end;
             }
             break;
           case HELP_SPECIALIST:
@@ -3001,55 +1869,26 @@ void boot_help_texts(struct player *pplayer)
             fc_snprintf(name, sizeof(name), "%*s%s", level, "",
                         Q_(HELP_RULESET_ITEM));
             pitem->topic = fc_strdup(name);
-            if (game.ruleset_description != NULL) {
-              if (game.control.version[0] != '\0') {
-                int len = strlen(_(game.control.name))
-                  + strlen(" ")
-                  + strlen(game.control.version)
-                  + strlen("\n\n")
-                  + strlen(_(game.ruleset_description))
-                  + 1;
+            if (game.control.description[0] != '\0') {
+              int len = strlen(_(game.control.name))
+                + strlen("\n\n")
+                + strlen(_(game.control.description))
+                + 1;
 
-                pitem->text = fc_malloc(len);
-                fc_snprintf(pitem->text, len, "%s %s\n\n%s",
-                            _(game.control.name), game.control.version,
-                            _(game.ruleset_description));
-              } else {
-                int len = strlen(_(game.control.name))
-                  + strlen("\n\n")
-                  + strlen(_(game.ruleset_description))
-                  + 1;
-
-                pitem->text = fc_malloc(len);
-                fc_snprintf(pitem->text, len, "%s\n\n%s",
-                            _(game.control.name), _(game.ruleset_description));
-              }
+              pitem->text = fc_malloc(len);
+              fc_snprintf(pitem->text, len, "%s\n\n%s",
+                          _(game.control.name), _(game.control.description));
             } else {
               const char *nodesc = _("Current ruleset contains no description.");
+              int len = strlen(_(game.control.name))
+                + strlen("\n\n")
+                + strlen(nodesc)
+                + 1;
 
-              if (game.control.version[0] != '\0') {
-                int len = strlen(_(game.control.name))
-                  + strlen(" ")
-                  + strlen(game.control.version)
-                  + strlen("\n\n")
-                  + strlen(nodesc)
-                  + 1;
-
-                pitem->text = fc_malloc(len);
-                fc_snprintf(pitem->text, len, "%s %s\n\n%s",
-                            _(game.control.name), game.control.version,
-                            nodesc);
-              } else {
-                int len = strlen(_(game.control.name))
-                  + strlen("\n\n")
-                  + strlen(nodesc)
-                  + 1;
-
-                pitem->text = fc_malloc(len);
-                fc_snprintf(pitem->text, len, "%s\n\n%s",
-                            _(game.control.name),
-                            nodesc);
-              }
+              pitem->text = fc_malloc(len);
+              fc_snprintf(pitem->text, len, "%s\n\n%s",
+                          _(game.control.name),
+                          nodesc);
             }
             help_list_append(help_nodes, pitem);
             break;
@@ -3065,25 +1904,6 @@ void boot_help_texts(struct player *pplayer)
                 help_list_append(category_nodes, pitem);
               }
             } nations_iterate_end;
-            break;
-	  case HELP_MULTIPLIER:
-            multipliers_iterate(pmul) {
-              help_text_buffer[0] = '\0';
-              pitem = new_help_item(current_type);
-              fc_snprintf(name, sizeof(name), "%*s%s", level, "",
-                          name_translation(&pmul->name));
-              pitem->topic = fc_strdup(name);
-              if (pmul->helptext) {
-                const char *sep = "";
-                strvec_iterate(pmul->helptext, text) {
-                  cat_snprintf(help_text_buffer, sizeof(help_text_buffer),
-                               "%s%s", sep, text);
-                  sep = "\n\n";
-                } strvec_iterate_end;
-              }
-              pitem->text = fc_strdup(help_text_buffer);
-              help_list_append(help_nodes, pitem);
-            } multipliers_iterate_end;
             break;
           default:
             log_error("Bad current_type: %d.", current_type);
@@ -3305,21 +2125,14 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
     fc_strlcat(buf, "\n", bufsz);
   }
 
-  requirement_vector_iterate(&pimprove->obsolete_by, pobs) {
-    if (VUT_ADVANCE == pobs->source.kind && pobs->present) {
-      cat_snprintf(buf, bufsz,
-                   _("* The discovery of %s will make %s obsolete.\n"),
-                   advance_name_translation(pobs->source.value.advance),
-                   improvement_name_translation(pimprove));
-    }
-    if (VUT_IMPROVEMENT == pobs->source.kind && pobs->present) {
-      cat_snprintf(buf, bufsz,
-                   _("* The presence of %s in the city will make %s "
-                     "obsolete.\n"),
-                     improvement_name_translation(pobs->source.value.building),
-                     improvement_name_translation(pimprove));
-    }
-  } requirement_vector_iterate_end;
+
+  if (valid_advance(pimprove->obsolete_by)) {
+    cat_snprintf(buf, bufsz,
+		 _("* The discovery of %s will make %s obsolete.\n"),
+		 advance_name_for_player(pplayer,
+					 advance_number(pimprove->obsolete_by)),
+		 improvement_name_translation(pimprove));
+  }
 
   if (is_small_wonder(pimprove)) {
     cat_snprintf(buf, bufsz,
@@ -3330,15 +2143,16 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
    * uniqueness, so we don't mention it here.) */
 
   if (building_has_effect(pimprove, EFT_ENABLE_NUKE)
-      && num_role_units(action_get_role(ACTION_NUKE)) > 0) {
-    struct unit_type *u = get_role_unit(action_get_role(ACTION_NUKE), 0);
+      && num_role_units(UTYF_NUCLEAR) > 0) {
+    struct unit_type *u = get_role_unit(UTYF_NUCLEAR, 0);
 
     cat_snprintf(buf, bufsz,
 		 /* TRANS: 'Allows all players with knowledge of atomic
 		  * power to build nuclear units.' */
 		 _("* Allows all players with knowledge of %s "
 		   "to build %s units.\n"),
-                 advance_name_translation(u->require_advance),
+		 advance_name_for_player(pplayer,
+					 advance_number(u->require_advance)),
 		 utype_name_translation(u));
   }
 
@@ -3349,7 +2163,8 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
       if (A_NEVER != u->require_advance) {
 	cat_snprintf(buf, bufsz, _("* Allows %s (with %s).\n"),
 		     utype_name_translation(u),
-                     advance_name_translation(u->require_advance));
+		     advance_name_for_player(pplayer,
+					     advance_number(u->require_advance)));
       } else {
 	cat_snprintf(buf, bufsz, _("* Allows %s.\n"),
 		     utype_name_translation(u));
@@ -3410,29 +2225,74 @@ char *helptext_building(char *buf, size_t bufsz, struct player *pplayer,
   return buf;
 }
 
-/****************************************************************
-  Is unit type ever able to build an extra
-*****************************************************************/
-static bool help_is_extra_buildable(struct extra_type *pextra,
-                                    struct unit_type *ptype)
+#define techs_with_flag_iterate(flag, tech_id)				    \
+{									    \
+  Tech_type_id tech_id = 0;						    \
+									    \
+  while ((tech_id = advance_by_flag(tech_id, (flag))) != A_LAST) {
+
+#define techs_with_flag_iterate_end		\
+    tech_id++;					\
+  }						\
+}
+
+/****************************************************************************
+  Return a string containing the techs that have the flag.  Returns the
+  number of techs found.
+
+  pplayer may be NULL.
+****************************************************************************/
+static int techs_with_flag_string(char *buf, size_t bufsz,
+				  struct player *pplayer,
+				  enum tech_flag_id flag)
 {
-  if (!pextra->buildable) {
+  int count = 0;
+
+  fc_assert_ret_val(NULL != buf && 0 < bufsz, 0);
+  buf[0] = '\0';
+
+  techs_with_flag_iterate(flag, tech_id) {
+    const char *name = advance_name_for_player(pplayer, tech_id);
+
+    if (buf[0] == '\0') {
+      CATLSTR(buf, bufsz, name);
+    } else {
+      /* TRANS: continue list, in case comma is not the separator of choice. */
+      cat_snprintf(buf, bufsz, Q_("?clistmore:, %s"), name);
+    }
+    count++;
+  } techs_with_flag_iterate_end;
+
+  return count;
+}
+
+/****************************************************************
+  Is unit type ever able to build an road
+*****************************************************************/
+static bool help_is_road_buildable(struct road_type *proad,
+                                   struct unit_type *ptype)
+{
+  if (!proad->buildable) {
     return FALSE;
   }
 
-  return are_reqs_active(NULL, NULL, NULL, NULL, NULL,
-                         NULL, ptype, NULL, NULL, NULL, &pextra->reqs,
+  return are_reqs_active(NULL, NULL, NULL, NULL, ptype,
+                         NULL, NULL, &proad->reqs,
                          RPT_POSSIBLE);
 }
 
 /****************************************************************
-  Is unit type ever able to clean out an extra
+  Is unit type ever able to build an base
 *****************************************************************/
-static bool help_is_extra_cleanable(struct extra_type *pextra,
-                                    struct unit_type *ptype)
+static bool help_is_base_buildable(struct base_type *pbase,
+                                   struct unit_type *ptype)
 {
-  return are_reqs_active(NULL, NULL, NULL, NULL, NULL,
-                         NULL, ptype, NULL, NULL, NULL, &pextra->rmreqs,
+  if (!pbase->buildable) {
+    return FALSE;
+  }
+
+  return are_reqs_active(NULL, NULL, NULL, NULL, ptype,
+                         NULL, NULL, &pbase->reqs,
                          RPT_POSSIBLE);
 }
 
@@ -3475,8 +2335,6 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   }
   if (!uclass_has_flag(utype_class(utype), UCF_ZOC)) {
     CATLSTR(buf, bufsz, _("  * Not subject to zones of control.\n"));
-  } else if (!utype_has_flag(utype, UTYF_IGZOC)) {
-    CATLSTR(buf, bufsz, _("  * Subject to zones of control.\n"));
   }
   if (uclass_has_flag(utype_class(utype), UCF_DAMAGE_SLOWS)) {
     CATLSTR(buf, bufsz, _("  * Slowed down while damaged.\n"));
@@ -3485,7 +2343,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz, _("  * Gets used up in making an attack.\n"));
   }
   if (uclass_has_flag(utype_class(utype), UCF_CAN_FORTIFY)
-      && !utype_has_flag(utype, UTYF_CANT_FORTIFY)) {
+      && !utype_has_flag(utype, UTYF_SETTLERS)) {
     if (utype->defense_strength > 0) {
       CATLSTR(buf, bufsz,
               /* xgettext:no-c-format */
@@ -3521,10 +2379,6 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       && uclass_has_flag(utype_class(utype), UCF_ATT_FROM_NON_NATIVE)) {
     CATLSTR(buf, bufsz,
             _("  * Can launch attack from non-native tiles.\n"));
-  }
-  if (uclass_has_flag(utype_class(utype), UCF_AIRLIFTABLE)) {
-    CATLSTR(buf, bufsz,
-            _("  * Can be airlifted from a suitable city.\n"));
   }
 
   if (utype->need_improvement) {
@@ -3779,6 +2633,15 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       astr_free(&dlist);
     }
   }
+  if (utype_has_flag(utype, UTYF_TRADE_ROUTE)) {
+    CATLSTR(buf, bufsz,
+            _("* Can establish trade routes (must travel to target city).\n"));
+  }
+  if (utype_has_flag(utype, UTYF_HELP_WONDER)) {
+    cat_snprintf(buf, bufsz,
+		 _("* Can help build wonders (adds %d production).\n"),
+		 utype_build_shield_cost(utype));
+  }
   if (utype_has_flag(utype, UTYF_UNDISBANDABLE)) {
     CATLSTR(buf, bufsz, _("* May not be disbanded.\n"));
   } else {
@@ -3787,17 +2650,34 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
 	    _("* May be disbanded in a city to recover 50% of the"
 	      " production cost.\n"));
   }
+  if (utype_has_flag(utype, UTYF_CITIES)) {
+    cat_snprintf(buf, bufsz,
+                 PL_("* Can build new cities (initial population %d).\n",
+                     "* Can build new cities (initial population %d).\n",
+                     utype->city_size),
+                 utype->city_size);
+  }
+  if (utype_has_flag(utype, UTYF_ADD_TO_CITY)) {
+    cat_snprintf(buf, bufsz,
+                 /* TRANS: Plural in "%d population", not "size %d". */
+		 PL_("* Can add on %d population to cities of no more than"
+                     " size %d.\n",
+		     "* Can add on %d population to cities of no more than"
+                     " size %d.\n", utype_pop_value(utype)),
+		 utype_pop_value(utype),
+		 game.info.add_to_size_limit - utype_pop_value(utype));
+  }
   if (utype_has_flag(utype, UTYF_SETTLERS)) {
-    struct universal for_utype = { .kind = VUT_UTYPE, .value = { .utype = utype }};
+    char buf2[1024];
     struct astring extras_and = ASTRING_INIT;
     struct strvec *extras_vec = strvec_new();
 
     /* Roads, rail, mines, irrigation. */
-    extra_type_by_cause_iterate(EC_ROAD, pextra) {
-      if (help_is_extra_buildable(pextra, utype)) {
-        strvec_append(extras_vec, extra_name_translation(pextra));
+    road_type_iterate(proad) {
+      if (help_is_road_buildable(proad, utype)) {
+        strvec_append(extras_vec, road_name_translation(proad));
       }
-    } extra_type_by_cause_iterate_end;
+    } road_type_iterate_end;
     if (strvec_size(extras_vec) > 0) {
       strvec_to_and_list(extras_vec, &extras_and);
       /* TRANS: %s is list of extra types separated by ',' and 'and' */
@@ -3806,53 +2686,45 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       strvec_clear(extras_vec);
     }
 
-    if (effect_cumulative_max(EFT_MINING_POSSIBLE, &for_utype) > 0) {
-      extra_type_by_cause_iterate(EC_MINE, pextra) {
-        if (help_is_extra_buildable(pextra, utype)) {
-          strvec_append(extras_vec, extra_name_translation(pextra));
-        }
-      } extra_type_by_cause_iterate_end;
-
-      if (strvec_size(extras_vec) > 0) {
-        strvec_to_and_list(extras_vec, &extras_and);
-        cat_snprintf(buf, bufsz, _("* Can build %s on tiles.\n"),
-                     astr_str(&extras_and));
-        strvec_clear(extras_vec);
-      }
+    if (effect_cumulative_max(EFT_MINING_POSSIBLE, utype) > 0) {
+      CATLSTR(buf, bufsz, _("* Can build mines on tiles.\n"));
     }
-    if (effect_cumulative_max(EFT_MINING_TF_POSSIBLE, &for_utype) > 0) {
+    if (effect_cumulative_max(EFT_MINING_TF_POSSIBLE, utype) > 0) {
       CATLSTR(buf, bufsz, _("* Can convert terrain to another type by "
                             "mining.\n"));
     }
 
-    if (effect_cumulative_max(EFT_IRRIG_POSSIBLE, &for_utype) > 0) {
-      extra_type_by_cause_iterate(EC_IRRIGATION, pextra) {
-        if (help_is_extra_buildable(pextra, utype)) {
-          strvec_append(extras_vec, extra_name_translation(pextra));
-        }
-      } extra_type_by_cause_iterate_end;
-
-      if (strvec_size(extras_vec) > 0) {
-        strvec_to_and_list(extras_vec, &extras_and);
-        cat_snprintf(buf, bufsz, _("* Can build %s on tiles.\n"),
-                     astr_str(&extras_and));
-        strvec_clear(extras_vec);
+    if (effect_cumulative_max(EFT_IRRIG_POSSIBLE, utype) > 0) {
+      CATLSTR(buf, bufsz, _("* Can build irrigation on tiles.\n"));
+      /* Farmland. */
+      switch (techs_with_flag_string(buf2, sizeof(buf2), pplayer, TF_FARMLAND)) {
+      case 0:
+        /* Can never build farmland */
+        break;
+      case 1:
+        cat_snprintf(buf, bufsz,
+                     _("* Can build farmland (if %s is known).\n"), buf2);
+        break;
+      default:
+        cat_snprintf(buf, bufsz,
+                     _("* Can build farmland (if any of the following are"
+                       " known: %s).\n"), buf2);
+        break;
       }
     }
-    if (effect_cumulative_max(EFT_IRRIG_TF_POSSIBLE, &for_utype) > 0) {
+    if (effect_cumulative_max(EFT_IRRIG_TF_POSSIBLE, utype) > 0) {
       CATLSTR(buf, bufsz, _("* Can convert terrain to another type by "
                             "irrigation.\n"));
     }
-    if (effect_cumulative_max(EFT_TRANSFORM_POSSIBLE, &for_utype) > 0) {
+    if (effect_cumulative_max(EFT_TRANSFORM_POSSIBLE, utype) > 0) {
       CATLSTR(buf, bufsz, _("* Can transform terrain to another type.\n"));
     }
 
-    extra_type_by_cause_iterate(EC_BASE, pextra) {
-      if (help_is_extra_buildable(pextra, utype)) {
-        strvec_append(extras_vec, extra_name_translation(pextra));
+    base_type_iterate(pbase) {
+      if (help_is_base_buildable(pbase, utype)) {
+        strvec_append(extras_vec, base_name_translation(pbase));
       }
-    } extra_type_by_cause_iterate_end;
-
+    } base_type_iterate_end;
     if (strvec_size(extras_vec) > 0) {
       strvec_to_and_list(extras_vec, &extras_and);
       cat_snprintf(buf, bufsz, _("* Can build %s on tiles.\n"),
@@ -3861,37 +2733,17 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     }
 
     /* Pollution, fallout. */
-    extra_type_by_rmcause_iterate(ERM_CLEANPOLLUTION, pextra) {
-      if (help_is_extra_cleanable(pextra, utype)) {
-        strvec_append(extras_vec, extra_name_translation(pextra));
-     }
-    } extra_type_by_rmcause_iterate_end;
-
-    if (strvec_size(extras_vec) > 0) {
-      strvec_to_and_list(extras_vec, &extras_and);
-      cat_snprintf(buf, bufsz, _("* Can clean %s from tiles.\n"),
-                   astr_str(&extras_and));
-      strvec_clear(extras_vec);
-    }
-    
-    extra_type_by_rmcause_iterate(ERM_CLEANFALLOUT, pextra) {
-      if (help_is_extra_cleanable(pextra, utype)) {
-        strvec_append(extras_vec, extra_name_translation(pextra));
-      }
-    } extra_type_by_rmcause_iterate_end;
-
-    if (strvec_size(extras_vec) > 0) {
-      strvec_to_and_list(extras_vec, &extras_and);
-      cat_snprintf(buf, bufsz, _("* Can clean %s from tiles.\n"),
-                   astr_str(&extras_and));
-      strvec_clear(extras_vec);
-    }
-
-    strvec_destroy(extras_vec);
+    CATLSTR(buf, bufsz, _("* Can clean pollution from tiles.\n"));
+    CATLSTR(buf, bufsz, _("* Can clean nuclear fallout from tiles.\n"));
   }
 
-  if (utype_has_flag(utype, UTYF_SPY)) {
-    CATLSTR(buf, bufsz, _("* Performs better diplomatic actions.\n"));
+  if (utype_has_flag(utype, UTYF_DIPLOMAT)) {
+    if (utype_has_flag(utype, UTYF_SPY)) {
+      CATLSTR(buf, bufsz, _("* Can perform diplomatic actions,"
+			    " plus special spy abilities.\n"));
+    } else {
+      CATLSTR(buf, bufsz, _("* Can perform diplomatic actions.\n"));
+    }
   }
   if (utype_has_flag(utype, UTYF_DIPLOMAT)
       || utype_has_flag(utype, UTYF_SUPERSPY)) {
@@ -3903,6 +2755,9 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   if (utype_has_flag(utype, UTYF_SPY)
       && utype_has_flag(utype, UTYF_SUPERSPY)) {
     CATLSTR(buf, bufsz, _("* Will always survive a spy mission.\n"));
+  }
+  if (utype_has_flag(utype, UTYF_UNBRIBABLE)) {
+    CATLSTR(buf, bufsz, _("* May not be bribed.\n"));
   }
   if (utype_has_flag(utype, UTYF_PARTIAL_INVIS)) {
     CATLSTR(buf, bufsz,
@@ -3917,13 +2772,6 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz,
             _("* Can launch attack from non-native tiles.\n"));
   }
-  if (game.info.slow_invasions
-      && utype_has_flag(utype, UTYF_BEACH_LANDER)) {
-    /* BeachLander only matters when slow_invasions are enabled. */
-    CATLSTR(buf, bufsz,
-            _("* Won't lose all movement when moving from non-native "
-              "terrain to native terrain.\n"));
-  }
   if (utype_has_flag(utype, UTYF_PARATROOPERS)) {
     cat_snprintf(buf, bufsz,
 		 _("* Can be paradropped from a friendly city or suitable base"
@@ -3935,9 +2783,26 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
     CATLSTR(buf, bufsz,
 	    _("* Making an attack ends this unit's turn.\n"));
   }
+  if (utype_has_flag(utype, UTYF_NUCLEAR)) {
+    CATLSTR(buf, bufsz,
+	    _("* This unit's attack causes a nuclear explosion!\n"));
+  }
   if (utype_has_flag(utype, UTYF_CITYBUSTER)) {
     CATLSTR(buf, bufsz,
 	    _("* Gets double firepower when attacking cities.\n"));
+  }
+  if (utype_has_flag(utype, UTYF_IGWALL)) {
+    CATLSTR(buf, bufsz, _("* Ignores the effects of city walls.\n"));
+  }
+  if (utype_has_flag(utype, UTYF_BOMBARDER)) {
+    /* FIXME: also they only happen against land units. We leave the
+     * ruleset author to document this. */
+    cat_snprintf(buf, bufsz,
+		 _("* Does bombard attacks (%d per turn). These attacks will"
+		   " only damage (never kill) defenders, but damage all"
+                   " defenders on a tile, and have no risk for the"
+                   " attacker.\n"),
+		 utype->bombard_rate);
   }
   if (utype_has_flag(utype, UTYF_IGTER)) {
     cat_snprintf(buf, bufsz,
@@ -3947,15 +2812,8 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
                    "per tile).\n"),
                  move_points_text(terrain_control.igter_cost, TRUE));
   }
-  if (utype_has_flag(utype, UTYF_NOZOC)) {
-    CATLSTR(buf, bufsz, _("* Never imposes a zone of control.\n"));
-  } else {
-    CATLSTR(buf, bufsz, _("* May impose a zone of control on its adjacent "
-                          "tiles.\n"));
-  }
   if (utype_has_flag(utype, UTYF_IGZOC)) {
-    CATLSTR(buf, bufsz, _("* Not subject to zones of control imposed "
-                          "by other units.\n"));
+    CATLSTR(buf, bufsz, _("* Ignores zones of control.\n"));
   }
   if (utype_has_flag(utype, UTYF_CIVILIAN)) {
     CATLSTR(buf, bufsz,
@@ -3972,6 +2830,12 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
   if (utype_has_flag(utype, UTYF_FIELDUNIT)) {
     CATLSTR(buf, bufsz,
             _("* A field unit: one unhappiness applies even when non-aggressive.\n"));
+  }
+  if (utype_has_flag(utype, UTYF_CAPTURER)) {
+    CATLSTR(buf, bufsz, _("* Can capture some enemy units.\n"));
+  }
+  if (utype_has_flag(utype, UTYF_CAPTURABLE)) {
+    CATLSTR(buf, bufsz, _("* Can be captured by some enemy units.\n"));
   }
   if (utype_has_flag(utype, UTYF_SHIELD2GOLD)) {
     /* FIXME: the conversion shield => gold is activated if
@@ -4023,131 +2887,6 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
       astr_free(&list);
     }
   }
-  action_iterate(act) {
-    if (utype_can_do_action(utype, act)) {
-      switch (act) {
-      case ACTION_HELP_WONDER:
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: the first %s is the ruleset defined ui
-                      * name of the "Help Wonder" action, the next %s is
-                      * the name of its target kind ("individual cities")
-                      * and the %d is the number of shields the unit can
-                      * contribute. */
-                     _("* Can do the action \'%s\' to some %s"
-                       " (adds %d production).\n"),
-                     /* The action may have a ruleset defined ui name. */
-                     action_get_ui_name(act),
-                     /* Keep the style consistent with the help for the
-                      * other actions. */
-                     _(action_target_kind_name(
-                         action_get_target_kind(act))),
-                     /* The custom information. */
-                     utype_build_shield_cost(utype));
-        break;
-      case ACTION_FOUND_CITY:
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: the first %s is the ruleset defined ui
-                      * name of the "Found City" action, the next %s is
-                      * the name of its target kind ("tiles"), the %d
-                      * is initial population and the third %s is if city
-                      * founding is disabled in the current game. */
-                     PL_("* Can do the action \'%s\' to some %s (initial"
-                         " population %d).%s\n",
-                         "* Can do the action \'%s\' to some %s (initial"
-                         " population %d).%s\n",
-                         utype->city_size),
-                     /* The action may have a ruleset defined ui name. */
-                     action_get_ui_name(act),
-                     /* Keep the style consistent with the help for the
-                      * other actions. */
-                     _(action_target_kind_name(
-                         action_get_target_kind(act))),
-                     /* Custom information. */
-                     utype->city_size,
-                     game.scenario.prevent_new_cities ?
-                       _(" (Disabled in the current game)") :
-                       "");
-        break;
-      case ACTION_JOIN_CITY:
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: the first %s is the ruleset defined ui
-                      * name of the "Join City" action, the next %s is
-                      * the name of its target kind ("individual cities")
-                      * the first %d is population and the last %d, the
-                      * value the plural is about, is the population
-                      * added. */
-                     PL_("* Can do the action \'%s\' to some %s of no"
-                         " more than size %d (adds %d population).\n",
-                         "* Can do the action \'%s\' to some %s of no"
-                         " more than size %d (adds %d population).\n",
-                         utype_pop_value(utype)),
-                     /* The action may have a ruleset defined ui name. */
-                     action_get_ui_name(act),
-                     /* Keep the style consistent with the help for the
-                                     * other actions. */
-                     _(action_target_kind_name(
-                         action_get_target_kind(act))),
-                     /* Custom information. */
-                     game.info.add_to_size_limit - utype_pop_value(utype),
-                     utype_pop_value(utype));
-        break;
-      case ACTION_BOMBARD:
-        cat_snprintf(buf, bufsz,
-                     _("* Can do the action \'%s\' (%d per turn)."
-                       " These attacks will only damage (never kill)"
-                       " defenders, but damage all"
-                       " defenders on a tile, and have no risk for the"
-                       " attacker.\n"),
-                     /* The action may have a ruleset defined UI
-                                       * name. */
-                     action_get_ui_name(act),
-                     utype->bombard_rate);
-        break;
-      default:
-        /* Generic action information. */
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: the first %s is the action's ruleset
-                      * defined ui name and the next %s is the name of
-                      * its target kind. */
-                     _("* Can do the action \'%s\' to some %s.\n"),
-                     action_get_ui_name(act),
-                     _(action_target_kind_name(
-                         action_get_target_kind(act))));
-        break;
-      }
-    }
-  } action_iterate_end;
-  action_iterate(act) {
-    bool vulnerable;
-
-    /* Not relevant */
-    if (action_get_target_kind(act) != ATK_UNIT
-        && action_get_target_kind(act) != ATK_UNITS) {
-      continue;
-    }
-
-    /* All units are immune to this since its not enabled */
-    if (action_enabler_list_size(action_enablers_for_action(act)) == 0) {
-      continue;
-    }
-
-    /* Must be immune in all cases */
-    vulnerable = FALSE;
-    action_enabler_list_iterate(action_enablers_for_action(act), enabler) {
-      if (requirement_fulfilled_by_unit_type(utype,
-                                             &(enabler->target_reqs))) {
-        vulnerable = TRUE;
-        break;
-      }
-    } action_enabler_list_iterate_end;
-
-    if (!vulnerable) {
-      cat_snprintf(buf, bufsz,
-                   _("* Doing the action \'%s\' to this unit"
-                     " is impossible.\n"),
-                   action_get_ui_name(act));
-    }
-  } action_iterate_end;
   if (!has_vet_levels) {
     /* Only mention this if the game generally does have veteran levels. */
     if (game.veteran->levels > 1) {
@@ -4168,8 +2907,7 @@ char *helptext_unit(char *buf, size_t bufsz, struct player *pplayer,
      * UTYF_NO_VETERAN when writing this text. (Gna patch #4794) */
     CATLSTR(buf, bufsz, _("* May acquire veteran status.\n"));
     if (utype_veteran_has_power_bonus(utype)) {
-      if ((!utype_can_do_action(utype, ACTION_NUKE)
-           && utype->attack_strength > 0)
+      if ((!utype_has_flag(utype, UTYF_NUCLEAR) && utype->attack_strength > 0)
           || utype->defense_strength > 0) {
         CATLSTR(buf, bufsz,
                 _("  * Veterans have increased strength in combat.\n"));
@@ -4236,64 +2974,53 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
     return;
   }
 
-  if (NULL != pplayer) {
-    const struct research *presearch = research_get(pplayer);
+  if (player_invention_state(pplayer, i) != TECH_KNOWN) {
+    if (player_invention_state(pplayer, i) == TECH_PREREQS_KNOWN) {
+      int bulbs = base_total_bulbs_required(pplayer, i, FALSE);
 
-    if (research_invention_state(presearch, i) != TECH_KNOWN) {
-      if (research_invention_state(presearch, i) == TECH_PREREQS_KNOWN) {
-        int bulbs = research_total_bulbs_required(presearch, i, FALSE);
+      cat_snprintf(buf, bufsz,
+		   PL_("Starting now, researching %s would need %d bulb.",
+                       "Starting now, researching %s would need %d bulbs.",
+                       bulbs),
+		   advance_name_for_player(pplayer, i), bulbs);
+    } else if (player_invention_reachable(pplayer, i, TRUE)) {
+      /* Split string into two to allow localization of two pluralizations. */
+      char buf2[MAX_LEN_MSG];
+      int bulbs = total_bulbs_required_for_goal(pplayer, i);
 
-        cat_snprintf(buf, bufsz,
-                     PL_("Starting now, researching %s would need %d bulb.",
-                         "Starting now, researching %s would need %d bulbs.",
-                         bulbs),
-                     advance_name_translation(vap), bulbs);
-      } else if (research_invention_reachable(presearch, i)) {
-        /* Split string into two to allow localization of two pluralizations. */
-        char buf2[MAX_LEN_MSG];
-        int bulbs = research_goal_bulbs_required(presearch, i);
-
-        fc_snprintf(buf2, ARRAY_SIZE(buf2),
-                    /* TRANS: appended to another sentence. Preserve the
-                     * leading space. */
-                    PL_(" The whole project will require %d bulb to complete.",
-                        " The whole project will require %d bulbs to complete.",
-                        bulbs),
-                    bulbs);
-        cat_snprintf(buf, bufsz,
-                     /* TRANS: last %s is a sentence pluralized separately. */
-                     PL_("To reach %s you need to obtain %d other"
-                         " technology first.%s",
-                         "To reach %s you need to obtain %d other"
-                         " technologies first.%s",
-                         research_goal_unknown_techs(presearch, i) - 1),
-                     advance_name_translation(vap),
-                     research_goal_unknown_techs(presearch, i) - 1, buf2);
-      } else {
-        CATLSTR(buf, bufsz,
-                _("You cannot research this technology."));
-      }
-      if (!techs_have_fixed_costs()
-          && research_invention_reachable(presearch, i)) {
-        CATLSTR(buf, bufsz,
-                _(" This number may vary depending on what "
-                  "other players research.\n"));
-      } else {
-        CATLSTR(buf, bufsz, "\n");
-      }
+      fc_snprintf(buf2, ARRAY_SIZE(buf2),
+                  /* TRANS: appended to another sentence. Preserve the
+                   * leading space. */
+                  PL_(" The whole project will require %d bulb to complete.",
+                      " The whole project will require %d bulbs to complete.",
+                      bulbs),
+                  bulbs);
+      cat_snprintf(buf, bufsz,
+                   /* TRANS: last %s is a sentence pluralized separately. */
+                   PL_("To reach %s you need to obtain %d other"
+                       " technology first.%s",
+                       "To reach %s you need to obtain %d other"
+                       " technologies first.%s",
+                       num_unknown_techs_for_goal(pplayer, i) - 1),
+		   advance_name_for_player(pplayer, i),
+		   num_unknown_techs_for_goal(pplayer, i) - 1, buf2);
+    } else {
+      CATLSTR(buf, bufsz,
+	      _("You cannot research this technology."));
     }
-
-    CATLSTR(buf, bufsz, "\n");
+    if (!techs_have_fixed_costs()
+     && player_invention_reachable(pplayer, i, FALSE)) {
+      CATLSTR(buf, bufsz,
+              /* TRANS: Appended to another sentence. Preserve the
+               * leading space. */
+	      _(" This number may vary depending on what "
+		"other players research.\n"));
+    } else {
+      CATLSTR(buf, bufsz, "\n");
+    }
   }
 
-  if (requirement_vector_size(&vap->research_reqs) > 0) {
-    CATLSTR(buf, bufsz, _("Requirements to research:\n"));
-    requirement_vector_iterate(&vap->research_reqs, preq) {
-      (void) insert_requirement(buf, bufsz, pplayer, preq);
-    } requirement_vector_iterate_end;
-    CATLSTR(buf, bufsz, "\n");
-  }
-
+  CATLSTR(buf, bufsz, "\n");
   insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
 
   {
@@ -4337,7 +3064,25 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
     cat_snprintf(buf, bufsz,
 		 _("* The first player to research %s gets"
 		   " an immediate advance.\n"),
-                 advance_name_translation(vap));
+		 advance_name_for_player(pplayer, i));
+  }
+
+  /* If the ruleset has globally disabled the population-related component
+   * of pollution (effect value -100 to counteract the default +100), this
+   * tech-related behaviour won't show up unless some special condition
+   * holds, so keep quiet. (See city_pollution_types().) */
+  if (advance_has_flag(i, TF_POPULATION_POLLUTION_INC)
+      && get_world_bonus(EFT_POLLU_POP_PCT) != -100) {
+    CATLSTR(buf, bufsz,
+            _("* Increases the pollution generated by the population.\n"));
+  }
+
+  if (advance_has_flag(i, TF_FARMLAND)
+      && role_units_translations(&astr, UTYF_SETTLERS, FALSE)) {
+    cat_snprintf(buf, bufsz,
+                 /* TRANS: %s is list of units separated by "and". */
+                 _("* Allows %s to upgrade irrigation to farmland.\n"),
+                 astr_str(&astr));
   }
 
   for (flagid = TECH_USER_1 ; flagid <= TECH_USER_LAST; flagid++) {
@@ -4394,6 +3139,14 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   }
 
   insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
+  if (terrain_has_flag(pterrain, TER_NO_POLLUTION)) {
+    CATLSTR(buf, bufsz,
+	    _("* Pollution cannot be generated on this terrain."));
+    CATLSTR(buf, bufsz, "\n");
+    CATLSTR(buf, bufsz,
+	    _("* Fallout cannot be generated on this terrain."));
+    CATLSTR(buf, bufsz, "\n");
+  }
   if (terrain_has_flag(pterrain, TER_NO_CITIES)) {
     CATLSTR(buf, bufsz,
 	    _("* You cannot build cities on this terrain."));
@@ -4402,7 +3155,7 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   if (pterrain->road_time == 0) {
     /* Can't build roads; only mention if ruleset has buildable roads */
     road_type_iterate(r) {
-      if (road_extra_get(r)->buildable) {
+      if (r->buildable) {
         CATLSTR(buf, bufsz,
                 _("* Paths cannot be built on this terrain."));
         CATLSTR(buf, bufsz, "\n");
@@ -4413,7 +3166,7 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   if (pterrain->base_time == 0) {
     /* Can't build bases; only mention if ruleset has buildable bases */
     base_type_iterate(b) {
-      if (base_extra_get(b)->buildable) {
+      if (b->buildable) {
         CATLSTR(buf, bufsz,
                 _("* Bases cannot be built on this terrain."));
         CATLSTR(buf, bufsz, "\n");
@@ -4430,12 +3183,14 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
   {
     const char *classes[uclass_count()];
     int i = 0;
-    bv_extras extras;
+    bv_bases bases;
+    bv_roads roads;
 
-    BV_CLR_ALL(extras);
+    BV_CLR_ALL(bases);
+    BV_CLR_ALL(roads);
 
     unit_class_iterate(uclass) {
-      if (is_native_to_class(uclass, pterrain, extras)) {
+      if (is_native_to_class(uclass, pterrain, bases, roads)) {
         classes[i++] = uclass_name_translation(uclass);
       }
     } unit_class_iterate_end;
@@ -4448,22 +3203,6 @@ void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
                    astr_build_and_list(&list, classes, i));
       astr_free(&list);
     }
-  }
-  if (terrain_has_flag(pterrain, TER_NO_ZOC)) {
-    CATLSTR(buf, bufsz,
-            _("* Units on this terrain neither impose zones of control "
-              "nor are restricted by them.\n"));
-  } else {
-    CATLSTR(buf, bufsz,
-            _("* Units on this terrain may impose a zone of control, or "
-              "be restricted by one.\n"));
-  }
-  if (terrain_has_flag(pterrain, TER_NO_FORTIFY)) {
-    CATLSTR(buf, bufsz,
-            _("* No units can fortify on this terrain.\n"));
-  } else {
-    CATLSTR(buf, bufsz,
-            _("* Units able to fortify may do so on this terrain.\n"));
   }
   for (flagid = TER_USER_1 ; flagid <= TER_USER_LAST; flagid++) {
     if (terrain_has_flag(pterrain, flagid)) {
@@ -4546,88 +3285,53 @@ const char *helptext_road_bonus_str(const struct terrain *pterrain,
 }
 
 /****************************************************************************
-  Append misc dynamic text for extras.
+  Append misc dynamic text for bases.
   Assumes build time and conflicts are handled in the GUI front-end.
 
   pplayer may be NULL.
 ****************************************************************************/
-void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
-                    const char *user_text, struct extra_type *pextra)
+void helptext_base(char *buf, size_t bufsz, struct player *pplayer,
+                   const char *user_text, struct base_type *pbase)
 {
-  struct base_type *pbase;
-  struct road_type *proad;
   struct universal source = {
-    .kind = VUT_EXTRA,
-    .value = {.extra = pextra}
+    .kind = VUT_BASE,
+    .value = {.base = pbase}
   };
 
   fc_assert_ret(NULL != buf && 0 < bufsz);
   buf[0] = '\0';
 
-  if (!pextra) {
-    log_error("Unknown extra!");
+  if (!pbase) {
+    log_error("Unknown base!");
     return;
   }
 
-  if (is_extra_caused_by(pextra, EC_BASE)) {
-    pbase = pextra->data.base;
-  } else {
-    pbase = NULL;
-  }
-
-  if (is_extra_caused_by(pextra, EC_ROAD)) {
-    proad = pextra->data.road;
-  } else {
-    proad = NULL;
-  }
-
-  if (pextra->helptext != NULL) {
-    strvec_iterate(pextra->helptext, text) {
+  if (NULL != pbase->helptext) {
+    strvec_iterate(pbase->helptext, text) {
       cat_snprintf(buf, bufsz, "%s\n\n", _(text));
     } strvec_iterate_end;
   }
 
-  insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
-
-  if (is_extra_caused_by(pextra, EC_POLLUTION)) {
-    CATLSTR(buf, bufsz,
-            _("* May randomly appear around polluting city.\n"));
-  }
-
-  if (is_extra_caused_by(pextra, EC_FALLOUT)) {
-    CATLSTR(buf, bufsz,
-            _("* May randomly appear around nuclear blast.\n"));
-  }
-
-  if (is_extra_caused_by(pextra, EC_HUT)
-      || (proad != NULL && road_has_flag(proad, RF_RIVER))) {
-    CATLSTR(buf, bufsz,
-            _("* Placed by mapgenerator.\n"));
-  }
-
-  if (is_extra_caused_by(pextra, EC_SPONTANEOUS)) {
-    CATLSTR(buf, bufsz,
-            _(" * May spread to neighbor tiles.\n"));
-  }
-
   /* XXX Non-zero requirement vector is not a good test of whether
    * insert_requirement() will give any output. */
-  if (requirement_vector_size(&pextra->reqs) > 0) {
-    if (pextra->buildable && is_extra_caused_by_worker_action(pextra)) {
+  if (requirement_vector_size(&pbase->reqs) > 0) {
+    if (pbase->buildable) {
       CATLSTR(buf, bufsz, _("Requirements to build:\n"));
     }
-    requirement_vector_iterate(&pextra->reqs, preq) {
+    requirement_vector_iterate(&pbase->reqs, preq) {
       (void) insert_requirement(buf, bufsz, pplayer, preq);
     } requirement_vector_iterate_end;
     CATLSTR(buf, bufsz, "\n");
   }
+
+  insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
 
   {
     const char *classes[uclass_count()];
     int i = 0;
 
     unit_class_iterate(uclass) {
-      if (is_native_extra_to_uclass(pextra, uclass)) {
+      if (is_native_base_to_uclass(pbase, uclass)) {
         classes[i++] = uclass_name_translation(uclass);
       }
     } unit_class_iterate_end;
@@ -4635,51 +3339,178 @@ void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
     if (0 < i) {
       struct astring list = ASTRING_INIT;
 
-      if (proad != NULL) {
-        /* TRANS: %s is a list of unit classes separated by "and". */
-        cat_snprintf(buf, bufsz, _("* Can be traveled by %s units.\n"),
-                     astr_build_and_list(&list, classes, i));
-      } else {
-        /* TRANS: %s is a list of unit classes separated by "and". */
-        cat_snprintf(buf, bufsz, _("* Native to %s units.\n"),
-                     astr_build_and_list(&list, classes, i));
-      }
+      /* TRANS: %s is a list of unit classes separated by "and". */
+      cat_snprintf(buf, bufsz, _("* Native to %s units.\n"),
+                   astr_build_and_list(&list, classes, i));
       astr_free(&list);
 
-      if (extra_has_flag(pextra, EF_NATIVE_TILE)) {
+      if (base_has_flag(pbase, BF_NATIVE_TILE)) {
         CATLSTR(buf, bufsz,
                 _("  * Such units can move onto this tile even if it would "
                   "not normally be suitable terrain.\n"));
       }
-      if (pbase != NULL) {
-        if (base_has_flag(pbase, BF_NOT_AGGRESSIVE)) {
-          /* "3 tiles" is hardcoded in is_friendly_city_near() */
-          CATLSTR(buf, bufsz,
-                  _("  * Such units situated here are not considered aggressive "
-                    "if this tile is within 3 tiles of a friendly city.\n"));
-        }
-        if (territory_claiming_base(pbase)) {
-          CATLSTR(buf, bufsz,
-                  _("  * Can be captured by such units if at war with the "
-                    "nation that currently owns it.\n"));
-        }
-        if (base_has_flag(pbase, BF_DIPLOMAT_DEFENSE)) {
-          CATLSTR(buf, bufsz,
-                  /* xgettext:no-c-format */
-                  _("  * Diplomatic units get a 25% defense bonus in "
-                    "diplomatic fights.\n"));
-        }
+      if (base_has_flag(pbase, BF_NOT_AGGRESSIVE)) {
+        /* "3 tiles" is hardcoded in is_friendly_city_near() */
+        CATLSTR(buf, bufsz,
+                _("  * Such units situated here are not considered aggressive "
+                  "if this tile is within 3 tiles of a friendly city.\n"));
       }
-      if (pextra->defense_bonus) {
+      if (territory_claiming_base(pbase)) {
+        CATLSTR(buf, bufsz,
+                _("  * Can be captured by such units if at war with the "
+                  "nation that currently owns it.\n"));
+      }
+      if (pbase->defense_bonus) {
         cat_snprintf(buf, bufsz,
                      _("  * Such units get a %d%% defense bonus on this "
                        "tile.\n"),
-                     pextra->defense_bonus);
+                     pbase->defense_bonus);
+      }
+      if (base_has_flag(pbase, BF_DIPLOMAT_DEFENSE)) {
+        CATLSTR(buf, bufsz,
+                /* xgettext:no-c-format */
+                _("  * Diplomatic units get a 25% defense bonus in "
+                  "diplomatic fights.\n"));
       }
     }
   }
 
-  if (proad != NULL && road_provides_move_bonus(proad)) {
+  if (!pbase->buildable) {
+    CATLSTR(buf, bufsz,
+            _("* Cannot be built.\n"));
+  }
+  if (pbase->pillageable) {
+    CATLSTR(buf, bufsz,
+            _("* Can be pillaged by units.\n"));
+  }
+  if (game.info.killstack
+      && base_has_flag(pbase, BF_NO_STACK_DEATH)) {
+    CATLSTR(buf, bufsz,
+            _("* Defeat of one unit does not cause death of all other units "
+              "on this tile.\n"));
+  }
+  if (base_has_flag(pbase, BF_PARADROP_FROM)) {
+    CATLSTR(buf, bufsz,
+            _("* Units can paradrop from this tile.\n"));
+  }
+  if (territory_claiming_base(pbase)) {
+    CATLSTR(buf, bufsz,
+            _("* Extends national borders of the building nation.\n"));
+  }
+  if (pbase->vision_main_sq >= 0) {
+    CATLSTR(buf, bufsz,
+            _("* Grants permanent vision of an area around the tile to "
+              "its owner.\n"));
+  }
+  if (pbase->vision_invis_sq >= 0) {
+    CATLSTR(buf, bufsz,
+            _("* Allows the owner to see normally invisible units in an "
+              "area around the tile.\n"));
+  }
+
+  /* Terrain-dependent build time? */
+  if (pbase->buildable && pbase->build_time == 0)
+  {
+    CATLSTR(buf, bufsz,
+            _("\nTime to build depends on terrain:\n\n"));
+    CATLSTR(buf, bufsz,
+            /* TRANS: Header for fixed-width base properties table.
+             * TRANS: Translators cannot change column widths :( */
+            _("Terrain       Time\n"
+              "------------------\n"));
+    terrain_type_iterate(t) {
+      int time = terrain_base_time(t, base_number(pbase));
+      if (time > 0) {
+        const char *terrain = terrain_name_translation(t);
+        cat_snprintf(buf, bufsz,
+                     "%s%*s %3d\n", terrain,
+                     MAX(0, 12 - (int)get_internal_string_length(terrain)),
+                     "", time);
+      }
+    } terrain_type_iterate_end;
+  } /* else rely on client-specific display */
+
+  if (user_text && user_text[0] != '\0') {
+    CATLSTR(buf, bufsz, "\n\n");
+    CATLSTR(buf, bufsz, user_text);
+  }
+}
+
+/****************************************************************************
+  Append misc dynamic text for roads.
+  Assumes build time is handled in the GUI front-end.
+
+  pplayer may be NULL.
+****************************************************************************/
+void helptext_road(char *buf, size_t bufsz, struct player *pplayer,
+                   const char *user_text, struct road_type *proad)
+{
+  struct universal source = {
+    .kind = VUT_ROAD,
+    .value = {.road = proad}
+  };
+
+  fc_assert_ret(NULL != buf && 0 < bufsz);
+  buf[0] = '\0';
+
+  if (!proad) {
+    log_error("Unknown road!");
+    return;
+  }
+
+  if (NULL != proad->helptext) {
+    strvec_iterate(proad->helptext, text) {
+      cat_snprintf(buf, bufsz, "%s\n\n", _(text));
+    } strvec_iterate_end;
+  }
+
+  /* XXX Non-zero requirement vector is not a good test of whether
+   * insert_requirement() will give any output. */
+  if (requirement_vector_size(&proad->reqs) > 0) {
+    if (proad->buildable) {
+      CATLSTR(buf, bufsz, _("Requirements to build:\n"));
+    }
+    requirement_vector_iterate(&proad->reqs, preq) {
+      (void) insert_requirement(buf, bufsz, pplayer, preq);
+    } requirement_vector_iterate_end;
+    CATLSTR(buf, bufsz, "\n");
+  }
+
+  insert_allows(&source, buf + strlen(buf), bufsz - strlen(buf));
+
+  {
+    const char *classes[uclass_count()];
+    int i = 0;
+
+    unit_class_iterate(uclass) {
+      if (is_native_road_to_uclass(proad, uclass)) {
+        classes[i++] = uclass_name_translation(uclass);
+      }
+    } unit_class_iterate_end;
+
+    if (0 < i) {
+      struct astring list = ASTRING_INIT;
+
+      /* TRANS: %s is a list of unit classes separated by "and". */
+      cat_snprintf(buf, bufsz, _("* Can be traveled by %s units.\n"),
+                   astr_build_and_list(&list, classes, i));
+      astr_free(&list);
+
+      if (road_has_flag(proad, RF_NATIVE_TILE)) {
+        CATLSTR(buf, bufsz,
+                _("  * Such units can move onto this tile even if it would "
+                  "not normally be suitable terrain.\n"));
+      }
+      if (proad->defense_bonus) {
+        cat_snprintf(buf, bufsz,
+                     _("  * Such units get a %d%% defense bonus on this "
+                       "tile.\n"),
+                     proad->defense_bonus);
+      }
+    }
+  }
+
+  if (proad->move_mode != RMM_NO_BONUS) {
     if (proad->move_cost == 0) {
       CATLSTR(buf, bufsz, _("* Allows infinite movement.\n"));
     } else {
@@ -4692,61 +3523,24 @@ void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
     }
   }
 
-  if (is_extra_removed_by(pextra, ERM_PILLAGE)) {
+  if (proad->pillageable) {
     CATLSTR(buf, bufsz,
             _("* Can be pillaged by units.\n"));
   }
-  if (is_extra_removed_by(pextra, ERM_CLEANPOLLUTION) || is_extra_removed_by(pextra, ERM_CLEANFALLOUT)) {
-    CATLSTR(buf, bufsz,
-            _("* Can be cleaned by units.\n"));
-  }
-  if (pbase != NULL) {
-    if (game.info.killstack
-        && base_has_flag(pbase, BF_NO_STACK_DEATH)) {
-      CATLSTR(buf, bufsz,
-              _("* Defeat of one unit does not cause death of all other units "
-                "on this tile.\n"));
-    }
-    if (base_has_flag(pbase, BF_PARADROP_FROM)) {
-      CATLSTR(buf, bufsz,
-              _("* Units can paradrop from this tile.\n"));
-    }
-    if (territory_claiming_base(pbase)) {
-      CATLSTR(buf, bufsz,
-              _("* Extends national borders of the building nation.\n"));
-    }
-    if (pbase->vision_main_sq >= 0) {
-      CATLSTR(buf, bufsz,
-              _("* Grants permanent vision of an area around the tile to "
-                "its owner.\n"));
-    }
-    if (pbase->vision_invis_sq >= 0) {
-      CATLSTR(buf, bufsz,
-              _("* Allows the owner to see normally invisible units in an "
-                "area around the tile.\n"));
-    }
-  }
 
   /* Table of terrain-specific attributes, if needed */
-  if (proad != NULL || pbase != NULL) {
-    bool road, do_time, do_bonus;
-
-    road = (proad != NULL);
+  {
     /* Terrain-dependent build time? */
-    do_time = pextra->buildable && pextra->build_time == 0;
-    if (road) {
-      /* Terrain-dependent output bonus? */
-      do_bonus = FALSE;
-      output_type_iterate(o) {
-        if (proad->tile_incr[o] > 0) {
-          do_bonus = TRUE;
-          fc_assert(o == O_FOOD || o == O_SHIELD || o == O_TRADE);
-        }
-      } output_type_iterate_end;
-    } else {
-      /* Bases don't have output bonuses */
-      do_bonus = FALSE;
-    }
+    bool do_time = proad->buildable && proad->build_time == 0;
+    /* Terrain-dependent output bonus? */
+    bool do_bonus = FALSE;
+
+    output_type_iterate(o) {
+      if (proad->tile_incr[o] > 0) {
+        do_bonus = TRUE;
+        fc_assert(o == O_FOOD || o == O_SHIELD || o == O_TRADE);
+      }
+    } output_type_iterate_end;
 
     if (do_time || do_bonus) {
       if (do_time && do_bonus) {
@@ -4761,7 +3555,7 @@ void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
         CATLSTR(buf, bufsz,
                 _("\nTime to build depends on terrain:\n\n"));
         CATLSTR(buf, bufsz,
-                /* TRANS: Header for fixed-width extra properties table.
+                /* TRANS: Header for fixed-width road properties table.
                  * TRANS: Translators cannot change column widths :( */
                 _("Terrain       Time\n"
                   "------------------\n"));
@@ -4776,10 +3570,8 @@ void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
                   "-------------------------\n"));;
       }
       terrain_type_iterate(t) {
-        int time = road ? terrain_extra_build_time(t, ACTIVITY_GEN_ROAD, pextra)
-                          : terrain_extra_build_time(t, ACTIVITY_BASE, pextra);
-        const char *bonus_text
-          = road ? helptext_road_bonus_str(t, proad) : NULL;
+        int time = terrain_road_time(t, road_number(proad));
+        const char *bonus_text = helptext_road_bonus_str(t, proad);
         if (time > 0 || bonus_text) {
           const char *terrain = terrain_name_translation(t);
           cat_snprintf(buf, bufsz,
@@ -4794,7 +3586,6 @@ void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
             }
           }
           if (do_bonus) {
-            fc_assert(proad != NULL);
             cat_snprintf(buf, bufsz, " %s", bonus_text ? bonus_text : "-");
           }
           CATLSTR(buf, bufsz, "\n");
@@ -4893,10 +3684,10 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
     bool world_value_valid = TRUE;
 
     /* Grab output type, if there is one */
-    requirement_vector_iterate(&peffect->reqs, preq) {
+    requirement_list_iterate(peffect->reqs, preq) {
       /* FIXME: perhaps we should treat any effect with negated requirements
-       * as too complex for us to explain here? */
-      if (!preq->present) {
+       * or nreqs as too complex for us to explain here? */
+      if (preq->negated) {
         continue;
       }
       switch (preq->source.kind) {
@@ -4942,7 +3733,7 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
          world_value_valid = FALSE;
          break;
       };
-    } requirement_vector_iterate_end;
+    } requirement_list_iterate_end;
 
     if (!extra_reqs) {
       /* Only list effects that don't have extra requirements too complex
@@ -4967,9 +3758,8 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
         struct output_type *potype =
           output_type != O_LAST ? get_output_type(output_type) : NULL;
         world_value = 
-          get_target_bonus_effects(NULL, NULL, NULL, NULL, NULL, NULL,
-                                   NULL, unittype, potype, NULL, NULL,
-                                   peffect->type);
+          get_target_bonus_effects(NULL, NULL, NULL, NULL, NULL,
+                                   unittype, potype, NULL, peffect->type);
         net_value = peffect->value + world_value;
       }
 
@@ -5217,15 +4007,22 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
           cat_snprintf(buf, bufsz, "\n");
         }
         break;
-      case EFT_REVOLUTION_UNHAPPINESS:
-        if (playerwide) {
-          cat_snprintf(buf, bufsz,
-                       PL_("* If a city is in disorder for more than %d turn "
-                           "in a row, government will fall into anarchy.\n",
-                           "* If a city is in disorder for more than %d turns "
-                           "in a row, government will fall into anarchy.\n",
-                           net_value),
-                       net_value);
+      case EFT_UNBRIBABLE_UNITS:
+        if (playerwide && net_value > 0) {
+          CATLSTR(buf, bufsz, _("* Your units cannot be bribed.\n"));
+        }
+        break;
+      case EFT_NO_INCITE:
+        if (playerwide && net_value > 0) {
+          CATLSTR(buf, bufsz, _("* Your cities cannot be incited to "
+                                "revolt.\n"));
+        }
+        break;
+      case EFT_REVOLUTION_WHEN_UNHAPPY:
+        if (playerwide && net_value > 0) {
+          CATLSTR(buf, bufsz,
+                  _("* If any city is in disorder for more than two turns "
+                    "in a row, government will fall into anarchy.\n"));
         }
         break;
       case EFT_HAS_SENATE:
@@ -5467,17 +4264,6 @@ void helptext_government(char *buf, size_t bufsz, struct player *pplayer,
                    utype_name_translation(utype));
     }
   } unit_type_iterate_end;
-
-  /* Action immunity */
-  action_iterate(act) {
-    if (action_immune_government(gov, act)) {
-      cat_snprintf(buf, bufsz,
-                   _("* Makes it impossible to do the action \'%s\'"
-                     " to your %s.\n"),
-                   action_get_ui_name(act),
-                   _(action_target_kind_name(action_get_target_kind(act))));
-    }
-  } action_iterate_end;
 
   if (user_text && user_text[0] != '\0') {
     cat_snprintf(buf, bufsz, "\n%s", user_text);

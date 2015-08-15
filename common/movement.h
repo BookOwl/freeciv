@@ -43,18 +43,17 @@ enum unit_move_result {
   MR_NO_TRANSPORTER_CAPACITY,
   MR_TRIREME,
   MR_CANNOT_DISEMBARK,
-  MR_NON_NATIVE_MOVE,  /* Usually RMM_RELAXED road diagonally without link */
 };
 
-int utype_move_rate(const struct unit_type *utype, const struct tile *ptile,
-                    const struct player *pplayer, int veteran_level,
-                    int hitpoints);
 int unit_move_rate(const struct unit *punit);
-int utype_unknown_move_cost(const struct unit_type *utype);
-
 bool unit_can_defend_here(const struct unit *punit);
 bool can_attack_non_native(const struct unit_type *utype);
 bool can_attack_from_non_native(const struct unit_type *utype);
+
+bool is_sailing_unit(const struct unit *punit);
+bool is_ground_unit(const struct unit *punit);
+bool is_sailing_unittype(const struct unit_type *punittype);
+bool is_ground_unittype(const struct unit_type *punittype);
 
 bool is_city_channel_tile(const struct unit_class *punitclass,
                           const struct tile *ptile,
@@ -64,12 +63,12 @@ bool is_native_tile(const struct unit_type *punittype,
                     const struct tile *ptile);
 bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile);
+bool is_native_terrain(const struct unit_type *punittype,
+                       const struct terrain *pterrain,
+                       bv_bases bases, bv_roads roads);
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_extras extras);
-bool is_native_move(const struct unit_class *punitclass,
-                    const struct tile *src_tile,
-                    const struct tile *dst_tile);
+                        bv_bases bases, bv_roads roads);
 bool is_native_near_tile(const struct unit_class *uclass, const struct tile *ptile);
 bool can_exist_at_tile(const struct unit_type *utype,
                        const struct tile *ptile);
@@ -93,8 +92,11 @@ unit_move_to_tile_test(const struct unit *punit,
 bool can_unit_transport(const struct unit *transporter, const struct unit *transported);
 bool can_unit_type_transport(const struct unit_type *transporter,
                              const struct unit_class *transported);
-bool unit_can_load(const struct unit *punit);
-bool unit_could_load_at(const struct unit *punit, const struct tile *ptile);
+int unit_class_transporter_capacity(const struct tile *ptile,
+                                    const struct player *pplayer,
+                                    const struct unit_class *pclass);
+struct unit *transport_from_tile(const struct unit *punit,
+                                 const struct tile *ptile);
 
 void init_move_fragments(void);
 const char *move_points_text_full(int mp, bool reduce, const char *prefix,

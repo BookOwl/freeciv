@@ -15,8 +15,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -25,7 +24,6 @@
 /* common */
 #include "diptreaty.h"
 #include "game.h"
-#include "research.h"
 
 /* client */
 #include "client_main.h"
@@ -638,18 +636,14 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
   
   /* Trading: advances */
   if (game.info.trading_tech) {
-    const struct research *presearch0 = research_get(pPlayer0);
-    const struct research *presearch1 = research_get(pPlayer1);
     int flag = A_NONE;
-
+    
     advance_index_iterate(A_FIRST, i) {
-      if (research_invention_state(presearch0, i) == TECH_KNOWN
-          && research_invention_gettable(presearch1, i,
-                                         game.info.tech_trade_allow_holes)
-          && (research_invention_state(presearch1, i) == TECH_UNKNOWN
-              || research_invention_state(presearch1, i)
-                 == TECH_PREREQS_KNOWN)) {
-
+      if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
+         player_invention_reachable(pPlayer1, i, FALSE) &&
+	(player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
+	 player_invention_state(pPlayer1, i) == TECH_PREREQS_KNOWN)) {
+	     
 	     pBuf = create_iconlabel_from_chars(NULL, pWindow->dst,
 		_("Advances"), adj_font(12), WF_RESTORE_BACKGROUND);
              pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_DIPLODLG_MEETING_HEADING_TEXT);
@@ -657,9 +651,9 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     height = MAX(height, pBuf->size.h);
              add_to_gui_list(ID_LABEL, pBuf);
 	     count++;
-
+	     
 	     fc_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
-
+  
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
              pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_DIPLODLG_MEETING_TEXT);
@@ -674,18 +668,16 @@ static struct ADVANCED_DLG * popup_diplomatic_objects(struct player *pPlayer0,
 	     break;
       }
     } advance_index_iterate_end;
-
-    if (flag > A_NONE) {
+    
+    if(flag > A_NONE) {
       advance_index_iterate(flag, i) {
-        if (research_invention_state(presearch0, i) == TECH_KNOWN
-            && research_invention_gettable(presearch1, i,
-                                           game.info.tech_trade_allow_holes)
-            && (research_invention_state(presearch1, i) == TECH_UNKNOWN
-                || research_invention_state(presearch1, i)
-                   == TECH_PREREQS_KNOWN)) {
-
+	if (player_invention_state(pPlayer0, i) == TECH_KNOWN &&
+	   player_invention_reachable(pPlayer1, i, FALSE) &&
+	  (player_invention_state(pPlayer1, i) == TECH_UNKNOWN || 
+	   player_invention_state(pPlayer1, i) == TECH_PREREQS_KNOWN)) {
+	     
 	     fc_snprintf(cBuf, sizeof(cBuf), "  %s", advance_name_translation(advance_by_number(i)));
-
+  
              pBuf = create_iconlabel_from_chars(NULL, pWindow->dst, cBuf, adj_font(12),
 	         (WF_RESTORE_BACKGROUND|WF_DRAW_TEXT_LABEL_WITH_SPACE));
              pBuf->string16->fgcol = *get_theme_color(COLOR_THEME_DIPLODLG_MEETING_TEXT);
@@ -1535,7 +1527,6 @@ void popup_diplomacy_dialog(struct player *pPlayer)
 
     if (type != DS_WAR && can_client_issue_orders()
         && !players_on_same_team(client.conn.playing, pPlayer)) {
-
       if (type == DS_ARMISTICE) {
         fc_snprintf(cBuf, sizeof(cBuf), _("Declare WAR"));
       } else {

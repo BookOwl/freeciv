@@ -300,12 +300,9 @@ void establish_new_connection(struct connection *pconn)
 
   if (NULL != pplayer) {
     /* Else, no need to do anything. */
-    reset_all_start_commands(TRUE);
+    reset_all_start_commands();
     (void) send_server_info_to_metaserver(META_INFO);
   }
-
-  send_current_history_report(pconn->self);
-
   conn_compression_thaw(pconn);
 }
 
@@ -354,8 +351,8 @@ bool handle_login_request(struct connection *pconn,
              req->patch_version, req->version_label);
   log_verbose("Client caps: %s", req->capability);
   log_verbose("Server caps: %s", our_capability);
-  conn_set_capability(pconn, req->capability);
-
+  sz_strlcpy(pconn->capability, req->capability);
+  
   /* Make sure the server has every capability the client needs */
   if (!has_capabilities(our_capability, req->capability)) {
     fc_snprintf(msg, sizeof(msg),
@@ -616,25 +613,6 @@ static bool connection_attach_real(struct connection *pconn,
     }
 
     send_player_info_c(pplayer, game.est_connections);
-
-    /* Remove from global observers list, if was there */
-    conn_list_remove(game.glob_observers, pconn);
-  } else if (pplayer == NULL) {
-    /* Global observer */
-    bool already = FALSE;
-
-    fc_assert(observing);
-
-    conn_list_iterate(game.glob_observers, pconn2) {
-      if (pconn2 == pconn) {
-        already = TRUE;
-        break;
-      }
-    } conn_list_iterate_end;
-
-    if (!already) {
-      conn_list_append(game.glob_observers, pconn);
-    }
   }
 
   /* We don't want the connection's username on another player. */
@@ -768,7 +746,7 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
         /* Actually do the removal. */
         server_remove_player(pplayer);
         (void) aifill(game.info.aifill);
-        reset_all_start_commands(TRUE);
+        reset_all_start_commands();
       } else {
         /* Aitoggle the player if no longer connected. */
         if (game.server.auto_ai_toggle && !pplayer->ai_controlled) {
@@ -783,7 +761,7 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
           log_verbose("connection_detach() calls send_player_info_c()");
           send_player_info_c(pplayer, NULL);
 
-          reset_all_start_commands(TRUE);
+          reset_all_start_commands();
         }
       }
     }

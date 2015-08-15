@@ -15,15 +15,14 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
-#include <SDL_ttf.h>
+#include "SDL.h"
 
 /* utility */
 #include "log.h"
 #include "mem.h"
 
 /* client/gui-sdl */
+#include "SDL_ttf.h"
 #include "colors.h"
 #include "graphics.h"
 #include "gui_main.h"
@@ -70,14 +69,6 @@ void canvas_free(struct canvas *store)
 {
   FREESURFACE(store->surf);
   free(store);
-}
-
-/****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* sdl-client has no zoom support */
 }
 
 /**************************************************************************
@@ -168,6 +159,23 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
                                                 pcolor->color->g,
 		                                pcolor->color->b,
                                                 pcolor->color->unused));
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  SDL_Rect dst = {canvas_x, canvas_y, GET_SURF(psprite)->w,
+                                      GET_SURF(psprite)->h};
+                                      
+  SDL_Surface *tmp_surf = create_surf_alpha(GET_SURF(psprite)->w, 
+                                            GET_SURF(psprite)->h,
+                                            SDL_SWSURFACE);
+  SDL_FillRect(tmp_surf, NULL, SDL_MapRGBA(tmp_surf->format, 0, 0, 0, 64));
+  alphablit(tmp_surf, NULL, pcanvas->surf, &dst);
+  FREESURFACE(tmp_surf);
 }
 
 /****************************************************************************

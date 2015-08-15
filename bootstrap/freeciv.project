@@ -1,6 +1,0 @@
-# Default metaserver URL
-META_URL="http://meta.freeciv.org/metaserver.php"
-
-# We want default MODPACK_LIST_URL constructed compile time, so not giving
-# one here. This is just an example.
-# MODPACK_LIST_URL="http://modpack.freeciv.org/${DATASUBDIR}/modpack.list"

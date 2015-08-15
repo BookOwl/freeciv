@@ -17,10 +17,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* common */
-#include "name_translation.h"
-#include "requirements.h"
-
 /* Used in the network protocol. */
 #define SPECENUM_NAME disaster_effect_id
 #define SPECENUM_VALUE0 DE_DESTROY_BUILDING
@@ -35,11 +31,10 @@ extern "C" {
 #define SPECENUM_VALUE4NAME "Pollution"
 #define SPECENUM_VALUE5 DE_FALLOUT
 #define SPECENUM_VALUE5NAME "Fallout"
-#define SPECENUM_VALUE6 DE_REDUCE_DESTROY
-#define SPECENUM_VALUE6NAME "ReducePopDestroy"
 #define SPECENUM_COUNT DE_COUNT
-#define SPECENUM_BITVECTOR bv_disaster_effects
 #include "specenum_gen.h"
+
+BV_DEFINE(bv_disaster_effects, DE_COUNT); /* Used in the network protocol. */
 
 #define DISASTER_BASE_RARITY 1000000
 
@@ -63,7 +58,7 @@ void disaster_types_free(void);
 /* General disaster type accessor functions. */
 Disaster_type_id disaster_count(void);
 Disaster_type_id disaster_index(const struct disaster_type *pdis);
-Disaster_type_id disaster_number(const struct disaster_type *pdis);
+Disaster_type_id disaster_number(const struct disaster_type *proad);
 
 struct disaster_type *disaster_by_number(Disaster_type_id id);
 
@@ -73,8 +68,7 @@ const char *disaster_rule_name(struct disaster_type *pdis);
 bool disaster_has_effect(const struct disaster_type *pdis,
                          enum disaster_effect_id effect);
 
-bool can_disaster_happen(const struct disaster_type *pdis,
-                         const struct city *pcity);
+bool can_disaster_happen(struct disaster_type *pdis, struct city *pcity);
 
 #define disaster_type_iterate(_p)                                \
 {                                                                \

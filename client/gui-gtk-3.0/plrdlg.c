@@ -314,7 +314,7 @@ static void toggle_view(GtkCheckMenuItem* item, gpointer data)
 *************************************************************************/
 static void toggle_dead_players(GtkCheckMenuItem* item, gpointer data)
 {
-  options.player_dlg_show_dead_players = 
+  player_dlg_show_dead_players = 
     gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item));
   real_players_dialog_update();
 }
@@ -400,7 +400,7 @@ static GtkWidget* create_show_menu(void)
   
   item = gtk_check_menu_item_new_with_label(Q_("?show:Dead Players"));
   gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),
-                                 options.player_dlg_show_dead_players);
+                                 player_dlg_show_dead_players);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   g_signal_connect(item, "toggled", G_CALLBACK(toggle_dead_players), NULL);
   
@@ -554,9 +554,9 @@ void create_players_dialog(void)
   sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_translated_name(level);
+      const char *level_name = ai_level_name(level);
 
       item = gtk_menu_item_new_with_label(level_name);
       g_signal_connect(item, "activate",
@@ -700,7 +700,7 @@ static void fill_row(GtkListStore *store, GtkTreeIter *it,
 **************************************************************************/
 static bool player_should_be_shown(const struct player *pplayer)
 {
-  return NULL != pplayer && (options.player_dlg_show_dead_players
+  return NULL != pplayer && (player_dlg_show_dead_players
                              || pplayer->is_alive)
          && (!is_barbarian(pplayer));
 }
@@ -805,7 +805,7 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
     newstate = cancel_pact_result(oldstate);
 
     /* TRANS: %s is a diplomatic state: "Cancel Cease-fire" */
-    astr_set(&title, _("Cancel %s"), diplstate_type_translated_name(oldstate));
+    astr_set(&title, _("Cancel %s"), diplstate_text(oldstate));
 
     if (newstate == DS_WAR) {
       astr_set(&question, _("Really declare war on the %s?"),
@@ -814,8 +814,8 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
       /* TRANS: "Cancel Belgian Alliance? ... will be Armistice." */
       astr_set(&question, _("Cancel %s %s? New diplomatic state will be %s."),
                nation_adjective_for_player(aplayer),
-               diplstate_type_translated_name(oldstate),
-               diplstate_type_translated_name(newstate));
+               diplstate_text(oldstate),
+               diplstate_text(newstate));
     }
 
     /* can be any pact clause */

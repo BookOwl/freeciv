@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -65,3 +65,4 @@ tiles = { "row", "column", "tag"
   3, 8, "upkeep.unhappy9"
   3, 9, "upkeep.unhappy10"
 }
+

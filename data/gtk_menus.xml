@@ -108,7 +108,6 @@
     <menu action="MENU_WORK">
       <menuitem action="BUILD_CITY" />
       <menuitem action="GO_BUILD_CITY" />
-      <menuitem action="GO_JOIN_CITY" />
       <menuitem action="AUTO_SETTLER" />
       <separator />
       <menuitem action="BUILD_ROAD" />
@@ -129,7 +128,6 @@
     </menu>
 
     <menu action="MENU_COMBAT">
-      <menuitem action="FORTIFY" />
       <menuitem action="BUILD_FORTRESS" />
       <menuitem action="BUILD_AIRBASE" />
       <menu action="MENU_BUILD_BASE">
@@ -151,7 +149,6 @@
       <menuitem action="REPORT_RESEARCH" />
       <separator />
       <menuitem action="TAX_RATE" />
-      <menuitem action="POLICIES" />
       <menu action="MENU_GOVERNMENT">
         <menuitem action="START_REVOLUTION" />
         <!-- The government types are ruleset dependent -->
@@ -162,7 +159,6 @@
       <menuitem action="REPORT_MESSAGES" />
       <menuitem action="REPORT_DEMOGRAPHIC" />
       <menuitem action="REPORT_SPACESHIP" />
-      <menuitem action="REPORT_ACHIEVEMENTS" />
     </menu>
 
     <menu action="MENU_HELP">
@@ -177,7 +173,6 @@
       <menuitem action="HELP_COMBAT" />
       <menuitem action="HELP_ZOC" />
       <menuitem action="HELP_GOVERNMENT" />
-      <menuitem action="HELP_POLICIES" />
       <menuitem action="HELP_DIPLOMACY" />
       <menuitem action="HELP_TECH" />
       <menuitem action="HELP_SPACE_RACE" />

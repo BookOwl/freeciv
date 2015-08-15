@@ -16,8 +16,7 @@
 
 [datafile]
 description="Unit definitions for the multiplayer ruleset."
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom unit type flags. There can be up to 16 of these.
@@ -31,11 +30,6 @@ flags =
     _("AirAttacker"), _("Very bad at attacking AEGIS.")
     _("Horse"), _("Attack value halved when attacking Pikemen.")
     _("Helicopter"), _("Defends very badly against Fighters.")
-    _("HelpWonder")
-    _("Cities")
-    _("AddToCity")
-    _("Nuclear")
-    _("Infra"), _("Can build infrastructure.")
   }
 
 [veteran_system]
@@ -78,6 +72,12 @@ veteran_move_bonus = 0, 0, 0, 0
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a unit class after a
 ;                 ruleset has been released.
+; move_type     = Where unit moves; "Land", "Sea", or "Both".
+;                 This is optional field. If it's not
+;                 given, move type is automatically determined from native
+;                 terrains. You need to set it only if you want to set move
+;                 type "Both" for unit that has no native Land terrains or
+;                 for unit that has no native Oceanic terrains.
 ; min_speed     = Minimum speed after damage and effects (whole movement points)
 ; hp_loss_pct   = Hitpoints lost each turn if unit not in city or native base
 ; non_native_def_pct = Defense power percentage applying when defending on
@@ -103,8 +103,7 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "CollectRansom" = Unit can collect ransom when killing lone barbarian leader
 ; "ZOC"           = Unit is subject to ZOC rules. Unit type flag "IgZOC" can
 ;                   override this
-; "CanFortify"    = Unit can fortify at land tiles. Unit type flag
-;                   "Cant_Fortify" can override this
+; "CanFortify"    = Unit can fortify at land tiles
 ; "CanPillage"    = Unit can pillage tile infrastructure
 ; "DoesntOccupyTile"  = Even if this kind of enemy unit is on tile, cities can
 ;                       still work that tile
@@ -118,7 +117,6 @@ veteran_move_bonus = 0, 0, 0, 0
 ; "KillCitizen"       = Upon successful attack against a city, unit kills one
 ;                       citizen. The effect "Unit_No_Lose_Pop" and the server
 ;                       setting 'killcitizen' can disable this.
-; "Airliftable"       = Unit may be airlifted
 ;
 ; */ <-- avoid gettext warnings
 
@@ -137,7 +135,7 @@ min_speed     = 1
 hp_loss_pct   = 0
 flags         = "TerrainSpeed", "DamageSlows", "CanOccupyCity", "BuildAnywhere",
                 "CollectRansom", "ZOC", "CanFortify", "CanPillage",
-                "TerrainDefense", "KillCitizen", "Airliftable"
+                "TerrainDefense", "KillCitizen"
 
 [unitclass_sea]
 ; /* TRANS: Unit class: used adjectivally */
@@ -201,7 +199,7 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; gov_req       = required government, names from governments.ruleset
 ; obsolete_by   = can be upgraded to and made obsolete by another unit by name
 ; build_cost    = production shields required to build
-; pop_cost      = population removed from city when built; for 'Join City'
+; pop_cost      = population removed from city when built; for 'AddToCity'
 ;                 units this is also the population added to the destination
 ; attack        = base attack strength (0 = cannot attack)
 ; defense       = base defense strength (0 = cannot defend)
@@ -219,8 +217,8 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ;                 the unit has unlimited fuel, despite flying.
 ; uk_*          = upkeep costs, these are used as base values in the game
 ; cargo         = Unit classes this unit can transport
-; city_size     = Initial size of the cities built by 'Found City' type units
-;                 (but 'Join City' uses pop_cost)
+; city_size     = Initial size of the cities built by 'Cities' type units
+;                 (but 'AddToCity' uses pop_cost)
 ; targets       = list of unit classes this unit can attack against even
 ;                 if they have Unreachable unit class flag
 ; embarks       = list of unit classes this unit may load into while not in
@@ -269,37 +267,39 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ;
 ; ** Flags **
 ;
+; "HelpWonder"	= can help build wonders
+; "TradeRoute"	= can establish trade routes
 ; "IgZOC"       = ignore Zones of Control (ZOC) even if unit class has
 ;                 "ZOC" flag
-; "HasNoZOC"	= unit has no Zone of Control (ZOC), thus any unit can move
-;		  around it freely
 ; "NonMil"	= a non-military unit: no attacks; no martial law; can enter
 ;                 peaceful borders; DoesntOccupyTile
 ; "IgTer"       = use constant move cost defined in igter_cost (terrain.ruleset)
 ;                 rather than terrain/road etc cost, unless terrain cost is
 ;                 less
 ; "OneAttack"	= can only make a single attack, regardless of movement points
+; "IgWall"	= ignore effect of city walls
 ; "FieldUnit"	= cause unhappiness even when not being aggressive
 ; "Marines"	= can attack from non-native tile (from transport or city)
-; "BeachLander" = won't lose all its movement when moving from non-native
-;                 terrain to native terrain even if slow_invasions is on.
 ; "Partial_Invis" = visible only to adjancent units; does not hide transported
 ;		  units other than missiles
 ; "Settlers"	= can irrigate and build roads
-; "Diplomat"	= can defend against diplomat actions (see diplchance
-;                 server option)
-; "Spy"		= enhanced diplomat actions. _Must_ be "Diplomat" also
+; "Diplomat"	= can do diplomat actions (see diplchance server option)
+; "Spy"		= can do poison and sabotage, _must_ be "Diplomat" also
 ; "Trireme"	= (sea only) cannot leave shoreline
+; "Nuclear"	= nuke!
 ; "Paratroopers"= can paradrop
+; "Cities"      = can disband to produce a city (initial population city_size)
 ; "Only_Native_Attack" = cannot attack targets on non-native tiles even if
 ;                 unit class can
-; "Cant_Fortify" =  cannot fortify even if unit class has "CanFortify" flag
+; "AddToCity"   = can disband to add pop_cost population to a city
+;                 (see cities.ruleset for limitation of this ability)
 ; "Fanatic"	= can only be built by governments that allow them
 ;		  (see civ2/governments.ruleset, Fundamentalism government)
 ; "Unique"	= a player can only have one of these units in the game at
 ;		  the same time; barbarians cannot use this at present
 ; "GameLoss"	= losing one of these units means you lose the game, but it
 ;		  is produced without homecity and upkeep
+; "Unbribable"	= this unit cannot be bribed
 ; "Undisbandable" = this unit cannot be disbanded, will not drown, and will not
 ;		  disband due to lack of shields to upkeep it in homecity;
 ;		  if not given enough food to upkeep it, homecity will shrink 
@@ -314,6 +314,9 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ; "NoVeteran"   = this unit cannot gain veteran levels through experience
 ;                 (as if both raise_chance and work_raise_chance were zero);
 ;                 it can still gain veterancy through Veteran_Build, etc
+; "Bombarder"   = this unit cannot kill other units, only damage them, but
+;                 also is not harmed by return fire when attacking; the field
+;                 bombard_rate regulates its number of shots
 ; "CityBuster"  = this unit has double firepower against cities
 ; "NoBuild"     = this unit cannot be built
 ; "BadWallAttacker"	= the firepower of this unit is set to 1 if
@@ -324,6 +327,9 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ;                 rule)
 ; "BarbarianOnly" = only barbarians can build this unit
 ; "Shield2Gold" = Switch from shield upkeep to gold upkeep possible
+; "Capturable"  = can be captured by units with "Capturer" flag
+; "Capturer"    = can capture units with flag "Capturable" instead of
+;                 fighting them
 ;
 ; Following flag strings require extra fields:
 ;  "Paratroopers"
@@ -332,11 +338,8 @@ flags         = "Unreachable", "DoesntOccupyTile"
 ;                         paradropping (whole movement points)
 ;   paratroopers_mr_sub = the move rate which is subtracted after paradropping
 ;                         (whole movement points)
-; Following actions require extra fields:
-;  "Bombard"
+;  "Bombarder"
 ;   bombard_rate = the number of shots fired at enemy units when attacking
-;  "Join City"
-;   pop_cost = the number of population added to the target city
 ;
 ; ** Roles **
 ;
@@ -396,7 +399,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 1
 uk_gold       = 0
-flags         = "Settlers", "Infra", "NonMil", "HasNoZOC", "AddToCity", "Cities", "Cant_Fortify"
+flags         = "Settlers", "NonMil", "AddToCity", "Cities"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -442,7 +445,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Settlers", "Infra", "NonMil", "HasNoZOC", "Airbase", "Cant_Fortify"
+flags         = "Settlers", "NonMil", "Airbase"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -503,7 +506,7 @@ uk_happy      = 0
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Settlers", "Infra", "NonMil", "HasNoZOC", "Transform", "Airbase", "Cant_Fortify"
+flags         = "Settlers", "NonMil", "Transform", "Airbase"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -1350,12 +1353,11 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = ""
+flags         = "IgWall"
 roles         = "AttackStrong"
 helptext      = _("\
 Howitzers are upgraded artillery with improved\
  defensive as well as offensive capabilities.\
- They can shoot over city walls, ignoring their effect.\
 ")
 
 [unit_fighter]
@@ -1421,7 +1423,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirAttacker", "HasNoZOC"
+flags         = "FieldUnit", "OneAttack", "AirAttacker"
 roles         = ""
 helptext      = _("\
 Bombers are specialized airborne units that may\
@@ -1527,8 +1529,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "Partial_Invis", "FieldUnit", "OneAttack", "AirAttacker",
-                "HasNoZOC"
+flags         = "Partial_Invis", "FieldUnit", "OneAttack", "AirAttacker"
 roles         = ""
 helptext      = _("\
 An improved Bomber, with improved attack and a higher movement\
@@ -1966,7 +1967,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "AirAttacker", "HasNoZOC"
+flags         = "FieldUnit", "OneAttack", "AirAttacker"
 roles         = ""
 helptext      = _("\
 The Cruise Missile is a long-distance missile\
@@ -2001,7 +2002,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "FieldUnit", "OneAttack", "Nuclear", "AirAttacker", "HasNoZOC"
+flags         = "FieldUnit", "OneAttack", "Nuclear", "AirAttacker"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -2060,7 +2061,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "Diplomat", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "Diplomat", "IgZOC", "NonMil"
 veteran_names =
 ; /* TRANS: diplomatic rank. */
 ; /* TRANS: Unless translated, the last character in "attache" should be */
@@ -2169,7 +2170,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "Diplomat", "IgZOC", "NonMil", "HasNoZOC", "Spy"
+flags         = "Diplomat", "IgZOC", "NonMil", "Spy"
 veteran_names =
 ; /* TRANS: Spy veteran level */
   _("?spy_level:informant"),
@@ -2238,7 +2239,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "HelpWonder", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "HelpWonder", "IgZOC", "NonMil"
 roles         = ""
 helptext      = _("\
 A Caravan carries goods or material to help build wonders in your\
@@ -2277,7 +2278,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "HelpWonder", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "HelpWonder", "IgZOC", "NonMil"
 roles         = ""
 helptext      = _("\
 The Freight unit replaces the Caravan, and moves at twice the speed.\
@@ -2309,7 +2310,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgTer", "IgZOC", "NonMil", "HasNoZOC"
+flags         = "IgTer", "IgZOC", "NonMil"
 roles         = "Explorer"
 helptext      = _("\
 Explorers are brave individuals that are very useful for\
@@ -2341,8 +2342,8 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgZOC", "NonMil", "HasNoZOC", "NoBuild", "NoHome", "SuperSpy", 
-                "Undisbandable", "GameLoss", "Unique"
+flags         = "IgZOC", "NonMil", "NoBuild", "NoHome", "SuperSpy", 
+                "Undisbandable", "Unbribable", "GameLoss", "Unique"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
 veteran_raise_chance = 0
@@ -2379,7 +2380,7 @@ uk_happy      = 0
 uk_shield     = 0
 uk_food       = 0
 uk_gold       = 0
-flags         = "IgZOC", "NonMil", "HasNoZOC",
+flags         = "IgZOC", "NonMil", "Unbribable",
                 "Undisbandable", "SuperSpy", "NoHome", "NoBuild"
 ; No veteran levels (level name is never displayed)
 veteran_names = _("green")
@@ -2421,7 +2422,7 @@ uk_happy      = 1
 uk_shield     = 1
 uk_food       = 0
 uk_gold       = 0
-flags         = "HasNoZOC"
+flags         = ""
 roles         = ""
 helptext      = _("\
 The AWACS (Airborne Warning and Control System) is an airplane with an \

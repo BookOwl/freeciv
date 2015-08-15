@@ -20,7 +20,7 @@
  * it is needed for sound to work as long as SDL-1.2 mixer is
  * being used. It defines "main" macro to rename our main() so that
  * it can install SDL's own. */
-#include <SDL.h>
+#include "SDL.h"
 #endif
 
 #include <stdio.h>
@@ -37,14 +37,15 @@
 // client
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 #include "tilespec.h"
 #include "sprite.h"
 
 // gui-qt
 #include "fc_client.h"
-#include "gui_main.h"
 #include "helpdlg.h"
+#include "gui_main.h"
 #include "qtg_cxxside.h"
 
 
@@ -133,18 +134,6 @@ static bool parse_options(int argc, char **argv)
 }
 
 /**************************************************************************
-  Migrate Qt client specific options from freeciv-2.5 options
-**************************************************************************/
-static void migrate_options_from_2_5()
-{
-  log_normal("Migrating Qt-client options from freeciv-2.5 options.");
-
-  options.gui_qt_fullscreen = options.migrate_fullscreen;
-
-  options.gui_qt_migrated_from_2_5 = TRUE; 
-}
-
-/**************************************************************************
   The main loop for the UI.  This is called from main(), and when it
   exits the client will exit.
 **************************************************************************/
@@ -161,11 +150,6 @@ void qtg_ui_main(int argc, char *argv[])
     qpm = get_icon_sprite(tileset, ICON_FREECIV)->pm;
     app_icon = ::QIcon(*qpm);
     qapp->setWindowIcon(app_icon);
-
-    if (!options.gui_qt_migrated_from_2_5) {
-      migrate_options_from_2_5();
-    }
-
     freeciv_qt = new fc_client();
     freeciv_qt->main(qapp);
   }
@@ -174,7 +158,7 @@ void qtg_ui_main(int argc, char *argv[])
 /****************************************************************************
   Extra initializers for client options.
 ****************************************************************************/
-void qtg_options_extra_init()
+void qtg_gui_options_extra_init()
 {
     struct option *poption;
 
@@ -248,6 +232,23 @@ void qtg_add_net_input(int sock)
 void qtg_remove_net_input()
 {
   gui()->remove_server_source();
+}
+
+/**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void qtg_add_ggz_input(int sock)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void qtg_remove_ggz_input()
+{
+  /* PORTME */
 }
 
 /**************************************************************************
@@ -325,9 +326,6 @@ static void apply_font(struct option *poption)
   }
 }
 
-/****************************************************************************
-  Change the manual font
-****************************************************************************/
 static void apply_help_font(struct option *poption)
 {
   QFont *f;
@@ -343,6 +341,28 @@ static void apply_help_font(struct option *poption)
     delete remove_old;
     gui()->fc_fonts.set_font(s, f);
     update_help_fonts();
+  }
+}
+
+
+/****************************************************************************
+  Changes city label font
+****************************************************************************/
+void apply_city_font(option *poption)
+{
+  QFont *f;
+  QFont *remove_old;
+  QString s;
+
+  if (gui() && qtg_get_current_client_page() == PAGE_GAME) {
+    f = new QFont;
+    s = option_font_get(poption);
+    f->fromString(s);
+    s = option_name(poption);
+    remove_old = gui()->fc_fonts.get_font(s);
+    delete remove_old;
+    gui()->fc_fonts.set_font(s, f);
+    qtg_popdown_all_city_dialogs();
   }
 }
 
@@ -380,6 +400,18 @@ void qtg_editgui_notify_object_changed(int objtype, int object_id, bool remove)
   Stub for editor function
 ****************************************************************************/
 void qtg_editgui_notify_object_created(int tag, int id)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void qtg_gui_ggz_embed_leave_table()
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void qtg_gui_ggz_embed_ensure_server()
 {}
 
 /****************************************************************************
@@ -431,27 +463,6 @@ void popup_quit_dialog()
   }
 }
 
-/****************************************************************************
-  Changes city label font
-****************************************************************************/
-void apply_city_font(option *poption)
-{
-  QFont *f;
-  QFont *remove_old;
-  QString s;
-
-  if (gui() && qtg_get_current_client_page() == PAGE_GAME) {
-    f = new QFont;
-    s = option_font_get(poption);
-    f->fromString(s);
-    s = option_name(poption);
-    remove_old = gui()->fc_fonts.get_font(s);
-    delete remove_old;
-    gui()->fc_fonts.set_font(s, f);
-    qtg_popdown_all_city_dialogs();
-  }
-}
-
 /**************************************************************************
   Called to build the unit_below pixmap table.  This is the table on the
   left of the screen that shows all of the inactive units in the current
@@ -463,27 +474,4 @@ static void populate_unit_pixmap_table(void)
 {
   unit_pixmap = new QPixmap(tileset_unit_width(tileset), 
                             tileset_unit_height(tileset));
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void qtg_insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* There's separate entry about Qt in help menu.
-   * Should we enable this regardless? As then to place to find such information
-   * would be standard over clients. */
-
-  /*
-  cat_snprintf(outbuf, outlen, _("\nBuilt against Qt %s, using %s"),
-               QT_VERSION_STR, qVersion());
-  */
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void qtg_adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
 }

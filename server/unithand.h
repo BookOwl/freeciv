@@ -21,7 +21,7 @@ void unit_activity_handling(struct unit *punit,
                             enum unit_activity new_activity);
 void unit_activity_handling_targeted(struct unit *punit,
                                      enum unit_activity new_activity,
-                                     struct extra_type **new_target);
+                                     struct act_tgt *new_target);
 void unit_change_homecity_handling(struct unit *punit, struct city *new_pcity);
 
 bool unit_move_handling(struct unit *punit, struct tile *pdesttile,
@@ -29,20 +29,5 @@ bool unit_move_handling(struct unit *punit, struct tile *pdesttile,
 
 void city_add_or_build_error(struct player *pplayer, struct unit *punit,
                              enum unit_add_build_city_result res);
-
-bool unit_perform_action(struct player *pplayer,
-                         const int actor_id,
-                         const int target_id,
-                         const int value,
-                         const char *name,
-                         const enum gen_action action_type);
-
-void illegal_action_msg(struct player *pplayer,
-                        const enum event_type event,
-                        struct unit *actor,
-                        const int stopped_action,
-                        const struct tile *target_tile,
-                        const struct city *target_city,
-                        const struct unit *target_unit);
 
 #endif  /* FC__UNITHAND_H */

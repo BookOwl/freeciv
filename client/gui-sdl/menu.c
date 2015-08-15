@@ -23,8 +23,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -38,7 +37,6 @@
 
 /* client */
 #include "client_main.h" /* client_state */
-#include "climisc.h"
 #include "control.h"
 
 /* gui-sdl */
@@ -169,28 +167,17 @@ static int unit_order_callback(struct widget *pOrder_Widget)
       key_unit_auto_explore();
       break;
     case ID_UNIT_ORDER_CONNECT_IRRIGATE:
-      {
-        struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *pextra;
-
-          pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-          key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-        }
-      }
+      key_unit_connect(ACTIVITY_IRRIGATE, NULL);
       break;
     case ID_UNIT_ORDER_CONNECT_ROAD:
       {
         struct road_type *proad = road_by_compat_special(ROCO_ROAD);
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) };
 
-          tgt = road_extra_get(proad);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+          key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
         }
       }
       break;
@@ -199,11 +186,10 @@ static int unit_order_callback(struct widget *pOrder_Widget)
         struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
 
         if (prail != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(prail) };
 
-          tgt = road_extra_get(prail);
-
-          key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+          key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
         }
       }
       break;
@@ -256,8 +242,15 @@ static int unit_order_callback(struct widget *pOrder_Widget)
 }
 
 /**************************************************************************
-  Refresh order widgets.
+  ...
 **************************************************************************/
+#if 0
+static bool has_city_airport(struct city *pCity)
+{
+  return (pCity && (get_city_bonus(pCity, EFT_AIR_VETERAN) > 0));
+}
+#endif
+
 static Uint16 redraw_order_widgets(void)
 {
   Uint16 count = 0;
@@ -430,8 +423,7 @@ void create_units_order_widgets(void)
   /* --------- */  
 
   /* Explode Nuclear */
-  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)",
-              action_get_ui_name(ACTION_NUKE), "Shift+N");
+  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Explode Nuclear"), "Shift+N");
   pBuf = create_themeicon(pTheme->ONuke_Icon, Main.gui,
                           WF_HIDDEN | WF_RESTORE_BACKGROUND
                           | WF_WIDGET_HAS_INFO_LABEL);
@@ -764,7 +756,7 @@ void create_units_order_widgets(void)
   /* --------- */
 
   /* Build Airbase */
-  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Build Airbase"), "Shift+E");
+  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Build Airbase"), "E");
   pBuf = create_themeicon(pTheme->OAirBase_Icon, Main.gui,
                           WF_HIDDEN | WF_RESTORE_BACKGROUND
                           | WF_WIDGET_HAS_INFO_LABEL);
@@ -788,7 +780,7 @@ void create_units_order_widgets(void)
   /* --------- */
 
   /* Build Fortress */
-  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Build Fortress"), "Shift+F");
+  fc_snprintf(cBuf, sizeof(cBuf),"%s (%s)", _("Build Fortress"), "F");
   pBuf = create_themeicon(pTheme->OFortress_Icon, Main.gui,
                           WF_HIDDEN | WF_RESTORE_BACKGROUND
                           | WF_WIDGET_HAS_INFO_LABEL);
@@ -1080,8 +1072,7 @@ void real_menus_update(void)
       struct city *pCity = tile_city(pTile);
       struct terrain *pTerrain = tile_terrain(pTile);
       struct base_type *pbase;
-      struct extra_type *pextra = next_extra_for_tile(pTile, EC_ROAD,
-                                                      unit_owner(pUnit), pUnit);
+      struct road_type *proad = next_road_for_tile(pTile, unit_owner(pUnit), pUnit);
 
       if (!counter) {
 	local_show(ID_UNIT_ORDER_GOTO);
@@ -1113,11 +1104,10 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_BUILD_WONDER);
       }
 
-      if (pextra != NULL) {
-        struct road_type *proad = extra_road_get(pextra);
+      if (proad != NULL) {
         enum road_compat compat = road_compat_special(proad);
 
-        time = tile_activity_time(ACTIVITY_GEN_ROAD, pTile, road_extra_get(proad));
+	time = tile_activity_road_time(pTile, road_number(proad));
 
         /* TRANS: "Build Railroad (R) 3 turns" */
 	fc_snprintf(cBuf, sizeof(cBuf), _("Build %s (%s) %d %s"),
@@ -1136,24 +1126,22 @@ void real_menus_update(void)
 	set_wflag(pOrder_Road_Button, WF_HIDDEN);
       }
       
-      /* unit_can_est_trade_route_here(pUnit) */
-      if (pCity && utype_can_do_action(unit_type(pUnit),
-                                       ACTION_TRADE_ROUTE)
+	/* unit_can_est_trade_route_here(pUnit) */
+      if (pCity && unit_has_type_flag(pUnit, UTYF_TRADE_ROUTE)
           && (pHomecity = game_city_by_number(pUnit->homecity))
           && can_cities_trade(pHomecity, pCity)) {
-        int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pCity,
-                                                         TRUE);
+	int revenue = get_caravan_enter_city_trade_bonus(pHomecity, pCity);
 	
         if (can_establish_trade_route(pHomecity, pCity)) {
           fc_snprintf(cBuf, sizeof(cBuf),
-                      _("Establish Trade Route With %s ( %d one time bonus + %d trade ) (R)"),
+                      _("Establish Trade Route With %s ( %d R&G + %d trade ) (R)"),
                       city_name(pHomecity),
                       revenue,
                       trade_between_cities(pHomecity, pCity));
         } else {
           revenue = (revenue + 2) / 3;
           fc_snprintf(cBuf, sizeof(cBuf),
-                      _("Trade With %s ( %d one time bonus ) (R)"),
+                      _("Trade With %s ( %d R&G bonus ) (R)"),
                       city_name(pHomecity),
                       revenue);
         }
@@ -1164,7 +1152,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_IRRIGATE)) {
-        time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_IRRIGATE, unit_tile(pUnit));
 
         if (!strcmp(terrain_rule_name(pTerrain), "Forest") ||
           !strcmp(terrain_rule_name(pTerrain), "Jungle")) {
@@ -1195,7 +1183,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_MINE)) {
-        time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit), NULL);
+	time = tile_activity_time(ACTIVITY_MINE, unit_tile(pUnit));
 
 	/* FIXME: THIS CODE IS WRONG */
    if (!strcmp(terrain_rule_name(pTerrain), "Forest")) {  
@@ -1230,7 +1218,7 @@ void real_menus_update(void)
       }
 
       if (can_unit_do_activity(pUnit, ACTIVITY_TRANSFORM)) {
-        time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit), NULL);
+        time = tile_activity_time(ACTIVITY_TRANSFORM, unit_tile(pUnit));
         fc_snprintf(cBuf, sizeof(cBuf),"%s %s (%s) %d %s",
                     _("Transform to"),
                     terrain_name_translation(pTerrain->transform_result),
@@ -1350,24 +1338,10 @@ void real_menus_update(void)
 	local_hide(ID_UNIT_ORDER_AUTO_EXPLORE);
       }
 
-      {
-        bool conn_possible = FALSE;
-        struct extra_type_list *extras;
-
-        extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-        if (extra_type_list_size(extras) > 0) {
-          struct extra_type *tgt;
-
-          tgt = extra_type_list_get(extras, 0);
-          conn_possible = can_units_do_connect(punits, ACTIVITY_IRRIGATE, tgt);
-        }
-
-        if (conn_possible) {
-          local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        } else {
-          local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
-        }
+      if (can_unit_do_connect(pUnit, ACTIVITY_IRRIGATE, NULL)) {
+	local_show(ID_UNIT_ORDER_CONNECT_IRRIGATE);
+      } else {
+	local_hide(ID_UNIT_ORDER_CONNECT_IRRIGATE);
       }
 
       {
@@ -1375,11 +1349,11 @@ void real_menus_update(void)
         bool road_conn_possible;
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) }; 
 
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
+          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD,
+                                                   &tgt);
         } else {
           road_conn_possible = FALSE;
         }
@@ -1396,11 +1370,11 @@ void real_menus_update(void)
         bool road_conn_possible;
 
         if (proad != NULL) {
-          struct extra_type *tgt;
+          struct act_tgt tgt = { .type = ATT_ROAD,
+                                 .obj.road = road_number(proad) }; 
 
-          tgt = road_extra_get(proad);
-
-          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD, tgt);
+          road_conn_possible = can_unit_do_connect(pUnit, ACTIVITY_GEN_ROAD,
+                                                   &tgt);
         } else {
           road_conn_possible = FALSE;
         }
@@ -1412,18 +1386,20 @@ void real_menus_update(void)
         }
       }
 
-      if (can_unit_act_against_own_tile(pUnit)) {
+      if (is_diplomat_unit(pUnit) &&
+	  diplomat_can_do_action(pUnit, DIPLOMAT_ANY_ACTION, unit_tile(pUnit))) {
 	local_show(ID_UNIT_ORDER_DIPLOMAT_DLG);
       } else {
 	local_hide(ID_UNIT_ORDER_DIPLOMAT_DLG);
       }
 
-      if (unit_can_do_action(pUnit, ACTION_NUKE)) {
+      if (unit_has_type_flag(pUnit, UTYF_NUCLEAR)) {
 	local_show(ID_UNIT_ORDER_NUKE);
       } else {
 	local_hide(ID_UNIT_ORDER_NUKE);
       }
 
+/*      if (pCity && has_city_airport(pCity) && pCity->airlift) {*/
       if (pCity && pCity->airlift) {      
 	local_show(ID_UNIT_ORDER_AIRLIFT);
 	hide(ID_UNIT_ORDER_GOTO_CITY);

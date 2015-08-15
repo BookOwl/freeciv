@@ -48,7 +48,6 @@
 #include "unit.h"
 #include "unitlist.h"
 #include "version.h"
-#include "victory.h"
 
 /* server */
 #include "aiiface.h"
@@ -63,7 +62,6 @@
 #include "notify.h"
 #include "plrhand.h"
 #include "ruleset.h"
-#include "savecompat.h"
 #include "score.h"
 #include "settings.h"
 #include "spacerace.h"
@@ -82,10 +80,6 @@
 
 /* server/scripting */
 #include "script_server.h"
-
-/* ai */
-#include "aitraits.h"
-#include "difficulty.h"
 
 #include "savegame.h"
 
@@ -223,12 +217,14 @@
   }									    \
 }
 
+static const char hex_chars[] = "0123456789abcdef";
 static const char num_chars[] =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-+";
 
 static bool load_river_overlay = FALSE;
 
-static void set_savegame_special(bv_extras *extras,
+static void set_savegame_special(bv_special *specials, bv_bases *bases,
+                                 bv_roads *roads,
                                  char ch, const enum tile_special_type *index);
 
 static void game_load_internal(struct section_file *file);
@@ -239,6 +235,41 @@ static struct player *identifier_to_player(char c);
 static void worklist_load(struct section_file *file, struct worklist *pwl,
                           const char *path, ...)
                           fc__attribute((__format__ (__printf__, 3, 4)));
+
+/***************************************************************
+This returns an ascii hex value of the given half-byte of the binary
+integer. See ascii_hex2bin().
+  example: bin2ascii_hex(0xa00, 2) == 'a'
+***************************************************************/
+#define bin2ascii_hex(value, halfbyte_wanted) \
+  hex_chars[((value) >> ((halfbyte_wanted) * 4)) & 0xf]
+
+/***************************************************************
+This returns a binary integer value of the ascii hex char, offset by
+the given number of half-bytes. See bin2ascii_hex().
+  example: ascii_hex2bin('a', 2) == 0xa00
+This is only used in loading games, and it requires some error
+checking so it's done as a function.
+***************************************************************/
+static int ascii_hex2bin(char ch, int halfbyte)
+{
+  const char *pch;
+
+  if (ch == ' ') {
+    /* 
+     * Sane value. It is unknow if there are savegames out there which
+     * need this fix. Savegame.c doesn't write such savegames
+     * (anymore) since the inclusion into CVS (2000-08-25).
+     */
+    return 0;
+  }
+  
+  pch = strchr(hex_chars, ch);
+
+  fc_assert_ret_val_msg(NULL != pch && '\0' != ch, 0,
+                        "Unknown hex value: '%c' %d", ch, ch);
+  return (pch - hex_chars) << (halfbyte * 4);
+}
 
 /****************************************************************************
   Converts single character into numerical value. This is not hex conversion.
@@ -289,7 +320,7 @@ static enum unit_orders char2order(char order)
     return ORDER_FULL_MP;
   case 'b':
   case 'B':
-    return ORDER_OLD_BUILD_CITY;
+    return ORDER_BUILD_CITY;
   case 'a':
   case 'A':
     return ORDER_ACTIVITY;
@@ -298,10 +329,10 @@ static enum unit_orders char2order(char order)
     return ORDER_DISBAND;
   case 'u':
   case 'U':
-    return ORDER_OLD_BUILD_WONDER;
+    return ORDER_BUILD_WONDER;
   case 't':
   case 'T':
-    return ORDER_OLD_TRADE_ROUTE;
+    return ORDER_TRADE_ROUTE;
   case 'h':
   case 'H':
     return ORDER_HOMECITY;
@@ -423,26 +454,26 @@ static inline enum fz_method int2fz_method(int magic)
   case 0:               /* Was FZ_PLAIN. */
     return FZ_PLAIN;
   case 1:               /* Was FZ_ZLIB. */
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
     return FZ_ZLIB;
 #else
     log_verbose("Not compiled with zlib support, reverting to default.");
     break;
-#endif /* FREECIV_HAVE_LIBZ */
+#endif /* HAVE_LIBZ */
   case 2:               /* Was FZ_BZIP2. */
-#ifdef FREECIV_HAVE_LIBBZ2
+#ifdef HAVE_LIBBZ2
     return FZ_BZIP2;
 #else
     log_verbose("Not compiled with bzib2 support, reverting to default.");
     break;
-#endif /* FREECIV_HAVE_LIBZ */
+#endif /* HAVE_LIBZ */
   case 3:
-#ifdef FREECIV_HAVE_LIBLZMA
+#ifdef HAVE_LIBLZMA
     return FZ_XZ;
 #else
     log_verbose("Not compiled with xz support, reverting to default.");
     break;
-#endif /* FREECIV_HAVE_LIBLZMA */
+#endif /* HAVE_LIBLZMA */
   }
   return GAME_DEFAULT_COMPRESS_TYPE;
 }
@@ -679,6 +710,9 @@ static void map_load_rivers_overlay(struct section_file *file,
   /* used by set_savegame_special */
   load_river_overlay = TRUE;
 
+  /* Is it still as specials overlay after loading? */
+  map.server.have_rivers_overlay = (road_by_compat_special(ROCO_RIVER) == NULL);
+
   if (special_order) {
     special_halfbyte_iterate(j, num_special_types) {
       char buf[16]; /* enough for sprintf() below */
@@ -686,7 +720,7 @@ static void map_load_rivers_overlay(struct section_file *file,
 
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	secfile_lookup_str(file, buf, nat_y),
-        set_savegame_special(&ptile->extras, ch, special_order + 4 * j));
+        set_savegame_special(&ptile->special, NULL, &ptile->roads, ch, special_order + 4 * j));
     } special_halfbyte_iterate_end;
   } else {
     /* Get the bits of the special flags which contain the river special
@@ -694,7 +728,7 @@ static void map_load_rivers_overlay(struct section_file *file,
     fc_assert_ret(S_LAST <= 32);
     LOAD_MAP_DATA(ch, line, ptile,
       secfile_lookup_str(file, "map.n%03d", line),
-      set_savegame_special(&ptile->extras, ch, default_specials + 8));
+      set_savegame_special(&ptile->special, NULL, &ptile->roads, ch, default_specials + 8));
   }
 
   load_river_overlay = FALSE;
@@ -707,7 +741,9 @@ static void map_load_rivers_overlay(struct section_file *file,
   in four to a character in hex notation.  'index' is a mapping of
   savegame bit -> special bit. S_LAST is used to mark unused savegame bits.
 ****************************************************************************/
-static void set_savegame_special(bv_extras *extras,
+static void set_savegame_special(bv_special *specials,
+                                 bv_bases *bases,
+                                 bv_roads *roads,
 				 char ch,
 				 const enum tile_special_type *index)
 {
@@ -734,48 +770,52 @@ static void set_savegame_special(bv_extras *extras,
     if (bin & (1 << i)) {
       /* Pre 2.2 savegames have fortresses and airbases as part of specials */
       if (sp == S_OLD_FORTRESS) {
-        struct base_type *pbase;
+        if (bases) {
+          struct base_type *pbase;
 
-        pbase = get_base_by_gui_type(BASE_GUI_FORTRESS, NULL, NULL);
-        if (pbase) {
-          BV_SET(*extras, extra_index(base_extra_get(pbase)));
+          pbase = get_base_by_gui_type(BASE_GUI_FORTRESS, NULL, NULL);
+          if (pbase) {
+            BV_SET(*bases, base_index(pbase));
+          }
         }
       } else if (sp == S_OLD_AIRBASE) {
-        struct base_type *pbase;
+        if (bases) {
+          struct base_type *pbase;
 
-        pbase = get_base_by_gui_type(BASE_GUI_AIRBASE, NULL, NULL);
-        if (pbase) {
-          BV_SET(*extras, extra_index(base_extra_get(pbase)));
+          pbase = get_base_by_gui_type(BASE_GUI_AIRBASE, NULL, NULL);
+          if (pbase) {
+            BV_SET(*bases, base_index(pbase));
+          }
         }
       } else if (sp == S_OLD_ROAD) {
-        struct road_type *proad;
+        if (roads) {
+          struct road_type *proad;
 
-        proad = road_by_compat_special(ROCO_ROAD);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
+          proad = road_by_compat_special(ROCO_ROAD);
+          if (proad) {
+            BV_SET(*roads, road_index(proad));
+          }
         }
       } else if (sp == S_OLD_RAILROAD) {
-        struct road_type *proad;
+        if (roads) {
+          struct road_type *proad;
 
-        proad = road_by_compat_special(ROCO_RAILROAD);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
+          proad = road_by_compat_special(ROCO_RAILROAD);
+          if (proad) {
+            BV_SET(*roads, road_index(proad));
+          }
         }
       } else if (sp == S_OLD_RIVER) {
-        struct road_type *proad;
+        if (roads) {
+          struct road_type *proad;
 
-        proad = road_by_compat_special(ROCO_RIVER);
-        if (proad) {
-          BV_SET(*extras, extra_index(road_extra_get(proad)));
+          proad = road_by_compat_special(ROCO_RIVER);
+          if (proad) {
+            BV_SET(*roads, road_index(proad));
+          }
         }
       } else {
-        struct extra_type *pextra;
-
-        pextra = extra_type_by_rule_name(special_rule_name(sp));
-
-        if (pextra) {
-          BV_SET(*extras, extra_index(pextra));
-        }
+        set_special(specials, sp);
       }
     }
   }
@@ -788,7 +828,7 @@ static void set_savegame_special(bv_extras *extras,
   in four to a character in hex notation.  'index' is a mapping of
   savegame bit -> base bit.
 ****************************************************************************/
-static void set_savegame_bases(bv_extras *extras,
+static void set_savegame_bases(bv_bases *bases,
                                char ch,
                                struct base_type **index)
 {
@@ -809,7 +849,7 @@ static void set_savegame_bases(bv_extras *extras,
       continue;
     }
     if (bin & (1 << i)) {
-      BV_SET(*extras, extra_index(base_extra_get(pbase)));
+      BV_SET(*bases, base_index(pbase));
     }
   }
 }
@@ -900,27 +940,27 @@ static void map_load(struct section_file *file,
 
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	  secfile_lookup_str(file, buf, nat_y),
-          set_savegame_special(&ptile->extras,
+          set_savegame_special(&ptile->special, &ptile->bases, &ptile->roads,
                                ch, special_order + 4 * j));
     } special_halfbyte_iterate_end;
   } else {
     /* get 4-bit segments of 16-bit "special" field. */
     LOAD_MAP_DATA(ch, nat_y, ptile,
 	    secfile_lookup_str(file, "map.l%03d", nat_y),
-                  set_savegame_special(&ptile->extras,
-                                       ch, default_specials + 0));
+            set_savegame_special(&ptile->special, &ptile->bases, &ptile->roads,
+                                 ch, default_specials + 0));
     LOAD_MAP_DATA(ch, nat_y, ptile,
 	    secfile_lookup_str(file, "map.u%03d", nat_y),
-                  set_savegame_special(&ptile->extras,
-                                       ch, default_specials + 4));
+            set_savegame_special(&ptile->special, &ptile->bases, &ptile->roads,
+                                 ch, default_specials + 4));
     LOAD_MAP_DATA(ch, nat_y, ptile,
 	    secfile_lookup_str(file, "map.n%03d", nat_y),
-                  set_savegame_special(&ptile->extras,
-                                       ch, default_specials + 8));
+            set_savegame_special(&ptile->special, &ptile->bases, &ptile->roads,
+                                 ch, default_specials + 8));
     LOAD_MAP_DATA(ch, nat_y, ptile,
 	    secfile_lookup_str(file, "map.f%03d", nat_y),
-                  set_savegame_special(&ptile->extras,
-                                       ch, default_specials + 12));
+            set_savegame_special(&ptile->special, &ptile->bases, &ptile->roads,
+                                 ch, default_specials + 12));
     /* Setup resources (from half-bytes 1 and 3 of old savegames) */
     LOAD_MAP_DATA(ch, nat_y, ptile,
 	secfile_lookup_str(file, "map.l%03d", nat_y),
@@ -938,7 +978,7 @@ static void map_load(struct section_file *file,
     }
     if (terrain_has_resource(ptile->terrain, ptile->resource)) {
       /* cannot use set_special() for internal values */
-      ptile->resource_valid = TRUE;
+      BV_SET(ptile->special, S_RESOURCE_VALID);
     }
   } whole_map_iterate_end;
 
@@ -959,7 +999,7 @@ static void map_load(struct section_file *file,
 
       LOAD_MAP_DATA(ch, nat_y, ptile,
                     secfile_lookup_str_default(file, zeroline, buf, nat_y),
-                    set_savegame_bases(&ptile->extras, ch, base_order + 4 * j));
+                    set_savegame_bases(&ptile->bases, ch, base_order + 4 * j));
     } bases_halfbyte_iterate_end;
   }
 }
@@ -1015,7 +1055,7 @@ static void map_load_owner(struct section_file *file,
           claimer = index_to_tile(number);
         }
 
-        map_claim_ownership(ptile, owner, claimer, TRUE);
+        map_claim_ownership(ptile, owner, claimer);
       }
     }
   }
@@ -1078,6 +1118,205 @@ static void map_load_known(struct section_file *file,
   map.server.have_resources = TRUE;
 }
 
+/*
+ * Previously (with 1.14.1 and earlier) units had their type saved by ID.
+ * This meant any time a unit was added (unless it was added at the end)
+ * savegame compatibility would be broken.  Sometime after 1.14.1 this
+ * method was changed so the type is saved by name.  However to preserve
+ * backwards compatibility we have here a list of unit names from before
+ * the change was made.  When loading an old savegame (one that doesn't
+ * have the type string) we need to lookup the type into this array
+ * to get the "proper" type string.
+ *
+ * Note that this list includes the AWACS, which was not in 1.14.1.
+ */
+
+/* old (~1.14.1) unit order in default/civ2/history ruleset */
+static const char* old_default_unit_types[] = {
+  "Settlers",	"Engineers",	"Warriors",	"Phalanx",
+  "Archers",	"Legion",	"Pikemen",	"Musketeers",
+  "Fanatics",	"Partisan",	"Alpine Troops","Riflemen",
+  "Marines",	"Paratroopers",	"Mech. Inf.",	"Horsemen",
+  "Chariot",	"Elephants",	"Crusaders",	"Knights",
+  "Dragoons",	"Cavalry",	"Armor",	"Catapult",
+  "Cannon",	"Artillery",	"Howitzer",	"Fighter",
+  "Bomber",	"Helicopter",	"Stealth Fighter", "Stealth Bomber",
+  "Trireme",	"Caravel",	"Galleon",	"Frigate",
+  "Ironclad",	"Destroyer",	"Cruiser",	"AEGIS Cruiser",
+  "Battleship",	"Submarine",	"Carrier",	"Transport",
+  "Cruise Missile", "Nuclear",	"Diplomat",	"Spy",
+  "Caravan",	"Freight",	"Explorer",	"Barbarian Leader",
+  "AWACS"
+};
+
+/* old (~1.14.1) unit order in civ1 ruleset */
+static const char* old_civ1_unit_types[] = {
+  "Settlers",	"Engineers",	"Militia",	"Phalanx",
+  "Archers",	"Legion",	"Pikemen",	"Musketeers",
+  "Fanatics",	"Partisan",	"Alpine Troops","Riflemen",
+  "Marines",	"Paratroopers",	"Mech. Inf.",	"Cavalry",
+  "Chariot",	"Elephants",	"Crusaders",	"Knights",
+  "Dragoons",	"Civ2-Cavalry",	"Armor",	"Catapult",
+  "Cannon",	"Civ2-Artillery","Artillery",	"Fighter",
+  "Bomber",	"Helicopter",	"Stealth Fighter", "Stealth Bomber",
+  "Trireme",	"Sail",		"Galleon",	"Frigate",
+  "Ironclad",	"Destroyer",	"Cruiser",	"AEGIS Cruiser",
+  "Battleship",	"Submarine",	"Carrier",	"Transport",
+  "Cruise Missile", "Nuclear",	"Diplomat",	"Spy",
+  "Caravan",	"Freight",	"Explorer",	"Barbarian Leader"
+};
+
+/* old (1.14.1) improvement order in default ruleset */
+const char* old_impr_types[] =
+{
+  "Airport",		"Aqueduct",		"Bank",
+  "Barracks",		"Barracks II",		"Barracks III",
+  "Cathedral",		"City Walls",		"Coastal Defense",
+  "Colosseum",		"Courthouse",		"Factory",
+  "Granary",		"Harbour",		"Hydro Plant",
+  "Library",		"Marketplace",		"Mass Transit",
+  "Mfg. Plant",		"Nuclear Plant",	"Offshore Platform",
+  "Palace",		"Police Station",	"Port Facility",
+  "Power Plant",	"Recycling Center",	"Research Lab",
+  "SAM Battery",	"SDI Defense",		"Sewer System",
+  "Solar Plant",	"Space Component",	"Space Module",
+  "Space Structural",	"Stock Exchange",	"Super Highways",
+  "Supermarket",	"Temple",		"University",
+  "Apollo Program",	"A.Smith's Trading Co.","Colossus",
+  "Copernicus' Observatory", "Cure For Cancer",	"Darwin's Voyage",
+  "Eiffel Tower",	"Great Library",	"Great Wall",
+  "Hanging Gardens",	"Hoover Dam",		"Isaac Newton's College",
+  "J.S. Bach's Cathedral","King Richard's Crusade", "Leonardo's Workshop",
+  "Lighthouse",		"Magellan's Expedition","Manhattan Project",
+  "Marco Polo's Embassy","Michelangelo's Chapel","Oracle",
+  "Pyramids",		"SETI Program",		"Shakespeare's Theatre",
+  "Statue of Liberty",	"Sun Tzu's War Academy","United Nations",
+  "Women's Suffrage",	"Coinage"
+};
+
+/* old (~1.14.1) techs order in civ2/default ruleset.
+ *
+ * Note that Theology is called Religion in civ1 ruleset; this is handled
+ * as a special case in the code.
+ *
+ * Nowadays we save A_FUTURE as "A_FUTURE", A_NONE as "A_NONE".
+ * A_UNSET as "A_UNSET" - they used to be saved as 198, 0 or -1, 0.
+ */
+const char* old_default_techs[] = 
+{
+  "A_NONE",
+  "Advanced Flight",	"Alphabet",		"Amphibious Warfare",
+  "Astronomy",		"Atomic Theory",	"Automobile",
+  "Banking",		"Bridge Building",	"Bronze Working",
+  "Ceremonial Burial",	"Chemistry",		"Chivalry",
+  "Code of Laws",	"Combined Arms",	"Combustion",
+  "Communism",		"Computers",		"Conscription",
+  "Construction",	"Currency",		"Democracy",
+  "Economics",		"Electricity",		"Electronics",
+  "Engineering",	"Environmentalism",	"Espionage",
+  "Explosives",		"Feudalism",		"Flight",
+  "Fundamentalism",	"Fusion Power",		"Genetic Engineering",
+  "Guerilla Warfare",	"Gunpowder",		"Horseback Riding",
+  "Industrialization",	"Invention",		"Iron Working",
+  "Labor Union",	"Laser",		"Leadership",
+  "Literacy",		"Machine Tools",	"Magnetism",
+  "Map Making",		"Masonry",		"Mass Production",
+  "Mathematics",	"Medicine",		"Metallurgy",
+  "Miniaturization",	"Mobile Warfare",	"Monarchy",
+  "Monotheism",		"Mysticism",		"Navigation",
+  "Nuclear Fission",	"Nuclear Power",	"Philosophy",
+  "Physics",		"Plastics",		"Polytheism",
+  "Pottery",		"Radio",		"Railroad",
+  "Recycling",		"Refining",		"Refrigeration",
+  "Robotics",		"Rocketry",		"Sanitation",
+  "Seafaring",		"Space Flight",		"Stealth",
+  "Steam Engine",	"Steel",		"Superconductors",
+  "Tactics",		"The Corporation",	"The Republic",
+  "The Wheel",		"Theology",		"Theory of Gravity",
+  "Trade",		"University",		"Warrior Code",
+  "Writing"
+};
+
+/* old (~1.14.1) government order in default, civ1, and history rulesets */
+const char* old_default_governments[] = 
+{
+  "Anarchy", "Despotism", "Monarchy", "Communism", "Republic", "Democracy"
+};
+
+/* old (~1.14.1) government order in the civ2 ruleset */
+const char* old_civ2_governments[] =
+{
+  "Anarchy", "Despotism", "Monarchy", "Communism", "Fundamentalism",
+  "Republic", "Democracy"
+};
+
+/****************************************************************************
+  Convert an old-style unit type id into a unit type name.
+****************************************************************************/
+static const char* old_unit_type_name(int id)
+{
+  /* before 1.15.0 unit types used to be saved by id */
+  if (id < 0) {
+    return NULL;
+  }
+  /* Different rulesets had different unit names. */
+  if (strcmp(game.server.rulesetdir, "civ1") == 0) {
+    if (id >= ARRAY_SIZE(old_civ1_unit_types)) {
+      return NULL;
+    }
+    return old_civ1_unit_types[id];
+  } else {
+    if (id >= ARRAY_SIZE(old_default_unit_types)) {
+      return NULL;
+    }
+    return old_default_unit_types[id];
+  }
+}
+
+/***************************************************************
+  Convert old-style improvement type id into improvement type name
+***************************************************************/
+static const char* old_impr_type_name(int id)
+{
+  /* before 1.15.0 improvement types used to be saved by id */
+  if (id < 0 || id >= ARRAY_SIZE(old_impr_types)) {
+    return NULL;
+  }
+  return old_impr_types[id];
+}
+
+/****************************************************************************
+  Convert an old-style technology id into a tech name.
+  Caller uses -1 to indicate missing value.
+****************************************************************************/
+static const char* old_tech_name(int id)
+{
+  /* Longstanding value (through 2.1) for A_LAST at 200,
+   * and A_UNSET at 199 */
+  if (id == -1 || id >= 199) {
+    return "A_UNSET";
+  }
+
+  /* This was 1.14.1 value for A_FUTURE */
+  if (id == 198) {
+    return "A_FUTURE";
+  }
+  
+  if (id == 0) {
+    return "A_NONE";
+  }
+  
+  if (id < 0 || id >= ARRAY_SIZE(old_default_techs)) {
+    return NULL;
+  }
+
+  if (strcmp(game.server.rulesetdir, "civ1") == 0 && id == 83) {
+    return "Religion";
+  }
+  
+  return old_default_techs[id];
+}
+
 /*****************************************************************************
   Load technology from path_name and if doesn't exist (because savegame
   is too old) load from path.
@@ -1088,14 +1327,19 @@ static Tech_type_id technology_load(struct section_file *file,
   char path_with_name[128];
   const char* name;
   struct advance *padvance;
+  int id;
 
   fc_snprintf(path_with_name, sizeof(path_with_name),
               "%s_name", path);
 
   name = secfile_lookup_str(file, path_with_name, plrno);
   if (!name) {
-    log_fatal("%s: no tech name", path_with_name);
-    exit(EXIT_FAILURE);
+    id = secfile_lookup_int_default(file, -1, path, plrno);
+    name = old_tech_name(id);
+    if (!name) {
+      log_fatal("%s: value (%d) out of range.", path, id);
+      exit(EXIT_FAILURE);
+    }
   }
 
   if (fc_strcasecmp(name, "A_FUTURE") == 0) {
@@ -1118,6 +1362,32 @@ static Tech_type_id technology_load(struct section_file *file,
     exit(EXIT_FAILURE);    
   }
   return advance_number(padvance);
+}
+
+/****************************************************************************
+  Convert an old-style government index into a government name.
+****************************************************************************/
+static const char* old_government_name(int id)
+{
+  /* before 1.15.0 governments used to be saved by index */
+  if (id < 0) {
+    log_fatal("Wrong government type id value (%d)", id);
+    exit(EXIT_FAILURE);
+  }
+  /* Different rulesets had different governments. */
+  if (strcmp(game.server.rulesetdir, "civ2") == 0) {
+    if (id >= ARRAY_SIZE(old_civ2_governments)) {
+      log_fatal("Wrong government type id value (%d)", id);
+      exit(EXIT_FAILURE);
+    }
+    return old_civ2_governments[id];
+  } else {
+    if (id >= ARRAY_SIZE(old_default_governments)) {
+      log_fatal("Wrong government type id value (%d)", id);
+      exit(EXIT_FAILURE);
+    }
+    return old_default_governments[id];
+  }
 }
 
 /****************************************************************************
@@ -1159,8 +1429,15 @@ static void player_load_units(struct player *plr, int plrno,
     type_name = secfile_lookup_str(file, "player%d.u%d.type_by_name",
                                    plrno, i);
     if (!type_name) {
-      log_fatal("Player %d, unit %d, no type", plrno, i);
-      exit(EXIT_FAILURE);
+      /* before 1.15.0 unit types used to be saved by id. */
+      int t = secfile_lookup_int_default(file, -1,
+                                         "player%d.u%d.type",
+                                         plrno, i);
+      type_name = old_unit_type_name(t);
+      if (!type_name) {
+        log_fatal("player%d.u%d.type: unknown (%d)", plrno, i, t);
+        exit(EXIT_FAILURE);
+      }
     }
     
     type = unit_type_by_rule_name(type_name);
@@ -1299,47 +1576,7 @@ static void player_load_units(struct player *plr, int plrno,
       proad = road_by_compat_special(ROCO_RAILROAD);
     }
 
-    if (activity == ACTIVITY_IRRIGATE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_IRRIGATION,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_IRRIGATE, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_IRRIGATE, NULL);
-      }
-    } else if (activity == ACTIVITY_MINE) {
-      struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                   EC_MINE,
-                                                   unit_owner(punit),
-                                                   punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_MINE, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_MINE, NULL);
-      }
-    } else if (activity == ACTIVITY_POLLUTION) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANPOLLUTION,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_POLLUTION, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_POLLUTION, NULL);
-      }
-    } else if (activity == ACTIVITY_FALLOUT) {
-      struct extra_type *tgt = prev_extra_in_tile(unit_tile(punit),
-                                                  ERM_CLEANFALLOUT,
-                                                  unit_owner(punit),
-                                                  punit);
-      if (tgt != NULL) {
-        set_unit_activity_targeted(punit, ACTIVITY_FALLOUT, tgt);
-      } else {
-        set_unit_activity_targeted(punit, ACTIVITY_FALLOUT, NULL);
-      }
-    } else if (activity == ACTIVITY_BASE) {
+    if (activity == ACTIVITY_BASE) {
       if (pbase) {
         set_unit_activity_base(punit, base_number(pbase));
       } else {
@@ -1356,21 +1593,25 @@ static void player_load_units(struct player *plr, int plrno,
         set_unit_activity(punit, ACTIVITY_IDLE);
       }
     } else if (activity == ACTIVITY_PILLAGE) {
-      struct extra_type *a_target;
+      struct act_tgt a_target;
 
       if (target != S_LAST) {
-        a_target = special_extra_get(target);
+        a_target.type = ATT_SPECIAL;
+        a_target.obj.spe = target;
       } else if (pbase != NULL) {
-        a_target = base_extra_get(pbase);
+        a_target.type = ATT_BASE;
+        a_target.obj.base = base_index(pbase);
       } else if (proad != NULL) {
-        a_target = road_extra_get(proad);
+        a_target.type = ATT_ROAD;
+        a_target.obj.road = road_index(proad);
       } else {
-        a_target = NULL;
+        a_target.type = ATT_SPECIAL;
+        a_target.obj.road = S_LAST;
       }
       /* An out-of-range base number is seen with old savegames. We take
        * it as indicating undirected pillaging. We will assign pillage
        * targets before play starts. */
-      set_unit_activity_targeted(punit, activity, a_target);
+      set_unit_activity_targeted(punit, activity, &a_target);
     } else {
       set_unit_activity(punit, activity);
     }
@@ -1472,6 +1713,7 @@ static void player_load_units(struct player *plr, int plrno,
 			"player%d.u%d.orders_repeat", plrno, i);
 	punit->orders.vigilant = secfile_lookup_bool_default(file, FALSE,
 			"player%d.u%d.orders_vigilant", plrno, i);
+        punit->server.last_order_move_is_safe = FALSE;
 
 	orders_buf = secfile_lookup_str_default(file, "",
 			"player%d.u%d.orders_list", plrno, i);
@@ -1495,7 +1737,6 @@ static void player_load_units(struct player *plr, int plrno,
 	  order->order = char2order(orders_buf[j]);
 	  order->dir = char2dir(dir_buf[j]);
 	  order->activity = char2activity(act_buf[j]);
-
 	  if (order->order == ORDER_LAST
 	      || (order->order == ORDER_MOVE && !direction8_is_valid(order->dir))
 	      || (order->order == ORDER_ACTIVITY
@@ -1506,14 +1747,6 @@ static void player_load_units(struct player *plr, int plrno,
 	    punit->has_orders = FALSE;
 	    break;
 	  }
-
-          /* The order may have been replaced by the perform action order */
-          order->action = sg_order_to_action(order->order, punit,
-                                             punit->goto_tile);
-          if (order->action != ACTION_COUNT) {
-            /* The order was converted by order_to_action */
-            order->order = ORDER_PERFORM_ACTION;
-          }
 
           /* Pre 2.2 savegames had activities ACTIVITY_FORTRESS and ACTIVITY_AIRBASE */
           if (order->activity == ACTIVITY_FORTRESS) {
@@ -1526,7 +1759,7 @@ static void player_load_units(struct player *plr, int plrno,
           if (pbase) {
             /* Either ACTIVITY_FORTRESS or ACTIVITY_AIRBASE */
             order->activity = ACTIVITY_BASE;
-            order->target = extra_number(base_extra_get(pbase));
+            order->base = base_number(pbase);
           } else if (base_buf && base_buf[j] != '?') {
             base = char2num(base_buf[j]);
 
@@ -1538,23 +1771,21 @@ static void player_load_units(struct player *plr, int plrno,
               base = base_number(get_base_by_gui_type(BASE_GUI_FORTRESS, NULL, NULL));
             }
 
-            order->target = extra_number(base_extra_get(base_by_number(base)));
+            order->base = base;
           } else {
-            order->target = EXTRA_NONE;
+            order->base = BASE_NONE;
           }
 
           if (order->activity == ACTIVITY_OLD_ROAD) {
             order->activity = ACTIVITY_GEN_ROAD;
-            order->target = extra_number(road_extra_get(road_by_number(road_idx)));
+            order->road = road_idx;
           } else if (order->activity == ACTIVITY_OLD_RAILROAD) {
             order->activity = ACTIVITY_GEN_ROAD;
-            order->target = extra_number(road_extra_get(road_by_number(rail_idx)));
+            order->road = rail_idx;
+          } else {
+            order->road = ROAD_NONE;
           }
 	}
-        if (punit->orders.list[len - 1].order == ORDER_MOVE) {
-          /* Last move never safe in old versions. */
-          punit->orders.list[len - 1].order = ORDER_ACTION_MOVE;
-        }
       } else {
 	punit->has_orders = FALSE;
 	punit->orders.list = NULL;
@@ -1577,10 +1808,14 @@ static void player_load_units(struct player *plr, int plrno,
     unit_list_prepend(ptile->units, punit);
 
     /* Claim ownership of fortress? */
-    if ((extra_owner(ptile) == NULL
-         || pplayers_at_war(extra_owner(ptile), plr))
+    if ((!base_owner(ptile)
+         || pplayers_at_war(base_owner(ptile), plr))
         && tile_has_claimable_base(ptile, unit_type(punit))) {
-      tile_claim_bases(ptile, plr);
+      struct player *old_owner = base_owner(ptile);
+
+      base_type_iterate(pbase) {
+        map_claim_base(ptile, pbase, plr, old_owner);
+      } base_type_iterate_end;
     }
   }
 }
@@ -1643,19 +1878,15 @@ static void player_load_main(struct player *plr, int plrno,
   const char *p;
   const char *name;
   struct government *gov;
-  struct research *research;
+  int id;
+  struct player_research *research;
   struct nation_type *pnation;
-  struct nation_style *style;
-  int old_barb_type;
 
-  research = research_get(plr);
+  research = player_research_get(plr);
 
-  old_barb_type = secfile_lookup_int_default(file, 0,
-                                             "player%d.ai.is_barbarian",
-                                             plrno);
-
-  plr->ai_common.barbarian_type = barb_type_convert(old_barb_type);
-
+  plr->ai_common.barbarian_type = secfile_lookup_int_default(file, 0,
+                                                    "player%d.ai.is_barbarian",
+                                                    plrno);
   if (is_barbarian(plr)) {
     server.nbarbarians++;
   }
@@ -1719,7 +1950,8 @@ static void player_load_main(struct player *plr, int plrno,
   /* Nation may be unselected at this point; we check for this later and
    * reassign nations to players who don't have them. */
 
-  init_tech(research, FALSE);
+  /* Add techs from game and nation, but ignore game.info.tech. */
+  init_tech(plr, FALSE);
   /* We used to call give_initial_techs here, but that shouldn't be
    * necessary.  The savegame should already mark those techs as known.
    * give_initial_techs will crash if the nation is unset. */
@@ -1738,8 +1970,9 @@ static void player_load_main(struct player *plr, int plrno,
   /* government */
   name = secfile_lookup_str(file, "player%d.government_name", plrno);
   if (!name) {
-    log_fatal("Player%d: no government.", plrno);
-    exit(EXIT_FAILURE);
+    /* old servers used to save government by id */
+    id = secfile_lookup_int_default(file, -1, "player%d.government", plrno);
+    name = old_government_name(id);
   }
   gov = government_by_rule_name(name);
   if (gov == NULL) {
@@ -1762,12 +1995,6 @@ static void player_load_main(struct player *plr, int plrno,
     plr->target_government = government_of_player(plr);
   }
 
-  /* Multipliers: post-date version 1 savefiles, so use ruleset defaults */
-  multipliers_iterate(pmul) {
-    plr->multipliers[multiplier_index(pmul)]
-      = plr->multipliers_target[multiplier_index(pmul)] = pmul->def;
-  } multipliers_iterate_end;
-
   p = secfile_lookup_str(file, "player%d.city_style_by_name", plrno);
   if (!p) {
     char* old_order[4] = {"European", "Classical", "Tropical", "Asian"};
@@ -1779,47 +2006,44 @@ static void player_load_main(struct player *plr, int plrno,
     }
     p = old_order[c_s];
   }
-  style = style_by_rule_name(p);
-  if (style == NULL) {
-    style = style_by_number(0);
+  c_s = city_style_by_rule_name(p);
+  if (c_s < 0) {
     log_error("Player%d: unsupported city_style_name \"%s\". "
-              "Changed to \"%s\".", plrno, p, style_rule_name(style));
+              "Changed to \"%s\".", plrno, p, city_style_rule_name(0));
+    c_s = 0;
   }
-  plr->style = style;
+  plr->city_style = c_s;
 
   plr->nturns_idle=0;
   plr->is_male=secfile_lookup_bool_default(file, TRUE, "player%d.is_male", plrno);
   fc_assert_exit_msg(secfile_lookup_bool(file, &plr->is_alive,
                                          "player%d.is_alive", plrno),
                      "%s", secfile_error());
-  plr->turns_alive = secfile_lookup_int_default(file, game.info.turn,
-                                                "player%d.turns_alive", plrno);
   fc_assert_exit_msg(secfile_lookup_bool(file, &plr->ai_controlled,
                                          "player%d.ai.control", plrno),
                      "%s", secfile_error());
-  plr->phase_done = FALSE;
 
   /* Backwards-compatibility: the tech goal value is still stored in the
    * "ai" section even though it was moved into the research struct. */
   research->tech_goal =
     technology_load(file, "player%d.ai.tech_goal", plrno);
 
-  if (research->tech_goal == A_NONE
-      || NULL == valid_advance_by_number(research->tech_goal)) {
+  if (research->tech_goal == A_NONE) {
     /* Old servers (1.14.1) saved both A_UNSET and A_NONE by 0
      * Here 0 means A_UNSET
      */
     research->tech_goal = A_UNSET;
   }
   /* Some sane defaults */
+  BV_CLR_ALL(plr->ai_common.handicaps); /* set later */
   plr->ai_common.fuzzy = 0;		 /* set later */
   plr->ai_common.expand = 100;		 /* set later */
   plr->ai_common.science_cost = 100;	 /* set later */
   plr->ai_common.skill_level =
-    ai_level_convert(secfile_lookup_int_default(file, game.info.skill_level,
-                                                "player%d.ai.skill_level", plrno));
-  if (plr->ai_controlled && !ai_level_is_valid(plr->ai_common.skill_level)) {
-    plr->ai_common.skill_level = ai_level_convert(GAME_OLD_DEFAULT_SKILL_LEVEL);
+    secfile_lookup_int_default(file, game.info.skill_level,
+                               "player%d.ai.skill_level", plrno);
+  if (plr->ai_controlled && plr->ai_common.skill_level==0) {
+    plr->ai_common.skill_level = GAME_OLD_DEFAULT_SKILL_LEVEL;
   }
   if (plr->ai_controlled) {
     /* Set AI parameters */
@@ -1868,8 +2092,7 @@ static void player_load_main(struct player *plr, int plrno,
   research->researching =
     technology_load(file, "player%d.researching", plrno);
 
-  if (research->researching == A_NONE
-      || NULL == valid_advance_by_number(research->researching)) {
+  if (research->researching == A_NONE) {
     /* Old servers (1.14.1) used to save A_FUTURE by 0 
      * This has to be interpreted from context because A_NONE was also
      * saved by 0
@@ -1887,15 +2110,27 @@ static void player_load_main(struct player *plr, int plrno,
    */
   p = secfile_lookup_str(file, "player%d.invs_new", plrno);
   if (!p) {
-    log_fatal("Player %d: no inventions info", plrno);
-    exit(EXIT_FAILURE);
+    /* old savegames */
+    p = secfile_lookup_str(file, "player%d.invs", plrno);
+    for (k = 0; p[k];  k++) {
+      const char *name = old_tech_name(k);
+      if (!name) {
+        log_fatal("player%d.invs: value (%d) out of range.", plrno, k);
+        exit(EXIT_FAILURE);
+      }
+      if (p[k] == '1') {
+        struct advance *padvance = advance_by_rule_name(name);
+        if (padvance) {
+          player_invention_set(plr, advance_number(padvance), TECH_KNOWN);
+        }
+      }
+    }
   } else {
     for (k = 0; k < technology_order_size && p[k]; k++) {
       if (p[k] == '1') {
         struct advance *padvance = advance_by_rule_name(technology_order[k]);
         if (padvance) {
-          research_invention_set(research, advance_number(padvance),
-                                 TECH_KNOWN);
+          player_invention_set(plr, advance_number(padvance), TECH_KNOWN);
         }
       }
     }
@@ -2318,18 +2553,9 @@ static void player_load_cities(struct player *plr, int plrno,
     } specialist_type_iterate_end;
 
     for (j = 0; j < MAX_TRADE_ROUTES; j++) {
-      int partner = secfile_lookup_int_default(file, 0,
-                                               "player%d.c%d.traderoute%d",
-                                               plrno, i, j);
-      if (partner != 0) {
-        struct trade_route *proute = fc_malloc(sizeof(struct trade_route));
-
-        proute->partner = partner;
-        proute->dir = RDIR_BIDIRECTIONAL;
-        proute->goods = goods_by_number(0); /* First good */
-
-        trade_route_list_append(pcity->routes, proute);
-      }
+      pcity->trade[j] = secfile_lookup_int_default(file, 0,
+                                                   "player%d.c%d.traderoute%d",
+                                                   plrno, i, j);
     }
 
     fc_assert_exit_msg(secfile_lookup_int(file, &pcity->food_stock,
@@ -2404,8 +2630,32 @@ static void player_load_cities(struct player *plr, int plrno,
     name = secfile_lookup_str(file, "player%d.c%d.currently_building_name",
                               plrno, i);
     if (!name) {
-      log_fatal("Player %d, city %d: No production name", plrno, i);
-      exit(EXIT_FAILURE);
+      /* before 1.15.0 production was saved by id. */
+      int id = secfile_lookup_int_default(file, -1,
+                                          "player%d.c%d.currently_building",
+                                          plrno, i);
+      switch (pcity->production.kind) {
+      case VUT_UTYPE:
+        name = old_unit_type_name(id);
+        if (!name) {
+          log_fatal("player%d.c%d.currently_building: unknown unit (%d)",
+                    plrno, i, id);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case VUT_IMPROVEMENT:
+        name = old_impr_type_name(id);
+        if (!name) {
+          log_fatal("player%d.c%d.currently_building: "
+                    "unknown improvement (%d)", plrno, i, id);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      default:
+        log_fatal("player%d.c%d.currently_building: version mismatch.",
+                  plrno, i);
+        exit(EXIT_FAILURE);
+      };
     }
     pcity->production = universal_by_rule_name(kind, name);
     if (pcity->production.kind == universals_n_invalid()) {
@@ -2427,9 +2677,32 @@ static void player_load_cities(struct player *plr, int plrno,
     name = secfile_lookup_str(file, "player%d.c%d.changed_from_name",
                               plrno, i);
     if (!name) {
-      log_fatal("Player %d, city %d: No old production name",
-                plrno, i);
-      exit(EXIT_FAILURE);
+      /* before 1.15.0 production was saved by id. */
+      int id = secfile_lookup_int_default(file, -1,
+                                          "player%d.c%d.changed_from_id",
+                                          plrno, i);
+      switch (pcity->production.kind) {
+      case VUT_UTYPE:
+        name = old_unit_type_name(id);
+        if (!name) {
+          log_fatal("player%d.c%d.changed_from_id: unknown unit (%d)",
+                    plrno, i, id);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case VUT_IMPROVEMENT:
+        name = old_impr_type_name(id);
+        if (!name) {
+          log_fatal("player%d.c%d.changed_from_id: unknown improvement (%d)",
+                    plrno, i, id);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      default:
+        log_fatal("player%d.c%d.changed_from_id: version mismatch.",
+                  plrno, i);
+        exit(EXIT_FAILURE);
+      };
     }
     pcity->changed_from = universal_by_rule_name(kind, name);
     if (pcity->changed_from.kind == universals_n_invalid()) {
@@ -2451,8 +2724,6 @@ static void player_load_cities(struct player *plr, int plrno,
       secfile_lookup_int_default(file, 0,
 				 "player%d.c%d.last_turns_shield_surplus",
 				 plrno, i);
-
-    pcity->style = city_style(pcity);
 
     pcity->server.synced = FALSE; /* must re-sync with clients */
 
@@ -2581,9 +2852,22 @@ static void player_load_cities(struct player *plr, int plrno,
     p = secfile_lookup_str(file, "player%d.c%d.improvements_new",
                            plrno, i);
     if (!p) {
-      log_fatal("Player %d, city %d: No buildings information",
-                plrno, i);
-      exit(EXIT_FAILURE);
+      /* old savegames */
+      p = secfile_lookup_str(file, "player%d.c%d.improvements", plrno, i);
+      for (k = 0; p[k]; k++) {
+        const char *name = old_impr_type_name(k);
+        if (!name) {
+          log_fatal("player%d.c%d.improvements: unknown building (%d)",
+                    plrno, i, k);
+          exit(EXIT_FAILURE);
+        }
+        if (p[k] == '1') {
+          struct impr_type *pimprove = improvement_by_rule_name(name);
+          if (pimprove) {
+            city_add_improvement(pcity, pimprove);
+          }
+        }
+      }
     } else {
       for (k = 0; k < improvement_order_size && p[k]; k++) {
         if (p[k] == '1') {
@@ -2617,7 +2901,7 @@ static void player_load_cities(struct player *plr, int plrno,
     CALL_FUNC_EACH_AI(city_load, file, pcity, citystr);
 
     /* After everything is loaded, but before vision. */
-    map_claim_ownership(pcenter, plr, pcenter, TRUE);
+    map_claim_ownership(pcenter, plr, pcenter);
 
     /* adding the city contribution to fog-of-war */
     pcity->server.vision = vision_new(plr, pcenter);
@@ -2631,8 +2915,6 @@ static void player_load_cities(struct player *plr, int plrno,
     city_refresh(pcity);
 
     city_list_append(plr->cities, pcity);
-
-    CALL_PLR_AI_FUNC(city_got, plr, plr, pcity);
   }
 }
 
@@ -2756,23 +3038,31 @@ static void player_load_vision(struct player *plr, int plrno,
 	sprintf (buf, "player%d.map_spe%02d_%%03d", plrno, j);
 	LOAD_MAP_DATA(ch, nat_y, ptile,
 	    secfile_lookup_str(file, buf, nat_y),
-	    set_savegame_special(&map_get_player_tile(ptile, plr)->extras,
+	    set_savegame_special(&map_get_player_tile(ptile, plr)->special,
+                                 &map_get_player_tile(ptile, plr)->bases,
+                                 &map_get_player_tile(ptile, plr)->roads,
 				 ch, special_order + 4 * j));
       } special_halfbyte_iterate_end;
     } else {
       /* get 4-bit segments of 12-bit "special" field. */
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	  secfile_lookup_str(file, "player%d.map_l%03d", plrno, nat_y),
-	  set_savegame_special(&map_get_player_tile(ptile, plr)->extras,
+	  set_savegame_special(&map_get_player_tile(ptile, plr)->special,
+                               &map_get_player_tile(ptile, plr)->bases,
+                               &map_get_player_tile(ptile, plr)->roads,
 			       ch, default_specials + 0));
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	  secfile_lookup_str(file, "player%d.map_u%03d", plrno, nat_y),
-	  set_savegame_special(&map_get_player_tile(ptile, plr)->extras,
+	  set_savegame_special(&map_get_player_tile(ptile, plr)->special,
+                               &map_get_player_tile(ptile, plr)->bases,
+                               &map_get_player_tile(ptile, plr)->roads,
 			       ch, default_specials + 4));
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	  secfile_lookup_str_default (file, NULL, "player%d.map_n%03d",
 				      plrno, nat_y),
-	  set_savegame_special(&map_get_player_tile(ptile, plr)->extras,
+	  set_savegame_special(&map_get_player_tile(ptile, plr)->special,
+                               &map_get_player_tile(ptile, plr)->bases,
+                               &map_get_player_tile(ptile, plr)->roads,
 			       ch, default_specials + 8));
       LOAD_MAP_DATA(ch, nat_y, ptile,
 	secfile_lookup_str(file, "map.l%03d", nat_y),
@@ -2802,7 +3092,7 @@ static void player_load_vision(struct player *plr, int plrno,
 
         LOAD_MAP_DATA(ch, nat_y, ptile,
                       secfile_lookup_str_default(file, zeroline, buf, nat_y),
-                      set_savegame_bases(&map_get_player_tile(ptile, plr)->extras,
+                      set_savegame_bases(&map_get_player_tile(ptile, plr)->bases,
                                          ch, base_order + 4 * j));
       } bases_halfbyte_iterate_end;
     } else {
@@ -2907,8 +3197,6 @@ static void player_load_vision(struct player *plr, int plrno,
                                       "player%d.dc%d.happy", plrno, i);
       pdcity->unhappy = secfile_lookup_bool_default(file, FALSE,
                                       "player%d.dc%d.unhappy", plrno, i);
-
-      pdcity->style = 0;
 
       /* Old savegames never have real city image information, so set
        * it to special value "server doesn't know" */
@@ -3061,12 +3349,6 @@ static void game_load_internal(struct section_file *file)
     }
     game.scenario.players
       = secfile_lookup_bool_default(file, TRUE, "scenario.save_players");
-
-    /* Old scenarios couldn't prevent cities */
-    game.scenario.prevent_new_cities = FALSE;
-
-    /* Assume any scenario from pre-editor time handmade with special settings. */
-    game.scenario.handmade = TRUE;
   } else {
     game.scenario.is_scenario = FALSE;
   }
@@ -3137,7 +3419,7 @@ static void game_load_internal(struct section_file *file)
   }
 
   /* load rulesets */
-  if (!load_rulesets(NULL, FALSE, TRUE, FALSE)) {
+  if (!load_rulesets(NULL, TRUE)) {
     /* Failed to load correct ruleset */
     exit(EXIT_FAILURE);
   }
@@ -3148,10 +3430,10 @@ static void game_load_internal(struct section_file *file)
   /* [game] */
   game_version = secfile_lookup_int_default(file, 0, "game.version");
 
-  /* we require at least version 2.0.0 */
-  if (20000 > game_version) {
+  /* we require at least version 1.9.0 */
+  if (10900 > game_version) {
     /* TRANS: Fatal error message. */
-    log_fatal(_("Saved game is too old, at least version 2.0.0 required."));
+    log_fatal(_("Saved game is too old, at least version 1.9.0 required."));
     exit(EXIT_FAILURE);
   }
 
@@ -3264,9 +3546,6 @@ static void game_load_internal(struct section_file *file)
   }
 
   {
-    bool spacerace;
-    int level;
-
     set_meta_patches_string(secfile_lookup_str_default(file, 
                                                 default_meta_patches_string(),
                                                 "game.metapatches"));
@@ -3301,14 +3580,13 @@ static void game_load_internal(struct section_file *file)
     fc_assert_exit_msg(secfile_lookup_int(file, &game.info.tech,
                                           "game.tech"),
                        "%s", secfile_error());
-    fc_assert_exit_msg(secfile_lookup_int(file, &level,
+    fc_assert_exit_msg(secfile_lookup_int(file, &game.info.skill_level,
                                           "game.skill_level"),
                        "%s", secfile_error());
-    game.info.skill_level = ai_level_convert(level);
     fc_assert_exit_msg(secfile_lookup_int(file, &game.info.timeout,
                                           "game.timeout"),
                        "%s", secfile_error());
-    if (!ai_level_is_valid(game.info.skill_level)) {
+    if (0 == game.info.skill_level) {
       game.info.skill_level = GAME_OLD_DEFAULT_SKILL_LEVEL;
     }
 
@@ -3442,9 +3720,8 @@ static void game_load_internal(struct section_file *file)
     }
     game.info.rapturedelay =
       secfile_lookup_int_default(file, GAME_DEFAULT_RAPTUREDELAY, "game.rapturedelay");
-    game.server.diplbulbcost =
-      secfile_lookup_int_default(file, GAME_DEFAULT_DIPLBULBCOST, "game.diplcost");
-    game.server.diplgoldcost = game.server.diplbulbcost; /* They used to be one value */
+    game.server.diplcost =
+      secfile_lookup_int_default(file, GAME_DEFAULT_DIPLCOST, "game.diplcost");
     game.server.freecost =
       secfile_lookup_int_default(file, GAME_DEFAULT_FREECOST, "game.freecost");
     game.server.conquercost =
@@ -3475,11 +3752,8 @@ static void game_load_internal(struct section_file *file)
     if (BORDERS_EXPAND < game.info.borders) {
       game.info.borders = BORDERS_ENABLED;
     }
-    if (secfile_lookup_bool_default(file, FALSE, "game.happyborders")) {
-      game.info.happyborders = HB_NATIONAL;
-    } else {
-      game.info.happyborders = HB_DISABLED;
-    }
+    game.info.happyborders = secfile_lookup_bool_default(file, FALSE, 
+						    "game.happyborders");
 
     /* Diplomacy. */
     game.info.diplomacy = secfile_lookup_int_default(file, GAME_DEFAULT_DIPLOMACY, 
@@ -3585,14 +3859,6 @@ static void game_load_internal(struct section_file *file)
     game.server.revolution_length =
       secfile_lookup_int_default(file, game.server.revolution_length,
                                  "game.revolen");
-    if (game.server.revolution_length == 0) {
-      /* Value 0 meant RANDOM 1-5 */
-      game.server.revolution_length = 5;
-      game.info.revolentype = REVOLEN_RANDOM;
-    } else {
-      game.info.revolentype = REVOLEN_FIXED;
-    }
-
     game.server.occupychance =
       secfile_lookup_int_default(file, game.server.occupychance,
                                  "game.occupychance");
@@ -3641,14 +3907,8 @@ static void game_load_internal(struct section_file *file)
 	       secfile_lookup_str_default(file, GAME_DEFAULT_ALLOW_TAKE,
 					  "game.allow_take"));
 
-    spacerace = secfile_lookup_bool_default(file, victory_enabled(VC_SPACERACE),
-                                            "game.spacerace");
-    if (spacerace) {
-      game.info.victory_conditions |= (1 << VC_SPACERACE);
-    } else {
-      game.info.victory_conditions &= ~(1 << VC_SPACERACE);
-    }
-
+    game.info.spacerace = secfile_lookup_bool_default(file, game.info.spacerace,
+						"game.spacerace");
     game.server.endspaceship =
       secfile_lookup_bool_default(file, game.server.endspaceship,
                                   "game.endspaceship");
@@ -3851,8 +4111,6 @@ static void game_load_internal(struct section_file *file)
                                sizeof(server.game_identifier));
   }
 
-  settings_consider_all_changed();
-
   map_load(file, tmp_server_state, savefile_options,
            special_order, num_special_types,
            base_order, num_base_types);
@@ -3865,8 +4123,23 @@ static void game_load_internal(struct section_file *file)
     /* destroyed wonders: */
     string = secfile_lookup_str(file, "game.destroyed_wonders_new");
     if (!string) {
-      log_fatal("No destroyed wonders information");
-      exit(EXIT_FAILURE);
+      /* old savegames */
+      string = secfile_lookup_str_default(file, "",
+                                          "game.destroyed_wonders");
+      for (k = 0; string[k]; k++) {
+        const char *name = old_impr_type_name(k);
+        if (!name) {
+          log_fatal("game.destroyed_wonders: unknown building (%d)", k);
+          exit(EXIT_FAILURE);
+        }
+        if (string[k] == '1') {
+          struct impr_type *pimprove = improvement_by_rule_name(name);
+          if (pimprove) {
+            game.info.great_wonder_owners[improvement_index(pimprove)] =
+                WONDER_DESTROYED;
+          }
+        }
+      }
     } else {
       for (k = 0; k < improvement_order_size && string[k]; k++) {
         if (string[k] == '1') {
@@ -3959,7 +4232,7 @@ static void game_load_internal(struct section_file *file)
         CALL_PLR_AI_FUNC(gained_control, pplayer, pplayer);
         log_normal(_("%s has been added as %s level AI-controlled player "
                      "(%s)."), player_name(pplayer),
-                   ai_level_translated_name(pplayer->ai_common.skill_level),
+                   ai_level_name(pplayer->ai_common.skill_level),
                    ai_name(pplayer->ai));
       } else {
         log_normal(_("%s has been added as human player."),
@@ -3995,32 +4268,34 @@ static void game_load_internal(struct section_file *file)
 
     /* In case of tech_leakage, we can update research only after all
      * the players have been loaded */
-    researches_iterate(presearch) {
+    players_iterate(pplayer) {
+      struct player_research *presearch = player_research_get(pplayer);
+
       /* Mark the reachable techs */
-      research_update(presearch);
+      player_research_update(pplayer);
 
       /* Check researching technology and goal. */
       if (presearch->researching != A_UNSET
           && !is_future_tech(presearch->researching)
           && (valid_advance_by_number(presearch->researching) == NULL
-              || (research_invention_state(presearch, presearch->researching)
+              || (player_invention_state(pplayer, presearch->researching)
                   != TECH_PREREQS_KNOWN))) {
         log_error(_("%s had invalid researching technology."),
-                  research_name_translation(presearch));
+                  player_name(pplayer));
         presearch->researching = A_UNSET;
       }
       if (presearch->tech_goal != A_UNSET
           && !is_future_tech(presearch->tech_goal)
           && (valid_advance_by_number(presearch->researching) == NULL
-              || !research_invention_reachable(presearch,
-                                               presearch->tech_goal)
-              || (research_invention_state(presearch, presearch->tech_goal)
+              || !player_invention_reachable(pplayer, presearch->tech_goal,
+                                             TRUE)
+              || (player_invention_state(pplayer, presearch->tech_goal)
                   == TECH_KNOWN))) {
         log_error(_("%s had invalid technology goal."),
-                  research_name_translation(presearch));
+                  player_name(pplayer));
         presearch->tech_goal = A_UNSET;
       }
-    } researches_iterate_end;
+    } players_iterate_end;
 
     /* The savegame may contain valid nations that are not included in
      * the current default nationset for the ruleset, since it predates
@@ -4037,8 +4312,6 @@ static void game_load_internal(struct section_file *file)
         log_error(_("%s had invalid nation; changing to %s."),
                   player_name(pplayer), nation_plural_for_player(pplayer));
       }
-
-      ai_traits_init(pplayer);
     } players_iterate_end;
 
     /* Sanity check alliances, prevent allied-with-ally-of-enemy */

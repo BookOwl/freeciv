@@ -30,7 +30,6 @@
 
 /* common */
 #include "ai.h"
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "improvement.h"
@@ -40,6 +39,7 @@
 /* server */
 #include "citytools.h"
 #include "connecthand.h"
+#include "ggzserver.h"
 #include "maphand.h"
 #include "notify.h"
 #include "plrhand.h"
@@ -80,45 +80,45 @@ struct team_placement_state {
 #include "specpq.h"
 
 /****************************************************************************
-  Get role_id for given role character
-****************************************************************************/
-enum unit_role_id crole_to_role_id(char crole)
-{
-  switch(crole) {
-  case 'c':
-    return L_CITIES;
-  case 'w':
-    return L_SETTLERS;
-  case 'x':
-    return L_EXPLORER;
-  case 'k':
-    return L_GAMELOSS;
-  case 's':
-    return L_DIPLOMAT;
-  case 'f':
-    return L_FERRYBOAT;
-  case 'd':
-    return L_DEFEND_OK;
-  case 'D':
-    return L_DEFEND_GOOD;
-  case 'a':
-    return L_ATTACK_FAST;
-  case 'A':
-    return L_ATTACK_STRONG;
-  default: 
-    return 0;
-  }
-}
-
-/****************************************************************************
   Get unit_type for given role character
 ****************************************************************************/
 struct unit_type *crole_to_unit_type(char crole,struct player *pplayer)
 {
   struct unit_type *utype = NULL;
-  enum unit_role_id role = crole_to_role_id(crole);
+  enum unit_role_id role;
 
-  if (role == 0) {
+  switch(crole) {
+  case 'c':
+    role = L_CITIES;
+    break;
+  case 'w':
+    role = L_SETTLERS;
+    break;
+  case 'x':
+    role = L_EXPLORER;
+    break;
+  case 'k':
+    role = L_GAMELOSS;
+    break;
+  case 's':
+    role = L_DIPLOMAT;
+    break;
+  case 'f':
+    role = L_FERRYBOAT;
+    break;
+  case 'd':
+    role = L_DEFEND_OK;
+    break;
+  case 'D':
+    role = L_DEFEND_GOOD;
+    break;
+  case 'a':
+    role = L_ATTACK_FAST;
+    break;
+  case 'A':
+    role = L_ATTACK_STRONG;
+    break;
+  default: 
     fc_assert_ret_val(FALSE, NULL);
     return NULL;
   }
@@ -146,7 +146,6 @@ static struct tile *place_starting_unit(struct tile *starttile,
 {
   struct tile *ptile = NULL;
   struct unit_type *utype = crole_to_unit_type(crole, pplayer);
-  bool hut_present = FALSE;
 
   if (utype != NULL) {
     iterate_outward(starttile, map.xsize + map.ysize, itertile) {
@@ -169,14 +168,8 @@ static struct tile *place_starting_unit(struct tile *starttile,
    * other cases, huts are avoided as start positions).  Remove any such hut,
    * and make sure to tell the client, since we may have already sent this
    * tile (with the hut) earlier: */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      tile_remove_extra(ptile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(ptile, S_HUT)) {
+    tile_clear_special(ptile, S_HUT);
     update_tile_knowledge(ptile);
     log_verbose("Removed hut on start position for %s",
                 player_name(pplayer));
@@ -186,6 +179,19 @@ static struct tile *place_starting_unit(struct tile *starttile,
   map_show_circle(pplayer, ptile, game.server.init_vis_radius_sq);
 
   if (utype != NULL) {
+    /* We cannot currently handle sea units as start units.
+     * TODO: remove this code block when we can. */
+    if (utype_move_type(utype) == UMT_SEA) {
+      log_error("Sea moving start units are not yet supported, "
+                "%s not created.",
+                utype_rule_name(utype));
+      notify_player(pplayer, NULL, E_BAD_COMMAND, ftc_server,
+                    _("Sea moving start units are not yet supported. "
+                      "Nobody gets %s."),
+                    utype_name_translation(utype));
+      return NULL;
+    }
+
     (void) create_unit(pplayer, ptile, utype, FALSE, 0, 0);
     return ptile;
   }
@@ -825,22 +831,21 @@ void init_new_game(void)
   Tell clients the year, and also update turn_done and nturns_idle fields
   for all players.
 **************************************************************************/
-void send_year_to_clients(void)
+void send_year_to_clients(int year)
 {
   struct packet_new_year apacket;
-
+  
   players_iterate(pplayer) {
     pplayer->nturns_idle++;
   } players_iterate_end;
 
-  apacket.year = game.info.year;
-  apacket.fragments = game.info.fragment_count;
+  apacket.year = year;
   apacket.turn = game.info.turn;
   lsend_packet_new_year(game.est_connections, &apacket);
 
   /* Hmm, clients could add this themselves based on above packet? */
   notify_conn(game.est_connections, NULL, E_NEXT_YEAR, ftc_any,
-              _("Year: %s"), calendar_text());
+              _("Year: %s"), textyear(year));
 }
 
 /**************************************************************************
@@ -854,14 +859,12 @@ void send_year_to_clients(void)
 void send_game_info(struct conn_list *dest)
 {
   struct packet_game_info ginfo;
-  struct packet_timeout_info tinfo;
 
   if (!dest) {
     dest = game.est_connections;
   }
 
   ginfo = game.info;
-  tinfo = game.tinfo;
 
   /* the following values are computed every
      time a packet_game_info packet is created */
@@ -871,20 +874,17 @@ void send_game_info(struct conn_list *dest)
   if (current_turn_timeout() > 0 && game.server.phase_timer) {
     /* Whenever the client sees this packet, it starts a new timer at 0;
      * but the server's timer is only ever reset at the start of a phase
-     * (and game.tinfo.seconds_to_phasedone is relative to this).
+     * (and game.info.seconds_to_phasedone is relative to this).
      * Account for the difference. */
-    tinfo.seconds_to_phasedone = game.tinfo.seconds_to_phasedone
+    ginfo.seconds_to_phasedone = game.info.seconds_to_phasedone
         - timer_read_seconds(game.server.phase_timer);
   } else {
     /* unused but at least initialized */
-    tinfo.seconds_to_phasedone = -1.0;
+    ginfo.seconds_to_phasedone = -1.0;
   }
 
   conn_list_iterate(dest, pconn) {
-    /* These are separate packets as first one may not get sent at all
-     * if there's no changes in it */
     send_packet_game_info(pconn, &ginfo);
-    send_packet_timeout_info(pconn, &tinfo);
   }
   conn_list_iterate_end;
 }
@@ -974,8 +974,8 @@ void increase_timeout_because_unit_moved(void)
     double maxsec = (timer_read_seconds(game.server.phase_timer)
 		     + (double) game.server.timeoutaddenemymove);
 
-    if (maxsec > game.tinfo.seconds_to_phasedone) {
-      game.tinfo.seconds_to_phasedone = maxsec;
+    if (maxsec > game.info.seconds_to_phasedone) {
+      game.info.seconds_to_phasedone = maxsec;
       send_game_info(NULL);
     }	
   }
@@ -1062,17 +1062,19 @@ void handle_single_want_hack_req(struct connection *pc,
   const char *token = NULL;
   bool you_have_hack = FALSE;
 
-  if ((secfile = secfile_load(get_challenge_fullname(pc), FALSE))) {
-    token = secfile_lookup_str(secfile, "challenge.token");
-    you_have_hack = (token && strcmp(token, packet->token) == 0);
-    secfile_destroy(secfile);
-  } else {
-    log_debug("Error reading '%s':\n%s", get_challenge_fullname(pc),
-              secfile_error());
-  }
+  if (!with_ggz) {
+    if ((secfile = secfile_load(get_challenge_fullname(pc), FALSE))) {
+      token = secfile_lookup_str(secfile, "challenge.token");
+      you_have_hack = (token && strcmp(token, packet->token) == 0);
+      secfile_destroy(secfile);
+    } else {
+      log_debug("Error reading '%s':\n%s", get_challenge_fullname(pc),
+                secfile_error());
+    }
 
-  if (!token) {
-    log_debug("Failed to read authentication token");
+    if (!token) {
+      log_debug("Failed to read authentication token");
+    }
   }
 
   if (you_have_hack) {

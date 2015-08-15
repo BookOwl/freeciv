@@ -17,7 +17,6 @@
 
 /* common */
 #include "idex.h"
-#include "map.h"
 #include "movement.h"
 
 /* common/scriptcore */

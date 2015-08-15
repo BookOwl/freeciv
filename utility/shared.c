@@ -15,7 +15,7 @@
 #include <fc_config.h>
 #endif
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 /* Under Mac OS X sys/types.h must be included before dirent.h */
 #include <sys/types.h>
 #endif
@@ -248,7 +248,7 @@ bool is_option(const char *option_name,char *option)
   Like strcspn but also handles quotes, i.e. *reject chars are
   ignored if they are inside single or double quotes.
 ***************************************************************/
-static size_t fc_strcspn(const char *s, const char *reject)
+static size_t my_strcspn(const char *s, const char *reject)
 {
   bool in_single_quotes = FALSE, in_double_quotes = FALSE;
   size_t i, len = strlen(s);
@@ -293,19 +293,27 @@ static size_t fc_strcspn(const char *s, const char *reject)
  **tokens using free_tokens().
 ***************************************************************/
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
-               const char *delimiterset)
+	       const char *delimiterset)
 {
-  int token;
+  int token = 0;
 
   fc_assert_ret_val(NULL != str, -1);
 
-  for (token = 0; token <= num_tokens && *str != '\0'; token++) {
+  for(;;) {
     size_t len, padlength = 0;
 
     /* skip leading delimiters */
     str += strspn(str, delimiterset);
 
-    len = fc_strcspn(str, delimiterset);
+    if (*str == '\0') {
+      break;
+    }
+
+    len = my_strcspn(str, delimiterset);
+
+    if (token >= num_tokens) {
+      break;
+    }
 
     /* strip start/end quotes if they exist */
     if (len >= 2) {
@@ -319,6 +327,8 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
 
     tokens[token] = fc_malloc(len + 1);
     (void) fc_strlcpy(tokens[token], str, len + 1);     /* adds the '\0' */
+
+    token++;
 
     str += len + padlength;
   }

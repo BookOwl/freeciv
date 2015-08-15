@@ -11,8 +11,7 @@
 
 [datafile]
 description="Experimental technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -44,24 +43,14 @@ format_version=10
 ;     means, inherited by all techs that require this tech in turn unless
 ;     "None" is given here explicitly; and you can make a tech available
 ;     only through the init_tech of a nation by making it root_req itself.
-; research_reqs = requirements before researching this one. Can have non
-;                 tech requirements because it is a requirement vector.
-;                 See doc/README.effects to learn more about requirement
-;                 vectors.
-;                 Requireing a tech here in stead of in req1, req2 or
-;                 root_req is not supported yet.
-;                 Requirements that may become fulfilled during the game
-;                 when they weren't at the start of the game is not
-;                 supported yet.
 ; flags         = special flag strings
 ; graphic       = icon for technology
 ; graphic_alt   = alternate icon
 ; helptext	= optional help text string (set units ruleset for examples)
 ; bonus_message = text seen when a player is the first to 
 ;                 discover an bonus tech.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
 ; Special values for req1 and req2 are "None" (first section below) 
 ; and "Never" (never available).  If only one tech is required, 
@@ -73,11 +62,12 @@ format_version=10
 ; "Bonus_Tech" = player gets extra tech if reached first
 ; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
 ;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
 ; "Build_Airborne" = from now on can build air units (for use by AI)
-; "Claim_Ocean"         = Player claims ocean tiles even if they are not
-;                         adjacent to border source
-; "Claim_Ocean_Limited" = Oceanic border sources claim ocean tiles even if
-;                         they are not adjacent to border source
+; "Claim_Ocean"    = Player claims ocean tiles even if they are not
+;                    adjacent to border source
 ;
 ; */ <-- avoid gettext warnings
 
@@ -130,9 +120,9 @@ name     = _("Automobile")
 req1     = "Combustion"
 req2     = "Steel"
 root_req = "Combustion"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.automobile"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_banking]
 name     = _("Banking")
@@ -402,9 +392,9 @@ name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
 root_req = "Railroad"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
-helptext = _("Population will start contributing to pollution.")
 
 [advance_invention]
 name     = _("Invention")
@@ -501,9 +491,9 @@ name     = _("Mass Production")
 req1     = "Automobile"
 req2     = "The Corporation"
 root_req = "Automobile"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.mass_production"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_mathematics]
 name     = _("Mathematics")
@@ -631,9 +621,9 @@ name     = _("Plastics")
 req1     = "Refining"
 req2     = "Space Flight"
 root_req = "Space Flight"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.plastics"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_polytheism]
 name     = _("Polytheism")
@@ -699,13 +689,9 @@ name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
 root_req = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Workers and Engineers to upgrade irrigation systems \
-to farmland.\
-")
 
 [advance_robotics]
 name     = _("Robotics")

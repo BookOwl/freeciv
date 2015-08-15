@@ -25,12 +25,6 @@ an alternative way to increase trade; see below.)
 The cost of inciting a city to change hands has been greatly
 increased.
 
-Units attacking with less than a full movement point get penalized because
-of their tiredness. Only the fragment of their normal attack strength
-equivalent to their movement point fragment is considered. If they have 2/3
-movement points, they will attack with 2/3 strength. If they have 1/3 movement
-points, they will attack with 1/3 strength.
-
 Wonder changes
 --------------
 
@@ -117,6 +111,12 @@ Unit changes
 - Caravans cost 30 production (was 50); Freight remain at 50.
 - Elephants, Crusaders, and Fanatics added from the civ2 ruleset.
 
+Extras changes
+--------------
+
+- Buoys cannot be built. Current freeciv does not fully support
+  bases like them when national borders are disabled.
+
 Default settings
 ----------------
 
@@ -132,7 +132,7 @@ map settings are used.
 To play a game with the multiplayer rules, start the server with:
        ./fcser -r data/multiplayer.serv
 or a single player game with
-       ./freeciv-gtk3 -r data/multiplayer.serv
+       ./freeciv-gtk2 -r data/multiplayer.serv
 (and any other command-line arguments you normally use; depending on
 how you have Freeciv installed you may have to give the installed
 data directory path instead of "data")

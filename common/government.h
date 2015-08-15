@@ -32,8 +32,8 @@ struct ruler_title;     /* Opaque type. */
 
 /* 'struct ruler_title_hash' and related functions. */
 #define SPECHASH_TAG ruler_title
-#define SPECHASH_IKEY_TYPE struct nation_type *
-#define SPECHASH_IDATA_TYPE struct ruler_title *
+#define SPECHASH_KEY_TYPE struct nation_type *
+#define SPECHASH_DATA_TYPE struct ruler_title *
 #include "spechash.h"
 #define ruler_titles_iterate(ARG_hash, NAME_rule_title)                     \
   TYPED_HASH_DATA_ITERATE(const struct ruler_title *, ARG_hash,             \
@@ -54,7 +54,6 @@ struct government {
   char graphic_alt[MAX_LEN_NAME];
   struct requirement_vector reqs;
   struct ruler_title_hash *ruler_titles;
-  int changed_to_times;
   struct strvec *helptext;
 
   /* AI cached data for this government. */

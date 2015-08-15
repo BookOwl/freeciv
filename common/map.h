@@ -26,8 +26,8 @@ extern "C" {
 
 /* common */
 #include "fc_types.h"
+
 #include "tile.h"
-#include "packets.h"
 
 /****************************************************************
 miscellaneous terrain information
@@ -105,11 +105,21 @@ struct civ_map {
       bool have_resources;
       bool ocean_resources;         /* Resources in the middle of the ocean */
       bool have_huts;
+      bool have_rivers_overlay;	/* only applies if !have_resources */
       enum team_placement team_placement;
     } server;
 
     /* Add client side when needed */
   };
+};
+
+enum topo_flag {
+  /* Bit-values. */
+  /* Changing these values will break map_init_topology. */
+  TF_WRAPX = 1,
+  TF_WRAPY = 2,
+  TF_ISO = 4,
+  TF_HEX = 8
 };
 
 /* Parameters for terrain counting functions. */
@@ -346,13 +356,14 @@ bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
-int map_move_cost(const struct player *pplayer,
-                  const struct unit_type *punittype,
+int map_move_cost(const struct player *pplayer, const struct unit_class *pclass,
                   const struct tile *src_tile,
                   const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
-bv_extras get_tile_infrastructure_set(const struct tile *ptile,
-                                      int *count);
+bv_special get_tile_infrastructure_set(const struct tile *ptile,
+					  int *count);
+bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount);
+bv_roads get_tile_pillageable_road_set(const struct tile *ptile, int *pcount);
 
 bool can_channel_land(const struct tile *ptile);
 bool can_reclaim_ocean(const struct tile *ptile);
@@ -612,15 +623,9 @@ extern const int DIR_DY[8];
 /* Size of the map in thousands of tiles. If MAP_MAX_SIZE is increased, 
  * MAX_DBV_LENGTH in bitvector.c must be checked; see the static assertion
  * below. */
-#ifdef FREECIV_WEB
-#define MAP_DEFAULT_SIZE         3
-#define MAP_MIN_SIZE             0
-#define MAP_MAX_SIZE             18
-#else  /* FREECIV_WEB */
 #define MAP_DEFAULT_SIZE         4
 #define MAP_MIN_SIZE             0
 #define MAP_MAX_SIZE             2048
-#endif /* FREECIV_WEB */
 
 FC_STATIC_ASSERT(MAP_MAX_SIZE * 1000 <= MAX_DBV_LENGTH,
                  map_too_big_for_bitvector);

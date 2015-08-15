@@ -9,9 +9,8 @@ AC_DEFUN([AM_PATH_GTK_3_0],
 [dnl 
 dnl Get the cflags and libraries from pkg-config
 dnl
-AC_ARG_ENABLE([gtktest],
-  AS_HELP_STRING([--disable-gtktest], [do not try to compile and run a test GTK+ program]),
-[], [enable_gtktest=yes])
+AC_ARG_ENABLE(gtktest, [  --disable-gtktest       do not try to compile and run a test GTK+ program],
+		    , enable_gtktest=yes)
 
   pkg_config_args=gtk+-3.0
   for module in . $4
@@ -58,8 +57,6 @@ AC_ARG_ENABLE([gtktest],
 
   if test x"$no_gtk" = x ; then
     GTK3_CFLAGS=`$PKG_CONFIG $pkg_config_args --cflags`
-    GTK3_CFLAGS="$GTK3_CFLAGS -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_3_8 -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_3_8"
-    GTK3_CFLAGS="$GTK3_CFLAGS -DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36"
     GTK3_LIBS=`$PKG_CONFIG $pkg_config_args --libs`
     gtk_config_major_version=`$PKG_CONFIG --modversion gtk+-3.0 | \
            sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`

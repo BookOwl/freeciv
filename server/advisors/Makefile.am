@@ -5,9 +5,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/server \
 	-I$(top_srcdir)/utility \
 	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/ai \
-	-I$(top_srcdir)/dependencies/tinycthread
+	-I$(top_srcdir)/common/aicore
 
 libadvisors_la_SOURCES = \
 	advbuilding.c	\
@@ -20,8 +18,6 @@ libadvisors_la_SOURCES = \
 	advgoto.h	\
 	advruleset.c	\
 	advruleset.h	\
-	advspace.c	\
-	advspace.h	\
 	advtools.c	\
 	advtools.h	\
 	autoexplorer.c	\

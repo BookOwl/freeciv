@@ -22,6 +22,10 @@
 
 #include <gtk/gtk.h>
 
+#ifdef GGZ_GTK
+#  include <ggz-gtk.h>
+#endif
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -40,6 +44,7 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
+#include "ggzclient.h"
 #include "packhand.h"
 #include "servers.h"
 #include "update_queue.h"
@@ -130,20 +135,12 @@ static void connect_network_game_callback(GtkWidget *w, gpointer data)
   set_client_page(PAGE_NETWORK);
 }
 
-/****************************************************************************
-  Callback to open settings dialog.
-****************************************************************************/
-static void open_settings(void)
-{
-  option_dialog_popup(_("Set local options"), client_optset);
-}
-
 /**************************************************************************
   cancel, by terminating the connection and going back to main page.
 **************************************************************************/
 static void main_callback(GtkWidget *w, gpointer data)
 {
-  enum client_pages page = PAGE_MAIN;
+  enum client_pages page = in_ggz ? PAGE_GGZ : PAGE_MAIN;
 
   if (client.conn.used) {
     disconnect_from_server();
@@ -203,6 +200,17 @@ static gboolean intro_expose(GtkWidget *w, GdkEventExpose *ev)
       layout);
   return TRUE;
 }
+
+#ifdef GGZ_GTK
+/****************************************************************************
+  Callback to raise the login dialog when the gaming zone login button is
+  clicked.
+****************************************************************************/
+static void ggz_login(void)
+{
+  set_client_page(PAGE_GGZ);
+}
+#endif /* GGZ_GTK */
 
 /**************************************************************************
   create the main page.
@@ -274,10 +282,12 @@ GtkWidget *create_main_page(void)
   g_signal_connect(button, "clicked",
                    G_CALLBACK(connect_network_game_callback), NULL);
 
-  button = gtk_button_new_with_mnemonic(_("Client Settings"));
+#ifdef GGZ_GTK
+  button = gtk_button_new_with_mnemonic(_("Connect to Gaming _Zone"));
   gtk_size_group_add_widget(size, button);
   gtk_table_attach_defaults(GTK_TABLE(table), button, 1, 2, 1, 2);
-  g_signal_connect(button, "clicked", open_settings, NULL);
+  g_signal_connect(button, "clicked", ggz_login, NULL);
+#endif /* GGZ_GTK */
 
   button = gtk_button_new_from_stock(GTK_STOCK_QUIT);
   gtk_size_group_add_widget(size, button);
@@ -1196,7 +1206,7 @@ GtkWidget *create_network_page(void)
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
 				 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(sw), view);
-  if (options.gui_gtk2_metaserver_tab_first) {
+  if (gui_gtk2_metaserver_tab_first) {
     gtk_notebook_prepend_page(GTK_NOTEBOOK(notebook), sw, label);
   } else {
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw, label);
@@ -1371,6 +1381,8 @@ enum connection_list_columns {
   CL_COL_FLAG,
   CL_COL_NATION,
   CL_COL_TEAM,
+  CL_COL_GGZ_RECORD,
+  CL_COL_GGZ_RATING,
   CL_COL_CONN_ID,
   CL_COL_STYLE,
   CL_COL_WEIGHT,
@@ -1392,6 +1404,8 @@ static inline GtkTreeStore *connection_list_store_new(void)
                             GDK_TYPE_PIXBUF,    /* CL_COL_FLAG */
                             G_TYPE_STRING,      /* CL_COL_NATION */
                             G_TYPE_STRING,      /* CL_COL_TEAM */
+                            G_TYPE_STRING,      /* CL_COL_GGZ_RECORD */
+                            G_TYPE_STRING,      /* CL_COL_GGZ_RATING */
                             G_TYPE_INT,         /* CL_COL_CONN_ID */
                             G_TYPE_INT,         /* CL_COL_STYLE */
                             G_TYPE_INT,         /* CL_COL_WEIGHT */
@@ -1828,9 +1842,9 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 
-    for (level = 0; level < AI_LEVEL_COUNT; level++) {
+    for (level = 0; level < AI_LEVEL_LAST; level++) {
       if (is_settable_ai_level(level)) {
-        const char *level_name = ai_level_translated_name(level);
+        const char *level_name = ai_level_name(level);
         const char *level_cmd = ai_level_cmd(level);
 
         item = gtk_menu_item_new_with_label(level_name);
@@ -2241,6 +2255,24 @@ static bool model_get_conn_iter(GtkTreeModel *model, GtkTreeIter *iter,
 ****************************************************************************/
 void real_conn_list_dialog_update(void)
 {
+  if (connection_list_view != NULL) {
+    GObject *view;
+    GtkTreeViewColumn *col;
+    bool visible;
+
+    view = G_OBJECT(connection_list_view);
+    visible = (with_ggz || in_ggz);
+
+    col = g_object_get_data(view, "record_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+    col = g_object_get_data(view, "rating_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+  }
+
   if (client_state() == C_S_PREPARING
       && get_client_page() == PAGE_START
       && connection_list_store != NULL) {
@@ -2255,7 +2287,8 @@ void real_conn_list_dialog_update(void)
     struct connection *pselected_conn;
     bool is_ready;
     const char *nation, *plr_name, *team;
-    char user_name[MAX_LEN_NAME + 8];
+    char user_name[MAX_LEN_NAME + 8], rating_text[128], record_text[128];
+    int rating, wins, losses, ties, forfeits;
     enum cmdlevel access_level;
     int conn_id;
 
@@ -2280,7 +2313,7 @@ void real_conn_list_dialog_update(void)
           && !pplayer->is_connected) {
         /* TRANS: "<Novice AI>" */
         fc_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
-                    ai_level_translated_name(pplayer->ai_common.skill_level));
+                    ai_level_name(pplayer->ai_common.skill_level));
       } else {
         sz_strlcpy(user_name, pplayer->username);
         if (access_level > ALLOW_BASIC) {
@@ -2304,6 +2337,30 @@ void real_conn_list_dialog_update(void)
 
       team = pplayer->team ? team_name_translation(pplayer->team) : "";
 
+      rating_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_controlled
+          && user_get_rating(pplayer->username, &rating)) {
+        fc_snprintf(rating_text, sizeof(rating_text), "%d", rating);
+      }
+
+      record_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_controlled
+          && user_get_record(pplayer->username,
+                             &wins, &losses, &ties, &forfeits)) {
+        if (forfeits == 0 && ties == 0) {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d",
+                      wins, losses);
+        } else if (forfeits == 0) {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
+                      wins, losses, ties);
+        } else {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
+                      wins, losses, ties, forfeits);
+        }
+      }
+
       if (model_get_player_iter(model, &parent, pprev_parent, pplayer)) {
         gtk_tree_store_move_after(store, &parent, pprev_parent);
       } else {
@@ -2318,6 +2375,8 @@ void real_conn_list_dialog_update(void)
                          CL_COL_FLAG, pixbuf,
                          CL_COL_NATION, nation,
                          CL_COL_TEAM, team,
+                         CL_COL_GGZ_RECORD, record_text,
+                         CL_COL_GGZ_RATING, rating_text,
                          CL_COL_CONN_ID, conn_id,
                          CL_COL_STYLE, PANGO_STYLE_NORMAL,
                          CL_COL_WEIGHT, PANGO_WEIGHT_BOLD,
@@ -2499,10 +2558,10 @@ GtkWidget *create_start_page(void)
   GtkWidget *rs_entry;
   GtkTreeSelection *selection;
   enum ai_level level;
-  /* There's less than AI_LEVEL_COUNT entries as not all levels have
+  /* There's less than AI_LEVEL_LAST entries as not all levels have
      entries (that's the whole point of this array: index != value),
      but this is set safely to the max */
-  static enum ai_level levels[AI_LEVEL_COUNT];
+  static enum ai_level levels[AI_LEVEL_LAST];
   int i = 0;
 
   box = gtk_vbox_new(FALSE, 8);
@@ -2553,9 +2612,9 @@ GtkWidget *create_start_page(void)
 
   ai_lvl_combobox = gtk_combo_box_new_text();
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_translated_name(level);
+      const char *level_name = ai_level_name(level);
 
       gtk_combo_box_insert_text(GTK_COMBO_BOX(ai_lvl_combobox), i, level_name);
       levels[i] = level;
@@ -2623,6 +2682,10 @@ GtkWidget *create_start_page(void)
 
   add_tree_col(view, G_TYPE_STRING, _("Name"),
                CL_COL_USER_NAME, NULL);
+  add_tree_col(view, G_TYPE_STRING, _("Record"),
+               CL_COL_GGZ_RECORD, "record_col");
+  add_tree_col(view, G_TYPE_STRING, _("Rating"),
+               CL_COL_GGZ_RATING, "rating_col");
   add_tree_col(view, G_TYPE_BOOLEAN, _("Ready"),
                CL_COL_READY_STATE, NULL);
   add_tree_col(view, G_TYPE_STRING, Q_("?player:Leader"),
@@ -3089,6 +3152,8 @@ void real_set_client_page(enum client_pages new_page)
 
   switch (new_page) {
   case PAGE_MAIN:
+  case PAGE_GGZ:
+    break;
   case PAGE_START:
     if (is_server_running()) {
       if (game.info.is_new_game) {
@@ -3143,6 +3208,8 @@ void real_set_client_page(enum client_pages new_page)
   case PAGE_START:
     chatline_scroll_to_bottom(FALSE);
     inputline_grab_focus();
+    break;
+  case PAGE_GGZ:
     break;
   case PAGE_LOAD:
     gtk_tree_view_focus(gtk_tree_selection_get_tree_view(load_selection));
@@ -3279,7 +3346,7 @@ void mapimg_client_save(const char *filename)
   "default", and if the user changes this then set_ruleset() should be
   called.
 ****************************************************************************/
-void set_rulesets(int num_rulesets, char **rulesets)
+void gui_set_rulesets(int num_rulesets, char **rulesets)
 {
   int i;
   int def_idx = -1;

@@ -25,8 +25,7 @@
 
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -1135,8 +1134,8 @@ void handle_authentication_req(enum authentication_type type,
 
 /**************************************************************************
   Provide an interface for connecting to a Freeciv server.
-  sdl-client does it as popup main start menu which != connecting dlg.
+  SDLClient use it as popup main start menu which != connecting dlg.
 **************************************************************************/
-void server_connect(void)
+void gui_server_connect(void)
 {
 }

@@ -121,13 +121,13 @@ class fc_client : public QMainWindow
 {
   Q_OBJECT
   QWidget *main_wdg;
-  QWidget *pages[ (int) PAGE_GAME + 1];
+  QWidget *pages[ (int) PAGE_GGZ + 1];
   QWidget *connect_lan;
   QWidget *connect_metaserver;
   QWidget *game_main_widget;
 
   QGridLayout *central_layout;
-  QGridLayout *pages_layout[PAGE_GAME + 1];
+  QGridLayout *pages_layout[PAGE_GGZ + 1];
 
   QTextEdit *output_window;
   QTextEdit *scenarios_view;
@@ -166,6 +166,8 @@ class fc_client : public QMainWindow
   QLabel *status_bar_label;
   info_tile *info_tile_wdg;
   choice_dialog *opened_dialog;
+  int current_unit_id;
+  int current_unit_target_id;
 
 public:
   fc_client();
@@ -189,6 +191,8 @@ public:
   void update_unit_sel();
   void popup_tile_info(struct tile *ptile);
   void popdown_tile_info();
+  void set_current_unit(int curr, int target);
+  void get_current_unit(int *curr, int *target);
   void set_diplo_dialog(choice_dialog *widget);
   void update_completer();
   choice_dialog *get_diplo_dialog();

@@ -17,6 +17,8 @@
 
 #define MAX_HELP_TEXT_SIZE 8192 // Taken from Gtk 3 client
 
+#include "fc_config.h"
+
 // common
 #include "nation.h"
 #include "terrain.h"
@@ -39,7 +41,6 @@
 // gui-qt
 #include "qtg_cxxside.h"
 #include "helpdlg.h"
-#include "sprite.h"
 
 // Qt
 #include <QApplication>
@@ -52,13 +53,13 @@
 #include <QSplitter>
 #include <QStack>
 #include <QStringList>
+#include <QTextBrowser>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
 static help_dialog *help_dlg = NULL;
 canvas *terrain_canvas(struct terrain *terrain,
-                       const struct resource *resource,
-                       enum extra_cause cause);
+                       const struct resource *resource);
 /**************************************************************************
   Popup the help dialog to get help on the given string topic.  Note
   that the topic may appear in multiple sections of the help (it may
@@ -116,7 +117,7 @@ void update_help_fonts()
 }
 
 /**************************************************************************
-  Constructor for help dialog
+  Help dialog constructor
 **************************************************************************/
 help_dialog::help_dialog(QWidget *parent) :
   QDialog(parent)
@@ -144,8 +145,7 @@ help_dialog::help_dialog(QWidget *parent) :
   connect(
     tree_wdg,
     SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)),
-    this, SLOT(item_changed(QTreeWidgetItem *))
-  );
+    this, SLOT(item_changed(QTreeWidgetItem *)));
   help_wdg->layout()->setContentsMargins(0, 0, 0, 0);
   splitter->addWidget(help_wdg);
 
@@ -163,6 +163,14 @@ help_dialog::help_dialog(QWidget *parent) :
   if (first) {
     tree_wdg->setCurrentItem(first);
   }
+}
+
+/**************************************************************************
+  Update fonts for help_wdg
+**************************************************************************/
+void help_dialog::update_fonts()
+{
+  help_wdg->update_fonts();
 }
 
 /**************************************************************************
@@ -218,14 +226,6 @@ void help_dialog::set_topic(const help_item *topic)
 void help_dialog::item_changed(QTreeWidgetItem *item)
 {
   help_wdg->set_topic(topics_map[item]);
-}
-
-/**************************************************************************
-  Update fonts for help_wdg
-**************************************************************************/
-void help_dialog::update_fonts()
-{
-  help_wdg->update_fonts();
 }
 
 /**************************************************************************
@@ -510,13 +510,15 @@ void help_widget::set_topic(const help_item *topic)
 
   switch (topic->type) {
     case HELP_ANY:
-    case HELP_MULTIPLIER:
+    case HELP_BASE:
+      set_topic_base(topic, title);
+      break;
+    case HELP_ROAD:
+      set_topic_road(topic, title);
+      break;
     case HELP_RULESET:
     case HELP_TEXT:
       set_topic_other(topic, title);
-      break;
-    case HELP_EXTRA:
-      set_topic_extra(topic, title);
       break;
     case HELP_GOVERNMENT:
       set_topic_government(topic, title);
@@ -553,6 +555,24 @@ void help_widget::set_topic(const help_item *topic)
 ****************************************************************************/
 void help_widget::set_bottom_panel(QWidget *widget) {
   bottom_panel = widget;
+}
+
+/**************************************************************************
+  Sets the main content widget.
+**************************************************************************/
+void help_widget::set_main_widget(QWidget *widget)
+{
+  QLayoutItem *item;
+
+  if (main_widget != widget) {
+    item = layout()->replaceWidget(main_widget, widget);
+    delete item;
+    if (main_widget != text_browser) {
+      main_widget->deleteLater();
+    }
+    main_widget = widget;
+    main_widget->setParent(this);
+  }
 }
 
 /**************************************************************************
@@ -597,7 +617,7 @@ void help_widget::set_topic_unit(const help_item *topic,
                tileset_full_tile_height(tileset)
              );
     canvas->map_pixmap.fill(Qt::transparent);
-    put_unittype(utype, canvas, 1.0f, 0, 0);
+    put_unittype(utype, canvas, 0, 0);
     add_info_canvas(canvas);
     qtg_canvas_free(canvas);
 
@@ -709,13 +729,11 @@ void help_widget::set_topic_tech(const help_item *topic,
   Creates a terrain image on the given canvas.
 ****************************************************************************/
 canvas *terrain_canvas(struct terrain *terrain,
-                       const struct resource *resource = NULL,
-                       enum extra_cause cause = EC_COUNT)
+                       const struct resource *resource = NULL)
 {
   struct canvas *canvas;
   struct drawn_sprite sprs[80];
   int canvas_y, count, i, width, height;
-  struct extra_type *pextra;
   struct sprite *sprite;
 
   width = tileset_full_tile_width(tileset);
@@ -727,18 +745,7 @@ canvas *terrain_canvas(struct terrain *terrain,
   for (i = 0; i < 3; ++i) {
     count = fill_basic_terrain_layer_sprite_array(tileset, sprs,
                                                   i, terrain);
-    put_drawn_sprites(canvas, 1.0f, 0, canvas_y, count, sprs, false);
-  }
-
-  pextra = NULL;
-  if (cause != EC_COUNT) {
-    extra_type_by_cause_iterate(cause, e) {
-      pextra = e;
-      break;
-    } extra_type_by_cause_iterate_end;
-
-    count = fill_basic_extra_sprite_array(tileset, sprs, pextra);
-    put_drawn_sprites(canvas, 1.0f, 0, canvas_y, count, sprs, false);
+    put_drawn_sprites(canvas, 0, canvas_y, count, sprs, false);
   }
 
   if (resource != NULL) {
@@ -805,11 +812,6 @@ void help_widget::set_topic_terrain(const help_item *topic,
 
   pterrain = terrain_by_translated_name(title);
   if (pterrain) {
-    struct universal for_terr;
-
-    for_terr.kind = VUT_TERRAIN;
-    for_terr.value.terrain = pterrain;
-
     helptext_terrain(buffer, sizeof(buffer), client.conn.playing,
                      topic->text, pterrain);
     text_browser->setText(buffer);
@@ -842,70 +844,60 @@ void help_widget::set_topic_terrain(const help_item *topic,
     add_info_separator();
 
     if (pterrain->irrigation_result == pterrain) {
-      if (effect_cumulative_max(EFT_IRRIG_POSSIBLE, &for_terr) > 0) {
-        add_info_label(
-          // TRANS: When irrigated, terrain gets a bonus of %1 food;
-          //        irrigating takes %2 turns
-          QString(PL_(
-            "Irrigation: +%1 food in %2 turn",
-            "Irrigation: +%1 food in %2 turns",
-            pterrain->irrigation_time))
-          .arg(pterrain->irrigation_food_incr)
-          .arg(pterrain->irrigation_time));
-      }
+      add_info_label(
+        // TRANS: When irrigated, terrain gets a bonus of %1 food;
+        //        irrigating takes %2 turns
+        QString(PL_(
+          "Irrigation: +%1 food in %2 turn",
+          "Irrigation: +%1 food in %2 turns",
+          pterrain->irrigation_time))
+        .arg(pterrain->irrigation_food_incr)
+        .arg(pterrain->irrigation_time));
     } else if (pterrain->irrigation_result) {
-      if (effect_cumulative_max(EFT_IRRIG_TF_POSSIBLE, &for_terr) > 0) {
-        add_info_label(
-          // TRANS: When irrigated, terrain gets changed to other terrain %1
-          //        in %2 turns
-          QString(PL_(
-            "Irrigation: %1 in %2 turn",
-            "Irrigation: %1 in %2 turns",
-            pterrain->irrigation_time))
-          .arg(terrain_name_translation(pterrain->irrigation_result))
-          .arg(pterrain->irrigation_time));
-      }
+      add_info_label(
+        // TRANS: When irrigated, terrain gets changed to other terrain %1
+        //        in %2 turns
+        QString(PL_(
+          "Irrigation: %1 in %2 turn",
+          "Irrigation: %1 in %2 turns",
+          pterrain->irrigation_time))
+        .arg(terrain_name_translation(pterrain->irrigation_result))
+        .arg(pterrain->irrigation_time));
     }
 
     if (pterrain->mining_result == pterrain) {
-      if (effect_cumulative_max(EFT_MINING_POSSIBLE, &for_terr) > 0) {
-        add_info_label(
-          // TRANS: When mined, terrain gets a bonus of %1 shields; mining 
-          //        takes %2 turns
-          QString(PL_(
-            "Mining: +%1 shields in %2 turn",
-            "Mining: +%1 shields in %2 turns",
-            pterrain->mining_time))
-          .arg(pterrain->mining_shield_incr)
-          .arg(pterrain->mining_time));
-      }
+      add_info_label(
+        // TRANS: When mined, terrain gets a bonus of %1 shields; mining
+        //        takes %2 turns
+        QString(PL_(
+          "Mining: +%1 shields in %2 turn",
+          "Mining: +%1 shields in %2 turns",
+          pterrain->mining_time))
+        .arg(pterrain->mining_shield_incr)
+        .arg(pterrain->mining_time));
     } else if (pterrain->mining_result) {
-      if (effect_cumulative_max(EFT_MINING_TF_POSSIBLE, &for_terr) > 0) {
-        add_info_label(
-          // TRANS: When mined, terrain gets changed to other terrain %1
-          //        in %2 turns
-          QString(PL_(
-            "Mining: %1 in %2 turn",
-            "Mining: %1 in %2 turns",
-            pterrain->mining_time))
-          .arg(terrain_name_translation(pterrain->mining_result))
-          .arg(pterrain->mining_time));
-      }
+      add_info_label(
+        // TRANS: When mined, terrain gets changed to other terrain %1
+        //        in %2 turns
+        QString(PL_(
+          "Mining: %1 in %2 turn",
+          "Mining: %1 in %2 turns",
+          pterrain->mining_time))
+        .arg(terrain_name_translation(pterrain->mining_result))
+        .arg(pterrain->mining_time));
     }
 
     if (pterrain->transform_result &&
         pterrain->transform_result != pterrain) {
-      if (effect_cumulative_max(EFT_TRANSFORM_POSSIBLE, &for_terr) > 0) {
-        add_info_label(
-          // TRANS: When transformed, terrain gets changed to other terrain %1
-          //        in %2 turns
-          QString(PL_(
-            "Transform: %1 in %2 turn",
-            "Transform: %1 in %2 turns",
-            pterrain->transform_time))
-          .arg(terrain_name_translation(pterrain->transform_result))
-          .arg(pterrain->transform_time));
-      }
+      add_info_label(
+        // TRANS: When transformed, terrain gets changed to other terrain %1
+        //        in %2 turns
+        QString(PL_(
+          "Transform: %1 in %2 turn",
+          "Transform: %1 in %2 turns",
+          pterrain->transform_time))
+        .arg(terrain_name_translation(pterrain->transform_result))
+        .arg(pterrain->transform_time));
     }
 
     info_panel_done();
@@ -951,23 +943,6 @@ void help_widget::set_topic_terrain(const help_item *topic,
 }
 
 /**************************************************************************
-  Creates extra help pages.
-**************************************************************************/
-void help_widget::set_topic_extra(const help_item *topic,
-                                    const char *title)
-{
-  char buffer[MAX_HELP_TEXT_SIZE];
-  struct extra_type *pextra = extra_type_by_translated_name(title);
-  if (pextra) {
-    helptext_extra(buffer, sizeof(buffer), client.conn.playing,
-                  topic->text, pextra);
-    text_browser->setText(buffer);
-  } else {
-    set_topic_other(topic, title);
-  }
-}
-
-/**************************************************************************
   Creates specialist help pages.
 **************************************************************************/
 void help_widget::set_topic_specialist(const help_item *topic,
@@ -1002,6 +977,40 @@ void help_widget::set_topic_government(const help_item *topic,
 }
 
 /**************************************************************************
+  Creates roads help pages.
+**************************************************************************/
+void help_widget::set_topic_road(const help_item *topic, const char *title)
+{
+  char buffer[MAX_HELP_TEXT_SIZE];
+  struct road_type *proad = road_type_by_translated_name(title);
+
+  if (!proad) {
+    set_topic_other(topic, title);
+  } else {
+    helptext_road(buffer, sizeof(buffer), client.conn.playing,
+                  topic->text, proad);
+    text_browser->setText(buffer);
+  }
+}
+
+/**************************************************************************
+  Creates help pages for base
+**************************************************************************/
+void help_widget::set_topic_base(const help_item *topic, const char *title)
+{
+  char buffer[MAX_HELP_TEXT_SIZE];
+  struct base_type *pbase = base_type_by_translated_name(title);
+
+  if (!pbase) {
+    set_topic_other(topic, title);
+  } else {
+    helptext_base(buffer, sizeof(buffer), client.conn.playing,
+                  topic->text, pbase);
+    text_browser->setText(buffer);
+  }
+}
+
+/**************************************************************************
   Creates nation help pages.
 **************************************************************************/
 void help_widget::set_topic_nation(const help_item *topic,
@@ -1022,8 +1031,7 @@ void help_widget::set_topic_nation(const help_item *topic,
   Supported fields:
     base_time, clean_fallout_time, clean_pollution_time, defense_bonus,
     irrigation_food_incr, irrigation_time, mining_shield_incr, mining_time,
-    movement_cost, output, pillage_time, road_output_incr_pct, road_time,
-    transform_time
+    movement_cost, output, road_output_incr_pct, road_time, transform_time
   Other fields in returned value are undefined. Especially, all pointers are
   invalid.
 ****************************************************************************/
@@ -1047,7 +1055,6 @@ struct terrain *help_widget::terrain_max_values()
   max->output[O_SCIENCE] = 0;
   max->output[O_SHIELD] = 0;
   max->output[O_TRADE] = 0;
-  max->pillage_time = 0;
   max->road_output_incr_pct[O_FOOD] = 0;
   max->road_output_incr_pct[O_GOLD] = 0;
   max->road_output_incr_pct[O_LUXURY] = 0;
@@ -1076,7 +1083,6 @@ struct terrain *help_widget::terrain_max_values()
     SET_MAX(output[O_SCIENCE]);
     SET_MAX(output[O_SHIELD]);
     SET_MAX(output[O_TRADE]);
-    SET_MAX(pillage_time);
     SET_MAX(road_output_incr_pct[O_FOOD]);
     SET_MAX(road_output_incr_pct[O_GOLD]);
     SET_MAX(road_output_incr_pct[O_LUXURY]);

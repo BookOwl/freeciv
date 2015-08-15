@@ -20,12 +20,8 @@
 #include "city.h"
 #include "unit.h"
 
-/* server */
-#include "citytools.h"
-
-/* ai/default */
+/* ai */
 #include "aidata.h"
-#include "advmilitary.h"
 
 #include "aiplayer.h"
 
@@ -120,37 +116,4 @@ void dai_player_load(struct ai_type *ait, const char *aitstr,
     adip->asked_about_ceasefire
          = secfile_lookup_int_default(file, 0, "%s.ask_ceasefire", buf);
   } players_iterate_end;
-}
-
-/**************************************************************************
-  Copy default ai data from player to player
-**************************************************************************/
-void dai_player_copy(struct ai_type *ait,
-                     struct player *original, struct player *created)
-{
-  struct ai_plr *orig_data = dai_plr_data_get(ait, original, NULL);
-  struct ai_plr *created_data = dai_plr_data_get(ait, created, NULL);
-
-  advance_index_iterate(A_NONE, i) {
-    created_data->tech_want[i] = orig_data->tech_want[i];
-  } advance_index_iterate_end;
-}
-
-/**************************************************************************
-  Ai got control of the player.
-**************************************************************************/
-void dai_gained_control(struct ai_type *ait, struct player *pplayer)
-{
-  if (pplayer->ai_common.skill_level != AI_LEVEL_AWAY) {
-    multipliers_iterate(pmul) {
-      pplayer->multipliers_target[multiplier_index(pmul)] = pmul->def;
-    } multipliers_iterate_end;
-  }
-
-  /* Clear worker tasks, classic AI does not use those */
-  city_list_iterate(pplayer->cities, pcity) {
-    clear_worker_tasks(pcity);
-  } city_list_iterate_end;
-
-  dai_assess_danger_player(ait, pplayer);
 }

@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
@@ -81,6 +81,8 @@
 #include "connectdlg_common.h"
 #include "connectdlg_g.h"
 #include "dialogs_g.h"		/* popdown_races_dialog() */
+#include "ggzclient.h"
+#include "ggz_g.h"
 #include "gui_main_g.h"		/* add_net_input(), remove_net_input() */
 #include "mapview_common.h"	/* unqueue_mapview_update */
 #include "menu_g.h"
@@ -108,6 +110,12 @@ static int name_count;
 **************************************************************************/
 static void close_socket_nomessage(struct connection *pc)
 {
+  if (with_ggz || in_ggz) {
+    remove_ggz_input();
+  }
+  if (in_ggz) {
+    gui_ggz_embed_leave_table();
+  }
   connection_common_close(pc);
   remove_net_input();
   popdown_races_dialog(); 
@@ -136,6 +144,9 @@ static void client_conn_close_callback(struct connection *pconn)
   log_error("Lost connection to server: %s.", reason);
   output_window_printf(ftc_client, _("Lost connection to server (%s)!"),
                        reason);
+  if (with_ggz) {
+    client_exit();
+  }
 }
 
 /**************************************************************************
@@ -150,11 +161,7 @@ static int get_server_address(const char *hostname, int port,
                               char *errbuf, int errbufsize)
 {
   if (port == 0) {
-#ifdef FREECIV_JSON_CONNECTION
-    port = FREECIV_JSON_PORT;
-#else  /* FREECIV_JSON_CONNECTION */
     port = DEFAULT_SOCK_PORT;
-#endif /* FREECIV_JSON_CONNECTION */
   }
 
   /* use name to find TCP/IP address of server */
@@ -256,11 +263,6 @@ int connect_to_server(const char *username, const char *hostname, int port,
     return -1;
   }
 
-  if (options.use_prev_server) {
-    sz_strlcpy(options.default_server_host, hostname);
-    options.default_server_port = port;
-  }
-
   return 0;
 }
 
@@ -303,9 +305,6 @@ void disconnect_from_server(void)
   const bool force = !client.conn.used;
 
   attribute_flush();
-
-  stop_turn_change_wait();
-
   /* If it's internal server - kill him 
    * We assume that we are always connected to the internal server  */
   if (!force) {
@@ -316,11 +315,13 @@ void disconnect_from_server(void)
     client_kill_server(TRUE);
   }
   output_window_append(ftc_client, _("Disconnected from server."));
-
-  if (options.save_options_on_exit) {
+  if (with_ggz) {
+    client_exit();
+  }
+  if (save_options_on_exit) {
     options_save();
   }
-}
+}  
 
 /****************************************************************************
   A wrapper around read_socket_data() which also handles the case the

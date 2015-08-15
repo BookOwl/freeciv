@@ -39,7 +39,6 @@
 #include "map.h"
 #include "movement.h"
 #include "nation.h"
-#include "research.h"
 #include "tech.h"
 #include "terrain.h"
 #include "unitlist.h"
@@ -60,9 +59,6 @@
 /* server/advisors */
 #include "advdata.h"
 
-/* ai */
-#include "difficulty.h"
-
 #include "barbarian.h"
 
 #define BARBARIAN_INITIAL_VISION_RADIUS 3
@@ -73,8 +69,7 @@
 **************************************************************************/
 bool is_land_barbarian(struct player *pplayer)
 {
-  return (pplayer->ai_common.barbarian_type == LAND_BARBARIAN
-          || pplayer->ai_common.barbarian_type == LAND_AND_SEA_BARBARIAN);
+  return (pplayer->ai_common.barbarian_type == LAND_BARBARIAN);
 }
 
 /**************************************************************************
@@ -82,8 +77,7 @@ bool is_land_barbarian(struct player *pplayer)
 **************************************************************************/
 bool is_sea_barbarian(struct player *pplayer)
 {
-  return (pplayer->ai_common.barbarian_type == SEA_BARBARIAN
-          || pplayer->ai_common.barbarian_type == LAND_AND_SEA_BARBARIAN);
+  return (pplayer->ai_common.barbarian_type == SEA_BARBARIAN);
 }
 
 /**************************************************************************
@@ -96,8 +90,7 @@ bool is_sea_barbarian(struct player *pplayer)
 struct player *create_barbarian_player(enum barbarian_type type)
 {
   struct player *barbarians;
-  struct nation_type *nation = NULL;
-  struct research *presearch;
+  struct nation_type *nation;
 
   players_iterate(barbarians) {
     if ((type == LAND_BARBARIAN && is_land_barbarian(barbarians))
@@ -131,19 +124,7 @@ struct player *create_barbarian_player(enum barbarian_type type)
   }
   server_player_init(barbarians, TRUE, TRUE);
 
-  if (type == LAND_BARBARIAN || type == SEA_BARBARIAN) {
-    /* Try LAND_AND_SEA *FIRST*, so that we don't end up
-     * with one of the Land/Sea barbarians created first and
-     * then LAND_AND_SEA created instead of the second. */
-    nation = pick_a_nation(NULL, FALSE, FALSE, LAND_AND_SEA_BARBARIAN);
-    if (nation != NULL) {
-      type = LAND_AND_SEA_BARBARIAN;
-    }
-  }
-
-  if (nation == NULL) {
-    nation = pick_a_nation(NULL, FALSE, FALSE, type);
-  }
+  nation = pick_a_nation(NULL, FALSE, FALSE, type);
 
   /* Ruleset loading time checks should guarantee that there always is
      suitable nation available */
@@ -170,10 +151,9 @@ struct player *create_barbarian_player(enum barbarian_type type)
   barbarians->ai_controlled = TRUE;
   barbarians->ai_common.barbarian_type = type;
   set_ai_level_directer(barbarians, game.info.skill_level);
-
-  presearch = research_get(barbarians);
-  init_tech(presearch, TRUE);
-  give_initial_techs(presearch, 0);
+  init_tech(barbarians, TRUE);
+  give_global_initial_techs(barbarians);
+  give_nation_initial_techs(barbarians);
 
   /* Ensure that we are at war with everyone else */
   players_iterate(pplayer) {
@@ -194,9 +174,6 @@ struct player *create_barbarian_player(enum barbarian_type type)
                 player_name(barbarians));
 
   send_player_all_c(barbarians, NULL);
-  /* Send research info after player info, else the client will complain
-   * about invalid team. */
-  send_research_info(presearch, NULL);
 
   return barbarians;
 }
@@ -488,14 +465,11 @@ static void try_summon_barbarians(void)
 {
   struct tile *ptile, *utile;
   int i, dist;
-  int uprise;
+  int uprise = 1;
   struct city *pc;
   struct player *barbarians, *victim;
   struct unit_type *leader_type;
   int barb_count, really_created = 0;
-  bool hut_present = FALSE;
-  int city_count;
-  int city_max;
 
   /* We attempt the summons on a particular, random position.  If this is
    * an invalid position then the summons simply fails this time.  This means
@@ -534,32 +508,18 @@ static void try_summon_barbarians(void)
   fc_assert(1 < game.server.barbarianrate);
 
   /* do not harass small civs - in practice: do not uprise at the beginning */
-  if ((int)fc_rand(30) + 1 >
-      (int)city_list_size(victim->cities) * (game.server.barbarianrate - 1)
+  if ((int)fc_rand(UPRISE_CIV_MORE) >
+           (int)city_list_size(victim->cities) -
+                UPRISE_CIV_SIZE/(game.server.barbarianrate-1)
       || fc_rand(100) > get_player_bonus(victim, EFT_CIVIL_WAR_CHANCE)) {
     return;
   }
   log_debug("Barbarians are willing to fight");
 
-  /* Remove huts in place of uprising */
-  extra_type_by_cause_iterate(EC_HUT, pextra) {
-    if (tile_has_extra(utile, pextra)) {
-      tile_remove_extra(utile, pextra);
-      hut_present = TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
-
-  if (hut_present) {
+  if (tile_has_special(utile, S_HUT)) {
+    /* remove the hut in place of uprising */
+    tile_clear_special(utile, S_HUT);
     update_tile_knowledge(utile);
-  }
-
-  city_count = city_list_size(victim->cities);
-  city_max = UPRISE_CIV_SIZE;
-  uprise = 1;
-
-  while (city_max <= city_count) {
-    uprise++;
-    city_max *= 1.2 + UPRISE_CIV_SIZE;
   }
 
   barb_count = fc_rand(3) + uprise * game.server.barbarianrate;
@@ -570,6 +530,9 @@ static void try_summon_barbarians(void)
     barbarians = create_barbarian_player(LAND_BARBARIAN);
     if (!barbarians) {
       return;
+    }
+    if (city_list_size(victim->cities) > UPRISE_CIV_MOST) {
+      uprise = 3;
     }
     for (i = 0; i < barb_count; i++) {
       struct unit_type *punittype

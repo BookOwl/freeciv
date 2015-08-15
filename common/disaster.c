@@ -119,10 +119,9 @@ bool disaster_has_effect(const struct disaster_type *pdis,
 /****************************************************************************
   Whether disaster can happen in given city.
 ****************************************************************************/
-bool can_disaster_happen(const struct disaster_type *pdis,
-                         const struct city *pcity)
+bool can_disaster_happen(struct disaster_type *pdis, struct city *pcity)
 {
-  return are_reqs_active(city_owner(pcity), NULL, pcity, NULL,
-                         city_tile(pcity), NULL, NULL, NULL, NULL, NULL,
-                         &pdis->reqs, RPT_POSSIBLE);
+  return are_reqs_active(city_owner(pcity), pcity, NULL, city_tile(pcity),
+                         NULL, NULL, NULL, &pdis->reqs,
+                         RPT_POSSIBLE);
 }

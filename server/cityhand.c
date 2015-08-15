@@ -63,33 +63,31 @@ void handle_city_name_suggestion_req(struct player *pplayer, int unit_id)
     return;
   }
 
-  if (action_prob_possible(action_prob_vs_tile(punit, ACTION_FOUND_CITY,
-                                               unit_tile(punit)))) {
+  res = unit_add_or_build_city_test(punit);
+
+  switch (res) {
+  case UAB_BUILD_OK:
     log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d))",
                 TILE_XY(unit_tile(punit)));
     dlsend_packet_city_name_suggestion_info(pplayer->connections, unit_id,
         city_name_suggestion(pplayer, unit_tile(punit)));
+    break;
 
-    /* The rest of this function is error handling. */
-    return;
-  }
-
-  res = unit_build_city_test(punit);
-
-  switch (res) {
-  case UAB_BUILD_OK:
-    /* No action enabler permitted the city to be built. */
   case UAB_BAD_CITY_TERRAIN:
   case UAB_BAD_UNIT_TERRAIN:
   case UAB_BAD_BORDERS:
   case UAB_NO_MIN_DIST:
   case UAB_NOT_BUILD_UNIT:
+  case UAB_NO_MOVES_BUILD:
     log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d)): "
                 "cannot build there.", TILE_XY(unit_tile(punit)));
     city_add_or_build_error(pplayer, punit, res);       /* Message. */
     break;
 
   case UAB_ADD_OK:
+  case UAB_NOT_ADDABLE_UNIT:
+  case UAB_NO_MOVES_ADD:
+  case UAB_NOT_OWNER:
   case UAB_TOO_BIG:
   case UAB_NO_SPACE:
     log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d)): "

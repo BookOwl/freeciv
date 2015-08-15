@@ -49,8 +49,6 @@ int api_methods_city_size_get(lua_State *L, City *pcity);
 Tile *api_methods_city_tile_get(lua_State *L, City *pcity);
 int api_methods_city_inspire_partisans(lua_State *L, City *self, Player *inspirer);
 
-int api_methods_city_culture_get(lua_State *L, City *pcity);
-
 /* Government */
 const char *api_methods_government_rule_name(lua_State *L,
                                              Government *pgovernment);
@@ -81,31 +79,21 @@ Unit_List_Link *api_methods_private_player_unit_list_head(lua_State *L,
                                                           Player *pplayer);
 City_List_Link *api_methods_private_player_city_list_head(lua_State *L,
                                                           Player *pplayer);
-int api_methods_player_culture_get(lua_State *L, Player *pplayer);
 
 /* Tech Type */
 const char *api_methods_tech_type_rule_name(lua_State *L, Tech_Type *ptech);
-const char *api_methods_tech_type_name_translation(lua_State *L, Tech_Type *ptech);
+const char *api_methods_tech_type_name_translation(lua_State *L,
+                                                   Tech_Type *ptech);
 
 /* Terrain */
 const char *api_methods_terrain_rule_name(lua_State *L, Terrain *pterrain);
-const char *api_methods_terrain_name_translation(lua_State *L, Terrain *pterrain);
-const char *api_methods_terrain_class_name(lua_State *L, Terrain *pterrain);
+const char *api_methods_terrain_name_translation(lua_State *L,
+                                                 Terrain *pterrain);
 
 /* Disaster */
 const char *api_methods_disaster_rule_name(lua_State *L, Disaster *pdis);
 const char *api_methods_disaster_name_translation(lua_State *L,
                                                   Disaster *pdis);
-
-/* Achievement */
-const char *api_methods_achievement_rule_name(lua_State *L, Achievement *pach);
-const char *api_methods_achievement_name_translation(lua_State *L,
-                                                     Achievement *pach);
-
-/* Action */
-const char *api_methods_action_rule_name(lua_State *L, Action *pact);
-const char *api_methods_action_name_translation(lua_State *L,
-                                                Action *pact);
 
 /* Tile */
 int api_methods_tile_nat_x(lua_State *L, Tile *ptile);
@@ -116,7 +104,6 @@ City *api_methods_tile_city(lua_State *L, Tile *ptile);
 bool api_methods_tile_city_exists_within_max_city_map(lua_State *L,
                                                       Tile *ptile,
                                                       bool may_be_on_center);
-bool api_methods_tile_has_extra(lua_State *L, Tile *ptile, const char *name);
 bool api_methods_tile_has_base(lua_State *L, Tile *ptile, const char *name);
 bool api_methods_tile_has_road(lua_State *L, Tile *ptile, const char *name);
 int api_methods_tile_num_units(lua_State *L, Tile *ptile);
