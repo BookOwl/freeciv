@@ -31,12 +31,10 @@
 #include "game.h"
 #include "map.h"
 #include "movement.h"
-#include "research.h"
 #include "tile.h"
 
 /* client */
 #include "client_main.h"
-#include "climisc.h"
 #include "editor.h"
 #include "mapview_common.h"
 #include "tilespec.h"
@@ -78,14 +76,21 @@ static void add_column(GtkWidget *view,
                        GCallback edit_callback,
                        gpointer callback_userdata);
 
+static int built_status_to_string(char *buf, int buflen,
+                                  struct built_status *bs);
+
 static bool can_create_unit_at_tile(struct tile *ptile);
 
 static int get_next_unique_tag(void);
 
 /* 'struct stored_tag_hash' and related functions. */
 #define SPECHASH_TAG stored_tag
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_INT_DATA_TYPE
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE int
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_DATA FC_PTR_TO_INT
 #include "spechash.h"
 
 /* NB: If packet definitions change, be sure to
@@ -194,7 +199,6 @@ enum value_types {
   VALTYPE_BUILT_ARRAY,        /* struct built_status[B_LAST] */
   VALTYPE_INVENTIONS_ARRAY,   /* bool[A_LAST] */
   VALTYPE_BV_SPECIAL,
-  VALTYPE_BV_ROADS,
   VALTYPE_BV_BASES,
   VALTYPE_NATION,
   VALTYPE_NATION_HASH,        /* struct nation_hash */
@@ -221,7 +225,6 @@ union propval_data {
   GdkPixbuf *v_pixbuf;
   struct built_status *v_built;
   bv_special v_bv_special;
-  bv_roads v_bv_roads;
   bv_bases v_bv_bases;
   struct nation_type *v_nation;
   struct nation_hash *v_nation_hash;
@@ -239,6 +242,7 @@ static void propval_free(struct propval *pv);
 static void propval_free_data(struct propval *pv);
 static struct propval *propval_copy(struct propval *pv);
 static bool propval_equal(struct propval *pva, struct propval *pvb);
+static int propval_as_string(struct propval *pv, char *buf, int buflen);
 
 struct propstate {
   int property_id;
@@ -254,9 +258,11 @@ static void propstate_set_value(struct propstate *ps,
 static struct propval *propstate_get_value(struct propstate *ps);
 
 #define SPECHASH_TAG propstate
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct propstate *
-#define SPECHASH_IDATA_FREE propstate_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct propstate *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_FREE propstate_destroy
 #include "spechash.h"
 
 
@@ -306,7 +312,6 @@ enum object_property_ids {
   OPID_TILE_XY,
   OPID_TILE_RESOURCE,
   OPID_TILE_SPECIALS,
-  OPID_TILE_ROADS,
   OPID_TILE_BASES,
   OPID_TILE_VISION, /* tile_known and tile_seen */
   OPID_TILE_LABEL,
@@ -338,28 +343,23 @@ enum object_property_ids {
   OPID_CITY_ID,
   OPID_CITY_XY,
   OPID_CITY_SIZE,
-  OPID_CITY_HISTORY,
   OPID_CITY_BUILDINGS,
   OPID_CITY_FOOD_STOCK,
   OPID_CITY_SHIELD_STOCK,
 
   OPID_PLAYER_NAME,
   OPID_PLAYER_NATION,
-  OPID_PLAYER_AGE,
 #ifdef DEBUG
   OPID_PLAYER_ADDRESS,
 #endif /* DEBUG */
   OPID_PLAYER_INVENTIONS,
-  OPID_PLAYER_SCIENCE,
   OPID_PLAYER_GOLD,
 
   OPID_GAME_YEAR,
   OPID_GAME_SCENARIO,
   OPID_GAME_SCENARIO_NAME,
   OPID_GAME_SCENARIO_DESC,
-  OPID_GAME_SCENARIO_PLAYERS,
-  OPID_GAME_STARTPOS_NATIONS,
-  OPID_GAME_PREVENT_CITIES
+  OPID_GAME_SCENARIO_PLAYERS
 };
 
 enum object_property_flags {
@@ -425,8 +425,10 @@ static void objprop_widget_toggle_button_changed(GtkToggleButton *button,
                                                  gpointer userdata);
 
 #define SPECHASH_TAG objprop
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objprop *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objprop *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -479,9 +481,11 @@ static void objbind_set_rowref(struct objbind *ob,
 static GtkTreeRowReference *objbind_get_rowref(struct objbind *ob);
 
 #define SPECHASH_TAG objbind
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objbind *
-#define SPECHASH_IDATA_FREE objbind_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objbind *
+#define SPECHASH_DATA_FREE objbind_destroy
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -773,8 +777,6 @@ static const char *valtype_get_name(enum value_types valtype)
     return "bool[A_LAST]";
   case VALTYPE_BV_SPECIAL:
     return "bv_special";
-  case VALTYPE_BV_ROADS:
-    return "bv_roads";
   case VALTYPE_BV_BASES:
     return "bv_bases";
   case VALTYPE_NATION:
@@ -833,26 +835,30 @@ static void add_column(GtkWidget *view,
 
 /****************************************************************************
   Fill the supplied buffer with a short string representation of the given
-  value. Returned value is g_strdup'd and must be g_free'd.
+  value.
 ****************************************************************************/
-static gchar *propval_as_string(struct propval *pv)
+static int propval_as_string(struct propval *pv, char *buf, int buflen)
 {
   int count = 0;
 
   fc_assert_ret_val(NULL != pv, 0);
+  fc_assert_ret_val(0 < buflen, 0);
 
   switch (pv->valtype) {
   case VALTYPE_NONE:
-    return g_strdup("");
+    buf[0] = '\0';
+    return 0;
 
   case VALTYPE_INT:
-    return g_strdup_printf("%d", pv->data.v_int);
+    return fc_snprintf(buf, buflen, "%d", pv->data.v_int);
 
   case VALTYPE_BOOL:
-    return g_strdup_printf("%s", pv->data.v_bool ? _("TRUE") : _("FALSE"));
+    return fc_snprintf(buf, buflen, "%s",
+                       pv->data.v_bool ? _("TRUE") : _("FALSE"));
 
   case VALTYPE_NATION:
-    return g_strdup_printf("%s", nation_adjective_translation(pv->data.v_nation));
+    return fc_snprintf(buf, buflen, "%s",
+                       nation_adjective_translation(pv->data.v_nation));
 
   case VALTYPE_BUILT_ARRAY:
     {
@@ -874,9 +880,9 @@ static gchar *propval_as_string(struct propval *pv)
       } improvement_iterate_end;
       /* TRANS: "Number of buildings, number of small
        * wonders (e.g. palace), number of great wonders." */
-      return g_strdup_printf(_("%db %ds %dW"),
-                             building_count, small_wonder_count,
-                             great_wonder_count);
+      return fc_snprintf(buf, buflen, _("%db %ds %dW"),
+                         building_count, small_wonder_count,
+                         great_wonder_count);
     }
 
   case VALTYPE_INVENTIONS_ARRAY:
@@ -886,25 +892,17 @@ static gchar *propval_as_string(struct propval *pv)
       }
     } advance_index_iterate_end;
     /* TRANS: "Number of technologies known". */
-    return g_strdup_printf(_("%d known"), count);
+    return fc_snprintf(buf, buflen, _("%d known"), count);
 
   case VALTYPE_BV_SPECIAL:
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      if (BV_ISSET(pv->data.v_bv_special, spe->data.special_idx)) {
+    tile_special_type_iterate(spe) {
+      if (BV_ISSET(pv->data.v_bv_special, spe)) {
         count++;
       }
-    } extra_type_by_cause_iterate_end;
-    /* TRANS: "The number of terrain specials (e.g. hut,
-     * river, pollution, etc.) present on a tile." */
-    return g_strdup_printf(_("%d present"), count);
-
-  case VALTYPE_BV_ROADS:
-    road_type_iterate(proad) {
-      if (BV_ISSET(pv->data.v_bv_roads, road_number(proad))) {
-        count++;
-      }
-    } road_type_iterate_end;
-    return g_strdup_printf(_("%d present"), count);
+    } tile_special_type_iterate_end;
+    /* TRANS: "The number of terrain specials (e.g. road,
+     * rail, hut, etc.) present on a tile." */
+    return fc_snprintf(buf, buflen, _("%d present"), count);
 
   case VALTYPE_BV_BASES:
     base_type_iterate(pbase) {
@@ -912,22 +910,22 @@ static gchar *propval_as_string(struct propval *pv)
         count++;
       }
     } base_type_iterate_end;
-    return g_strdup_printf(_("%d present"), count);
+    return fc_snprintf(buf, buflen, _("%d present"), count);
 
   case VALTYPE_NATION_HASH:
     count = nation_hash_size(pv->data.v_nation_hash);
     if (0 == count) {
-      return g_strdup(_("All nations"));
+      return fc_snprintf(buf, buflen, "%s", _("All nations"));
     } else {
-      return g_strdup_printf(PL_("%d nation", "%d nations",
-                                 count), count);
+      return fc_snprintf(buf, buflen, PL_("%d nation", "%d nations",
+                                          count), count);
     }
 
   case VALTYPE_STRING:
     /* Assume it is a very long string. */
     count = strlen(pv->data.v_const_string);
-    return g_strdup_printf(PL_("%d byte", "%d bytes", count),
-                           count);
+    return fc_snprintf(buf, buflen, PL_("%d byte", "%d bytes", count),
+                       count);
 
   case VALTYPE_PIXBUF:
   case VALTYPE_TILE_VISION_DATA:
@@ -936,28 +934,31 @@ static gchar *propval_as_string(struct propval *pv)
 
   log_error("%s(): Unhandled value type %d for property value %p.",
             __FUNCTION__, pv->valtype, pv);
-  return g_strdup("");
+  buf[0] = '\0';
+  return 0;
 }
 
 /****************************************************************************
   Convert the built_status information to a user viewable string.
-  Returned value is g_strdup'd and must be g_free'd.
 ****************************************************************************/
-static gchar *built_status_to_string(struct built_status *bs)
+static int built_status_to_string(char *buf, int buflen,
+                                  struct built_status *bs)
 {
-  int turn_built;
+  int ret, turn_built;
 
   turn_built = bs->turn;
 
   if (turn_built == I_NEVER) {
     /* TRANS: Improvement never built. */
-    return g_strdup(_("(never)"));
+    ret = fc_snprintf(buf, buflen, "%s", _("(never)"));
   } else if (turn_built == I_DESTROYED) {
     /* TRANS: Improvement was destroyed. */
-    return g_strdup(_("(destroyed)"));
+    ret = fc_snprintf(buf, buflen, "%s", _("(destroyed)"));
   } else {
-    return g_strdup_printf("%d", turn_built);
+    ret = fc_snprintf(buf, buflen, "%d", turn_built);
   }
+
+  return ret;
 }
 
 /****************************************************************************
@@ -1046,9 +1047,6 @@ static struct propval *propval_copy(struct propval *pv)
   case VALTYPE_BV_SPECIAL:
     pv_copy->data.v_bv_special = pv->data.v_bv_special;
     return pv_copy;
-  case VALTYPE_BV_ROADS:
-    pv_copy->data.v_bv_roads = pv->data.v_bv_roads;
-    return pv_copy;
   case VALTYPE_BV_BASES:
     pv_copy->data.v_bv_bases = pv->data.v_bv_bases;
     return pv_copy;
@@ -1114,7 +1112,6 @@ static void propval_free_data(struct propval *pv)
   case VALTYPE_INT:
   case VALTYPE_BOOL:
   case VALTYPE_BV_SPECIAL:
-  case VALTYPE_BV_ROADS:
   case VALTYPE_BV_BASES:
   case VALTYPE_NATION:
     return;
@@ -1200,8 +1197,6 @@ static bool propval_equal(struct propval *pva,
     return TRUE;
   case VALTYPE_BV_SPECIAL:
     return BV_ARE_EQUAL(pva->data.v_bv_special, pvb->data.v_bv_special);
-  case VALTYPE_BV_ROADS:
-    return BV_ARE_EQUAL(pva->data.v_bv_roads, pvb->data.v_bv_roads);
   case VALTYPE_BV_BASES:
     return BV_ARE_EQUAL(pva->data.v_bv_bases, pvb->data.v_bv_bases);
   case VALTYPE_NATION:
@@ -1496,30 +1491,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_int = ptile->continent;
         break;
       case OPID_TILE_SPECIALS:
-        BV_CLR_ALL(pv->data.v_bv_special);
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (tile_has_extra(ptile, pextra)) {
-            BV_SET(pv->data.v_bv_special, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
-        break;
-      case OPID_TILE_ROADS:
-        BV_CLR_ALL(pv->data.v_bv_roads);
-        extra_type_iterate(pextra) {
-          if (tile_has_extra(ptile, pextra)
-              && is_extra_caused_by(pextra, EC_ROAD)) {
-            BV_SET(pv->data.v_bv_roads, road_index(extra_road_get(pextra)));
-          }
-        } extra_type_iterate_end;
+        pv->data.v_bv_special = tile_specials(ptile);
         break;
       case OPID_TILE_BASES:
-        BV_CLR_ALL(pv->data.v_bv_bases);
-        extra_type_iterate(pextra) {
-          if (tile_has_extra(ptile, pextra)
-              && is_extra_caused_by(pextra, EC_BASE)) {
-            BV_SET(pv->data.v_bv_bases, base_index(extra_base_get(pextra)));
-          }
-        } extra_type_iterate_end;
+        pv->data.v_bv_bases = tile_bases(ptile);
         break;
       case OPID_TILE_VISION:
         pv->data.v_tile_vision = fc_malloc(sizeof(struct tile_vision_data));
@@ -1699,9 +1674,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       case OPID_CITY_SIZE:
         pv->data.v_int = city_size_get(pcity);
         break;
-      case OPID_CITY_HISTORY:
-        pv->data.v_int = pcity->history;
-        break;
       case OPID_CITY_BUILDINGS:
         pv->data.v_built = fc_malloc(sizeof(pcity->built));
         memcpy(pv->data.v_built, pcity->built, sizeof(pcity->built));
@@ -1725,7 +1697,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
   case OBJTYPE_PLAYER:
     {
       const struct player *pplayer = objbind_get_object(ob);
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         goto FAILED;
@@ -1738,9 +1709,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       case OPID_PLAYER_NATION:
         pv->data.v_nation = nation_of_player(pplayer);
         break;
-      case OPID_PLAYER_AGE:
-        pv->data.v_int = pplayer->turns_alive;
-        break;
 #ifdef DEBUG
       case OPID_PLAYER_ADDRESS:
         pv->data.v_string = g_strdup_printf("%p", pplayer);
@@ -1748,17 +1716,12 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
 #endif /* DEBUG */
       case OPID_PLAYER_INVENTIONS:
-        presearch = research_get(pplayer);
         pv->data.v_inventions = fc_calloc(A_LAST, sizeof(bool));
         advance_index_iterate(A_FIRST, tech) {
           pv->data.v_inventions[tech]
-              = TECH_KNOWN == research_invention_state(presearch, tech);
+              = TECH_KNOWN == player_invention_state(pplayer, tech);
         } advance_index_iterate_end;
         pv->must_free = TRUE;
-        break;
-      case OPID_PLAYER_SCIENCE:
-        presearch = research_get(pplayer);
-        pv->data.v_int = presearch->bulbs_researched;
         break;
       case OPID_PLAYER_GOLD:
         pv->data.v_int = pplayer->economic.gold;
@@ -1795,12 +1758,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
       case OPID_GAME_SCENARIO_PLAYERS:
         pv->data.v_bool = pgame->scenario.players;
-        break;
-      case OPID_GAME_STARTPOS_NATIONS:
-        pv->data.v_bool = pgame->scenario.startpos_nations;
-        break;
-      case OPID_GAME_PREVENT_CITIES:
-        pv->data.v_bool = pgame->scenario.prevent_new_cities;
         break;
       default:
         log_error("%s(): Unhandled request for value of property %d "
@@ -1937,12 +1894,6 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         *pstep = 1;
         *pbig_step = 5;
         return TRUE;
-      case OPID_CITY_HISTORY:
-        *pmin = 0;
-        *pmax = USHRT_MAX;
-        *pstep = 1;
-        *pbig_step = 10;
-        return TRUE;
       case OPID_CITY_FOOD_STOCK:
         *pmin = 0;
         *pmax = city_granary_size(city_size_get(pcity));
@@ -1966,12 +1917,6 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
 
   case OBJTYPE_PLAYER:
     switch (propid) {
-    case OPID_PLAYER_SCIENCE:
-      *pmin = 0;
-      *pmax = 1000000; /* Arbitrary. */
-      *pstep = 1;
-      *pbig_step = 100;
-      return TRUE;
     case OPID_PLAYER_GOLD:
       *pmin = 0;
       *pmax = 1000000; /* Arbitrary. */
@@ -2200,7 +2145,8 @@ static void objbind_pack_current_values(struct objbind *ob,
       }
 
       packet->tile = tile_index(ptile);
-      packet->extras = tile_extras(ptile);
+      packet->specials = tile_specials(ptile);
+      packet->bases = tile_bases(ptile);
       /* TODO: Set more packet fields. */
     }
     return;
@@ -2249,7 +2195,6 @@ static void objbind_pack_current_values(struct objbind *ob,
       packet->id = pcity->id;
       sz_strlcpy(packet->name, pcity->name);
       packet->size = city_size_get(pcity);
-      packet->history = pcity->history;
       for (i = 0; i < B_LAST; i++) {
         packet->built[i] = pcity->built[i].turn;
       }
@@ -2264,7 +2209,6 @@ static void objbind_pack_current_values(struct objbind *ob,
       struct packet_edit_player *packet = pd.player;
       const struct player *pplayer = objbind_get_object(ob);
       const struct nation_type *pnation;
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         return;
@@ -2274,10 +2218,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       sz_strlcpy(packet->name, pplayer->name);
       pnation = nation_of_player(pplayer);
       packet->nation = nation_index(pnation);
-      presearch = research_get(pplayer);
       advance_index_iterate(A_FIRST, tech) {
         packet->inventions[tech]
-            = TECH_KNOWN == research_invention_state(presearch, tech);
+            = TECH_KNOWN == player_invention_state(pplayer, tech);
       } advance_index_iterate_end;
       packet->gold = pplayer->economic.gold;
       /* TODO: Set more packet fields. */
@@ -2348,39 +2291,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
 
       switch (propid) {
       case OPID_TILE_SPECIALS:
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (BV_ISSET(pv->data.v_bv_special, pextra->data.special_idx)) {
-            BV_SET(packet->extras, pextra->data.special_idx);
-          } else {
-            BV_CLR(packet->extras, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
-        return;
-      case OPID_TILE_ROADS:
-        extra_type_iterate(pextra) {
-          if (is_extra_caused_by(pextra, EC_ROAD)) {
-            int ridx = road_index(extra_road_get(pextra));
-
-            if (BV_ISSET(pv->data.v_bv_roads, ridx)) {
-              BV_SET(packet->extras, extra_index(pextra));
-            } else {
-              BV_CLR(packet->extras, extra_index(pextra));
-            }
-          }
-        } extra_type_iterate_end;
+        packet->specials = pv->data.v_bv_special;
         return;
       case OPID_TILE_BASES:
-        extra_type_iterate(pextra) {
-          if (is_extra_caused_by(pextra, EC_BASE)) {
-            int bidx = base_index(extra_base_get(pextra));
-
-            if (BV_ISSET(pv->data.v_bv_bases, bidx)) {
-              BV_SET(packet->extras, extra_index(pextra));
-            } else {
-              BV_CLR(packet->extras, extra_index(pextra));
-            }
-          }
-        } extra_type_iterate_end;
+        packet->bases = pv->data.v_bv_bases;
         return;
       case OPID_TILE_LABEL:
         sz_strlcpy(packet->label, pv->data.v_string);
@@ -2460,9 +2374,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
       case OPID_CITY_SIZE:
         packet->size = pv->data.v_int;
         return;
-      case OPID_CITY_HISTORY:
-        packet->history = pv->data.v_int;
-        return;
       case OPID_CITY_FOOD_STOCK:
         packet->food_stock = pv->data.v_int;
         return;
@@ -2503,9 +2414,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
           packet->inventions[tech] = pv->data.v_inventions[tech];
         } advance_index_iterate_end;
         return;
-      case OPID_PLAYER_SCIENCE:
-        packet->bulbs_researched = pv->data.v_int;
-        return;
       case OPID_PLAYER_GOLD:
         packet->gold = pv->data.v_int;
         return;
@@ -2537,12 +2445,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
         return;
       case OPID_GAME_SCENARIO_PLAYERS:
         packet->scenario_players = pv->data.v_bool;
-        return;
-      case OPID_GAME_STARTPOS_NATIONS:
-        packet->startpos_nations = pv->data.v_bool;
-        return;
-      case OPID_GAME_PREVENT_CITIES:
-        packet->prevent_new_cities = pv->data.v_bool;
         return;
       default:
         break;
@@ -2619,7 +2521,6 @@ static GType objprop_get_gtype(const struct objprop *op)
   case VALTYPE_BUILT_ARRAY:
   case VALTYPE_INVENTIONS_ARRAY:
   case VALTYPE_BV_SPECIAL:
-  case VALTYPE_BV_ROADS:
   case VALTYPE_BV_BASES:
   case VALTYPE_NATION_HASH:
     return G_TYPE_STRING;
@@ -2894,7 +2795,6 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_UNIT_TYPE:
   case OPID_CITY_ID:
   case OPID_CITY_XY:
-  case OPID_PLAYER_AGE:
 #ifdef DEBUG
   case OPID_TILE_ADDRESS:
   case OPID_UNIT_ADDRESS:
@@ -2930,9 +2830,7 @@ static void objprop_setup_widget(struct objprop *op)
     return;
 
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
-  case OPID_PLAYER_SCIENCE:
   case OPID_PLAYER_GOLD:
   case OPID_GAME_YEAR:
     spin = gtk_spin_button_new_with_range(0.0, 100.0, 1.0);
@@ -2961,7 +2859,6 @@ static void objprop_setup_widget(struct objprop *op)
     return;
 
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
   case OPID_TILE_VISION:
   case OPID_STARTPOS_NATIONS:
@@ -2981,8 +2878,6 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_UNIT_DONE_MOVING:
   case OPID_GAME_SCENARIO:
   case OPID_GAME_SCENARIO_PLAYERS:
-  case OPID_GAME_STARTPOS_NATIONS:
-  case OPID_GAME_PREVENT_CITIES:
     button = gtk_check_button_new();
     g_signal_connect(button, "toggled",
         G_CALLBACK(objprop_widget_toggle_button_changed), op);
@@ -3092,7 +2987,6 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_TILE_CONTINENT:
   case OPID_UNIT_ID:
   case OPID_CITY_ID:
-  case OPID_PLAYER_AGE:
     label = objprop_get_child_widget(op, "value-label");
     if (pv) {
       char buf[16];
@@ -3117,9 +3011,7 @@ static void objprop_refresh_widget(struct objprop *op,
     break;
 
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
-  case OPID_PLAYER_SCIENCE:
   case OPID_PLAYER_GOLD:
   case OPID_GAME_YEAR:
     spin = objprop_get_child_widget(op, "spin");
@@ -3169,7 +3061,6 @@ static void objprop_refresh_widget(struct objprop *op,
     break;
 
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
   case OPID_TILE_VISION:
   case OPID_STARTPOS_NATIONS:
@@ -3190,8 +3081,6 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_UNIT_DONE_MOVING:
   case OPID_GAME_SCENARIO:
   case OPID_GAME_SCENARIO_PLAYERS:
-  case OPID_GAME_STARTPOS_NATIONS:
-  case OPID_GAME_PREVENT_CITIES:
     button = objprop_get_child_widget(op, "checkbutton");
     disable_gobject_callback(G_OBJECT(button),
         G_CALLBACK(objprop_widget_toggle_button_changed));
@@ -3387,7 +3276,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
 
   switch (propid) {
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
   case OPID_STARTPOS_NATIONS:
   case OPID_CITY_BUILDINGS:
@@ -3451,7 +3339,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
 
   switch (propid) {
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
   case OPID_PLAYER_INVENTIONS:
     store = gtk_list_store_new(3, G_TYPE_BOOLEAN, G_TYPE_INT,
@@ -3530,7 +3417,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
   switch (propid) {
 
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
     /* TRANS: As in "this tile special is present". */
     add_column(view, 0, _("Present"), G_TYPE_BOOLEAN, TRUE, FALSE,
@@ -3666,12 +3552,12 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
   enum object_property_ids propid;
   int id, turn_built;
   bool present, all;
+  char buf[128];
   const char *name;
   GdkPixbuf *pixbuf;
   GtkListStore *store;
   GtkTextBuffer *textbuf;
   GtkTreeIter iter;
-  gchar *buf;
 
   if (!ev) {
     return;
@@ -3696,30 +3582,15 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   case OPID_TILE_SPECIALS:
     gtk_list_store_clear(store);
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      id = spe->data.special_idx;
-      name = extra_name_translation(spe);
-      present = BV_ISSET(pv->data.v_bv_special, id);
+    tile_special_type_iterate(spe) {
+      id = spe;
+      name = special_name_translation(spe);
+      present = BV_ISSET(pv->data.v_bv_special, spe);
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } extra_type_by_cause_iterate_end;
-    buf = propval_as_string(pv);
+    } tile_special_type_iterate_end;
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
-    break;
-
-  case OPID_TILE_ROADS:
-    gtk_list_store_clear(store);
-    road_type_iterate(proad) {
-      id = road_number(proad);
-      name = road_name_translation(proad);
-      present = BV_ISSET(pv->data.v_bv_roads, id);
-      gtk_list_store_append(store, &iter);
-      gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } road_type_iterate_end;
-    buf = propval_as_string(pv);
-    gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_TILE_BASES:
@@ -3731,9 +3602,8 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
     } base_type_iterate_end;
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_TILE_VISION:
@@ -3771,24 +3641,20 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
     gtk_list_store_set(store, &iter, 0, all, 1, -1, 3,
                        _("All nations"), -1);
     nations_iterate(pnation) {
-      if (client_nation_is_in_current_set(pnation)
-          && is_nation_playable(pnation)) {
-        present = (!all && nation_hash_lookup(pv->data.v_nation_hash,
-                                              pnation, NULL));
-        id = nation_number(pnation);
-        pixbuf = get_flag(pnation);
-        name = nation_adjective_translation(pnation);
-        gtk_list_store_append(store, &iter);
-        gtk_list_store_set(store, &iter, 0, present, 1, id,
-                           2, pixbuf, 3, name, -1);
-        if (pixbuf) {
-          g_object_unref(pixbuf);
-        }
+      present = (!all && nation_hash_lookup(pv->data.v_nation_hash,
+                                            pnation, NULL));
+      id = nation_number(pnation);
+      pixbuf = get_flag(pnation);
+      name = nation_adjective_translation(pnation);
+      gtk_list_store_append(store, &iter);
+      gtk_list_store_set(store, &iter, 0, present, 1, id,
+                         2, pixbuf, 3, name, -1);
+      if (pixbuf) {
+        g_object_unref(pixbuf);
       }
     } nations_iterate_end;
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_CITY_BUILDINGS:
@@ -3801,47 +3667,36 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
       name = improvement_name_translation(pimprove);
       turn_built = pv->data.v_built[id].turn;
       present = turn_built >= 0;
-      buf = built_status_to_string(&pv->data.v_built[id]);
+      built_status_to_string(buf, sizeof(buf), &pv->data.v_built[id]);
+
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name,
                          3, buf, -1);
-      g_free(buf);
     } improvement_iterate_end;
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_PLAYER_NATION:
-    {
-      enum barbarian_type barbarian_type =
-          nation_barbarian_type(pv->data.v_nation);
-
-      gtk_list_store_clear(store);
-      nations_iterate(pnation) {
-        if (client_nation_is_in_current_set(pnation)
-            && nation_barbarian_type(pnation) == barbarian_type
-            && (barbarian_type != NOT_A_BARBARIAN
-                || is_nation_playable(pnation))) {
-          present = (pnation == pv->data.v_nation);
-          id = nation_index(pnation);
-          pixbuf = get_flag(pnation);
-          name = nation_adjective_translation(pnation);
-          gtk_list_store_append(store, &iter);
-          gtk_list_store_set(store, &iter, 0, present, 1, id,
-                             2, pixbuf, 3, name, -1);
-          if (pixbuf) {
-            g_object_unref(pixbuf);
-          }
-        }
-      } nations_iterate_end;
-      gtk_label_set_text(GTK_LABEL(ev->panel_label),
-                         nation_adjective_translation(pv->data.v_nation));
-      pixbuf = get_flag(pv->data.v_nation);
-      gtk_image_set_from_pixbuf(GTK_IMAGE(ev->panel_image), pixbuf);
+    gtk_list_store_clear(store);
+    nations_iterate(pnation) {
+      present = (pnation == pv->data.v_nation);
+      id = nation_index(pnation);
+      pixbuf = get_flag(pnation);
+      name = nation_adjective_translation(pnation);
+      gtk_list_store_append(store, &iter);
+      gtk_list_store_set(store, &iter, 0, present, 1, id,
+                         2, pixbuf, 3, name, -1);
       if (pixbuf) {
         g_object_unref(pixbuf);
       }
+    } nations_iterate_end;
+    gtk_label_set_text(GTK_LABEL(ev->panel_label),
+                       nation_adjective_translation(pv->data.v_nation));
+    pixbuf = get_flag(pv->data.v_nation);
+    gtk_image_set_from_pixbuf(GTK_IMAGE(ev->panel_image), pixbuf);
+    if (pixbuf) {
+      g_object_unref(pixbuf);
     }
     break;
 
@@ -3854,9 +3709,8 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
     } advance_iterate_end;
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_GAME_SCENARIO_DESC:
@@ -3875,9 +3729,8 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
     enable_gobject_callback(G_OBJECT(ev->textbuf),
                             G_CALLBACK(extviewer_textbuf_changed));
     gtk_widget_set_sensitive(ev->view_widget, TRUE);
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   default:
@@ -3912,7 +3765,6 @@ static void extviewer_clear_widgets(struct extviewer *ev)
 
   switch (propid) {
   case OPID_TILE_SPECIALS:
-  case OPID_TILE_ROADS:
   case OPID_TILE_BASES:
   case OPID_TILE_VISION:
   case OPID_STARTPOS_NATIONS:
@@ -3977,7 +3829,7 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
   int id, old_id, turn_built;
   struct propval *pv;
   bool active, present;
-  gchar *buf;
+  char buf[64];
   GdkPixbuf *pixbuf = NULL;
 
   ev = userdata;
@@ -4006,7 +3858,7 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
 
   case OPID_TILE_SPECIALS:
     gtk_tree_model_get(model, &iter, 1, &id, -1);
-    if (id < 0 || id >= extra_type_list_size(extra_type_list_by_cause(EC_SPECIAL))) {
+    if (!(0 <= id && id < S_LAST)) {
       return;
     }
     if (present) {
@@ -4015,25 +3867,8 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
       BV_CLR(pv->data.v_bv_special, id);
     }
     gtk_list_store_set(ev->store, &iter, 0, present, -1);
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
-    break;
-
-  case OPID_TILE_ROADS:
-    gtk_tree_model_get(model, &iter, 1, &id, -1);
-    if (!(0 <= id && id < road_count())) {
-      return;
-    }
-    if (present) {
-      BV_SET(pv->data.v_bv_roads, id);
-    } else {
-      BV_CLR(pv->data.v_bv_roads, id);
-    }
-    gtk_list_store_set(ev->store, &iter, 0, present, -1);
-    buf = propval_as_string(pv);
-    gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_TILE_BASES:
@@ -4047,9 +3882,8 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
       BV_CLR(pv->data.v_bv_bases, id);
     }
     gtk_list_store_set(ev->store, &iter, 0, present, -1);
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_STARTPOS_NATIONS:
@@ -4091,9 +3925,8 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
       all = (0 == nation_hash_size(pv->data.v_nation_hash));
       gtk_list_store_set(ev->store, &iter, 0, all, -1);
     }
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_CITY_BUILDINGS:
@@ -4103,12 +3936,10 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
     }
     turn_built = present ? game.info.turn : I_NEVER;
     pv->data.v_built[id].turn = turn_built;
-    buf = built_status_to_string(&pv->data.v_built[id]);
+    built_status_to_string(buf, sizeof(buf), &pv->data.v_built[id]);
     gtk_list_store_set(ev->store, &iter, 0, present, 3, buf, -1);
-    g_free(buf);
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   case OPID_PLAYER_NATION:
@@ -4137,9 +3968,8 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
     }
     pv->data.v_inventions[id] = present;
     gtk_list_store_set(ev->store, &iter, 0, present, -1);
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
 
   default:
@@ -4165,8 +3995,7 @@ static void extviewer_textbuf_changed(GtkTextBuffer *textbuf,
   enum object_property_ids propid;
   struct propval value = {{0,}, VALTYPE_STRING, FALSE}, *pv;
   GtkTextIter start, end;
-  char *text;
-  gchar *buf;
+  char buf[64], *text;
 
   ev = userdata;
   if (!ev) {
@@ -4185,9 +4014,8 @@ static void extviewer_textbuf_changed(GtkTextBuffer *textbuf,
 
   switch (propid) {
   case OPID_GAME_SCENARIO_DESC:
-    buf = propval_as_string(pv);
+    propval_as_string(pv, buf, sizeof(buf));
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
-    g_free(buf);
     break;
   default:
     log_error("Unhandled widget modified signal in "
@@ -4240,8 +4068,6 @@ static void property_page_setup_objprops(struct property_page *pp)
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
     ADDPROP(OPID_TILE_SPECIALS, _("Specials"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_SPECIAL);
-    ADDPROP(OPID_TILE_ROADS, _("Roads"), OPF_IN_LISTVIEW
-            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_ROADS);
     ADDPROP(OPID_TILE_BASES, _("Bases"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_BASES);
 #ifdef DEBUG
@@ -4315,8 +4141,6 @@ static void property_page_setup_objprops(struct property_page *pp)
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
     ADDPROP(OPID_CITY_SIZE, _("Size"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_CITY_HISTORY, _("History"),
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     ADDPROP(OPID_CITY_BUILDINGS, _("Buildings"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BUILT_ARRAY);
     ADDPROP(OPID_CITY_FOOD_STOCK, _("Food Stock"),
@@ -4334,12 +4158,8 @@ static void property_page_setup_objprops(struct property_page *pp)
 #endif /* DEBUG */
     ADDPROP(OPID_PLAYER_NATION, _("Nation"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_NATION);
-    ADDPROP(OPID_PLAYER_AGE, _("Age"),
-            OPF_HAS_WIDGET, VALTYPE_INT);
     ADDPROP(OPID_PLAYER_INVENTIONS, _("Inventions"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INVENTIONS_ARRAY);
-    ADDPROP(OPID_PLAYER_SCIENCE, _("Science"),
-            OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     ADDPROP(OPID_PLAYER_GOLD, _("Gold"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     return;
@@ -4356,10 +4176,6 @@ static void property_page_setup_objprops(struct property_page *pp)
             VALTYPE_STRING);
     ADDPROP(OPID_GAME_SCENARIO_PLAYERS, _("Save Players"), OPF_IN_LISTVIEW
             | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_STARTPOS_NATIONS, _("Nation Start Positions"),
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_PREVENT_CITIES, _("Prevent New Cities"),
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
     return;
 
   case NUM_OBJTYPES:
@@ -4513,7 +4329,7 @@ property_page_new(enum editor_object_type objtype,
   GType *gtype_array;
   int col_id = 1;
   const char *attr_type_str, *name;
-  gchar *title;
+  char title[64];
 
   if (!(0 <= objtype && objtype < NUM_OBJTYPES)) {
     return NULL;
@@ -4707,10 +4523,9 @@ property_page_new(enum editor_object_type objtype,
 
   /* TRANS: %s is a type of object that can be edited, such as "Tile",
    * "Unit", "Start Position", etc. */
-  title = g_strdup_printf(_("%s Properties"),
-                          objtype_get_name(objtype));
+  fc_snprintf(title, sizeof(title), _("%s Properties"),
+              objtype_get_name(objtype));
   frame = gtk_frame_new(title);
-  g_free(title);
   gtk_widget_set_size_request(frame, 256, -1);
   gtk_box_pack_start(GTK_BOX(vbox), frame, TRUE, TRUE, 0);
 
@@ -4916,7 +4731,7 @@ static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
   canvas_y += (fh - h);
 
   for (i = 0; i < num_layers; i++) {
-    put_one_element(&canvas, 1.0, layers[i],
+    put_one_element(&canvas, layers[i],
                     ptile, NULL, NULL, punit, pcity,
                     canvas_x, canvas_y, NULL, NULL);
   }
@@ -5042,7 +4857,6 @@ static bool property_page_set_store_value(struct property_page *pp,
   char buf[128], *p;
   GdkPixbuf *pixbuf = NULL;
   GtkListStore *store;
-  gchar *buf2;
 
   if (!pp || !pp->object_store || !op || !ob) {
     return FALSE;
@@ -5091,12 +4905,10 @@ static bool property_page_set_store_value(struct property_page *pp,
   case VALTYPE_BUILT_ARRAY:
   case VALTYPE_INVENTIONS_ARRAY:
   case VALTYPE_BV_SPECIAL:
-  case VALTYPE_BV_ROADS:
   case VALTYPE_BV_BASES:
   case VALTYPE_NATION_HASH:
-    buf2 = propval_as_string(pv);
-    gtk_list_store_set(store, iter, col_id, buf2, -1);
-    g_free(buf2);
+    propval_as_string(pv, buf, sizeof(buf));
+    gtk_list_store_set(store, iter, col_id, buf, -1);
     break;
   case VALTYPE_NATION:
     pixbuf = get_flag(pv->data.v_nation);

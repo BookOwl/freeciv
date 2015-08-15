@@ -26,8 +26,16 @@ extern "C" {
 
 /* common */
 #include "fc_types.h"
+
 #include "tile.h"
-#include "packets.h"
+
+/*
+ * The value of MOVE_COST_FOR_VALID_SEA_STEP has no particular
+ * meaning. The value is only used for comparison. The value must be
+ * <0.
+ */
+#define MOVE_COST_FOR_VALID_SEA_STEP	(-3)
+#define MOVE_COST_FOR_VALID_AIR_STEP	(-3)
 
 /****************************************************************
 miscellaneous terrain information
@@ -53,8 +61,7 @@ enum map_generator {
   MAPGEN_SCENARIO = 0,
   MAPGEN_RANDOM,
   MAPGEN_FRACTAL,
-  MAPGEN_ISLAND,
-  MAPGEN_FAIR
+  MAPGEN_ISLAND
 };
 
 enum map_startpos {
@@ -64,14 +71,6 @@ enum map_startpos {
   MAPSTARTPOS_ALL,              /* All players on a single continent. */
   MAPSTARTPOS_VARIABLE,         /* Depending on size of continents. */
 };
-
-#define SPECENUM_NAME team_placement
-#define SPECENUM_VALUE0 TEAM_PLACEMENT_DISABLED
-#define SPECENUM_VALUE1 TEAM_PLACEMENT_CLOSEST
-#define SPECENUM_VALUE2 TEAM_PLACEMENT_CONTINENT
-#define SPECENUM_VALUE3 TEAM_PLACEMENT_HORIZONTAL
-#define SPECENUM_VALUE4 TEAM_PLACEMENT_VERTICAL
-#include "specenum_gen.h"
 
 struct civ_map {
   int topology_id;
@@ -86,6 +85,10 @@ struct civ_map {
   struct startpos_hash *startpos_table;
 
   union {
+    struct {
+      /* Nothing yet. */
+    } client;
+
     struct {
       enum mapsize_type mapsize; /* how the map size is defined */
       int size; /* used to calculate [xy]size */
@@ -105,11 +108,18 @@ struct civ_map {
       bool have_resources;
       bool ocean_resources;         /* Resources in the middle of the ocean */
       bool have_huts;
-      enum team_placement team_placement;
+      bool have_rivers_overlay;	/* only applies if !have_resources */
     } server;
-
-    /* Add client side when needed */
   };
+};
+
+enum topo_flag {
+  /* Bit-values. */
+  /* Changing these values will break map_init_topology. */
+  TF_WRAPX = 1,
+  TF_WRAPY = 2,
+  TF_ISO = 4,
+  TF_HEX = 8
 };
 
 /* Parameters for terrain counting functions. */
@@ -127,7 +137,7 @@ static const bool C_PERCENT = TRUE;
 
 bool map_is_empty(void);
 void map_init(void);
-void map_init_topology(void);
+void map_init_topology(bool set_sizes);
 void map_allocate(void);
 void map_free(void);
 
@@ -346,13 +356,15 @@ bool is_tiles_adjacent(const struct tile *ptile0, const struct tile *ptile1);
 bool is_move_cardinal(const struct tile *src_tile,
 		      const struct tile *dst_tile);
 int map_move_cost_unit(struct unit *punit, const struct tile *ptile);
-int map_move_cost(const struct player *pplayer,
-                  const struct unit_type *punittype,
-                  const struct tile *src_tile,
+int map_move_cost_ai(const struct player *pplayer, const struct tile *tile0,
+                     const struct tile *tile1);
+int map_move_cost(const struct player *pplayer, const struct tile *src_tile,
                   const struct tile *dst_tile);
 bool is_safe_ocean(const struct tile *ptile);
-bv_extras get_tile_infrastructure_set(const struct tile *ptile,
-                                      int *count);
+bool is_cardinally_adj_to_ocean(const struct tile *ptile);
+bv_special get_tile_infrastructure_set(const struct tile *ptile,
+					  int *count);
+bv_bases get_tile_pillageable_base_set(const struct tile *ptile, int *pcount);
 
 bool can_channel_land(const struct tile *ptile);
 bool can_reclaim_ocean(const struct tile *ptile);
@@ -373,6 +385,7 @@ extern struct terrain_misc terrain_control;
   struct tile *_tile;							    \
   const struct tile *_tile##_start = (start_tile);			    \
   int _tile##_max = (max_dist);						    \
+  bool _tile##_is_border = is_border_tile(_tile##_start, _tile##_max);	    \
   int _tile##_index = 0;						    \
   index_to_map_pos(&_start##_x, &_start##_y, tile_index(_tile##_start));    \
   for (;								    \
@@ -385,10 +398,10 @@ extern struct terrain_misc terrain_control;
     _y = map.iterate_outwards_indices[_tile##_index].dy;		    \
     _tile##_x = _x + _start##_x;                                            \
     _tile##_y = _y + _start##_y;                                            \
-    _tile = map_pos_to_tile(_tile##_x, _tile##_y);                          \
-    if (NULL == _tile) {                                                    \
-      continue;                                                             \
-    }
+    if (_tile##_is_border && !normalize_map_pos(&_tile##_x, &_tile##_y)) {  \
+      continue;								    \
+    }									    \
+    _tile = map.tiles + map_pos_to_index(_tile##_x, _tile##_y);
 
 #define iterate_outward_dxy_end						    \
   }									    \
@@ -504,17 +517,6 @@ extern struct terrain_misc terrain_control;
 #define cardinal_adjc_dir_base_iterate_end                                     \
   adjc_dirlist_base_iterate_end
 
-/* Iterate through all tiles cardinally adjacent to both tile1 and tile2 */
-#define cardinal_between_iterate(tile1, tile2, between)                        \
-  cardinal_adjc_iterate(tile1, between) {                                      \
-    cardinal_adjc_iterate(between, second) {                                   \
-    if (same_pos(second, tile2)) {
-
-#define cardinal_between_iterate_end                                           \
-      }                                                                        \
-    } cardinal_adjc_iterate_end;                                               \
-  } cardinal_adjc_iterate_end;
-
 /* Iterate through all tiles adjacent to a tile using the given list of
  * directions.  _dir is the directional value, (center_x, center_y) is
  * the center tile (which must be normalized).  The center tile is not
@@ -529,6 +531,7 @@ extern struct terrain_misc terrain_control;
   int _tile##_x, _tile##_y, _center##_x, _center##_y;                       \
   struct tile *_tile;							    \
   const struct tile *_tile##_center = (center_tile);			    \
+  bool _tile##_is_border = is_border_tile(_tile##_center, 1);		    \
   int _tile##_index = 0;						    \
   index_to_map_pos(&_center##_x, &_center##_y, tile_index(_tile##_center)); \
   for (;								    \
@@ -538,10 +541,10 @@ extern struct terrain_misc terrain_control;
     DIRSTEP(_tile##_x, _tile##_y, _dir);				    \
     _tile##_x += _center##_x;                                               \
     _tile##_y += _center##_y;                                               \
-    _tile = map_pos_to_tile(_tile##_x, _tile##_y);                          \
-    if (NULL == _tile) {                                                    \
-      continue;                                                             \
-    }
+    if (_tile##_is_border && !normalize_map_pos(&_tile##_x, &_tile##_y)) {  \
+      continue;								    \
+    }									    \
+    _tile = map.tiles + map_pos_to_index(_tile##_x, _tile##_y);
 
 #define adjc_dirlist_iterate_end					    \
     }									    \
@@ -612,15 +615,9 @@ extern const int DIR_DY[8];
 /* Size of the map in thousands of tiles. If MAP_MAX_SIZE is increased, 
  * MAX_DBV_LENGTH in bitvector.c must be checked; see the static assertion
  * below. */
-#ifdef FREECIV_WEB
-#define MAP_DEFAULT_SIZE         3
-#define MAP_MIN_SIZE             0
-#define MAP_MAX_SIZE             18
-#else  /* FREECIV_WEB */
 #define MAP_DEFAULT_SIZE         4
 #define MAP_MIN_SIZE             0
 #define MAP_MAX_SIZE             2048
-#endif /* FREECIV_WEB */
 
 FC_STATIC_ASSERT(MAP_MAX_SIZE * 1000 <= MAX_DBV_LENGTH,
                  map_too_big_for_bitvector);
@@ -635,7 +632,9 @@ FC_STATIC_ASSERT((long unsigned) MAP_MAX_SIZE * 1000
 
 /* This defines the maximum linear size in _native_ coordinates. */
 #define MAP_DEFAULT_LINEAR_SIZE  64
-#define MAP_MAX_LINEAR_SIZE      (MAP_MAX_SIZE * 1000 / MAP_MIN_LINEAR_SIZE)
+/* 32 * 1024 is 2^15; thus, x*y is <= 2^15 * 2^15 = 2^30. This can be
+ * represented by an signed int as required by the network protocol. */
+#define MAP_MAX_LINEAR_SIZE      (32 * 1024)
 #define MAP_MIN_LINEAR_SIZE      16
 
 #define MAP_ORIGINAL_TOPO        TF_WRAPX
@@ -680,8 +679,6 @@ FC_STATIC_ASSERT((long unsigned) MAP_MAX_SIZE * 1000
 #define MAP_DEFAULT_TEMPERATURE   50
 #define MAP_MIN_TEMPERATURE       0
 #define MAP_MAX_TEMPERATURE       100
-
-#define MAP_DEFAULT_TEAM_PLACEMENT  TEAM_PLACEMENT_CLOSEST
 
 /*
  * Inline function definitions.  These are at the bottom because they may use

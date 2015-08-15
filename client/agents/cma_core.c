@@ -92,7 +92,7 @@ static struct {
  Returns TRUE iff the two results are equal. Both results have to be
  results for the given city.
 *****************************************************************************/
-static bool fc_results_are_equal(const struct cm_result *result1,
+static bool my_results_are_equal(const struct cm_result *result1,
                                  const struct cm_result *result2)
 {
 #define T(x) if (result1->x != result2->x) { \
@@ -172,7 +172,7 @@ static bool apply_result_on_server(struct city *pcity,
   fc_assert_ret_val(result->found_a_valid, FALSE);
   cm_result_from_main_map(current_state, pcity);
 
-  if (fc_results_are_equal(current_state, result)
+  if (my_results_are_equal(current_state, result)
       && !ALWAYS_APPLY_AT_SERVER) {
     stats.apply_result_ignored++;
     return TRUE;
@@ -267,7 +267,7 @@ static bool apply_result_on_server(struct city *pcity,
   if (last_request_id == 0 || ALWAYS_APPLY_AT_SERVER) {
       /*
        * If last_request is 0 no change request was send. But it also
-       * means that the results are different or the fc_results_are_equal()
+       * means that the results are different or the my_results_are_equal()
        * test at the start of the function would be true. So this
        * means that the client has other results for the same
        * allocation of citizen than the server. We just send a
@@ -293,7 +293,7 @@ static bool apply_result_on_server(struct city *pcity,
   /* Return. */
   cm_result_from_main_map(current_state, pcity);
 
-  success = fc_results_are_equal(current_state, result);
+  success = my_results_are_equal(current_state, result);
   if (!success) {
     cm_clear_cache(pcity);
 
@@ -475,10 +475,10 @@ void cma_init(void)
   /* reset cache counters */
   memset(&stats, 0, sizeof(stats));
 
-  /* We used to just use timer_new here, but apparently cma_init can be
+  /* We used to just use new_timer here, but apparently cma_init can be
    * called multiple times per client invocation so that lead to memory
    * leaks. */
-  stats.wall_timer = timer_renew(timer, TIMER_USER, TIMER_ACTIVE);
+  stats.wall_timer = renew_timer(timer, TIMER_USER, TIMER_ACTIVE);
 
   memset(&self, 0, sizeof(self));
   strcpy(self.name, "CMA");
@@ -574,7 +574,7 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
 
   dio_input_init(&din, buffer, len);
 
-  dio_get_uint8_raw(&din, &version);
+  dio_get_uint8(&din, &version);
   fc_assert_ret_val(version == 2, FALSE);
 
   /* Initialize the parameter (includes some AI-only fields that aren't
@@ -582,13 +582,13 @@ bool cma_get_parameter(enum attr_city attr, int city_id,
   cm_init_parameter(parameter);
 
   output_type_iterate(i) {
-    dio_get_sint16_raw(&din, &parameter->minimal_surplus[i]);
-    dio_get_sint16_raw(&din, &parameter->factor[i]);
+    dio_get_sint16(&din, &parameter->minimal_surplus[i]);
+    dio_get_sint16(&din, &parameter->factor[i]);
   } output_type_iterate_end;
 
-  dio_get_sint16_raw(&din, &parameter->happy_factor);
-  dio_get_uint8_raw(&din, &dummy); /* Dummy value; used to be factor_target. */
-  dio_get_bool8_raw(&din, &parameter->require_happy);
+  dio_get_sint16(&din, &parameter->happy_factor);
+  dio_get_uint8(&din, &dummy); /* Dummy value; used to be factor_target. */
+  dio_get_bool8(&din, &parameter->require_happy);
 
   return TRUE;
 }
@@ -600,23 +600,23 @@ void cma_set_parameter(enum attr_city attr, int city_id,
 		       const struct cm_parameter *parameter)
 {
   char buffer[SAVED_PARAMETER_SIZE];
-  struct raw_data_out dout;
+  struct data_out dout;
 
   /* Changing this function is likely to break compatability with old
    * savegames that store these values. */
 
   dio_output_init(&dout, buffer, sizeof(buffer));
 
-  dio_put_uint8_raw(&dout, 2);
+  dio_put_uint8(&dout, 2);
 
   output_type_iterate(i) {
-    dio_put_sint16_raw(&dout, parameter->minimal_surplus[i]);
-    dio_put_sint16_raw(&dout, parameter->factor[i]);
+    dio_put_sint16(&dout, parameter->minimal_surplus[i]);
+    dio_put_sint16(&dout, parameter->factor[i]);
   } output_type_iterate_end;
 
-  dio_put_sint16_raw(&dout, parameter->happy_factor);
-  dio_put_uint8_raw(&dout, 0); /* Dummy value; used to be factor_target. */
-  dio_put_bool8_raw(&dout, parameter->require_happy);
+  dio_put_sint16(&dout, parameter->happy_factor);
+  dio_put_uint8(&dout, 0); /* Dummy value; used to be factor_target. */
+  dio_put_bool8(&dout, parameter->require_happy);
 
   fc_assert(dio_output_used(&dout) == SAVED_PARAMETER_SIZE);
 

@@ -21,7 +21,6 @@
 /* utility */
 #include "astring.h"
 #include "fcintl.h"
-#include "fcthread.h"
 #include "fc_utf8.h"
 #include "log.h"
 
@@ -38,7 +37,6 @@
 
 #include "chatline_common.h"
 
-static fc_mutex ow_mutex;
 
 /****************************************************************************
   Send the message as a chat to the server.
@@ -63,38 +61,6 @@ int send_chat_printf(const char *format, ...)
   va_end(args);
 
   return send_packet_chat_msg_req(&client.conn, &packet);
-}
-
-/**************************************************************************
-  Allocate output window mutex
-**************************************************************************/
-void fc_allocate_ow_mutex(void)
-{
-  fc_allocate_mutex(&ow_mutex);
-}
-
-/**************************************************************************
-  Release output window mutex
-**************************************************************************/
-void fc_release_ow_mutex(void)
-{
-  fc_release_mutex(&ow_mutex);
-}
-
-/**************************************************************************
-  Initialize output window mutex
-**************************************************************************/
-void fc_init_ow_mutex(void)
-{
-  fc_init_mutex(&ow_mutex);
-}
-
-/**************************************************************************
-  Destroy output window mutex
-**************************************************************************/
-void fc_destroy_ow_mutex(void)
-{
-  fc_destroy_mutex(&ow_mutex);
 }
 
 /**************************************************************************
@@ -126,9 +92,7 @@ void output_window_append(const struct ft_color color,
     }
   }
 
-  fc_allocate_ow_mutex();
   real_output_window_append(plain_text, tags, -1);
-  fc_release_ow_mutex();
   text_tag_list_destroy(tags);
 }
 
@@ -166,9 +130,7 @@ void output_window_printf(const struct ft_color color,
 void output_window_event(const char *plain_text,
                          const struct text_tag_list *tags, int conn_id)
 {
-  fc_allocate_ow_mutex();
   real_output_window_append(plain_text, tags, conn_id);
-  fc_release_ow_mutex();
 }
 
 /****************************************************************************
@@ -190,11 +152,11 @@ void chat_welcome_message(void)
 **************************************************************************/
 void write_chatline_content(const char *txt)
 {
-  FILE *fp = fc_fopen(options.default_chat_logfile, "w");
+  FILE *fp = fc_fopen(default_chat_logfile, "w");
   char buf[512];
 
   fc_snprintf(buf, sizeof(buf), _("Exporting output window to '%s' ..."),
-              options.default_chat_logfile);
+              default_chat_logfile);
   output_window_append(ftc_client, buf);
 
   if (fp) {

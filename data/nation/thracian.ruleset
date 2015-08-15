@@ -18,13 +18,13 @@ leaders = {
 ; A dragon was depicted on the standard of the Thracians.
 flag="thrace"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""
 init_units=""
 
-civilwar_nations="bosporan", "illyrian", "macedon", "dacian"
+civilwar_nations="bosporan", "illyrian", "macedon"
 
 cities =
  "Uscudama",

@@ -6,8 +6,6 @@ CONTENTS
 2. Using freeciv built with AI-modules support
 3. Building freeciv with AI-modules support
 4. Coding new AI module
-5. Using default AI as part of new AI module
-6. Callback interface ChangeLog
 
 
 1. Default build
@@ -31,8 +29,8 @@ that use that module can be created by giving "create" command AI type as
 second parameter
 > create Leonidas classic
 
-Players created any other way, such as by aifill will get the AI type
-that has been made the default freeciv build time.
+Players created any other way, such as by aifill will get the "classic"
+AI type.
 
 Information "list" command shows includes player's AI type:
 > list
@@ -48,19 +46,13 @@ built in to freeciv.
 
 To statically link some of the supplied AI modules to freeciv,
 use --enable-ai-static=<comma,separated,list>. Default value for this
-is just "classic". Order of the modules is important in that first of
-the modules will be the default AI type used for all the players for whom
-it's not explicitly set.
+is just "classic".
 
 To support dynamically loading additional modules, use
 --enable-aimodules. It requires that also --enable-shared has been used,
 which may not work on all platforms.
 Special value --enable-aimodules=experimental makes freeciv also to build
 all the modules in its source tree as dynamically loadable AI modules.
-
-In case you want to use some dynamically loadable module as the default
-AI type instead of first type listed for --enable-ai-static, you can
-explicitly set the default type with --with-default-ai=<type>.
 
 Dynamic AI modules are expected in their correct installation location
 unless one has configured with --enable-debug which allows freeciv
@@ -91,39 +83,3 @@ bool fc_ai_<modulename>_setup(struct ai_type *ai)
 
 For "--LoadAI <modulename>" to find the AI module, it must reside in ${libdir}/fcai/
 (/usr/lib/fcai by default) under name fc_ai_<modulename>.so
-
-
-5. Using default AI as part of new AI module
---------------------------------------------
-
-Default AI here refers to specific code module that any AI module can use, not to any
-one AI module. Classic AI module is just a thin wrapper around it, and also Threaded AI
-uses it.
-
-Almost all functions in default AI API take pointer to current AI type as parameter.
-This is used for accessing memory associated with the correct AI type from the structures
-having such AI type specific data.
-
-If a AI type wants to add its own data associated with some code structure, it needs
-to make sure data needed by default AI is in the beginning of the allocated data blocks.
-For example, see threaded AI: tai_player_alloc(), tai_player_free(), and struct tai_plr.
-
-Default AI code is usually built in freeciv only if some AI type using it has been built;
-either 'classic' or 'threaded'. If no such ai type has been built, you can still force
-it in for custom ai types to use by passing configure option --with-ai-lib
-
-
-6. Callback interface ChangeLog
--------------------------------
-
-New in Freeciv 2.6:
--------------------
-- Renamed enum danger_consideration as enum override_bool
-- Added restart_phase, called when AI gains control of the player whose phase is already
-  active, for example when continuing from a saved game
-- Added created_by_civil_war, called for AI type of the player who got created from
-  civil war
-- Added "created" player parameter to split_by_civil_war
-- Added game_start, called for all AI types when game starts
-- "city_got" is called when the city is fully initialized, "city_lost" when city still valid
-- Added gov_value for giving AI control of deciding value of governments

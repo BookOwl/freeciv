@@ -299,7 +299,7 @@ static void close_callback(GtkDialog *dialog, gpointer data)
 ***********************************************************************/
 void setup_dialog(GtkWidget *shell, GtkWidget *parent)
 {
-  if (options.gui_gtk2_dialogs_on_top || options.gui_gtk2_fullscreen) {
+  if (gui_gtk2_dialogs_on_top || fullscreen_mode) {
     gtk_window_set_transient_for(GTK_WINDOW(shell),
                                  GTK_WINDOW(parent));
     gtk_window_set_type_hint(GTK_WINDOW(shell),
@@ -541,7 +541,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   dlg->default_width = 200;
   dlg->default_height = 300;
 
-  if (options.gui_gtk2_enable_tabs) {
+  if (gui_gtk2_enable_tabs) {
     dlg->type = GUI_DIALOG_TAB;
   } else {
     dlg->type = GUI_DIALOG_WINDOW;
@@ -552,9 +552,9 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   }
   dlg->gui_button = gtk_size_group_new(GTK_SIZE_GROUP_BOTH);
 
-  if (options.gui_gtk2_enable_tabs
+  if (gui_gtk2_enable_tabs
       && (check_top && notebook != GTK_NOTEBOOK(top_notebook))
-      && !options.gui_gtk2_small_display_layout) {
+      && !gui_gtk2_small_display_layout) {
     /* We expect this to be short (as opposed to tall); maximise usable
      * height by putting buttons down the right hand side */
     vbox = gtk_hbox_new(FALSE, 0);
@@ -595,7 +595,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
     {
       GtkWidget *hbox, *label, *image, *button, *event_box;
       gint w, h;
-      gchar *buf;
+      char buf[256];
 
       gtk_icon_size_lookup(GTK_ICON_SIZE_MENU, &w, &h);
 
@@ -611,9 +611,8 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
       g_signal_connect_swapped(button, "clicked",
 	  G_CALLBACK(gui_dialog_delete_tab_handler), dlg);
 
-      buf = g_strdup_printf(_("Close Tab:\n%s"), _("Ctrl+W"));
+      fc_snprintf(buf, sizeof(buf), _("Close Tab:\n%s"), _("Ctrl+W"));
       gtk_widget_set_tooltip_text(button, buf);
-      g_free(buf);
 
       image = gtk_image_new_from_stock(GTK_STOCK_CLOSE, GTK_ICON_SIZE_MENU);
       gtk_widget_set_size_request(button, w, h);
@@ -622,7 +621,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
       gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
 
       gtk_widget_show_all(hbox);
-
+      
       event_box = gtk_event_box_new();
       gtk_container_add(GTK_CONTAINER(event_box), hbox);
 

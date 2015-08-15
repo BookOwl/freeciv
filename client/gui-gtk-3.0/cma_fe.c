@@ -209,12 +209,12 @@ static void cell_data_func(GtkTreeViewColumn *col, GtkCellRenderer *cell,
 /**************************************************************************
  instantiates a new struct for each city_dialog window that is open.
 **************************************************************************/
-struct cma_dialog *create_cma_dialog(struct city *pcity, bool tiny)
+struct cma_dialog *create_cma_dialog(struct city *pcity)
 {
   struct cma_dialog *pdialog;
   struct cm_parameter param;
   GtkWidget *frame, *page, *hbox, *label, *table;
-  GtkWidget *vbox, *sw, *hscale, *button, *image;
+  GtkWidget *vbox, *sw, *hscale, *button, *align, *image;
   GtkListStore *store;
   GtkCellRenderer *rend;
   GtkWidget *view;
@@ -316,20 +316,17 @@ struct cma_dialog *create_cma_dialog(struct city *pcity, bool tiny)
   gtk_container_add(GTK_CONTAINER(page), vbox);
 
   /* Result */
-  if (!tiny) {
-    frame = gtk_frame_new(_("Results"));
-    gtk_widget_set_vexpand(frame, TRUE);
-    gtk_widget_set_valign(frame, GTK_ALIGN_CENTER);
-    gtk_container_add(GTK_CONTAINER(vbox), frame);
 
-    pdialog->result_label =
+  frame = gtk_frame_new(_("Results"));
+  gtk_widget_set_vexpand(frame, TRUE);
+  gtk_widget_set_valign(frame, GTK_ALIGN_CENTER);
+  gtk_container_add(GTK_CONTAINER(vbox), frame);
+
+  pdialog->result_label =
       gtk_label_new("food\n prod\n trade\n\n people\n grow\n prod\n name");
-    gtk_widget_set_name(pdialog->result_label, "city_label");
-    gtk_container_add(GTK_CONTAINER(frame), pdialog->result_label);
-    gtk_label_set_justify(GTK_LABEL(pdialog->result_label), GTK_JUSTIFY_LEFT);
-  } else {
-    pdialog->result_label = NULL;
-  }
+  gtk_widget_set_name(pdialog->result_label, "city_label");
+  gtk_container_add(GTK_CONTAINER(frame), pdialog->result_label);
+  gtk_label_set_justify(GTK_LABEL(pdialog->result_label), GTK_JUSTIFY_LEFT);
 
   /* Minimal Surplus and Factor */
 
@@ -422,15 +419,22 @@ struct cma_dialog *create_cma_dialog(struct city *pcity, bool tiny)
   g_signal_connect(button, "clicked",
 		   G_CALLBACK(help_callback), NULL);
   gtk_container_add(GTK_CONTAINER(hbox), button);
-  gtk_button_box_set_child_non_homogeneous(GTK_BUTTON_BOX(hbox),
-                                           button, TRUE);
 
   pdialog->active_command = gtk_toggle_button_new();
-  gtk_button_set_use_underline(GTK_BUTTON(pdialog->active_command), TRUE);
-  gtk_button_set_image_position(GTK_BUTTON(pdialog->active_command),
-                                GTK_POS_TOP);
-  gtk_widget_set_name(pdialog->active_command, "comment_label");
   gtk_container_add(GTK_CONTAINER(hbox), pdialog->active_command);
+
+  align = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
+  gtk_container_add(GTK_CONTAINER(pdialog->active_command), align);
+
+  vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+  gtk_container_add(GTK_CONTAINER(align), vbox);
+
+  pdialog->active_image = gtk_image_new();
+  gtk_box_pack_start(GTK_BOX(vbox), pdialog->active_image, FALSE, FALSE, 0);
+
+  pdialog->active_label = gtk_label_new(NULL);
+  gtk_widget_set_name(pdialog->active_label, "comment_label");
+  gtk_box_pack_end(GTK_BOX(vbox), pdialog->active_label, FALSE, FALSE, 0);
 
   gtk_widget_show_all(pdialog->shell);
 
@@ -457,12 +461,10 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
 
   cmafec_get_fe_parameter(pcity, &param);
 
-  if (pdialog->result_label != NULL) {
-    /* fill in result label */
-    cm_result_from_main_map(result, pcity);
-    gtk_label_set_text(GTK_LABEL(pdialog->result_label),
-                       cmafec_get_result_descr(pcity, result, &param));
-  }
+  /* fill in result label */
+  cm_result_from_main_map(result, pcity);
+  gtk_label_set_text(GTK_LABEL(pdialog->result_label),
+                     cmafec_get_result_descr(pcity, result, &param));
 
   /* if called from a hscale, we _don't_ want to do this */
   if (refresh != DONT_REFRESH_HSCALES) {
@@ -482,23 +484,17 @@ void refresh_cma_dialog(struct city *pcity, enum cma_refresh refresh)
       G_CALLBACK(cma_active_callback), pdialog);
 
   if (controlled) {
-    GtkWidget *image = gtk_image_new_from_stock(
-        GTK_STOCK_YES, GTK_ICON_SIZE_DND);
-    gtk_button_set_image(GTK_BUTTON(pdialog->active_command), image);
-    gtk_button_set_label(GTK_BUTTON(pdialog->active_command),
-                         _("Governor Enabl_ed"));
+    gtk_image_set_from_stock(GTK_IMAGE(pdialog->active_image),
+	GTK_STOCK_YES, GTK_ICON_SIZE_DND);
+    gtk_label_set_text_with_mnemonic(GTK_LABEL(pdialog->active_label),
+	_("Governor Enabl_ed"));
   } else {
-    GtkWidget *image = gtk_image_new_from_stock(
-        GTK_STOCK_NO, GTK_ICON_SIZE_DND);
-    gtk_button_set_image(GTK_BUTTON(pdialog->active_command), image);
-    gtk_button_set_label(GTK_BUTTON(pdialog->active_command),
-                         _("Governor Disabl_ed"));
+    gtk_image_set_from_stock(GTK_IMAGE(pdialog->active_image),
+	GTK_STOCK_NO, GTK_ICON_SIZE_DND);
+    gtk_label_set_text_with_mnemonic(GTK_LABEL(pdialog->active_label),
+	_("Governor Disabl_ed"));
   }
-  gtk_button_set_always_show_image(GTK_BUTTON(pdialog->active_command), TRUE);
-
-  if (pdialog->result_label != NULL) {
-    gtk_widget_set_sensitive(pdialog->result_label, controlled);
-  }
+  gtk_widget_set_sensitive(pdialog->result_label, controlled);
 
   cm_result_destroy(result);
 }

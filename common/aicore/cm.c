@@ -291,10 +291,10 @@ void cm_init(void)
 #ifdef GATHER_TIME_STATS
   memset(&performance, 0, sizeof(performance));
 
-  performance.greedy.wall_timer = timer_new(TIMER_USER, TIMER_ACTIVE);
+  performance.greedy.wall_timer = new_timer(TIMER_USER, TIMER_ACTIVE);
   performance.greedy.name = "greedy";
 
-  performance.opt.wall_timer = timer_new(TIMER_USER, TIMER_ACTIVE);
+  performance.opt.wall_timer = new_timer(TIMER_USER, TIMER_ACTIVE);
   performance.opt.name = "opt";
 #endif /* GATHER_TIME_STATS */
 }
@@ -326,8 +326,8 @@ void cm_free(void)
   print_performance(&performance.greedy);
   print_performance(&performance.opt);
 
-  timer_destroy(performance.greedy.wall_timer);
-  timer_destroy(performance.opt.wall_timer);
+  free_timer(performance.greedy.wall_timer);
+  free_timer(performance.opt.wall_timer);
   memset(&performance, 0, sizeof(performance));
 #endif /* GATHER_TIME_STATS */
 }
@@ -755,17 +755,8 @@ static struct cm_fitness evaluate_solution(struct cm_state *state,
 
   /* if this solution is not content, we have an estimate on min. luxuries */
   if (disorder) {
-    /* We have to consider the influence of each specialist in this
-       solution possibly 'hiding' a potential unhappy citizen who
-       could require luxuries.
-       Since we know the city is in disorder, we can discount most
-       effects that make citizens content, since they clearly weren't
-       sufficient.
-       This may not be sufficient luxury to make the city content (due
-       to military unhappiness etc), but certainly no less will do.
-       (Specialists may also be making angry citizens content, requiring
-       additional luxuries, but we don't try to consider that here; this
-       just means we might explore some solutions unnecessarily.) */
+    /* we have to consider the influence of specialists making one unhappy 
+       citizen content (because all other citizens are already unhappy) */
     state->min_luxury = surplus[O_LUXURY] 
        + game.info.happy_cost*MAX( city_specialists(pcity) - player_content_citizens(city_owner(pcity)), 0)
        + 1;
@@ -1628,16 +1619,9 @@ static bool choice_is_promising(struct cm_state *state, int newchoice)
     }
   } output_type_iterate_end;
  
-  /* If we don't get the city content, we assume using every idle worker 
-     as specialist and the maximum producible luxury already computed.
-     If this is less than the amount of luxury we calculated in
-     evaluate_solution() (where min_luxury is set), when we observed the
-     city in disorder, then this is clearly not worth pursuing.
-     (Since we're comparing to evaluate_solution()'s calculation, we
-     don't need to take effects, angry citizens etc into account here
-     either.)
-     FIXME: this heuristic will break in rulesets where specialists can
-     influence happiness other than by direct production of luxury. */
+ /* if we don't get the city content, we assume using every idle worker 
+     as specialist and the maximum producible luxury already computed 
+     see also evaluate_solution, where min_luxury is set */
   int max_luxury = production[O_LUXURY]
         + game.info.happy_cost*MAX( specialists_in_solution(state, &state->current) + state->current.idle - player_content_citizens(city_owner(state->pcity)), 0);
  
@@ -1867,7 +1851,7 @@ static void begin_search(struct cm_state *state,
 			 const struct cm_parameter *parameter)
 {
 #ifdef GATHER_TIME_STATS
-  timer_start(performance.current->wall_timer);
+  start_timer(performance.current->wall_timer);
   performance.current->query_count++;
 #endif
 
@@ -1892,7 +1876,7 @@ static void begin_search(struct cm_state *state,
 static void end_search(struct cm_state *state)
 {
 #ifdef GATHER_TIME_STATS
-  timer_stop(performance.current->wall_timer);
+  stop_timer(performance.current->wall_timer);
 
 #ifdef PRINT_TIME_STATS_EVERY_QUERY
   print_performance(performance.current);
@@ -1946,8 +1930,6 @@ static void cm_find_best_solution(struct cm_state *state,
     max_count = CM_MAX_LOOP;
   }
 
-  result->aborted = FALSE;
-
   /* search until we find a feasible solution */
   while (!bb_next(state)) {
     /* Limit the number of loops. */
@@ -1956,7 +1938,6 @@ static void cm_find_best_solution(struct cm_state *state,
     if (loop_count > max_count) {
       log_error("Did not find a cm solution in %d iterations for %s.",
                 max_count, city_name(state->pcity));
-      result->aborted = TRUE;
       break;
     }
   }
@@ -2259,7 +2240,7 @@ static void print_performance(struct one_perf *counts)
   double q;
   int queries, applies;
 
-  s = timer_read_seconds(counts->wall_timer);
+  s = read_timer_seconds(counts->wall_timer);
   ms = 1000.0 * s;
 
   queries = counts->query_count;

@@ -101,14 +101,10 @@ void update_timeout_label(void)
 {
   gtk_label_set_text(GTK_LABEL(timeout_label), get_timeout_label_text());
 
-  if (current_turn_timeout() > 0) {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Time to forced turn change,\n"
-                                  "or eta to finish of turn change processing."));
+  if (game.info.timeout > 0) {
+    gtk_widget_set_tooltip_text(timeout_label, _("Time to forced turn change"));
   } else {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Turn timeout disabled.\nBetween turns eta to "
-                                  "finish of turn change processing."));
+    gtk_widget_set_tooltip_text(timeout_label, _("Turn timeout disabled"));
   }
 }
 
@@ -149,7 +145,7 @@ void update_info_label(void)
   }
 
   gtk_label_set_text(GTK_LABEL(main_label_info),
-                     get_info_label_text(!options.gui_gtk3_small_display_layout));
+                     get_info_label_text(!gui_gtk3_small_display_layout));
 
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
@@ -294,7 +290,7 @@ void get_overview_area_dimensions(int *width, int *height)
 void overview_size_changed(void)
 {
   gtk_widget_set_size_request(overview_canvas,
-                              options.overview.width, options.overview.height);
+			      overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 }
 
@@ -321,11 +317,11 @@ struct canvas *get_overview_window(void)
 gboolean overview_canvas_draw(GtkWidget *w, cairo_t *cr, gpointer data)
 {
   gpointer source = (can_client_change_view()) ?
-                     (gpointer)options.overview.window : (gpointer)radar_gfx_sprite;
+                     (gpointer)overview.window : (gpointer)radar_gfx_sprite;
 
   if (source) {
     cairo_surface_t *surface = (can_client_change_view()) ?
-                                options.overview.window->surface :
+                                overview.window->surface :
                                 radar_gfx_sprite->surface;
 
     cairo_set_source_surface(cr, surface, 0, 0);
@@ -371,7 +367,6 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
                               gpointer data)
 {
   map_canvas_resized(ev->width, ev->height);
-
   return TRUE;
 }
 
@@ -469,7 +464,7 @@ void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
 
   gtk_pixcomm_clear(p);
 
-  put_unit(punit, &canvas_store, 1.0, 0, 0);
+  put_unit(punit, &canvas_store, 0, 0);
 }
 
 
@@ -493,7 +488,7 @@ void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
 /**************************************************************************
   Put overlay tile to pixmap
 **************************************************************************/
-void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
+void pixmap_put_overlay_tile(GdkWindow *pixmap,
 			     int canvas_x, int canvas_y,
 			     struct sprite *ssprite)
 {
@@ -504,7 +499,6 @@ void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
   }
 
   cr = gdk_cairo_create(pixmap);
-  cairo_scale(cr, zoom, zoom);
   cairo_set_source_surface(cr, ssprite->surface, canvas_x, canvas_y);
   cairo_paint(cr);
   cairo_destroy(cr);
@@ -547,13 +541,11 @@ void pixmap_put_overlay_tile_draw(struct canvas *pcanvas,
 
     for (i = 0; i < sswidth; i++) {
       for (j = 0; j < ssheight; j++) {
-        if (!is_bigendian()) {
-          mask_out[(j * sswidth + i) * 4 + 3]
-            = 0.65 * mask_in[(j * sswidth + i) * 4 + 3];
-        } else {
-          mask_out[(j * sswidth + i) * 4 + 0]
-            = 0.65 * mask_in[(j * sswidth + i) * 4 + 0];
-        }
+#ifndef WORDS_BIGENDIAN
+        mask_out[(j * sswidth + i) * 4 + 3] = 0.65 * mask_in[(j * sswidth + i) * 4 + 3];
+#else  /* WORDS_BIGENDIAN */
+        mask_out[(j * sswidth + i) * 4 + 0] = 0.65 * mask_in[(j * sswidth + i) * 4 + 0];
+#endif /* WORDS_BIGENDIAN */
       }
     }
 
@@ -588,11 +580,11 @@ void pixmap_put_overlay_tile_draw(struct canvas *pcanvas,
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
-    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas), map_zoom,
-			    canvas_x / map_zoom, canvas_y / map_zoom,
+    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas),
+			    canvas_x, canvas_y,
 			    get_attention_crosshair_sprite(tileset));
   }
 }
@@ -641,8 +633,7 @@ void update_map_canvas_scrollbars(void)
 **************************************************************************/
 void update_map_canvas_scrollbars_size(void)
 {
-  float xmin, ymin, xmax, ymax;
-  int xsize, ysize, xstep, ystep;
+  int xmin, ymin, xmax, ymax, xsize, ysize, xstep, ystep;
 
   get_mapview_scroll_window(&xmin, &ymin, &xmax, &ymax, &xsize, &ysize);
   get_mapview_scroll_step(&xstep, &ystep);

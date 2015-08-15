@@ -22,8 +22,7 @@
 #ifndef FC__DIALOGS_H
 #define FC__DIALOGS_H
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 #include "dialogs_g.h"
 
@@ -39,7 +38,5 @@ void popup_unit_upgrade_dlg(struct unit *pUnit, bool city);
 void popup_unit_disband_dlg(struct unit *pUnit, bool city);
 void popup_revolution_dialog(void);
 void popdown_notify_goto_dialog(void);
-
-void nationset_changed(void);
 
 #endif	/* FC__DIALOGS_H */

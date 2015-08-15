@@ -22,7 +22,7 @@
 
 struct lua_State;
 
-const char *api_fcdb_option(lua_State *L, const char *type);
+const char *api_fcdb_option(lua_State *L, enum fcdb_option_type type);
 
 #endif /* FC__API_FCDB_BASE_H */
 

@@ -18,9 +18,7 @@
 #include <stdarg.h>
 
 /* common */
-#include "map.h"
 #include "player.h"
-#include "research.h"
 
 /* server */
 #include "notify.h"
@@ -37,10 +35,9 @@
 /**************************************************************************
   Produce logline fragment for srv_log.
 **************************************************************************/
-void dai_city_log(struct ai_type *ait, char *buffer, int buflength,
-                  const struct city *pcity)
+void dai_city_log(char *buffer, int buflength, const struct city *pcity)
 {
-  struct ai_city *city_data = def_ai_city_data(pcity, ait);
+  struct ai_city *city_data = def_ai_city_data(pcity);
 
   fc_snprintf(buffer, buflength, "d%d u%d g%d",
               city_data->danger, city_data->urgency,
@@ -50,49 +47,12 @@ void dai_city_log(struct ai_type *ait, char *buffer, int buflength,
 /**************************************************************************
   Produce logline fragment for srv_log.
 **************************************************************************/
-void dai_unit_log(struct ai_type *ait, char *buffer, int buflength,
-                  const struct unit *punit)
+void dai_unit_log(char *buffer, int buflength, const struct unit *punit)
 {
-  struct unit_ai *unit_data = def_ai_unit_data(punit, ait);
+  struct unit_ai *unit_data = def_ai_unit_data(punit);
 
   fc_snprintf(buffer, buflength, "%d %d",
               unit_data->bodyguard, unit_data->ferryboat);
-}
-
-/**************************************************************************
-  Log player tech messages.
-**************************************************************************/
-void real_tech_log(struct ai_type *ait, const char *file, const char *function,
-                   int line, enum log_level level, bool notify,
-                   const struct player *pplayer, struct advance *padvance,
-                   const char *msg, ...)
-{
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  struct ai_plr *plr_data;
-
-  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
-    return;
-  }
-
-  plr_data = def_ai_player_data(pplayer, ait);
-  fc_snprintf(buffer, sizeof(buffer), "%s::%s (want " ADV_WANT_PRINTF ", dist %d) ",
-              player_name(pplayer),
-              advance_rule_name(padvance),
-              plr_data->tech_want[advance_index(padvance)],
-              research_goal_unknown_techs(research_get(pplayer),
-                                          advance_number(padvance)));
-
-  va_start(ap, msg);
-  fc_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
-  }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
 }
 
 /**************************************************************************
@@ -100,8 +60,7 @@ void real_tech_log(struct ai_type *ait, const char *file, const char *function,
     
   where ti is timer, co countdown and lo love for target, who is e.
 **************************************************************************/
-void real_diplo_log(struct ai_type *ait, const char *file,
-                    const char *function, int line,
+void real_diplo_log(const char *file, const char *function, int line,
                     enum log_level level, bool notify,
                     const struct player *pplayer,
                     const struct player *aplayer, const char *msg, ...)
@@ -112,7 +71,7 @@ void real_diplo_log(struct ai_type *ait, const char *file,
   const struct ai_dip_intel *adip;
 
   /* Don't use ai_data_get since it can have side effects. */
-  adip = dai_diplomacy_get(ait, pplayer, aplayer);
+  adip = ai_diplomacy_get(pplayer, aplayer);
 
   fc_snprintf(buffer, sizeof(buffer), "%s->%s(l%d,c%d,d%d%s): ",
               player_name(pplayer),
@@ -139,8 +98,7 @@ void real_diplo_log(struct ai_type *ait, const char *file,
     2: Polish Mech. Inf.[485] bodyguard (38,22){Riflemen:574@37,23} was ...
   note that these messages are likely to wrap if long.
 **************************************************************************/
-void real_bodyguard_log(struct ai_type *ait, const char *file,
-                        const char *function, int line,
+void real_bodyguard_log(const char *file, const char *function, int line,
                         enum log_level level,  bool notify,
                         const struct unit *punit, const char *msg, ...)
 {
@@ -154,7 +112,7 @@ void real_bodyguard_log(struct ai_type *ait, const char *file,
   int charge_y = -1;
   const char *type = "guard";
   const char *s = "none";
-  struct unit_ai *unit_data = def_ai_unit_data(punit, ait);
+  struct unit_ai *unit_data = def_ai_unit_data(punit);
 
   pcity = game_city_by_number(unit_data->charge);
   pcharge = game_unit_by_number(unit_data->charge);

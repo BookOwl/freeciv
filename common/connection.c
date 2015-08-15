@@ -19,7 +19,7 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SELECT_H
@@ -97,6 +97,7 @@ void connection_close(struct connection *pconn, const char *reason)
 
   (*conn_close_callback) (pconn);
 }
+
 
 /**************************************************************************
   Make sure that there is at least extra_space bytes free space in buffer,
@@ -215,8 +216,8 @@ static int write_socket_data(struct connection *pc,
   if (start > 0) {
     buf->ndata -= start;
     memmove(buf->data, buf->data+start, buf->ndata);
-    pc->last_write = timer_renew(pc->last_write, TIMER_USER, TIMER_ACTIVE);
-    timer_start(pc->last_write);
+    pc->last_write = renew_timer_start(pc->last_write,
+				       TIMER_USER, TIMER_ACTIVE);
   }
   return 0;
 }
@@ -239,7 +240,6 @@ void flush_connection_send_buffer_all(struct connection *pc)
 /**************************************************************************
   flush'em
 **************************************************************************/
-#ifndef FREECIV_JSON_CONNECTION
 static void flush_connection_send_buffer_packets(struct connection *pc)
 {
   if(pc && pc->used && pc->send_buffer->ndata >= MAX_LEN_PACKET) {
@@ -250,7 +250,6 @@ static void flush_connection_send_buffer_packets(struct connection *pc)
     }
   }
 }
-#endif /* FREECIV_JSON_CONNECTION */
 
 /****************************************************************************
   Add data to send to the connection.
@@ -291,8 +290,6 @@ bool connection_send_data(struct connection *pconn,
   }
 
   pconn->statistics.bytes_send += len;
-
-#ifndef FREECIV_JSON_CONNECTION
   if (0 < pconn->send_buffer->do_buffer_sends) {
     flush_connection_send_buffer_packets(pconn);
     if (!add_connection_data(pconn, data, len)) {
@@ -301,9 +298,7 @@ bool connection_send_data(struct connection *pconn,
       return FALSE;
     }
     flush_connection_send_buffer_packets(pconn);
-  } else
-#endif /* FREECIV_JSON_CONNECTION */
-  {
+  } else {
     flush_connection_send_buffer_all(pconn);
     if (!add_connection_data(pconn, data, len)) {
       log_verbose("cut connection %s due to huge send buffer (2)",
@@ -413,9 +408,6 @@ struct connection *conn_by_user_prefix(const char *user_name,
 struct connection *conn_by_number(int id)
 {
   conn_list_iterate(game.all_connections, pconn) {
-    fc_assert_msg(pconn != NULL,
-                  "Trying to look at the id of a non existing connection");
-
     if (pconn->id == id) {
       return pconn;
     }
@@ -544,11 +536,12 @@ static void init_packet_hashs(struct connection *pc)
 
   pc->phs.sent = fc_malloc(sizeof(*pc->phs.sent) * PACKET_LAST);
   pc->phs.received = fc_malloc(sizeof(*pc->phs.received) * PACKET_LAST);
-  pc->phs.handlers = packet_handlers_initial();
+  pc->phs.variant = fc_malloc(sizeof(*pc->phs.variant) * PACKET_LAST);
 
   for (i = 0; i < PACKET_LAST; i++) {
     pc->phs.sent[i] = NULL;
     pc->phs.received[i] = NULL;
+    pc->phs.variant[i] = -1;
   }
 }
 
@@ -578,6 +571,11 @@ static void free_packet_hashes(struct connection *pc)
     free(pc->phs.received);
     pc->phs.received = NULL;
   }
+
+  if (pc->phs.variant) {
+    free(pc->phs.variant);
+    pc->phs.variant = NULL;
+  }
 }
 
 /**************************************************************************
@@ -588,7 +586,6 @@ void connection_common_init(struct connection *pconn)
 {
   pconn->established = FALSE;
   pconn->used = TRUE;
-  packet_header_init(&pconn->packet_header);
   pconn->closing_reason = NULL;
   pconn->last_write = NULL;
   pconn->buffer = new_socket_packet_buffer();
@@ -625,23 +622,13 @@ void connection_common_close(struct connection *pconn)
     pconn->send_buffer = NULL;
 
     if (pconn->last_write) {
-      timer_destroy(pconn->last_write);
+      free_timer(pconn->last_write);
       pconn->last_write = NULL;
     }
 
     free_compression_queue(pconn);
     free_packet_hashes(pconn);
   }
-}
-
-/****************************************************************************
-  Set the network capability string for 'pconn'.
-****************************************************************************/
-void conn_set_capability(struct connection *pconn, const char *capability)
-{
-  fc_assert(strlen(capability) < sizeof(pconn->capability));
-  sz_strlcpy(pconn->capability, capability);
-  pconn->phs.handlers = packet_handlers_get(capability);
 }
 
 /**************************************************************************

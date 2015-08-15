@@ -22,7 +22,7 @@ leaders = {
 }
 
 flag ="seychelles"
-style = "tropical"
+city_style = "tropical"
 
 init_techs=""
 init_buildings=""

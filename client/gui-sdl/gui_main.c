@@ -37,8 +37,7 @@
 #include <winsock.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fciconv.h"
@@ -54,6 +53,8 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "editgui_g.h"
+#include "ggzclient.h"
+#include "ggz_g.h"
 #include "tilespec.h"
 #include "update_queue.h"
 
@@ -108,6 +109,7 @@ int city_productions_font_size = 12;
 
 /* ================================ Private ============================ */
 static int net_socket = -1;
+static int ggz_socket = -1;
 static bool autoconnect = FALSE;
 static bool is_map_scrolling = FALSE;
 static enum direction8 scroll_dir;
@@ -115,17 +117,19 @@ static enum direction8 scroll_dir;
 static struct mouse_button_behavior button_behavior;
   
 static SDL_Event *pNet_User_Event = NULL;
+static SDL_Event *pGGZ_User_Event = NULL;
 static SDL_Event *pAnim_User_Event = NULL;
 static SDL_Event *pInfo_User_Event = NULL;
 static SDL_Event *pMap_Scroll_User_Event = NULL;
 
-static void print_usage(void);
+static void print_usage(const char *argv0);
 static void parse_options(int argc, char **argv);
 static int check_scroll_area(int x, int y);
       
 enum USER_EVENT_ID {
   EVENT_ERROR = 0,
   NET,
+  GGZ,
   ANIM,
   TRY_AUTO_CONNECT,
   SHOW_WIDGET_INFO_LABBEL,
@@ -162,7 +166,7 @@ void set_city_names_font_sizes(int my_city_names_font_size,
   Print extra usage information, including one line help on each option,
   to stderr. 
 **************************************************************************/
-static void print_usage(void)
+static void print_usage(const char *argv0)
 {
   /* add client-specific usage information here */
   fc_fprintf(stderr,
@@ -176,8 +180,8 @@ static void print_usage(void)
 }
 
 /**************************************************************************
-  Search for command line options. right now, it's just help
-  semi-useless until we have options that aren't the same across all clients.
+ search for command line options. right now, it's just help
+ semi-useless until we have options that aren't the same across all clients.
 **************************************************************************/
 static void parse_options(int argc, char **argv)
 {
@@ -186,26 +190,23 @@ static void parse_options(int argc, char **argv)
     
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      print_usage();
+      print_usage(argv[0]);
       exit(EXIT_SUCCESS);
-    } else if (is_option("--fullscreen", argv[i])) {
-      options.gui_sdl_fullscreen = TRUE;
-    } else if (is_option("--eventthread", argv[i])) {
+    } else if (is_option("--fullscreen",argv[i])) {
+      gui_sdl_fullscreen = TRUE;
+    } else if (is_option("--eventthread",argv[i])) {
       /* init events in other thread ( only linux and BeOS ) */  
       SDL_InitSubSystem(SDL_INIT_EVENTTHREAD);
     } else if ((option = get_option_malloc("--theme", argv, &i, argc))) {
-      sz_strlcpy(options.gui_sdl_default_theme_name, option);
-    } else {
-      fc_fprintf(stderr, _("Unrecognized option: \"%s\"\n"), argv[i]);
-      exit(EXIT_FAILURE);
+      sz_strlcpy(gui_sdl_default_theme_name, option);
     }
-
     i++;
   }
+  
 }
 
 /**************************************************************************
-  Main handler for key presses
+...
 **************************************************************************/
 static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
 {
@@ -247,7 +248,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
 	  case SDLK_F7:
             send_report_request(REPORT_WONDERS_OF_THE_WORLD);
           return ID_ERROR;
-
+	    
           case SDLK_F8:
             send_report_request(REPORT_TOP_5_CITIES);
           return ID_ERROR;
@@ -261,19 +262,15 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
             flush_dirty();
             return ID_ERROR;
 
-        case SDLK_F11:
-          send_report_request(REPORT_DEMOGRAPHIC);
+	  case SDLK_F11:
+            send_report_request(REPORT_DEMOGRAPHIC);
           return ID_ERROR;
-
-        case SDLK_F12:
-          popup_spaceship_dialog(client.conn.playing);
+	    
+	  case SDLK_F12:
+            popup_spaceship_dialog(client.conn.playing);
           return ID_ERROR;
-
-        case SDLK_ASTERISK:
-          send_report_request(REPORT_ACHIEVEMENTS);
-          return ID_ERROR;
-
-        default:
+	  
+	  default:
 	  return ID_ERROR;
 	}
       }
@@ -284,7 +281,7 @@ static Uint16 main_key_down_handler(SDL_keysym Key, void *pData)
 }
 
 /**************************************************************************
-  Main key release handler.
+...
 **************************************************************************/
 static Uint16 main_key_up_handler(SDL_keysym Key, void *pData)
 {
@@ -295,7 +292,7 @@ static Uint16 main_key_up_handler(SDL_keysym Key, void *pData)
 }
 
 /**************************************************************************
-  Main mouse click handler.
+...
 **************************************************************************/
 static Uint16 main_mouse_button_down_handler(SDL_MouseButtonEvent *pButtonEvent, void *pData)
 {
@@ -311,7 +308,7 @@ static Uint16 main_mouse_button_down_handler(SDL_MouseButtonEvent *pButtonEvent,
     /* no visible widget at this position -> map click */ 
 #ifdef UNDER_CE
     if (!check_scroll_area(pButtonEvent->x, pButtonEvent->y)) {
-#endif
+#endif        
     if (!button_behavior.counting) {
       /* start counting */
       button_behavior.counting = TRUE;
@@ -322,14 +319,11 @@ static Uint16 main_mouse_button_down_handler(SDL_MouseButtonEvent *pButtonEvent,
     }
 #ifdef UNDER_CE
     }
-#endif
+#endif    
   }
   return ID_ERROR;
 }
 
-/**************************************************************************
-  Main mouse button release handler.
-**************************************************************************/
 static Uint16 main_mouse_button_up_handler(SDL_MouseButtonEvent *pButtonEvent, void *pData)
 {
   if (button_behavior.button_down_ticks /* button wasn't pressed over a widget */
@@ -353,7 +347,7 @@ static Uint16 main_mouse_button_up_handler(SDL_MouseButtonEvent *pButtonEvent, v
 #endif
 
 /**************************************************************************
-  Main handler for mouse movement handling.
+...
 **************************************************************************/
 static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void *pData)
 {
@@ -368,16 +362,16 @@ static Uint16 main_mouse_motion_handler(SDL_MouseMotionEvent *pMotionEvent, void
       button_behavior.counting = FALSE;
     }
   }
-
+  
   if(draw_goto_patrol_lines) {
     update_line(pMotionEvent->x, pMotionEvent->y);
   }
 
 #ifndef UNDER_CE
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     check_scroll_area(pMotionEvent->x, pMotionEvent->y);
   }
-#endif /* UNDER_CE */
+#endif          
 
   if ((pWidget = find_next_widget_at_pos(NULL,
                                          pMotionEvent->x,
@@ -429,9 +423,6 @@ static void update_button_hold_state(void)
   return;
 }
 
-/**************************************************************************
-  Check if coordinate is in scroll area.
-**************************************************************************/
 static int check_scroll_area(int x, int y) {
   
   SDL_Rect rect_north = {0, 0, Main.map->w, SCROLL_MAP_AREA};
@@ -466,14 +457,14 @@ static int check_scroll_area(int x, int y) {
   } else {
     is_map_scrolling = FALSE;
   }
-
+  
   return is_map_scrolling;
 }
 
 /* ============================ Public ========================== */
 
 /**************************************************************************
-  Instruct event loop to exit.
+...
 **************************************************************************/
 void force_exit_from_event_loop(void)
 {
@@ -483,14 +474,12 @@ void force_exit_from_event_loop(void)
   Event.user.code = EXIT_FROM_EVENT_LOOP;
   Event.user.data1 = NULL;
   Event.user.data2 = NULL;
-
+  
   SDL_PushEvent(&Event);
+  
 }
 
-/**************************************************************************
-  Filter out mouse motion events for too small movement to react to.
-  This function may run in a separate event thread.
-**************************************************************************/
+/* This function may run in a separate event thread */
 int FilterMouseMotionEvents(const SDL_Event *event)
 {
   if (event->type == SDL_MOUSEMOTION) {
@@ -508,7 +497,7 @@ int FilterMouseMotionEvents(const SDL_Event *event)
 }
 
 /**************************************************************************
-  SDL-client main loop.
+...
 **************************************************************************/
 Uint16 gui_event_loop(void *pData,
 	void (*loop_action)(void *pData),
@@ -531,17 +520,20 @@ Uint16 gui_event_loop(void *pData,
   while (ID == ID_ERROR) {
     /* ========================================= */
     /* net check with 10ms delay event loop */
-    if (net_socket >= 0) {
+    if ((net_socket >= 0) || (ggz_socket >= 0)) {
       FD_ZERO(&civfdset);
-
+      
       if (net_socket >= 0) {
         FD_SET(net_socket, &civfdset);
+      }
+      if (ggz_socket >= 0) {
+        FD_SET(ggz_socket, &civfdset);
       }
       
       tv.tv_sec = 0;
       tv.tv_usec = 10000;/* 10ms*/
     
-      result = fc_select(net_socket + 1, &civfdset, NULL, NULL, &tv);
+      result = fc_select(MAX(net_socket, ggz_socket) + 1, &civfdset, NULL, NULL, &tv);
       if (result < 0) {
         if (errno != EINTR) {
 	  break;
@@ -552,6 +544,9 @@ Uint16 gui_event_loop(void *pData,
         if (result > 0) {
 	  if ((net_socket >= 0) && FD_ISSET(net_socket, &civfdset)) {
 	    SDL_PushEvent(pNet_User_Event);
+	  }
+	  if ((ggz_socket >= 0) && FD_ISSET(ggz_socket, &civfdset)) {
+	    SDL_PushEvent(pGGZ_User_Event);
 	  }
 	}
       }
@@ -600,13 +595,13 @@ Uint16 gui_event_loop(void *pData,
     /* ========================================= */
     
     while (SDL_PollEvent(&Main.event) == 1) {
-
+      
       switch (Main.event.type) {
-
+        
         case SDL_QUIT:
           return MAX_ID;
         break;
-
+    
         case SDL_KEYUP:
           switch (Main.event.key.keysym.sym) {
             /* find if Shifts are released */
@@ -632,7 +627,7 @@ Uint16 gui_event_loop(void *pData,
             break;
           }
           break;
-
+          
         case SDL_KEYDOWN:
           switch(Main.event.key.keysym.sym) {
             case SDLK_PRINT:
@@ -640,32 +635,32 @@ Uint16 gui_event_loop(void *pData,
               log_normal(_("Making screenshot %s"), schot);
               SDL_SaveBMP(Main.screen, schot);
             break;
-
+            
             case SDLK_RSHIFT:
               /* Right Shift is Pressed */
               RSHIFT = TRUE;
             break;
-
+              
             case SDLK_LSHIFT:
               /* Left Shift is Pressed */
               LSHIFT = TRUE;
             break;
-
+              
             case SDLK_LCTRL:
               /* Left CTRL is Pressed */
               LCTRL = TRUE;
             break;
-
+             
             case SDLK_RCTRL:
               /* Right CTRL is Pressed */
               RCTRL = TRUE;
             break;
-
+            
             case SDLK_LALT:
               /* Left ALT is Pressed */
               LALT = TRUE;
             break;
-
+            
             default:
               if(key_down_handler) {
                 ID = key_down_handler(Main.event.key.keysym, pData);
@@ -673,29 +668,32 @@ Uint16 gui_event_loop(void *pData,
             break;
           }
         break;
-
+          
         case SDL_MOUSEBUTTONDOWN:
           if(mouse_button_down_handler) {
             ID = mouse_button_down_handler(&Main.event.button, pData);
           }	
         break;
-
+          
         case SDL_MOUSEBUTTONUP:
           if(mouse_button_up_handler) {
             ID = mouse_button_up_handler(&Main.event.button, pData);
           }
         break;
-
+          
         case SDL_MOUSEMOTION:
           if(mouse_motion_handler) {
             ID = mouse_motion_handler(&Main.event.motion, pData);
           }	
         break;
-
+          
         case SDL_USEREVENT:
           switch(Main.event.user.code) {
             case NET:
               input_from_server(net_socket);
+            break;
+            case GGZ:
+              input_from_ggz(ggz_socket);
             break;
             case ANIM:
               update_button_hold_state();
@@ -724,10 +722,10 @@ Uint16 gui_event_loop(void *pData,
             break;
           }    
         break;
-
+          
       }
     }
-
+    
     if (ID == ID_ERROR) {
       if (callbacks && callback_list_size(callbacks) > 0) {
         struct callback *cb = callback_list_get(callbacks, 0);
@@ -737,7 +735,7 @@ Uint16 gui_event_loop(void *pData,
       }
     }
   }
-
+  
   return ID;
 }
 
@@ -760,15 +758,15 @@ void ui_init(void)
   
   SDL_Client_Flags = 0;
   iSDL_Flags = SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE;
-
+  
   /* auto center new windows in X enviroment */
   putenv((char *)"SDL_VIDEO_CENTERED=yes");
-
+  
   init_sdl(iSDL_Flags);
 
   log_normal(_("Using Video Output: %s"),
              SDL_VideoDriverName(device, sizeof(device)));
-
+  
   /* create splash screen */  
 #ifdef SMALL_SCREEN
   {
@@ -777,18 +775,18 @@ void ui_init(void)
     pBgd = zoomSurface(pTmpSurf, DEFAULT_ZOOM, DEFAULT_ZOOM, 0);
     FREESURFACE(pTmpSurf);
   }
-#else  /* SMALL_SCREEN */
+#else
   pBgd = load_surf(fileinfoname(get_data_dirs(), "misc/intro.png"));
-#endif /* SMALL_SCREEN */
+#endif
   
-  if (pBgd && SDL_GetVideoInfo()->wm_available) {
+  if(pBgd && SDL_GetVideoInfo()->wm_available) {
     set_video_mode(pBgd->w, pBgd->h, SDL_SWSURFACE | SDL_ANYFORMAT);
 #if 0    
     /*
-     * call this for other than X enviroments - currently not supported.
+     * call this for other that X enviroments - currently not supported.
      */
     center_main_window_on_screen();
-#endif /* 0 */
+#endif
     alphablit(pBgd, NULL, Main.map, NULL);
     putframe(Main.map,
              0, 0, Main.map->w - 1, Main.map->h - 1,
@@ -799,9 +797,9 @@ void ui_init(void)
     
 #ifndef SMALL_SCREEN
     set_video_mode(640, 480, SDL_SWSURFACE | SDL_ANYFORMAT);
-#else  /* SMALL_SCREEN */
+#else
     set_video_mode(320, 240, SDL_SWSURFACE | SDL_ANYFORMAT);
-#endif /* SMALL_SCREEN */
+#endif    
     
     if(pBgd) {
       blit_entire_src(pBgd, Main.map, (Main.map->w - pBgd->w) / 2,
@@ -834,7 +832,7 @@ void ui_init(void)
   copy_chars_to_string16(pInit_String->string16,
   			_("Waiting for the beginning of the game"));
 
-#endif /* 0 */
+#endif    
 
   flush_all();
 }
@@ -847,12 +845,12 @@ static void real_resize_window_callback(void *data)
   struct widget *widget;
   Uint32 flags = Main.screen->flags;
 
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     flags |= SDL_FULLSCREEN;
   } else {
     flags &= ~SDL_FULLSCREEN;
   }
-  set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height, flags);
+  set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height, flags);
 
   if (C_S_RUNNING == client_state()) {
     /* Move units window to botton-right corner. */
@@ -893,7 +891,7 @@ static void resize_window_callback(struct option *poption)
   Extra initializers for client options. Here we make set the callback
   for the specific gui-sdl options.
 ****************************************************************************/
-void options_extra_init(void)
+void gui_options_extra_init(void)
 {
   struct option *poption;
 
@@ -910,8 +908,7 @@ void options_extra_init(void)
 }
 
 /**************************************************************************
-  Remove double messages caused by message configured to both MW_MESSAGES
-  and MW_OUTPUT.
+...
 **************************************************************************/
 static void clear_double_messages_call(void)
 {
@@ -941,6 +938,7 @@ int main(int argc, char **argv)
 void ui_main(int argc, char *argv[])
 {
   SDL_Event __Net_User_Event;
+  SDL_Event __GGZ_User_Event;
   SDL_Event __Anim_User_Event;
   SDL_Event __Info_User_Event;
   SDL_Event __Flush_User_Event;
@@ -953,6 +951,12 @@ void ui_main(int argc, char *argv[])
   __Net_User_Event.user.data1 = NULL;
   __Net_User_Event.user.data2 = NULL;
   pNet_User_Event = &__Net_User_Event;
+
+  __GGZ_User_Event.type = SDL_USEREVENT;
+  __GGZ_User_Event.user.code = GGZ;
+  __GGZ_User_Event.user.data1 = NULL;
+  __GGZ_User_Event.user.data2 = NULL;
+  pGGZ_User_Event = &__GGZ_User_Event;
 
   __Anim_User_Event.type = SDL_USEREVENT;
   __Anim_User_Event.user.code = EVENT_ERROR;
@@ -1001,43 +1005,43 @@ void ui_main(int argc, char *argv[])
     
   setup_auxiliary_tech_icons();
   
-  if (options.gui_sdl_fullscreen) {
+  if (gui_sdl_fullscreen) {
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE
         /* set 320x240 fullscreen */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
-      #else  /* UNDER_CE */
+      #else
         /* small screen on desktop -> don't set 320x240 fullscreen mode */
-        set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+        set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                        SDL_SWSURFACE | SDL_ANYFORMAT);
-      #endif /* UNDER_CE */
-    #else  /* SMALL_SCREEN */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      #endif
+    #else
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT | SDL_FULLSCREEN);
-    #endif /* SMALL_SCREEN */
+    #endif
     
   } else {
     
     #ifdef SMALL_SCREEN
       #ifdef UNDER_CE    
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
-      #else  /* UNDER_CE */
-      set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      #else
+      set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
                      SDL_SWSURFACE | SDL_ANYFORMAT);
-      #endif /* UNDER_CE */
-    #else  /* SMALL_SCREEN */
-    set_video_mode(options.gui_sdl_screen.width, options.gui_sdl_screen.height,
+      #endif
+    #else
+    set_video_mode(gui_sdl_screen.width, gui_sdl_screen.height,
       SDL_SWSURFACE | SDL_ANYFORMAT);
-    #endif /* SMALL_SCREEN */
+    #endif
     
 #if 0    
     /*
      * call this for other that X enviroments - currently not supported.
      */
     center_main_window_on_screen();
-#endif /* 0 */
+#endif
   }
 
   /* SDL_WM_SetCaption(_("SDL Client for Freeciv"), _("Freeciv")); */
@@ -1147,6 +1151,25 @@ void remove_net_input(void)
   update_mouse_cursor(CURSOR_DEFAULT);
 }
 
+/**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+  log_debug("GGZ Connection UP (%d)", sock);
+  ggz_socket = sock;
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  log_debug("GGZ Connection DOWN... ");
+  ggz_socket = (-1);
+}
+
 /****************************************************************************
   Enqueue a callback to be called during an idle moment.  The 'callback'
   function should be called sometimes soon, and passed the 'data' pointer
@@ -1198,26 +1221,23 @@ void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 void editgui_notify_object_created(int tag, int id)
 {}
 
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_leave_table(void)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_ggz_embed_ensure_server(void)
+{}
+
+
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
 void gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
 }

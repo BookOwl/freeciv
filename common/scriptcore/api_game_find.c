@@ -17,7 +17,6 @@
 
 /* common */
 #include "idex.h"
-#include "map.h"
 #include "movement.h"
 
 /* common/scriptcore */
@@ -79,7 +78,7 @@ Unit *api_find_transport_unit(lua_State *L, Player *pplayer, Unit_Type *ptype,
     struct unit *pvirt = unit_virtual_create(pplayer, NULL, ptype, 0);
     unit_tile_set(pvirt, ptile);
     pvirt->homecity = 0;
-    ptransport = transporter_for_unit(pvirt);
+    ptransport = transport_from_tile(pvirt, ptile);
     unit_virtual_destroy(pvirt);
     return ptransport;
   }
@@ -96,9 +95,9 @@ Unit_Type *api_find_role_unit_type(lua_State *L, const char *role_name,
   LUASCRIPT_CHECK_STATE(L, NULL);
   LUASCRIPT_CHECK_ARG_NIL(L, role_name, 2, string, NULL);
 
-  role = unit_role_id_by_name(role_name, fc_strcasecmp);
+  role = unit_role_by_rule_name(role_name);
 
-  if (!unit_role_id_is_valid(role)) {
+  if (role == L_LAST) {
     return NULL;
   }
 

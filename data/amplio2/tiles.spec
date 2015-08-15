@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -22,6 +22,29 @@ dx = 96
 dy = 48
 
 tiles = { "row", "column", "tag"
+; Unit activity letters:  (note unit icons have just "u.")
+
+  0, 18, "unit.auto_attack",
+         "unit.auto_settler"
+  0, 19, "unit.stack"
+  1, 17, "unit.loaded"
+  1, 18, "unit.connect"
+  1, 19, "unit.auto_explore"
+  2, 12, "unit.transform"
+  2, 13, "unit.sentry"
+  2, 14, "unit.goto"
+  2, 15, "unit.mine"
+  2, 16, "unit.pollution"
+  2, 17, "unit.road"
+  2, 18, "unit.irrigate"
+  2, 19, "unit.fortifying",
+         "unit.fortress"
+  3, 16, "unit.airbase"
+  3, 17, "unit.pillage"
+  3, 18, "unit.fortified"
+  3, 19, "unit.fallout"
+  4, 19, "unit.patrol"
+
 ; Unit hit-point bars: approx percent of hp remaining
 
   7,  0, "unit.hp_100"
@@ -102,6 +125,18 @@ tiles = { "row", "column", "tag"
   6, 17, "city.t_trade_7"
   6, 18, "city.t_trade_8"
   6, 19, "city.t_trade_9"
+
+; Unit upkeep in city dialog:
+; These should probably be handled differently and have
+; a different size...
+
+  7, 12, "upkeep.gold"
+  7, 13, "upkeep.gold2"
+  7, 15, "upkeep.food"
+  7, 16, "upkeep.food2"
+  7, 17, "upkeep.unhappy"
+  7, 18, "upkeep.unhappy2"
+  7, 19, "upkeep.shield"
 
 ; Nuclear explosion: this could maybe now be handled as one 
 ; big graphic (?), but for now is done old way as 3 by 3:

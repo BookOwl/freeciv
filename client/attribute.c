@@ -42,7 +42,8 @@ struct attr_key {
   int key, id, x, y;
 };
 
-static genhash_val_t attr_key_val(const struct attr_key *pkey);
+static genhash_val_t attr_key_val(const struct attr_key *pkey,
+                                  size_t num_buckets);
 static bool attr_key_comp(const struct attr_key *pkey1,
                           const struct attr_key *pkey2);
 static struct attr_key *attr_key_dup(const struct attr_key *pkey);
@@ -50,13 +51,13 @@ static void attr_key_destroy(struct attr_key *pkey);
 
 /* 'struct attribute_hash' and related functions. */
 #define SPECHASH_TAG attribute
-#define SPECHASH_IKEY_TYPE struct attr_key *
-#define SPECHASH_IDATA_TYPE void *
-#define SPECHASH_IKEY_VAL attr_key_val
-#define SPECHASH_IKEY_COMP attr_key_comp
-#define SPECHASH_IKEY_COPY attr_key_dup
-#define SPECHASH_IKEY_FREE attr_key_destroy
-#define SPECHASH_IDATA_FREE free
+#define SPECHASH_KEY_TYPE struct attr_key *
+#define SPECHASH_DATA_TYPE void *
+#define SPECHASH_KEY_VAL attr_key_val
+#define SPECHASH_KEY_COMP attr_key_comp
+#define SPECHASH_KEY_COPY attr_key_dup
+#define SPECHASH_KEY_FREE attr_key_destroy
+#define SPECHASH_DATA_FREE free
 #include "spechash.h"
 #define attribute_hash_values_iterate(hash, pvalue)                         \
   TYPED_HASH_DATA_ITERATE(void *, hash, pvalue)
@@ -71,9 +72,11 @@ static struct attribute_hash *attribute_hash = NULL;
 /****************************************************************************
   Hash function for attribute_hash.
 ****************************************************************************/
-static genhash_val_t attr_key_val(const struct attr_key *pkey)
+static genhash_val_t attr_key_val(const struct attr_key *pkey,
+                                  size_t num_buckets)
 {
-  return (genhash_val_t) pkey->id ^ pkey->x ^ pkey->y ^ pkey->key;
+  return (((genhash_val_t) pkey->id ^ pkey->x ^ pkey->y ^ pkey->key)
+          % num_buckets);
 }
 
 /****************************************************************************
@@ -152,7 +155,7 @@ serialize_hash(const struct attribute_hash *hash,
   const size_t entries = attribute_hash_size(hash);
   int total_length, value_lengths[entries];
   void *result;
-  struct raw_data_out dout;
+  struct data_out dout;
   int i;
 
   /*
@@ -168,7 +171,7 @@ serialize_hash(const struct attribute_hash *hash,
     struct data_in din;
 
     dio_input_init(&din, pvalue, 4);
-    dio_get_uint32_raw(&din, &value_lengths[i]);
+    dio_get_uint32(&din, &value_lengths[i]);
 
     total_length += value_lengths[i];
     i++;
@@ -183,24 +186,24 @@ serialize_hash(const struct attribute_hash *hash,
   /*
    * Step 3: fill out the preamble.
    */
-  dio_put_uint32_raw(&dout, 0);
-  dio_put_uint8_raw(&dout, 2);
-  dio_put_uint32_raw(&dout, attribute_hash_size(hash));
-  dio_put_uint32_raw(&dout, total_length);
+  dio_put_uint32(&dout, 0);
+  dio_put_uint8(&dout, 2);
+  dio_put_uint32(&dout, attribute_hash_size(hash));
+  dio_put_uint32(&dout, total_length);
 
   /*
    * Step 4: fill out the body.
    */
   i = 0;
   attribute_hash_iterate(hash, pkey, pvalue) {
-    dio_put_uint32_raw(&dout, value_lengths[i]);
+    dio_put_uint32(&dout, value_lengths[i]);
 
-    dio_put_uint32_raw(&dout, pkey->key);
-    dio_put_uint32_raw(&dout, pkey->id);
-    dio_put_sint16_raw(&dout, pkey->x);
-    dio_put_sint16_raw(&dout, pkey->y);
+    dio_put_uint32(&dout, pkey->key);
+    dio_put_uint32(&dout, pkey->id);
+    dio_put_sint16(&dout, pkey->x);
+    dio_put_sint16(&dout, pkey->y);
 
-    dio_put_memory_raw(&dout, ADD_TO_POINTER(pvalue, 4), value_lengths[i]);
+    dio_put_memory(&dout, ADD_TO_POINTER(pvalue, 4), value_lengths[i]);
     i++;
   } attribute_hash_iterate_end;
 
@@ -238,20 +241,20 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
 
   dio_input_init(&din, data, data_length);
 
-  dio_get_uint32_raw(&din, &dummy);
+  dio_get_uint32(&din, &dummy);
   if (dummy != 0) {
     log_verbose("attribute.c unserialize_hash() preamble, uint32 %lu != 0",
                 (long unsigned) dummy);
     return A_SERIAL_OLD;
   }
-  dio_get_uint8_raw(&din, &dummy);
+  dio_get_uint8(&din, &dummy);
   if (dummy != 2) {
     log_verbose("attribute.c unserialize_hash() preamble, "
                 "uint8 %lu != 2 version", (long unsigned) dummy);
     return A_SERIAL_OLD;
   }
-  dio_get_uint32_raw(&din, &entries);
-  dio_get_uint32_raw(&din, &dummy);
+  dio_get_uint32(&din, &entries);
+  dio_get_uint32(&din, &dummy);
   if (dummy != data_length) {
     log_verbose("attribute.c unserialize_hash() preamble, "
                 "uint32 %lu != %lu data_length",
@@ -267,9 +270,10 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
     struct attr_key key;
     void *pvalue;
     int value_length;
-    struct raw_data_out dout;
+    struct data_out dout;
 
-    if (!dio_get_uint32_raw(&din, &value_length)) {
+    dio_get_uint32(&din, &value_length);
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 value_length dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -278,10 +282,12 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
                   "uint32 %lu value_length", (long unsigned) value_length);
 
     /* next 12 bytes */
-    if (!dio_get_uint32_raw(&din, &key.key)
-        || !dio_get_uint32_raw(&din, &key.id)
-        || !dio_get_sint16_raw(&din, &key.x)
-        || !dio_get_sint16_raw(&din, &key.y)) {
+    dio_get_uint32(&din, &key.key);
+    dio_get_uint32(&din, &key.id);
+    dio_get_sint16(&din, &key.x);
+    dio_get_sint16(&din, &key.y);
+
+    if (din.too_short) {
       log_verbose("attribute.c unserialize_hash() "
                   "uint32 key dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -289,8 +295,8 @@ static enum attribute_serial unserialize_hash(struct attribute_hash *hash,
     pvalue = fc_malloc(value_length + 4);
 
     dio_output_init(&dout, pvalue, value_length + 4);
-    dio_put_uint32_raw(&dout, value_length);
-    if (!dio_get_memory_raw(&din, ADD_TO_POINTER(pvalue, 4), value_length)) {
+    dio_put_uint32(&dout, value_length);
+    if (!dio_get_memory(&din, ADD_TO_POINTER(pvalue, 4), value_length)) {
       log_verbose("attribute.c unserialize_hash() "
                   "memory dio_input_too_short");
       return A_SERIAL_FAIL;
@@ -393,11 +399,11 @@ void attribute_set(int key, int id, int x, int y, size_t data_length,
 
   if (0 != data_length) {
     void *pvalue = fc_malloc(data_length + 4);
-    struct raw_data_out dout;
+    struct data_out dout;
 
     dio_output_init(&dout, pvalue, data_length + 4);
-    dio_put_uint32_raw(&dout, data_length);
-    dio_put_memory_raw(&dout, data, data_length);
+    dio_put_uint32(&dout, data_length);
+    dio_put_memory(&dout, data, data_length);
 
     attribute_hash_replace(attribute_hash, &akey, pvalue);
   } else {
@@ -432,10 +438,10 @@ size_t attribute_get(int key, int id, int x, int y, size_t max_data_length,
   }
 
   dio_input_init(&din, pvalue, 0xffffffff);
-  dio_get_uint32_raw(&din, &length);
+  dio_get_uint32(&din, &length);
 
   if (length <= max_data_length) {
-    dio_get_memory_raw(&din, data, length);
+    dio_get_memory(&din, data, length);
   }
 
   log_attribute("  found length = %d", length);

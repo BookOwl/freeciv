@@ -29,7 +29,6 @@
 #include "fc_types.h"
 #include "game.h"
 #include "map.h"
-#include "road.h"
 #include "unit.h"
 #include "unitlist.h"
 #include "unittype.h"
@@ -38,108 +37,44 @@
 #include "movement.h"
 
 /****************************************************************************
-  This function calculates the move rate of the unit, taking into account
-  the penalty for reduced hitpoints, the active effects, and any veteran
+  This function calculates the move rate of the unit, taking into 
+  account the penalty for reduced hitpoints (affects sea and land 
+  units only), the effects of wonders for sea units, and any veteran
   bonuses.
-
-  'utype' and 'pplayer' must be set. 'ptile' can be NULL.
 ****************************************************************************/
-int utype_move_rate(const struct unit_type *utype, const struct tile *ptile,
-                    const struct player *pplayer, int veteran_level,
-                    int hitpoints)
+int unit_move_rate(const struct unit *punit)
 {
-  const struct unit_class *uclass;
+  int move_rate = 0;
+  int base_move_rate;
+  struct unit_class *pclass;
   const struct veteran_level *vlevel;
-  int base_move_rate, move_rate;
 
-  fc_assert_ret_val(NULL != utype, 0);
-  fc_assert_ret_val(NULL != pplayer, 0);
-  vlevel = utype_veteran_level(utype, veteran_level);
-  fc_assert_ret_val(NULL != vlevel, 0);
-  uclass = utype_class(utype);
+  fc_assert_ret_val(punit != NULL, 0);
 
-  base_move_rate = utype->move_rate + vlevel->move_bonus;
+  vlevel = utype_veteran_level(unit_type(punit), punit->veteran);
+  fc_assert_ret_val(vlevel != NULL, 0);
+
+  base_move_rate = unit_type(punit)->move_rate + vlevel->move_bonus;
   move_rate = base_move_rate;
 
-  if (uclass_has_flag(uclass, UCF_DAMAGE_SLOWS)) {
+  pclass = unit_class(punit);
+
+  if (uclass_has_flag(pclass, UCF_DAMAGE_SLOWS)) {
     /* Scale the MP based on how many HP the unit has. */
-    move_rate = (move_rate * hitpoints) / utype->hp;
+    move_rate = (move_rate * punit->hp) / unit_type(punit)->hp;
   }
 
   /* Add on effects bonus (Magellan's Expedition, Lighthouse,
    * Nuclear Power). */
-  move_rate += (get_unittype_bonus(pplayer, ptile, utype, EFT_MOVE_BONUS)
-                * SINGLE_MOVE);
+  move_rate += (get_unit_bonus(punit, EFT_MOVE_BONUS) * SINGLE_MOVE);
 
   /* Don't let the move_rate be less than min_speed unless the base_move_rate is
    * also less than min_speed. */
-  if (move_rate < uclass->min_speed) {
-    move_rate = MIN(uclass->min_speed, base_move_rate);
+  if (move_rate < pclass->min_speed) {
+    move_rate = MIN(pclass->min_speed, base_move_rate);
   }
 
   return move_rate;
-}
-
-/****************************************************************************
-  This function calculates the move rate of the unit. See utype_move_rate()
-  for further details.
-****************************************************************************/
-int unit_move_rate(const struct unit *punit)
-{
-  fc_assert_ret_val(NULL != punit, 0);
-
-  return utype_move_rate(unit_type(punit), unit_tile(punit),
-                         unit_owner(punit), punit->veteran, punit->hp);
-}
-
-/****************************************************************************
-  This function calculates the movement cost to unknown tiles. The base
-  value is equal to the highest movement cost the unit can encounter. If
-  the unit cannot enter all terrains, a malus is applied.
-  The returned value is usually cached into utype->unknown_move_cost and
-  used in the path-finding module.
-****************************************************************************/
-int utype_unknown_move_cost(const struct unit_type *utype)
-{
-  const struct unit_class *uclass = utype_class(utype);
-  bv_extras extras;
-  int move_cost;
-
-  BV_CLR_ALL(extras);
-
-  if (!uclass_has_flag(uclass, UCF_TERRAIN_SPEED)) {
-    /* Unit is not subject to terrain movement costs. */
-    move_cost = SINGLE_MOVE;
-  } else if (utype_has_flag(utype, UTYF_IGTER)) {
-    /* All terrain movement costs are equal! */
-    move_cost = MOVE_COST_IGTER;
-  } else {
-    /* Unit is subject to terrain movement costs. */
-    move_cost = 1; /* Arbitrary minimum. */
-    terrain_type_iterate(pterrain) {
-      if (is_native_to_class(uclass, pterrain, extras)
-          && pterrain->movement_cost > move_cost) {
-        /* Exact movement cost matters only if we can enter
-         * the tile. */
-        move_cost = pterrain->movement_cost;
-      }
-    } terrain_type_iterate_end;
-    move_cost *= SINGLE_MOVE; /* Real value. */
-  }
-
-  /* Let's see if we can cross over all terrain types, else apply a malus.
-   * We want units that may encounter unsuitable terrain explore less.
-   * N.B.: We don't take in account terrain no unit can enter here. */
-  terrain_type_iterate(pterrain) {
-    if (BV_ISSET_ANY(pterrain->native_to)
-        && !is_native_to_class(uclass, pterrain, extras)) {
-      /* Units that may encounter unsuitable terrain explore less. */
-      move_cost *= 2;
-      break;
-    }
-  } terrain_type_iterate_end;
-
-  return move_cost;
 }
 
 
@@ -165,9 +100,8 @@ bool unit_can_defend_here(const struct unit *punit)
 ****************************************************************************/
 bool can_attack_non_native(const struct unit_type *utype)
 {
-  return uclass_has_flag(utype_class(utype), UCF_ATTACK_NON_NATIVE)
-         && utype->attack_strength > 0
-         && !utype_has_flag(utype, UTYF_ONLY_NATIVE_ATTACK);
+  return (utype_class(utype)->move_type == UMT_SEA
+          && !utype_has_flag(utype, F_NO_LAND_ATTACK));
 }
 
 /****************************************************************************
@@ -176,8 +110,49 @@ bool can_attack_non_native(const struct unit_type *utype)
 ****************************************************************************/
 bool can_attack_from_non_native(const struct unit_type *utype)
 {
-  return uclass_has_flag(utype_class(utype), UCF_ATT_FROM_NON_NATIVE)
-         || utype_has_flag(utype, UTYF_MARINES);
+  /* It's clear that UMT_LAND should not be able to attack from
+   * non-native (unless F_MARINES) and it's clear that UMT_SEA
+   * should be able to attack from non-native. It's not clear what to do
+   * with UMT_BOTH. At the moment we return FALSE for
+   * them. One can always give "Marines" flag for them. This should be
+   * generalized for unit_classes anyway. */
+  return (utype_class(utype)->move_type == UMT_SEA
+          || utype_has_flag(utype, F_MARINES));
+}
+
+/****************************************************************************
+  Return TRUE iff the unit is a sailing/naval/sea/water unit.
+****************************************************************************/
+bool is_sailing_unit(const struct unit *punit)
+{
+  return (uclass_move_type(unit_class(punit)) == UMT_SEA);
+}
+
+
+/****************************************************************************
+  Return TRUE iff this unit is a ground/land/normal unit.
+****************************************************************************/
+bool is_ground_unit(const struct unit *punit)
+{
+  return (uclass_move_type(unit_class(punit)) == UMT_LAND);
+}
+
+
+/****************************************************************************
+  Return TRUE iff this unit type is a sailing/naval/sea/water unit type.
+****************************************************************************/
+bool is_sailing_unittype(const struct unit_type *punittype)
+{
+  return (utype_move_type(punittype) == UMT_SEA);
+}
+
+
+/****************************************************************************
+  Return TRUE iff this unit type is a ground/land/normal unit type.
+****************************************************************************/
+bool is_ground_unittype(const struct unit_type *punittype)
+{
+  return (utype_move_type(punittype) == UMT_LAND);
 }
 
 /****************************************************************************
@@ -199,7 +174,7 @@ bool is_city_channel_tile(const struct unit_class *punitclass,
         continue;
       } else if (piter != pexclude
                  && is_native_to_class(punitclass, tile_terrain(piter),
-                                       tile_extras(piter))) {
+                                       piter->special, piter->bases)) {
         found = TRUE;
         break;
       } else if (piter != pexclude
@@ -243,7 +218,7 @@ bool can_exist_at_tile(const struct unit_type *utype,
   }
 
   /* A trireme unit cannot exist in an ocean tile without access to land. */
-  if (utype_has_flag(utype, UTYF_TRIREME) && !is_safe_ocean(ptile)) {
+  if (utype_has_flag(utype, F_TRIREME) && !is_safe_ocean(ptile)) {
     return FALSE;
   }
 
@@ -270,9 +245,21 @@ bool is_native_tile(const struct unit_type *punittype,
                     const struct tile *ptile)
 {
   return is_native_to_class(utype_class(punittype), tile_terrain(ptile),
-                            tile_extras(ptile));
+                            ptile->special, ptile->bases);
 }
 
+
+/****************************************************************************
+  This terrain is native to unit.
+
+  See is_native_to_class()
+****************************************************************************/
+bool is_native_terrain(const struct unit_type *punittype,
+                       const struct terrain *pterrain,
+                       bv_special special, bv_bases bases)
+{
+  return is_native_to_class(utype_class(punittype), pterrain, special, bases);
+}
 
 /****************************************************************************
   This tile is native to unit class.
@@ -283,7 +270,7 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
                              const struct tile *ptile)
 {
   return is_native_to_class(punitclass, tile_terrain(ptile),
-                            tile_extras(ptile));
+                            tile_specials(ptile), tile_bases(ptile));
 }
 
 /****************************************************************************
@@ -292,7 +279,7 @@ bool is_native_tile_to_class(const struct unit_class *punitclass,
 ****************************************************************************/
 bool is_native_to_class(const struct unit_class *punitclass,
                         const struct terrain *pterrain,
-                        bv_extras extras)
+                        bv_special special, bv_bases bases)
 {
   if (!pterrain) {
     /* Unknown is considered native terrain */
@@ -302,91 +289,20 @@ bool is_native_to_class(const struct unit_class *punitclass,
   if (BV_ISSET(pterrain->native_to, uclass_index(punitclass))) {
     return TRUE;
   }
-
-  extra_type_list_iterate(punitclass->cache.native_tile_extras, pextra) {
-    if (BV_ISSET(extras, extra_index(pextra))) {
-      return TRUE;
-    }
-  } extra_type_list_iterate_end;
-
-  return FALSE;
-}
-
-
-/****************************************************************************
-  Is the move under consideration a native move?
-  Note that this function does not check for possible moves, only native
-  moves, so that callers are responsible for checking for other sources of
-  legal moves (e.g. cities, transports, etc.).
-****************************************************************************/
-bool is_native_move(const struct unit_class *punitclass,
-                    const struct tile *src_tile,
-                    const struct tile *dst_tile)
-{
-  const struct road_type *proad;
-  bv_extras none;
-
-  BV_CLR_ALL(none);
-  if (is_native_to_class(punitclass, tile_terrain(dst_tile), none)) {
-    /* We aren't using extras to make the destination native. */
+  if (uclass_has_flag(punitclass, UCF_ROAD_NATIVE)
+      && contains_special(special, S_ROAD)) {
     return TRUE;
-  } else if (!is_native_tile_to_class(punitclass, src_tile)) {
-    /* Disembarking or leaving port, so ignore road connectivity. */
+  }
+  if (uclass_has_flag(punitclass, UCF_RIVER_NATIVE)
+      && contains_special(special, S_RIVER)) {
     return TRUE;
-  } else if (is_native_to_class(punitclass, tile_terrain(src_tile), none)) {
-    /* Native source terrain depends entirely on destination tile nativity. */
-    return is_native_tile_to_class(punitclass, dst_tile);
   }
 
-  /* Check for non-road native extras on the source tile. */
-  extra_type_list_iterate(punitclass->cache.native_tile_extras, pextra) {
-    if (tile_has_extra(src_tile, pextra)
-        && !is_extra_caused_by(pextra, EC_ROAD)
-        && is_native_tile_to_class(punitclass, dst_tile)) {
-      /* If there is one, and the destination is native, the move is native. */
+  base_type_list_iterate(punitclass->cache.native_tile_bases, pbase) {
+    if (BV_ISSET(bases, base_index(pbase))) {
       return TRUE;
     }
-  } extra_type_list_iterate_end;
-
-  extra_type_list_iterate(punitclass->cache.native_tile_extras, pextra) {
-    if (!tile_has_extra(dst_tile, pextra)) {
-      continue;
-    } else if (!is_extra_caused_by(pextra, EC_ROAD)) {
-      /* The destination is native because of a non-road extra. */
-      return TRUE;
-    }
-
-    proad = extra_road_get_const(pextra);
-    road_type_list_iterate(proad->integrators, iroad) {
-      if (!tile_has_road(src_tile, iroad)) {
-        continue;
-      }
-      switch (iroad->move_mode) {
-      case RMM_FAST_ALWAYS:
-        /* Road connects source and destination, so we're fine. */
-        return TRUE;
-      case RMM_CARDINAL:
-        /* Road connects source and destination if cardinal move. */
-        if (is_move_cardinal(src_tile, dst_tile)) {
-          return TRUE;
-        }
-        break;
-      case RMM_RELAXED:
-        if (is_move_cardinal(src_tile, dst_tile)) {
-          /* Cardinal moves have no between tiles, so connected. */
-          return TRUE;
-        }
-        cardinal_between_iterate(src_tile, dst_tile, between) {
-          if (tile_has_road(between, iroad)
-              || tile_has_road(between, proad)) {
-            /* We have a link for the connection. */
-            return TRUE;
-          }
-        } cardinal_between_iterate_end;
-        break;
-      }
-    } road_type_list_iterate_end;
-  } extra_type_list_iterate_end;
+  } base_type_list_iterate_end;
 
   return FALSE;
 }
@@ -429,8 +345,8 @@ bool can_unit_survive_at_tile(const struct unit *punit,
     return TRUE;
   }
 
-  if (tile_has_refuel_extra(ptile, unit_type(punit))) {
-    /* Unit can always survive at refueling base */
+  if (tile_has_native_base(ptile, unit_type(punit))) {
+    /* Unit can always survive at native base */
     return TRUE;
   }
 
@@ -474,11 +390,10 @@ bool can_step_taken_wrt_to_zoc(const struct unit_type *punittype,
   if (tile_city(src_tile) || tile_city(dst_tile)) {
     return TRUE;
   }
-  if (terrain_has_flag(tile_terrain(src_tile), TER_NO_ZOC)
-      || terrain_has_flag(tile_terrain(dst_tile), TER_NO_ZOC)) {
+  if (is_ocean_tile(src_tile)
+      || is_ocean_tile(dst_tile)) {
     return TRUE;
   }
-
   return (is_my_zoc(unit_owner, src_tile)
 	  || is_my_zoc(unit_owner, dst_tile));
 }
@@ -519,7 +434,8 @@ bool unit_can_move_to_tile(const struct unit *punit,
                            const struct tile *dst_tile,
                            bool igzoc)
 {
-  return (MR_OK == unit_move_to_tile_test(punit,
+  return (MR_OK == unit_move_to_tile_test(unit_type(punit),
+                                          unit_owner(punit),
                                           punit->activity, unit_tile(punit),
                                           dst_tile, igzoc));
 }
@@ -533,29 +449,25 @@ bool unit_can_move_to_tile(const struct unit *punit,
     1) The unit is idle or on server goto.
     2) The target location is next to the unit.
     3) There are no non-allied units on the target tile.
-    4) Animals cannot move out from home terrains
-    5) Unit can move to a tile where it can't survive on its own if there
+    4) Unit can move to a tile where it can't survive on its own if there
        is free transport capacity.
-    6) Some units cannot take over a city.
-    7) Only units permitted to attack from non-native tiles may do so.
-    8) There are no peaceful but un-allied units on the target tile.
-    9) There is not a peaceful but un-allied city on the target tile.
-   10) There is no non-allied unit blocking (zoc) [or igzoc is true].
-   11) Triremes cannot move out of sight from land.
-   12) It is not the territory of a player we are at peace with.
-   13) The unit is unable to disembark from current transporter.
-   14) The unit is making a non-native move (e.g. lack of road)
+    5) Some units cannot take over a city.
+    6) Marines are the only land units that can attack from a ocean square.
+    7) There are no peaceful but un-allied units on the target tile.
+    8) There is not a peaceful but un-allied city on the target tile.
+    9) There is no non-allied unit blocking (zoc) [or igzoc is true].
+   10) Triremes cannot move out of sight from land.
+   11) It is not the territory of a player we are at peace with.
 **************************************************************************/
 enum unit_move_result
-unit_move_to_tile_test(const struct unit *punit,
+unit_move_to_tile_test(const struct unit_type *punittype,
+                       const struct player *unit_owner,
                        enum unit_activity activity,
                        const struct tile *src_tile,
                        const struct tile *dst_tile, bool igzoc)
 {
   bool zoc;
   struct city *pcity;
-  const struct unit_type *punittype = unit_type(punit);
-  const struct player *puowner = unit_owner(punit);
 
   /* 1) */
   if (activity != ACTIVITY_IDLE
@@ -571,45 +483,39 @@ unit_move_to_tile_test(const struct unit *punit,
   }
 
   /* 3) */
-  if (is_non_allied_unit_tile(dst_tile, puowner)) {
+  if (is_non_allied_unit_tile(dst_tile, unit_owner)) {
     /* You can't move onto a tile with non-allied units on it (try
      * attacking instead). */
     return MR_DESTINATION_OCCUPIED_BY_NON_ALLIED_UNIT;
   }
 
   /* 4) */
-  if (puowner->ai_common.barbarian_type == ANIMAL_BARBARIAN
-      && dst_tile->terrain->animal != punittype) {
-    return MR_NO_TRANSPORTER_CAPACITY;
-  }
-
-  /* 5) */
   if (!(can_exist_at_tile(punittype, dst_tile)
-        || unit_could_load_at(punit, dst_tile))) {
+        || unit_class_transporter_capacity(dst_tile, unit_owner,
+                                           utype_class(punittype)) > 0)) {
     return MR_NO_TRANSPORTER_CAPACITY;
   }
 
-  pcity = is_enemy_city_tile(dst_tile, puowner);
+  pcity = is_enemy_city_tile(dst_tile, unit_owner);
   if (NULL != pcity) {
-    /* 6) */
-    if (!unit_can_take_over(punit)) {
+    /* 5) */
+    if (!utype_can_take_over(punittype)) {
       return MR_BAD_TYPE_FOR_CITY_TAKE_OVER;
-    } else {
-      /* No point checking for being able to take over from non-native
-       * for units that can't take over a city anyway. */
+    }
 
-      /* 7) */
-      if (!can_exist_at_tile(punittype, src_tile)
-          && !can_attack_from_non_native(punittype)) {
-        /* Don't use is_native_tile() because any unit in an
-         * adjacent city may conquer, regardless of flags. */
-        return MR_BAD_TYPE_FOR_CITY_TAKE_OVER_FROM_NON_NATIVE;
-      }
+    /* 6) */
+    if (utype_move_type(punittype) == UMT_LAND
+        && is_ocean_tile(src_tile)      /* Moving from ocean */
+        && !utype_has_flag(punittype, F_MARINES)) {
+      /* Most ground units can't move into cities from ships. (Note this
+       * check is only for movement, not attacking: most ground units
+       * can't attack from ship at *any* units on land.) */
+      return MR_BAD_TYPE_FOR_CITY_TAKE_OVER_FROM_SEA;
     }
   }
 
-  /* 8) */
-  if (is_non_attack_unit_tile(dst_tile, puowner)) {
+  /* 7) */
+  if (is_non_attack_unit_tile(dst_tile, unit_owner)) {
     /* You can't move into a non-allied tile.
      *
      * FIXME: this should never happen since it should be caught by check
@@ -617,45 +523,31 @@ unit_move_to_tile_test(const struct unit *punit,
     return MR_NO_WAR;
   }
 
-  /* 9) */
+  /* 8) */
   pcity = tile_city(dst_tile);
-  if (pcity && pplayers_non_attack(city_owner(pcity), puowner)) {
+  if (pcity && pplayers_non_attack(city_owner(pcity), unit_owner)) {
     /* You can't move into an empty city of a civilization you're at
      * peace with - you must first either declare war or make alliance. */
     return MR_NO_WAR;
   }
 
-  /* 10) */
+  /* 9) */
   zoc = igzoc
-    || can_step_taken_wrt_to_zoc(punittype, puowner, src_tile, dst_tile);
+    || can_step_taken_wrt_to_zoc(punittype, unit_owner, src_tile, dst_tile);
   if (!zoc) {
     /* The move is illegal because of zones of control. */
     return MR_ZOC;
   }
 
-  /* 11) */
-  if (utype_has_flag(punittype, UTYF_TRIREME) && !is_safe_ocean(dst_tile)) {
+  /* 10) */
+  if (utype_has_flag(punittype, F_TRIREME) && !is_safe_ocean(dst_tile)) {
     return MR_TRIREME;
   }
 
-  /* 12) */
-  if (!utype_has_flag(punittype, UTYF_CIVILIAN)
-      && !player_can_invade_tile(puowner, dst_tile)) {
+  /* 11) */
+  if (!utype_has_flag(punittype, F_CIVILIAN)
+      && !player_can_invade_tile(unit_owner, dst_tile)) {
     return MR_PEACE;
-  }
-
-  /* 13) */
-  if (unit_transported(punit)
-     && !can_unit_unload(punit, unit_transport_get(punit))) {
-    return MR_CANNOT_DISEMBARK;
-  }
-
-  /* 14) */
-  if (!(is_native_move(utype_class(punittype), src_tile, dst_tile)
-        /* Allow non-native moves into cities or boarding transport. */
-        || pcity
-        || unit_could_load_at(punit, dst_tile))) {
-    return MR_NON_NATIVE_MOVE;
   }
 
   return MR_OK;
@@ -686,132 +578,91 @@ bool can_unit_type_transport(const struct unit_type *transporter,
   return BV_ISSET(transporter->cargo, uclass_index(transported));
 }
 
-/****************************************************************************
-  Return whether we can find a suitable transporter for given unit at
-  'ptile'. It needs to have free space. To find the best transporter, see
-  transporter_for_unit().
-****************************************************************************/
-bool unit_can_load(const struct unit *punit)
-{
-  unit_list_iterate(unit_tile(punit)->units, ptransport) {
-    if (can_unit_load(punit, ptransport)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Return whether we could find a suitable transporter for given unit at
-  'ptile'. It needs to have free space. To find the best transporter, see
-  transporter_for_unit_at().
-****************************************************************************/
-bool unit_could_load_at(const struct unit *punit, const struct tile *ptile)
+/**************************************************************************
+  Search transport suitable for given unit from tile. It has to have
+  free space in it.
+**************************************************************************/
+struct unit *transport_from_tile(struct unit *punit, struct tile *ptile)
 {
   unit_list_iterate(ptile->units, ptransport) {
     if (could_unit_load(punit, ptransport)) {
-      return TRUE;
+      return ptransport;
     }
   } unit_list_iterate_end;
 
-  return FALSE;
+  return NULL;
 }
-
-static int move_points_denomlen = 0;
-
-/****************************************************************************
-  Call whenever terrain_control.move_fragments / SINGLE_MOVE changes.
-****************************************************************************/
-void init_move_fragments(void)
+ 
+/**************************************************************************
+ Returns the number of free spaces for units of given class.
+ Can be 0.
+**************************************************************************/
+int unit_class_transporter_capacity(const struct tile *ptile,
+                                    const struct player *pplayer,
+                                    const struct unit_class *pclass)
 {
-  char denomstr[10];
-  /* String length of maximum denominator for fractional representation of
-   * movement points, for padding of text representation */
-  fc_snprintf(denomstr, sizeof(denomstr), "%d", SINGLE_MOVE);
-  move_points_denomlen = strlen(denomstr);
+  int availability = 0;
+
+  unit_list_iterate(ptile->units, punit) {
+    if (!unit_transported(punit)
+        && pplayers_allied(unit_owner(punit), pplayer)
+        && can_unit_type_transport(unit_type(punit), pclass)) {
+      availability += get_transporter_capacity(punit);
+      availability -= get_transporter_occupancy(punit);
+    }
+  } unit_list_iterate_end;
+
+  return availability;
 }
 
 /****************************************************************************
-  Render positive movement points as text, including fractional movement
-  points, scaled by SINGLE_MOVE. Returns a pointer to a static buffer.
-  'reduce' is whether fractional movement points should be reduced to
-    lowest terms (this might be confusing in some cases).
+  Render movement points as text, including fractional movement points,
+  scaled by SINGLE_MOVE. Returns a pointer to a static buffer.
   'prefix' is a string put in front of all numeric output.
   'none' is the string to display in place of the integer part if no
-    movement points (or NULL to just say 0).
+  movement points (or NULL to just say 0).
   'align' controls whether this is for a fixed-width table, in which case
-    padding spaces will be included to make all such strings line up when
-    right-aligned.
+  padding spaces will be included to make all such strings line up when
+  right-aligned.
 ****************************************************************************/
-const char *move_points_text_full(int mp, bool reduce, const char *prefix,
-                                  const char *none, bool align)
+const char *move_points_text(int mp, const char *prefix, const char *none,
+                             bool align)
 {
   static struct astring str = ASTRING_INIT;
+  static int denomlen = 0;
   int pad1, pad2;
-
-  if (align && SINGLE_MOVE > 1) {
-    /* Align to worst-case denominator even if we might be reducing to
-     * lowest terms, as other entries in a table might not reduce */
-    pad1 = move_points_denomlen;      /* numerator or denominator */
-    pad2 = move_points_denomlen*2+2;  /* everything right of integer part */
+  if (denomlen == 0) {
+    /* String length of denominator for fractional representation of
+     * movement points, for padding */
+    char denomstr[10];
+    fc_snprintf(denomstr, sizeof(denomstr), "%d", SINGLE_MOVE);
+    denomlen = strlen(denomstr);
+  }
+  if (align) {
+    pad1 = denomlen;     /* numerator or denominator */
+    pad2 = denomlen*2+2; /* everything right of integer part */
   } else {
-    /* If no possible fractional part, alignment unneeded even if requested */
     pad1 = pad2 = 0;
   }
   if (!prefix) {
     prefix = "";
   }
   astr_clear(&str);
-  if ((mp == 0 && none) || SINGLE_MOVE == 0) {
-    /* No movement points, and we have a special representation to use */
-    /* (Also used when SINGLE_MOVE==0, to avoid dividing by zero, which is
-     * important for client before ruleset has been received. Doesn't much
-     * matter what we print in this case.) */
-    astr_add(&str, "%s%*s", none ? none : "", pad2, "");
+  if (mp == 0 && none) {
+    /* No movement points, special representation */
+    astr_add(&str, "%s%*s", none, pad2, "");
   } else if ((mp % SINGLE_MOVE) == 0) {
-    /* Integer move points */
+    /* Integer move bonus */
     astr_add(&str, "%s%d%*s", prefix, mp / SINGLE_MOVE, pad2, "");
+  } else if (mp < SINGLE_MOVE) {
+    /* Fractional move bonus */
+    astr_add(&str, "%s%*d/%*d", prefix,
+             pad1, mp % SINGLE_MOVE, pad1, SINGLE_MOVE);
   } else {
-    /* Fractional part */
-    int cancel;
-
-    fc_assert(SINGLE_MOVE > 1);
-    if (reduce) {
-      /* Reduce to lowest terms */
-      int gcd = mp;
-      /* Calculate greatest common divisor with Euclid's algorithm */
-      int b = SINGLE_MOVE;
-
-      while (b != 0) {
-        int t = b;
-        b = gcd % b;
-        gcd = t;
-      }
-      cancel = gcd;
-    } else {
-      /* No cancellation */
-      cancel = 1;
-    }
-    if (mp < SINGLE_MOVE) {
-      /* Fractional move points */
-      astr_add(&str, "%s%*d/%*d", prefix,
-               pad1, (mp % SINGLE_MOVE) / cancel, pad1, SINGLE_MOVE / cancel);
-    } else {
-      /* Integer + fractional move points */
-      astr_add(&str,
-               "%s%d %*d/%*d", prefix, mp / SINGLE_MOVE,
-               pad1, (mp % SINGLE_MOVE) / cancel, pad1, SINGLE_MOVE / cancel);
-    }
+    /* Integer + fractional move bonus */
+    astr_add(&str,
+             "%s%d %*d/%*d", prefix, mp / SINGLE_MOVE,
+             pad1, mp % SINGLE_MOVE, pad1, SINGLE_MOVE);
   }
   return astr_str(&str);
-}
-
-/****************************************************************************
-  Simple version of move_points_text_full() -- render positive movement
-  points as text without any prefix or alignment.
-****************************************************************************/
-const char *move_points_text(int mp, bool reduce)
-{
-  return move_points_text_full(mp, reduce, NULL, NULL, FALSE);
 }

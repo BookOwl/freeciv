@@ -1,10 +1,9 @@
 [nation_sioux]
 
-translation_domain="freeciv"
-
 name=_("Sioux")
 plural=_("?plural:Sioux")
 groups="Medieval", "American", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("The Sioux was a North American nation that fought several\
  decisive battles against the United States. It consisted of three distinct\
  groups of tribes: the Lakota, the Dakota and the Nakota.")
@@ -34,7 +33,7 @@ ruler_titles = {
 
 flag="cheyenne"
 flag_alt = "-"
-style = "Celtic"
+city_style = "Celtic"
 
 init_techs=""
 init_buildings=""

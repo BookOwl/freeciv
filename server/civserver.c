@@ -53,9 +53,12 @@
 /* server */
 #include "aiiface.h"
 #include "console.h"
+#include "ggzserver.h"
 #include "meta.h"
 #include "sernet.h"
 #include "srv_main.h"
+
+#include "civserver.h"
 
 #ifdef GENERATING_MAC
 static void Mac_options(int argc);  /* don't need argv */
@@ -82,7 +85,10 @@ static void signal_handler(int sig)
 
   switch (sig) {
   case SIGINT:
-    if (timer && timer_read_seconds(timer) <= 1.0) {
+    if (with_ggz) {
+      save_and_exit(SIGINT);
+    }
+    if (timer && read_timer_seconds(timer) <= 1.0) {
       save_and_exit(SIGINT);
     } else {
       if (game.info.timeout == -1) {
@@ -94,8 +100,7 @@ static void signal_handler(int sig)
                      "within one second to make it exit."));
       }
     }
-    timer = timer_renew(timer, TIMER_USER, TIMER_ACTIVE);
-    timer_start(timer);
+    timer = renew_timer_start(timer, TIMER_USER, TIMER_ACTIVE);
     break;
 
 #ifdef SIGHUP
@@ -139,14 +144,14 @@ int main(int argc, char *argv[])
 
   /* Load win32 post-crash debugger */
 #ifdef WIN32_NATIVE
-# ifndef FREECIV_NDEBUG
+# ifndef NDEBUG
   if (LoadLibrary("exchndl.dll") == NULL) {
-#  ifdef FREECIV_DEBUG
+#  ifdef DEBUG
     fprintf(stderr, "exchndl.dll could not be loaded, no crash debugger\n");
-#  endif /* FREECIV_DEBUG */
+#  endif
   }
-# endif /* FREECIV_NDEBUG */
-#endif /* WIN32_NATIVE */
+# endif
+#endif
 
 #ifdef USE_INTERRUPT_HANDLERS
   if (SIG_ERR == signal(SIGINT, signal_handler)) {
@@ -190,8 +195,6 @@ int main(int argc, char *argv[])
 #endif
   srvarg.announce = ANNOUNCE_DEFAULT;
 
-  game.server.meta_info.type[0] = '\0';
-
   /* no  we don't use GNU's getopt or even the "standard" getopt */
   /* yes we do have reasons ;)                                   */
   /* FIXME: and that are? */
@@ -205,7 +208,7 @@ int main(int argc, char *argv[])
       break;
     } else if ((option = get_option_malloc("--log", argv, &inx, argc))) {
       srvarg.log_filename = option; /* Never freed. */
-#ifndef FREECIV_NDEBUG
+#ifndef NDEBUG
     } else if (is_option("--Fatal", argv[inx])) {
       if (inx + 1 >= argc || '-' == argv[inx + 1][0]) {
         srvarg.fatal_assertions = SIGABRT;
@@ -217,7 +220,7 @@ int main(int argc, char *argv[])
         inx++;
         showhelp = TRUE;
       }
-#endif /* FREECIV_NDEBUG */
+#endif /* NDEBUG */
     } else if ((option = get_option_malloc("--Ranklog", argv, &inx, argc))) {
       srvarg.ranklog_filename = option; /* Never freed. */
     } else if (is_option("--nometa", argv[inx])) {
@@ -233,7 +236,7 @@ int main(int argc, char *argv[])
       srvarg.metaserver_no_send = FALSE;      /* --Metaserver implies --meta */
     } else if ((option = get_option_malloc("--identity",
 					   argv, &inx, argc))) {
-      sz_strlcpy(srvarg.identity_name, option);
+      sz_strlcpy(srvarg.metaserver_name, option);
       free(option);
     } else if ((option = get_option_malloc("--port", argv, &inx, argc))) {
       if (!str_to_int(option, &srvarg.port)) {
@@ -245,10 +248,6 @@ int main(int argc, char *argv[])
       srvarg.bind_addr = option; /* Never freed. */
     } else if ((option = get_option_malloc("--Bind-meta", argv, &inx, argc))) {
       srvarg.bind_meta_addr = option; /* Never freed. */
-#ifdef FREECIV_WEB
-    } else if ((option = get_option_malloc("--type", argv, &inx, argc))) {
-      sz_strlcpy(game.server.meta_info.type, option);
-#endif /* FREECIV_WEB */
     } else if ((option = get_option_malloc("--read", argv, &inx, argc)))
       srvarg.script_filename = option; /* Never freed. */
     else if ((option = get_option_malloc("--quitidle", argv, &inx, argc))) {
@@ -350,24 +349,24 @@ int main(int argc, char *argv[])
                 _("Listen for clients on ADDR"));
     cmdhelp_add(help, "B", "Bind-meta ADDR",
                 _("Connect to metaserver from this address"));
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
     cmdhelp_add(help, "d",
                 /* TRANS: "debug" is exactly what user must type, do not translate. */
                 _("debug NUM"),
                 _("Set debug log level (%d to %d, or %d:file1,min,max:...)"),
                 LOG_FATAL, LOG_DEBUG, LOG_DEBUG);
-#else  /* FREECIV_DEBUG */
+#else  /* DEBUG */
     cmdhelp_add(help, "d",
                 /* TRANS: "debug" is exactly what user must type, do not translate. */
                 _("debug NUM"),
                 _("Set debug log level (%d to %d)"), LOG_FATAL, LOG_VERBOSE);
-#endif /* FREECIV_DEBUG */
-#ifndef FREECIV_NDEBUG
+#endif /* DEBUG */
+#ifndef NDEBUG
     cmdhelp_add(help, "F",
                 /* TRANS: "Fatal" is exactly what user must type, do not translate. */
                 _("Fatal [SIGNAL]"),
                 _("Raise a signal on failed assertion"));
-#endif /* FREECIV_NDEBUG */
+#endif
     cmdhelp_add(help, "f",
                 /* TRANS: "file" is exactly what user must type, do not translate. */
                 _("file FILE"),
@@ -377,7 +376,7 @@ int main(int argc, char *argv[])
     cmdhelp_add(help, "i",
                 /* TRANS: "identity" is exactly what user must type, do not translate. */
                 _("identity ADDR"),
-                _("Be known as ADDR at metaserver or LAN client"));
+                _("Be known as ADDR at metaserver"));
     cmdhelp_add(help, "l",
                 /* TRANS: "log" is exactly what user must type, do not translate. */
                 _("log FILE"),
@@ -388,12 +387,6 @@ int main(int argc, char *argv[])
                 /* TRANS: "Metaserver" is exactly what user must type, do not translate. */
                 _("Metaserver ADDR"),
                 _("Set ADDR as metaserver address"));
-#ifdef FREECIV_WEB
-    cmdhelp_add(help, "t",
-                /* TRANS: "Type" is exactly what user must type, do not translate. */
-                _("Type TYPE"),
-                _("Set TYPE as server type in metaserver"));
-#endif /* FREECIV_WEB */
     cmdhelp_add(help, "p",
                 /* TRANS: "port" is exactly what user must type, do not translate. */
                 _("port PORT"),
@@ -453,6 +446,7 @@ int main(int argc, char *argv[])
   /* disallow running as root -- too dangerous */
   dont_run_as_root(argv[0], "freeciv_server");
 
+  ggz_initialize();
   init_our_capability();
 
   /* have arguments, call the main server loop... */
@@ -473,10 +467,11 @@ static void Mac_options(int argc)
 #define HARDCODED_OPT
   /*temporary hack since GetNewDialog() doesn't want to work*/
 #ifdef HARDCODED_OPT
-  srvarg.log_filename = "log.out";
-  srvarg.loglevel = LOG_DEBUG;
+  srvarg.log_filename="log.out";
+  srvarg.loglevel=LOG_DEBUG;
 #else  /* HARDCODED_OPT */
-  if (argc == 0) {
+  if (argc == 0)
+  {
     OSErr err;
     DialogPtr  optptr;
     Ptr storage;
@@ -488,45 +483,51 @@ static void Mac_options(int argc)
     short the_item, old_item=16;
     int done = false;
     Str255 the_string;
-
-    /* load/init the stuff for the dialog */
-    storage = NewPtr(sizeof(DialogRecord));
-    if (storage == 0) {
+    /*load/init the stuff for the dialog*/
+    storage =NewPtr(sizeof(DialogRecord));
+    if (storage == 0)
+    {
       exit(EXIT_FAILURE);
     }
-    ditl = Get1Resource('DITL',200);
-    if ((ditl == 0) || (ResError())) {
+    ditl=Get1Resource('DITL',200);
+    if ((ditl == 0)||(ResError()))
+    {
       exit(EXIT_FAILURE);
     }
-    dlog = Get1Resource('DLOG',200);
-    if ((dlog == 0) || (ResError())) {
+    dlog=Get1Resource('DLOG',200);
+    if ((dlog == 0)||(ResError()))
+    {
       exit(EXIT_FAILURE);
     }
-    /* make the dialog */
-    optptr = GetNewDialog(200, storage, (WindowPtr)-1L);
-    /* setup the dialog */
-    err = SetDialogDefaultItem(optptr, 1);
-    if (err != 0) {
+    /*make the dialog*/
+    optptr=GetNewDialog(200, storage, (WindowPtr)-1L);
+    /*setup the dialog*/
+    err=SetDialogDefaultItem(optptr, 1);
+    if (err != 0)
+    {
       exit(EXIT_FAILURE);
     }
-    /* insert default highlight draw code? */
+    /*insert default highlight draw code?*/
     err=SetDialogCancelItem(optptr, 2);
-    if (err != 0) {
+    if (err != 0)
+    {
       exit(EXIT_FAILURE);
     }
     err=SetDialogTracksCursor(optptr, true);
-    if (err != 0) {
+    if (err != 0)
+    {
       exit(EXIT_FAILURE);
     }
     GetDItem(optptr, 16/*normal radio button*/, &the_type, &the_handle, &the_rect);
     SetCtlValue((ControlHandle)the_handle, true);
 
-    while (!done) /* loop */
+    while(!done)/*loop*/
     {
       ModalDialog(0L, &the_item);/* don't feed 0 where a upp is expected? */
       	/* old book suggests using OL(NIL) as the first argument, but
            It doesn't include anything about UPPs either, so... */
-      switch (the_item) {
+      switch (the_item)
+      {
         case 1:
           done = true;
         break;
@@ -560,16 +561,19 @@ static void Mac_options(int argc)
     GetDItem( optptr, 10, &the_type, &the_handle, &the_rect);
     GetIText( the_handle, (unsigned char *)srvarg.script_filename);
     GetDItem(optptr, 15, &the_type, &the_handle, &the_rect);
-    if (GetControlValue((ControlHandle)the_handle)) {
-      srvarg.loglevel = LOG_FATAL;
+    if(GetControlValue((ControlHandle)the_handle))
+    {
+      srvarg.loglevel=LOG_FATAL;
     }
     GetDItem(optptr, 16, &the_type, &the_handle, &the_rect);
-    if (GetControlValue((ControlHandle)the_handle)) {
-      srvarg.loglevel = LOG_NORMAL;
+    if(GetControlValue((ControlHandle)the_handle))
+    {
+      srvarg.loglevel=LOG_NORMAL;
     }
     GetDItem(optptr, 17, &the_type, &the_handle, &the_rect);
-    if (GetControlValue((ControlHandle)the_handle)) {
-      srvarg.loglevel = LOG_VERBOSE;
+    if(GetControlValue((ControlHandle)the_handle))
+    {
+      srvarg.loglevel=LOG_VERBOSE;
     }
     DisposeDialog(optptr);/*get rid of the dialog after sorting out the options*/
     DisposePtr(storage);/*clean up the allocated memory*/

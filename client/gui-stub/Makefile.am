@@ -1,9 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LTLIBRARIES = libgui-stub.la
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility \
-	-I$(top_srcdir)/dependencies/tinycthread \
-        -I$(top_srcdir)/common $(gui_stub_cflags)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common $(GUI_stub_CFLAGS) $(SOUND_CFLAGS)
 
 libgui_stub_la_SOURCES = \
 	canvas.c	\
@@ -30,7 +28,6 @@ libgui_stub_la_SOURCES = \
 	graphics.h	\
 	gui_main.c	\
 	gui_main.h	\
-	gui_stub.h	\
 	helpdlg.c	\
 	helpdlg.h	\
 	inteldlg.c	\

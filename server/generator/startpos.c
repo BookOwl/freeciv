@@ -21,7 +21,6 @@
 #include "fcintl.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
 #include "movement.h"
 
@@ -49,11 +48,9 @@ static int *islands_index;
 ****************************************************************************/
 static int get_tile_value(struct tile *ptile)
 {
-  int value;
-  int irrig_bonus = 0;
-  int mine_bonus = 0;
-  struct tile *roaded;
-  struct extra_type *pextra;
+  struct terrain *old_terrain;
+  bv_special old_special;
+  int value, irrig_bonus, mine_bonus;
 
   /* Give one point for each food / shield / trade produced. */
   value = 0;
@@ -61,54 +58,27 @@ static int get_tile_value(struct tile *ptile)
     value += city_tile_output(NULL, ptile, FALSE, o);
   } output_type_iterate_end;
 
-  roaded = tile_virtual_new(ptile);
+  old_terrain = ptile->terrain;
+  old_special = ptile->special;
 
-  if (num_role_units(L_SETTLERS) > 0) {
-    struct unit_type *start_worker = get_role_unit(L_SETTLERS, 0);
+  tile_set_special(ptile, S_ROAD);
+  tile_apply_activity(ptile, ACTIVITY_IRRIGATE);
+  irrig_bonus = -value;
+  output_type_iterate(o) {
+    irrig_bonus += city_tile_output(NULL, ptile, FALSE, o);
+  } output_type_iterate_end;
 
-    road_type_iterate(proad) {
-      struct extra_type *pextra;
+  ptile->terrain = old_terrain;
+  ptile->special = old_special;
+  tile_set_special(ptile, S_ROAD);
+  tile_apply_activity(ptile, ACTIVITY_MINE);
+  mine_bonus = -value;
+  output_type_iterate(o) {
+    mine_bonus += city_tile_output(NULL, ptile, FALSE, o);
+  } output_type_iterate_end;
 
-      pextra = road_extra_get(proad);
-      if (road_can_be_built(proad, roaded)
-          && are_reqs_active(NULL, NULL, NULL, NULL, roaded,
-                             NULL, start_worker, NULL, NULL, NULL,
-                             &pextra->reqs, RPT_CERTAIN)) {
-        tile_add_road(roaded, proad);
-      }
-    } road_type_iterate_end;
-  }
-
-  pextra = next_extra_for_tile(roaded, EC_IRRIGATION, NULL, NULL);
-
-  if (pextra != NULL) {
-    struct tile *vtile;
-
-    vtile = tile_virtual_new(roaded);
-    tile_apply_activity(vtile, ACTIVITY_IRRIGATE, pextra);
-    irrig_bonus = -value;
-    output_type_iterate(o) {
-      irrig_bonus += city_tile_output(NULL, vtile, FALSE, o);
-    } output_type_iterate_end;
-    tile_virtual_destroy(vtile);
-  }
-
-  pextra = next_extra_for_tile(roaded, EC_MINE, NULL, NULL);
-
-  /* Same set of roads used with mine as with irrigation. */
-  if (pextra != NULL) {
-    struct tile *vtile;
-
-    vtile = tile_virtual_new(roaded);
-    tile_apply_activity(vtile, ACTIVITY_MINE, pextra);
-    mine_bonus = -value;
-    output_type_iterate(o) {
-      mine_bonus += city_tile_output(NULL, vtile, FALSE, o);
-    } output_type_iterate_end;
-    tile_virtual_destroy(vtile);
-  }
-
-  tile_virtual_destroy(roaded);
+  ptile->terrain = old_terrain;
+  ptile->special = old_special;
 
   value += MAX(0, MAX(mine_bonus, irrig_bonus)) / 2;
 
@@ -120,56 +90,6 @@ struct start_filter_data {
   struct unit_type *initial_unit;
   int *value;
 };
-
-/****************************************************************************
-  Check if number of reachable native tiles is sufficient.
-  Initially given tile is assumed to be native (not checked by this function)
-****************************************************************************/
-static bool check_native_area(const struct unit_type *utype,
-                              const struct tile *ptile,
-                              int min_area)
-{
-  int tiles = 1; /* There's the central tile already. */
-  struct tile_list *tlist = tile_list_new();
-  struct tile *central = tile_virtual_new(ptile); /* Non-const virtual tile */
-  struct dbv handled;
-
-  dbv_init(&handled, MAP_INDEX_SIZE);
-
-  tile_list_append(tlist, central);
-
-  while (tile_list_size(tlist) > 0 && tiles < min_area) {
-    tile_list_iterate(tlist, ptile2) {
-      adjc_iterate(ptile2, ptile3) {
-        int idx = tile_index(ptile3);
-        if (!dbv_isset(&handled, idx) && is_native_tile(utype, ptile3)) {
-          tiles++;
-          tile_list_append(tlist, ptile3);
-          dbv_set(&handled, idx);
-          if (tiles >= min_area) {
-            /* Break out when we already know that area is sufficient. */
-            break;
-          }
-        }
-      } adjc_iterate_end;
-
-      tile_list_remove(tlist, ptile2);
-
-      if (tiles >= min_area) {
-        /* Break out when we already know that area is sufficient. */
-        break;
-      }
-    } tile_list_iterate_end;
-  }
-
-  tile_list_destroy(tlist);
-
-  dbv_free(&handled);
-
-  tile_virtual_destroy(central);
-
-  return tiles >= min_area;
-}
 
 /****************************************************************************
   Return TRUE if (x,y) is a good starting position.
@@ -199,22 +119,12 @@ static bool is_valid_start_pos(const struct tile *ptile, const void *dataptr)
   }
 
   /* Don't start on a hut. */
-  if (tile_has_cause_extra(ptile, EC_HUT)) {
+  if (tile_has_special(ptile, S_HUT)) {
     return FALSE;
   }
 
   /* Has to be native tile for initial unit */
   if (!is_native_tile(pdata->initial_unit, ptile)) {
-    return FALSE;
-  }
-
-  /* Check native area size. */
-  if (!check_native_area(pdata->initial_unit, ptile,
-                         terrain_control.min_start_native_area)) {
-    return FALSE;
-  }
-
-  if (game.server.start_city && terrain_has_flag(tile_terrain(ptile), TER_NO_CITIES)) {
     return FALSE;
   }
 

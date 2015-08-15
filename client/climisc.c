@@ -60,7 +60,6 @@ used throughout the client.
 #include "mapctrl_common.h"
 #include "mapview_common.h"
 #include "messagewin_common.h"
-#include "options.h"
 #include "packhand.h"
 #include "repodlgs_common.h"
 #include "tilespec.h"
@@ -247,7 +246,7 @@ void client_diplomacy_clause_string(char *buf, int bufsiz,
   case CLAUSE_ADVANCE:
     fc_snprintf(buf, bufsiz, _("The %s give %s"),
                 nation_plural_for_player(pclause->from),
-                advance_name_translation(advance_by_number(pclause->value)));
+                advance_name_for_player(client.conn.playing, pclause->value));
     break;
   case CLAUSE_CITY:
     pcity = game_city_by_number(pclause->value);
@@ -348,10 +347,12 @@ void nuclear_winter_scaled(int *chance, int *rate, int max)
 struct sprite *client_research_sprite(void)
 {
   if (NULL != client.conn.playing && can_client_change_view()) {
-    const struct research *presearch = research_get(client_player());
+    const struct player_research *presearch =
+        player_research_get(client_player());
     int index = 0;
 
-    if (A_UNSET != presearch->researching) {
+    if (is_future_tech(presearch->researching)
+        || NULL != valid_advance_by_number(presearch->researching)) {
       index = (NUM_TILES_PROGRESS * presearch->bulbs_researched
                / (presearch->client.researching_cost + 1));
     }
@@ -580,7 +581,7 @@ bool city_building_present(const struct city *pcity,
 static int target_get_section(struct universal target)
 {
   if (VUT_UTYPE == target.kind) {
-    if (utype_has_flag(target.value.utype, UTYF_CIVILIAN)) {
+    if (utype_has_flag(target.value.utype, F_CIVILIAN)) {
       return 2;
     } else {
       return 3;
@@ -601,7 +602,7 @@ static int target_get_section(struct universal target)
 /**************************************************************************
  Helper for name_and_sort_items.
 **************************************************************************/
-static int fc_cmp(const void *p1, const void *p2)
+static int my_cmp(const void *p1, const void *p2)
 {
   const struct item *i1 = p1, *i2 = p2;
   int s1 = target_get_section(i1->item);
@@ -619,7 +620,7 @@ static int fc_cmp(const void *p1, const void *p2)
 
  section 0: normal buildings
  section 1: Capitalization
- section 2: UTYF_CIVILIAN units
+ section 2: F_CIVILIAN units
  section 3: other units
  section 4: small wonders
  section 5: great wonders
@@ -662,7 +663,7 @@ void name_and_sort_items(struct universal *targets, int num_targets,
     }
   }
 
-  qsort(items, num_targets, sizeof(struct item), fc_cmp);
+  qsort(items, num_targets, sizeof(struct item), my_cmp);
 }
 
 /**************************************************************************
@@ -968,7 +969,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
    * about us. */
   if (-1 != conn_id
       && client.conn.id != conn_id
-      && ft_color_requested(options.highlight_our_names)) {
+      && ft_color_requested(highlight_our_names)) {
     const char *username = client.conn.username;
     size_t userlen = strlen(username);
     const char *playername = ((client_player() && !client_is_observer())
@@ -989,7 +990,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
           && 0 == fc_strncasecmp(p, username, userlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + userlen,
-                                             options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1001,7 +1002,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
                  && 0 == fc_strncasecmp(p, playername, playerlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + playerlen,
-                                             options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1190,207 +1191,14 @@ void common_taxrates_callback(int i)
   Returns TRUE if any of the units can do the connect activity.
 ****************************************************************************/
 bool can_units_do_connect(struct unit_list *punits,
-			  enum unit_activity activity,
-                          struct extra_type *tgt)
+			  enum unit_activity activity)
 {
   unit_list_iterate(punits, punit) {
-    if (can_unit_do_connect(punit, activity, tgt)) {
+    if (can_unit_do_connect(punit, activity)) {
       return TRUE;
     }
   } unit_list_iterate_end;
 
-  return FALSE;
-}
-
-/**************************************************************************
-  Returns TRUE if a unit of the given type can act given an actor player,
-  a target player and their diplomatic state.
-
-  Note: only DRO_FOREIGN and the values of diplstate_type are tested.
-**************************************************************************/
-static bool can_unit_act_diplstate(struct unit_type *act_unit_type,
-                                   const int action_id,
-                                   const struct player *act_player,
-                                   const struct player *tgt_player)
-{
-  if (act_player == tgt_player) {
-    /* The actor player is the target player. */
-    return can_utype_do_act_if_tgt_diplrel(act_unit_type, action_id,
-                                           DRO_FOREIGN, FALSE);
-  } else if (NULL == tgt_player) {
-    /* No target player. */
-    return utype_can_do_action(act_unit_type, action_id);
-  } else {
-    /* The actor player and the target player are different. */
-    struct player_diplstate *diplstate;
-
-    /* Get the diplstate between actor player and target player. */
-    diplstate = player_diplstate_get(act_player, tgt_player);
-    fc_assert(diplstate);
-
-    return can_utype_do_act_if_tgt_diplrel(act_unit_type, action_id,
-                                           diplstate->type, TRUE);
-  }
-}
-
-/**************************************************************************
-  Returns TRUE if the unit can do a generalized action against its own
-  tile. May contain false positives.
-**************************************************************************/
-bool can_unit_act_against_own_tile(struct unit *act_unit)
-{
-  struct player *act_player;
-  struct player *tgt_player;
-  struct city *tgt_city;
-  struct tile *tgt_tile;
-
-  if (!is_actor_unit(act_unit)) {
-    /* Not an actor unit. */
-    return FALSE;
-  }
-
-  act_player = unit_owner(act_unit);
-  fc_assert(act_player);
-
-  tgt_tile = unit_tile(act_unit);
-  fc_assert(tgt_tile);
-
-  {
-    /* Check target tile. */
-
-    tgt_player = tile_owner(tgt_tile);
-
-    action_iterate(act) {
-      if (action_get_actor_kind(act) != AAK_UNIT
-          || action_get_target_kind(act) != ATK_TILE) {
-        /* Not relevant. */
-        continue;
-      }
-
-      /* Can't return yet unless TRUE. Another action vs the tile may be
-       * possible. It may also be possible to act against a target on the
-       * tile. */
-      if (can_unit_act_diplstate(unit_type(act_unit), act,
-                                 act_player, tgt_player)) {
-        /* Tile target confirmed possible. */
-        return TRUE;
-      }
-    } action_iterate_end;
-  }
-
-  if ((tgt_city = tile_city(tgt_tile))) {
-    /* Target city detected. */
-
-    tgt_player = city_owner(tgt_city);
-    fc_assert(tgt_player);
-
-    action_iterate(act) {
-      if (action_get_actor_kind(act) != AAK_UNIT
-          || action_get_target_kind(act) != ATK_CITY) {
-        /* Not relevant. */
-        continue;
-      }
-
-      /* Can't return yet unless TRUE. Another action vs the city may be
-       * possible. It may also be possible to act against a unit target on
-       * the tile. */
-      if (can_unit_act_diplstate(unit_type(act_unit), act,
-                                 act_player, tgt_player)) {
-        /* City target confirmed possible. */
-        return TRUE;
-      }
-    } action_iterate_end;
-  }
-
-  unit_list_iterate(tgt_tile->units, tgt_unit) {
-    /* Checking this target unit. */
-
-    tgt_player = unit_owner(tgt_unit);
-    fc_assert(tgt_player);
-
-    action_iterate(act) {
-      if (action_get_actor_kind(act) != AAK_UNIT
-          || action_get_target_kind(act) != ATK_UNIT) {
-        /* Not relevant. */
-        continue;
-      }
-
-      /* Can't return yet unless TRUE. Another action vs the unit may be
-       * possible. It may also be possible to act against another unit
-       * target at the tile. */
-      if (can_unit_act_diplstate(unit_type(act_unit), act,
-                                 act_player, tgt_player)) {
-        /* Unit target confirmed possible. */
-        return TRUE;
-      }
-    } action_iterate_end;
-  } unit_list_iterate_end;
-
-  /* Check the all units on tile target. An action against all units at a
-   * tile that the actor does to him self too may be added in the future.
-   * (Example: "Heal Tile Units")
-   * Remembering to add code here if that should happend will be hard.
-   * Discovering the bug that the client don't know it can be done against
-   * a unit that is alone at its tile will be even harder. */
-  action_iterate(act) {
-    /* Must check action by action since an action with an all units at
-     * tile target only is legal when it is legal to do to *all* target
-     * units at the target tile. */
-
-    bool legal;
-
-    if (action_get_actor_kind(act) != AAK_UNIT
-        || action_get_target_kind(act) != ATK_UNITS) {
-      /* Not relevant. */
-      continue;
-    }
-
-    /* No proof of illegality yet... */
-    legal = TRUE;
-
-    unit_list_iterate(tgt_tile->units, tgt_unit) {
-      /* Check the relationship to the owner of this potential target
-       * unit. */
-
-      tgt_player = unit_owner(tgt_unit);
-      fc_assert(tgt_player);
-
-      /* Can't return yet. Another action may be possible against this
-       * unit. Another unit may make this action impossible. */
-      if (!can_unit_act_diplstate(unit_type(act_unit), act,
-                                  act_player, tgt_player)) {
-        /* Impossible for one unit and therefore impossible at all. */
-        legal = FALSE;
-        break;
-      }
-    } unit_list_iterate_end;
-
-    if (legal) {
-      /* Actiong against all units on this tile confirmed possible. */
-      return TRUE;
-    }
-  } action_iterate_end;
-
-  /* No action against any kind of target possible. */
-  return FALSE;
-}
-
-/**************************************************************************
-  Returns TRUE if any of the units in the provided list can do a
-  generalized action against a target at its own tile.
-**************************************************************************/
-bool can_units_act_against_own_tile(struct unit_list *punits)
-{
-  unit_list_iterate(punits, punit) {
-    /* Can't return unless TRUE. Another unit may be able to act against a
-     * target at its won tile. */
-    if (can_unit_act_against_own_tile(punit)) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  /* No unit in the list were able to act against a target located at its
-   * own tile. */
   return FALSE;
 }
 
@@ -1545,25 +1353,25 @@ bool mapimg_client_define(void)
   }
 
   /* Map image definition: zoom, turns */
-  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", options.mapimg_zoom,
-              options.mapimg_format);
+  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", mapimg_zoom,
+              mapimg_format);
 
   /* Map image definition: show */
   if (client_is_global_observer()) {
     cat_snprintf(str, sizeof(str), ":show=all");
     /* use all available knowledge */
-    options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
   } else {
     cat_snprintf(str, sizeof(str), ":show=plrid:plrid=%d",
                  player_index(client.conn.playing));
     /* use only player knowledge */
-    options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
   }
 
   /* Map image definition: map */
   for (layer = mapimg_layer_begin(); layer != mapimg_layer_end();
        layer = mapimg_layer_next(layer)) {
-    if (options.mapimg_layer[layer]) {
+    if (mapimg_layer[layer]) {
       cat_snprintf(map, sizeof(map), "%s",
                    mapimg_layer_name(layer));
       map[map_pos++] = mapimg_layer_name(layer)[0];
@@ -1597,7 +1405,7 @@ bool mapimg_client_createmap(const char *filename)
   char mapimgfile[512];
 
   if (NULL == filename || '\0' == filename[0]) {
-    sz_strlcpy(mapimgfile, options.mapimg_filename);
+    sz_strlcpy(mapimgfile, mapimg_filename);
   } else {
     sz_strlcpy(mapimgfile, filename);
   }
@@ -1612,28 +1420,4 @@ bool mapimg_client_createmap(const char *filename)
   }
 
   return mapimg_create(pmapdef, TRUE, mapimgfile, NULL);
-}
-
-/****************************************************************************
-  Returns the nation set in use.
-****************************************************************************/
-struct nation_set *client_current_nation_set(void)
-{
-  struct option *poption = optset_option_by_name(server_optset, "nationset");
-  const char *setting_str;
-
-  if (poption == NULL
-      || option_type(poption) != OT_STRING
-      || (setting_str = option_str_get(poption)) == NULL) {
-    setting_str = "";
-  }
-  return nation_set_by_setting_value(setting_str);
-}
-
-/****************************************************************************
-  Returns Whether 'pnation' is in the current nation set.
-****************************************************************************/
-bool client_nation_is_in_current_set(const struct nation_type *pnation)
-{
-  return nation_is_in_set(pnation, client_current_nation_set());
 }

@@ -15,8 +15,7 @@
 #include <fc_config.h>
 #endif
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* gui-sdl */
 #include "colors.h"
@@ -559,20 +558,22 @@ INPUT:/* add new element of chain (and move cursor right) */
         pEdt->pInputChain->prev->chr[0] = Key.unicode;        
 	pEdt->pInputChain->prev->chr[1] = '\0';
 
-        if (get_wflags(pEdt->pWidget) & WF_PASSWD_EDIT) {
-          Uint16 passwd_chr[2] = {'*', '\0'};
-
-          pEdt->pInputChain->prev->pTsurf =
-            TTF_RenderUNICODE_Blended(pEdt->pWidget->string16->font,
-                                      passwd_chr,
-                                      pEdt->pWidget->string16->fgcol);
-        } else {
-          pEdt->pInputChain->prev->pTsurf =
-            TTF_RenderUNICODE_Blended(pEdt->pWidget->string16->font,
-                                      pEdt->pInputChain->prev->chr,
-                                      pEdt->pWidget->string16->fgcol);
-        }
-        pEdt->Truelength += pEdt->pInputChain->prev->pTsurf->w;
+	if (pEdt->pInputChain->prev->chr) {
+	  if (get_wflags(pEdt->pWidget) & WF_PASSWD_EDIT) {
+	    Uint16 passwd_chr[2] = {'*', '\0'};
+	    
+	    pEdt->pInputChain->prev->pTsurf =
+	      TTF_RenderUNICODE_Blended(pEdt->pWidget->string16->font,
+					  passwd_chr,
+					  pEdt->pWidget->string16->fgcol);
+	  } else {
+	    pEdt->pInputChain->prev->pTsurf =
+	      TTF_RenderUNICODE_Blended(pEdt->pWidget->string16->font,
+					  pEdt->pInputChain->prev->chr,
+					  pEdt->pWidget->string16->fgcol);
+	  }
+	  pEdt->Truelength += pEdt->pInputChain->prev->pTsurf->w;
+	}
 
 	if (pEdt->InputChain_X >= pEdt->pWidget->size.x + pEdt->pBg->w - adj_size(10)) {
 	  if (pEdt->pInputChain == pEdt->pEndTextChain) {

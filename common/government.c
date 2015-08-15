@@ -176,7 +176,7 @@ bool can_change_to_government(struct player *pplayer,
   }
 
   return are_reqs_active(pplayer, NULL, NULL, NULL, NULL, NULL, NULL,
-                         NULL, NULL, NULL, &gov->reqs, RPT_CERTAIN);
+			 &gov->reqs, RPT_CERTAIN);
 }
 
 
@@ -192,9 +192,13 @@ struct ruler_title {
 /****************************************************************************
   Hash function.
 ****************************************************************************/
-static genhash_val_t nation_hash_val(const struct nation_type *pnation)
+static genhash_val_t nation_hash_val(const struct nation_type *pnation,
+                                     size_t num_buckets)
 {
-  return NULL != pnation ? nation_number(pnation) : nation_count();
+  genhash_val_t base = (NULL != pnation ? nation_number(pnation)
+                        : nation_count());
+
+  return base % num_buckets;
 }
 
 /****************************************************************************
@@ -210,15 +214,14 @@ static bool nation_hash_comp(const struct nation_type *pnation1,
   Create a new ruler title.
 ****************************************************************************/
 static struct ruler_title *ruler_title_new(const struct nation_type *pnation,
-                                           const char *domain,
                                            const char *ruler_male_title,
                                            const char *ruler_female_title)
 {
   struct ruler_title *pruler_title = fc_malloc(sizeof(*pruler_title));
 
   pruler_title->pnation = pnation;
-  name_set(&pruler_title->male, domain, ruler_male_title);
-  name_set(&pruler_title->female, domain, ruler_female_title);
+  name_set(&pruler_title->male, ruler_male_title);
+  name_set(&pruler_title->female, ruler_female_title);
 
   return pruler_title;
 }
@@ -321,14 +324,8 @@ government_ruler_title_new(struct government *pgovern,
                            const char *ruler_male_title,
                            const char *ruler_female_title)
 {
-  const char *domain = NULL;
-  struct ruler_title *pruler_title;
-
-  if (pnation != NULL) {
-    domain = pnation->translation_domain;
-  }
-  pruler_title =
-    ruler_title_new(pnation, domain, ruler_male_title, ruler_female_title);
+  struct ruler_title *pruler_title =
+      ruler_title_new(pnation, ruler_male_title, ruler_female_title);
 
   if (!ruler_title_check(pruler_title)) {
     ruler_title_destroy(pruler_title);
@@ -487,7 +484,6 @@ static inline void government_init(struct government *pgovern)
       ruler_title_hash_new_full(nation_hash_val, nation_hash_comp,
                                 NULL, NULL, NULL, ruler_title_destroy);
   requirement_vector_init(&pgovern->reqs);
-  pgovern->changed_to_times = 0;
 }
 
 /****************************************************************************

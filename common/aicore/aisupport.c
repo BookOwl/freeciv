@@ -28,7 +28,6 @@
 #include "spaceship.h"
 #include "tech.h"
 #include "unitlist.h"
-#include "victory.h"
 
 #include "aisupport.h"
 
@@ -41,7 +40,7 @@ struct player *player_leading_spacerace(void)
   int best_arrival = FC_INFINITY;
   enum spaceship_state best_state = SSHIP_NONE;
 
-  if (!victory_enabled(VC_SPACERACE)) {
+  if (game.info.spacerace == FALSE) {
     return NULL;
   }
 
@@ -110,14 +109,10 @@ int city_gold_worth(struct city *pcity)
 {
   struct player *pplayer = city_owner(pcity);
   int worth = 0, i;
-  struct unit_type *u = NULL;
+  struct unit_type *u
+    = best_role_unit_for_player(city_owner(pcity), F_CITIES);
 
-  if (!game.scenario.prevent_new_cities) {
-    u = best_role_unit_for_player(city_owner(pcity),
-                                  action_get_role(ACTION_FOUND_CITY));
-  }
-
-  if (u != NULL) {
+  if (u) {
     worth += utype_buy_gold_cost(u, 0); /* cost of settler */
   }
   for (i = 1; i < city_size_get(pcity); i++) {
@@ -131,19 +126,17 @@ int city_gold_worth(struct city *pcity)
       struct unit_type *punittype = unit_type(punit)->obsoleted_by;
 
       if (punittype && can_city_build_unit_direct(pcity, punittype)) {
-        worth += unit_disband_shields(punit); /* obsolete, candidate for disbanding */
+        worth += unit_disband_shields(punit) / 2; /* obsolete */
       } else {
-        worth += unit_build_shield_cost(punit); /* good stuff */
+        worth += unit_disband_shields(punit); /* good stuff */
       }
     }
   } unit_list_iterate_end;
   city_built_iterate(pcity, pimprove) {
-    if (improvement_obsolete(pplayer, pimprove, pcity)) {
-      worth += impr_sell_gold(pimprove); /* obsolete, candidate for selling */
-    } else if (!is_wonder(pimprove)) {
-      worth += impr_build_shield_cost(pimprove) * 2; /* Buy cost, with nonzero shield amount */
+    if (improvement_obsolete(pplayer, pimprove)) {
+      worth += impr_sell_gold(pimprove) / 4;
     } else {
-      worth += impr_build_shield_cost(pimprove) * 4;
+      worth += impr_sell_gold(pimprove);
     }
   } city_built_iterate_end;
   if (city_unhappy(pcity)) {

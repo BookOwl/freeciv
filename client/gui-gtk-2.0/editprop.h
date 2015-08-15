@@ -40,3 +40,4 @@ void property_editor_handle_object_created(struct property_editor *pe,
 struct property_editor *editprop_get_property_editor(void);
 
 #endif /* FC__EDITPROP_H */
+

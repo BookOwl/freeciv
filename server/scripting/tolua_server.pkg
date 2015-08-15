@@ -43,8 +43,6 @@ module server {
     @ started (lua_State *L);
   int api_server_player_civilization_score
     @ civilization_score (lua_State *L, Player *pplayer);
-  bool api_play_music
-    @ play_music (lua_State *L, Player *pplayer, const char *tag);
 
   module setting {
     const char *api_server_setting_get
@@ -66,23 +64,19 @@ $[
 -- Notify module implementation.
 
 function notify.all(...)
-  local arg = table.pack(...);
-  notify.event_msg(nil, nil, E.SCRIPT, string.format(table.unpack(arg)))
+  notify.event_msg(nil, nil, E.SCRIPT, string.format(unpack(arg)))
 end
 
 function notify.player(player, ...)
-  local arg = table.pack(...);
-  notify.event_msg(player, nil, E.SCRIPT, string.format(table.unpack(arg)))
+  notify.event_msg(player, nil, E.SCRIPT, string.format(unpack(arg)))
 end
 
 function notify.event(player, tile, event, ...)
-  local arg = table.pack(...);
-  notify.event_msg(player, tile, event, string.format(table.unpack(arg)))
+  notify.event_msg(player, tile, event, string.format(unpack(arg)))
 end
 
 function notify.embassies(player, ptile, event, ...)
-  local arg = table.pack(...);
-  notify.embassies_msg(player, ptile, event, string.format(table.unpack(arg)))
+  notify.embassies_msg(player, ptile, event, string.format(unpack(arg)))
 end
 $]
 
@@ -98,21 +92,12 @@ module edit {
                         int moves_left, int hp_left, Unit *ptransport);
   bool api_edit_unit_teleport
     @ unit_teleport(lua_State *L, Unit *self, Tile *dest);
-  void api_edit_unit_kill
-    @ unit_kill(lua_State *L, Unit *self, const char *reason,
-                Player *killer);
   void api_edit_create_city
     @ create_city (lua_State *L, Player *pplayer, Tile *ptile,
                    const char *name);
-  void api_edit_create_extra
-    @ create_extra (lua_State *L, Tile *ptile, const char *name);
   void api_edit_create_base
     @ create_base (lua_State *L, Tile *ptile, const char *name,
                    Player *pplayer);
-  void api_edit_create_road
-    @ create_road (lua_State *L, Tile *ptile, const char *name);
-  void api_edit_tile_set_label
-    @ tile_set_label (lua_State *L, Tile *ptile, const char *label);
   Player *api_edit_create_player
     @ create_player(lua_State *L, const char *username, Nation_Type *nation,
                     const char *ai);
@@ -121,9 +106,6 @@ module edit {
   Tech_Type *api_edit_give_technology
     @ give_technology (lua_State *L, Player *pplayer, Tech_Type *ptech,
                        const char *reason);
-  bool api_edit_trait_mod
-    @ trait_mod (lua_State *L, Player *pplayer, const char *trait_name,
-                 const int mod);
   bool api_edit_unleash_barbarians
     @ unleash_barbarians (lua_State *L, Tile *ptile);
   void api_edit_place_partisans
@@ -144,11 +126,6 @@ module edit {
     @ player_victory (lua_State *L, Player *self);
   bool api_edit_unit_move
     @ unit_move(lua_State *L, Unit *self, Tile *moveto, int movecost);
-
-  void api_edit_city_add_history
-    @ add_city_history(lua_State *L, City *self, int amount);
-  void api_edit_player_add_history
-    @ add_player_history(lua_State *L, Player *self, int amount);
 }
 
 $[
@@ -168,10 +145,6 @@ function create_city(player, tile, name)
   edit.create_city (player, tile, name)
 end
 
-function create_extra(tile, name)
-  edit.create_extra(tile, name)
-end
-
 function create_base(tile, name, player)
   edit.create_base(tile, name, player)
 end
@@ -186,10 +159,6 @@ end
 
 function give_technology(player, tech, reason)
   return edit.give_technology(player, tech, reason)
-end
-
-function trait_mod(player, trait, mod)
-  return edit.trait_mod(player, trait, mod)
 end
 
 function unleash_barbarians(tile)
@@ -228,25 +197,12 @@ function Player:give_technology(tech, reason)
   return edit.give_technology(self, tech, reason)
 end
 
-function Player:trait_mod(trait, mod)
-  return edit.trait_mod(self, trait, mod)
-end
-
 function Player:civil_war(probability)
   return edit.civil_war(self, probability)
 end
 
 function Player:victory()
   edit.player_victory(self)
-end
-
-function Player:add_history(amount)
-  edit.add_player_history(self, amount)
-end
-
--- Server functions for City module
-function City:add_history(amount)
-  edit.add_city_history(self, amount)
 end
 
 -- Server functions for Unit module
@@ -258,25 +214,13 @@ function Unit:turn(direction)
   edit.unit_turn(self, direction)
 end
 
-function Unit:kill(reason, killer)
-  edit.unit_kill(self, reason, killer)
-end
-
 function Unit:move(moveto, movecost)
   return edit.unit_move(self, moveto, movecost)
 end
 
 -- Server functions for Tile module
-function Tile:create_extra(name)
-  edit.create_extra(self, name)
-end
-
 function Tile:create_base(name, player)
   edit.create_base(self, name, player)
-end
-
-function Tile:create_road(name)
-  edit.create_road(self, name)
 end
 
 function Tile:unleash_barbarians()
@@ -285,10 +229,6 @@ end
 
 function Tile:place_partisans(player, count, sq_radius)
   edit.place_partisans(self, player, count, sq_radius)
-end
-
-function Tile:set_label(label)
-  edit.tile_set_label(self, label)
 end
 
 $]

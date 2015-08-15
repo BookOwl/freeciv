@@ -6,12 +6,12 @@
 
 AC_DEFUN([FC_CHECK_MYSQL],
 [
-  AC_ARG_WITH([mysql-prefix],
-    AS_HELP_STRING([--with-mysql-prefix=PFX], [Prefix where MySql is installed (optional)]),
-[mysql_prefix="$withval"], [mysql_prefix=""])
+  AC_ARG_WITH(mysql-prefix,
+              [  --with-mysql-prefix=PFX Prefix where MySql is installed (optional)],
+              mysql_prefix="$withval", mysql_prefix="")
 
-  mysql_cflags=""
-  mysql_ldflags=""
+  MYSQL_CFLAGS=""
+  MYSQL_LDFLAGS=""
   MYSQL_VERSION=""
 
   dnl
@@ -25,16 +25,20 @@ AC_DEFUN([FC_CHECK_MYSQL],
   if test "$MYSQL_CONFIG" != "no"; then
     AC_MSG_CHECKING([for MySQL libraries])
 
-    mysql_cflags="`$MYSQL_CONFIG --cflags`"
-    mysql_ldflags="`$MYSQL_CONFIG --libs`"
+    MYSQL_CFLAGS="`$MYSQL_CONFIG --cflags`"
+    MYSQL_LDFLAGS="`$MYSQL_CONFIG --libs`"
     MYSQL_VERSION=`$MYSQL_CONFIG --version`
 
-    # remove NDEBUG from MYSQL_CFLAGS
-    mysql_cflags=`echo $mysql_cflags | $SED -e 's/-DNDEBUG//g'`
+    # remove NDBEUG from MYSQL_CFLAGS
+    MYSQL_CFLAGS=`echo $MYSQL_CFLAGS | sed -e 's/-DNDEBUG//g'`
 
     found_mysql="yes"
     AC_MSG_RESULT([yes])
 
+    dnl AC_MSG_CHECKING([for $MYSQL_CONFIG --cflags])
+    dnl AC_MSG_RESULT([$MYSQL_CFLAGS])
+    dnl AC_MSG_CHECKING([for $MYSQL_CONFIG --libs])
+    dnl AC_MSG_RESULT([$MYSQL_LDFLAGS])
   fi
 
   dnl
@@ -83,8 +87,8 @@ AC_DEFUN([FC_CHECK_MYSQL],
   fi
 
   AC_SUBST([MYSQL_VERSION])
-  AC_SUBST([mysql_cflags])
-  AC_SUBST([mysql_ldflags])
+  AC_SUBST([MYSQL_CFLAGS])
+  AC_SUBST([MYSQL_LDFLAGS])
 
   if test "x$found_mysql" = "xyes" ; then
     ifelse([$1], , :, [$1])

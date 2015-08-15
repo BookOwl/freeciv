@@ -12,17 +12,13 @@
 
 [datafile]
 description="Civ2 tile_type data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.4-ruleset"
 
-[control]
-; Names for custom terrain flags. There can be up to 8 of these.
-; name          = rule name; not translateable, but may be displayed in
-;                 some circumstances
-; helptxt       = displayed in the help for terrains with this flag (optional)
-;flags =
-;  { "name", "helptxt"
-;  }
+[options]
+may_road=1           ; 0 means no, 1 means yes
+may_irrigate=1       ; 0 means no, 1 means yes
+may_mine=1           ; 0 means no, 1 means yes
+may_transform=1      ; 0 means no, 1 means yes
 
 [parameters]
 
@@ -38,20 +34,63 @@ land_channel_requirement=101
 ; also terrain type(s) with flag "FreshWater" in the ruleset.
 lake_max_size = 0
 
-; How many native tiles first startunit must be able to reach.
-; 0 to disable check.
-min_start_native_area = 0
+; special movement costs for rivers:
+;   0 - normal movement cost for rivers (matches Civ1)
+;   1 - 1/3 movement cost, but only when moving exactly along rivers,
+;       diagonal moves incur full terrain movement costs (matches Civ2)
+;   2 - 1/3 movement cost directly along river, 2/3 for diagonals (this
+;       is effectively the same as '1', as if you had done the two moves,
+;       except for differences relating to ZOC, etc.)
+;   3 - 1/3 movement cost for any river to river move (classic Freeciv)
+river_move_mode=1
 
-; How many fragments each movement point has.
-; For example road movement costs are relative to this.
-move_fragments = 3
+; percent added to defense if tile is river
+river_defense_bonus=50
 
-; How many move_fragments IgTer unit movement costs
-igter_cost = 1
+; amount added to trade production if tile is river
+river_trade_incr=1
 
-; Whether diagonal movement has increased cost 
-; The cost increase is more accurate with larger values for move_fragments
-pythagorean_diagonal = FALSE
+; help text for rivers
+river_help_text=_("\
+Any land terrain type may have a River on it.  A River adds 1\
+ trade to the resources produced by that tile.  It also increases a tile's\
+ defense factor by 50%.  Finally, land units may move along a River (but\
+ not diagonally); movement along a River costs only 1/3 of a movement point.\
+"), _("\
+Roads and railroads can only be built on River tiles if your\
+ civilization has learned Bridge Building technology.\
+")
+
+; Old superhighway bonus percentage value: no longer used.
+; Use an Output_Per_Tile effect to simulate the pre-2.0 behaviour if needed
+road_superhighway_trade_bonus=50
+
+; percent added to food production if tile has railroad
+rail_food_bonus=0
+
+; percent added to shield production if tile has railroad
+rail_shield_bonus=50
+
+; percent added to trade production if tile has railroad
+rail_trade_bonus=0
+
+; percent subtracted from food production if tile is polluted
+pollution_food_penalty=50
+
+; percent subtracted from shield production if tile is polluted
+pollution_shield_penalty=50
+
+; percent subtracted from trade production if tile is polluted
+pollution_trade_penalty=50
+
+; percent subtracted from food production if tile has fallout
+fallout_food_penalty=50
+
+; percent subtracted from shield production if tile has fallout
+fallout_shield_penalty=50
+
+; percent subtracted from trade production if tile has fallout
+fallout_trade_penalty=50
 
 ; /* <-- avoid gettext warnings
 ;
@@ -77,47 +116,32 @@ pythagorean_diagonal = FALSE
 ; identifier           = single-character identifier used in savegames.  This
 ;                        must be unique for each terrain, and changing it will
 ;                        break savegame compatibility.
-; class                = Terrain class terrain belongs to: "Land" or "Oceanic"
-; movement_cost        = in whole movement points, not move_fragments;
-;                        typically 1 to 3
+; movement_cost        = typically 1 to 3
 ; defense_bonus        = percent added to defense; typically 0% to 200%
 ; food                 = normal food production
 ; shield               = normal shield production
 ; trade                = normal trade production
 ; resources            = list of possible resources on this terrain
-; road_food_incr_pct   = percent of road food_incr applied to this terrain
-; road_shield_incr_pct = percent of road shield_incr applied to this terrain
-; road_trade_incr_pct  = percent of road trade_incr applied to this terrain
-; base_time            = time to build bases; if 0, cannot build any bases.
-;                        Nonzero values only affect bases with build_time 0.
-; road_time            = time to build roads; if 0, cannot build any roads.
-;                        Nonzero values only affect roads with build_time 0.
+; road_trade_incr      = increment to trade if tile has road
+; road_time            = time to build road; if 0, cannot build road
 ; irrigation_result    = result of irrigation; one of:
 ;                        "no"  -- cannot irrigate
 ;                        "yes" -- can irrigate
 ;                        terrain section -- irrigation changes to that terrain
 ; irrigation_food_incr = increment to food if tile is irrigated
 ; irrigation_time      = time to irrigate; if 0, cannot irrigate
-;                        Nonzero values only affect extras with build_time 0.
 ; mining_result        = result of mining; one of:
 ;                        "no"  -- cannot mine
 ;                        "yes" -- can mine
 ;                        terrain section -- mining changes to that terrain
 ; mining_shield_incr   = increment to shields if tile is mined
 ; mining_time          = time to mine; if 0, cannot mine
-;                        Nonzero values only affect extras with build_time 0.
 ; transform_result     = result of transformation; one of:
 ;                        "no"  -- cannot transform
-;                        terrain section -- transformation changes to that
-;                          terrain
+;                        terrain section -- transformation changes to that terrain
 ; transform_time       = time to transform; if 0, cannot transform
-; pillage_time         = time to pillage extra from the tile (0 = impossible)
-;                        Nonzero values only affect extras with removal_time 0.
-; clean_pollution_time = time to clean pollution (0 = impossible)
-;                        Nonzero values only affect extras with removal_time 0.
-; clean_fallout_time   = time to clean fallout (0 = impossible)
-;                        Nonzero values only affect extras with removal_time 0.
-; animal               = unit type that can appear as animal on the terrain
+; clean_pollution_time = time to clean pollution
+; clean_fallout_time   = time to clean fallout
 ; warmer_wetter_result = result of global warming for wet terrains; one of:
 ;                        "no"  -- no change; does not count for warming
 ;                        "yes" -- no change; counts for warming
@@ -129,10 +153,10 @@ pythagorean_diagonal = FALSE
 ; cooler_drier_result  = result of nuclear winter for dry terrains;
 ;                        see warmer_wetter_result
 ; native_to            = List of unit classes that can move here
-; flags                = General flags for this terrain. List taken from the
-;                        following, and/or any user flags defined above:
+; flags                = General flags for this terrain:
 ;   - NoBarbs          = Barbarians will not be spawned here.
 ;   - NoCities         = Cities may not be built or found on this terrain.
+;   - NoPollution      = Pollution will not be put on this terrain type.
 ;   - Starter          = Players will only be started on "Starter" terrain.
 ;                        (Currently this cannot be Oceanic terrain.)
 ;   - CanHaveRiver     = Set to 1 if this terrain can have river on it (the
@@ -140,16 +164,15 @@ pythagorean_diagonal = FALSE
 ;                        separately).
 ;   - UnsafeCoast      = This terrain does not provide a safe voyage for
 ;                        F_TRIRIEME units.
+;   - Oceanic          = This is an "ocean" terrain.  This has a big effect
+;                        on gameplay.  Naval units can move on oceanic terrain,
+;                        while land units cannot.  Oceanic tiles can be used
+;                        as a water source for irrigation.  Cities built next
+;                        to oceanic terrain can build naval improvements and
+;                        units.  Most terrain improvements can only be built
+;                        on land.  Oceanic terrain has no zones of control.
+;                        The list goes on.
 ;   - FreshWater       = This terrain is used for small bodies of water.
-;                        If this becomes adjacent to non-FreshWater terrain,
-;                        the whole contiguous FreshWater area will be flooded
-;                        with the non-FreshWater terrain.
-;   - NotGenerated     = Map generator never places this terrain type. It can
-;                        be added from editor only, or by ingame events
-;                        (lua scripting)
-;   - NoZoc            = Units on this terrain are not generating or subject
-;                        to zoc
-;   - NoFortify        = Units cannot fortify on this terrain
 ; property_*           = specific property % values used by mapgen.  Most
 ;                        terrains will have 0 for most values.
 ;  - mountainous       = degree to which this terrain is mountainous
@@ -175,15 +198,13 @@ name                 = _("Ocean")
 graphic              = "coast"
 graphic_alt          = "-"
 identifier           = " "
-class                = "Oceanic"
 movement_cost        = 1
 defense_bonus        = 0
 food                 = 1
 shield               = 0
 trade                = 2
-resources            = "Fish", "Whales"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_fish", "resource_whales"
+road_trade_incr      = 0
 road_time            = 0
 irrigation_result    = "no"
 irrigation_food_incr = 0
@@ -193,14 +214,12 @@ mining_shield_incr   = 0
 mining_time          = 0
 transform_result     = "no"
 transform_time       = 0
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 native_to            = "Sea", "Air", "Missile", "Helicopter"
-flags                = "UnsafeCoast", "NoCities", "NoZoc", "NoFortify"
+flags                = "Oceanic", "UnsafeCoast", "NoCities", "NoPollution"
 property_ocean_depth = 36
 color.r              = 0
 color.g              = 46
@@ -214,15 +233,13 @@ name                 = _("Glacier")
 graphic              = "arctic"
 graphic_alt          = "-"
 identifier           = "a"
-class                = "Land"
 movement_cost        = 2
 defense_bonus        = 0
 food                 = 0
 shield               = 0
 trade                = 0
-resources            = "Ivory", "Icy Oil"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_icy_ivory", "resource_icy_oil"
+road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "no"
 irrigation_food_incr = 0
@@ -230,10 +247,8 @@ irrigation_time      = 0
 mining_result        = "yes"
 mining_shield_incr   = 1
 mining_time          = 10
-transform_result     = "Tundra"
+transform_result     = "terrain_tundra"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
@@ -255,15 +270,13 @@ name                 = _("Desert")
 graphic              = "desert"
 graphic_alt          = "-"
 identifier           = "d"
-class                = "Land"
 movement_cost        = 1
 defense_bonus        = 0
 food                 = 0
 shield               = 1
 trade                = 0
-resources            = "Oasis", "Oil"
-road_trade_incr_pct  = 100
-base_time            = 1
+resources            = "resource_oasis", "resource_desert_oil"
+road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
 irrigation_food_incr = 1
@@ -271,11 +284,9 @@ irrigation_time      = 5
 mining_result        = "yes"
 mining_shield_incr   = 1
 mining_time          = 5
-transform_result     = "Plains"
+transform_result     = "terrain_plains"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
-warmer_wetter_result = "Swamp"
+warmer_wetter_result = "terrain_swamp"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
@@ -297,28 +308,24 @@ name                 = _("Forest")
 graphic              = "forest"
 graphic_alt          = "-"
 identifier           = "f"
-class                = "Land"
 movement_cost        = 2
 defense_bonus        = 50
 food                 = 1
 shield               = 2
 trade                = 0
-resources            = "Pheasant", "Silk"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_pheasant", "resource_silk"
+road_trade_incr      = 0
 road_time            = 4
-irrigation_result    = "Plains"
+irrigation_result    = "terrain_plains"
 irrigation_food_incr = 0
 irrigation_time      = 5
 mining_result        = "no"
 mining_shield_incr   = 0
 mining_time          = 0
-transform_result     = "Grassland"
+transform_result     = "terrain_grassland"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
-warmer_wetter_result = "Jungle"
-warmer_drier_result  = "Desert"
+warmer_wetter_result = "terrain_jungle"
+warmer_drier_result  = "terrain_desert"
 cooler_wetter_result = "no"
 cooler_drier_result  = "no"
 native_to            = "Land", "Air", "Missile", "Helicopter"
@@ -340,30 +347,26 @@ name                 = _("Grassland")
 graphic              = "grassland"
 graphic_alt          = "-"
 identifier           = "g"
-class                = "Land"
 movement_cost        = 1
 defense_bonus        = 0
 food                 = 2
 shield               = 0
 trade                = 0
-resources            = "Resources"
-road_trade_incr_pct  = 100
-base_time            = 1
+resources            = "resource_bonus"
+road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
 irrigation_food_incr = 1
 irrigation_time      = 5
-mining_result        = "Forest"
+mining_result        = "terrain_forest"
 mining_shield_incr   = 0
 mining_time          = 10
-transform_result     = "Hills"
+transform_result     = "terrain_hills"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
-warmer_wetter_result = "Swamp"
-warmer_drier_result  = "Desert"
-cooler_wetter_result = "Desert"
-cooler_drier_result  = "Tundra"
+warmer_wetter_result = "terrain_swamp"
+warmer_drier_result  = "terrain_desert"
+cooler_wetter_result = "terrain_desert"
+cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_green       = 50
@@ -380,15 +383,13 @@ name                 = _("Hills")
 graphic              = "hills"
 graphic_alt          = "-"
 identifier           = "h"
-class                = "Land"
 movement_cost        = 2
 defense_bonus        = 100
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Coal", "Wine"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_coal", "resource_wine"
+road_trade_incr      = 0
 road_time            = 4
 irrigation_result    = "yes"
 irrigation_food_incr = 1
@@ -396,10 +397,8 @@ irrigation_time      = 10
 mining_result        = "yes"
 mining_shield_incr   = 3
 mining_time          = 10
-transform_result     = "Plains"
+transform_result     = "terrain_plains"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
@@ -421,30 +420,26 @@ name                 = _("Jungle")
 graphic              = "jungle"
 graphic_alt          = "-"
 identifier           = "j"
-class                = "Land"
 movement_cost        = 2
 defense_bonus        = 50
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Gems", "Fruit"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_gems", "resource_fruit"
+road_trade_incr      = 0
 road_time            = 4
-irrigation_result    = "Grassland"
+irrigation_result    = "terrain_grassland"
 irrigation_food_incr = 0
 irrigation_time      = 15
-mining_result        = "Forest"
+mining_result        = "terrain_forest"
 mining_shield_incr   = 0
 mining_time          = 15
-transform_result     = "Plains"
+transform_result     = "terrain_plains"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
-cooler_wetter_result = "Desert"
-cooler_drier_result  = "Tundra"
+cooler_wetter_result = "terrain_desert"
+cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_foliage     = 50
@@ -463,15 +458,13 @@ name                 = _("Mountains")
 graphic              = "mountains"
 graphic_alt          = "-"
 identifier           = "m"
-class                = "Land"
 movement_cost        = 3
 defense_bonus        = 200
 food                 = 0
 shield               = 1
 trade                = 0
-resources            = "Gold", "Iron"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_gold", "resource_iron"
+road_trade_incr      = 0
 road_time            = 6
 irrigation_result    = "no"
 irrigation_food_incr = 0
@@ -479,10 +472,8 @@ irrigation_time      = 0
 mining_result        = "yes"
 mining_shield_incr   = 1
 mining_time          = 10
-transform_result     = "Hills"
+transform_result     = "terrain_hills"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
 cooler_wetter_result = "no"
@@ -503,30 +494,26 @@ name                 = _("Plains")
 graphic              = "plains"
 graphic_alt          = "-"
 identifier           = "p"
-class                = "Land"
 movement_cost        = 1
 defense_bonus        = 0
 food                 = 1
 shield               = 1
 trade                = 0
-resources            = "Buffalo", "Wheat"
-road_trade_incr_pct  = 100
-base_time            = 1
+resources            = "resource_buffalo", "resource_wheat"
+road_trade_incr      = 1
 road_time            = 2
 irrigation_result    = "yes"
 irrigation_food_incr = 1
 irrigation_time      = 5
-mining_result        = "Forest"
+mining_result        = "terrain_forest"
 mining_shield_incr   = 0
 mining_time          = 15
-transform_result     = "Grassland"
+transform_result     = "terrain_grassland"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
-warmer_wetter_result = "Swamp"
-warmer_drier_result  = "Desert"
-cooler_wetter_result = "Desert"
-cooler_drier_result  = "Tundra"
+warmer_wetter_result = "terrain_swamp"
+warmer_drier_result  = "terrain_desert"
+cooler_wetter_result = "terrain_desert"
+cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "CanHaveRiver"
 property_dry         = 50
@@ -545,30 +532,26 @@ name                 = _("Swamp")
 graphic              = "swamp"
 graphic_alt          = "-"
 identifier           = "s"
-class                = "Land"
 movement_cost        = 2
 defense_bonus        = 50
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Peat", "Spice"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_peat", "resource_spice"
+road_trade_incr      = 0
 road_time            = 4
-irrigation_result    = "Grassland"
+irrigation_result    = "terrain_grassland"
 irrigation_food_incr = 0
 irrigation_time      = 15
-mining_result        = "Forest"
+mining_result        = "terrain_forest"
 mining_shield_incr   = 0
 mining_time          = 15
-transform_result     = "Plains"
+transform_result     = "terrain_plains"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
-warmer_drier_result  = "Desert"
+warmer_drier_result  = "terrain_desert"
 cooler_wetter_result = "no"
-cooler_drier_result  = "Tundra"
+cooler_drier_result  = "terrain_tundra"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "CanHaveRiver"
 property_wet         = 100
@@ -588,15 +571,13 @@ name                 = _("Tundra")
 graphic              = "tundra"
 graphic_alt          = "-"
 identifier           = "t"
-class                = "Land"
 movement_cost        = 1
 defense_bonus        = 0
 food                 = 1
 shield               = 0
 trade                = 0
-resources            = "Game", "Furs"
-road_trade_incr_pct  = 0
-base_time            = 1
+resources            = "resource_game", "resource_furs"
+road_trade_incr      = 0
 road_time            = 2
 irrigation_result    = "yes"
 irrigation_food_incr = 1
@@ -604,14 +585,12 @@ irrigation_time      = 5
 mining_result        = "no"
 mining_shield_incr   = 0
 mining_time          = 0
-transform_result     = "Desert"
+transform_result     = "terrain_desert"
 transform_time       = 24
-pillage_time         = 1
-animal               = "None"
 warmer_wetter_result = "no"
 warmer_drier_result  = "no"
-cooler_wetter_result = "Glacier"
-cooler_drier_result  = "Glacier"
+cooler_wetter_result = "terrain_glacier"
+cooler_drier_result  = "terrain_glacier"
 native_to            = "Land", "Air", "Missile", "Helicopter"
 flags                = "Starter", "NoBarbs", "CanHaveRiver"
 property_cold        = 50
@@ -807,7 +786,6 @@ trade       = 4
 
 [resource_icy_oil]
 name        = _("Oil")
-rule_name   = "Icy Oil"
 graphic     = "ts.oil"
 graphic_alt = "-"
 identifier  = "x"
@@ -824,440 +802,82 @@ shield      = 3
 
 ; /* <-- avoid gettext warnings
 ;
-; Each extra, including bases and roads, must have a section here.
-; Bases and roads have additional sections for their specific features below.
-;
-;
-; Extra types:
+; Base types:
 ;
 ; name                    = translatable name as seen by user
 ; rule_name               = (optional) name for savegames, rulesets etc; if not
 ;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming
-;                           an extra after a ruleset has been released.
-; category                = How UI should categorize this extra. One of
-;                           "Infra", "Natural", "Nuisance", or "Bonus"
-; causes                  = events that can create extra type.
-;                           "Irrigation", "Mine", "Hut", "Pollution", "Fallout",
-;                           "Base", "Road", or "Spontaneous"
-; rmcauses                = events that can remove extra type.
-;                           "CleanPollution", "CleanFallout", or "Pillage"
-; graphic                 = tag specifying preferred graphic
-; graphic_alt             = tag for alternate graphic if preferred graphic is
-;                           not present. Can use eg "-" for no alternate
-;                           graphic
-; activity_gfx            = tag specifying graphic for unit building extra
-;                           (can be "none")
-; act_gfx_alt             = tag for alternative graphic for unit building extra
-; rmact_gfx               = tag specifying graphic for unit removing extra
-;                           (can be "none")
-; rmact_gfx_alt           = tag for alternative graphic for unit removing extra
-; reqs                    = requirements to build the extra (see effects.ruleset
+;                           savegames must not change, use this when renaming a
+;                           base after a ruleset has been released.
+; buildable               = Can base be built? Defaults to true
+; pillageable             = Can base be pillaged? Defaults to true
+; graphic                 = tag specifing preferred graphic
+; graphic_alt             = tag for alternate graphic if preferred graphic is not 
+;                           present. Can use eg "-" for no alternate graphic.
+; activity_gfx            = tag specifing graphic for unit building base
+; reqs                    = requirements to build the base (see effects.ruleset
 ;                           and README.effects for help on requirements)
-; rmreqs                  = requirements to remove the extra
-; spontaneous_reqs        = spontaneous appearance requirements
-; buildable               = Can extra be built? Defaults to TRUE
-; build_time              = how long it takes a unit to build this extra.
-;                           Value of 0 (default) means that terrain- and
-;                           build activity specific time is used instead.
-; build_time_factor       = This setting take effect only if build_time is 0.
-;                           Terrain and activity specific build time will be
-;                           multiplied by this value (default 1)
-; removal_time            = how long it takes a unit to remove this extra.
-;                           Value of 0 (default) means that terrain- and
-;                           removal activity specific time is used instead.
-; removal_time_factor     = This setting take effect only if removal_time is 0.
-;                           Terrain and activity specific removal time will be
-;                           multiplied by this value (default 1)
-; defense_bonus           = Percent added to defense when tile has the extra
-;                           (default none)
-; appearance_chance       = If extra has cause "Spontaneous" and other requirements
-;                           for its appearance are fulfilled, this tells how big
-;                           chance it has to appear each turn. The chance is 1/1000
-;                           times this value.
-; native_to               = List of unit classes that are considered to
-;                           be inside the extra when they are on same tile
-; conflicts               = List of extras that cannot be on the same tile.
+; gui_type                = How gui should handle this base. Fortress/Airbase/Other
+; build_time              = How long it takes for a unit to build this base
+; defense_bonus           = Percent added to defense
+; border_sq               = Base will claim land ownership up to this radius,
+;                           -1 to disable.
+; vision_main_sq          = Base will have main layer vision to this radius
+; vision_invis_sq         = Base will have invisible layer vision to this radius
+; conflicts               = List of bases that cannot be on the same tile.
 ;                           Bases with non-zero border_sq automatically conflict
 ;                           with each other.
-; hidden_by               = List of extra types that will make this extra
-;                           type not to show on UI if both present.
+; native_to               = List of unit classes that are considered to
+;                           be inside the base when they are on same tile
 ; flags
-;   - "NativeTile"        = Native units consider tile native regardless of
-;                           terrain
-;   - "Refuel"            = Native units can use tile as refuel point
-;   - "TerrChangeRemoves" = Extra gets removed when ever terrain changes even
-;                           if target terrain could support it
-;   - "AlwaysOnCityCenter" = City center tiles always have this extra type
-;                           regardless of its other requirements
-;   - "AutoOnCityCenter"  = City center tiles will automatically have this
-;                           extra type if the player can build it
-;   - "ConnectLand"       = Road style gfx on Oceanic tiles are drawn to
-;                           connect to adjacent Land tiles even if they have
-;                           no extra. This affects appearance only
-;   - "GlobalWarming"     = Instances of this extra on map count towards
-;                           Global Warming
-;   - "NuclearWinter"     = Instances of this extra on map count towards
-;                           Nuclear Winter
-;   - "ShowFlag"          = Draw owner's flag
-; helptext                = optional help text string; should escape all raw
+;   - "NoAggressive"      = Units inside are not considered aggressive
+;   - "NoStackDeath"      = Units inside do not die all at once when attacked
+;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
+;   - "ParadropFrom"      = Paradrop can be initiated from base
+;   - "NativeTile"        = Units consider tile native regardless of terrain
+; helptext                = optional help text string; should escape all raw 
 ;                           newlines so that xgettext parsing works
 ;
 ; */ <-- avoid gettext warnings
 
-[extra_irrigation]
-name           = _("Irrigation")
-category       = "Infra"
-causes         = "Irrigation"
-rmcauses       = "Pillage"
-graphic        = "tx.irrigation"
-graphic_alt    = "-"
-activity_gfx   = "unit.irrigate"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-build_time     = 0
-removal_time   = 0
-conflicts      = "Mine"
-hidden_by      = "Farmland"
-
-[extra_mine]
-name           = _("Mine")
-category       = "Infra"
-causes         = "Mine"
-rmcauses       = "Pillage"
-graphic        = "tx.mine"
-graphic_alt    = "-"
-activity_gfx   = "unit.mine"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-build_time     = 0
-removal_time   = 0
-conflicts      = "Irrigation", "Farmland"
-
-[extra_pollution]
-name           = _("Pollution")
-category       = "Nuisance"
-causes         = "Pollution", "Fallout"
-rmcauses       = "CleanPollution"
-graphic        = "tx.pollution"
-graphic_alt    = "-"
-activity_gfx   = "None"
-act_gfx_alt    = "-"
-rmact_gfx      = "unit.pollution"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range", "present"
-      "Terrain", "Ocean", "Local", FALSE
-    }
-removal_time   = 0
-flags          = "GlobalWarming"
-
-[extra_hut]
-name           = _("Minor Tribe Village")
-rule_name      = "Hut"
-category       = "Bonus"
-causes         = "Hut"
-;rmcauses       = ""
-graphic        = "tx.village"
-graphic_alt    = "-"
-activity_gfx   = "None"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
+[base_fortress]
+name          = _("Fortress")
+graphic       = "base.fortress"
+graphic_alt   = "-"
+activity_gfx  = "unit.fortress"
+reqs          =
     { "type", "name", "range"
+      "Tech", "Construction", "Player"
       "TerrainClass", "Land", "Local"
+      "UnitFlag", "Settlers", "Local"
     }
-helptext = _("\
-Villages (also called \"huts\") are primitive communities spread \
-across the world at the beginning of the game. Any land unit can enter \
-a village, making the village disappear and deliver a random response. \
-If the village proves hostile, it could produce barbarians or the unit \
-entering may simply be destroyed. If they are friendly, the player \
-could receive gold, a new technology, a military unit (occasionally a \
-settler; and sometimes a unit that the player cannot yet create), or \
-even a new city.\
-"), _("\
-Later in the game, helicopters may also enter villages, but overflight \
-by other aircraft will cause the villagers to take fright and disband.\
-")
-
-[extra_farmland]
-name           = _("Farmland")
-category       = "Infra"
-causes         = "Irrigation"
-rmcauses       = "Pillage"
-graphic        = "tx.farmland"
-graphic_alt    = "-"
-activity_gfx   = "unit.farmland"
-act_gfx_alt    = "unit.irrigate"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range"
-      "Tech", "Refrigeration", "Player"
-      "Extra", "Irrigation", "Local"
-    }
-build_time     = 0
-removal_time   = 0
-conflicts      = "Mine"
-
-[extra_fortress]
-name           = _("Fortress")
-category       = "Infra"
-causes         = "Base"
-rmcauses       = "Pillage"
-graphic        = "base.fortress"
-graphic_alt    = "-"
-activity_gfx   = "unit.fortress"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range", "present"
-      "Tech", "Construction", "Player", TRUE
-      "TerrainClass", "Land", "Local", TRUE
-      "UnitFlag", "Settlers", "Local", TRUE
-      "CityTile", "Center", "Local", FALSE
-    }
-build_time     = 3
-removal_time   = 0
-defense_bonus  = 100
-native_to      = "Land"
+gui_type      = "Fortress"
+build_time    = 3
+defense_bonus = 100
+native_to     = "Land"
+flags         = "NoAggressive", "NoStackDeath", "DiplomatDefense"
 helptext       = _("\
 Fortresses improve defense for land units. Among other effects, a land \
 unit remaining in a fortress for a whole turn without moving recovers \
 a quarter of its hit points.\
 ")
 
-[extra_airbase]
-name           = _("Airbase")
-category       = "Infra"
-causes         = "Base"
-rmcauses       = "Pillage"
-graphic        = "base.airbase"
-graphic_alt    = "-"
-activity_gfx   = "unit.airbase"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range", "present"
-      "Tech", "Radio", "Player", TRUE
-      "TerrainClass", "Land", "Local", TRUE
-      "UnitFlag", "Airbase", "Local", TRUE
-      "CityTile", "Center", "Local", FALSE
+[base_airbase]
+name          = _("Airbase")
+graphic       = "base.airbase"
+graphic_alt   = "-"
+activity_gfx  = "unit.airbase"
+reqs          =
+    { "type", "name", "range"
+      "Tech", "Radio", "Player"
+      "TerrainClass", "Land", "Local"
+      "UnitFlag", "Airbase", "Local"
     }
-build_time     = 3
-removal_time   = 0
-native_to      = "Air", "Helicopter", "Missile"
-flags          = "Refuel"
+gui_type      = "Airbase"
+build_time    = 3
+native_to     = "Air", "Helicopter", "Missile"
+flags         = "NoStackDeath", "ParadropFrom"
 helptext       = _("\
 Airbases allow your air units to land and refuel. Air units in an \
 airbase may be attacked by land units.\
 ")
-
-[extra_road]
-name           = _("Road")
-category       = "Infra"
-causes         = "Road"
-rmcauses       = "Pillage"
-graphic        = "road.road"
-graphic_alt    = "-"
-activity_gfx   = "unit.road"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range"
-      "UnitFlag", "Settlers", "Local"
-      "TerrainClass", "Land", "Local"
-    }
-build_time     = 0
-removal_time   = 0
-native_to      = "Land"
-hidden_by      = "Railroad"
-flags          = "AlwaysOnCityCenter"
-helptext       = _("\
-Roads allow your land units to move more quickly, and on some terrain,\
- also provide a trade bonus.\
-"), _("\
-Building roads on river tiles requires knowledge of Bridge Building.\
- City center tiles automatically get roads, and are an exception to\
- this requirement.\
-")
-
-[extra_railroad]
-name           = _("Railroad")
-category       = "Infra"
-causes         = "Road"
-rmcauses       = "Pillage"
-graphic        = "road.rail"
-graphic_alt    = "-"
-activity_gfx   = "unit.rail"
-act_gfx_alt    = "unit.road"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-reqs           =
-    { "type", "name", "range"
-      "Tech", "Railroad", "Player"
-      "Extra", "Road", "Local"
-      "UnitFlag", "Settlers", "Local"
-      "TerrainClass", "Land", "Local"
-    }
-build_time     = 3
-removal_time   = 0
-native_to      = "Land"
-flags          = "AutoOnCityCenter"
-helptext       = _("\
-Once you learn the Railroad technology, you may upgrade your roads\
- to railroads. Units expend no movement points when moving along a\
- railroad; you may ride a railroad indefinitely. (As may your enemies!)\
-"), _("\
-A railroad also increases any shield resources produced by a tile.\
- A tile whose road is upgraded to a railroad retains any trade bonus\
- from the road as well.\
-"), _("\
-City center tiles with roads are automatically upgraded to railroads\
- when you learn the Railroad technology.\
-")
-
-[extra_river]
-name           = _("River")
-category       = "Natural"
-causes         = "Road"
-;rmcauses       = ""
-graphic        = "road.river"
-graphic_alt    = "-"
-activity_gfx   = "None"
-act_gfx_alt    = "-"
-rmact_gfx      = "None"
-rmact_gfx_alt  = "-"
-buildable      = FALSE
-defense_bonus  = 50
-native_to      = "Land"
-; /* xgettext:no-c-format */
-helptext       = _("\
-Any land terrain type may have a River on it.  A River adds 1\
- trade to the resources produced by that tile.  It also increases a tile's\
- defense factor by 50%.  Finally, land units may move along a River (but\
- not diagonally) for fast travel.\
-"), _("\
-Roads and railroads can only be built on River tiles if your\
- civilization has learned Bridge Building technology.\
-")
-
-; /* <-- avoid gettext warnings
-;
-; Base types:
-;
-; extra                   = name of the extra this base section is part of
-; gui_type                = How gui should handle this base.
-;                           Fortress/Airbase/Other
-; border_sq               = Base will claim land ownership up to this radius,
-;                           -1 to disable. If enabled, base cannot exist in city tile.
-; vision_main_sq          = Base will have main layer vision to this radius
-; vision_invis_sq         = Base will have invisible layer vision to this radius
-; flags
-;   - "NoAggressive"      = Units inside are not considered aggressive
-;   - "NoStackDeath"      = Units inside do not die all at once when attacked
-;   - "DiplomatDefense"   = Diplomats inside get bonus to diplomatic defense
-;   - "ParadropFrom"      = Paradrop can be initiated from base
-;
-; */ <-- avoid gettext warnings
-
-[base_fortress]
-extra         = "Fortress"
-gui_type      = "Fortress"
-flags         = "NoAggressive", "NoStackDeath", "DiplomatDefense"
-
-[base_airbase]
-extra         = "Airbase"
-gui_type      = "Airbase"
-flags         = "NoStackDeath", "ParadropFrom"
-
-; /* <-- avoid gettext warnings
-;
-; Road types:
-;
-; extra                   = name of the extra this road section is part of
-; first_reqs              = additional requirements to build the first part of
-;                           the road, when none of the adjacent tiles have any
-;                           integrating roads (see effects.ruleset and
-;                           README.effects for help on requirements)
-; move_cost               = how much movement it takes to travel
-;                           via this road (in fractional move points, as
-;                           defined by move_fragments)
-;                           -1 means that road provides no speed bonus.
-; move_mode               = how movement costs are applied
-;   - "Cardinal"   = Road cost applies only on cardinal moves
-;   - "Relaxed"    = Road cost is normal for cardinal, double for diagonal moves
-;   - "FastAlways" = Road cost applies always between two tiles with the roads
-;                    (default)
-; food_incr_const         = food production added to tile regardless of terrain
-; shield_incr_const       = shield production added to tile regardless of
-;                           terrain
-; trade_incr_const        = trade production added to tile regardless of
-;                           terrain
-; food_incr               = food production added to tile; multiplied by
-;                           terrain-specific road_food_incr_pct
-; shield_incr             = shield production added to tile; multiplied by
-;                           terrain-specific road_shield_incr_pct
-; trade_incr              = trade production added to tile; multiplied by
-;                           terrain-specific road_trade_incr_pct
-; food_bonus              = percent added to food production
-; shield_bonus            = percent added to shield production
-; trade_bonus             = percent added to trade production
-;   In summary, output bonuses from roads are given by the formula:
-;   (base_prod + roads.incr_const + roads.incr*terrain.incr_pct) * roads.bonus
-; compat_special          = what kind of pre-2.5 special this road corresponds
-;                           to, if any: "Road", "Railroad", "River, or "None".
-;                           Used for UI and loading old savegames
-; integrates              = list of road types that are suitable next steps
-;                           for travel from this road type
-; flags
-;   - "RequiresBridge"    = Technology with "Bridge" flag needed to build this
-;                           road on the same tile as another road with
-;                           "PreventsOtherRoads" flag (usually rivers)
-;   - "PreventsOtherRoads" = Prevents "RequiresBridge" roads being built on
-;                           the same tile as this one without appropriate tech
-;   - "River"             = Automatically generated by map generator, always
-;                           flowing from land tiles to ocean
-;   - "UnrestrictedInfra" = Use of the enemy owned road is not restricted
-;                           even if server setting 'restrictinfra' is set
-;
-; */ <-- avoid gettext warnings
-
-[road_road]
-extra          = "Road"
-move_cost      = 1
-food_incr      = 0
-shield_incr    = 0
-trade_incr     = 1
-food_bonus     = 0
-shield_bonus   = 0
-trade_bonus    = 0
-compat_special = "Road"
-flags          = "RequiresBridge"
-
-[road_railroad]
-extra          = "Railroad"
-move_cost      = 0
-food_incr      = 0
-shield_incr    = 0
-trade_incr     = 0
-food_bonus     = 0
-shield_bonus   = 50
-trade_bonus    = 0
-compat_special = "Railroad"
-flags          = "RequiresBridge"
-
-[road_river]
-extra          = "River"
-move_cost      = 1
-move_mode      = "Cardinal"
-trade_incr_const = 1
-compat_special = "River"
-flags          = "River", "PreventsOtherRoads", "UnrestrictedInfra"

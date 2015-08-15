@@ -63,13 +63,12 @@ int get_citydlg_canvas_height(void)
 void generate_citydlg_dimensions(void)
 {
   int min_x = 0, max_x = 0, min_y = 0, max_y = 0;
-  int max_rad = rs_max_city_radius_sq();
 
   /* use maximum possible squared city radius. */
-  city_map_iterate_without_index(max_rad, city_x, city_y) {
-    float canvas_x, canvas_y;
+  city_map_iterate_without_index(CITY_MAP_MAX_RADIUS_SQ, city_x, city_y) {
+    int canvas_x, canvas_y;
 
-    map_to_gui_vector(tileset, 1.0, &canvas_x, &canvas_y, CITY_ABS2REL(city_x),
+    map_to_gui_vector(tileset, &canvas_x, &canvas_y, CITY_ABS2REL(city_x),
                       CITY_ABS2REL(city_y));
 
     min_x = MIN(canvas_x, min_x);
@@ -86,14 +85,14 @@ void generate_citydlg_dimensions(void)
   Converts a (cartesian) city position to citymap canvas coordinates.
   Returns TRUE if the city position is valid.
 **************************************************************************/
-bool city_to_canvas_pos(float *canvas_x, float *canvas_y, int city_x,
+bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x,
                         int city_y, int city_radius_sq)
 {
   const int width = get_citydlg_canvas_width();
   const int height = get_citydlg_canvas_height();
 
   /* The citymap is centered over the center of the citydlg canvas. */
-  map_to_gui_vector(tileset, 1.0, canvas_x, canvas_y, CITY_ABS2REL(city_x),
+  map_to_gui_vector(tileset, canvas_x, canvas_y, CITY_ABS2REL(city_x),
                     CITY_ABS2REL(city_y));
   *canvas_x += (width - tileset_tile_width(tileset)) / 2;
   *canvas_y += (height - tileset_tile_height(tileset)) / 2;
@@ -139,8 +138,8 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
 
   /* Add on the offset of the top-left corner to get the final
    * coordinates (like in canvas_to_map_pos). */
-  *city_x = CITY_REL2ABS(*city_x);
-  *city_y = CITY_REL2ABS(*city_y);
+  *city_x += CITY_MAP_MAX_RADIUS;
+  *city_y += CITY_MAP_MAX_RADIUS;
 
   log_debug("canvas_to_city_pos(pos=(%d,%d))=(%d,%d)@radius=%d",
             orig_canvas_x, orig_canvas_y, *city_x, *city_y, city_radius_sq);
@@ -152,20 +151,19 @@ bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
  * painter's algorithm and can be used for drawing. */
 #define citydlg_iterate(pcity, ptile, pedge, pcorner, _x, _y)		\
 {									\
-  float _x##_0, _y##_0;                                                 \
-  int _tile_x, _tile_y;                                                 \
+  int _x##_0, _y##_0, _tile_x, _tile_y;                                 \
   const int _x##_w = get_citydlg_canvas_width();			\
   const int _y##_h = get_citydlg_canvas_height();			\
   index_to_map_pos(&_tile_x, &_tile_y, tile_index((pcity)->tile));      \
 									\
-  map_to_gui_vector(tileset, 1.0, &_x##_0, &_y##_0, _tile_x, _tile_y);  \
+  map_to_gui_vector(tileset, &_x##_0, &_y##_0, _tile_x, _tile_y);       \
   _x##_0 -= (_x##_w - tileset_tile_width(tileset)) / 2;			\
   _y##_0 -= (_y##_h - tileset_tile_height(tileset)) / 2;		\
-  log_debug("citydlg: %f,%f + %dx%d",					\
+  log_debug("citydlg: %d,%d + %dx%d",					\
 	    _x##_0, _y##_0, _x##_w, _y##_h);				\
 									\
   gui_rect_iterate_coord(_x##_0, _y##_0, _x##_w, _y##_h,		\
-                         ptile, pedge, pcorner, _x##_g, _y##_g, 1.0) {  \
+		   ptile, pedge, pcorner, _x##_g, _y##_g) {		\
     const int _x = _x##_g - _x##_0;					\
     const int _y = _y##_g - _y##_0;					\
     {
@@ -194,7 +192,7 @@ void city_dialog_redraw_map(struct city *pcity,
 	= ptile ? get_drawable_unit(tileset, ptile, pcity) : NULL;
       struct city *pcity_draw = ptile ? tile_city(ptile) : NULL;
 
-      put_one_element(pcanvas, 1.0, layer, ptile, pedge, pcorner,
+      put_one_element(pcanvas, layer, ptile, pedge, pcorner,
                       punit, pcity_draw, canvas_x, canvas_y, pcity, NULL);
     } citydlg_iterate_end;
   } mapview_layer_iterate_end;
@@ -273,7 +271,7 @@ void get_city_dialog_production(struct city *pcity,
   cost_str = city_production_cost_str(pcity);
 
   if (turns < FC_INFINITY) {
-    if (options.concise_city_production) {
+    if (concise_city_production) {
       fc_snprintf(time_str, sizeof(time_str), "%3d", turns);
     } else {
       fc_snprintf(time_str, sizeof(time_str),
@@ -281,10 +279,10 @@ void get_city_dialog_production(struct city *pcity,
     }
   } else {
     fc_snprintf(time_str, sizeof(time_str), "%s",
-                options.concise_city_production ? "-" : _("never"));
+                concise_city_production ? "-" : _("never"));
   }
 
-  if (options.concise_city_production) {
+  if (concise_city_production) {
     fc_snprintf(buffer, buffer_len, _("%3d/%s:%s"), stock, cost_str,
                 time_str);
   } else {
@@ -377,7 +375,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
 	const char *state = NULL;
 
 	if (is_great_wonder(pimprove)) {
-          if (improvement_obsolete(pplayer, pimprove, pcity)) {
+          if (improvement_obsolete(pplayer, pimprove)) {
             state = _("Obsolete");
           } else if (great_wonder_is_built(pimprove)) {
             state = _("Built");
@@ -387,7 +385,7 @@ void get_city_dialog_production_row(char *buf[], size_t column_size,
             state = _("Great Wonder");
           }
 	} else if (is_small_wonder(pimprove)) {
-	  if (improvement_obsolete(pplayer, pimprove, pcity)) {
+	  if (improvement_obsolete(pplayer, pimprove)) {
 	    state = _("Obsolete");
           } else if (wonder_is_built(pplayer, target.value.building)) {
 	    state = _("Built");
@@ -462,24 +460,26 @@ void get_city_dialog_output_text(const struct city *pcity,
   /* Special cases for "bonus" production.  See set_city_production in
    * city.c. */
   if (otype == O_TRADE) {
-    trade_routes_iterate(pcity, proute) {
-      /* There have been bugs causing the trade city to not be sent
-       * properly to the client.  If this happens we trust the
-       * trade_value[] array and simply don't give the name of the
-       * city.
-       *
-       * NB: (proute->value == 0) is valid case.  The trade route
-       * is established but doesn't give trade surplus. */
-      struct city *trade_city = game_city_by_number(proute->partner);
-      /* TRANS: "unknown" location */
-      const char *name = trade_city ? city_name(trade_city) : _("(unknown)");
+    int i;
 
-      cat_snprintf(buf, bufsz, _("%+4d : Trade route with %s\n"),
-                   proute->value
-                   * (100 + get_city_bonus(pcity, EFT_TRADEROUTE_PCT)) / 100,
-                   name);
-      total += proute->value;
-    } trade_routes_iterate_end;
+    for (i = 0; i < NUM_TRADE_ROUTES; i++) {
+      if (pcity->trade[i] != 0) {
+        /* There have been bugs causing the trade city to not be sent
+         * properly to the client.  If this happens we trust the
+         * trade_value[] array and simply don't give the name of the
+         * city.
+         *
+         * NB: (pcity->trade_value[i] == 0) is valid case.  The trade route
+         * is established but doesn't give trade surplus. */
+        struct city *trade_city = game_city_by_number(pcity->trade[i]);
+        /* TRANS: "unknown" location */
+        const char *name = trade_city ? city_name(trade_city) : _("(unknown)");
+
+        cat_snprintf(buf, bufsz, _("%+4d : Trade route with %s\n"),
+                     pcity->trade_value[i], name);
+        total += pcity->trade_value[i];
+      }
+    }
   } else if (otype == O_GOLD) {
     int tithes = get_city_tithes_bonus(pcity);
 
@@ -500,31 +500,16 @@ void get_city_dialog_output_text(const struct city *pcity,
 
       effect_list_iterate(plist, peffect) {
 	char buf2[512];
-        int delta;
 	int new_total;
 
 	get_effect_req_text(peffect, buf2, sizeof(buf2));
 
-        if (peffect->multiplier) {
-          int mul = player_multiplier_effect_value(city_owner(pcity),
-                                                   peffect->multiplier);
-          
-          if (mul == 0) {
-            /* Suppress text when multiplier setting suppresses effect
-             * (this will also suppress it when the city owner's policy
-             * settings are not known to us) */
-            continue;
-          }
-          delta = (peffect->value * mul) / 100;
-        } else {
-          delta = peffect->value;
-        }
-        bonus += delta;
+	bonus += peffect->value;
 	new_total = bonus * base / 100;
 	cat_snprintf(buf, bufsz,
-                     (delta > 0) ? _("%+4d : Bonus from %s (%+d%%)\n")
-                                 : _("%+4d : Loss from %s (%+d%%)\n"),
-		     (new_total - total), buf2, delta);
+		     _("%+4d : Bonus from %s (%+d%%)\n"),
+		     (new_total - total), buf2,
+		     peffect->value);
 	total = new_total;
       } effect_list_iterate_end;
       effect_list_destroy(plist);
@@ -632,29 +617,12 @@ void get_city_dialog_illness_text(const struct city *pcity,
 
   effect_list_iterate(plist, peffect) {
     char buf2[512];
-    int delta;
 
     get_effect_req_text(peffect, buf2, sizeof(buf2));
 
-    if (peffect->multiplier) {
-      int mul = player_multiplier_effect_value(city_owner(pcity),
-                                               peffect->multiplier);
-      
-      if (mul == 0) {
-        /* Suppress text when multiplier setting suppresses effect
-         * (this will also suppress it when the city owner's policy
-         * settings are not known to us) */
-        continue;
-      }
-      delta = (peffect->value * mul) / 100;
-    } else {
-      delta = peffect->value;
-    }
-
     cat_snprintf(buf, bufsz,
-                 (delta > 0) ? _("%+5.1f : Bonus from %s\n")
-                             : _("%+5.1f : Risk from %s\n"),
-                 -(0.1 * ill_base * delta / 100), buf2);
+                 _("%+5.1f : Bonus from %s\n"),
+                 -(0.1 * ill_base * peffect->value / 100), buf2);
   } effect_list_iterate_end;
   effect_list_destroy(plist);
 
@@ -685,52 +653,6 @@ void get_city_dialog_pollution_text(const struct city *pcity,
 	       _("==== : Adds up to\n"));
   cat_snprintf(buf, bufsz,
 	       _("%4d : Total surplus"), pollu);
-}
-
-/**************************************************************************
-  Return text describing the culture output.
-**************************************************************************/
-void get_city_dialog_culture_text(const struct city *pcity,
-                                  char *buf, size_t bufsz)
-{
-  struct effect_list *plist;
-
-  buf[0] = '\0';
-
-  cat_snprintf(buf, bufsz,
-               _("%4d : History\n"), pcity->history);
-
-  plist = effect_list_new();
-
-  (void) get_city_bonus_effects(plist, pcity, NULL, EFT_PERFORMANCE);
-
-  effect_list_iterate(plist, peffect) {
-    char buf2[512];
-    int mul = 100;
-
-    get_effect_req_text(peffect, buf2, sizeof(buf2));
-
-    if (peffect->multiplier) {
-      mul = player_multiplier_effect_value(city_owner(pcity),
-                                           peffect->multiplier);
-      
-      if (mul == 0) {
-        /* Suppress text when multiplier setting suppresses effect
-         * (this will also suppress it when the city owner's policy
-         * settings are not known to us) */
-        continue;
-      }
-    }
-
-    cat_snprintf(buf, bufsz,
-                 _("%4d : %s\n"), (peffect->value * mul) / 100, buf2);
-  } effect_list_iterate_end;
-  effect_list_destroy(plist);
-
-  cat_snprintf(buf, bufsz,
-	       _("==== : Adds up to\n"));
-  cat_snprintf(buf, bufsz,
-	       _("%4d : Total culture"), pcity->client.culture);
 }
 
 /**************************************************************************

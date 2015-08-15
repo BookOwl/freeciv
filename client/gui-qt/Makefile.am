@@ -1,38 +1,14 @@
 ## Process this file with automake to produce Makefile.in
 
-MOCCMD=@MOCCMD@
-
-include $(top_srcdir)/bootstrap/Makerules.mk
-
 noinst_LTLIBRARIES = libgui-qt.la
-AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility \
-        -I$(top_srcdir)/common -I$(srcdir)/../agents -I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/dependencies/tinycthread \
-        $(gui_qt_cppflags) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility -I$(top_srcdir)/common $(GUI_qt_CPPFLAGS)
 
-AM_CFLAGS = $(gui_qt_cflags)
+AM_CFLAGS = $(GUI_qt_CFLAGS) $(SOUND_CFLAGS)
 
-AM_CXXFLAGS = $(gui_qt_cxxflags)
+AM_CXXFLAGS = $(GUI_qt_CXXFLAGS) $(SOUND_CFLAGS)
 
 MOC_FILES = \
-	meta_fc_client.cpp	\
-	meta_ratesdlg.cpp	\
-	meta_mapview.cpp	\
-	meta_menu.cpp		\
-	meta_repodlgs.cpp	\
-	meta_dialogs.cpp	\
-	meta_optiondlg.cpp	\
-	meta_citydlg.cpp	\
-	meta_cityrep.cpp	\
-	meta_helpdlg.cpp	\
-	meta_plrdlg.cpp		\
-	meta_diplodlg.cpp	\
-	meta_spaceshipdlg.cpp	\
-	meta_messagewin.cpp	\
-	meta_chatline.cpp	\
-	meta_messagedlg.cpp	\
-	meta_voteinfo_bar.cpp	\
-	meta_gotodlg.cpp
+	meta_fc_client.cpp
 
 libgui_qt_la_SOURCES = \
 	canvas.cpp	\
@@ -40,7 +16,6 @@ libgui_qt_la_SOURCES = \
 	chatline.cpp	\
 	chatline.h	\
 	citydlg.cpp	\
-	citydlg.h	\
 	cityrep.cpp	\
 	cityrep.h	\
 	colors.cpp	\
@@ -60,7 +35,6 @@ libgui_qt_la_SOURCES = \
 	graphics.cpp	\
 	graphics.h	\
 	gui_main.cpp	\
-	gui_main.h	\
 	helpdlg.cpp	\
 	helpdlg.h	\
 	inteldlg.cpp	\
@@ -83,6 +57,8 @@ libgui_qt_la_SOURCES = \
 	pages.h		\
 	plrdlg.cpp	\
 	plrdlg.h	\
+	qtg_cside.c	\
+	qtg_cside.h	\
 	qtg_cxxside.cpp \
 	qtg_cxxside.h	\
 	ratesdlg.cpp	\
@@ -100,5 +76,9 @@ libgui_qt_la_SOURCES = \
 	wldlg.h
 
 nodist_libgui_qt_la_SOURCES = $(MOC_FILES)
+
+# Generate meta object source from header
+$(MOC_FILES) : meta_%.cpp: %.h
+	moc -o $@ $<
 
 CLEANFILES = $(MOC_FILES)

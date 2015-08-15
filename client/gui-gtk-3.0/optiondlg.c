@@ -29,7 +29,6 @@
 
 /* client/gui-gtk-3.0 */
 #include "colors.h"
-#include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "pages.h"
@@ -514,7 +513,8 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
                                    GTK_ORIENTATION_VERTICAL);
     g_object_set(pdialog->vboxes[category], "margin", 8, NULL);
     gtk_widget_set_hexpand(pdialog->vboxes[category], TRUE);
-    gtk_container_add(GTK_CONTAINER(sw), pdialog->vboxes[category]);
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(sw),
+                                          pdialog->vboxes[category]);
 
     gtk_widget_show_all(sw);
   }
@@ -1008,8 +1008,6 @@ static void option_gui_update_extra(struct option *poption)
   if (option_optset(poption) == server_optset) {
     if (strcmp(option_name(poption), "aifill") == 0) {
       ai_fill_changed_by_server(option_int_get(poption));
-    } else if (strcmp(option_name(poption), "nationset") == 0) {
-      nationset_sync_to_server(option_str_get(poption));
     }
   }
 }

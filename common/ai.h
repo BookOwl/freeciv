@@ -22,12 +22,12 @@ extern "C" {
 
 /* Update this capability string when ever there is changes to ai_type
    structure below */
-#define FC_AI_MOD_CAPSTR "+Freeciv-ai-module-2015.Aug.03"
+#define FC_AI_MOD_CAPSTR "+Freeciv-2.4-ai-module-2013.Feb.13"
 
 /* Timers for all AI activities. Define it to get statistics about the AI. */
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #  undef DEBUG_AITIMERS
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
 struct Treaty;
 struct player;
@@ -38,6 +38,7 @@ struct tile;
 struct settlermap;
 struct pf_path;
 struct section_file;
+struct tech_vector;
 struct adv_data;
 
 enum incident_type {
@@ -46,15 +47,13 @@ enum incident_type {
   INCIDENT_NUCLEAR_SELF, INCIDENT_LAST
 };
 
+enum danger_consideration { DANG_UNDECIDED, DANG_NOT, DANG_YES };
+
 struct ai_type
 {
   char name[MAX_LEN_NAME];
 
   struct {
-    /* Called for every AI type when game starts. Game is not necessarily new one,
-       it can also be an old game loaded from a savegame. */
-    void (*game_start)(void);
-
     /* Called for every AI type when game has ended. */
     void (*game_free)(void);
 
@@ -69,7 +68,7 @@ struct ai_type
                         int plrno);
 
     /* Called for every AI type for each player in game when game loaded. */
-    void (*player_load)(struct player *pplayer, const struct section_file *file,
+    void (*player_load)(struct player *pplayer, struct section_file *file,
                         int plrno);
 
     /* Called for AI type that gains control of player. */
@@ -79,10 +78,7 @@ struct ai_type
     void (*lost_control)(struct player *pplayer);
 
     /* Called for AI type of the player who gets split to two. */
-    void (*split_by_civil_war)(struct player *original, struct player *created);
-
-   /* Called for AI type of the player who got created from the split. */
-    void (*created_by_civil_war)(struct player *original, struct player *created);
+    void (*split_by_civil_war)(struct player *pplayer);
 
     /* Called for player AI type when player phase begins. This is in the
      * beginning of phase setup. See also first_activities. */
@@ -118,24 +114,13 @@ struct ai_type
     /* Called for player AI when building advisor prepares to make decisions. */
     void (*build_adv_prepare)(struct player *pplayer, struct adv_data *adv);
 
-    /* Called for every AI type when building advisor is first initialized
-     * for the turn. */
-    void (*build_adv_init)(struct player *pplayer);
-
     /* Called for player AI when building advisor should set wants for buildings.
      * Without this implemented in AI type building advisor does not adjust wants
      * at all. */
     void (*build_adv_adjust_want)(struct player *pplayer, struct city *wonder_city);
 
-    /* Called for player AI when evaluating governments. */
-    void (*gov_value)(struct player *pplayer, struct government *gov,
-                      adv_want *val, bool *override);
-
     /* Called for every AI type when unit ruleset has been loaded. */
     void (*units_ruleset_init)(void);
-
-    /* Called for every AI type before unit ruleset gets reloaded. */
-    void (*units_ruleset_close)(void);
 
     /* Called for every AI type when new unit is added to game. */
     void (*unit_alloc)(struct unit *punit);
@@ -146,11 +131,11 @@ struct ai_type
     /* Called for player AI type when player gains control of unit. */
     void (*unit_got)(struct unit *punit);
 
-    /* Called for player AI type when unit changes type. */
-    void (*unit_transformed)(struct unit *punit, struct unit_type *old_type);
-
     /* Called for player AI type when player loses control of unit. */
     void (*unit_lost)(struct unit *punit);
+
+    /* Called for unit owner AI type when new unit is created for player. */
+    void (*unit_created)(struct unit *punit);
 
     /* Called for unit owner AI type for each unit when turn ends. */
     void (*unit_turn_end)(struct unit *punit);
@@ -186,9 +171,6 @@ struct ai_type
     /* Called for player AI type in the beginning of player phase.
      * Unlike with phase_begin, everything is set up for phase already. */
     void (*first_activities)(struct player *pplayer);
-
-    /* Called for player AI when player phase is already active when AI gains control. */
-    void (*restart_phase)(struct player *pplayer);
 
     /* Called for player AI type in the beginning of player phase. Not for barbarian
      * players. */
@@ -227,23 +209,19 @@ struct ai_type
 
     /* Called for player AI type to decide if another player is dangerous. */
     void (*consider_plr_dangerous)(struct player *plr1, struct player *plr2,
-                                   enum override_bool *result);
+                                   enum danger_consideration *result);
 
     /* Called for player AI type to decide if it's dangerous for unit to enter tile. */
     void (*consider_tile_dangerous)(struct tile *ptile, struct unit *punit,
-                                    enum override_bool *result);
+                                    enum danger_consideration *result);
 
     /* Called for player AI to decide if city can be chosen to act as wonder city
      * for building advisor. */
     void (*consider_wonder_city)(struct city *pcity, bool *result);
-
-    /* Called for player AI type with short internval */
-    void (*refresh)(struct player *pplayer);
   } funcs;
 };
 
 struct ai_type *ai_type_alloc(void);
-void ai_type_dealloc(void);
 struct ai_type *get_ai_type(int id);
 int ai_type_number(const struct ai_type *ai);
 void init_ai(struct ai_type *ai);

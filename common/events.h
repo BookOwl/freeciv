@@ -19,7 +19,6 @@ extern "C" {
 
 #include "support.h"            /* bool type */
 
-/* Used in the network protocol. */
 #define SPECENUM_NAME event_type
 #define SPECENUM_VALUE0   E_CITY_CANTBUILD
 #define SPECENUM_VALUE1   E_CITY_LOST
@@ -144,24 +143,10 @@ extern "C" {
 #define SPECENUM_VALUE108 E_CITY_RADIUS_SQ
 /* A unit with population cost was built; the city shrinks. */
 #define SPECENUM_VALUE109 E_UNIT_BUILT_POP_COST
-#define SPECENUM_VALUE110 E_DISASTER
-#define SPECENUM_VALUE111 E_ACHIEVEMENT
-#define SPECENUM_VALUE112 E_TECH_LOST
-/* Used to notify tech events for foreigner players. */
-#define SPECENUM_VALUE113 E_TECH_EMBASSY
-#define SPECENUM_VALUE114 E_MY_SPY_STEAL_GOLD
-#define SPECENUM_VALUE115 E_ENEMY_SPY_STEAL_GOLD
-#define SPECENUM_VALUE116 E_EXTRA_APPEARS
-#define SPECENUM_VALUE117 E_UNIT_ILLEGAL_ACTION
-#define SPECENUM_VALUE118 E_MY_SPY_STEAL_MAP
-#define SPECENUM_VALUE119 E_ENEMY_SPY_STEAL_MAP
-#define SPECENUM_VALUE120 E_MY_SPY_NUKE
-#define SPECENUM_VALUE121 E_ENEMY_SPY_NUKE
 /*
  * Note: If you add a new event, make sure you make a similar change
- * to the events array in "common/events.c" using GEN_EV, to
- * "data/stdsounds.soundspec", which serves as the documentation to
- * soundset authors, and to "data/misc/events.spec".
+ * to the events array in "common/events.c" using GEN_EV and
+ * "data/stdsounds.soundspec"
  */
 #define SPECENUM_COUNT E_COUNT
 /* The sound system also generates "e_game_quit", although there's no
@@ -173,7 +158,7 @@ extern enum event_type sorted_events[]; /* [E_COUNT], sorted by the
                                            translated message text */
 
 const char *get_event_message_text(enum event_type event);
-const char *get_event_tag(enum event_type event);
+const char *get_event_sound_tag(enum event_type event);
 
 bool is_city_event(enum event_type event);
 

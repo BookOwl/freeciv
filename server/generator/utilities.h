@@ -15,8 +15,6 @@
 
 typedef void (*tile_knowledge_cb)(struct tile *ptile);
 
-void generator_free(void);
-
 void regenerate_lakes(tile_knowledge_cb knowledge_cb);
 void smooth_water_depth(void);
 void assign_continent_numbers(void);

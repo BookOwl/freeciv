@@ -15,16 +15,10 @@
 #include <fc_config.h>
 #endif
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
-#include "support.h"
-
-/* common */
-#include "calendar.h"
 #include "game.h"
-
-/* gui main header */
-#include "gui_stub.h"
+#include "support.h"
 
 /* client */
 #include "client_main.h"
@@ -50,7 +44,7 @@ void update_info_label(void)
                 "Gold %d\n"
                 "Tax: %d Lux: %d Sci: %d"),
               population_to_text(civ_population(client_player())),
-              calendar_text(),
+              textyear(game.info.year),
               client.conn.playing->economic.gold,
               client.conn.playing->economic.tax,
               client.conn.playing->economic.luxury,
@@ -89,7 +83,7 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
   Update the timeout display.  The timeout is the time until the turn
   ends, in seconds.
 ****************************************************************************/
-void gui_update_timeout_label(void)
+void update_timeout_label(void)
 {
   /* PORTME */
     

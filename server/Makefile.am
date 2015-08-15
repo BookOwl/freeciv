@@ -2,20 +2,10 @@
 
 SUBDIRS = advisors generator scripting
 
-if FREECIV_WEB
-srvbin = freeciv-web
-else
-srvbin = freeciv-server
-endif
-
-if SERVER
-bin_PROGRAMS = $(srvbin)
-endif
-
+bin_PROGRAMS = freeciv-server
 lib_LTLIBRARIES = libfreeciv-srv.la
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/ai \
-	-I$(top_srcdir)/ai/classic \
+	-I$(top_srcdir)/ai/default \
 	-I$(top_srcdir)/common \
 	-I$(top_srcdir)/common/aicore \
 	-I$(top_srcdir)/common/scriptcore \
@@ -23,23 +13,21 @@ AM_CPPFLAGS = \
 	-I$(srcdir)/advisors \
 	-I$(srcdir)/generator \
 	-I$(srcdir)/scripting \
-	-I$(top_srcdir)/dependencies/tinycthread \
+	$(MAPIMG_WAND_CFLAGS) \
+	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) \
 	$(FCDB_MYSQL_CFLAGS) $(FCDB_POSTGRES_CFLAGS) $(FCDB_SQLITE3_CFLAGS)
 
 if MINGW32
 SERVERICON=../win32/servericon.o
 endif
 
-exe_sources = \
-		civserver.c
+freeciv_server_SOURCES = \
+		civserver.c	\
+		civserver.h
 
 libfreeciv_srv_la_SOURCES = \
-		actiontools.c	\
-		actiontools.h	\
 		aiiface.c	\
 		aiiface.h	\
-		animals.c	\
-		animals.h	\
 		auth.c		\
 		auth.h		\
 		barbarian.c	\
@@ -68,6 +56,8 @@ libfreeciv_srv_la_SOURCES = \
 		fcdb.h		\
 		gamehand.c	\
 		gamehand.h	\
+		ggzserver.c	\
+		ggzserver.h	\
 		handchat.c	\
 		handchat.h	\
 		hand_gen.h	\
@@ -76,30 +66,20 @@ libfreeciv_srv_la_SOURCES = \
 		maphand.h	\
 		meta.c		\
 		meta.h		\
-		mood.c		\
-		mood.h		\
 		notify.c	\
 		notify.h	\
 		plrhand.c	\
 		plrhand.h	\
 		report.c	\
 		report.h	\
-		rscompat.c	\
-		rscompat.h	\
-		rssanity.c	\
-		rssanity.h	\
 		ruleset.c	\
 		ruleset.h	\
 		sanitycheck.c	\
 		sanitycheck.h	\
-		savecompat.c	\
-		savecompat.h	\
 		savegame.c	\
 		savegame.h	\
 		savegame2.c	\
 		savegame2.h	\
-		savegame3.c	\
-		savegame3.h	\
 		score.c		\
 		score.h		\
 		sernet.c	\
@@ -127,14 +107,14 @@ libfreeciv_srv_la_SOURCES = \
 # outside this directory (when building common) there's no point in
 # setting them to BUILT_SOURCES.
 
-da_libs = 
+da_libs =
 
-if AI_MOD_DEFAULT_NEEDED
-da_libs += $(top_builddir)/ai/default/libdefaultai.la
-endif
-
+if !AI_MODULES
+da_libs += $(top_builddir)/ai/default/libclassicai.la
+else
 if AI_MOD_STATIC_CLASSIC
-da_libs += $(top_builddir)/ai/classic/libclassicai.la
+da_libs += $(top_builddir)/ai/default/libclassicai.la
+endif
 endif
 if AI_MOD_STATIC_THREADED
 da_libs += $(top_builddir)/ai/threaded/libthreadedai.la
@@ -147,7 +127,6 @@ MAINTAINERCLEANFILES = \
 
 srvlibs = \
  $(da_libs) \
- $(top_builddir)/ai/libaicommon.la \
  $(top_builddir)/server/advisors/libadvisors.la \
  $(top_builddir)/server/generator/libgenerator.la \
  $(top_builddir)/server/scripting/libscripting_fcdb.la \
@@ -157,25 +136,14 @@ libfreeciv_srv_la_LIBADD = \
  $(srvlibs) $(SRV_LIB_LIBS) \
  $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS)
 
-exe_ldflags =
+freeciv_server_LDFLAGS = $(GGZDMOD_LDFLAGS)
 
-exe_ldadd = \
+freeciv_server_LDADD = \
  ./libfreeciv-srv.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) \
  $(MAPIMG_WAND_LIBS) \
- $(TINYCTHR_LIBS) \
- $(SERVER_LIBS) $(SERVERICON)
-
-if FREECIV_WEB
-freeciv_web_SOURCES = $(exe_sources)
-freeciv_web_LDFLAGS = $(exe_ldflags)
-freeciv_web_LDADD = $(exe_ldadd)
-else
-freeciv_server_SOURCES = $(exe_sources)
-freeciv_server_LDFLAGS = $(exe_ldflags)
-freeciv_server_LDADD = $(exe_ldadd)
-endif
+ $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
 
 desktopfiledir = @DESKTOPDIR@
 desktopfile_DATA = \

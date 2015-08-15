@@ -22,9 +22,6 @@
 #include "client_main.h"
 #include "control.h"
 
-/* gui main header */
-#include "gui_stub.h"
-
 #include "gotodlg.h"
 
 /**************************************************************************

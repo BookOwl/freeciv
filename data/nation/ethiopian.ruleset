@@ -1,10 +1,9 @@
 [nation_ethiopian]
 
-translation_domain="freeciv"
-
 name=_("Ethiopian")
 plural=_("?plural:Ethiopians")
 groups="African", "Modern", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("Ethiopia is the oldest nation in Africa and the only one to\
  remain independent during European colonialism.")
 
@@ -29,7 +28,7 @@ ruler_titles = {
 
 flag="ethiopia"
 flag_alt = "italy"
-style = "Babylonian"
+city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""

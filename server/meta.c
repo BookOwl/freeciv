@@ -55,7 +55,6 @@
 #include "connection.h"
 #include "dataio.h"
 #include "game.h"
-#include "map.h"
 #include "version.h"
 
 /* server */
@@ -111,18 +110,6 @@ const char *get_meta_patches_string(void)
 const char *get_meta_message_string(void)
 {
   return meta_message;
-}
-
-/*************************************************************************
- The server metaserver type
-*************************************************************************/
-static const char *get_meta_type_string(void)
-{
-  if (game.server.meta_info.type[0] != '\0') {
-    return game.server.meta_info.type;
-  }
-
-  return NULL;
 }
 
 /*************************************************************************
@@ -243,7 +230,7 @@ static void send_metaserver_post(void *arg)
     addr = srvarg.bind_addr;
   }
 
-  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, NULL, addr)) {
+  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, addr)) {
     con_puts(C_METAERROR, _("Error connecting to metaserver"));
     metaserver_failed();
   }
@@ -260,7 +247,6 @@ static bool send_to_metaserver(enum meta_flag flag)
   int humans = 0;
   char host[512];
   char state[20];
-  char rs[256];
   struct netfile_post *post;
 
   switch(server_state()) {
@@ -276,16 +262,10 @@ static bool send_to_metaserver(enum meta_flag flag)
   }
 
   /* get hostname */
-  if (srvarg.identity_name[0] != '\0') {
-    sz_strlcpy(host, srvarg.identity_name);
+  if (srvarg.metaserver_name[0] != '\0') {
+    sz_strlcpy(host, srvarg.metaserver_name);
   } else if (fc_gethostname(host, sizeof(host)) != 0) {
     sz_strlcpy(host, "unknown");
-  }
-
-  if (game.control.version[0] != '\0') {
-    fc_snprintf(rs, sizeof(rs), "%s %s", game.control.name, game.control.version);
-  } else {
-    sz_strlcpy(rs, game.control.name);
   }
 
   /* Freed in metaserver thread function send_metaserver_post() */
@@ -294,16 +274,10 @@ static bool send_to_metaserver(enum meta_flag flag)
   netfile_add_form_str(post, "host", host);
   netfile_add_form_int(post, "port", srvarg.port);
   netfile_add_form_str(post, "state", state);
-  netfile_add_form_str(post, "ruleset", rs);
 
   if (flag == META_GOODBYE) {
     netfile_add_form_int(post, "bye", 1);
   } else {
-    const char *srvtype = get_meta_type_string();
-
-    if (srvtype != NULL) {
-      netfile_add_form_str(post, "type", srvtype);
-    }
     netfile_add_form_str(post, "version", VERSION_STRING);
     netfile_add_form_str(post, "patches",
                          get_meta_patches_string());
@@ -341,10 +315,6 @@ static bool send_to_metaserver(enum meta_flag flag)
         netfile_add_form_str(post, "pln[]",
                              plr->nation != NO_NATION_SELECTED 
                              ? nation_plural_for_player(plr)
-                             : "none");
-        netfile_add_form_str(post, "plf[]",
-                             plr->nation != NO_NATION_SELECTED 
-                             ? nation_of_player(plr)->flag_graphic_str
                              : "none");
         netfile_add_form_str(post, "plh[]",
                              pconn ? pconn->addr : "");
@@ -484,7 +454,7 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
   /* if we're bidding farewell, ignore all timers */
   if (flag == META_GOODBYE) { 
     if (last_send_timer) {
-      timer_destroy(last_send_timer);
+      free_timer(last_send_timer);
       last_send_timer = NULL;
     }
     send_to_metaserver(flag);
@@ -497,7 +467,7 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
   }
 
   /* don't allow the user to spam the metaserver with updates */
-  if (last_send_timer && (timer_read_seconds(last_send_timer)
+  if (last_send_timer && (read_timer_seconds(last_send_timer)
                                           < METASERVER_MIN_UPDATE_INTERVAL)) {
     if (flag == META_INFO) {
       want_update = TRUE; /* we couldn't update now, but update a.s.a.p. */
@@ -508,17 +478,16 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
   /* if we're asking for a refresh, only do so if 
    * we've exceeded the refresh interval */
   if ((flag == META_REFRESH) && !want_update && last_send_timer 
-      && (timer_read_seconds(last_send_timer) < METASERVER_REFRESH_INTERVAL)) {
+      && (read_timer_seconds(last_send_timer) < METASERVER_REFRESH_INTERVAL)) {
     return FALSE;
   }
 
   /* start a new timer if we haven't already */
   if (!last_send_timer) {
-    last_send_timer = timer_new(TIMER_USER, TIMER_ACTIVE);
+    last_send_timer = new_timer(TIMER_USER, TIMER_ACTIVE);
   }
 
-  timer_clear(last_send_timer);
-  timer_start(last_send_timer);
+  clear_timer_start(last_send_timer);
   want_update = FALSE;
 
   return send_to_metaserver(flag);

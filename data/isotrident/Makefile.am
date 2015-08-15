@@ -22,8 +22,6 @@ pkgdata_DATA =          \
 	terrain2.spec	\
 	tiles.png	\
 	tiles.spec	\
-	unitcost.png	\
-	unitcost.spec	\
 	unitextras.png	\
 	unitextras.spec
 

@@ -300,12 +300,9 @@ void establish_new_connection(struct connection *pconn)
 
   if (NULL != pplayer) {
     /* Else, no need to do anything. */
-    reset_all_start_commands(TRUE);
+    reset_all_start_commands();
     (void) send_server_info_to_metaserver(META_INFO);
   }
-
-  send_current_history_report(pconn->self);
-
   conn_compression_thaw(pconn);
 }
 
@@ -339,12 +336,6 @@ bool handle_login_request(struct connection *pconn,
   char msg[MAX_LEN_MSG];
   int kick_time_remaining;
 
-  if (pconn->established || pconn->server.status != AS_NOT_ESTABLISHED) {
-    /* We read the PACKET_SERVER_JOIN_REQ twice from this connection,
-     * this is probably not a Freeciv client. */
-    return FALSE;
-  }
-
   log_normal(_("Connection request from %s from %s"),
              req->username, pconn->addr);
 
@@ -354,8 +345,8 @@ bool handle_login_request(struct connection *pconn,
              req->patch_version, req->version_label);
   log_verbose("Client caps: %s", req->capability);
   log_verbose("Server caps: %s", our_capability);
-  conn_set_capability(pconn, req->capability);
-
+  sz_strlcpy(pconn->capability, req->capability);
+  
   /* Make sure the server has every capability the client needs */
   if (!has_capabilities(our_capability, req->capability)) {
     fc_snprintf(msg, sizeof(msg),
@@ -419,14 +410,6 @@ bool handle_login_request(struct connection *pconn,
       return FALSE;
     }
   } conn_list_iterate_end;
-
-  /* Remove the ping timeout given in sernet.c:server_make_connection(). */
-  fc_assert_msg(1 == timer_list_size(pconn->server.ping_timers),
-                "Ping timer list size %d, should be 1. Have we sent "
-                "a ping to unestablished connection %s?",
-                timer_list_size(pconn->server.ping_timers),
-                conn_description(pconn));
-  timer_list_pop_front(pconn->server.ping_timers);
 
   if (game.server.connectmsg[0] != '\0') {
     log_debug("Sending connectmsg: %s", game.server.connectmsg);
@@ -578,15 +561,11 @@ static bool connection_attach_real(struct connection *pconn,
       if (NULL == pplayer) {
         /* no uncontrolled player found */
         if (player_count() >= game.server.max_players
-            || normal_player_count() >= server.playable_nations) {
+            || player_count() - server.nbarbarians >= server.playable_nations) {
           return FALSE;
         }
         /* add new player, or not */
-        /* Should only be called in such a way as to create a new player
-         * in the pregame */
-        fc_assert_ret_val(!game_was_started(), FALSE);
         pplayer = server_create_player(-1, default_ai_type_name(), NULL);
-        /* Pregame => no need to assign_player_colors() */
         if (!pplayer) {
           return FALSE;
         }
@@ -608,7 +587,7 @@ static bool connection_attach_real(struct connection *pconn,
         /* Temporarily set player_name() to username. */
         server_player_set_name(pplayer, pconn->username);
       }
-      (void) aifill(game.info.aifill);
+      aifill(game.info.aifill);
     }
 
     if (game.server.auto_ai_toggle && pplayer->ai_controlled) {
@@ -616,25 +595,6 @@ static bool connection_attach_real(struct connection *pconn,
     }
 
     send_player_info_c(pplayer, game.est_connections);
-
-    /* Remove from global observers list, if was there */
-    conn_list_remove(game.glob_observers, pconn);
-  } else if (pplayer == NULL) {
-    /* Global observer */
-    bool already = FALSE;
-
-    fc_assert(observing);
-
-    conn_list_iterate(game.glob_observers, pconn2) {
-      if (pconn2 == pconn) {
-        already = TRUE;
-        break;
-      }
-    } conn_list_iterate_end;
-
-    if (!already) {
-      conn_list_append(game.glob_observers, pconn);
-    }
   }
 
   /* We don't want the connection's username on another player. */
@@ -767,8 +727,8 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
 
         /* Actually do the removal. */
         server_remove_player(pplayer);
-        (void) aifill(game.info.aifill);
-        reset_all_start_commands(TRUE);
+        aifill(game.info.aifill);
+        reset_all_start_commands();
       } else {
         /* Aitoggle the player if no longer connected. */
         if (game.server.auto_ai_toggle && !pplayer->ai_controlled) {
@@ -783,7 +743,7 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
           log_verbose("connection_detach() calls send_player_info_c()");
           send_player_info_c(pplayer, NULL);
 
-          reset_all_start_commands(TRUE);
+          reset_all_start_commands();
         }
       }
     }

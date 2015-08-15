@@ -30,9 +30,7 @@
 #include "shared.h"
 
 /* common */
-#include "game.h"
 #include "map.h"
-#include "road.h"
 
 /* server/generator */
 #include "height_map.h"
@@ -50,7 +48,6 @@ static void add_resources(int prob);
 static void mapgenerator2(void);
 static void mapgenerator3(void);
 static void mapgenerator4(void);
-static bool map_generate_fair_islands(void);
 static void adjust_terrain_param(void);
 
 /* common variables for generator 2, 3 and 4 */
@@ -68,10 +65,6 @@ struct terrain_select {
   int temp_condition;
   int wet_condition;
 };
-
-
-static struct road_type *river_types[MAX_ROAD_TYPES];
-static int river_type_count = 0;
 
 #define SPECLIST_TAG terrain_select
 #include "speclist.h"
@@ -118,40 +111,25 @@ struct river_map {
 };
 
 static int river_test_blocked(struct river_map *privermap,
-                              struct tile *ptile,
-                              struct road_type *priver);
+                              struct tile *ptile);
 static int river_test_rivergrid(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver);
+                                struct tile *ptile);
 static int river_test_highlands(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver);
+                                struct tile *ptile);
 static int river_test_adjacent_ocean(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_adjacent_river(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_adjacent_highlands(struct river_map *privermap,
-                                         struct tile *ptile,
-                                         struct road_type *priver);
-static int river_test_swamp(struct river_map *privermap,
-                            struct tile *ptile,
-                            struct road_type *priver);
+                                         struct tile *ptile);
+static int river_test_swamp(struct river_map *privermap, struct tile *ptile);
 static int river_test_adjacent_swamp(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver);
+                                     struct tile *ptile);
 static int river_test_height_map(struct river_map *privermap,
-                                 struct tile *ptile,
-                                 struct road_type *priver);
-static void river_blockmark(struct river_map *privermap,
-                            struct tile *ptile);
-static bool make_river(struct river_map *privermap,
-                       struct tile *ptile,
-                       struct road_type *priver);
+                                 struct tile *ptile);
+static void river_blockmark(struct river_map *privermap, struct tile *ptile);
+static bool make_river(struct river_map *privermap, struct tile *ptile);
 static void make_rivers(void);
-
-static void river_types_init(void);
 
 #define HAS_POLES (map.server.temperature < 70 && !map.server.alltemperate)
 
@@ -173,7 +151,7 @@ static int river_pct = 0;
 #define map_pos_is_dry(ptile)						\
   (map_colatitude((ptile)) <= DRY_MAX_LEVEL				\
    && map_colatitude((ptile)) > DRY_MIN_LEVEL				\
-   && count_terrain_class_near_tile((ptile), FALSE, TRUE, TC_OCEAN) <= 35)
+   && count_ocean_near_tile((ptile), FALSE, TRUE) <= 35)
 typedef enum { WC_ALL = 200, WC_DRY, WC_NDRY } wetness_c;
 
 /* MISCELANEOUS (OTHER CONDITIONS) */
@@ -327,9 +305,7 @@ static struct terrain *pick_terrain_by_flag(enum terrain_flag_id flag)
   int count = 0;
 
   terrain_type_iterate(pterrain) {
-    if ((has_flag[terrain_index(pterrain)]
-         = (terrain_has_flag(pterrain, flag)
-            && !terrain_has_flag(pterrain, TER_NOT_GENERATED)))) {
+    if ((has_flag[terrain_index(pterrain)] = terrain_has_flag(pterrain, flag))) {
       count++;
     }
   } terrain_type_iterate_end;
@@ -370,19 +346,17 @@ static struct terrain *pick_terrain(enum mapgen_terrain_property target,
 
   /* Find the total weight. */
   terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
+    if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
+      continue;
+    }
+    if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
+      continue;
+    }
 
-      if (target != MG_UNUSED) {
-        sum += pterrain->property[target];
-      } else {
-        sum++;
-      }
+    if (target != MG_UNUSED) {
+      sum += pterrain->property[target];
+    } else {
+      sum++;
     }
   } terrain_type_iterate_end;
 
@@ -391,26 +365,24 @@ static struct terrain *pick_terrain(enum mapgen_terrain_property target,
 
   /* Finally figure out which one we picked. */
   terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      int property;
+    int property;
 
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
-
-      if (target != MG_UNUSED) {
-        property = pterrain->property[target];
-      } else {
-        property = 1;
-      }
-      if (sum < property) {
-        return pterrain;
-      }
-      sum -= property;
+    if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
+      continue;
     }
+    if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
+      continue;
+    }
+
+    if (target != MG_UNUSED) {
+      property = pterrain->property[target];
+    } else {
+      property = 1;
+    }
+    if (sum < property) {
+      return pterrain;
+    }
+    sum -= property;
   } terrain_type_iterate_end;
 
   /* This can happen with sufficient quantities of preferred and avoided
@@ -529,10 +501,10 @@ static void make_polar_land(void)
   Recursively generate terrains.
 **************************************************************************/
 static void place_terrain(struct tile *ptile, int diff, 
-                          struct terrain *pterrain, int *to_be_placed,
-                          wetness_c        wc,
-                          temperature_type tc,
-                          miscellaneous_c  mc)
+                           struct terrain *pterrain, int *to_be_placed,
+			   wetness_c        wc,
+			   temperature_type tc,
+			   miscellaneous_c  mc)
 {
   if (*to_be_placed <= 0) {
     return;
@@ -594,7 +566,6 @@ static void make_plains(void)
     }
   } whole_map_iterate_end;
 }
-
 /**************************************************************************
  This place randomly a cluster of terrains with some characteristics
  **************************************************************************/
@@ -686,8 +657,7 @@ static void make_terrains(void)
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_blocked(struct river_map *privermap,
-                              struct tile *ptile,
-                              struct road_type *priver)
+                              struct tile *ptile)
 {
   if (dbv_isset(&privermap->blocked, tile_index(ptile))) {
     return 1;
@@ -707,18 +677,16 @@ static int river_test_blocked(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_rivergrid(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver)
+                                struct tile *ptile)
 {
-  return (count_river_type_tile_card(ptile, priver, FALSE) > 1) ? 1 : 0;
+  return (count_special_near_tile(ptile, TRUE, FALSE, S_RIVER) > 1) ? 1 : 0;
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_highlands(struct river_map *privermap,
-                                struct tile *ptile,
-                                struct road_type *priver)
+                                struct tile *ptile)
 {
   return tile_terrain(ptile)->property[MG_MOUNTAINOUS];
 }
@@ -727,28 +695,25 @@ static int river_test_highlands(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_ocean(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
-  return 100 - count_terrain_class_near_tile(ptile, TRUE, TRUE, TC_OCEAN);
+  return 100 - count_ocean_near_tile(ptile, TRUE, TRUE);
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_river(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
-  return 100 - count_river_type_tile_card(ptile, priver, TRUE);
+  return 100 - count_special_near_tile(ptile, TRUE, TRUE, S_RIVER);
 }
 
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_highlands(struct river_map *privermap,
-                                         struct tile *ptile,
-                                         struct road_type *priver)
+                                         struct tile *ptile)
 {
   int sum = 0;
 
@@ -762,9 +727,7 @@ static int river_test_adjacent_highlands(struct river_map *privermap,
 /*********************************************************************
  Help function used in make_river(). See the help there.
 *********************************************************************/
-static int river_test_swamp(struct river_map *privermap,
-                            struct tile *ptile,
-                            struct road_type *priver)
+static int river_test_swamp(struct river_map *privermap, struct tile *ptile)
 {
   return FC_INFINITY - tile_terrain(ptile)->property[MG_WET];
 }
@@ -773,8 +736,7 @@ static int river_test_swamp(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_adjacent_swamp(struct river_map *privermap,
-                                     struct tile *ptile,
-                                     struct road_type *priver)
+                                     struct tile *ptile)
 {
   int sum = 0;
 
@@ -789,8 +751,7 @@ static int river_test_adjacent_swamp(struct river_map *privermap,
  Help function used in make_river(). See the help there.
 *********************************************************************/
 static int river_test_height_map(struct river_map *privermap,
-                                 struct tile *ptile,
-                                 struct road_type *priver)
+                                 struct tile *ptile)
 {
   return hmap(ptile);
 }
@@ -798,8 +759,7 @@ static int river_test_height_map(struct river_map *privermap,
 /*********************************************************************
  Called from make_river. Marks all directions as blocked.  -Erik Sigra
 *********************************************************************/
-static void river_blockmark(struct river_map *privermap,
-                            struct tile *ptile)
+static void river_blockmark(struct river_map *privermap, struct tile *ptile)
 {
   log_debug("Blockmarking (%d, %d) and adjacent tiles.", TILE_XY(ptile));
 
@@ -811,7 +771,7 @@ static void river_blockmark(struct river_map *privermap,
 }
 
 struct test_func {
-  int (*func)(struct river_map *privermap, struct tile *ptile, struct road_type *priver);
+  int (*func)(struct river_map *privermap, struct tile *ptile);
   bool fatal;
 };
 
@@ -918,8 +878,7 @@ static struct test_func test_funcs[NUM_TEST_FUNCTIONS] = {
  If these rules haven't decided the direction, the random number
  generator gets the desicion.                              -Erik Sigra
 *********************************************************************/
-static bool make_river(struct river_map *privermap, struct tile *ptile,
-                       struct road_type *priver)
+static bool make_river(struct river_map *privermap, struct tile *ptile)
 {
   /* Comparison value for each tile surrounding the current tile.  It is
    * the suitability to continue a river to the tile in that direction;
@@ -938,8 +897,8 @@ static bool make_river(struct river_map *privermap, struct tile *ptile,
 
     /* Test if the river is done. */
     /* We arbitrarily make rivers end at the poles. */
-    if (count_river_near_tile(ptile, priver) > 0
-        || count_terrain_class_near_tile(ptile, TRUE, TRUE, TC_OCEAN) > 0
+    if (count_special_near_tile(ptile, TRUE, TRUE, S_RIVER) > 0
+        || count_ocean_near_tile(ptile, TRUE, TRUE) > 0
         || (tile_terrain(ptile)->property[MG_FROZEN] > 0
             && map_colatitude(ptile) < 0.8 * COLD_LEVEL)) {
 
@@ -965,7 +924,7 @@ static bool make_river(struct river_map *privermap, struct tile *ptile,
       cardinal_adjc_dir_iterate(ptile, ptile1, dir) {
         if (rd_direction_is_valid[dir]) {
           rd_comparison_val[dir] = (test_funcs[func_num].func)(privermap,
-                                                               ptile1, priver);
+                                                               ptile1);
           fc_assert_action(rd_comparison_val[dir] >= 0, continue);
           if (best_val == -1) {
             best_val = rd_comparison_val[dir];
@@ -1036,7 +995,6 @@ static void make_rivers(void)
   struct tile *ptile;
   struct terrain *pterrain;
   struct river_map rivermap;
-  struct road_type *road_river = NULL;
 
   /* Formula to make the river density similar om different sized maps. Avoids
      too few rivers on large maps and too many rivers on small maps. */
@@ -1058,11 +1016,6 @@ static void make_rivers(void)
      every iteration of the main loop in this function).
      Is needed to stop a potentially infinite loop. */
   int iteration_counter = 0;
-
-  if (river_type_count <= 0) {
-    /* No river type available */
-    return;
-  }
 
   create_placed_map(); /* needed bu rand_map_characteristic */
   set_all_ocean_tiles_placed();
@@ -1087,12 +1040,12 @@ static void make_rivers(void)
 	!is_ocean(pterrain)
 
 	/* Don't start a river on river. */
-	&& !tile_has_river(ptile)
+	&& !tile_has_special(ptile, S_RIVER)
 
 	/* Don't start a river on a tile is surrounded by > 1 river +
 	   ocean tile. */
-	&& (count_river_near_tile(ptile, NULL)
-	    + count_terrain_class_near_tile(ptile, TRUE, FALSE, TC_OCEAN) <= 1)
+	&& (count_special_near_tile(ptile, TRUE, FALSE, S_RIVER)
+	    + count_ocean_near_tile(ptile, TRUE, FALSE) <= 1)
 
 	/* Don't start a river on a tile that is surrounded by hills or
 	   mountains unless it is hard to find somewhere else to start
@@ -1120,27 +1073,14 @@ static void make_rivers(void)
       dbv_clr_all(&rivermap.blocked);
       dbv_clr_all(&rivermap.ok);
 
-      road_river = river_types[fc_rand(river_type_count)];
-
-      road_type_iterate(oriver) {
-        if (oriver != road_river) {
-          whole_map_iterate(rtile) {
-            if (tile_has_road(rtile, oriver)) {
-              dbv_set(&rivermap.blocked, tile_index(rtile));
-            }
-          } whole_map_iterate_end;
-        }
-      } road_type_iterate_end;
-
       log_debug("Found a suitable starting tile for a river at (%d, %d)."
                 " Starting to make it.", TILE_XY(ptile));
 
       /* Try to make a river. If it is OK, apply it to the map. */
-      if (make_river(&rivermap, ptile, road_river)) {
+      if (make_river(&rivermap, ptile)) {
         whole_map_iterate(ptile1) {
           if (dbv_isset(&rivermap.ok, tile_index(ptile1))) {
             struct terrain *pterrain = tile_terrain(ptile1);
-
             if (!terrain_has_flag(pterrain, TER_CAN_HAVE_RIVER)) {
               /* We have to change the terrain to put a river here. */
               pterrain = pick_terrain_by_flag(TER_CAN_HAVE_RIVER);
@@ -1148,8 +1088,7 @@ static void make_rivers(void)
                 tile_set_terrain(ptile1, pterrain);
               }
             }
-
-            tile_add_road(ptile1, road_river);
+            tile_set_special(ptile1, S_RIVER);
             current_riverlength++;
             map_set_placed(ptile1);
             log_debug("Applied a river to (%d, %d).", TILE_XY(ptile1));
@@ -1189,7 +1128,7 @@ static void make_land(void)
    * that terrain. We must set some terrain (and not T_UNKNOWN) so that "
    * continent number assignment works. */
   terrain_type_iterate(pterrain) {
-    if (!is_ocean(pterrain) && !terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
+    if (!is_ocean(pterrain)) {
       land_fill = pterrain;
       break;
     }
@@ -1291,12 +1230,7 @@ static void remove_tiny_islands(void)
   whole_map_iterate(ptile) {
     if (is_tiny_island(ptile)) {
       tile_set_terrain(ptile, shallow);
-      road_type_iterate(priver) {
-        if (tile_has_road(ptile, priver)
-            && road_has_flag(priver, RF_RIVER)) {
-          tile_remove_road(ptile, priver);
-        }
-      } road_type_iterate_end;
+      tile_clear_special(ptile, S_RIVER);
       tile_set_continent(ptile, 0);
     }
   } whole_map_iterate_end;
@@ -1370,29 +1304,20 @@ FIXME: Some continent numbers are unused at the end of this function, fx
 bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 {
   /* save the current random state: */
-  RANDOM_STATE rstate;
-  RANDOM_TYPE seed_rand;
-
-  /* Call fc_rand() even when result is not needed to make sure
-   * random state proceeds equally for random seeds and explicitly
-   * set seed. */
-  seed_rand = fc_rand(MAX_UINT32);
+  RANDOM_STATE rstate = fc_rand_state();
 
   if (map.server.seed == 0) {
-    /* Create a "random" map seed. */
-    map.server.seed = seed_rand & (MAX_UINT32 >> 1);
+    /* Create a "random" map seed.  Note the call to fc_rand() which will
+     * depend on the game seed. */
+    map.server.seed = (fc_rand(MAX_UINT32) ^ time(NULL)) & (MAX_UINT32 >> 1);
     log_debug("Setting map.seed:%d", map.server.seed);
   }
-
-  rstate = fc_rand_state();
 
   fc_srand(map.server.seed);
 
   /* don't generate tiles with mapgen==0 as we've loaded them from file */
   /* also, don't delete (the handcrafted!) tiny islands in a scenario */
   if (map.server.generator != MAPGEN_SCENARIO) {
-    river_types_init();
-
     generator_init_topology(autosize);
     /* Map can be already allocated, if we failed first map generation */
     if (map_is_empty()) {
@@ -1404,11 +1329,6 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 
     /* create a temperature map */
     create_tmap(FALSE);
-
-    if (MAPGEN_FAIR == map.server.generator
-        && !map_generate_fair_islands()) {
-      map.server.generator = MAPGEN_ISLAND;
-    }
 
     if (MAPGEN_ISLAND == map.server.generator) {
       /* initialise terrain selection lists used by make_island() */
@@ -1491,10 +1411,6 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
     enum map_startpos mode = MAPSTARTPOS_ALL;
 
     switch (map.server.generator) {
-    case MAPGEN_FAIR:
-      fc_assert_msg(FALSE,
-                    "Fair island generator failed to allocated "
-                    "start positions!");
     case MAPGEN_SCENARIO:
     case MAPGEN_RANDOM:
       mode = map.server.startpos;
@@ -1531,7 +1447,6 @@ bool map_fractal_generate(bool autosize, struct unit_type *initial_unit)
 
       success = create_start_positions(mode, initial_unit);
       if (success) {
-        map.server.startpos = mode;
         break;
       }
 
@@ -1623,13 +1538,13 @@ static void make_huts(int number)
     /* Add a hut.  But not on a polar area, on an ocean, or too close to
      * another hut. */
     if ((ptile = rand_map_pos_characteristic(WC_ALL, TT_NFROZEN, MC_NONE))) {
-      struct extra_type *phut = rand_extra_for_tile(ptile, EC_HUT);
-
-      number--;
-      if (phut != NULL) {
-        tile_add_extra(ptile, phut);
+      if (is_ocean_tile(ptile)) {
+	map_set_placed(ptile); /* not good for a hut */
+      } else {
+	number--;
+	tile_set_special(ptile, S_HUT);
+	set_placed_near_pos(ptile, 3);
       }
-      set_placed_near_pos(ptile, 3);
     }
   }
   destroy_placed_map();
@@ -1797,8 +1712,7 @@ static void fill_island(int coast, long int *bucket,
     if ((i * 3 > k * 2
          || fc_rand(100) < 50
          || is_terrain_near_tile(ptile, pterrain, FALSE))
-        && (!is_terrain_class_card_near(ptile, TC_OCEAN)
-            || fc_rand(100) < coast)) {
+        && (!is_cardinally_adj_to_ocean(ptile) || fc_rand(100) < coast)) {
       tile_set_terrain(ptile, pterrain);
       map_set_placed(ptile);
 
@@ -1815,16 +1729,14 @@ static void fill_island(int coast, long int *bucket,
 /**************************************************************************
   Returns TRUE if ptile is suitable for a river mouth.
 **************************************************************************/
-static bool island_river_mouth_suitability(const struct tile *ptile,
-                                           const struct road_type *priver)
+static bool island_river_mouth_suitability(const struct tile *ptile)
 {
   int num_card_ocean, pct_adj_ocean, num_adj_river;
 
-  num_card_ocean = count_terrain_class_near_tile(ptile, C_CARDINAL, C_NUMBER,
-                                                 TC_OCEAN);
-  pct_adj_ocean = count_terrain_class_near_tile(ptile, C_ADJACENT, C_PERCENT,
-                                                TC_OCEAN);
-  num_adj_river = count_river_type_tile_card(ptile, priver, FALSE);
+  num_card_ocean = count_ocean_near_tile(ptile, C_CARDINAL, C_NUMBER);
+  pct_adj_ocean = count_ocean_near_tile(ptile, C_ADJACENT, C_PERCENT);
+  num_adj_river = count_special_near_tile(ptile, C_ADJACENT, C_NUMBER,
+                                          S_RIVER);
 
   return (num_card_ocean == 1 && pct_adj_ocean <= 35
           && num_adj_river == 0);
@@ -1834,17 +1746,16 @@ static bool island_river_mouth_suitability(const struct tile *ptile,
   Returns TRUE if there is a river in a cardinal direction near the tile
   and the tile is suitable for extending it.
 **************************************************************************/
-static bool island_river_suitability(const struct tile *ptile,
-                                     const struct road_type *priver)
+static bool island_river_suitability(const struct tile *ptile)
 {
   int pct_adj_ocean, num_card_ocean, pct_adj_river, num_card_river;
 
-  num_card_river = count_river_type_tile_card(ptile, priver, FALSE);
-  num_card_ocean = count_terrain_class_near_tile(ptile, C_CARDINAL, C_NUMBER,
-                                                 TC_OCEAN);
-  pct_adj_ocean = count_terrain_class_near_tile(ptile, C_ADJACENT, C_PERCENT,
-                                                TC_OCEAN);
-  pct_adj_river = count_river_type_near_tile(ptile, priver, TRUE);
+  num_card_river = count_special_near_tile(ptile, C_CARDINAL, C_NUMBER,
+                                           S_RIVER);
+  num_card_ocean = count_ocean_near_tile(ptile, C_CARDINAL, C_NUMBER);
+  pct_adj_ocean = count_ocean_near_tile(ptile, C_ADJACENT, C_PERCENT);
+  pct_adj_river = count_special_near_tile(ptile, C_ADJACENT, C_PERCENT,
+                                          S_RIVER);
 
   return (num_card_river == 1 && num_card_ocean == 0
           && pct_adj_ocean < 20 && pct_adj_river < 35
@@ -1865,10 +1776,6 @@ static void fill_island_rivers(int coast, long int *bucket,
   if (*bucket <= 0) {
     return;
   }
-  if (river_type_count <= 0) {
-    return;
-  }
-
   capac = pstate->totalmass;
   i = *bucket / capac;
   i++;
@@ -1884,25 +1791,21 @@ static void fill_island_rivers(int coast, long int *bucket,
   }
 
   while (i > 0 && failsafe-- > 0) {
-    struct road_type *priver;
-
     ptile = get_random_map_position_from_state(pstate);
     if (tile_continent(ptile) != pstate->isleindex
-        || tile_has_river(ptile)) {
+        || tile_has_special(ptile, S_RIVER)) {
       continue;
     }
-
-    priver = river_types[fc_rand(river_type_count)];
 
     if (test_wetness(ptile, WC_DRY) && fc_rand(100) < 50) {
       /* rivers don't like dry locations */
       continue;
     }
 
-    if ((island_river_mouth_suitability(ptile, priver)
+    if ((island_river_mouth_suitability(ptile)
          && (fc_rand(100) < coast || i == k))
-        || island_river_suitability(ptile, priver)) {
-      tile_add_road(ptile, priver);
+        || island_river_suitability(ptile)) {
+      tile_set_special(ptile, S_RIVER);
       i--;
     }
   }
@@ -2290,9 +2193,8 @@ static void initworld(struct gen234_state *pstate)
     tile_set_terrain(ptile, deepest_ocean);
     tile_set_continent(ptile, 0);
     map_set_placed(ptile); /* not a land tile */
-    BV_CLR_ALL(ptile->extras);
+    tile_clear_all_specials(ptile);
     tile_set_owner(ptile, NULL, NULL);
-    ptile->extras_owner = NULL;
   } whole_map_iterate_end;
 
   if (HAS_POLES) {
@@ -2420,15 +2322,7 @@ static void mapgenerator3(void)
   struct gen234_state *pstate = &state;
 
   if (map.server.landpercent > 80) {
-    log_verbose("ISLAND generator: falling back to FRACTAL generator due "
-                "to landpercent > 80.");
-    map.server.generator = MAPGEN_FRACTAL;
-    return;
-  }
-
-  if (map.xsize < 40 || map.ysize < 40) {
-    log_verbose("ISLAND generator: falling back to FRACTAL generator due "
-                "to unsupported map size.");
+    log_verbose("ISLAND generator: falling back to FRACTAL generator");
     map.server.generator = MAPGEN_FRACTAL;
     return;
   }
@@ -2451,6 +2345,12 @@ static void mapgenerator3(void)
   }
   if (islandmass < 3 * maxmassdiv6 && player_count() * 2 < landmass) {
     islandmass= (landmass)/(bigislands);
+  }
+
+  if (map.xsize < 40 || map.ysize < 40 || map.server.landpercent > 80) { 
+    log_verbose("ISLAND generator: falling back to FRACTAL generator");
+    map.server.generator = MAPGEN_FRACTAL;
+    return; 
   }
 
   if (islandmass < 2) {
@@ -2570,1241 +2470,3 @@ static void mapgenerator4(void)
 }
 
 #undef DMSIS
-
-/**************************************************************************
-  Initialize river types array
-**************************************************************************/
-static void river_types_init(void)
-{
-  river_type_count = 0;
-
-  road_type_iterate(priver) {
-    if (road_has_flag(priver, RF_RIVER)) {
-      river_types[river_type_count++] = priver;
-    }
-  } road_type_iterate_end;
-}
-
-
-/****************************************************************************
-  Fair island generator types.
-****************************************************************************/
-enum fair_tile_flag {
-  FTF_NONE = 0,
-  FTF_ASSIGNED = 1 << 0,
-  FTF_OCEAN = 1 << 1,
-  FTF_STARTPOS = 1 << 2,
-  FTF_NO_RESOURCE = 1 << 3,
-  FTF_HAS_HUT = 1 << 4,
-  FTF_NO_HUT = 1 << 5
-};
-
-struct fair_tile {
-  enum fair_tile_flag flags;
-  struct terrain *pterrain;
-  struct resource *presource;
-  bv_extras extras;
-  int startpos_team_id;
-};
-
-typedef void (*fair_geometry_func)(int *x, int *y);
-struct fair_geometry_data {
-  fair_geometry_func transform[4];
-  int transform_num;
-};
-
-/****************************************************************************
-  Create a map. Note that all maps have the same dimensions, to be able to
-  call map utilities.
-****************************************************************************/
-static inline struct fair_tile *fair_map_new(void)
-{
-  return fc_calloc(MAP_INDEX_SIZE, sizeof(struct fair_tile));
-}
-
-/****************************************************************************
-  Free a map.
-****************************************************************************/
-static inline void fair_map_destroy(struct fair_tile *pmap)
-{
-  free(pmap);
-}
-
-/****************************************************************************
-  Get the coordinates of tile 'ptile'.
-****************************************************************************/
-static inline void fair_map_tile_pos(struct fair_tile *pmap,
-                                     struct fair_tile *ptile, int *x, int *y)
-{
-  index_to_map_pos(x, y, ptile - pmap);
-}
-
-/****************************************************************************
-  Get the tile at the position ('x', 'y').
-****************************************************************************/
-static inline struct fair_tile *
-fair_map_pos_tile(struct fair_tile *pmap, int x, int y)
-{
-  int nat_x, nat_y;
-
-  MAP_TO_NATIVE_POS(&nat_x, &nat_y, x, y);
-
-  /* Wrap in X and Y directions, as needed. */
-  if (nat_x < 0 || nat_x >= map.xsize) {
-    if (current_topo_has_flag(TF_WRAPX)) {
-      nat_x = FC_WRAP(nat_x, map.xsize);
-    } else {
-      return NULL;
-    }
-  }
-  if (nat_y < 0 || nat_y >= map.ysize) {
-    if (current_topo_has_flag(TF_WRAPY)) {
-      nat_y = FC_WRAP(nat_y, map.ysize);
-    } else {
-      return NULL;
-    }
-  }
-
-  return pmap + native_pos_to_index(nat_x, nat_y);
-}
-
-/****************************************************************************
-  Get the next tile in direction 'dir'.
-****************************************************************************/
-static inline struct fair_tile *
-fair_map_tile_step(struct fair_tile *pmap, struct fair_tile *ptile,
-                   enum direction8 dir)
-{
-  int x, y, dx, dy;
-
-  fair_map_tile_pos(pmap, ptile, &x, &y);
-  DIRSTEP(dx, dy, dir);
-  return fair_map_pos_tile(pmap, x + dx, y + dy);
-}
-
-/****************************************************************************
-  Returns whether 'ptile' is at least at 'dist' tiles (in real distance)
-  to the border. Note is also take in account map wrapping.
-****************************************************************************/
-static inline bool
-fair_map_tile_border(struct fair_tile *pmap, struct fair_tile *ptile,
-                     int dist)
-{
-  int nat_x, nat_y;
-
-  index_to_native_pos(&nat_x, &nat_y, ptile - pmap);
-
-  if (!current_topo_has_flag(TF_WRAPX)
-      && (nat_x < dist || nat_x >= map.xsize - dist)) {
-    return TRUE;
-  }
-
-  if (MAP_IS_ISOMETRIC) {
-    dist *= 2;
-  }
-
-  if (!current_topo_has_flag(TF_WRAPY)
-      && (nat_y < dist || nat_y >= map.ysize - dist)) {
-    return TRUE;
-  }
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Compare two iter_index values for doing closest team placement.
-****************************************************************************/
-static int fair_team_placement_closest(const void *a, const void *b)
-{
-  const struct iter_index *index1 = a, *index2 = b;
-
-  return index1->dist - index2->dist;
-}
-
-/****************************************************************************
-  Compare two iter_index values for doing horizontal team placement.
-****************************************************************************/
-static int fair_team_placement_horizontal(const void *a, const void *b)
-{
-  const struct iter_index *index1 = a, *index2 = b;
-  /* Map vector to natural vector (Y axis). */
-  int diff = (MAP_IS_ISOMETRIC
-              ? abs(index1->dx + index1->dy) - abs(index2->dx + index2->dy)
-              : abs(index1->dy) - abs(index2->dy));
-
-  return (diff != 0 ? diff : index1->dist - index2->dist);
-}
-
-/****************************************************************************
-  Compare two iter_index values for doing vertical team placement.
-****************************************************************************/
-static int fair_team_placement_vertical(const void *a, const void *b)
-{
-  const struct iter_index *index1 = a, *index2 = b;
-  /* Map vector to natural vector (X axis). */
-  int diff = (MAP_IS_ISOMETRIC
-              ? abs(index1->dx - index1->dy) - abs(index2->dx - index2->dy)
-              : abs(index1->dx) - abs(index2->dx));
-
-  return (diff != 0 ? diff : index1->dist - index2->dist);
-}
-
-/****************************************************************************
-  Symetry matrix.
-****************************************************************************/
-static void fair_do_symetry1(int *x, int *y)
-{
-  *x = -*x;
-}
-
-/****************************************************************************
-  Symetry matrix.
-****************************************************************************/
-static void fair_do_symetry2(int *x, int *y)
-{
-  *y = -*y;
-}
-
-/****************************************************************************
-  Symetry matrix for hexagonal topologies.
-****************************************************************************/
-static void fair_do_hex_symetry1(int *x, int *y)
-{
-  *x = -(*x + *y);
-}
-
-/****************************************************************************
-  Symetry matrix for hexagonal topologies.
-****************************************************************************/
-static void fair_do_hex_symetry2(int *x, int *y)
-{
-  *x = -*x;
-  *y = -*y;
-}
-
-/****************************************************************************
-  Symetry matrix for hexgonal-isometric topology.
-****************************************************************************/
-static void fair_do_iso_hex_symetry1(int *x, int *y)
-{
-  *y = *x - *y;
-}
-
-#define fair_do_iso_hex_symetry2 fair_do_rotation
-
-/****************************************************************************
-  Rotation matrix, also symetry matrix for hexagonal-isometric topology.
-****************************************************************************/
-static void fair_do_rotation(int *x, int *y)
-{
-  int z = *x;
-
-  *x = *y;
-  *y = z;
-}
-
-/****************************************************************************
-  Rotation matrix for hexgonal topology.
-****************************************************************************/
-static void fair_do_hex_rotation(int *x, int *y)
-{
-  int z = *x + *y;
-
-  *x = -*y;
-  *y = z;
-}
-
-/****************************************************************************
-  Rotation matrix for hexgonal-isometric topology.
-****************************************************************************/
-static void fair_do_iso_hex_rotation(int *x, int *y)
-{
-  int z = *x - *y;
-
-  *y = *x;
-  *x = z;
-}
-
-/****************************************************************************
-  Perform transformations defined into 'data' to position ('x', 'y').
-****************************************************************************/
-static void fair_do_geometry(const struct fair_geometry_data *data,
-                             int *x, int *y)
-{
-  int i;
-
-  for (i = 0; i < data->transform_num; i++) {
-    data->transform[i](x, y);
-  }
-}
-
-/****************************************************************************
-  Push random transformations to 'data'.
-****************************************************************************/
-static void fair_geometry_rand(struct fair_geometry_data *data)
-{
-  int i = 0;
-
-  if (!current_topo_has_flag(TF_HEX)) {
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_symetry1;
-    }
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_symetry2;
-    }
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_rotation;
-    }
-  } else if (!current_topo_has_flag(TF_ISO)) {
-    int steps;
-
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_hex_symetry1;
-    }
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_hex_symetry2;
-    }
-    /* Rotations have 2 steps on hexgonal topologies. */
-    for (steps = fc_rand(99) % 3; steps > 0; steps--) {
-      data->transform[i++] = fair_do_hex_rotation;
-    }
-  } else {
-    int steps;
-
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_iso_hex_symetry1;
-    }
-    if (fc_rand(100) < 50) {
-      data->transform[i++] = fair_do_iso_hex_symetry2;
-    }
-    /* Rotations have 2 steps on hexgonal topologies. */
-    for (steps = fc_rand(99) % 3; steps > 0; steps--) {
-      data->transform[i++] = fair_do_iso_hex_rotation;
-    }
-  }
-  fc_assert(i <= ARRAY_SIZE(data->transform));
-  data->transform_num = i;
-}
-
-/****************************************************************************
-  Copy 'psource' on 'ptarget' at position ('tx', 'ty'), performing
-  transformations defined into 'data'. Assign start positions for team
-  'startpos_team_id'. Return TRUE if we have copied the map, FALSE if the
-  copy was not possible.
-****************************************************************************/
-static bool fair_map_copy(struct fair_tile *ptarget, int tx, int ty,
-                          struct fair_tile *psource,
-                          const struct fair_geometry_data *data,
-                          int startpos_team_id)
-{
-  int sdx = map.xsize / 2, sdy = map.ysize / 2;
-  struct fair_tile *smax_tile = psource + MAP_INDEX_SIZE;
-  struct fair_tile *pstile, *pttile;
-  int x, y;
-
-  /* Check. */
-  for (pstile = psource; pstile < smax_tile; pstile++) {
-    if (pstile->flags == FTF_NONE) {
-      continue;
-    }
-
-    /* Do translation and eventually other transformations. */
-    fair_map_tile_pos(psource, pstile, &x, &y);
-    x -= sdx;
-    y -= sdy;
-    fair_do_geometry(data, &x, &y);
-    x += tx;
-    y += ty;
-    pttile = fair_map_pos_tile(ptarget, x, y);
-    if (pttile == NULL) {
-      return FALSE; /* Limit of the map. */
-    }
-    if (pttile->flags & FTF_ASSIGNED) {
-      if (pstile->flags & FTF_ASSIGNED
-          || !(pttile->flags & FTF_OCEAN)
-          || !(pstile->flags & FTF_OCEAN)) {
-        return FALSE; /* Already assigned for another usage. */
-      }
-    } else if (pttile->flags & FTF_OCEAN && !(pstile->flags & FTF_OCEAN)) {
-      return FALSE; /* We clearly want a sea tile here. */
-    }
-    if ((pttile->flags & FTF_NO_RESOURCE && pstile->presource != NULL)
-        || (pstile->flags & FTF_NO_RESOURCE && pttile->presource != NULL)) {
-      return FALSE; /* Resource disallowed there. */
-    }
-    if ((pttile->flags & FTF_NO_HUT && pstile->flags & FTF_HAS_HUT)
-        || (pstile->flags & FTF_NO_HUT && pttile->flags & FTF_HAS_HUT)) {
-      return FALSE; /* Resource disallowed there. */
-    }
-  }
-
-  /* Copy. */
-  for (pstile = psource; pstile < smax_tile; pstile++) {
-    if (pstile->flags == FTF_NONE) {
-      continue;
-    }
-
-    /* Do translation and eventually other transformations. */
-    fair_map_tile_pos(psource, pstile, &x, &y);
-    x -= sdx;
-    y -= sdy;
-    fair_do_geometry(data, &x, &y);
-    x += tx;
-    y += ty;
-    pttile = fair_map_pos_tile(ptarget, x, y);
-    fc_assert_ret_val(pttile != NULL, FALSE);
-    pttile->flags |= pstile->flags;
-    if (pstile->pterrain != NULL) {
-      pttile->pterrain = pstile->pterrain;
-      pttile->presource = pstile->presource;
-      pttile->extras = pstile->extras;
-    }
-    if (pstile->flags & FTF_STARTPOS) {
-      pttile->startpos_team_id = startpos_team_id;
-    }
-  }
-  return TRUE; /* Looks ok. */
-}
-
-/****************************************************************************
-  Attempts to copy 'psource' to 'ptarget' at a random position, with random
-  geometric effects.
-****************************************************************************/
-static bool fair_map_place_island_rand(struct fair_tile *ptarget,
-                                       struct fair_tile *psource)
-{
-  struct fair_geometry_data geometry;
-  int i, r, x, y;
-
-  fair_geometry_rand(&geometry);
-
-  /* Try random positions. */
-  for (i = 0; i < 10; i++) {
-    r = fc_rand(MAP_INDEX_SIZE);
-    index_to_map_pos(&x, &y, r);
-    if (fair_map_copy(ptarget, x, y, psource, &geometry, -1)) {
-      return TRUE;
-    }
-  }
-
-  /* Try hard placement. */
-  r = fc_rand(MAP_INDEX_SIZE);
-  for (i = (r + 1) % MAP_INDEX_SIZE; i != r; i = (i + 1) % MAP_INDEX_SIZE) {
-    index_to_map_pos(&x, &y, i);
-    if (fair_map_copy(ptarget, x, y, psource, &geometry, -1)) {
-      return TRUE;
-    }
-  }
-
-  /* Impossible placement. */
-  return FALSE;
-}
-
-/****************************************************************************
-  Attempts to copy 'psource' to 'ptarget' as close as possible of position
-  'x', 'y' for players of the team 'team_id'.
-****************************************************************************/
-static bool
-fair_map_place_island_team(struct fair_tile *ptarget, int tx, int ty,
-                           struct fair_tile *psource,
-                           const struct iter_index *outwards_indices,
-                           int startpos_team_id)
-{
-  struct fair_geometry_data geometry;
-  int i, x, y;
-
-  fair_geometry_rand(&geometry);
-
-  /* Iterate positions, beginning by a random index of the outwards
-   * indices. */
-  for (i = fc_rand(map.num_iterate_outwards_indices / 200);
-       i < map.num_iterate_outwards_indices; i++) {
-    x = tx + outwards_indices[i].dx;
-    y = ty + outwards_indices[i].dy;
-    if (normalize_map_pos(&x, &y)
-        && fair_map_copy(ptarget, x, y, psource, &geometry,
-                         startpos_team_id)) {
-      return TRUE;
-    }
-  }
-
-  /* Impossible placement. */
-  return FALSE;
-}
-
-/****************************************************************************
-  Add resources on 'pmap'.
-****************************************************************************/
-static void fair_map_make_resources(struct fair_tile *pmap)
-{
-  struct fair_tile *pftile, *pftile2;
-  struct resource **r;
-  int i, j;
-
-  for (i = 0; i < MAP_INDEX_SIZE; i++) {
-    pftile = pmap + i;
-    if (pftile->flags == FTF_NONE
-        || pftile->flags & FTF_NO_RESOURCE
-        || fc_rand (1000) > map.server.riches) {
-      continue;
-    }
-
-    if (pftile->flags & FTF_OCEAN) {
-      bool land_around = FALSE;
-
-      for (j = 0; j < map.num_valid_dirs; j++) {
-        pftile2 = fair_map_tile_step(pmap, pftile, map.valid_dirs[j]);
-        if (pftile2 != NULL
-            && pftile2->flags & FTF_ASSIGNED
-            && !(pftile2->flags & FTF_OCEAN)) {
-          land_around = TRUE;
-          break;
-        }
-      }
-      if (!land_around) {
-        continue;
-      }
-    }
-
-    j = 0;
-    for (r = pftile->pterrain->resources; *r != NULL; r++) {
-      if (fc_rand(++j) == 0) {
-        pftile->presource = *r;
-      }
-    }
-    /* Note that 'pftile->presource' might be NULL if there is no suitable
-     * resource for the terrain. */
-    if (pftile->presource != NULL) {
-      pftile->flags |= FTF_NO_RESOURCE;
-      for (j = 0; j < map.num_valid_dirs; j++) {
-        pftile2 = fair_map_tile_step(pmap, pftile, map.valid_dirs[j]);
-        if (pftile2 != NULL) {
-          pftile2->flags |= FTF_NO_RESOURCE;
-        }
-      }
-    }
-  }
-}
-
-/****************************************************************************
-  Add huts on 'pmap'.
-****************************************************************************/
-static void fair_map_make_huts(struct fair_tile *pmap)
-{
-  struct fair_tile *pftile;
-  struct tile *pvtile = tile_virtual_new(NULL);
-  struct extra_type *phut;
-  int i, j, k;
-
-  for (i = map.server.huts, j = 0;
-       i * map_num_tiles() >= 2000 && j < map_num_tiles() * 2; j++) {
-    k = fc_rand(MAP_INDEX_SIZE);
-    pftile = pmap + k;
-    while (pftile->flags & FTF_NO_HUT) {
-      pftile++;
-      if (pftile - pmap == MAP_INDEX_SIZE) {
-        pftile = pmap;
-      }
-      if (pftile - pmap == k) {
-        break;
-      }
-    }
-    if (pftile->flags & FTF_NO_HUT) {
-      break; /* Cannot make huts anymore. */
-    }
-
-    i--;
-    if (pftile->pterrain == NULL) {
-      continue; /* Not an used tile. */
-    }
-
-    pvtile->index = pftile - pmap;
-    tile_set_terrain(pvtile, pftile->pterrain);
-    tile_set_resource(pvtile, pftile->presource);
-    pvtile->extras = pftile->extras;
-
-    phut = rand_extra_for_tile(pvtile, EC_HUT);
-    if (phut != NULL) {
-      tile_add_extra(pvtile, phut);
-      pftile->extras = pvtile->extras;
-      pftile->flags |= FTF_HAS_HUT;
-      square_iterate(index_to_tile(pftile - pmap), 3, ptile) {
-        pmap[tile_index(ptile)].flags |= FTF_NO_HUT;
-      } square_iterate_end;
-    }
-  }
-
-  tile_virtual_destroy(pvtile);
-}
-
-/****************************************************************************
-  Generate a map where an island would be placed in the center.
-****************************************************************************/
-static struct fair_tile *fair_map_island_new(int size, int startpos_num)
-{
-  enum {
-    FT_GRASSLAND,
-    FT_FOREST,
-    FT_DESERT,
-    FT_HILL,
-    FT_MOUNTAIN,
-    FT_SWAMP,
-    FT_COUNT
-  };
-  struct {
-    int count;
-    enum mapgen_terrain_property target;
-    enum mapgen_terrain_property prefer;
-    enum mapgen_terrain_property avoid;
-  } terrain[FT_COUNT] = {
-    { 0, MG_TEMPERATE, MG_GREEN, MG_MOUNTAINOUS },
-    { 0, MG_FOLIAGE, MG_TEMPERATE, MG_UNUSED },
-    { 0, MG_DRY, MG_TEMPERATE, MG_GREEN },
-    { 0, MG_MOUNTAINOUS, MG_GREEN, MG_UNUSED },
-    { 0, MG_MOUNTAINOUS, MG_UNUSED, MG_GREEN },
-    { 0, MG_WET, MG_TEMPERATE, MG_FOLIAGE },
-  };
-
-  struct fair_tile *pisland;
-  struct fair_tile *land_tiles[1000];
-  struct fair_tile *pftile, *pftile2, *pftile3;
-  int fantasy;
-  const int sea_around_island = (startpos_num > 0
-                                 ? CITY_MAP_DEFAULT_RADIUS : 1);
-  const int sea_around_island_sq = (startpos_num > 0
-                                    ? CITY_MAP_DEFAULT_RADIUS_SQ : 2);
-  int i, j, k;
-
-  size = CLIP(startpos_num, size, ARRAY_SIZE(land_tiles));
-  fantasy = (size * 2) / 5;
-  pisland = fair_map_new();
-  pftile = fair_map_pos_tile(pisland, map.xsize / 2, map.ysize / 2);
-  fc_assert(!fair_map_tile_border(pisland, pftile, sea_around_island));
-  pftile->flags |= FTF_ASSIGNED;
-  land_tiles[0] = pftile;
-  i = 1;
-
-  log_debug("Generating an island with %d land tiles [fantasy=%d].",
-            size, fantasy);
-
-  /* Make land. */
-  while (i < fantasy) {
-    pftile = land_tiles[fc_rand(i)];
-
-    for (j = 0; j < map.num_valid_dirs; j++) {
-      pftile2 = fair_map_tile_step(pisland, pftile, map.valid_dirs[j]);
-      fc_assert(pftile2 != NULL);
-      if (fair_map_tile_border(pisland, pftile2, sea_around_island)) {
-        continue;
-      }
-
-      if (pftile2->flags == FTF_NONE) {
-        pftile2->flags = FTF_ASSIGNED;
-        land_tiles[i++] = pftile2;
-        if (i == fantasy) {
-          break;
-        }
-      }
-    }
-  }
-  while (i < size) {
-    pftile = land_tiles[i - fc_rand(fantasy) - 1];
-    pftile2 = fair_map_tile_step(pisland, pftile, map.cardinal_dirs
-                                     [fc_rand(map.num_cardinal_dirs)]);
-    fc_assert(pftile2 != NULL);
-    if (fair_map_tile_border(pisland, pftile2, sea_around_island)) {
-      continue;
-    }
-
-    if (pftile2->flags == FTF_NONE) {
-      pftile2->flags = FTF_ASSIGNED;
-      land_tiles[i++] = pftile2;
-    }
-  }
-  fc_assert(i == size);
-
-  /* Add start positions. */
-  for (i = 0; i < startpos_num;) {
-    pftile = land_tiles[fc_rand(size - fantasy)];
-    fc_assert(pftile->flags & FTF_ASSIGNED);
-    if (!(pftile->flags & FTF_STARTPOS)) {
-      pftile->flags |= FTF_STARTPOS;
-      i++;
-    }
-  }
-
-  /* Make terrain. */
-  terrain[FT_GRASSLAND].count = size - startpos_num;
-  terrain[FT_FOREST].count = ((forest_pct + jungle_pct) * size) / 100;
-  terrain[FT_DESERT].count = (desert_pct * size) / 100;
-  terrain[FT_HILL].count = (mountain_pct * size) / 150;
-  terrain[FT_MOUNTAIN].count = (mountain_pct * size) / 300;
-  terrain[FT_SWAMP].count = (swamp_pct * size) / 100;
-
-  j = FT_GRASSLAND;
-  for (i = 0; i < size; i++) {
-    pftile = land_tiles[i];
-
-    if (pftile->flags & FTF_STARTPOS) {
-      pftile->pterrain = pick_terrain_by_flag(TER_STARTER);
-    } else {
-      if (terrain[j].count == 0 || fc_rand(100) < 70) {
-        do {
-          j = fc_rand(FT_COUNT);
-        } while (terrain[j].count == 0);
-      }
-      pftile->pterrain = pick_terrain(terrain[j].target, terrain[j].prefer,
-                                      terrain[j].avoid);
-      terrain[j].count--;
-    }
-  }
-
-  /* Make sea arround the island. */
-  for (i = 0; i < size; i++) {
-    circle_iterate(index_to_tile(land_tiles[i] - pisland),
-                   sea_around_island_sq, ptile) {
-      pftile = pisland + tile_index(ptile);
-
-      if (pftile->flags == FTF_NONE) {
-        pftile->flags = FTF_OCEAN;
-        pftile->pterrain =
-            pick_ocean(TERRAIN_OCEAN_DEPTH_MINIMUM
-                       + fc_rand(TERRAIN_OCEAN_DEPTH_MAXIMUM / 2));
-        if (startpos_num > 0) {
-          pftile->flags |= FTF_ASSIGNED;
-        }
-      }
-    } circle_iterate_end;
-  }
-
-  /* Make rivers. */
-  if (river_type_count > 0) {
-    struct road_type *priver;
-    struct fair_tile *pend;
-    int n = ((river_pct * size * map.num_cardinal_dirs
-              * map.num_cardinal_dirs) / 200);
-    int length_max = 3, length, l;
-    enum direction8 dir;
-    int extra_idx;
-    int dirs_num;
-    bool cardinal_only;
-    bool connectable_river_around, ocean_around;
-    int river_around;
-    bool finished;
-
-    for (i = 0; i < n; i++) {
-      pftile = land_tiles[fc_rand(size)];
-      if (!terrain_has_flag(pftile->pterrain, TER_CAN_HAVE_RIVER)) {
-        continue;
-      }
-
-      priver = river_types[fc_rand(river_type_count)];
-      extra_idx = extra_index(road_extra_get(priver));
-      if (BV_ISSET(pftile->extras, extra_idx)) {
-        continue;
-      }
-      cardinal_only = is_cardinal_only_road(road_extra_get(priver));
-
-      river_around = 0;
-      connectable_river_around = FALSE;
-      ocean_around = FALSE;
-      for (j = 0; j < map.num_valid_dirs; j++) {
-        pftile2 = fair_map_tile_step(pisland, pftile, map.valid_dirs[j]);
-        if (pftile2 == NULL) {
-          continue;
-        }
-
-        if (pftile2->flags & FTF_OCEAN) {
-          ocean_around = TRUE;
-          break;
-        } else if (BV_ISSET(pftile2->extras, extra_idx)) {
-          river_around++;
-          if (!cardinal_only || is_cardinal_dir(map.valid_dirs[j])) {
-            connectable_river_around = TRUE;
-          }
-        }
-      }
-      if (ocean_around
-          || river_around > 1
-          || (river_around == 1 && !connectable_river_around)) {
-        continue;
-      }
-
-      if (connectable_river_around) {
-        log_debug("Adding river at (%d, %d)",
-                  index_to_map_pos_x(pftile - pisland),
-                  index_to_map_pos_y(pftile - pisland));
-        BV_SET(pftile->extras, extra_idx);
-        continue;
-      }
-
-      /* Check a river in one direction. */
-      pend = NULL;
-      length = -1;
-      dir = -1;
-      dirs_num = 0;
-      for (j = 0; j < map.num_valid_dirs; j++) {
-        if (cardinal_only && !is_cardinal_dir(map.valid_dirs[j])) {
-          continue;
-        }
-
-        finished = FALSE;
-        pftile2 = pftile;
-        for (l = 2; l < length_max; l++) {
-          pftile2 = fair_map_tile_step(pisland, pftile2, map.valid_dirs[j]);
-          if (pftile2 == NULL
-              || !terrain_has_flag(pftile2->pterrain, TER_CAN_HAVE_RIVER)) {
-            break;
-          }
-
-          river_around = 0;
-          connectable_river_around = FALSE;
-          ocean_around = FALSE;
-          for (k = 0; k < map.num_valid_dirs; k++) {
-            if (map.valid_dirs[k] == DIR_REVERSE(map.valid_dirs[j])) {
-              continue;
-            }
-
-            pftile3 = fair_map_tile_step(pisland, pftile2,
-                                         map.valid_dirs[k]);
-            if (pftile3 == NULL) {
-              continue;
-            }
-
-            if (pftile3->flags & FTF_OCEAN) {
-              if (!cardinal_only || is_cardinal_dir(map.valid_dirs[k])) {
-                ocean_around = TRUE;
-              }
-            } else if (BV_ISSET(pftile3->extras, extra_idx)) {
-              river_around++;
-              if (!cardinal_only || is_cardinal_dir(map.valid_dirs[k])) {
-                connectable_river_around = TRUE;
-              }
-            }
-          }
-          if (river_around > 1 && !connectable_river_around) {
-            break;
-          } else if (ocean_around || connectable_river_around) {
-            finished = TRUE;
-            break;
-          }
-        }
-        if (finished && fc_rand(++dirs_num) == 0) {
-          dir = map.valid_dirs[j];
-          pend = pftile2;
-          length = l;
-        }
-      }
-      if (pend == NULL) {
-        continue;
-      }
-
-      log_debug("Make river from (%d, %d) to (%d, %d) [dir=%s, length=%d]",
-                index_to_map_pos_x(pftile - pisland),
-                index_to_map_pos_y(pftile - pisland),
-                index_to_map_pos_x(pend - pisland),
-                index_to_map_pos_y(pend - pisland),
-                direction8_name(dir),
-                length);
-      for (;;) {
-        BV_SET(pftile->extras, extra_idx);
-        length--;
-        if (pftile == pend) {
-          fc_assert(length == 0);
-          break;
-        }
-        pftile = fair_map_tile_step(pisland, pftile, dir);
-        fc_assert(pftile != NULL);
-      }
-    }
-  }
-
-  if (startpos_num > 0) {
-    /* Islands with start positions must have the same resources and the
-     * same huts. Other ones don't matter. */
-
-    /* Make resources. */
-    if (map.server.riches > 0) {
-      fair_map_make_resources(pisland);
-    }
-
-    /* Make huts. */
-    if (map.server.huts > 0) {
-      fair_map_make_huts(pisland);
-    }
-
-    /* Make sure there will be no more resources and huts on assigned
-     * tiles. */
-    for (i = 0; i < MAP_INDEX_SIZE; i++) {
-      pftile = pisland + i;
-      if (pftile->flags & FTF_ASSIGNED) {
-        pftile->flags |= (FTF_NO_RESOURCE | FTF_NO_HUT);
-      }
-    }
-  }
-
-  return pisland;
-}
-
-/****************************************************************************
-  Build a map using generator 'FAIR'.
-****************************************************************************/
-static bool map_generate_fair_islands(void)
-{
-  struct terrain *deepest_ocean = pick_ocean(TERRAIN_OCEAN_DEPTH_MAXIMUM);
-  struct fair_tile *pmap, *pisland;
-  int playermass, islandmass1 , islandmass2, islandmass3;
-  int min_island_size = map.server.tinyisles ? 1 : 2;
-  int players_per_island = 1;
-  int teams_num = 0, team_players_num = 0, single_players_num = 0;
-  int i, iter = CLIP(1, 100000 / map_num_tiles(), 10);
-  bool done;
-
-  teams_iterate(pteam) {
-    i = player_list_size(team_members(pteam));
-    fc_assert(0 < i);
-    if (i == 1) {
-      single_players_num++;
-    } else {
-      teams_num++;
-      team_players_num += i;
-    }
-  } teams_iterate_end;
-  fc_assert(team_players_num + single_players_num == player_count());
-
-  /* Take in account the 'startpos' setting. */
-  if (map.server.startpos == MAPSTARTPOS_DEFAULT
-      && map.server.team_placement == TEAM_PLACEMENT_CONTINENT) {
-    map.server.startpos = MAPSTARTPOS_ALL;
-  }
-
-  switch (map.server.startpos) {
-  case MAPSTARTPOS_2or3:
-    {
-      bool maybe2 = (0 == player_count() % 2);
-      bool maybe3 = (0 == player_count() % 3);
-
-      if (map.server.team_placement != TEAM_PLACEMENT_DISABLED) {
-        teams_iterate(pteam) {
-          i = player_list_size(team_members(pteam));
-          if (i > 1) {
-            if (0 != i % 2) {
-              maybe2 = FALSE;
-            }
-            if (0 != i % 3) {
-              maybe3 = FALSE;
-            }
-          }
-        } teams_iterate_end;
-      }
-
-      if (maybe3) {
-        players_per_island = 3;
-      } else if (maybe2) {
-        players_per_island = 2;
-      }
-    }
-    break;
-  case MAPSTARTPOS_ALL:
-    if (map.server.team_placement == TEAM_PLACEMENT_CONTINENT) {
-      teams_iterate(pteam) {
-        i = player_list_size(team_members(pteam));
-        if (i > 1) {
-          if (players_per_island == 1) {
-            players_per_island = i;
-          } else if (i != players_per_island) {
-            /* Every team doesn't have the same number of players. Cannot
-             * consider this option. */
-            players_per_island = 1;
-            map.server.team_placement = TEAM_PLACEMENT_CLOSEST;
-            break;
-          }
-        }
-      } teams_iterate_end;
-    }
-    break;
-  case MAPSTARTPOS_DEFAULT:
-  case MAPSTARTPOS_SINGLE:
-  case MAPSTARTPOS_VARIABLE:
-    break;
-  }
-  if (players_per_island == 1) {
-    map.server.startpos = MAPSTARTPOS_SINGLE;
-  }
-
-  whole_map_iterate(ptile) {
-    tile_set_terrain(ptile, deepest_ocean);
-    tile_set_continent(ptile, 0);
-    BV_CLR_ALL(ptile->extras);
-    tile_set_owner(ptile, NULL, NULL);
-    ptile->extras_owner = NULL;
-  } whole_map_iterate_end;
-
-  i = 0;
-  if (HAS_POLES) {
-    make_polar();
-
-    whole_map_iterate(ptile) {
-      if (tile_terrain(ptile) != deepest_ocean) {
-        i++;
-      }
-    } whole_map_iterate_end;
-  }
-
-  if (map.server.mapsize == MAPSIZE_PLAYER) {
-    playermass = map.server.tilesperplayer - i / player_count();
-  } else {
-    playermass = ((map_num_tiles() * map.server.landpercent - i)
-                  / (player_count() * 100));
-  }
-  islandmass1 = (players_per_island * playermass * 7) / 10;
-  if (islandmass1 < min_island_size) {
-    islandmass1 = min_island_size;
-  }
-  islandmass2 = (playermass * 2) / 10;
-  if (islandmass2 < min_island_size) {
-    islandmass2 = min_island_size;
-  }
-  islandmass3 = playermass / 10;
-  if (islandmass3 < min_island_size) {
-    islandmass3 = min_island_size;
-  }
-
-  log_verbose("Creating a map with fair island generator");
-  log_debug("max iterations=%d", iter);
-  log_debug("players_per_island=%d", players_per_island);
-  log_debug("team_placement=%s",
-            team_placement_name(map.server.team_placement));
-  log_debug("teams_num=%d, team_players_num=%d, single_players_num=%d",
-            teams_num, team_players_num, single_players_num);
-  log_debug("playermass=%d, islandmass1=%d, islandmass2=%d, islandmass3=%d",
-            playermass, islandmass1, islandmass2, islandmass3);
-
-  while (--iter >= 0) {
-    done = TRUE;
-    pmap = fair_map_new();
-
-    whole_map_iterate(ptile) {
-      struct fair_tile *pftile = pmap + tile_index(ptile);
-
-      if (tile_terrain(ptile) != deepest_ocean) {
-        pftile->flags |= (FTF_ASSIGNED | FTF_NO_HUT);
-        adjc_iterate(ptile, atile) {
-          struct fair_tile *aftile = pmap + tile_index(atile);
-
-          if (!(aftile->flags & FTF_ASSIGNED)
-              && tile_terrain(atile) == deepest_ocean) {
-            aftile->flags |= FTF_OCEAN;
-          }
-        } adjc_iterate_end;
-      }
-      pftile->pterrain = tile_terrain(ptile);
-      pftile->presource = tile_resource(ptile);
-      pftile->extras = tile_extras(ptile);
-    } whole_map_iterate_end;
-
-    /* Create main player island. */
-    log_debug("Making main island.");
-    pisland = fair_map_island_new(islandmass1, players_per_island);
-
-    log_debug("Place main islands on the map.");
-    i = 0;
-
-    if (map.server.team_placement != TEAM_PLACEMENT_DISABLED
-        && team_players_num > 0) {
-      /* Do team placement. */
-      struct iter_index outwards_indices[map.num_iterate_outwards_indices];
-      int start_x[teams_num], start_y[teams_num];
-      int dx = 0, dy = 0;
-      int j, k;
-
-      /* Build outwards_indices. */
-      memcpy(outwards_indices, map.iterate_outwards_indices,
-             sizeof(outwards_indices));
-      switch (map.server.team_placement) {
-      case TEAM_PLACEMENT_DISABLED:
-        fc_assert(map.server.team_placement != TEAM_PLACEMENT_DISABLED);
-      case TEAM_PLACEMENT_CLOSEST:
-      case TEAM_PLACEMENT_CONTINENT:
-        for (j = 0; j < map.num_iterate_outwards_indices; j++) {
-          /* We want square distances for comparing. */
-          outwards_indices[j].dist =
-              map_vector_to_sq_distance(outwards_indices[j].dx,
-                                        outwards_indices[j].dy);
-        }
-        qsort(outwards_indices, map.num_iterate_outwards_indices,
-              sizeof(outwards_indices[0]), fair_team_placement_closest);
-        break;
-      case TEAM_PLACEMENT_HORIZONTAL:
-        qsort(outwards_indices, map.num_iterate_outwards_indices,
-              sizeof(outwards_indices[0]), fair_team_placement_horizontal);
-        break;
-      case TEAM_PLACEMENT_VERTICAL:
-        qsort(outwards_indices, map.num_iterate_outwards_indices,
-              sizeof(outwards_indices[0]), fair_team_placement_vertical);
-        break;
-      }
-
-      /* Make start point for teams. */
-      if (current_topo_has_flag(TF_WRAPX)) {
-        dx = fc_rand(map.xsize);
-      }
-      if (current_topo_has_flag(TF_WRAPY)) {
-        dy = fc_rand(map.ysize);
-      }
-      for (j = 0; j < teams_num; j++) {
-        start_x[j] = (map.xsize * (2 * j + 1)) / (2 * teams_num) + dx;
-        start_y[j] = (map.ysize * (2 * j + 1)) / (2 * teams_num) + dy;
-        if (current_topo_has_flag(TF_WRAPX)) {
-          start_x[j] = FC_WRAP(start_x[j], map.xsize);
-        }
-        if (current_topo_has_flag(TF_WRAPY)) {
-          start_y[j] = FC_WRAP(start_y[j], map.ysize);
-        }
-      }
-      /* Randomize. */
-      array_shuffle(start_x, teams_num);
-      array_shuffle(start_y, teams_num);
-
-      j = 0;
-      teams_iterate(pteam) {
-        int members_count = player_list_size(team_members(pteam));
-        int team_id;
-        int x, y;
-
-        if (members_count <= 1) {
-          continue;
-        }
-        team_id = team_number(pteam);
-
-        NATIVE_TO_MAP_POS(&x, &y, start_x[j], start_y[j]);
-        log_verbose("Team %d (%s) will start on (%d, %d)",
-                    team_id, team_rule_name(pteam), x, y);
-
-        for (k = 0; k < members_count; k += players_per_island) {
-          if (!fair_map_place_island_team(pmap, x, y, pisland,
-                                          outwards_indices, team_id)) {
-            log_verbose("Failed to place island number %d for team %d (%s).",
-                        k, team_id, team_rule_name(pteam));
-            done = FALSE;
-            break;
-          }
-        }
-        if (!done) {
-          break;
-        }
-        i += k;
-        j++;
-      } teams_iterate_end;
-
-      fc_assert(!done || i == team_players_num);
-    }
-
-    if (done) {
-      /* Place last player islands. */
-      for (; i < player_count(); i += players_per_island) {
-        if (!fair_map_place_island_rand(pmap, pisland)) {
-          log_verbose("Failed to place island number %d.", i);
-          done = FALSE;
-          break;
-        }
-      }
-      fc_assert(!done || i == player_count());
-    }
-    fair_map_destroy(pisland);
-
-    if (done) {
-      log_debug("Create and place small islands on the map.");
-      for (i = 0; i < player_count(); i++) {
-        pisland = fair_map_island_new(islandmass2, 0);
-        if (!fair_map_place_island_rand(pmap, pisland)) {
-          log_verbose("Failed to place small island2 number %d.", i);
-          done = FALSE;
-          fair_map_destroy(pisland);
-          break;
-        }
-        fair_map_destroy(pisland);
-      }
-    }
-    if (done) {
-      for (i = 0; i < player_count(); i++) {
-        pisland = fair_map_island_new(islandmass3, 0);
-        if (!fair_map_place_island_rand(pmap, pisland)) {
-          log_verbose("Failed to place small island3 number %d.", i);
-          done = FALSE;
-          fair_map_destroy(pisland);
-          break;
-        }
-        fair_map_destroy(pisland);
-      }
-    }
-
-    if (done) {
-      break;
-    }
-
-    fair_map_destroy(pmap);
-
-    /* Decrease land mass, for better chances. */
-    islandmass1 = (islandmass1 * 99) / 100;
-    if (islandmass1 < min_island_size) {
-      islandmass1 = min_island_size;
-    }
-    islandmass2 = (islandmass2 * 99) / 100;
-    if (islandmass2 < min_island_size) {
-      islandmass2 = min_island_size;
-    }
-    islandmass3 = (islandmass3 * 99) / 100;
-    if (islandmass3 < min_island_size) {
-      islandmass3 = min_island_size;
-    }
-  }
-
-  if (!done) {
-    log_verbose("Failed to create map after %d iterations.", iter);
-    map.server.generator = MAPGEN_ISLAND;
-    return FALSE;
-  }
-
-  /* Finalize the map. */
-  for (i = 0; i < MAP_INDEX_SIZE; i++) {
-    /* Mark all tiles as assigned, for adding resources and huts. */
-    pmap[i].flags |= FTF_ASSIGNED;
-  }
-  if (map.server.riches > 0) {
-    fair_map_make_resources(pmap);
-  }
-  if (map.server.huts > 0) {
-    fair_map_make_huts(pmap);
-  }
-
-  /* Apply the map. */
-  log_debug("Applying the map...");
-  whole_map_iterate(ptile) {
-    struct fair_tile *pftile = pmap + tile_index(ptile);
-
-    fc_assert(pftile->pterrain != NULL);
-    tile_set_terrain(ptile, pftile->pterrain);
-    tile_set_resource(ptile, pftile->presource);
-    ptile->extras = pftile->extras;
-    if (pftile->flags & FTF_STARTPOS) {
-      struct startpos *psp = map_startpos_new(ptile);
-
-      if (pftile->startpos_team_id != -1) {
-        player_list_iterate(team_members(team_by_number
-                                (pftile->startpos_team_id)), pplayer) {
-          startpos_allow(psp, nation_of_player(pplayer));
-        } player_list_iterate_end;
-      } else {
-        startpos_allows_all(psp);
-      }
-    }
-  } whole_map_iterate_end;
-  map.server.have_resources = TRUE;
-  map.server.have_huts = TRUE;
-
-  fair_map_destroy(pmap);
-
-  log_verbose("Fair island map created with success!");
-  return TRUE;
-}

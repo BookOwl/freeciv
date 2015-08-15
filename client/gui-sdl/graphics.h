@@ -24,10 +24,10 @@
 #ifndef FC__GRAPHICS_H
 #define FC__GRAPHICS_H
 
-#include <SDL_gfxPrimitives.h>
-#include <SDL_rotozoom.h>
-
 #include "graphics_g.h"
+
+#include "SDL_gfxPrimitives.h"
+#include "SDL_rotozoom.h"
 #include "canvas.h"
 #include "gui_main.h"
 
@@ -361,7 +361,7 @@ do {									  \
 		break;							  \
 		case 3:							  \
 			buf_ptr += (x << 1) + x;			  \
-			if (is_bigendian()) {                           \
+			if (SDL_BYTEORDER == SDL_BIG_ENDIAN) {		  \
 				buf_ptr[0] = (pixel >> 16) & 0xff;	\
 				buf_ptr[1] = (pixel >> 8) & 0xff;	\
 				buf_ptr[2] = pixel & 0xff;		\

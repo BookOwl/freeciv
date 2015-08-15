@@ -172,7 +172,10 @@ signal.connect("hut_enter", "default_hut_enter_callback")
 ]]--
 
 function default_make_partisans_callback(city, loser, winner)
-  if city:inspire_partisans(loser) <= 0 then
+  if city.original ~= loser then
+    return
+  end
+  if effects.player_bonus(loser, "Inspire_Partisans") <= 0 then
     return
   end
 
@@ -188,15 +191,3 @@ function default_make_partisans_callback(city, loser, winner)
 end
 
 signal.connect("city_lost", "default_make_partisans_callback")
-
-
--- Notify player about the fact that disaster had no effect if that is
--- the case
-function harmless_disaster_message(disaster, city, had_internal_effect)
-  if not had_internal_effect then
-    notify.event(city.owner, city.tile, E.DISASTER,
-        _("We survived the disaster without serious damages."))
-  end
-end
-
-signal.connect("disaster", "harmless_disaster_message")

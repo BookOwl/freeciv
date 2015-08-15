@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,17 +28,14 @@
 #include "support.h"
 
 /* common */
-#include "ai.h"
 #include "game.h"
 #include "government.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
+#include "tech.h"
 #include "unitlist.h"
 
 #include "unittype.h"
-
-#define MAX_UNIT_ROLES L_LAST + ACTION_COUNT
 
 static struct unit_type unit_types[U_LAST];
 static struct unit_class unit_classes[UCL_LAST];
@@ -47,7 +44,28 @@ static struct unit_class unit_classes[UCL_LAST];
    client/packhand.c (for the client)
 */
 
-static struct user_flag user_type_flags[MAX_NUM_USER_UNIT_FLAGS];
+static const char *flag_names[] = {
+  "TradeRoute", "HelpWonder", "IgZOC", "NonMil", "IgTer", 
+  "OneAttack", "Pikemen", "Horse", "IgWall", "FieldUnit", 
+  "AEGIS", "Marines", "Partial_Invis", "Settlers", "Diplomat",
+  "Trireme", "Nuclear", "Spy", "Transform", "Paratroopers",
+  "Cities", "No_Land_Attack",
+  "AddToCity", "Fanatic", "GameLoss", "Unique", "Unbribable", 
+  "Undisbandable", "SuperSpy", "NoHome", "NoVeteran", "Bombarder",
+  "CityBuster", "NoBuild", "BadWallAttacker", "BadCityDefender",
+  "Helicopter", "AirUnit", "Fighter", "BarbarianOnly", "Shield2Gold",
+  "Capturable", "Capturer"
+};
+static char *user_flag_names[MAX_NUM_USER_UNIT_FLAGS]
+  = { NULL, NULL, NULL, NULL };
+static const char *role_names[] = {
+  "FirstBuild", "Explorer", "Hut", "HutTech", "Partisan",
+  "DefendOk", "DefendGood", "AttackFast", "AttackStrong",
+  "Ferryboat", "Barbarian", "BarbarianTech", "BarbarianBoat",
+  "BarbarianBuild", "BarbarianBuildTech", "BarbarianLeader",
+  "BarbarianSea", "BarbarianSeaTech", "Cities", "Settlers",
+  "GameLoss", "Diplomat", "Hunter"
+};
 
 /**************************************************************************
   Return the first item of unit_types.
@@ -132,8 +150,8 @@ int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
 {
   int val = ut->upkeep[otype], gold_upkeep_factor;
 
-  if (BV_ISSET(ut->flags, UTYF_FANATIC)
-      && get_player_bonus(pplayer, EFT_FANATICS) > 0) {
+  if (get_player_bonus(pplayer, EFT_FANATICS)
+      && BV_ISSET(ut->flags, F_FANATIC)) {
     /* Special case: fanatics have no upkeep under fanaticism. */
     return 0;
   }
@@ -141,13 +159,12 @@ int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
   /* switch shield upkeep to gold upkeep if
      - the effect 'EFT_SHIELD2GOLD_FACTOR' is non-zero (it gives the
        conversion factor in percent) and
-     - the unit has the corresponding flag set (UTYF_SHIELD2GOLD)
+     - the unit has the corresponding flag set (F_SHIELD2GOLD)
      FIXME: Should the ai know about this? */
-  if (utype_has_flag(ut, UTYF_SHIELD2GOLD)
-      && (otype == O_GOLD || otype == O_SHIELD)) {
-    gold_upkeep_factor = get_player_bonus(pplayer, EFT_SHIELD2GOLD_FACTOR);
-    if (gold_upkeep_factor > 0) {
-      switch (otype) {
+  gold_upkeep_factor = get_player_bonus(pplayer, EFT_SHIELD2GOLD_FACTOR);
+  gold_upkeep_factor = (gold_upkeep_factor > 0) ? gold_upkeep_factor : 0;
+  if (gold_upkeep_factor > 0 && utype_has_flag(ut, F_SHIELD2GOLD)) {
+    switch (otype) {
       case O_GOLD:
         val = ceil((0.01 * gold_upkeep_factor) * ut->upkeep[O_SHIELD]);
         break;
@@ -155,9 +172,8 @@ int utype_upkeep_cost(const struct unit_type *ut, struct player *pplayer,
         val = 0;
         break;
       default:
-        fc_assert(otype == O_GOLD || otype == O_SHIELD);
+        /* fall through */
         break;
-      }
     }
   }
 
@@ -191,14 +207,14 @@ bool uclass_has_flag(const struct unit_class *punitclass,
 **************************************************************************/
 bool utype_has_flag(const struct unit_type *punittype, int flag)
 {
-  fc_assert_ret_val(unit_type_flag_id_is_valid(flag), FALSE);
+  fc_assert_ret_val(flag >= 0 && flag < F_LAST, FALSE);
   return BV_ISSET(punittype->flags, flag);
 }
 
 /**************************************************************************
   Return whether the unit has the given flag.
 **************************************************************************/
-bool unit_has_type_flag(const struct unit *punit, enum unit_type_flag_id flag)
+bool unit_has_type_flag(const struct unit *punit, enum unit_flag_id flag)
 {
   return utype_has_flag(unit_type(punit), flag);
 }
@@ -222,441 +238,20 @@ bool unit_has_type_role(const struct unit *punit, enum unit_role_id role)
 }
 
 /****************************************************************************
-  Return whether the unit can take over enemy cities.
+  Return whether the unit can take over ennemy cities.
 ****************************************************************************/
 bool unit_can_take_over(const struct unit *punit)
 {
-  return unit_owner(punit)->ai_common.barbarian_type != ANIMAL_BARBARIAN
-    && utype_can_take_over(unit_type(punit));
+  return utype_can_take_over(unit_type(punit));
 }
 
 /****************************************************************************
-  Return whether the unit type can take over enemy cities.
+  Return whether the unit type can take over ennemy cities.
 ****************************************************************************/
 bool utype_can_take_over(const struct unit_type *punittype)
 {
   return (uclass_has_flag(utype_class(punittype), UCF_CAN_OCCUPY_CITY)
-          && !utype_has_flag(punittype, UTYF_CIVILIAN));
-}
-
-/****************************************************************************
-  Return TRUE iff the given cargo type has no restrictions on when it can
-  load onto the given transporter.
-  (Does not check that cargo is valid for transport!)
-****************************************************************************/
-bool utype_can_freely_load(const struct unit_type *pcargotype,
-                           const struct unit_type *ptranstype)
-{
-  return BV_ISSET(pcargotype->embarks,
-                  uclass_index(utype_class(ptranstype)));
-}
-
-/****************************************************************************
-  Return TRUE iff the given cargo type has no restrictions on when it can
-  unload from the given transporter.
-  (Does not check that cargo is valid for transport!)
-****************************************************************************/
-bool utype_can_freely_unload(const struct unit_type *pcargotype,
-                             const struct unit_type *ptranstype)
-{
-  return BV_ISSET(pcargotype->disembarks,
-                  uclass_index(utype_class(ptranstype)));
-}
-
-/* Fake action representing any hostile action. */
-#define ACTION_HOSTILE ACTION_COUNT + 1
-
-/* Number of real and fake actions. */
-#define ACTION_AND_FAKES ACTION_HOSTILE + 1
-
-/* Cache of what generalized (ruleset defined) action enabler controlled
- * actions units of each type can perform. Checking if any action can be
- * done at all is done via the fake action ACTION_ANY. If any hostile
- * action can be performed is done via ACTION_HOSTILE. */
-static bv_unit_types unit_can_act_cache[ACTION_AND_FAKES];
-
-/**************************************************************************
-  Cache what generalized (ruleset defined) action enabler controlled
-  actions a unit of the given type can perform.
-**************************************************************************/
-static void unit_can_act_cache_set(struct unit_type *putype)
-{
-  /* Clear old values. */
-  action_iterate(act_id) {
-    BV_CLR(unit_can_act_cache[act_id], utype_index(putype));
-  } action_iterate_end;
-  BV_CLR(unit_can_act_cache[ACTION_ANY], utype_index(putype));
-  BV_CLR(unit_can_act_cache[ACTION_HOSTILE], utype_index(putype));
-
-  /* See if the unit type can do an action controlled by generalized action
-   * enablers */
-  action_enablers_iterate(enabler) {
-    if (action_get_actor_kind(enabler->action) == AAK_UNIT
-        && action_actor_utype_hard_reqs_ok(enabler->action, putype)
-        && requirement_fulfilled_by_unit_type(putype,
-                                              &(enabler->actor_reqs))) {
-      log_debug("act_cache: %s can %s",
-                utype_rule_name(putype), gen_action_name(enabler->action));
-      BV_SET(unit_can_act_cache[enabler->action], utype_index(putype));
-      BV_SET(unit_can_act_cache[ACTION_ANY], utype_index(putype));
-      if (action_is_hostile(enabler->action)) {
-        BV_SET(unit_can_act_cache[ACTION_HOSTILE], utype_index(putype));
-      }
-    }
-  } action_enablers_iterate_end;
-}
-
-/**************************************************************************
-  Return TRUE iff units of this type can do actions controlled by
-  generalized (ruleset defined) action enablers.
-**************************************************************************/
-bool is_actor_unit_type(const struct unit_type *putype)
-{
-  return utype_can_do_action(putype, ACTION_ANY);
-}
-
-/**************************************************************************
-  Return TRUE iff units of the given type can do the specified generalized
-  (ruleset defined) action enabler controlled action.
-**************************************************************************/
-bool utype_can_do_action(const struct unit_type *putype,
-                         const int action_id)
-{
-  return BV_ISSET(unit_can_act_cache[action_id], utype_index(putype));
-}
-
-/**************************************************************************
-  Return TRUE iff the unit type can perform the action corresponding to
-  the unit type role.
-**************************************************************************/
-static bool utype_can_do_action_role(const struct unit_type *putype,
-                                     const int role)
-{
-  return utype_can_do_action(putype, role - L_LAST);
-}
-
-/**************************************************************************
-  Return TRUE iff units of this type can do hostile actions controlled by
-  generalized (ruleset defined) action enablers.
-**************************************************************************/
-bool utype_acts_hostile(const struct unit_type *putype)
-{
-  return utype_can_do_action(putype, ACTION_HOSTILE);
-}
-
-/* Cache if any action at all may be possible when the actor unit's state
- * is...
- * bit 0 to USP_COUNT - 1: Possible when the corresponding property is TRUE
- * bit USP_COUNT to ((USP_COUNT - 1) * 2): Possible when the corresponding
- * property is FALSE
- */
-BV_DEFINE(bv_ustate_act_cache, ((USP_COUNT - 1) * 2));
-
-/* Caches for each unit type */
-static bv_ustate_act_cache ustate_act_cache[U_LAST][ACTION_AND_FAKES];
-static bv_diplrel_all_reqs dipl_rel_action_cache[U_LAST][ACTION_AND_FAKES];
-
-/**************************************************************************
-  Cache if any action may be possible for a unit of the type putype for
-  each unit state property. Since a unit state property could be ignored
-  both present and !present must be checked.
-**************************************************************************/
-static void unit_state_action_cache_set(struct unit_type *putype)
-{
-  struct requirement req;
-  int uidx = utype_index(putype);
-
-  /* The unit is not yet known to be allowed to perform any actions no
-   * matter what its unit state is. */
-  action_iterate(action_id) {
-    BV_CLR_ALL(ustate_act_cache[uidx][action_id]);
-  } action_iterate_end;
-  BV_CLR_ALL(ustate_act_cache[uidx][ACTION_ANY]);
-  BV_CLR_ALL(ustate_act_cache[uidx][ACTION_HOSTILE]);
-
-  if (!is_actor_unit_type(putype)) {
-    /* Not an actor unit. */
-    return;
-  }
-
-  /* Common for every situation */
-  req.range = REQ_RANGE_LOCAL;
-  req.survives = FALSE;
-  req.source.kind = VUT_UNITSTATE;
-
-  for (req.source.value.unit_state = ustate_prop_begin();
-       req.source.value.unit_state != ustate_prop_end();
-       req.source.value.unit_state = ustate_prop_next(
-         req.source.value.unit_state)) {
-
-    /* No action will ever be possible in a specific unit state if the
-     * opposite unit state is required in all action enablers.
-     * No unit state except present and !present of the same property
-     * implies or conflicts with another so the tests can be simple. */
-    action_enablers_iterate(enabler) {
-      if (requirement_fulfilled_by_unit_type(putype,
-                                             &(enabler->actor_reqs))
-          && action_get_actor_kind(enabler->action) == AAK_UNIT) {
-        /* Not required to be absent, so OK if present */
-        req.present = FALSE;
-        if (!is_req_in_vec(&req, &(enabler->actor_reqs))) {
-          BV_SET(ustate_act_cache[utype_index(putype)][ACTION_ANY],
-              requirement_unit_state_ereq(req.source.value.unit_state,
-                                         TRUE));
-          BV_SET(ustate_act_cache[utype_index(putype)][enabler->action],
-              requirement_unit_state_ereq(req.source.value.unit_state,
-                                         TRUE));
-          if (action_is_hostile(enabler->action)) {
-            BV_SET(ustate_act_cache[utype_index(putype)][ACTION_HOSTILE],
-                requirement_unit_state_ereq(req.source.value.unit_state,
-                                           TRUE));
-          }
-        }
-
-        /* Not required to be present, so OK if absent */
-        req.present = TRUE;
-        if (!is_req_in_vec(&req, &(enabler->actor_reqs))) {
-          BV_SET(ustate_act_cache[utype_index(putype)][ACTION_ANY],
-                 requirement_unit_state_ereq(req.source.value.unit_state,
-                                            FALSE));
-          BV_SET(ustate_act_cache[utype_index(putype)][enabler->action],
-                 requirement_unit_state_ereq(req.source.value.unit_state,
-                                            FALSE));
-          if (action_is_hostile(enabler->action)) {
-            BV_SET(ustate_act_cache[utype_index(putype)][ACTION_HOSTILE],
-                   requirement_unit_state_ereq(req.source.value.unit_state,
-                                              FALSE));
-          }
-        }
-      }
-    } action_enablers_iterate_end;
-  }
-}
-
-/**************************************************************************
-  Cache what actions may be possible for a unit of the type putype for
-  each local DiplRel variation. Since a diplomatic relationship could be
-  ignored both present and !present must be checked.
-
-  Note: since can_unit_act_when_local_diplrel_is() only supports querying
-  the local range no values for the other ranges are set.
-**************************************************************************/
-static void local_dipl_rel_action_cache_set(struct unit_type *putype)
-{
-  struct requirement req;
-  int putype_id = utype_index(putype);
-
-  /* The unit is not yet known to be allowed to perform any actions no
-   * matter what the diplomatic state is. */
-  action_iterate(action_id) {
-    BV_CLR_ALL(dipl_rel_action_cache[putype_id][action_id]);
-  } action_iterate_end;
-  BV_CLR_ALL(dipl_rel_action_cache[putype_id][ACTION_ANY]);
-  BV_CLR_ALL(dipl_rel_action_cache[putype_id][ACTION_HOSTILE]);
-
-  if (!is_actor_unit_type(putype)) {
-    /* Not an actor unit. */
-    return;
-  }
-
-  /* Common for every situation */
-  req.range = REQ_RANGE_LOCAL;
-  req.survives = FALSE;
-  req.source.kind = VUT_DIPLREL;
-
-  /* DiplRel starts with diplstate_type and ends with diplrel_other */
-  for (req.source.value.diplrel = diplstate_type_begin();
-       req.source.value.diplrel != DRO_LAST;
-       req.source.value.diplrel++) {
-
-    /* No action will ever be possible in a specific diplomatic relation if
-     * its presence contradicts all action enablers.
-     * Everything was set to false above. It is therefore OK to only change
-     * the cache when units can do an action given a certain diplomatic
-     * relationship property value. */
-    action_enablers_iterate(enabler) {
-      if (requirement_fulfilled_by_unit_type(putype,
-                                             &(enabler->actor_reqs))
-          && action_get_actor_kind(enabler->action) == AAK_UNIT) {
-        req.present = TRUE;
-        if (!does_req_contradicts_reqs(&req, &(enabler->actor_reqs))) {
-          BV_SET(dipl_rel_action_cache[putype_id][enabler->action],
-                 requirement_diplrel_ereq(req.source.value.diplrel,
-                                          REQ_RANGE_LOCAL, TRUE));
-          BV_SET(dipl_rel_action_cache[putype_id][ACTION_HOSTILE],
-                 requirement_diplrel_ereq(req.source.value.diplrel,
-                                          REQ_RANGE_LOCAL, TRUE));
-          BV_SET(dipl_rel_action_cache[putype_id][ACTION_ANY],
-                 requirement_diplrel_ereq(req.source.value.diplrel,
-                                          REQ_RANGE_LOCAL, TRUE));
-        }
-
-        req.present = FALSE;
-        if (!does_req_contradicts_reqs(&req, &(enabler->actor_reqs))) {
-          BV_SET(dipl_rel_action_cache[putype_id][enabler->action],
-              requirement_diplrel_ereq(req.source.value.diplrel,
-                                       REQ_RANGE_LOCAL, FALSE));
-          BV_SET(dipl_rel_action_cache[putype_id][ACTION_HOSTILE],
-              requirement_diplrel_ereq(req.source.value.diplrel,
-                                       REQ_RANGE_LOCAL, FALSE));
-          BV_SET(dipl_rel_action_cache[putype_id][ACTION_ANY],
-              requirement_diplrel_ereq(req.source.value.diplrel,
-                                       REQ_RANGE_LOCAL, FALSE));
-        }
-      }
-    } action_enablers_iterate_end;
-  }
-}
-
-struct range {
-  int min;
-  int max;
-};
-
-#define MOVES_LEFT_INFINITY -1
-
-/**************************************************************************
-  Get the legal range of move fragments left of the specified requirement
-  vector.
-**************************************************************************/
-static struct range *moves_left_range(struct requirement_vector *reqs)
-{
-  struct range *prange = fc_malloc(sizeof(prange));
-
-  prange->min = 0;
-  prange->max = MOVES_LEFT_INFINITY;
-
-  requirement_vector_iterate(reqs, preq) {
-    if (preq->source.kind == VUT_MINMOVES) {
-      if (preq->present) {
-        prange->min = preq->source.value.minmoves;
-      } else {
-        prange->max = preq->source.value.minmoves;
-      }
-    }
-  } requirement_vector_iterate_end;
-
-  return prange;
-}
-
-/**************************************************************************
-  Cache if any action may be possible for a unit of the type putype given
-  the property tested for. Since a it could be ignored both present and
-  !present must be checked.
-**************************************************************************/
-void unit_type_action_cache_set(struct unit_type *ptype)
-{
-  unit_can_act_cache_set(ptype);
-  unit_state_action_cache_set(ptype);
-  local_dipl_rel_action_cache_set(ptype);
-}
-
-/**************************************************************************
-  Cache what unit types may be allowed do what actions, both at all and
-  when certain properties are true.
-**************************************************************************/
-void unit_type_action_cache_init(void)
-{
-  unit_type_iterate(u) {
-    unit_type_action_cache_set(u);
-  } unit_type_iterate_end;
-}
-
-/**************************************************************************
-  Return TRUE iff there exists an (action enabler controlled) action that a
-  unit of the type punit_type can perform while its unit state property
-  prop has the value is_there.
-**************************************************************************/
-bool can_unit_act_when_ustate_is(const struct unit_type *punit_type,
-                                 const enum ustate_prop prop,
-                                 const bool is_there)
-{
-  return utype_can_do_act_when_ustate(punit_type, ACTION_ANY, prop, is_there);
-}
-
-/**************************************************************************
-  Return TRUE iff the unit type can do the specified (action enabler
-  controlled) action while its unit state property prop has the value
-  is_there.
-**************************************************************************/
-bool utype_can_do_act_when_ustate(const struct unit_type *punit_type,
-                                  const int action_id,
-                                  const enum ustate_prop prop,
-                                  const bool is_there)
-{
-  return BV_ISSET(ustate_act_cache[utype_index(punit_type)][action_id],
-      requirement_unit_state_ereq(prop, is_there));
-}
-
-/**************************************************************************
-  Return TRUE iff the given (action enabler controlled) action can be
-  performed by a unit of the given type while the given property of its
-  owner's diplomatic relationship to the target's owner has the given
-  value.
-
-  Note: since this only supports the local range no information for other
-  ranges are stored in dipl_rel_action_cache.
-**************************************************************************/
-bool can_utype_do_act_if_tgt_diplrel(const struct unit_type *punit_type,
-                                     const int action_id,
-                                     const int prop,
-                                     const bool is_there)
-{
-  int utype_id = utype_index(punit_type);
-
-  return BV_ISSET(dipl_rel_action_cache[utype_id][action_id],
-      requirement_diplrel_ereq(prop, REQ_RANGE_LOCAL, is_there));
-}
-
-/**************************************************************************
-  Return TRUE iff the given (action enabler controlled) action may be
-  performed by a unit of the given type that has the given number of move
-  fragments left.
-
-  Note: Values aren't cached. If a performance critical user appears it
-  would be a good idea to cache the (merged) ranges of move fragments
-  where a unit of the given type can perform the specified action.
-**************************************************************************/
-bool utype_may_act_move_frags(struct unit_type *punit_type,
-                              const int action_id,
-                              const int move_fragments)
-{
-  struct range *ml_range;
-
-  if (!is_actor_unit_type(punit_type)) {
-    /* Not an actor unit. */
-    return FALSE;
-  }
-
-  if (action_get_actor_kind(action_id) != AAK_UNIT) {
-    /* This action isn't performed by any unit at all so this unit type
-     * can't do it. */
-    return FALSE;
-  }
-
-  action_enabler_list_iterate(action_enablers_for_action(action_id),
-                              enabler) {
-    if (!requirement_fulfilled_by_unit_type(punit_type,
-                                            &(enabler->actor_reqs))) {
-      /* This action can't be performed by this unit type at all. */
-      continue;
-    }
-
-    ml_range = moves_left_range(&(enabler->actor_reqs));
-    if (ml_range->min <= move_fragments
-        && (ml_range->max == MOVES_LEFT_INFINITY
-            || ml_range->max > move_fragments)) {
-      /* The number of move fragments is in range of the action enabler. */
-
-      free(ml_range);
-
-      return TRUE;
-    }
-
-    free(ml_range);
-  } action_enabler_list_iterate_end;
-
-  return FALSE;
+          && !utype_has_flag(punittype, F_CIVILIAN));
 }
 
 /****************************************************************************
@@ -726,11 +321,19 @@ int unit_pop_value(const struct unit *punit)
 }
 
 /**************************************************************************
+  Return move type of the unit class
+**************************************************************************/
+enum unit_move_type uclass_move_type(const struct unit_class *pclass)
+{
+  return pclass->move_type;
+}
+
+/**************************************************************************
   Return move type of the unit type
 **************************************************************************/
 enum unit_move_type utype_move_type(const struct unit_type *punittype)
 {
-  return utype_class(punittype)->move_type;
+  return uclass_move_type(utype_class(punittype));
 }
 
 /**************************************************************************
@@ -781,11 +384,11 @@ const char *utype_values_string(const struct unit_type *punittype)
   fc_snprintf(buffer, sizeof(buffer), "%d/%d/%s",
               punittype->attack_strength,
               punittype->defense_strength,
-              move_points_text(punittype->move_rate, TRUE));
+              move_points_text(punittype->move_rate, NULL, NULL, FALSE));
   if (utype_fuel(punittype)) {
     cat_snprintf(buffer, sizeof(buffer), "(%s)",
                  move_points_text(punittype->move_rate * utype_fuel(punittype),
-                                  TRUE));
+                                  NULL, NULL, FALSE));
   }
   return buffer;
 }
@@ -951,91 +554,90 @@ struct unit_class *unit_class_by_rule_name(const char *s)
 }
 
 /**************************************************************************
-  Initialize user unit type flags.
-**************************************************************************/
-void user_unit_type_flags_init(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
-    user_flag_init(&user_type_flags[i]);
-  }
-}
-
-/**************************************************************************
   Sets user defined name for unit flag.
 **************************************************************************/
-void set_user_unit_type_flag_name(enum unit_type_flag_id id, const char *name,
-                                  const char *helptxt)
+void set_user_unit_flag_name(enum unit_flag_id id, const char *name)
 {
-  int ufid = id - UTYF_USER_FLAG_1;
+  int ufid = id - F_USER_FLAG_1;
 
-  fc_assert_ret(id >= UTYF_USER_FLAG_1 && id <= UTYF_LAST_USER_FLAG);
+  fc_assert_ret(id >= F_USER_FLAG_1 && id < F_LAST);
 
-  if (user_type_flags[ufid].name != NULL) {
-    FC_FREE(user_type_flags[ufid].name);
-    user_type_flags[ufid].name = NULL;
+  if (user_flag_names[ufid] != NULL) {
+    free(user_flag_names[ufid]);
+    user_flag_names[ufid] = NULL;
   }
 
   if (name && name[0] != '\0') {
-    user_type_flags[ufid].name = fc_strdup(name);
-  }
-
-  if (user_type_flags[ufid].helptxt != NULL) {
-    free(user_type_flags[ufid].helptxt);
-    user_type_flags[ufid].helptxt = NULL;
-  }
-
-  if (helptxt && helptxt[0] != '\0') {
-    user_type_flags[ufid].helptxt = fc_strdup(helptxt);
+    user_flag_names[ufid] = fc_strdup(name);
   }
 }
 
 /**************************************************************************
-  Unit type flag name callback, called from specenum code.
+  Convert flag names to enum; case insensitive;
+  returns F_LAST if can't match.
 **************************************************************************/
-const char *unit_type_flag_id_name_cb(enum unit_type_flag_id flag)
+enum unit_flag_id unit_flag_by_rule_name(const char *s)
 {
-  if (flag < UTYF_USER_FLAG_1 || flag > UTYF_LAST_USER_FLAG) {
-    return NULL;
-  }
+  enum unit_flag_id i;
 
-  return user_type_flags[flag - UTYF_USER_FLAG_1].name;
-}
+  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, F_LAST);
 
-/**************************************************************************
-  Return the (untranslated) helptxt of the user unit flag.
-**************************************************************************/
-const char *unit_type_flag_helptxt(enum unit_type_flag_id id)
-{
-  fc_assert(id >= UTYF_USER_FLAG_1 && id <= UTYF_LAST_USER_FLAG);
-
-  return user_type_flags[id - UTYF_USER_FLAG_1].helptxt;
-}
-
-/**************************************************************************
-  Returns TRUE iff the unit type is unique and the player already has one.
-**************************************************************************/
-bool utype_player_already_has_this_unique(const struct player *pplayer,
-                                          const struct unit_type *putype)
-{
-  if (!utype_has_flag(putype, UTYF_UNIQUE)) {
-    /* This isn't a unique unit type. */
-    return FALSE;
-  }
-
-  unit_list_iterate(pplayer->units, existing_unit) {
-    if (putype == unit_type(existing_unit)) {
-      /* FIXME: This could be slow if we have lots of units. We could
-       * consider keeping an array of unittypes updated with this info
-       * instead. */
-
-      return TRUE;
+  for (i = 0; i < F_USER_FLAG_1; i++) {
+    if (fc_strcasecmp(flag_names[i], s) == 0) {
+      return i;
     }
-  } unit_list_iterate_end;
+  }
+  for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
+    if (user_flag_names[i] != NULL
+        && fc_strcasecmp(user_flag_names[i], s) == 0) {
+      return i + F_USER_FLAG_1;
+    }
+  }
 
-  /* The player doesn't already have one. */
-  return FALSE;
+  return F_LAST;
+}
+
+/**************************************************************************
+  Return the (untranslated) rule name of the unit flag.
+**************************************************************************/
+const char *unit_flag_rule_name(enum unit_flag_id id)
+{
+  fc_assert_ret_val(ARRAY_SIZE(flag_names) == F_USER_FLAG_1, NULL);
+  fc_assert_ret_val(id >= 0 && id < F_LAST, NULL);
+
+  if (id < F_USER_FLAG_1) {
+    return flag_names[id];
+  }
+
+  return user_flag_names[id - F_USER_FLAG_1];
+}
+
+/**************************************************************************
+  Convert role names to enum; case insensitive;
+  returns L_LAST if can't match.
+**************************************************************************/
+enum unit_role_id unit_role_by_rule_name(const char *s)
+{
+  enum unit_role_id i;
+
+  fc_assert_ret_val(ARRAY_SIZE(role_names) == (L_LAST - L_FIRST), L_LAST);
+
+  for(i = L_FIRST; i < L_LAST; i++) {
+    if (fc_strcasecmp(role_names[i - L_FIRST], s) == 0) {
+      return i;
+    }
+  }
+  return L_LAST;
+}
+
+/**************************************************************************
+  Return the (untranslated) rule name of the unit role.
+**************************************************************************/
+const char *unit_role_rule_name(enum unit_role_id id)
+{
+  fc_assert_ret_val(ARRAY_SIZE(role_names) == L_LAST, NULL);
+  fc_assert_ret_val(id >= 0 && id < L_LAST, NULL);
+  return role_names[id];
 }
 
 /**************************************************************************
@@ -1055,15 +657,15 @@ bool can_player_build_unit_direct(const struct player *p,
     return FALSE;
   }
 
-  if (utype_can_do_action(punittype, ACTION_NUKE)
-      && get_player_bonus(p, EFT_ENABLE_NUKE) <= 0) {
+  if (utype_has_flag(punittype, F_NUCLEAR)
+      && !get_player_bonus(p, EFT_ENABLE_NUKE) > 0) {
     return FALSE;
   }
-  if (utype_has_flag(punittype, UTYF_NOBUILD)) {
+  if (utype_has_flag(punittype, F_NOBUILD)) {
     return FALSE;
   }
 
-  if (utype_has_flag(punittype, UTYF_BARBARIAN_ONLY)
+  if (utype_has_flag(punittype, F_BARBARIAN_ONLY)
       && !is_barbarian(p)) {
     /* Unit can be built by barbarians only and this player is
      * not barbarian */
@@ -1074,9 +676,7 @@ bool can_player_build_unit_direct(const struct player *p,
       && punittype->need_government != government_of_player(p)) {
     return FALSE;
   }
-  if (research_invention_state(research_get(p),
-                               advance_number(punittype->require_advance))
-      != TECH_KNOWN) {
+  if (player_invention_state(p, advance_number(punittype->require_advance)) != TECH_KNOWN) {
     if (!is_barbarian(p)) {
       /* Normal players can never build units without knowing tech
        * requirements. */
@@ -1103,11 +703,17 @@ bool can_player_build_unit_direct(const struct player *p,
         return FALSE;
       }
     }
+    
   }
-
-  if (utype_player_already_has_this_unique(p, punittype)) {
-    /* A player can only have one unit of each unique unit type. */
-    return FALSE;
+  if (utype_has_flag(punittype, F_UNIQUE)) {
+    /* FIXME: This could be slow if we have lots of units. We could
+     * consider keeping an array of unittypes updated with this info 
+     * instead. */
+    unit_list_iterate(p->units, punit) {
+      if (unit_type(punit) == punittype) { 
+        return FALSE;
+      }
+    } unit_list_iterate_end;
   }
 
   /* If the unit has a building requirement, we check to see if the player
@@ -1161,7 +767,7 @@ bool can_player_build_unit_later(const struct player *p,
                                  const struct unit_type *punittype)
 {
   fc_assert_ret_val(NULL != punittype, FALSE);
-  if (utype_has_flag(punittype, UTYF_NOBUILD)) {
+  if (utype_has_flag(punittype, F_NOBUILD)) {
     return FALSE;
   }
   while ((punittype = punittype->obsoleted_by) != U_NOT_OBSOLETED) {
@@ -1180,8 +786,8 @@ and any "role" argument can also be a "flag".
 Unit order is in terms of the order in the units ruleset.
 **************************************************************************/
 static bool first_init = TRUE;
-static int n_with_role[MAX_UNIT_ROLES];
-static struct unit_type **with_role[MAX_UNIT_ROLES];
+static int n_with_role[L_LAST];
+static struct unit_type **with_role[L_LAST];
 
 /**************************************************************************
 Do the real work for role_unit_precalcs, for one role (or flag), given by i.
@@ -1192,7 +798,6 @@ static void precalc_one(int i,
   int j;
 
   /* Count: */
-  fc_assert(n_with_role[i] == 0);
   unit_type_iterate(u) {
     if (func_has(u, i)) {
       n_with_role[i]++;
@@ -1218,7 +823,7 @@ void role_unit_precalcs_free(void)
 {
   int i;
 
-  for (i = 0; i < MAX_UNIT_ROLES; i++) {
+  for (i = 0; i < L_LAST; i++) {
     free(with_role[i]);
     with_role[i] = NULL;
     n_with_role[i] = 0;
@@ -1234,7 +839,7 @@ void role_unit_precalcs(void)
   int i;
 
   if (first_init) {
-    for (i = 0; i < MAX_UNIT_ROLES; i++) {
+    for (i = 0; i < L_LAST; i++) {
       with_role[i] = NULL;
       n_with_role[i] = 0;
     }
@@ -1242,14 +847,11 @@ void role_unit_precalcs(void)
     role_unit_precalcs_free();
   }
 
-  for (i = 0; i <= UTYF_LAST_USER_FLAG; i++) {
+  for(i=0; i<F_LAST; i++) {
     precalc_one(i, utype_has_flag);
   }
-  for (i = L_FIRST; i < L_LAST; i++) {
+  for(i=L_FIRST; i<L_LAST; i++) {
     precalc_one(i, utype_has_role);
-  }
-  for (i = L_LAST; i < MAX_UNIT_ROLES; i++) {
-    precalc_one(i, utype_can_do_action_role);
   }
   first_init = FALSE;
 }
@@ -1259,48 +861,10 @@ How many unit types have specified role/flag.
 **************************************************************************/
 int num_role_units(int role)
 {
-  fc_assert_ret_val((role >= 0 && role <= UTYF_LAST_USER_FLAG)
-                    || (role >= L_FIRST && role < L_LAST)
-                    || (role >= L_LAST && role < MAX_UNIT_ROLES), -1);
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
+                    || (role >= L_FIRST && role < L_LAST), -1);
   fc_assert_ret_val(!first_init, -1);
   return n_with_role[role];
-}
-
-/**************************************************************************
-  Iterate over all the role units and feed them to callback.
-  Once callback returns TRUE, no further units are feeded to it and
-  we return the unit that caused callback to return TRUE
-**************************************************************************/
-struct unit_type *role_units_iterate(int role, role_unit_callback cb, void *data)
-{
-  int i;
-
-  for (i = 0; i < n_with_role[role]; i++) {
-    if (cb(with_role[role][i], data)) {
-      return with_role[role][i];
-    }
-  }
-
-  return NULL;
-}
-
-/**************************************************************************
-  Iterate over all the role units and feed them to callback, starting
-  from the last one.
-  Once callback returns TRUE, no further units are feeded to it and
-  we return the unit that caused callback to return TRUE
-**************************************************************************/
-struct unit_type *role_units_iterate_backwards(int role, role_unit_callback cb, void *data)
-{
-  int i;
-
-  for (i = n_with_role[role] - 1; i >= 0; i--) {
-    if (cb(with_role[role][i], data)) {
-     return with_role[role][i];
-    }
-  }
-
-  return NULL;
 }
 
 /**************************************************************************
@@ -1309,9 +873,8 @@ Index -1 means (n-1), ie last one.
 **************************************************************************/
 struct unit_type *get_role_unit(int role, int index)
 {
-  fc_assert_ret_val((role >= 0 && role <= UTYF_LAST_USER_FLAG)
-                    || (role >= L_FIRST && role < L_LAST)
-                    || (role >= L_LAST && role < MAX_UNIT_ROLES), NULL);
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
+                    || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
   if (index==-1) {
     index = n_with_role[role]-1;
@@ -1329,16 +892,13 @@ struct unit_type *best_role_unit(const struct city *pcity, int role)
   struct unit_type *u;
   int j;
 
-  fc_assert_ret_val((role >= 0 && role <= UTYF_LAST_USER_FLAG)
-                    || (role >= L_FIRST && role < L_LAST)
-                    || (role >= L_LAST && role < MAX_UNIT_ROLES), NULL);
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
+                    || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
   for(j=n_with_role[role]-1; j>=0; j--) {
     u = with_role[role][j];
-    if ((1 != utype_fuel(u) || uclass_has_flag(utype_class(u), UCF_MISSILE))
-        && can_city_build_unit_now(pcity, u)) {
-      /* Allow fuel==1 units when pathfinding can handle them. */
+    if (can_city_build_unit_now(pcity, u)) {
       return u;
     }
   }
@@ -1356,9 +916,8 @@ struct unit_type *best_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role <= UTYF_LAST_USER_FLAG)
-                    || (role >= L_FIRST && role < L_LAST)
-                    || (role >= L_LAST && role < MAX_UNIT_ROLES), NULL);
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
+                    || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
   for(j = n_with_role[role]-1; j >= 0; j--) {
@@ -1381,9 +940,8 @@ struct unit_type *first_role_unit_for_player(const struct player *pplayer,
 {
   int j;
 
-  fc_assert_ret_val((role >= 0 && role <= UTYF_LAST_USER_FLAG)
-                    || (role >= L_FIRST && role < L_LAST)
-                    || (role >= L_LAST && role < MAX_UNIT_ROLES), NULL);
+  fc_assert_ret_val((role >= 0 && role < F_LAST)
+                    || (role >= L_FIRST && role < L_LAST), NULL);
   fc_assert_ret_val(!first_init, NULL);
 
   for(j = 0; j < n_with_role[role]; j++) {
@@ -1408,10 +966,7 @@ void unit_types_init(void)
    * num_unit_types isn't known yet. */
   for (i = 0; i < ARRAY_SIZE(unit_types); i++) {
     unit_types[i].item_number = i;
-    unit_types[i].helptext = NULL;
     unit_types[i].veteran = NULL;
-    unit_types[i].bonuses = combat_bonus_list_new();
-    unit_types[i].disabled = FALSE;
   }
 }
 
@@ -1426,10 +981,6 @@ static void unit_type_free(struct unit_type *punittype)
   }
 
   veteran_system_destroy(punittype->veteran);
-  combat_bonus_list_iterate(punittype->bonuses, pbonus) {
-    FC_FREE(pbonus);
-  } combat_bonus_list_iterate_end;
-  combat_bonus_list_destroy(punittype->bonuses);
 }
 
 /***************************************************************
@@ -1437,24 +988,23 @@ static void unit_type_free(struct unit_type *punittype)
 ***************************************************************/
 void unit_types_free(void)
 {
-  int i;
-
-  /* Can't use unit_type_iterate or utype_by_number here because
-   * we want to free what unit_types_init() has allocated. */
-  for (i = 0; i < ARRAY_SIZE(unit_types); i++) {
-    unit_type_free(unit_types + i);
-  }
+  unit_type_iterate(punittype) {
+    unit_type_free(punittype);
+  } unit_type_iterate_end;
 }
 
 /***************************************************************
   Frees the memory associated with all unit type flags
 ***************************************************************/
-void unit_type_flags_free(void)
+void unit_flags_free(void)
 {
   int i;
 
   for (i = 0; i < MAX_NUM_USER_UNIT_FLAGS; i++) {
-    user_flag_free(&user_type_flags[i]);
+    if (user_flag_names[i] != 0) {
+      free(user_flag_names[i]);
+      user_flag_names[i] = NULL;
+    }
   }
 }
 
@@ -1552,9 +1102,7 @@ void unit_classes_init(void)
    * num_unit_classes isn't known yet. */
   for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
     unit_classes[i].item_number = i;
-    unit_classes[i].cache.refuel_bases = NULL;
-    unit_classes[i].cache.native_tile_extras = NULL;
-    unit_classes[i].cache.subset_movers = NULL;
+    unit_classes[i].cache.native_tile_bases = NULL;
   }
 }
 
@@ -1566,16 +1114,11 @@ void unit_classes_free(void)
   int i;
 
   for (i = 0; i < ARRAY_SIZE(unit_classes); i++) {
-    if (unit_classes[i].cache.refuel_bases != NULL) {
-      extra_type_list_destroy(unit_classes[i].cache.refuel_bases);
+    if (unit_classes[i].cache.native_tile_bases != NULL) {
+      base_type_list_destroy(unit_classes[i].cache.refuel_bases);
       unit_classes[i].cache.refuel_bases = NULL;
-    }
-    if (unit_classes[i].cache.native_tile_extras != NULL) {
-      extra_type_list_destroy(unit_classes[i].cache.native_tile_extras);
-      unit_classes[i].cache.native_tile_extras = NULL;
-    }
-    if (unit_classes[i].cache.subset_movers != NULL) {
-      unit_class_list_destroy(unit_classes[i].cache.subset_movers);
+      base_type_list_destroy(unit_classes[i].cache.native_tile_bases);
+      unit_classes[i].cache.native_tile_bases = NULL;
     }
   }
 }
@@ -1699,28 +1242,11 @@ void veteran_system_definition(struct veteran_system *vsystem, int level,
 
   vlevel = vsystem->definitions + level;
 
-  names_set(&vlevel->name, NULL, vlist_name, NULL);
+  names_set(&vlevel->name, vlist_name, NULL);
   vlevel->power_fact = vlist_power;
   vlevel->move_bonus = vlist_move;
   vlevel->raise_chance = vlist_raise;
   vlevel->work_raise_chance = vlist_wraise;
-}
-
-/**************************************************************************
-  Return pointer to ai data of given unit type and ai type.
-**************************************************************************/
-void *utype_ai_data(const struct unit_type *ptype, const struct ai_type *ai)
-{
-  return ptype->ais[ai_type_number(ai)];
-}
-
-/**************************************************************************
-  Attach ai data to unit type
-**************************************************************************/
-void utype_set_ai_data(struct unit_type *ptype, const struct ai_type *ai,
-                       void *data)
-{
-  ptype->ais[ai_type_number(ai)] = data;
 }
 
 /****************************************************************************
@@ -1728,167 +1254,15 @@ void utype_set_ai_data(struct unit_type *ptype, const struct ai_type *ai,
 ****************************************************************************/
 void set_unit_class_caches(struct unit_class *pclass)
 {
-  pclass->cache.refuel_bases = extra_type_list_new();
-  pclass->cache.native_tile_extras = extra_type_list_new();
-  pclass->cache.subset_movers = unit_class_list_new();
+  pclass->cache.native_tile_bases = base_type_list_new();
+  pclass->cache.refuel_bases = base_type_list_new();
 
-  extra_type_iterate(pextra) {
-    if (is_native_extra_to_uclass(pextra, pclass)) {
-      if (extra_has_flag(pextra, EF_REFUEL)) {
-        extra_type_list_append(pclass->cache.refuel_bases, pextra);
-      }
-      if (extra_has_flag(pextra, EF_NATIVE_TILE)) {
-        extra_type_list_append(pclass->cache.native_tile_extras, pextra);
+  base_type_iterate(pbase) {
+    if (is_native_base_to_uclass(pbase, pclass)) {
+      base_type_list_append(pclass->cache.refuel_bases, pbase);
+      if (base_has_flag(pbase, BF_NATIVE_TILE)) {
+        base_type_list_append(pclass->cache.native_tile_bases, pbase);
       }
     }
-  } extra_type_iterate_end;
-
-  unit_class_iterate(pcharge) {
-    bool subset_mover = TRUE;
-
-    terrain_type_iterate(pterrain) {
-      if (BV_ISSET(pterrain->native_to, uclass_index(pcharge))
-          && !BV_ISSET(pterrain->native_to, uclass_index(pclass))) {
-        subset_mover = FALSE;
-      }
-    } terrain_type_iterate_end;
-
-    if (subset_mover) {
-      extra_type_iterate(pextra) {
-        if (is_native_extra_to_uclass(pextra, pcharge)
-            && !is_native_extra_to_uclass(pextra, pclass)) {
-          subset_mover = FALSE;
-        }
-      } extra_type_list_iterate_end;
-    }
-
-    if (subset_mover) {
-      unit_class_list_append(pclass->cache.subset_movers, pcharge);
-    }
-  } unit_class_iterate_end;
-}
-
-/**************************************************************************
-  What move types nativity of this extra will give?
-**************************************************************************/
-static enum unit_move_type move_type_from_extra(struct extra_type *pextra,
-                                                struct unit_class *puc)
-{
-  bool land_allowed = TRUE;
-  bool sea_allowed = TRUE;
-
-  if (!extra_has_flag(pextra, EF_NATIVE_TILE)) {
-    return unit_move_type_invalid();
-  }
-  if (!is_native_extra_to_uclass(pextra, puc)) {
-    return unit_move_type_invalid();
-  }
-
-  if (is_extra_caused_by(pextra, EC_ROAD)
-      && road_has_flag(extra_road_get(pextra), RF_RIVER)) {
-    /* Natural rivers are created to land only */
-    sea_allowed = FALSE;
-  }
-
-  requirement_vector_iterate(&pextra->reqs, preq) {
-    if (preq->source.kind == VUT_TERRAINCLASS) {
-      if (!preq->present) {
-        if (preq->source.value.terrainclass == TC_LAND) {
-          land_allowed = FALSE;
-        } else if (preq->source.value.terrainclass == TC_OCEAN) {
-          sea_allowed = FALSE;
-        }
-      } else {
-        if (preq->source.value.terrainclass == TC_LAND) {
-          sea_allowed = FALSE;
-        } else if (preq->source.value.terrainclass == TC_OCEAN) {
-          land_allowed = FALSE;
-        }
-      }
-    } else if (preq->source.kind == VUT_TERRAIN) {
-     if (!preq->present) {
-        if (preq->source.value.terrain->tclass == TC_LAND) {
-          land_allowed = FALSE;
-        } else if (preq->source.value.terrain->tclass == TC_OCEAN) {
-          sea_allowed = FALSE;
-        }
-      } else {
-        if (preq->source.value.terrain->tclass == TC_LAND) {
-          sea_allowed = FALSE;
-        } else if (preq->source.value.terrain->tclass == TC_OCEAN) {
-          land_allowed = FALSE;
-        }
-      }
-    }
-  } requirement_vector_iterate_end;
-
-  if (land_allowed && sea_allowed) {
-    return UMT_BOTH;
-  }
-  if (land_allowed && !sea_allowed) {
-    return UMT_LAND;
-  }
-  if (!land_allowed && sea_allowed) {
-    return UMT_SEA;
-  }
-
-  return unit_move_type_invalid();
-}
-
-/****************************************************************************
-  Set move_type for unit class.
-****************************************************************************/
-void set_unit_move_type(struct unit_class *puclass)
-{
-  bool land_moving = FALSE;
-  bool sea_moving = FALSE;
-
-  extra_type_iterate(pextra) {
-    enum unit_move_type eut = move_type_from_extra(pextra, puclass);
-
-    if (eut == UMT_BOTH) {
-      land_moving = TRUE;
-      sea_moving = TRUE;
-    } else if (eut == UMT_LAND) {
-      land_moving = TRUE;
-    } else if (eut == UMT_SEA) {
-      sea_moving = TRUE;
-    }
-  } extra_type_iterate_end;
-
-  terrain_type_iterate(pterrain) {
-    bv_extras extras;
-
-    BV_CLR_ALL(extras);
-
-    if (is_native_to_class(puclass, pterrain, extras)) {
-      if (is_ocean(pterrain)) {
-        sea_moving = TRUE;
-      } else {
-        land_moving = TRUE;
-      }
-    }
-  } terrain_type_iterate_end;
-
-  if (land_moving && sea_moving) {
-    puclass->move_type = UMT_BOTH;
-  } else if (sea_moving) {
-    puclass->move_type = UMT_SEA;
-  } else {
-    /* If unit has no native terrains, it is considered land moving */
-    puclass->move_type = UMT_LAND;
-  }
-}
-
-/****************************************************************************
-  Is cityfounder type
-****************************************************************************/
-bool utype_is_cityfounder(struct unit_type *utype)
-{
-  if (game.scenario.prevent_new_cities) {
-    /* No unit is allowed to found new cities */
-    return FALSE;
-  }
-
-  return utype_can_do_action(utype, ACTION_FOUND_CITY);
+  } base_type_iterate_end;
 }

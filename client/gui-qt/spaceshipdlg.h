@@ -14,49 +14,8 @@
 #ifndef FC__SPACESHIPDLG_H
 #define FC__SPACESHIPDLG_H
 
-#ifdef HAVE_CONFIG_H
-#include <fc_config.h>
-#endif
-
 extern "C" {
 #include "spaceshipdlg_g.h"
 }
-
-/* client */
-#include "text.h"
-
-// Qt
-#include <QWidget>
-
-class QPixmap;
-class QPushButton;
-class QLabel;
-
-/****************************************************************************
-  Tab widget to display spaceship report (F12)
-****************************************************************************/
-class ss_report: public QWidget
-{
-  Q_OBJECT
-  QPushButton *launch_button;
-  QLabel *ss_pix_label;
-  QLabel *ss_label;
-  struct canvas *can;
-
-public:
-  ss_report(struct player *pplayer);
-  ~ss_report();
-  void update_report();
-  void init();
-
-private slots:
-  void launch();
-
-private:
-  struct player *player;
-};
-
-void popup_spaceship_dialog(struct player *pplayer);
-void popdown_all_spaceships_dialogs();
 
 #endif /* FC__SPACESHIPDLG_H */

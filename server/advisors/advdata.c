@@ -20,8 +20,6 @@
 #include "mem.h"
 
 /* common */
-#include "actions.h"
-#include "ai.h"
 #include "city.h"
 #include "effects.h"
 #include "game.h"
@@ -38,6 +36,7 @@
 #include "pf_tools.h"
 
 /* server */
+#include "citytools.h"
 #include "cityturn.h"
 #include "diplhand.h"
 #include "maphand.h"
@@ -46,13 +45,9 @@
 #include "unittools.h"
 
 /* server/advisors */
-#include "advbuilding.h"
 #include "advcity.h"
 #include "advtools.h"
 #include "autosettlers.h"
-
-/* ai */
-#include "handicaps.h"
 
 #include "advdata.h"
 
@@ -101,13 +96,12 @@ static void adv_data_city_impr_calc(struct player *pplayer,
 #endif
       case EFT_CAPITAL_CITY:
       case EFT_POLLU_POP_PCT:
-      case EFT_POLLU_POP_PCT_2:
       case EFT_POLLU_PROD_PCT:
       case EFT_OUTPUT_BONUS:
       case EFT_OUTPUT_BONUS_2:
       case EFT_OUTPUT_WASTE_PCT:
       case EFT_UPKEEP_FREE:
-	requirement_vector_iterate(&peffect->reqs, preq) {
+	requirement_list_iterate(peffect->reqs, preq) {
 	  if (VUT_IMPROVEMENT == preq->source.kind
 	      && preq->source.value.building == pimprove) {
             if (adv->impr_calc[improvement_index(pimprove)] != ADV_IMPR_CALCULATE_FULL) {
@@ -117,12 +111,12 @@ static void adv_data_city_impr_calc(struct player *pplayer,
 	      adv->impr_range[improvement_index(pimprove)] = preq->range;
 	    }
 	  }
-	} requirement_vector_iterate_end;
+	} requirement_list_iterate_end;
         break;
       case EFT_OUTPUT_ADD_TILE:
       case EFT_OUTPUT_PER_TILE:
       case EFT_OUTPUT_INC_TILE:
-	requirement_vector_iterate(&peffect->reqs, preq) {
+	requirement_list_iterate(peffect->reqs, preq) {
 	  if (VUT_IMPROVEMENT == preq->source.kind
 	      && preq->source.value.building == pimprove) {
 	    adv->impr_calc[improvement_index(pimprove)] = ADV_IMPR_CALCULATE_FULL;
@@ -130,7 +124,7 @@ static void adv_data_city_impr_calc(struct player *pplayer,
 	      adv->impr_range[improvement_index(pimprove)] = preq->range;
 	    }
 	  }
-	} requirement_vector_iterate_end;
+	} requirement_list_iterate_end;
       break;
       default:
       /* Nothing! */
@@ -147,20 +141,17 @@ static void adv_data_city_impr_calc(struct player *pplayer,
 **************************************************************************/
 static bool player_has_really_useful_tech_parasite(struct player* pplayer)
 {
-  struct research *presearch, *aresearch;
   int players_needed = get_player_bonus(pplayer, EFT_TECH_PARASITE);
 
   if (players_needed == 0) {
     return FALSE;
   }
-
-  presearch = research_get(pplayer);
+  
   advance_index_iterate(A_FIRST, tech) {
     int players_having;
 
-    if (!research_invention_gettable(presearch, tech,
-                                     game.info.tech_parasite_allow_holes)
-        || TECH_KNOWN == research_invention_state(presearch, tech)) {
+    if (!player_invention_reachable(pplayer, tech, FALSE)
+        || TECH_KNOWN == player_invention_state(pplayer, tech)) {
       continue;
     }
 
@@ -171,9 +162,8 @@ static bool player_has_really_useful_tech_parasite(struct player* pplayer)
         continue;
       }
 
-      aresearch = research_get(aplayer);
-      if (TECH_KNOWN == research_invention_state(aresearch, tech)
-          || aresearch->researching == tech) {
+      if (TECH_KNOWN == player_invention_state(aplayer, tech)
+          || player_research_get(aplayer)->researching == tech) {
 	players_having++;
 	if (players_having >= players_needed) {
 	  return TRUE;
@@ -210,19 +200,26 @@ static void count_my_units(struct player *pplayer)
   unit_list_iterate(pplayer->units, punit) {
     struct unit_class *pclass = unit_class(punit);
 
-    adv->stats.units.byclass[uclass_index(pclass)]++;
+    if (pclass->adv.land_move != MOVE_NONE
+        && pclass->adv.sea_move != MOVE_NONE) {
+      /* Can move both land and ocean */
+      adv->stats.units.amphibious++;
+    } else if (pclass->adv.land_move != MOVE_NONE) {
+      /* Can move only at land */
+      adv->stats.units.land++;
+    } else if (pclass->adv.sea_move != MOVE_NONE) {
+      /* Can move only at sea */
+      adv->stats.units.sea++;
+    }
 
-    if (unit_has_type_flag(punit, UTYF_TRIREME)) {
+    if (unit_has_type_flag(punit, F_TRIREME)) {
       adv->stats.units.triremes++;
     }
-    if (uclass_has_flag(pclass, UCF_MISSILE)) {
+    if (uclass_has_flag(unit_class(punit), UCF_MISSILE)) {
       adv->stats.units.missiles++;
     }
-    if (unit_has_type_flag(punit, UTYF_PARATROOPERS)) {
+    if (unit_has_type_flag(punit, F_PARATROOPERS)) {
       adv->stats.units.paratroopers++;
-    }
-    if (uclass_has_flag(pclass, UCF_AIRLIFTABLE)) {
-      adv->stats.units.airliftable++;
     }
     if (can_upgrade_unittype(pplayer, unit_type(punit)) >= 0) {
       adv->stats.units.upgradeable++;
@@ -270,7 +267,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   TIMING_LOG(AIT_AIDATA, TIMER_START);
 
-  nuke_units = num_role_units(action_get_role(ACTION_NUKE));
+  nuke_units = num_role_units(F_NUCLEAR);
   danger_of_nukes = FALSE;
 
   /*** Threats ***/
@@ -300,23 +297,18 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
     } city_list_iterate_end;
 
     unit_list_iterate(aplayer->units, punit) {
-      const struct unit_class *pclass = unit_class(punit);
-
-      if (unit_type(punit)->adv.igwall) {
+      if (unit_has_type_flag(punit, F_IGWALL)) {
         adv->threats.igwall = TRUE;
       }
 
-      if (pclass->adv.sea_move != MOVE_NONE) {
+      if (is_sailing_unit(punit)) {
         /* If the enemy has not started sailing yet, or we have total
          * control over the seas, don't worry, keep attacking. */
-        if (uclass_has_flag(pclass, UCF_CAN_OCCUPY_CITY)) {
-          /* Enemy represents a cross-continental threat! */
-          adv->threats.invasions = TRUE;
-        } else if (get_transporter_capacity(punit) > 0) {
-          unit_class_iterate(cargoclass) {
-            if (uclass_has_flag(cargoclass, UCF_CAN_OCCUPY_CITY)
-                && can_unit_type_transport(unit_type(punit), cargoclass)) {
-              /* Enemy can transport some threatening units! */
+        if (get_transporter_capacity(punit) > 0) {
+          unit_class_iterate(punitclass) {
+            if (punitclass->move_type == UMT_LAND
+                && can_unit_type_transport(unit_type(punit), punitclass)) {
+              /* Enemy can transport some land units! */
               adv->threats.invasions = TRUE;
               break;
             }
@@ -348,14 +340,14 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
       }
 
       /* If he builds nukes, worry a lot. */
-      if (unit_can_do_action(punit, ACTION_NUKE)) {
+      if (unit_has_type_flag(punit, F_NUCLEAR)) {
         danger_of_nukes = TRUE;
       }
     } unit_list_iterate_end;
 
     /* Check for nuke capability */
     for (i = 0; i < nuke_units; i++) {
-      struct unit_type *nuke = get_role_unit(action_get_role(ACTION_NUKE), i);
+      struct unit_type *nuke = get_role_unit(F_NUCLEAR, i);
 
       if (can_player_build_unit_direct(aplayer, nuke)) { 
         adv->threats.nuclear = 1;
@@ -378,7 +370,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
     Continent_id continent = tile_continent(ptile);
 
     if (is_ocean_tile(ptile)) {
-      if (adv->explore.sea_done && has_handicap(pplayer, H_TARGETS) 
+      if (adv->explore.sea_done && ai_handicap(pplayer, H_TARGETS) 
           && !map_is_known(ptile, pplayer)) {
 	/* We're not done there. */
         adv->explore.sea_done = FALSE;
@@ -391,14 +383,14 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
       /* we don't need more explaining, we got the point */
       continue;
     }
-    if (tile_has_cause_extra(ptile, EC_HUT) 
-        && (!has_handicap(pplayer, H_HUTS)
+    if (tile_has_special(ptile, S_HUT) 
+        && (!ai_handicap(pplayer, H_HUTS)
              || map_is_known(ptile, pplayer))) {
       adv->explore.land_done = FALSE;
       adv->explore.continent[continent] = TRUE;
       continue;
     }
-    if (has_handicap(pplayer, H_TARGETS) && !map_is_known(ptile, pplayer)) {
+    if (ai_handicap(pplayer, H_TARGETS) && !map_is_known(ptile, pplayer)) {
       /* this AI must explore */
       adv->explore.land_done = FALSE;
       adv->explore.continent[continent] = TRUE;
@@ -407,6 +399,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
 
   /*** Statistics ***/
 
+  adv->stats.workers = fc_calloc(adv->num_continents + 1, sizeof(int));
   adv->stats.cities = fc_calloc(adv->num_continents + 1, sizeof(int));
   adv->stats.average_production = 0;
   city_list_iterate(pplayer->cities, pcity) {
@@ -417,6 +410,13 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
     adv->stats.average_production += pcity->surplus[O_SHIELD];
   } city_list_iterate_end;
   adv->stats.average_production /= MAX(1, city_list_size(pplayer->cities));
+  unit_list_iterate(pplayer->units, punit) {
+    struct tile *ptile = unit_tile(punit);
+
+    if (!is_ocean_tile(ptile) && unit_has_type_flag(punit, F_SETTLERS)) {
+      adv->stats.workers[(int)tile_continent(unit_tile(punit))]++;
+    }
+  } unit_list_iterate_end;
 
   /*** Diplomacy ***/
 
@@ -465,7 +465,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
   adv->pollution_priority = POLLUTION_WEIGHTING;
 
   /* Research want */
-  if (is_future_tech(research_get(pplayer)->researching)
+  if (is_future_tech(player_research_get(pplayer)->researching)
       || player_has_really_useful_tech_parasite(pplayer)) {
     adv->wants_science = FALSE;
   } else {
@@ -479,7 +479,7 @@ bool adv_data_phase_init(struct player *pplayer, bool is_new_phase)
    * than the best human players. This should lead to more exciting games
    * for the beginners.
    */
-  if (has_handicap(pplayer, H_EXPANSION)) {
+  if (ai_handicap(pplayer, H_EXPANSION)) {
     bool found_human = FALSE;
     adv->max_num_cities = 3;
     players_iterate_alive(aplayer) {
@@ -533,6 +533,9 @@ void adv_data_phase_done(struct player *pplayer)
 
   free(adv->threats.ocean);
   adv->threats.ocean = NULL;
+
+  free(adv->stats.workers);
+  adv->stats.workers = NULL;
 
   free(adv->stats.cities);
   adv->stats.cities = NULL;
@@ -593,7 +596,7 @@ struct adv_data *adv_data_get(struct player *pplayer, bool *close)
        instead of making intrusive fixes for actual bug in stable branch,
        do not assert for non-debug builds of stable versions. */
 #if defined(DEBUG) || defined(IS_DEVEL_VERSION)
-  fc_assert(close != NULL || adv->phase_is_initialized);
+  fc_assert(close != NULL || adv->phase_is_initialized || game.info.phase_mode != PMT_CONCURRENT);
 #endif
 
   if (close != NULL) {
@@ -788,16 +791,15 @@ void adv_best_government(struct player *pplayer)
   adv->goal.govt.req = A_UNSET;
   adv->goal.revolution = current_gov;
 
-  if (has_handicap(pplayer, H_AWAY) || !pplayer->is_alive) {
+  if (ai_handicap(pplayer, H_AWAY) || !pplayer->is_alive) {
     return;
   }
 
   if (adv->govt_reeval == 0) {
-    const struct research *presearch = research_get(pplayer);
-
     governments_iterate(gov) {
-      adv_want val = 0;
-      bool override = FALSE;
+      int val = 0;
+      int bonus = 0; /* in percentage */
+      int dist;
 
       if (gov == game.government_during_revolution) {
         continue; /* pointless */
@@ -806,58 +808,40 @@ void adv_best_government(struct player *pplayer)
           && can_change_to_government(pplayer, gov->ai.better)) {
         continue; /* we have better governments available */
       }
+      pplayer->government = gov;
+      /* Ideally we should change tax rates here, but since
+       * this is a rather big CPU operation, we'd rather not. */
+      check_player_max_rates(pplayer);
+      city_list_iterate(pplayer->cities, acity) {
+        auto_arrange_workers(acity);
+      } city_list_iterate_end;
+      city_list_iterate(pplayer->cities, pcity) {
+        val += adv_eval_calc_city(pcity, adv);
+      } city_list_iterate_end;
 
-      CALL_PLR_AI_FUNC(gov_value, pplayer, pplayer, gov, &val, &override);
+      /* Bonuses for non-economic abilities. We increase val by
+       * a very small amount here to choose govt in cases where
+       * we have no cities yet. */
+      bonus += get_player_bonus(pplayer, EFT_VETERAN_BUILD) > 0 ? 3 : 0;
+      bonus -= get_player_bonus(pplayer, EFT_REVOLUTION_WHEN_UNHAPPY) > 0 ? 3 : 0;
+      bonus += get_player_bonus(pplayer, EFT_NO_INCITE) > 0 ? 4 : 0;
+      bonus += get_player_bonus(pplayer, EFT_UNBRIBABLE_UNITS) > 0 ? 2 : 0;
+      bonus += get_player_bonus(pplayer, EFT_INSPIRE_PARTISANS) > 0 ? 3 : 0;
+      bonus += get_player_bonus(pplayer, EFT_RAPTURE_GROW) > 0 ? 2 : 0;
+      bonus += get_player_bonus(pplayer, EFT_FANATICS) > 0 ? 3 : 0;
+      bonus += get_player_bonus(pplayer, EFT_OUTPUT_INC_TILE) * 8;
 
-      if (!override) {
-        int dist;
-        int bonus = 0; /* in percentage */
-        int revolution_turns;
+      val += (val * bonus) / 100;
 
-        pplayer->government = gov;
-        /* Ideally we should change tax rates here, but since
-         * this is a rather big CPU operation, we'd rather not. */
-        check_player_max_rates(pplayer);
-        city_list_iterate(pplayer->cities, acity) {
-          auto_arrange_workers(acity);
-        } city_list_iterate_end;
-        city_list_iterate(pplayer->cities, pcity) {
-          val += adv_eval_calc_city(pcity, adv);
-        } city_list_iterate_end;
-
-        /* Bonuses for non-economic abilities. We increase val by
-         * a very small amount here to choose govt in cases where
-         * we have no cities yet. */
-        bonus += get_player_bonus(pplayer, EFT_VETERAN_BUILD) > 0 ? 3 : 0;
-        if (action_immune_government(gov, ACTION_SPY_INCITE_CITY)) {
-          bonus += 4;
-        }
-        if (action_immune_government(gov, ACTION_SPY_BRIBE_UNIT)) {
-          bonus += 2;
-        }
-        bonus += get_player_bonus(pplayer, EFT_INSPIRE_PARTISANS) > 0 ? 3 : 0;
-        bonus += get_player_bonus(pplayer, EFT_RAPTURE_GROW) > 0 ? 2 : 0;
-        bonus += get_player_bonus(pplayer, EFT_FANATICS) > 0 ? 3 : 0;
-        bonus += get_player_bonus(pplayer, EFT_OUTPUT_INC_TILE) * 8;
-
-        revolution_turns = get_player_bonus(pplayer, EFT_REVOLUTION_UNHAPPINESS);
-        if (revolution_turns > 0) {
-          bonus -= 6 / revolution_turns;
-        }
-
-        val += (val * bonus) / 100;
-
-        /* FIXME: handle reqs other than technologies. */
-        dist = 0;
-        requirement_vector_iterate(&gov->reqs, preq) {
-          if (VUT_ADVANCE == preq->source.kind) {
-            dist += MAX(1, research_goal_unknown_techs(presearch,
-                                                       advance_number(preq->source.value.advance)));
-          }
-        } requirement_vector_iterate_end;
-        val = amortize(val, dist);
-      }
-
+      /* FIXME: handle reqs other than technologies. */
+      dist = 0;
+      requirement_vector_iterate(&gov->reqs, preq) {
+	if (VUT_ADVANCE == preq->source.kind) {
+	  dist += MAX(1, num_unknown_techs_for_goal(pplayer,
+						    advance_number(preq->source.value.advance)));
+	}
+      } requirement_vector_iterate_end;
+      val = amortize(val, dist);
       adv->government_want[government_index(gov)] = val; /* Save want */
     } governments_iterate_end;
     /* Now reset our gov to it's real state. */
@@ -920,19 +904,19 @@ bool adv_is_player_dangerous(struct player *pplayer,
 {
   struct adv_dipl *dip;
   enum diplstate_type ds;
-  enum override_bool dang = NO_OVERRIDE;
+  enum danger_consideration dang = DANG_UNDECIDED;
 
   if (pplayer->ai_controlled) {
     /* Give AI code possibility to decide itself */
     CALL_PLR_AI_FUNC(consider_plr_dangerous, pplayer, pplayer, aplayer, &dang);
   }
 
-  if (dang == OVERRIDE_FALSE) {
+  if (dang == DANG_NOT) {
     return FALSE;
   }
 
-  if (dang == OVERRIDE_TRUE) {
-    return TRUE;
+  if (dang == DANG_YES) {
+    return TRUE;;
   }
 
   if (pplayer == aplayer) {

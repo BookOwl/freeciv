@@ -4,12 +4,8 @@
 pkgdatadir = $(datadir)/$(PACKAGE)/amplio2
 
 pkgdata_DATA =          	\
-	activities.png		\
-	activities.spec		\
 	ancientcities.png	\
 	ancientcities.spec	\
-	bases.png		\
-	bases.spec		\
 	explosions.png		\
 	explosions.spec		\
 	fog.png			\
@@ -18,8 +14,6 @@ pkgdata_DATA =          	\
 	grid.spec		\
 	hills.png		\
 	hills.spec		\
-	maglev.png		\
-	maglev.spec		\
 	medievalcities.png	\
 	medievalcities.spec	\
 	moderncities.png	\
@@ -41,8 +35,6 @@ pkgdata_DATA =          	\
 	tiles.spec		\
 	units.png		\
 	units.spec		\
-	upkeep.png		\
-	upkeep.spec		\
 	veterancy.png		\
 	veterancy.spec		\
 	water.png		\

@@ -25,8 +25,6 @@ extern "C" {
 #include "unitlist.h"
 
 struct Clause;
-struct nation_type;
-struct nation_set;
 
 typedef int cid;
 
@@ -117,11 +115,7 @@ void cityrep_buy(struct city *pcity);
 void common_taxrates_callback(int i);
 
 bool can_units_do_connect(struct unit_list *punits,
-			  enum unit_activity activity,
-                          struct extra_type *tgt);
-
-bool can_unit_act_against_own_tile(struct unit *punit);
-bool can_units_act_against_own_tile(struct unit_list *punits);
+			  enum unit_activity activity);
 
 enum unit_bg_color_type { UNIT_BG_HP_LOSS,
                           UNIT_BG_LAND,
@@ -141,9 +135,6 @@ void client_player_maps_reset(void);
 
 bool mapimg_client_define(void);
 bool mapimg_client_createmap(const char *filename);
-
-struct nation_set *client_current_nation_set(void);
-bool client_nation_is_in_current_set(const struct nation_type *pnation);
 
 #ifdef __cplusplus
 }

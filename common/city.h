@@ -22,13 +22,12 @@ extern "C" {
 #include "log.h"
 
 /* common */
+#include "ai.h" /* FC_AI_LAST */
 #include "fc_types.h"
 #include "name_translation.h"
 #include "improvement.h"
-#include "traderoutes.h"
 #include "unitlist.h"
 #include "vision.h"
-#include "workertask.h"
 #include "worklist.h"
 
 enum production_class_type {
@@ -40,25 +39,16 @@ enum production_class_type {
 
 /* Various city options.  These are stored by the server and can be
  * toggled by the user.  Each one defaults to off.  Adding new ones
- * will break network compatibility. If you want to reorder or remove
- * an option remeber to load the city option order from the savegame.
- * It is stored in savefile.city_options_vector
- *
- * Used in the network protocol.
- */
-#define SPECENUM_NAME city_options
-/* If building a settler at size 1 disbands the city */
-#define SPECENUM_VALUE0 CITYO_DISBAND
-#define SPECENUM_VALUE0NAME "Disband"
-/* If new citizens are science specialists */
-#define SPECENUM_VALUE1 CITYO_NEW_EINSTEIN
-#define SPECENUM_VALUE1NAME "New_Einstein"
-/* If new citizens are gold specialists */
-#define SPECENUM_VALUE2 CITYO_NEW_TAXMAN
-#define SPECENUM_VALUE2NAME "New_Taxman"
-#define SPECENUM_COUNT CITYO_LAST
-#define SPECENUM_BITVECTOR bv_city_options
-#include "specenum_gen.h"
+ * will break network compatibility.  Reordering them will break savegame
+ * compatibility.  If you want to remove one you should replace it with
+ * a CITYO_UNUSED entry; new options can just be added at the end.*/
+enum city_options {
+  CITYO_DISBAND,      /* If building a settler at size 1 disbands the city */
+  CITYO_NEW_EINSTEIN, /* If new citizens are science specialists */
+  CITYO_NEW_TAXMAN,   /* If new citizens are gold specialists */
+  CITYO_LAST
+};
+BV_DEFINE(bv_city_options, CITYO_LAST);
 
 /* Changing the max radius requires updating network capabilities and results
  * in incompatible savefiles. */
@@ -84,6 +74,11 @@ enum production_class_type {
 #define INCITE_IMPOSSIBLE_COST (1000 * 1000 * 1000)
 
 /*
+ * Number of trade routes a city can have.
+ */
+#define NUM_TRADE_ROUTES        4
+
+/*
  * Size of the biggest possible city.
  *
  * The constant may be changed since it isn't externally visible.
@@ -98,8 +93,6 @@ struct iter_index {
   int dx, dy, dist;
 };
 
-/* City map coordinates are positive integers shifted by the maximum
- * radius the game engine allows (not the current ruleset) */
 #define CITY_REL2ABS(_coor) (_coor + CITY_MAP_MAX_RADIUS)
 #define CITY_ABS2REL(_coor) (_coor - CITY_MAP_MAX_RADIUS)
 
@@ -108,7 +101,6 @@ bool city_tile_index_to_xy(int *city_map_x, int *city_map_y,
 int city_tile_xy_to_index(int city_map_x, int city_map_y,
                           int city_radius_sq);
 
-int rs_max_city_radius_sq(void);
 int city_map_radius_sq_get(const struct city *pcity);
 void city_map_radius_sq_set(struct city *pcity, int radius_sq);
 int city_map_tiles(int city_radius_sq);
@@ -266,7 +258,6 @@ enum citizen_feeling {
   FEELING_BASE,		/* before any of the modifiers below */
   FEELING_LUXURY,	/* after luxury */
   FEELING_EFFECT,	/* after building effects */
-  FEELING_NATIONALITY,  /* after citizen nationality effects */
   FEELING_MARTIAL,	/* after units enforce martial order */
   FEELING_FINAL,	/* after wonders (final result) */
   FEELING_LAST
@@ -308,7 +299,6 @@ struct city {
   struct player *owner; /* Cannot be NULL. */
   struct player *original; /* Cannot be NULL. */
   int id;
-  int style;
 
   /* the people */
   citizens size;
@@ -323,7 +313,7 @@ struct city {
   citizens *nationality;      /* Nationality of the citizens. */
 
   /* trade routes */
-  struct trade_route_list *routes;
+  int trade[NUM_TRADE_ROUTES], trade_value[NUM_TRADE_ROUTES];
 
   /* Tile output, regardless of if the tile is actually worked. It is used
    * as cache for the output of the tiles within the city map.
@@ -384,10 +374,6 @@ struct city {
 
   struct unit_list *units_supported;
 
-  int history;                 /* Cumulative culture */
-
-  struct worker_task_list *task_reqs;
-
   union {
     struct {
       /* Only used in the server (./ai/ and ./server/). */
@@ -424,11 +410,9 @@ struct city {
     struct {
       /* Only used at the client (the server is omniscient; ./client/). */
       bool occupied;
-      int  walls;
+      bool walls;
       bool happy;
       bool unhappy;
-      int  city_image;
-      int  culture;
 
       /* The color is an index into the city_colors array in mapview_common */
       bool colored;
@@ -444,8 +428,6 @@ struct city {
 
       /* Updates needed for the city. */
       enum city_updates need_updates;
-
-      unsigned char first_citizen_index;
     } client;
   };
 };
@@ -454,10 +436,13 @@ struct citystyle {
   struct name_translation name;
   char graphic[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
+  char oceanic_graphic[MAX_LEN_NAME];
+  char oceanic_graphic_alt[MAX_LEN_NAME];
   char citizens_graphic[MAX_LEN_NAME];
   char citizens_graphic_alt[MAX_LEN_NAME];
   struct requirement_vector reqs;
-};
+  int replaced_by;              /* index to replacing style          */
+};                              /* not incl. wall and occupied tiles */
 
 extern struct citystyle *city_styles;
 extern const Output_type_id num_output_types;
@@ -530,7 +515,6 @@ void city_size_set(struct city *pcity, citizens size);
 citizens city_specialists(const struct city *pcity);
 
 citizens player_content_citizens(const struct player *pplayer);
-citizens player_angry_citizens(const struct player *pplayer);
 
 int city_population(const struct city *pcity);
 int city_total_impr_gold_upkeep(const struct city *pcity);
@@ -573,7 +557,7 @@ bool city_can_use_specialist(const struct city *pcity,
 bool city_has_building(const struct city *pcity,
 		       const struct impr_type *pimprove);
 bool is_capital(const struct city *pcity);
-bool is_gov_center(const struct city *pcity);
+bool city_got_citywalls(const struct city *pcity);
 bool city_got_defense_effect(const struct city *pcity,
                              const struct unit_type *attacker);
 
@@ -640,6 +624,16 @@ bool city_can_be_built_here(const struct tile *ptile,
 enum city_build_result city_build_here_test(const struct tile *ptile,
                                             const struct unit *punit);
 
+/* trade functions */
+bool can_cities_trade(const struct city *pc1, const struct city *pc2);
+bool can_establish_trade_route(const struct city *pc1, const struct city *pc2);
+bool have_cities_trade_route(const struct city *pc1, const struct city *pc2);
+int trade_between_cities(const struct city *pc1, const struct city *pc2);
+int city_num_trade_routes(const struct city *pcity);
+int get_caravan_enter_city_trade_bonus(const struct city *pc1, 
+                                       const struct city *pc2);
+int get_city_min_trade_route(const struct city *pcity, int *slot);
+
 /* list functions */
 struct city *city_list_find_number(struct city_list *This, int id);
 struct city *city_list_find_name(struct city_list *This, const char *name);
@@ -652,6 +646,10 @@ const char *city_style_name_translation(const int style);
 
 int city_style_by_rule_name(const char *s);
 int city_style_by_translated_name(const char *s);
+
+bool city_style_has_requirements(const struct citystyle *style);
+int city_style_of_player(const struct player *plr);
+int style_of_city(const struct city *pcity);
 
 struct city *is_enemy_city_tile(const struct tile *ptile,
 				const struct player *pplayer);
@@ -704,7 +702,6 @@ int city_pollution_types(const struct city *pcity, int shield_total,
 int city_pollution(const struct city *pcity, int shield_total);
 int city_illness_calc(const struct city *pcity, int *ill_base,
                       int *ill_size, int *ill_trade, int *ill_pollution);
-bool city_had_recent_plague(const struct city *pcity);
 int city_build_slots(const struct city *pcity);
 int city_airlift_max(const struct city *pcity);
 
@@ -744,6 +741,8 @@ bool is_free_worked(const struct city *pcity, const struct tile *ptile);
 #define is_free_worked_index(city_tile_index) \
   (CITY_MAP_CENTER_TILE_INDEX == city_tile_index)
 #define FREE_WORKED_TILES (1)
+
+enum citytile_type citytile_by_rule_name(const char *name);
 
 void *city_ai_data(const struct city *pcity, const struct ai_type *ai);
 void city_set_ai_data(struct city *pcity, const struct ai_type *ai,

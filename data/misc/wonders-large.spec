@@ -1,7 +1,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -49,9 +49,6 @@ artists = "
   b.manhattan_project
   b.oracle
   b.statue_of_liberty
-  b.statue_of_zeus
-  b.temple_of_artemis
-  b.mausoleum
 "
 
 [extra]
@@ -68,7 +65,6 @@ sprites =
 		"b.great_wall", "wonders/great_wall"
 		"b.hanging_gardens", "wonders/hanging_gardens"
 		"b.hoover_dam", "wonders/hoover_dam"
-                "b.internet", "wonders/internet"
 		"b.isaac_newtons_college", "wonders/isaac_newtons_college"
 		"b.js_bachs_cathedral", "wonders/js_bachs_cathedral"
 		"b.king_richards_crusade", "wonders/king_richards_crusade"
@@ -77,16 +73,13 @@ sprites =
 		"b.magellans_expedition", "wonders/magellans_expedition"
 		"b.manhattan_project", "wonders/manhattan_project"
 		"b.marco_polos_embassy", "wonders/marco_polos_embassy"
-                "b.mausoleum", "wonders/mausoleum_of_halicarnassus"
 		"b.michelangelos_chapel", "wonders/michelangelos_chapel"
 		"b.oracle", "wonders/oracle"
 		"b.pyramids", "wonders/pyramids"
 		"b.seti_program", "wonders/seti_program"
 		"b.shakespeares_theatre", "wonders/shakespeares_theatre"
 		"b.statue_of_liberty", "wonders/statue_of_liberty"
-                "b.statue_of_zeus", "wonders/statue_of_zeus"
 		"b.sun_tzus_war_academy", "wonders/sun_tzus_war_academy"
-                "b.temple_of_artemis", "wonders/temple_of_artemis"
 		"b.united_nations", "wonders/united_nations"
 		"b.womens_suffrage", "wonders/womens_suffrage"
 	}

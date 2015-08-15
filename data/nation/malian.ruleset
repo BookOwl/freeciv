@@ -22,7 +22,7 @@ ruler_titles = {
 
 flag="mali"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

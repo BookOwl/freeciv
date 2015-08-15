@@ -257,20 +257,20 @@ void fc_nonblock(int sockfd)
 /***************************************************************************
   Write information about socaddr to debug log.
 ***************************************************************************/
-void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
+void sockaddr_debug(union fc_sockaddr *addr)
 {
 #ifdef IPV6_SUPPORT
   char buf[INET6_ADDRSTRLEN] = "Unknown";
 
   if (addr->saddr.sa_family == AF_INET6) { 
     inet_ntop(AF_INET6, &addr->saddr_in6.sin6_addr, buf, INET6_ADDRSTRLEN);
-    log_base(lvl, "Host: %s, Port: %d (IPv6)",
-             buf, ntohs(addr->saddr_in6.sin6_port));
+    log_debug("Host: %s, Port: %d (IPv6)",
+              buf, ntohs(addr->saddr_in6.sin6_port));
     return;
   } else if (addr->saddr.sa_family == AF_INET) {
     inet_ntop(AF_INET, &addr->saddr_in4.sin_addr, buf, INET_ADDRSTRLEN);
-    log_base(lvl, "Host: %s, Port: %d (IPv4)",
-             buf, ntohs(addr->saddr_in4.sin_port));
+    log_debug("Host: %s, Port: %d (IPv4)",
+              buf, ntohs(addr->saddr_in4.sin_port));
     return;
   }
 #else  /* IPv6 support */
@@ -279,8 +279,8 @@ void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
 
     buf = inet_ntoa(addr->saddr_in4.sin_addr);
 
-    log_base(lvl, "Host: %s, Port: %d",
-             buf, ntohs(addr->saddr_in4.sin_port));
+    log_debug("Host: %s, Port: %d",
+	      buf, ntohs(addr->saddr_in4.sin_port));
 
     return;
   }
@@ -295,9 +295,6 @@ void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
 ***************************************************************************/
 int sockaddr_size(union fc_sockaddr *addr)
 {
-#ifdef WIN32_NATIVE
-  return sizeof(*addr);
-#else
 #ifdef IPV6_SUPPORT
   if (addr->saddr.sa_family == AF_INET6) {
     return sizeof(addr->saddr_in6);
@@ -308,11 +305,10 @@ int sockaddr_size(union fc_sockaddr *addr)
   } else {
     fc_assert(FALSE);
 
-    log_error("Unsupported address family in sockaddr_size()");
+    log_error("Unsupported address family in socaddr_size()");
 
     return 0;
   }
-#endif /* WIN32_NATIVE */
 }
 
 /***************************************************************************
@@ -353,11 +349,7 @@ static struct fc_sockaddr_list *net_lookup_getaddrinfo(const char *name,
       gafam = AF_INET6;
       break;
     case FC_ADDR_ANY:
-#ifndef IPV6_SUPPORT
-      gafam = AF_INET;
-#else
       gafam = AF_UNSPEC;
-#endif
       break;
     default:
       fc_assert(FALSE);
@@ -427,12 +419,19 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
     return addrs;
   }
 
-  if (fc_inet_aton(name, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+  if (inet_aton(name, &sock4->sin_addr) != 0) {
     fc_sockaddr_list_append(addrs, result);
 
     return addrs;
   }
+#else  /* HAVE_INET_ATON */
+  if ((sock4->sin_addr.s_addr = inet_addr(name)) != INADDR_NONE) {
+    fc_sockaddr_list_append(addrs, result);
 
+    return addrs;
+  }
+#endif /* HAVE_INET_ATON */
   hp = gethostbyname(name);
   if (!hp || hp->h_addrtype != AF_INET) {
     FC_FREE(result);
@@ -447,34 +446,6 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
 
 #endif /* !HAVE_GETADDRINFO */
 
-}
-
-/*************************************************************************
-  Convert internet IPv4 host address to binary form and store it to inp.
-  Return FALSE on failure if possible, i.e., FALSE is guarantee that it
-  failed but TRUE is not guarantee that it succeeded.
-*************************************************************************/
-bool fc_inet_aton(const char *cp, struct in_addr *inp, bool addr_none_ok)
-{
-#ifdef IPV6_SUPPORT
-  /* Use inet_pton() */
-  if (!inet_pton(AF_INET, cp, &inp->s_addr)) {
-    return FALSE;
-  }
-#else  /* IPv6 Support */
-#ifdef HAVE_INET_ATON
-  if (!inet_aton(cp, inp)) {
-    return FALSE;
-  }
-#else  /* HAVE_INET_ATON */
-  inp->s_addr = inet_addr(cp);
-  if (!addr_none_ok && inp->s_addr == INADDR_NONE) {
-    return FALSE;
-  }
-#endif /* HAVE_INET_ATON */
-#endif /* IPv6 Support */
-
-  return TRUE;
 }
 
 /*************************************************************************
@@ -536,6 +507,118 @@ fz_FILE *fc_querysocket(int sock, void *buf, size_t size)
 #endif /* HAVE_FDOPEN */
 
   return fz_from_stream(fp);
+}
+
+/*************************************************************************
+  Returns a valid httpd server and port, plus the path to the resource
+  at the url location.
+*************************************************************************/
+const char *fc_lookup_httpd(char *server, int *port, const char *url)
+{
+  const char *purl, *str, *ppath, *pport;
+  const char *str2;
+  int chars_between = 0;
+
+  if ((purl = getenv("http_proxy")) && purl[0] != '\0') {
+    if (strncmp(purl, "http://", strlen("http://")) != 0) {
+      return NULL;
+    }
+    str = purl;
+  } else {
+    purl = NULL;
+    if (strncmp(url, "http://", strlen("http://")) != 0) {
+      return NULL;
+    }
+    str = url;
+  }
+
+  str += strlen("http://");
+
+  if (*str == '[') {
+    /* Literal IPv6 address (RFC 2732) */
+    str++;
+    str2 = strchr(str, ']') + 1;
+    if (!str2) {
+      str2 = str + strlen(str);
+    }
+    chars_between = 1;
+  } else {
+    str2 = str;
+  }
+
+  pport = strchr(str2, ':');
+  ppath = strchr(str2, '/');
+
+  /* snarf server. */
+  server[0] = '\0';
+
+  if (pport) {
+    strncat(server, str, MIN(MAX_LEN_ADDR, pport-str-chars_between));
+  } else {
+    if (ppath) {
+      strncat(server, str, MIN(MAX_LEN_ADDR, ppath-str-chars_between));
+    } else {
+      strncat(server, str, MAX_LEN_ADDR);
+    }
+  }
+
+  /* snarf port. */
+  if (NULL == pport || !str_to_int(pport + 1, port)) {
+    *port = 80;
+  }
+
+  /* snarf path. */
+  if (!ppath) {
+    ppath = "/";
+  }
+
+  return (purl ? url : ppath);
+}
+
+/*************************************************************************
+  Returns TRUE if ch is an unreserved ASCII character.
+*************************************************************************/
+static bool is_url_safe(unsigned ch)
+{
+  const char *unreserved = "-_.!~*'|";
+
+  if ((ch>='a' && ch<='z') || (ch>='A' && ch<='Z') || (ch>='0' && ch<='9')) {
+    return TRUE;
+  } else {
+    return (strchr(unreserved, ch) != NULL);
+  }
+}
+
+/***************************************************************
+  URL-encode a string as per RFC 2396.
+  Should work for all ASCII based charsets: including UTF-8.
+***************************************************************/
+const char *fc_url_encode(const char *txt)
+{
+  static char buf[2048];
+  unsigned ch;
+  char *ptr;
+
+  /* in a worst case scenario every character needs "% HEX HEX" encoding. */
+  if (sizeof(buf) <= (3*strlen(txt))) {
+    return "";
+  }
+  
+  for (ptr = buf; *txt != '\0'; txt++) {
+    ch = (unsigned char) *txt;
+
+    if (is_url_safe(ch)) {
+      *ptr++ = *txt;
+    } else if (ch == ' ') {
+      *ptr++ = '+';
+    } else {
+      sprintf(ptr, "%%%2.2X", ch);
+      ptr += 3;
+    }
+  }
+  *ptr++ = '\0';
+
+  return buf;
 }
 
 /************************************************************************** 
@@ -624,7 +707,12 @@ int find_next_free_port(int starting_port, enum fc_addr_family family,
     sock4->sin_family = AF_INET;
     sock4->sin_port = htons(port);
     if (net_interface != NULL) {
-      if (!fc_inet_aton(net_interface, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+      if (inet_aton(net_interface, &sock4->sin_addr) == 0) {
+#else /* HAVE_INET_ATON */
+      sock4->sin_addr.s_addr = inet_addr(net_interface);
+      if (sock4->sin_addr.s_addr == INADDR_NONE) {
+#endif /* HAVE_INET_ATON */
         struct hostent *hp;
 
         hp = gethostbyname(net_interface);

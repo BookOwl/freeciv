@@ -1,10 +1,9 @@
 [nation_dutch]
 
-translation_domain="freeciv"
-
 name=_("Dutch")
 plural=_("?plural:Dutch")
 groups="Early Modern", "Modern", "European", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("When the Holy Roman Emperor sentenced the entire population to\
  death, the people of the Netherlands revolted and declared themselves\
  independent, forming the Union of Utrecht in 1579. The Netherlands grew\
@@ -43,7 +42,7 @@ ruler_titles = {
 
 flag="netherlands"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

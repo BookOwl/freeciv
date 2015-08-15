@@ -7,71 +7,19 @@
 ; command "rulesetdir <mysubdir>" in the server to have freeciv
 ; use your new customized file.
 
-; See classic/nations.ruleset and default/nationlist.ruleset for more
-; information.
+; See data/default/nations.ruleset for more information.
 
 [datafile]
 description="Civ1-equivalent nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-;nationlist = ""
-
-; List of nations to embed to main nations.ruleset despite separate nationlist
-; being used for other nations.
-;embedded_nations = ""
+options="+Freeciv-2.4-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
 ; have it explicitly defined
 default_government = "Despotism"
 
-[default_traits]
-;expansionist_min = 50
-;expansionist_max = 50
-;trader_min = 50
-;trader_max = 50
-;aggressive_min = 50
-;aggressive_max = 50
-
-; Descriptions of nation sets
-; These are self-contained subsets of the available nations; one of these
-; can be chosen in pregame with the "nationset" option. No nations
-; outside the selected subset will be used.
-; The first set defined is the one that is used by default. It is mandatory
-; to have at least one, but if there is only one, it will be kept out of
-; the user`s way.
-; name 		= Translatable name of the set presented in the UI.
-; rule_name     = Unique persistent name; this is also visible to users as
-;                 the value of the "nationset" server option, and presented
-;                 in "/list nationsets". It should thus be short, in lower
-;                 case, and not contain spaces or punctuation.
-;                 The same saved "nationset" setting may be used for multiple
-;                 rulesets, so if your custom ruleset has any set which
-;                 contains all of its nations, it is useful to give it a
-;                 rule_name of "all" so that users can specify that they
-;                 always want the choice of all available nations by
-;                 default.
-; description   = Optional short user description of this set.
-
-[nset_all]
-name=_("All nations")
-rule_name="all"
-
 ; Descriptions of nation groups
-; These are more cosmetic than sets; they affect the "pick nation" dialog,
-; random nation selection, and possibly ruleset behaviour.
-; It`s OK to not define any nation groups at all.
-; name 		= name of the group (used adjectivally)
-; hidden        = TRUE to not include this group in the "pick nation" dialog
-;                 (for instance if it`s for use in a NationGroup requirement).
-;                 Default FALSE.
+; name 		= name of the group
 ; match		= How much the AI will try to select a nation in the same
 ;                 group
 
@@ -81,14 +29,8 @@ match=0
 [ngroup_modern]
 name=_("?nationgroup:Modern")
 match=0
-[ngroup_barbarian]
-name=_("?nationgroup:Barbarian")
-match=0
-hidden=true
 
 [nation_american]
-
-translation_domain="freeciv"
 
 name=_("American")
 plural=_("?plural:Americans")
@@ -108,7 +50,7 @@ ruler_titles = {
 
 flag="usa"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -196,8 +138,6 @@ cities =
 
 [nation_aztec]
 
-translation_domain="freeciv"
-
 name=_("Aztec")
 plural=_("?plural:Aztecs")
 groups="Ancient"
@@ -221,19 +161,19 @@ ruler_titles = {
 
 flag="aztec"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
 init_units=""
 
 cities =
- "Mexihco Tenochtitlan (swamp, mountains)",
+ "Mexihco Tenochtitlan (swamp, mountains, lake)",
  "Tetzcoco (mountains)",
- "Tlacopan (mountains, hills)",
- "Tlatelulco (swamp)",
+ "Tlacopan (mountains, hills, lake)",
+ "Tlatelulco (swamp, lake)",
  "Azcapotzalco (hills)",
- "Iztapallapan (hills)",
+ "Iztapallapan (lake, hills)",
  "Cuauhnanahuac (mountains, hills, forest, !ocean)",
  "Tlachco (mountains)",
  "Tollocan (mountains, plains)",
@@ -295,8 +235,6 @@ cities =
 
 [nation_babylonian]
 
-translation_domain="freeciv"
-
 name=_("Babylonian")
 plural=_("?plural:Babylonians")
 groups="Ancient"
@@ -318,7 +256,7 @@ ruler_titles =
 
 flag="babylon"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -358,8 +296,6 @@ cities =
 
 [nation_chinese]
 
-translation_domain="freeciv"
-
 name=_("Chinese")
 plural=_("?plural:Chinese")
 groups="Modern"
@@ -385,7 +321,7 @@ ruler_titles = {
 
 flag="han"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -503,8 +439,6 @@ cities =
 
 [nation_egyptian]
 
-translation_domain="freeciv"
-
 name=_("Egyptian")
 plural=_("?plural:Egyptians")
 groups="Ancient"
@@ -525,7 +459,7 @@ ruler_titles = {
 
 flag="egypt_ancient"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -581,8 +515,6 @@ cities =
 
 [nation_english]
 
-translation_domain="freeciv"
-
 name=_("English")
 plural=_("?plural:English")
 groups="Modern"
@@ -602,7 +534,7 @@ ruler_titles = {
 
 flag="england"
 flag_alt="-"
-style = "European"
+city_style="European"
 
 init_techs=""
 init_buildings=""
@@ -690,8 +622,6 @@ cities =
 
 [nation_french]
 
-translation_domain="freeciv"
-
 name=_("French")
 plural=_("?plural:French")
 groups="Modern"
@@ -712,7 +642,7 @@ ruler_titles = {
 
 flag="france_old"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -811,8 +741,6 @@ cities =
 
 [nation_german]
 
-translation_domain="freeciv"
-
 name   = _("German")
 plural = _("?plural:Germans")
 groups  = "Modern"
@@ -835,7 +763,7 @@ ruler_titles = {
 
 flag         = "hre"
 flag_alt     = "-"
-style        = "European"
+city_style   = "European"
 
 init_techs = ""
 init_buildings=""
@@ -963,8 +891,6 @@ cities =
 
 [nation_greek]
 
-translation_domain="freeciv"
-
 name=_("Greek")
 plural=_("?plural:Greeks")
 groups="Modern"
@@ -983,7 +909,7 @@ ruler_titles = {
 
 flag="greece_ancient"
 flag_alt="-"
-style = "Classical"
+city_style="Classical"
 
 init_techs=""
 init_buildings=""
@@ -1111,8 +1037,6 @@ cities =
 
 [nation_indian]
 
-translation_domain="freeciv"
-
 name=_("Indian")
 plural=_("?plural:Indians")
 groups="Modern"
@@ -1133,7 +1057,7 @@ ruler_titles = {
 
 flag="india"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1204,8 +1128,6 @@ cities =
 
 [nation_mongol]
 
-translation_domain="freeciv"
-
 name=_("Mongol")
 plural=_("?plural:Mongols")
 groups="Modern"
@@ -1227,7 +1149,7 @@ ruler_titles = {
 
 flag="mongolia"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1267,8 +1189,6 @@ cities=
 
 [nation_roman]
 
-translation_domain="freeciv"
-
 name=_("Roman")
 plural=_("?plural:Romans")
 groups="Ancient"
@@ -1291,7 +1211,7 @@ ruler_titles = {
 
 flag="rome"
 flag_alt="-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""
@@ -1317,8 +1237,6 @@ cities =
   "Agentoracum", "Moguntiacum", "Arretium", "Thapsus", "Altinum", "Tarsus"
 
 [nation_russian]
-
-translation_domain="freeciv"
 
 name=_("Russian")
 plural=_("?plural:Russians")
@@ -1347,7 +1265,7 @@ ruler_titles = {
 
 flag="kiev"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1411,8 +1329,6 @@ cities =
 
 [nation_zulu]
 
-translation_domain="freeciv"
-
 name=_("Zulu")
 plural=_("?plural:Zulus")
 groups="Ancient"
@@ -1434,7 +1350,7 @@ ruler_titles = {
 
 flag="zulu"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
@@ -1479,11 +1395,8 @@ cities =
 
 [nation_barbarian]
 
-translation_domain="freeciv"
-
 name=_("Barbarian")
 plural=_("?plural:Barbarians")
-groups="Barbarian"
 legend=_("Since the dawn of civilization, barbarians have been a threat to\
  cultured peoples everywhere.")
 
@@ -1499,7 +1412,7 @@ leaders = {
 
 flag="barbarian"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1507,20 +1420,15 @@ init_units=""
 
 cities = "Barbaricum"
 
-is_playable = FALSE
-barbarian_type = "LandAndSea"
+is_playable = 0
+barbarian_type = "Land"
 
 ; nothing more needed for barbarians
 
-; Pirate nation exist for backward compatibility with old savegames, where it might be present, only.
-; Freeciv should always pick the one "LandAndSea" barbarian in new games.
 [nation_pirate]
-
-translation_domain="freeciv"
 
 name=_("Pirate")
 plural=_("?plural:Pirates")
-groups="Barbarian"
 legend=_("As long as honest men have sailed the seas, pirates have been a\
  scourge of them and of all coastal dwelling peoples.")
 
@@ -1537,7 +1445,7 @@ leaders = {
 
 flag="pirate"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1549,7 +1457,7 @@ cities =
  "Port Royal", 
  "Tortuga"
 
-is_playable = FALSE
+is_playable = 0
 barbarian_type = "Sea"
 
 ; nothing more needed for barbarians

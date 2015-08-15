@@ -26,8 +26,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-/* SDL */
-#include <SDL.h>
+#include "SDL.h"
 
 /* utility */
 #include "fcintl.h"
@@ -239,16 +238,16 @@ static int back_callback(struct widget *pWidget)
   }
 
   if (ODM_MAIN == option_dialog->mode) {
+    popdown_optiondlg();
+
     if (client.conn.established) {
       /* Back to game. */
-      popdown_optiondlg(FALSE);
       enable_options_button();
       widget_redraw(pOptions_Button);
       widget_mark_dirty(pOptions_Button);
       flush_dirty();
     } else {
       /* Back to main page. */
-      popdown_optiondlg(TRUE);
       set_client_page(PAGE_MAIN);
     }
     return -1;
@@ -367,7 +366,7 @@ static int save_game_callback(struct widget *pWidget)
 static int disconnect_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popdown_optiondlg(TRUE);
+    popdown_optiondlg();
     enable_options_button();
     disconnect_from_server();
   }
@@ -380,7 +379,7 @@ static int disconnect_callback(struct widget *pWidget)
 static int exit_callback(struct widget *pWidget)
 {
   if (Main.event.button.button == SDL_BUTTON_LEFT) {
-    popdown_optiondlg(TRUE);
+    popdown_optiondlg();
     force_exit_from_event_loop();
   }
   return 0;
@@ -1380,9 +1379,9 @@ void popup_optiondlg(void)
 }
 
 /**************************************************************************
-  Close option dialog.
+  ...
 **************************************************************************/
-void popdown_optiondlg(bool leave_game)
+void popdown_optiondlg(void)
 {
   if (NULL == option_dialog) {
     return;
@@ -1390,10 +1389,7 @@ void popdown_optiondlg(bool leave_game)
 
   option_dialog_destroy(option_dialog);
   option_dialog = NULL;
-
-  if (!leave_game) {
-    enable_main_widgets();
-  }
+  enable_main_widgets();
 
   if (restore_meswin_dialog) {
     meswin_dialog_popup(TRUE);
@@ -1442,10 +1438,6 @@ void option_gui_update(struct option *poption)
       && option_optset(poption) == option_dialog->optset.poptset
       && option_category(poption) == option_dialog->optset.category) {
     option_widget_update(poption);
-  }
-
-  if (!strcmp(option_name(poption), "nationset")) {
-    nationset_changed();
   }
 }
 

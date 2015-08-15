@@ -60,19 +60,4 @@ void fc_interface_init(void)
   fc_assert_exit(fc_funcs->gui_color_free);
 
   fc_funcs_defined = TRUE;
-
-  setup_real_activities_array();
-}
-
-/**************************************************************************
-  Free misc resources allocated for libfreeciv.
-**************************************************************************/
-void free_libfreeciv(void)
-{
-  diplrel_mess_close();
-  free_data_dir_names();
-  free_multicast_group();
-  free_user_home_dir();
-  free_fileinfo_data();
-  cmp_buffers_free();
 }

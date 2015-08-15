@@ -2,14 +2,13 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
 artists = "
     Tatu Rissanen <tatu.rissanen@hut.fi>
     Jeff Mallatt <jjm@codewell.com> (miscellaneous)
-    GriffonSpade
 "
 
 [file]
@@ -40,7 +39,6 @@ tiles = { "row", "column", "tag"
   2, 18, "unit.irrigate"
   2, 19, "unit.fortifying",
          "unit.fortress"
-  3, 15, "unit.convert"
   3, 16, "unit.airbase"
   3, 17, "unit.pillage"
   3, 18, "unit.fortified"
@@ -132,13 +130,13 @@ tiles = { "row", "column", "tag"
 ; These should probably be handled differently and have
 ; a different size...
 
-;  7, 12, "upkeep.gold"
-;  7, 13, "upkeep.gold2"
-;  7, 15, "upkeep.food"
-;  7, 16, "upkeep.food2"
-;  7, 17, "upkeep.unhappy"
-;  7, 18, "upkeep.unhappy2"
-;  7, 19, "upkeep.shield"
+  7, 12, "upkeep.gold"
+  7, 13, "upkeep.gold2"
+  7, 15, "upkeep.food"
+  7, 16, "upkeep.food2"
+  7, 17, "upkeep.unhappy"
+  7, 18, "upkeep.unhappy2"
+  7, 19, "upkeep.shield"
 
 ; Nuclear explosion: this could maybe now be handled as one 
 ; big graphic (?), but for now is done old way as 3 by 3:

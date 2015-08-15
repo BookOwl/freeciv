@@ -1,10 +1,9 @@
 [nation_japanese]
 
-translation_domain="freeciv"
-
 name=_("Japanese")
 plural=_("?plural:Japanese")
 groups="Medieval", "Early Modern", "Modern", "Asian", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("According to traditional Japanese mythology, Japan was founded\
  in the 7th century BCE by the ancestral Emperor Jimmu.")
 
@@ -26,7 +25,7 @@ ruler_titles = {
 
 flag="japan"
 flag_alt = "-"
-style = "Asian"
+city_style = "Asian"
 
 init_techs=""
 init_buildings=""

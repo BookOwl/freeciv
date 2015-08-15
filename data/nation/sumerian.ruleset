@@ -1,10 +1,9 @@
 [nation_sumerian]
 
-translation_domain="freeciv"
-
 name=_("Sumerian")
 plural=_("?plural:Sumerians")
 groups="Ancient", "Asian", "Core"
+; /* TRANS: Legend for nation in "core" set */
 legend=_("Sumer controlled southern Mesopotamia until the rise of\
  Babylonia. Tablets of Sumerian writing some 5500 years old have been\
  found, pre-dating every other writing in history.")
@@ -31,7 +30,7 @@ ruler_titles = {
 
 flag = "sumeria"
 flag_alt = "-"
-style = "Babylonian"
+city_style = "Babylonian"
 
 init_techs=""
 init_buildings=""

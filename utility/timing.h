@@ -32,7 +32,7 @@ extern "C" {
 /* Timing logging happens so often only in debug builds that it makes
    sense to have macro defined for it once here and to have all the
    checks against that single macro instead of two separate. */
-#if defined(LOG_TIMERS) && defined(FREECIV_DEBUG)
+#if defined(LOG_TIMERS) && defined(DEBUG)
 #define DEBUG_TIMERS
 #endif
 
@@ -53,7 +53,7 @@ enum timer_use {
  * Also note TIMER_DEBUG below.
  */
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #define TIMER_DEBUG TIMER_ACTIVE
 #else
 #define TIMER_DEBUG TIMER_IGNORE
@@ -61,28 +61,26 @@ enum timer_use {
 
 struct timer;		/* opaque type; see comments in timing.c */
 
-#define SPECLIST_TAG timer
-#define SPECLIST_TYPE struct timer
-#include "speclist.h"
-#define timer_list_iterate(ARG_list, NAME_item) \
-  TYPED_LIST_ITERATE(struct timer, (ARG_list), NAME_item)
-#define timer_list_iterate_end LIST_ITERATE_END
+struct timer *new_timer(enum timer_timetype type, enum timer_use use);
+struct timer *new_timer_start(enum timer_timetype type, enum timer_use use);
 
-
-struct timer *timer_new(enum timer_timetype type, enum timer_use use);
-struct timer *timer_renew(struct timer *t, enum timer_timetype type,
+struct timer *renew_timer(struct timer *t, enum timer_timetype type,
 			  enum timer_use use);
+struct timer *renew_timer_start(struct timer *t, enum timer_timetype type,
+				enum timer_use use);
 
-void timer_destroy(struct timer *t);
+void free_timer(struct timer *t);
 bool timer_in_use(struct timer *t);
 
-void timer_clear(struct timer *t);
-void timer_start(struct timer *t);
-void timer_stop(struct timer *t);
+void clear_timer(struct timer *t);
+void start_timer(struct timer *t);
+void stop_timer(struct timer *t);
+void clear_timer_start(struct timer *t);
 
-double timer_read_seconds(struct timer *t);
+double read_timer_seconds(struct timer *t);
 
-void timer_usleep_since_start(struct timer *t, long usec);
+void usleep_since_timer_start(struct timer *t, long usec);
+void usleep_since_timer_start_free(struct timer *t, long usec);
 
 #ifdef __cplusplus
 }

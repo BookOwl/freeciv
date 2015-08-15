@@ -15,14 +15,19 @@
 #include <fc_config.h>
 #endif
 
+/* utility */
+#include "fcintl.h"
+#include "log.h"
+#include "string_vector.h"
+
 /* common */
-#include "extras.h"
 #include "game.h"
-#include "map.h"
 #include "tile.h"
 #include "unit.h"
 
 #include "base.h"
+
+static struct base_type base_types[MAX_BASE_TYPES];
 
 /****************************************************************************
   Check if base provides effect
@@ -33,37 +38,21 @@ bool base_has_flag(const struct base_type *pbase, enum base_flag_id flag)
 }
 
 /****************************************************************************
-  Returns TRUE iff any cardinally adjacent tile contains a base with
-  the given flag (does not check ptile itself)
+  Is base native to unit class?
 ****************************************************************************/
-bool is_base_flag_card_near(const struct tile *ptile, enum base_flag_id flag)
+bool is_native_base_to_uclass(const struct base_type *pbase,
+                              const struct unit_class *pclass)
 {
-  cardinal_adjc_iterate(ptile, adjc_tile) {
-    base_type_iterate(pbase) {
-      if (base_has_flag(pbase, flag) && tile_has_base(adjc_tile, pbase)) {
-        return TRUE;
-      }
-    } base_type_iterate_end;
-  } cardinal_adjc_iterate_end;
-
-  return FALSE;
+  return BV_ISSET(pbase->native_to, uclass_index(pclass));
 }
 
 /****************************************************************************
-  Returns TRUE iff any adjacent tile contains a base with the given flag
-  (does not check ptile itself)
+  Is base native to unit type?
 ****************************************************************************/
-bool is_base_flag_near_tile(const struct tile *ptile, enum base_flag_id flag)
+bool is_native_base_to_utype(const struct base_type *pbase,
+                             const struct unit_type *punittype)
 {
-  adjc_iterate(ptile, adjc_tile) {
-    base_type_iterate(pbase) {
-      if (base_has_flag(pbase, flag) && tile_has_base(adjc_tile, pbase)) {
-        return TRUE;
-      }
-    } base_type_iterate_end;
-  } adjc_iterate_end;
-
-  return FALSE;
+  return is_native_base_to_uclass(pbase, utype_class(punittype));
 }
 
 /****************************************************************************
@@ -72,13 +61,11 @@ bool is_base_flag_near_tile(const struct tile *ptile, enum base_flag_id flag)
 bool is_native_tile_to_base(const struct base_type *pbase,
                             const struct tile *ptile)
 {
-  struct extra_type *pextra;
-
-  pextra = base_extra_get(pbase);
-
-  return are_reqs_active(NULL, NULL, NULL, NULL, ptile,
-                         NULL, NULL, NULL, NULL, NULL,
-                         &pextra->reqs, RPT_POSSIBLE);
+  /* FIXME: Bases cannot be built in a city currently?  It should be a
+   * a negative requirement in the ruleset. */
+  return (!tile_city(ptile)
+          && are_reqs_active(NULL, NULL, NULL, ptile,
+                             NULL, NULL, NULL, &pbase->reqs, RPT_POSSIBLE));
 }
 
 /****************************************************************************
@@ -89,8 +76,7 @@ bool base_has_flag_for_utype(const struct base_type *pbase,
                              enum base_flag_id flag,
                              const struct unit_type *punittype)
 {
-  return base_has_flag(pbase, flag)
-    && is_native_extra_to_utype(base_extra_get(pbase), punittype);
+  return base_has_flag(pbase, flag) && is_native_base_to_utype(pbase, punittype);
 }
 
 /**************************************************************************
@@ -99,13 +85,7 @@ bool base_has_flag_for_utype(const struct base_type *pbase,
 **************************************************************************/
 const char *base_name_translation(const struct base_type *pbase)
 {
-  struct extra_type *pextra = base_extra_get(pbase);
-
-  if (pextra == NULL) {
-    return NULL;
-  }
-
-  return extra_name_translation(pextra);
+  return name_translation(&pbase->name);
 }
 
 /**************************************************************************
@@ -114,13 +94,7 @@ const char *base_name_translation(const struct base_type *pbase)
 **************************************************************************/
 const char *base_rule_name(const struct base_type *pbase)
 {
-  struct extra_type *pextra = base_extra_get(pbase);
-
-  if (pextra == NULL) {
-    return NULL;
-  }
-
-  return extra_rule_name(pextra);
+  return rule_name(&pbase->name);
 }
 
 /**************************************************************************
@@ -129,13 +103,15 @@ const char *base_rule_name(const struct base_type *pbase)
 **************************************************************************/
 struct base_type *base_type_by_rule_name(const char *name)
 {
-  struct extra_type *pextra = extra_type_by_rule_name(name);
+  const char *qs = Qn_(name);
 
-  if (pextra == NULL || !is_extra_caused_by(pextra, EC_BASE)) {
-    return NULL;
-  }
+  base_type_iterate(pbase) {
+    if (!fc_strcasecmp(base_rule_name(pbase), qs)) {
+      return pbase;
+    }
+  } base_type_iterate_end;
 
-  return extra_base_get(pextra);
+  return NULL;
 }
 
 /**************************************************************************
@@ -144,27 +120,57 @@ struct base_type *base_type_by_rule_name(const char *name)
 **************************************************************************/
 struct base_type *base_type_by_translated_name(const char *name)
 {
-  struct extra_type *pextra = extra_type_by_translated_name(name);
+  base_type_iterate(pbase) {
+    if (0 == strcmp(base_name_translation(pbase), name)) {
+      return pbase;
+    }
+  } base_type_iterate_end;
 
-  if (pextra == NULL || !is_extra_caused_by(pextra, EC_BASE)) {
-    return NULL;
-  }
+  return NULL;
+}
 
-  return extra_base_get(pextra);
+/****************************************************************************
+  Is there base of the given type cardinally near tile?
+  (Does not check ptile itself.)
+****************************************************************************/
+bool is_base_card_near(const struct tile *ptile, const struct base_type *pbase)
+{
+  cardinal_adjc_iterate(ptile, adjc_tile) {
+    if (tile_has_base(adjc_tile, pbase)) {
+      return TRUE;
+    }
+  } cardinal_adjc_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Is there base of the given type near tile?
+  (Does not check ptile itself.)
+****************************************************************************/
+bool is_base_near_tile(const struct tile *ptile, const struct base_type *pbase)
+{
+  adjc_iterate(ptile, adjc_tile) {
+    if (tile_has_base(adjc_tile, pbase)) {
+      return TRUE;
+    }
+  } adjc_iterate_end;
+
+  return FALSE;
 }
 
 /**************************************************************************
   Can unit build base to given tile?
 **************************************************************************/
-bool base_can_be_built(const struct base_type *pbase,
-                       const struct tile *ptile)
+bool can_build_base(const struct unit *punit, const struct base_type *pbase,
+                    const struct tile *ptile)
 {
-  if (tile_terrain(ptile)->base_time == 0) {
-    /* Bases cannot be built on this terrain. */
+  if (tile_city(ptile)) {
+    /* Bases cannot be built inside cities */
     return FALSE;
   }
 
-  if (!(base_extra_get(pbase)->buildable)) {
+  if (!pbase->buildable) {
     /* Base type not buildable. */
     return FALSE;
   }
@@ -174,50 +180,9 @@ bool base_can_be_built(const struct base_type *pbase,
     return FALSE;
   }
 
-  if (tile_city(ptile) != NULL && pbase->border_sq >= 0) {
-    return FALSE;
-  }
-
-  return TRUE;
-}
-
-/****************************************************************************
-  Tells if player can build base to tile with suitable unit.
-****************************************************************************/
-bool player_can_build_base(const struct base_type *pbase,
-                           const struct player *pplayer,
-                           const struct tile *ptile)
-{
-  struct extra_type *pextra;
-
-  if (!base_can_be_built(pbase, ptile)) {
-    return FALSE;
-  }
-
-  pextra = base_extra_get(pbase);
-
-  return are_reqs_active(pplayer, tile_owner(ptile), NULL, NULL, ptile,
-                         NULL, NULL, NULL, NULL, NULL,
-                         &pextra->reqs, RPT_POSSIBLE);
-}
-
-/**************************************************************************
-  Can unit build base to given tile?
-**************************************************************************/
-bool can_build_base(const struct unit *punit, const struct base_type *pbase,
-                    const struct tile *ptile)
-{
-  struct extra_type *pextra;
-
-  if (!base_can_be_built(pbase, ptile)) {
-    return FALSE;
-  }
-
-  pextra = base_extra_get(pbase);
-
-  return are_reqs_active(unit_owner(punit), tile_owner(ptile), NULL, NULL,
-                         ptile, punit, unit_type(punit), NULL, NULL, NULL,
-                         &pextra->reqs, RPT_CERTAIN);
+  return are_reqs_active(unit_owner(punit), NULL, NULL, ptile,
+                         unit_type(punit), NULL, NULL, &pbase->reqs,
+                         RPT_CERTAIN);
 }
 
 /****************************************************************************
@@ -225,15 +190,10 @@ bool can_build_base(const struct unit *punit, const struct base_type *pbase,
 ****************************************************************************/
 struct base_type *base_by_number(const Base_type_id id)
 {
-  struct extra_type_list *bases;
-
-  bases = extra_type_list_by_cause(EC_BASE);
-
-  if (bases == NULL || id < 0 || id >= extra_type_list_size(bases)) {
+  if (id < 0 || id >= game.control.num_base_types) {
     return NULL;
   }
-
-  return extra_base_get(extra_type_list_get(bases, id));
+  return &base_types[id];
 }
 
 /**************************************************************************
@@ -254,18 +214,7 @@ Base_type_id base_number(const struct base_type *pbase)
 Base_type_id base_index(const struct base_type *pbase)
 {
   fc_assert_ret_val(NULL != pbase, -1);
-
-  /* FIXME: */
-  /*  return pbase - base_types; */
-  return base_number(pbase);
-}
-
-/**************************************************************************
-  Return extra that base is.
-**************************************************************************/
-struct extra_type *base_extra_get(const struct base_type *pbase)
-{
-  return pbase->self;
+  return pbase - base_types;
 }
 
 /**************************************************************************
@@ -276,19 +225,39 @@ Base_type_id base_count(void)
   return game.control.num_base_types;
 }
 
+/**************************************************************************
+  Return the last item of base_types.
+**************************************************************************/
+const struct base_type *base_array_last(void)
+{
+  if (game.control.num_base_types > 0) {
+    return &base_types[game.control.num_base_types - 1];
+  }
+  return NULL;
+}
+
+/**************************************************************************
+  Return the first item of base_types.
+**************************************************************************/
+struct base_type *base_array_first(void)
+{
+  if (game.control.num_base_types > 0) {
+    return base_types;
+  }
+  return NULL;
+}
+
 /****************************************************************************
   Initialize base_type structures.
 ****************************************************************************/
-void base_type_init(struct extra_type *pextra, int idx)
+void base_types_init(void)
 {
-  struct base_type *pbase;
+  int i;
 
-  pbase = fc_malloc(sizeof(*pbase));
-
-  pextra->data.base = pbase;
-
-  pbase->item_number = idx;
-  pbase->self = pextra;
+  for (i = 0; i < ARRAY_SIZE(base_types); i++) {
+    base_types[i].item_number = i;
+    requirement_vector_init(&base_types[i].reqs);
+  }
 }
 
 /****************************************************************************
@@ -296,6 +265,13 @@ void base_type_init(struct extra_type *pextra, int idx)
 ****************************************************************************/
 void base_types_free(void)
 {
+  base_type_iterate(pbase) {
+    requirement_vector_free(&pbase->reqs);
+    if (NULL != pbase->helptext) {
+      strvec_destroy(pbase->helptext);
+      pbase->helptext = NULL;
+    }
+  } base_type_iterate_end;
 }
 
 /**************************************************************************
@@ -313,6 +289,18 @@ struct base_type *get_base_by_gui_type(enum base_gui_type type,
   } base_type_iterate_end;
 
   return NULL;
+}
+
+/**************************************************************************
+  Can two bases coexist in same tile?
+**************************************************************************/
+bool can_bases_coexist(const struct base_type *base1, const struct base_type *base2)
+{
+  if (base1 == base2) {
+    return TRUE;
+  }
+
+  return !BV_ISSET(base1->conflicts, base_index(base2));
 }
 
 /**************************************************************************

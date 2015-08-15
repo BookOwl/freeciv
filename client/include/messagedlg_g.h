@@ -13,8 +13,6 @@
 #ifndef FC__MESSAGEDLG_G_H
 #define FC__MESSAGEDLG_G_H
 
-#include "gui_proto_constructor.h"
+void popup_messageopt_dialog(void);
 
-GUI_FUNC_PROTO(void, popup_messageopt_dialog, void)
-
-#endif  /* FC__MESSAGEDLG_G_H */
+#endif				/* FC__MESSAGEDLG_G_H */

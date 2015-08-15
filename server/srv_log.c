@@ -25,10 +25,8 @@
 #include "timing.h"
 
 /* common */
-#include "ai.h"
 #include "city.h"
 #include "game.h"
-#include "map.h"
 #include "unit.h"
 
 /* server */
@@ -44,6 +42,39 @@ static struct timer *aitimer[AIT_LAST][2];
 static int recursion[AIT_LAST];
 
 /* General AI logging functions */
+
+/**************************************************************************
+  Log player tech messages.
+**************************************************************************/
+void real_tech_log(const char *file, const char *function, int line,
+                   enum log_level level, bool notify,
+                   const struct player *pplayer, struct advance *padvance,
+                   const char *msg, ...)
+{
+  char buffer[500];
+  char buffer2[500];
+  va_list ap;
+
+  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
+    return;
+  }
+
+  fc_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ",
+              player_name(pplayer),
+              advance_name_by_player(pplayer, advance_number(padvance)),
+              pplayer->ai_common.tech_want[advance_index(padvance)],
+              num_unknown_techs_for_goal(pplayer, advance_number(padvance)));
+
+  va_start(ap, msg);
+  fc_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
+  va_end(ap);
+
+  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
+  if (notify) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  }
+  do_log(file, function, line, FALSE, level, "%s", buffer);
+}
 
 /**************************************************************************
   Log city messages, they will appear like this
@@ -125,27 +156,34 @@ void real_unit_log(const char *file, const char *function, int line,
   Measure the time between the calls.  Used to see where in the AI too
   much CPU is being used.
 **************************************************************************/
-void timing_log_real(enum ai_timer timer, enum ai_timer_activity activity)
+void TIMING_LOG(enum ai_timer timer, enum ai_timer_activity activity)
 {
   static int turn = -1;
+  int i;
+
+  if (turn == -1) {
+    for (i = 0; i < AIT_LAST; i++) {
+      aitimer[i][0] = new_timer(TIMER_CPU, TIMER_ACTIVE);
+      aitimer[i][1] = new_timer(TIMER_CPU, TIMER_ACTIVE);
+      recursion[i] = 0;
+    }
+  }
 
   if (game.info.turn != turn) {
-    int i;
-
     turn = game.info.turn;
     for (i = 0; i < AIT_LAST; i++) {
-      timer_clear(aitimer[i][0]);
+      clear_timer(aitimer[i][0]);
     }
     fc_assert(activity == TIMER_START);
   }
 
   if (activity == TIMER_START && recursion[timer] == 0) {
-    timer_start(aitimer[timer][0]);
-    timer_start(aitimer[timer][1]);
+    start_timer(aitimer[timer][0]);
+    start_timer(aitimer[timer][1]);
     recursion[timer]++;
   } else if (activity == TIMER_STOP && recursion[timer] == 1) {
-    timer_stop(aitimer[timer][0]);
-    timer_stop(aitimer[timer][1]);
+    stop_timer(aitimer[timer][0]);
+    stop_timer(aitimer[timer][1]);
     recursion[timer]--;
   }
 }
@@ -153,7 +191,7 @@ void timing_log_real(enum ai_timer timer, enum ai_timer_activity activity)
 /**************************************************************************
   Print results
 **************************************************************************/
-void timing_results_real(void)
+void TIMING_RESULTS(void)
 {
   char buf[200];
 
@@ -161,8 +199,8 @@ void timing_results_real(void)
 
 #define AILOG_OUT(text, which)                                              \
   fc_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text,     \
-              timer_read_seconds(aitimer[which][0]),                        \
-              timer_read_seconds(aitimer[which][1]));                       \
+              read_timer_seconds(aitimer[which][0]),                        \
+              read_timer_seconds(aitimer[which][1]));                       \
   log_test("%s", buf);                                                      \
   notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buf);
 
@@ -172,8 +210,8 @@ void timing_results_real(void)
 
 #define AILOG_OUT(text, which)                                          \
   fc_snprintf(buf, sizeof(buf), "  %s: %g sec turn, %g sec game", text, \
-              timer_read_seconds(aitimer[which][0]),                    \
-              timer_read_seconds(aitimer[which][1]));                   \
+              read_timer_seconds(aitimer[which][0]),                    \
+              read_timer_seconds(aitimer[which][1]));                   \
   notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buf);
 
 #endif /* LOG_TIMERS */
@@ -209,31 +247,4 @@ void timing_results_real(void)
   AILOG_OUT(" - Settler want", AIT_CITY_SETTLERS);
   AILOG_OUT("Citizen arrange", AIT_CITIZEN_ARRANGE);
   AILOG_OUT("Tech", AIT_TECH);
-}
-
-/**************************************************************************
-  Initialize AI timing system
-**************************************************************************/
-void timing_log_init(void)
-{
-  int i;
-
-  for (i = 0; i < AIT_LAST; i++) {
-    aitimer[i][0] = timer_new(TIMER_CPU, TIMER_ACTIVE);
-    aitimer[i][1] = timer_new(TIMER_CPU, TIMER_ACTIVE);
-    recursion[i] = 0;
-  }
-}
-
-/**************************************************************************
-  Free AI timing system resources
-**************************************************************************/
-void timing_log_free(void)
-{
-  int i;
-
-  for (i = 0; i < AIT_LAST; i++) {
-    timer_destroy(aitimer[i][0]);
-    timer_destroy(aitimer[i][1]);
-  }
 }

@@ -1,4 +1,3 @@
-
 ; Modifying this file:
 ; You should not modify this file except to make bugfixes or
 ; for other "maintenance".  If you want to make custom changes
@@ -7,38 +6,5 @@
 ; command "rulesetdir <mysubdir>" in the server to have freeciv
 ; use your new customized file.
 
-[datafile]
-description="Experimental nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-nationlist = "default/nationlist.ruleset"
-
-; List of nations to embed to main nations.ruleset despite separate nationlist
-; being used for other nations.
-embedded_nations = "barbarian", "pirate"
-
-[compatibility]
-; Initial government for all the nations that do not
-; have it explicitly defined
-default_government = "Despotism"
-
-[default_traits]
-expansionist_min = 35
-expansionist_max = 80
-trader_min = 35
-trader_max = 80
-aggressive_min = 35
-aggressive_max = 80
-
-; Please keep [ruledit] section in sync with these includes
-*include "default/nationlist.ruleset"
-; This ruleset uses model of two separate barbarian nations
-*include "nation/barbarian.ruleset"
-*include "nation/pirate.ruleset"
+; Use default nations.ruleset.
+*include "default/nations.ruleset"

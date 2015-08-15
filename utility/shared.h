@@ -25,6 +25,12 @@ extern "C" {
 #include "log.h"
 #include "support.h" /* bool, fc__attribute */
 
+#ifdef HAVE_CONFIG_H
+#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
+#error Files including fcintl.h should also include fc_config.h directly
+#endif
+#endif
+
 /* Changing these will break network compatability! */
 #define MAX_LEN_ADDR     256	/* see also MAXHOSTNAMELEN and RFC 1123 2.1 */
 #define MAX_LEN_PATH    4095
@@ -117,8 +123,6 @@ int compare_strings_strvec(const char *const *first,
                            const char *const *second);
 
 char *skip_leading_spaces(char *s);
-void remove_leading_spaces(char *s);
-void remove_trailing_spaces(char *s);
 void remove_leading_trailing_spaces(char *s);
 
 bool check_strlen(const char *str, size_t len, const char *errmsg);
@@ -149,20 +153,16 @@ struct fileinfo {
 #define fileinfo_list_iterate_end LIST_ITERATE_END
 
 char *user_home_dir(void);
-void free_user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
-
+  
 const struct strvec *get_data_dirs(void);
 const struct strvec *get_save_dirs(void);
 const struct strvec *get_scenario_dirs(void);
-
-void free_data_dir_names(void);
 
 struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix);
 struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
                                          const char *infix, bool nodups);
 const char *fileinfoname(const struct strvec *dirs, const char *filename);
-void free_fileinfo_data(void);
 
 char *get_langname(void);
 void init_nls(void);
@@ -211,7 +211,6 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
                                     int *pnum_matches);
 
 char *get_multicast_group(bool ipv6_prefered);
-void free_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
 char *interpret_tilde_alloc(const char* filename);
 char *skip_to_basename(char *filepath);

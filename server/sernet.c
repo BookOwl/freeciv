@@ -21,7 +21,7 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
@@ -77,10 +77,10 @@
 #include "packets.h"
 
 /* server */
-#include "aiiface.h"
 #include "auth.h"
 #include "connecthand.h"
 #include "console.h"
+#include "ggzserver.h"
 #include "meta.h"
 #include "plrhand.h"
 #include "srv_main.h"
@@ -117,6 +117,13 @@ static int socklan;
    static char got_input = 0;
    void user_interrupt_callback();
 #endif
+
+#define SPECLIST_TAG timer
+#define SPECLIST_TYPE struct timer
+#include "speclist.h"
+#define timer_list_iterate(ARG_list, NAME_item) \
+  TYPED_LIST_ITERATE(struct timer, (ARG_list), NAME_item)
+#define timer_list_iterate_end LIST_ITERATE_END
 
 #define PROCESSING_TIME_STATISTICS 0
 
@@ -155,7 +162,7 @@ static void handle_stdin_close(void)
 #ifdef HAVE_LIBREADLINE
 /****************************************************************************/
 
-#define HISTORY_FILENAME  "freeciv-server_history"
+#define HISTORY_FILENAME  ".freeciv-server_history"
 #define HISTORY_LENGTH    100
 
 static char *history_file = NULL;
@@ -184,7 +191,7 @@ static void handle_readline_input_callback(char *line)
 
   con_prompt_enter();		/* just got an 'Enter' hit */
   line_internal = local_to_internal_string_malloc(line);
-  (void) handle_stdin_input(NULL, line_internal);
+  (void) handle_stdin_input(NULL, line_internal, FALSE);
   free(line_internal);
   free(line);
 
@@ -203,6 +210,9 @@ static void close_connection(struct connection *pconn)
   }
 
   if (pconn->server.ping_timers != NULL) {
+    timer_list_iterate(pconn->server.ping_timers, timer) {
+      free_timer(timer);
+    } timer_list_iterate_end;
     timer_list_destroy(pconn->server.ping_timers);
     pconn->server.ping_timers = NULL;
   }
@@ -211,7 +221,6 @@ static void close_connection(struct connection *pconn)
   pconn->server.ignore_list = NULL;
 
   /* safe to do these even if not in lists: */
-  conn_list_remove(game.glob_observers, pconn);
   conn_list_remove(game.all_connections, pconn);
   conn_list_remove(game.est_connections, pconn);
 
@@ -229,18 +238,16 @@ static void close_connection(struct connection *pconn)
 void close_connections_and_socket(void)
 {
   int i;
-
   lsend_packet_server_shutdown(game.all_connections);
 
-  for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
-    if (connections[i].used) {
+  for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
+    if(connections[i].used) {
       close_connection(&connections[i]);
     }
     conn_list_destroy(connections[i].self);
   }
 
   /* Remove the game connection lists and make sure they are empty. */
-  conn_list_destroy(game.glob_observers);
   conn_list_destroy(game.all_connections);
   conn_list_destroy(game.est_connections);
 
@@ -257,9 +264,6 @@ void close_connections_and_socket(void)
   if (history_file) {
     write_history(history_file);
     history_truncate_file(history_file, HISTORY_LENGTH);
-    free(history_file);
-    history_file = NULL;
-    clear_history();
   }
 #endif
 
@@ -288,7 +292,6 @@ static void really_close_connections(void)
         closing[num++] = pconn;
         /* Remove closing connections from the lists (hard detach)
          * to avoid sending to closing connections. */
-        conn_list_remove(game.glob_observers, pconn);
         conn_list_remove(game.est_connections, pconn);
         conn_list_remove(game.all_connections, pconn);
         if (NULL != conn_get_player(pconn)) {
@@ -327,7 +330,7 @@ static void cut_lagging_connection(struct connection *pconn)
       && pconn->last_write
       && conn_list_size(game.all_connections) > 1
       && pconn->access_level != ALLOW_HACK
-      && timer_read_seconds(pconn->last_write) > game.server.tcptimeout) {
+      && read_timer_seconds(pconn->last_write) > game.server.tcptimeout) {
     /* Cut the connections to players who lag too much.  This
      * usually happens because client animation slows the client
      * too much and it can't keep up with the server.  We don't
@@ -417,9 +420,11 @@ struct packet_to_handle {
 static bool get_packet(struct connection *pconn, 
                        struct packet_to_handle *ppacket)
 {
-  ppacket->data = get_packet_from_connection(pconn, &ppacket->type);
+  bool got_packet;
 
-  return NULL != ppacket->data;
+  ppacket->data = get_packet_from_connection(pconn, &ppacket->type, 
+                                             &got_packet);
+  return got_packet;
 }
 
 /*****************************************************************************
@@ -440,8 +445,7 @@ static void incoming_client_packets(struct connection *pconn)
 #if PROCESSING_TIME_STATISTICS
     int request_id;
 
-    request_time = timer_renew(request_time, TIMER_USER, TIMER_ACTIVE);
-    timer_start(request_time);
+    request_time = renew_timer_start(request_time, TIMER_USER, TIMER_ACTIVE);
 #endif /* PROCESSING_TIME_STATISTICS */
 
     pconn->server.last_request_id_seen
@@ -462,7 +466,7 @@ static void incoming_client_packets(struct connection *pconn)
 
 #if PROCESSING_TIME_STATISTICS
     log_verbose("processed request %d in %gms", request_id, 
-                timer_read_seconds(request_time) * 1000.0);
+                read_timer_seconds(request_time) * 1000.0);
 #endif /* PROCESSING_TIME_STATISTICS */
 
     if (!command_ok) {
@@ -471,7 +475,7 @@ static void incoming_client_packets(struct connection *pconn)
   }
 
 #if PROCESSING_TIME_STATISTICS
-  timer_destroy(request_time);
+  free_timer(request_time);
 #endif /* PROCESSING_TIME_STATISTICS */
 }
 
@@ -504,25 +508,15 @@ enum server_events server_sniff_all_input(void)
       char *home_dir = user_home_dir();
 
       if (home_dir) {
-        int fcdl = strlen(home_dir) + 1 + strlen(".freeciv") + 1;
-        char *fc_dir = fc_malloc(fcdl);
-
-        if (fc_dir != NULL) {
-          fc_snprintf(fc_dir, fcdl, "%s/.freeciv", home_dir);
-
-          if (make_dir(fc_dir)) {
-            history_file
-              = fc_malloc(strlen(fc_dir) + 1 + strlen(HISTORY_FILENAME) + 1);
-            if (history_file) {
-              strcpy(history_file, fc_dir);
-              strcat(history_file, "/");
-              strcat(history_file, HISTORY_FILENAME);
-              using_history();
-              read_history(history_file);
-            }
-          }
-          FC_FREE(fc_dir);
-        }
+	history_file
+	  = fc_malloc(strlen(home_dir) + 1 + strlen(HISTORY_FILENAME) + 1);
+	if (history_file) {
+	  strcpy(history_file, home_dir);
+	  strcat(history_file, "/");
+	  strcat(history_file, HISTORY_FILENAME);
+	  using_history();
+	  read_history(history_file);
+	}
       }
 
       rl_initialize();
@@ -538,7 +532,7 @@ enum server_events server_sniff_all_input(void)
 
   while (TRUE) {
     con_prompt_on();		/* accepting new input */
-
+    
     if (force_end_of_sniff) {
       force_end_of_sniff = FALSE;
       con_prompt_off();
@@ -610,8 +604,7 @@ enum server_events server_sniff_all_input(void)
       conn_list_iterate(game.all_connections, pconn) {
         if ((!pconn->server.is_closing
              && 0 < timer_list_size(pconn->server.ping_timers)
-	     && timer_read_seconds(timer_list_front
-                                   (pconn->server.ping_timers))
+	     && read_timer_seconds(timer_list_get(pconn->server.ping_timers, 0))
 	        > game.server.pingtimeout) 
             || pconn->ping_time > game.server.pingtimeout) {
           /* cut mute players, except for hack-level ones */
@@ -623,10 +616,7 @@ enum server_events server_sniff_all_input(void)
                         conn_description(pconn));
             connection_close_server(pconn, _("ping timeout"));
           }
-        } else if (pconn->established) {
-          /* We don't send ping to connection not established, because
-           * we wouldn't be able to handle asynchronous ping/pong with
-           * different packet header size. */
+        } else {
           connection_ping(pconn);
         }
       } conn_list_iterate_end;
@@ -644,7 +634,6 @@ enum server_events server_sniff_all_input(void)
 
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (S_S_RUNNING == server_state() && game.info.timeout == -1) {
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
       return S_E_END_OF_TURN_TIMEOUT;
     }
@@ -673,6 +662,15 @@ enum server_events server_sniff_all_input(void)
       max_desc = MAX(max_desc, listen_socks[i]);
     }
 
+    if (with_ggz) {
+#ifdef GGZ_SERVER
+      int ggz_sock = get_ggz_socket();
+
+      FD_SET(ggz_sock, &readfs);
+      max_desc = MAX(max_desc, ggz_sock);
+#endif /* GGZ_SERVER */
+    }
+
     for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
       struct connection *pconn = connections + i;
       if (pconn->used && !pconn->server.is_closing) {
@@ -688,24 +686,14 @@ enum server_events server_sniff_all_input(void)
 
     if (fc_select(max_desc + 1, &readfs, &writefs, &exceptfs, &tv) == 0) {
       /* timeout */
-      call_ai_refresh();
       (void) send_server_info_to_metaserver(META_REFRESH);
-      if (current_turn_timeout() > 0
+      if (game.info.timeout > 0
 	  && S_S_RUNNING == server_state()
 	  && game.server.phase_timer
-	  && (timer_read_seconds(game.server.phase_timer)
-	      > game.tinfo.seconds_to_phasedone)) {
+	  && (read_timer_seconds(game.server.phase_timer)
+	      > game.info.seconds_to_phasedone)) {
 	con_prompt_off();
 	return S_E_END_OF_TURN_TIMEOUT;
-      }
-      if ((game.server.autosaves & (1 << AS_TIMER))
-          && S_S_RUNNING == server_state()
-          && (timer_read_seconds(game.server.save_timer)
-              >= game.server.save_frequency * 60)) {
-        save_game_auto("Timer", AS_TIMER);
-        game.server.save_timer = timer_renew(game.server.save_timer,
-                                             TIMER_USER, TIMER_ACTIVE);
-        timer_start(game.server.save_timer);
       }
 
       if (!no_input) {
@@ -740,26 +728,28 @@ enum server_events server_sniff_all_input(void)
       }
     }
 
-    excepting = FALSE;
-    for (i = 0; i < listen_count; i++) {
-      if (FD_ISSET(listen_socks[i], &exceptfs)) {
-        excepting = TRUE;
-        break;
+    if (!with_ggz) { /* No listening socket when using GGZ. */
+      excepting = FALSE;
+      for (i = 0; i < listen_count; i++) {
+        if (FD_ISSET(listen_socks[i], &exceptfs)) {
+          excepting = TRUE;
+          break;
+        }
       }
-    }
-    if (excepting) {                  /* handle Ctrl-Z suspend/resume */
-      continue;
-    }
-    for (i = 0; i < listen_count; i++) {
-      s = listen_socks[i];
-      if (FD_ISSET(s, &readfs)) {     /* new players connects */
-        log_verbose("got new connection");
-        if (-1 == server_accept_connection(s)) {
-          /* There will be a log_error() message from
-           * server_accept_connection() if something
-           * goes wrong, so no need to make another
-           * error-level message here. */
-          log_verbose("failed accepting connection");
+      if (excepting) {                  /* handle Ctrl-Z suspend/resume */
+	continue;
+      }
+      for (i = 0; i < listen_count; i++) {
+        s = listen_socks[i];
+        if (FD_ISSET(s, &readfs)) {     /* new players connects */
+          log_verbose("got new connection");
+          if (-1 == server_accept_connection(s)) {
+            /* There will be a log_error() message from
+             * server_accept_connection() if something
+             * goes wrong, so no need to make another
+             * error-level message here. */
+            log_verbose("failed accepting connection");
+          }
         }
       }
     }
@@ -775,21 +765,33 @@ enum server_events server_sniff_all_input(void)
         connection_close_server(pconn, _("network exception"));
       }
     }
+#ifdef GGZ_SERVER
+    if (with_ggz) {
+      /* This is intentionally after all the player socket handling because
+       * it may cut a client. */
+      int ggz_sock = get_ggz_socket();
+
+      if (FD_ISSET(ggz_sock, &readfs)) {
+	input_from_ggz(ggz_sock);
+      }
+    }
+#endif /* GGZ_SERVER */
+    
 #ifdef SOCKET_ZERO_ISNT_STDIN
     if (!no_input && (bufptr = fc_read_console())) {
       char *bufptr_internal = local_to_internal_string_malloc(bufptr);
 
       con_prompt_enter();	/* will need a new prompt, regardless */
-      handle_stdin_input(NULL, bufptr_internal);
+      handle_stdin_input(NULL, bufptr_internal, FALSE);
       free(bufptr_internal);
     }
 #else  /* !SOCKET_ZERO_ISNT_STDIN */
-    if (!no_input && FD_ISSET(0, &readfs)) {    /* input from server operator */
+    if(!no_input && FD_ISSET(0, &readfs)) {    /* input from server operator */
 #ifdef HAVE_LIBREADLINE
       rl_callback_read_char();
       if (readline_handled_input) {
-        readline_handled_input = FALSE;
-        con_prompt_enter_clear();
+	readline_handled_input = FALSE;
+	con_prompt_enter_clear();
       }
       continue;
 #else  /* !HAVE_LIBREADLINE */
@@ -825,16 +827,16 @@ enum server_events server_sniff_all_input(void)
 
       if (didget >= 0) {
         buf_internal = local_to_internal_string_malloc(buffer);
-        handle_stdin_input(NULL, buf_internal);
+        handle_stdin_input(NULL, buf_internal, FALSE);
         free(buf_internal);
       }
       free(buffer);
 #endif /* !HAVE_LIBREADLINE */
     } else
 #endif /* !SOCKET_ZERO_ISNT_STDIN */
-
+     
     {                             /* input from a player */
-      for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
+      for(i = 0; i < MAX_NUM_CONNECTIONS; i++) {
         struct connection *pconn = connections + i;
         int nb;
 
@@ -842,7 +844,7 @@ enum server_events server_sniff_all_input(void)
             || pconn->server.is_closing
             || !FD_ISSET(pconn->sock, &readfs)) {
           continue;
-        }
+	}
 
         nb = read_socket_data(pconn->sock, pconn->buffer);
         if (0 <= nb) {
@@ -862,39 +864,27 @@ enum server_events server_sniff_all_input(void)
         if (pconn->used
             && !pconn->server.is_closing
             && pconn->send_buffer
-            && pconn->send_buffer->ndata > 0) {
-          if (FD_ISSET(pconn->sock, &writefs)) {
-            flush_connection_send_buffer_all(pconn);
-          } else {
-            cut_lagging_connection(pconn);
-          }
+	    && pconn->send_buffer->ndata > 0) {
+	  if (FD_ISSET(pconn->sock, &writefs)) {
+	    flush_connection_send_buffer_all(pconn);
+	  } else {
+	    cut_lagging_connection(pconn);
+	  }
         }
       }
-      really_close_connections();
-      break;
     }
+    really_close_connections();
+    break;
   }
   con_prompt_off();
 
-  call_ai_refresh();
-
-  if (current_turn_timeout() > 0
+  if (game.info.timeout > 0
       && S_S_RUNNING == server_state()
       && game.server.phase_timer
-      && (timer_read_seconds(game.server.phase_timer)
-          > game.tinfo.seconds_to_phasedone)) {
+      && (read_timer_seconds(game.server.phase_timer)
+          > game.info.seconds_to_phasedone)) {
     return S_E_END_OF_TURN_TIMEOUT;
   }
-  if ((game.server.autosaves & (1 << AS_TIMER))
-      && S_S_RUNNING == server_state()
-      && (timer_read_seconds(game.server.save_timer)
-          >= game.server.save_frequency * 60)) {
-    save_game_auto("Timer", AS_TIMER);
-    game.server.save_timer = timer_renew(game.server.save_timer,
-                                         TIMER_USER, TIMER_ACTIVE);
-    timer_start(game.server.save_timer);
-  }
-
   return S_E_OTHERWISE;
 }
 
@@ -1017,7 +1007,6 @@ static int server_accept_connection(int sockfd)
 ********************************************************************/
 int server_make_connection(int new_sock, const char *client_addr, const char *client_ip)
 {
-  struct timer *timer;
   int i;
 
   fc_nonblock(new_sock);
@@ -1037,7 +1026,7 @@ int server_make_connection(int new_sock, const char *client_addr, const char *cl
       pconn->server.auth_tries = 0;
       pconn->server.auth_settime = 0;
       pconn->server.status = AS_NOT_ESTABLISHED;
-      pconn->server.ping_timers = timer_list_new_full(timer_destroy);
+      pconn->server.ping_timers = timer_list_new();
       pconn->server.granted_access_level = pconn->access_level;
       pconn->server.ignore_list =
           conn_pattern_list_new_full(conn_pattern_destroy);
@@ -1054,12 +1043,7 @@ int server_make_connection(int new_sock, const char *client_addr, const char *cl
 
       log_verbose("connection (%s) from %s (%s)", 
                   pconn->username, pconn->addr, pconn->server.ipaddr);
-      /* Give a ping timeout to send the PACKET_SERVER_JOIN_REQ, or close
-       * the mute connection. This timer will be canceled into
-       * connecthand.c:handle_login_request(). */
-      timer = timer_new(TIMER_USER, TIMER_ACTIVE);
-      timer_start(timer);
-      timer_list_append(pconn->server.ping_timers, timer);
+      connection_ping(pconn);
       return 0;
     }
   }
@@ -1093,8 +1077,11 @@ int server_open_socket(void)
               srvarg.bind_addr ? srvarg.bind_addr : "(any)",
               srvarg.port);
 
-  /* Any supported family will do */
+#ifdef IPV6_SUPPORT
   list = net_lookup_service(srvarg.bind_addr, srvarg.port, FC_ADDR_ANY);
+#else  /* IPV6_SUPPORT */
+  list = net_lookup_service(srvarg.bind_addr, srvarg.port, FC_ADDR_IPV4);
+#endif /* IPV6_SUPPORT */
 
   name_count = fc_sockaddr_list_size(list);
 
@@ -1123,15 +1110,12 @@ int server_open_socket(void)
       continue;
     }
 
-#ifndef HAVE_WINSOCK
-    /* SO_REUSEADDR considered harmful on Win, necessary otherwise */
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, 
                    (char *)&on, sizeof(on)) == -1) {
       log_error("setsockopt SO_REUSEADDR failed: %s",
                 fc_strerror(fc_get_errno()));
-      sockaddr_debug(paddr, LOG_NORMAL);
+      sockaddr_debug(paddr);
     }
-#endif /* HAVE_WINSOCK */
 
     /* AF_INET6 sockets should use IPv6 only,
      * without stealing IPv4 from AF_INET sockets. */
@@ -1142,7 +1126,7 @@ int server_open_socket(void)
                      (char *)&on, sizeof(on)) == -1) {
         log_error("setsockopt IPV6_V6ONLY failed: %s",
                   fc_strerror(fc_get_errno()));
-        sockaddr_debug(paddr, LOG_DEBUG);
+        sockaddr_debug(paddr);
       }
 #endif /* IPV6_V6ONLY */
     }
@@ -1186,7 +1170,7 @@ int server_open_socket(void)
   if (listen_count == 0) {
     log_fatal("%s failed: %s", cause, fc_strerror(eno));
     fc_sockaddr_list_iterate(list, paddr) {
-      sockaddr_debug(paddr, LOG_DEBUG);
+      sockaddr_debug(paddr);
     } fc_sockaddr_list_iterate_end;
     exit(EXIT_FAILURE);
   }
@@ -1249,7 +1233,14 @@ int server_open_socket(void)
     log_error("Lan bind failed: %s", fc_strerror(fc_get_errno()));
   }
 
-#ifdef IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
+  if (addr.saddr.sa_family == AF_INET) {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &mreq4.imr_multiaddr);
+#else  /* HEVE_INET_ATON */
+    mreq4.imr_multiaddr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (addr.saddr.sa_family == AF_INET6) {
     inet_pton(AF_INET6, group, &mreq6.ipv6mr_multiaddr.s6_addr);
     mreq6.ipv6mr_interface = 0; /* TODO: Interface selection */
@@ -1258,10 +1249,9 @@ int server_open_socket(void)
       log_error("FC_IPV6_ADD_MEMBERSHIP (%s) failed: %s",
                 group, fc_strerror(fc_get_errno()));
     }
-  } else
-#endif /* IPV6 Support */
-  if (addr.saddr.sa_family == AF_INET) {
-    fc_inet_aton(group, &mreq4.imr_multiaddr, FALSE);
+  } else if (addr.saddr.sa_family == AF_INET) {
+    inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
+#endif /* IPv6 support */
     mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
 
     if (setsockopt(socklan, IPPROTO_IP, IP_ADD_MEMBERSHIP,
@@ -1289,7 +1279,6 @@ void init_connections(void)
 
   game.all_connections = conn_list_new();
   game.est_connections = conn_list_new();
-  game.glob_observers = conn_list_new();
 
   for(i=0; i<MAX_NUM_CONNECTIONS; i++) { 
     struct connection *pconn = &connections[i];
@@ -1343,12 +1332,10 @@ static void finish_processing_request(struct connection *pconn)
 ****************************************************************************/
 static void connection_ping(struct connection *pconn)
 {
-  struct timer *timer = timer_new(TIMER_USER, TIMER_ACTIVE);
-
   log_debug("sending ping to %s (open=%d)", conn_description(pconn),
             timer_list_size(pconn->server.ping_timers));
-  timer_start(timer);
-  timer_list_append(pconn->server.ping_timers, timer);
+  timer_list_append(pconn->server.ping_timers,
+                    new_timer_start(TIMER_USER, TIMER_ACTIVE));
   send_packet_conn_ping(pconn);
 }
 
@@ -1364,9 +1351,10 @@ void handle_conn_pong(struct connection *pconn)
     return;
   }
 
-  timer = timer_list_front(pconn->server.ping_timers);
-  pconn->ping_time = timer_read_seconds(timer);
-  timer_list_pop_front(pconn->server.ping_timers);
+  timer = timer_list_get(pconn->server.ping_timers, 0);
+  timer_list_remove(pconn->server.ping_timers, timer);
+  pconn->ping_time = read_timer_seconds(timer);
+  free_timer(timer);
   log_debug("got pong from %s (open=%d); ping time = %fs",
             conn_description(pconn),
             timer_list_size(pconn->server.ping_timers), pconn->ping_time);
@@ -1401,11 +1389,15 @@ static void send_ping_times_to_all(void)
 ********************************************************************/
 static void get_lanserver_announcement(void)
 {
-  fd_set readfs, exceptfs;
-  struct timeval tv;
   char msgbuf[128];
   struct data_in din;
   int type;
+  fd_set readfs, exceptfs;
+  struct timeval tv;
+
+  if (with_ggz) {
+    return;
+  }
 
   if (srvarg.announce == ANNOUNCE_NONE) {
     return;
@@ -1428,11 +1420,10 @@ static void get_lanserver_announcement(void)
      * Generally we just want to run select again. */
   }
 
-    /* We would need a raw network connection for broadcast messages */
   if (FD_ISSET(socklan, &readfs)) {
     if (0 < recvfrom(socklan, msgbuf, sizeof(msgbuf), 0, NULL, NULL)) {
       dio_input_init(&din, msgbuf, 1);
-      dio_get_uint8_raw(&din, &type);
+      dio_get_uint8(&din, &type);
       if (type == SERVER_LAN_VERSION) {
         log_debug("Received request for server LAN announcement.");
         send_lanserver_response();
@@ -1447,7 +1438,6 @@ static void get_lanserver_announcement(void)
   This function broadcasts an UDP packet to clients with
   that requests information about the server state.
 ********************************************************************/
-  /* We would need a raw network connection for broadcast messages */
 static void send_lanserver_response(void)
 {
 #ifndef HAVE_WINSOCK
@@ -1462,7 +1452,7 @@ static void send_lanserver_response(void)
   int nhumans;
   char humans[256];
   char status[256];
-  struct raw_data_out dout;
+  struct data_out dout;
   union fc_sockaddr addr;
   int socksend, setting = 1;
   const char *group;
@@ -1503,9 +1493,7 @@ static void send_lanserver_response(void)
   }
 
   /* Create a description of server state to send to clients.  */
-  if (srvarg.identity_name[0] != '\0') {
-    sz_strlcpy(hostname, srvarg.identity_name);
-  } else if (fc_gethostname(hostname, sizeof(hostname)) != 0) {
+  if (fc_gethostname(hostname, sizeof(hostname)) != 0) {
     sz_strlcpy(hostname, "none");
   }
 
@@ -1542,14 +1530,14 @@ static void send_lanserver_response(void)
               srvarg.port );
 
   dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8_raw(&dout, SERVER_LAN_VERSION);
-  dio_put_string_raw(&dout, hostname);
-  dio_put_string_raw(&dout, port);
-  dio_put_string_raw(&dout, version);
-  dio_put_string_raw(&dout, status);
-  dio_put_string_raw(&dout, players);
-  dio_put_string_raw(&dout, humans);
-  dio_put_string_raw(&dout, get_meta_message_string());
+  dio_put_uint8(&dout, SERVER_LAN_VERSION);
+  dio_put_string(&dout, hostname);
+  dio_put_string(&dout, port);
+  dio_put_string(&dout, version);
+  dio_put_string(&dout, status);
+  dio_put_string(&dout, players);
+  dio_put_string(&dout, humans);
+  dio_put_string(&dout, get_meta_message_string());
   size = dio_output_used(&dout);
 
   /* Sending packet to client with the information gathered above. */

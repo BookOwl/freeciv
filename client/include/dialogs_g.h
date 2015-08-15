@@ -13,69 +13,50 @@
 #ifndef FC__DIALOGS_G_H
 #define FC__DIALOGS_G_H
 
-/* utility */
 #include "support.h"            /* bool type */
 
-/* common */
-#include "actions.h"
 #include "fc_types.h"
 #include "featured_text.h"      /* struct text_tag_list */
 #include "nation.h"		/* Nation_type_id */
 #include "terrain.h"		/* enum tile_special_type */
 #include "unitlist.h"
 
-/* client */
-#include "gui_proto_constructor.h"
-
 struct packet_nations_selected_info;
 
-GUI_FUNC_PROTO(void, popup_notify_goto_dialog, const char *headline,
-               const char *lines,
-               const struct text_tag_list *tags,
-               struct tile *ptile)
-GUI_FUNC_PROTO(void, popup_notify_dialog, const char *caption,
-               const char *headline, const char *lines)
-GUI_FUNC_PROTO(void, popup_connect_msg, const char *headline, const char *message)
+void popup_notify_goto_dialog(const char *headline, const char *lines,
+			      const struct text_tag_list *tags,
+                              struct tile *ptile);
+void popup_notify_dialog(const char *caption, const char *headline,
+                         const char *lines);
+void popup_connect_msg(const char *headline, const char *message);
 
-GUI_FUNC_PROTO(void, popup_races_dialog, struct player *pplayer)
-GUI_FUNC_PROTO(void, popdown_races_dialog, void)
+void popup_races_dialog(struct player *pplayer);
+void popdown_races_dialog(void);
 
-GUI_FUNC_PROTO(void, unit_select_dialog_popup, struct tile *ptile)
+void unit_select_dialog_popup(struct tile *ptile);
 void unit_select_dialog_update(void); /* Defined in update_queue.c. */
-GUI_FUNC_PROTO(void, unit_select_dialog_update_real, void)
+void unit_select_dialog_update_real(void);
 
-GUI_FUNC_PROTO(void, races_toggles_set_sensitive, void)
-GUI_FUNC_PROTO(void, races_update_pickable, bool nationset_change)
+void races_toggles_set_sensitive(void);
 
-GUI_FUNC_PROTO(void, popup_action_selection, struct unit *actor_unit,
-               struct city *target_city, struct unit *target_unit,
-               struct tile *target_tile,
-               const action_probability *act_probs)
-GUI_FUNC_PROTO(int, action_selection_actor_unit, void)
-GUI_FUNC_PROTO(int, action_selection_target_city, void)
-GUI_FUNC_PROTO(int, action_selection_target_unit, void)
-GUI_FUNC_PROTO(void, close_diplomat_dialog, void)
-GUI_FUNC_PROTO(void, action_selection_refresh, struct unit *actor_unit,
-               struct city *target_city, struct unit *target_unit,
-               struct tile *target_tile,
-               const action_probability *act_probs)
-GUI_FUNC_PROTO(void, popup_incite_dialog, struct unit *actor,
-               struct city *pcity, int cost)
-GUI_FUNC_PROTO(void, popup_bribe_dialog, struct unit *actor,
-               struct unit *punit, int cost)
-GUI_FUNC_PROTO(void, popup_sabotage_dialog, struct unit *actor,
-               struct city *pcity)
-GUI_FUNC_PROTO(void, popup_pillage_dialog, struct unit *punit, bv_extras extras)
-GUI_FUNC_PROTO(void, popup_upgrade_dialog, struct unit_list *punits)
-GUI_FUNC_PROTO(void, popup_disband_dialog, struct unit_list *punits)
-GUI_FUNC_PROTO(void, popup_tileset_suggestion_dialog, void)
-GUI_FUNC_PROTO(void, popup_soundset_suggestion_dialog, void)
-GUI_FUNC_PROTO(void, popup_musicset_suggestion_dialog, void)
-GUI_FUNC_PROTO(bool, popup_theme_suggestion_dialog, const char *theme_name)
-GUI_FUNC_PROTO(void, show_tech_gained_dialog, Tech_type_id tech)
-GUI_FUNC_PROTO(void, show_tileset_error, const char *msg)
-GUI_FUNC_PROTO(bool, handmade_scenario_warning, void)
+void popup_caravan_dialog(struct unit *punit,
+			  struct city *phomecity, struct city *pdestcity);
+bool caravan_dialog_is_open(int* unit_id, int* city_id);
+void caravan_dialog_update(void);
 
-GUI_FUNC_PROTO(void, popdown_all_game_dialogs, void)
+void popup_diplomat_dialog(struct unit *punit, struct tile *ptile);
+int diplomat_handled_in_diplomat_dialog(void);
+void close_diplomat_dialog(void);
+void popup_incite_dialog(struct unit *actor, struct city *pcity, int cost);
+void popup_bribe_dialog(struct unit *actor, struct unit *punit, int cost);
+void popup_sabotage_dialog(struct unit *actor, struct city *pcity);
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases);
+void popup_upgrade_dialog(struct unit_list *punits);
+void popup_disband_dialog(struct unit_list *punits);
+void popup_tileset_suggestion_dialog(void);
+bool popup_theme_suggestion_dialog(const char *theme_name);
+
+void popdown_all_game_dialogs(void);
 
 #endif  /* FC__DIALOGS_G_H */

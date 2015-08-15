@@ -49,7 +49,8 @@ bool adv_follow_path(struct unit *punit, struct pf_path *path,
 {
   struct tile *old_tile = punit->goto_tile;
   enum unit_activity activity = punit->activity;
-  struct extra_type *tgt = punit->activity_target;
+  enum tile_special_type tgt = punit->activity_target;
+  Base_type_id tgt_base = punit->activity_base;
   bool alive;
 
   if (punit->moves_left <= 0) {
@@ -61,7 +62,7 @@ bool adv_follow_path(struct unit *punit, struct pf_path *path,
   if (alive) {
     unit_activity_handling(punit, ACTIVITY_IDLE);
     send_unit_info(NULL, punit); /* FIXME: probably duplicate */
-    unit_activity_handling_targeted(punit, activity, &tgt);
+    unit_activity_handling_targeted(punit, activity, tgt, tgt_base);
     punit->goto_tile = old_tile; /* May be NULL. */
     send_unit_info(NULL, punit);
   }
@@ -158,6 +159,8 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
   Similar to is_my_zoc(), but with some changes:
   - destination (x0,y0) need not be adjacent?
   - don't care about some directions?
+  
+  Note this function only makes sense for ground units.
 
   Fix to bizarre did-not-find bug.  Thanks, Katvrr -- Syela
 **************************************************************************/
@@ -172,7 +175,7 @@ static bool adv_could_be_my_zoc(struct unit *myunit, struct tile *ptile)
   }
 
   adjc_iterate(ptile, atile) {
-    if (!terrain_has_flag(tile_terrain(atile), TER_NO_ZOC)
+    if (!is_ocean_tile(atile)
 	&& is_non_allied_unit_tile(atile, unit_owner(myunit))) {
       return FALSE;
     }
@@ -192,8 +195,9 @@ static bool adv_could_be_my_zoc(struct unit *myunit, struct tile *ptile)
 int adv_could_unit_move_to_tile(struct unit *punit, struct tile *dest_tile)
 {
   enum unit_move_result reason =
-      unit_move_to_tile_test(punit, ACTIVITY_IDLE, unit_tile(punit),
-                             dest_tile, unit_has_type_flag(punit, UTYF_IGZOC));
+      unit_move_to_tile_test(unit_type(punit), unit_owner(punit),
+                             ACTIVITY_IDLE, unit_tile(punit),
+                             dest_tile, unit_has_type_flag(punit, F_IGZOC));
   switch (reason) {
   case MR_OK:
     return 1;
@@ -243,10 +247,9 @@ int adv_unit_def_rating_basic(const struct unit *punit)
 /****************************************************************************
   Square of the previous function - used in actual computations.
 ****************************************************************************/
-int adv_unit_def_rating_basic_squared(const struct unit *punit)
+int adv_unit_def_rating_basic_sq(const struct unit *punit)
 {
   int v = adv_unit_def_rating_basic(punit);
-
   return v * v;
 }
 
@@ -258,14 +261,13 @@ bool adv_danger_at(struct unit *punit, struct tile *ptile)
   int a = 0, d, db;
   struct player *pplayer = unit_owner(punit);
   struct city *pcity = tile_city(ptile);
-  enum override_bool dc = NO_OVERRIDE;
-  int extras_bonus = 0;
+  enum danger_consideration dc = DANG_UNDECIDED;
 
   /* Give AI code possibility to decide itself */
   CALL_PLR_AI_FUNC(consider_tile_dangerous, unit_owner(punit), ptile, punit, &dc);
-  if (dc == OVERRIDE_TRUE) {
+  if (dc == DANG_YES) {
     return TRUE;
-  } else if (dc == OVERRIDE_FALSE) {
+  } else if (dc == DANG_NOT) {
     return FALSE;
   }
 
@@ -277,9 +279,10 @@ bool adv_danger_at(struct unit *punit, struct tile *ptile)
 
   /* Calculate how well we can defend at (x,y) */
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  extras_bonus += tile_extras_defense_bonus(ptile, unit_type(punit));
-  db += (db * extras_bonus) / 100;
-  d = adv_unit_def_rating_basic_squared(punit) * db;
+  if (tile_has_special(ptile, S_RIVER)) {
+    db += (db * terrain_control.river_defense_bonus) / 100;
+  }
+  d = adv_unit_def_rating_basic_sq(punit) * db;
 
   adjc_iterate(ptile, ptile1) {
     if (!map_is_known_and_seen(ptile1, unit_owner(punit), V_MAIN)) {
@@ -337,7 +340,6 @@ static double chance_killed_at(const struct tile *ptile,
                                const struct pf_parameter *param)
 {
   double db;
-  int extras_bonus = 0;
   /* Compute the basic probability */
   /* WAG */
   /* In the early stages of a typical game, ferries
@@ -350,9 +352,9 @@ static double chance_killed_at(const struct tile *ptile,
 
   /* If we are on defensive terrain, we are more likely to survive */
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  extras_bonus += tile_extras_class_defense_bonus(ptile,
-                                                  utype_class(param->utype));
-  db += (extras_bonus) / 100;
+  if (tile_has_special(ptile, S_RIVER)) {
+    db += (db * terrain_control.river_defense_bonus) / 100;
+  }
   p *= 10.0 / db;
 
   return p;

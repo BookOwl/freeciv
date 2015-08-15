@@ -16,17 +16,12 @@
 #endif
 
 /* common */
-#include "achievements.h"
-#include "actions.h"
-#include "citizens.h"
-#include "culture.h"
 #include "game.h"
 #include "government.h"
 #include "improvement.h"
 #include "map.h"
 #include "movement.h"
 #include "nation.h"
-#include "research.h"
 #include "tech.h"
 #include "terrain.h"
 #include "tile.h"
@@ -169,58 +164,6 @@ Tile *api_methods_city_tile_get(lua_State *L, City *pcity)
   return pcity->tile;
 }
 
-/**************************************************************************
-  How much city inspires partisans for a player.
-**************************************************************************/
-int api_methods_city_inspire_partisans(lua_State *L, City *self, Player *inspirer)
-{
-  bool inspired = FALSE;
-
-  if (!game.info.citizen_nationality) {
-    if (self->original == inspirer) {
-      inspired = TRUE;
-    }
-  } else {
-    if (game.info.citizen_partisans_pct > 0) {
-      int own = citizens_nation_get(self, inspirer->slot);
-      int total = 0;
-
-      /* Not citizens_foreign_iterate() as city has already changed hands.
-       * old owner would be considered foreign and new owner not. */
-      citizens_iterate(self, pslot, nat) {
-        total += nat;
-      } citizens_iterate_end;
-
-      if ((own * 100 / total) >= game.info.citizen_partisans_pct) {
-        inspired = TRUE;
-      }
-    } else if (self->original == inspirer) {
-      inspired = TRUE;
-    }
-  }
-
-  if (inspired) {
-    /* Cannot use get_city_bonus() as it would use city's current owner
-     * instead of inspirer. */
-    return get_target_bonus_effects(NULL, inspirer, NULL, self, NULL,
-                                    city_tile(self), NULL, NULL, NULL,
-                                    NULL, NULL, EFT_INSPIRE_PARTISANS);
-  }
-
-  return 0;
-}
-
-/**************************************************************************
-  How much culture city has?
-**************************************************************************/
-int api_methods_city_culture_get(lua_State *L, City *pcity)
-{
-  LUASCRIPT_CHECK_STATE(L, 0);
-  LUASCRIPT_CHECK_SELF(L, pcity, 0);
-
-  return city_culture(pcity);
-}
-
 /*****************************************************************************
   Return rule name for Government
 *****************************************************************************/
@@ -350,32 +293,7 @@ bool api_methods_player_knows_tech(lua_State *L, Player *pplayer,
   LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, ptech, 3, Tech_Type, FALSE);
 
-  return research_invention_state(research_get(pplayer),
-                                  advance_number(ptech)) == TECH_KNOWN;
-}
-
-/**************************************************************************
-  How much culture player has?
-**************************************************************************/
-int api_methods_player_culture_get(lua_State *L, Player *pplayer)
-{
-  LUASCRIPT_CHECK_STATE(L, 0);
-  LUASCRIPT_CHECK_SELF(L, pplayer, 0);
-
-  return player_culture(pplayer);
-}
-
-/*****************************************************************************
-  Return TRUE if players share research.
-*****************************************************************************/
-bool api_methods_player_shares_research(lua_State *L, Player *pplayer,
-                                        Player *aplayer)
-{
-  LUASCRIPT_CHECK_STATE(L, FALSE);
-  LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
-  LUASCRIPT_CHECK_ARG_NIL(L, aplayer, 3, Player, FALSE);
-
-  return research_get(pplayer) == research_get(aplayer);
+  return player_invention_state(pplayer, advance_number(ptech)) == TECH_KNOWN;
 }
 
 /*****************************************************************************
@@ -424,6 +342,7 @@ const char *api_methods_tech_type_name_translation(lua_State *L,
   return advance_name_translation(ptech);
 }
 
+
 /*****************************************************************************
   Return rule name for Terrain
 *****************************************************************************/
@@ -445,85 +364,6 @@ const char *api_methods_terrain_name_translation(lua_State *L,
   LUASCRIPT_CHECK_SELF(L, pterrain, NULL);
 
   return terrain_name_translation(pterrain);
-}
-
-/*****************************************************************************
-  Return name of the terrain's class
-*****************************************************************************/
-const char *api_methods_terrain_class_name(lua_State *L, Terrain *pterrain)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pterrain, NULL);
-
-  return terrain_class_name(terrain_type_terrain_class(pterrain));
-}
-
-/*****************************************************************************
-  Return rule name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_rule_name(lua_State *L, Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_rule_name(pdis);
-}
-
-/*****************************************************************************
-  Return translated name for Disaster
-*****************************************************************************/
-const char *api_methods_disaster_name_translation(lua_State *L,
-                                                  Disaster *pdis)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pdis, NULL);
-
-  return disaster_name_translation(pdis);
-}
-
-/*****************************************************************************
-  Return rule name for Achievement
-*****************************************************************************/
-const char *api_methods_achievement_rule_name(lua_State *L, Achievement *pach)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pach, NULL);
-
-  return achievement_rule_name(pach);
-}
-
-/*****************************************************************************
-  Return translated name for Achievement
-*****************************************************************************/
-const char *api_methods_achievement_name_translation(lua_State *L,
-                                                     Achievement *pach)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pach, NULL);
-
-  return achievement_name_translation(pach);
-}
-
-/*****************************************************************************
-  Return rule name for Action
-*****************************************************************************/
-const char *api_methods_action_rule_name(lua_State *L, Action *pact)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pact, NULL);
-
-  return action_get_rule_name(pact->id);
-}
-
-/*****************************************************************************
-  Return translated name for Action
-*****************************************************************************/
-const char *api_methods_action_name_translation(lua_State *L, Action *pact)
-{
-  LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_SELF(L, pact, NULL);
-
-  return action_get_ui_name(pact->id);
 }
 
 /*****************************************************************************
@@ -595,81 +435,20 @@ bool api_methods_tile_city_exists_within_max_city_map(lua_State *L,
 }
 
 /*****************************************************************************
-  Return TRUE if there is a extra with rule name name on ptile.
-  If no name is specified return true if there is a extra on ptile.
-*****************************************************************************/
-bool api_methods_tile_has_extra(lua_State *L, Tile *ptile, const char *name)
-{
-  LUASCRIPT_CHECK_STATE(L, FALSE);
-  LUASCRIPT_CHECK_SELF(L, ptile, FALSE);
-
-  if (!name) {
-    extra_type_iterate(pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        return TRUE;
-      }
-    } extra_type_iterate_end;
-
-    return FALSE;
-  } else {
-    struct extra_type *pextra;
-
-    pextra = extra_type_by_rule_name(name);
-
-    return (NULL != pextra && tile_has_extra(ptile, pextra));
-  }
-}
-
-/*****************************************************************************
   Return TRUE if there is a base with rule name name on ptile.
-  If no name is specified return true if there is any base on ptile.
+  If no name is specified return true if there is a base on ptile.
 *****************************************************************************/
 bool api_methods_tile_has_base(lua_State *L, Tile *ptile, const char *name)
 {
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_SELF(L, ptile, FALSE);
 
+  struct base_type *base;
   if (!name) {
-    base_type_iterate(pbase) {
-      if (tile_has_extra(ptile, base_extra_get(pbase))) {
-        return TRUE;
-      }
-    } base_type_iterate_end;
-
-    return FALSE;
+    return tile_has_any_bases(ptile);
   } else {
-    struct base_type *pbase;
-
-    pbase = base_type_by_rule_name(name);
-
-    return (NULL != pbase && tile_has_extra(ptile, base_extra_get(pbase)));
-  }
-}
-
-/*****************************************************************************
-  Return TRUE if there is a road with rule name name on ptile.
-  If no name is specified return true if there is any road on ptile.
-*****************************************************************************/
-bool api_methods_tile_has_road(lua_State *L, Tile *ptile, const char *name)
-{
-  LUASCRIPT_CHECK_STATE(L, FALSE);
-  LUASCRIPT_CHECK_SELF(L, ptile, FALSE);
-
-  if (!name) {
-    road_type_iterate(proad) {
-      if (tile_has_extra(ptile, road_extra_get(proad))) {
-        return TRUE;
-      }
-    } road_type_iterate_end;
-
-
-    return FALSE;
-  } else {
-    struct road_type *proad;
- 
-    proad = road_type_by_rule_name(name);
-
-    return (NULL != proad && tile_has_extra(ptile, road_extra_get(proad)));
+    base = base_type_by_rule_name(name);
+    return (NULL != base && tile_has_base(ptile, base));
   }
 }
 
@@ -770,6 +549,7 @@ int api_methods_tile_sq_distance(lua_State *L, Tile *ptile1, Tile *ptile2)
   return sq_map_distance(ptile1, ptile2);
 }
 
+
 /*****************************************************************************
   Can punit found a city on its tile?
 *****************************************************************************/
@@ -809,17 +589,17 @@ Direction api_methods_unit_orientation_get(lua_State *L, Unit *punit)
 bool api_methods_unit_type_has_flag(lua_State *L, Unit_Type *punit_type,
                                     const char *flag)
 {
-  enum unit_type_flag_id id;
+  enum unit_flag_id id;
 
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_SELF(L, punit_type, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, flag, 3, string, FALSE);
 
-  id = unit_type_flag_id_by_name(flag, fc_strcasecmp);
-  if (unit_type_flag_id_is_valid(id)) {
+  id = unit_flag_by_rule_name(flag);
+  if (id != F_LAST) {
     return utype_has_flag(punit_type, id);
   } else {
-    luascript_error(L, "Unit type flag \"%s\" does not exist", flag);
+    luascript_error(L, "Unit flag \"%s\" does not exist", flag);
     return FALSE;
   }
 }
@@ -836,8 +616,8 @@ bool api_methods_unit_type_has_role(lua_State *L, Unit_Type *punit_type,
   LUASCRIPT_CHECK_SELF(L, punit_type, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, role, 3, string, FALSE);
 
-  id = unit_role_id_by_name(role, fc_strcasecmp);
-  if (unit_role_id_is_valid(id)) {
+  id = unit_role_by_rule_name(role);
+  if (id != L_LAST) {
     return utype_has_role(punit_type, id);
   } else {
     luascript_error(L, "Unit role \"%s\" does not exist", role);

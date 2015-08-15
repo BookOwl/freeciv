@@ -32,7 +32,7 @@ pkgdatadir = $(datadir)/$(PACKAGE)/scenarios
 pkgdata_DATA = $(zipped_files)
 
 $(zipped_files): %.sav.gz: %.sav
-	$(GZIP) --best -n -c $< > $@
+	$(GZIP) --best -c $< > $@
 
 MOSTLYCLEANFILES = $(zipped_files)
 

@@ -5,44 +5,20 @@
 # Version definition for Freeciv.
 
 MAJOR_VERSION="2"
-MINOR_VERSION="90"
-PATCH_VERSION="99"
-VERSION_LABEL="-dev"
+MINOR_VERSION="4"
+PATCH_VERSION="5"
+VERSION_LABEL="+"
 
-# 1) Development until MAJOR and MINOR version numbers are
-#    set to new release series:
-#   - IS_DEVEL_VERSION=1
-#   - IS_FREEZE_VERSION=0
-#   - IS_BETA_VERSION=0
-#
-# 2) Development from version number bump to first beta:
-#   - IS_DEVEL_VERSION=1
-#   - IS_FREEZE_VERSION=1
-#   - IS_BETA_VERSION=0
-#
-# 3) Development from first beta to first RC:
-#   - IS_DEVEL_VERSION=0
-#   - IS_FREEZE_VERSION=0
-#   - IS_BETA_VERSION=1
-#
-# 4) Stable, starting from first RC:
-#   - IS_DEVEL_VERSION=0
-#   - IS_FREEZE_VERSION=0
-#   - IS_BETA_VERSION=0
-# (and update DEFAULT_FOLLOW_TAG to "stable", and also
-# win32/installer/Makefile --follow-tag to "win32")
-
-IS_DEVEL_VERSION=1
-IS_FREEZE_VERSION=0
+IS_DEVEL_VERSION=0
 IS_BETA_VERSION=0
 
-NEXT_STABLE_VERSION="3.0.0"
+NEXT_STABLE_VERSION="2.5.0"
 
 # 0 to disable display of release month until we can make better estimate
 RELEASE_MONTH=0
 
-DATASUBDIR=dev
-DEFAULT_FOLLOW_TAG=S3_0
+DATASUBDIR=2.4
+DEFAULT_FOLLOW_TAG=stable
 
 # Freeciv network capstring: see documentation in common/capstr.c
 #
@@ -54,8 +30,8 @@ DEFAULT_FOLLOW_TAG=S3_0
 #   - Avoid adding a new mandatory capability to the development branch for
 #     as long as possible.  We want to maintain network compatibility with
 #     the stable branch for as long as possible.
-NETWORK_CAPSTRING_MANDATORY="+Freeciv.Devel-3.0-2015.Aug.14b"
-NETWORK_CAPSTRING_OPTIONAL=""
+NETWORK_CAPSTRING_MANDATORY="+Freeciv-2.4-network"
+NETWORK_CAPSTRING_OPTIONAL="rules_finished trademindist_size actcount_range wonder_city_id bulbs_size tech_cost"
 
 FREECIV_DISTRIBUTOR=""
 

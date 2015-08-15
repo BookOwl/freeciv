@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -26,22 +26,22 @@ tiles = { "row", "column","tag"
 ; Rivers (as special type), and whether north, south, east, west 
 ; also has river or is ocean:
 
- 2,  0, "road.river_s_n0e0s0w0"
- 2,  1, "road.river_s_n1e0s0w0"
- 2,  2, "road.river_s_n0e1s0w0"
- 2,  3, "road.river_s_n1e1s0w0"
- 2,  4, "road.river_s_n0e0s1w0"
- 2,  5, "road.river_s_n1e0s1w0"
- 2,  6, "road.river_s_n0e1s1w0"
- 2,  7, "road.river_s_n1e1s1w0"
- 3,  0, "road.river_s_n0e0s0w1"
- 3,  1, "road.river_s_n1e0s0w1"
- 3,  2, "road.river_s_n0e1s0w1"
- 3,  3, "road.river_s_n1e1s0w1"
- 3,  4, "road.river_s_n0e0s1w1"
- 3,  5, "road.river_s_n1e0s1w1"
- 3,  6, "road.river_s_n0e1s1w1"
- 3,  7, "road.river_s_n1e1s1w1"
+ 2,  0, "tx.s_river_n0e0s0w0"
+ 2,  1, "tx.s_river_n1e0s0w0"
+ 2,  2, "tx.s_river_n0e1s0w0"
+ 2,  3, "tx.s_river_n1e1s0w0"
+ 2,  4, "tx.s_river_n0e0s1w0"
+ 2,  5, "tx.s_river_n1e0s1w0"
+ 2,  6, "tx.s_river_n0e1s1w0"
+ 2,  7, "tx.s_river_n1e1s1w0"
+ 3,  0, "tx.s_river_n0e0s0w1"
+ 3,  1, "tx.s_river_n1e0s0w1"
+ 3,  2, "tx.s_river_n0e1s0w1"
+ 3,  3, "tx.s_river_n1e1s0w1"
+ 3,  4, "tx.s_river_n0e0s1w1"
+ 3,  5, "tx.s_river_n1e0s1w1"
+ 3,  6, "tx.s_river_n0e1s1w1"
+ 3,  7, "tx.s_river_n1e1s1w1"
 
 ;forests as overlay
 
@@ -102,10 +102,10 @@ tiles = { "row", "column","tag"
 
 ;river outlets
 
- 10, 0, "road.river_outlet_n"
- 10, 1, "road.river_outlet_e"
- 10, 2, "road.river_outlet_s"
- 10, 3, "road.river_outlet_w"
+ 10, 0, "tx.river_outlet_n"
+ 10, 1, "tx.river_outlet_e"
+ 10, 2, "tx.river_outlet_s"
+ 10, 3, "tx.river_outlet_w"
 
 }
 

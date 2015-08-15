@@ -21,7 +21,6 @@
 
 /* common */
 #include "fc_types.h"
-#include "version.h"
 
 /* client */
 #include "connectdlg_common.h"
@@ -139,7 +138,6 @@ static void show_main_page(void)
   int h = 0;
   SDL_Rect area;
   char verbuf[200];
-  const char *rev_ver = fc_svn_revision();
     
   /* create dialog */
   pStartMenu = fc_calloc(1, sizeof(struct SMALL_DLG));
@@ -151,31 +149,12 @@ static void show_main_page(void)
   area = pWindow->area;
 
   /* Freeciv version */
-  if (rev_ver == NULL) {
-    /* TRANS: Freeciv 2.4.0 */
-    fc_snprintf(verbuf, sizeof(verbuf), _("Freeciv %s"), VERSION_STRING);
-  } else {
-    /* TRANS: Freeciv 2.4.0 (r25000) */
-    fc_snprintf(verbuf, sizeof(verbuf), _("Freeciv %s (%s)"), VERSION_STRING, rev_ver);
-  }
+  /* TRANS: Freeciv 2.4.0, gui-sdl client */
+  fc_snprintf(verbuf, sizeof(verbuf), _("Freeciv %s, %s client"), VERSION_STRING, client_string);
   pWidget = create_iconlabel_from_chars(NULL, pWindow->dst, verbuf,
             adj_font(12),
             (WF_SELLECT_WITHOUT_BAR|WF_RESTORE_BACKGROUND|WF_FREE_DATA));
 
-   
-  pWidget->string16->style |= SF_CENTER | TTF_STYLE_BOLD;
-  
-  area.w = MAX(area.w, pWidget->size.w);
-  h = MAX(h, pWidget->size.h);
-  count++;
-  
-  add_to_gui_list(ID_LABEL, pWidget);
-
-  /* TRANS: gui-sdl client */
-  fc_snprintf(verbuf, sizeof(verbuf), _("%s client"), client_string);
-  pWidget = create_iconlabel_from_chars(NULL, pWindow->dst, verbuf,
-            adj_font(12),
-            (WF_SELLECT_WITHOUT_BAR|WF_RESTORE_BACKGROUND|WF_FREE_DATA));
    
   pWidget->string16->style |= SF_CENTER | TTF_STYLE_BOLD;
   
@@ -308,7 +287,7 @@ static void show_main_page(void)
 
   setup_vertical_widgets_position(1, area.x, area.y, area.w, h, pWidget, pWindow->prev);
   
-  area.h = h * 2;
+  area.h = h;
   SDL_FillRectAlpha(pWindow->theme, &area, &bg_color);
   
   widget_set_position(pWindow,
@@ -320,20 +299,11 @@ static void show_main_page(void)
   redraw_group(pStartMenu->pBeginWidgetList, pStartMenu->pEndWidgetList, FALSE);
 
   putline(pWindow->dst->surface,
-          area.x, area.y + (h * 2 - 1),
-          area.x + area.w - 1, area.y + (h * 2 - 1),
+          area.x, area.y + (h - 1),
+          area.x + area.w - 1, area.y + (h - 1),
           line_color);
   
   set_output_window_text(_("SDLClient welcomes you..."));
-
-  rev_ver = fc_git_revision();
-  if (rev_ver != NULL) {
-    char buffer[512];
-
-    fc_snprintf(buffer, sizeof(buffer), _("Commit: %s"), rev_ver);
-    set_output_window_text(buffer);
-  }
-
   chat_welcome_message();
 
   meswin_dialog_popup(TRUE);
@@ -416,7 +386,7 @@ void real_set_client_page(enum client_pages page)
   "default", and if the user changes this then set_ruleset() should be
   called.
 ****************************************************************************/
-void set_rulesets(int num_rulesets, char **rulesets)
+void gui_set_rulesets(int num_rulesets, char **rulesets)
 {
   /* PORTME */
 }

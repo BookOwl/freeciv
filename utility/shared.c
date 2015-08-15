@@ -15,7 +15,7 @@
 #include <fc_config.h>
 #endif
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 /* Under Mac OS X sys/types.h must be included before dirent.h */
 #include <sys/types.h>
 #endif
@@ -111,15 +111,6 @@ static char *grouping_sep = NULL;
  * 'safe' filenames, so should not contain / \ . */
 static const char base64url[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
-static struct strvec *data_dir_names = NULL;
-static struct strvec *save_dir_names = NULL;
-static struct strvec *scenario_dir_names = NULL;
-
-static char *mc_group = NULL;
-static char *home_dir = NULL;
-
-static struct astring realfile = ASTRING_INIT;
 
 static int compare_file_mtime_ptrs(const struct fileinfo *const *ppa,
                                    const struct fileinfo *const *ppb);
@@ -248,7 +239,7 @@ bool is_option(const char *option_name,char *option)
   Like strcspn but also handles quotes, i.e. *reject chars are
   ignored if they are inside single or double quotes.
 ***************************************************************/
-static size_t fc_strcspn(const char *s, const char *reject)
+static size_t my_strcspn(const char *s, const char *reject)
 {
   bool in_single_quotes = FALSE, in_double_quotes = FALSE;
   size_t i, len = strlen(s);
@@ -293,19 +284,27 @@ static size_t fc_strcspn(const char *s, const char *reject)
  **tokens using free_tokens().
 ***************************************************************/
 int get_tokens(const char *str, char **tokens, size_t num_tokens,
-               const char *delimiterset)
+	       const char *delimiterset)
 {
-  int token;
+  int token = 0;
 
   fc_assert_ret_val(NULL != str, -1);
 
-  for (token = 0; token <= num_tokens && *str != '\0'; token++) {
+  for(;;) {
     size_t len, padlength = 0;
 
     /* skip leading delimiters */
     str += strspn(str, delimiterset);
 
-    len = fc_strcspn(str, delimiterset);
+    if (*str == '\0') {
+      break;
+    }
+
+    len = my_strcspn(str, delimiterset);
+
+    if (token >= num_tokens) {
+      break;
+    }
 
     /* strip start/end quotes if they exist */
     if (len >= 2) {
@@ -319,6 +318,8 @@ int get_tokens(const char *str, char **tokens, size_t num_tokens,
 
     tokens[token] = fc_malloc(len + 1);
     (void) fc_strlcpy(tokens[token], str, len + 1);     /* adds the '\0' */
+
+    token++;
 
     str += len + padlength;
   }
@@ -586,7 +587,7 @@ char *skip_leading_spaces(char *s)
   Removes leading spaces in string pointed to by 's'.
   Note 's' must point to writeable memory!
 ***************************************************************************/
-void remove_leading_spaces(char *s)
+static void remove_leading_spaces(char *s)
 {
   char *t;
 
@@ -604,7 +605,7 @@ void remove_leading_spaces(char *s)
   Terminates string pointed to by 's' to remove traling spaces;
   Note 's' must point to writeable memory!
 ***************************************************************************/
-void remove_trailing_spaces(char *s)
+static void remove_trailing_spaces(char *s)
 {
   char *t;
   size_t len;
@@ -736,11 +737,12 @@ char *user_home_dir(void)
   return "PROGDIR:";
 #else  /* AMIGA */
   static bool init = FALSE;
+  static char *home_dir = NULL;
 
   if (!init) {
     char *env = getenv("HOME");
     if (env) {
-      home_dir = fc_strdup(env);
+      home_dir = fc_strdup(env);        /* never free()d */
       log_verbose("HOME is %s", home_dir);
     } else {
 
@@ -796,17 +798,6 @@ char *user_home_dir(void)
 
   return home_dir;
 #endif /* AMIGA */
-}
-
-/***************************************************************************
-  Free user home directory information
-***************************************************************************/
-void free_user_home_dir(void)
-{
-  if (home_dir != NULL) {
-    free(home_dir);
-    home_dir = NULL;
-  }
 }
 
 /***************************************************************************
@@ -941,25 +932,6 @@ static struct strvec *base_get_dirs(const char *dir_list)
 }
 
 /***************************************************************************
-  Free data dir name vectors.
-***************************************************************************/
-void free_data_dir_names(void)
-{
-  if (data_dir_names != NULL) {
-    strvec_destroy(data_dir_names);
-    data_dir_names = NULL;
-  }
-  if (save_dir_names != NULL) {
-    strvec_destroy(save_dir_names);
-    save_dir_names = NULL;
-  }
-  if (scenario_dir_names != NULL) {
-    strvec_destroy(scenario_dir_names);
-    scenario_dir_names = NULL;
-  }
-}
-
-/***************************************************************************
   Returns a list of data directory paths, in the order in which they should
   be searched.  These paths are specified internally or may be set as the
   environment variable $FREECIV_DATA PATH (a separated list of directories,
@@ -973,10 +945,12 @@ void free_data_dir_names(void)
 ***************************************************************************/
 const struct strvec *get_data_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == data_dir_names) {
+  if (NULL == dirs) {
     const char *path;
 
     if ((path = getenv(FREECIV_DATA_PATH)) && '\0' == path[0]) {
@@ -992,14 +966,14 @@ const struct strvec *get_data_dirs(void)
                 FREECIV_PATH, DEFAULT_DATA_PATH);
       path = NULL;
     }
-    data_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_DATA_PATH);
-    strvec_remove_duplicate(data_dir_names, strcmp); /* Don't set a path both. */
-    strvec_iterate(data_dir_names, dirname) {
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_DATA_PATH);
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Data path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return data_dir_names;
+  return dirs;
 }
 
 /***************************************************************************
@@ -1016,10 +990,12 @@ const struct strvec *get_data_dirs(void)
 ***************************************************************************/
 const struct strvec *get_save_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == save_dir_names) {
+  if (NULL == dirs) {
     const char *path;
     bool from_freeciv_path = FALSE;
 
@@ -1040,25 +1016,25 @@ const struct strvec *get_save_dirs(void)
         from_freeciv_path = TRUE;
       }
     }
-    save_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SAVE_PATH);
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_SAVE_PATH);
     if (from_freeciv_path) {
       /* Then also append a "/saves" suffix to every directory. */
       char buf[512];
       size_t i;
 
-      for (i = 0; i < strvec_size(save_dir_names); i++) {
-        path = strvec_get(save_dir_names, i);
+      for (i = 0; i < strvec_size(dirs); i++) {
+        path = strvec_get(dirs, i);
         fc_snprintf(buf, sizeof(buf), "%s/saves", path);
-        strvec_insert(save_dir_names, ++i, buf);
+        strvec_insert(dirs, ++i, buf);
       }
     }
-    strvec_remove_duplicate(save_dir_names, strcmp); /* Don't set a path both. */
-    strvec_iterate(save_dir_names, dirname) {
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Save path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return save_dir_names;
+  return dirs;
 }
 
 /***************************************************************************
@@ -1075,10 +1051,12 @@ const struct strvec *get_save_dirs(void)
 ***************************************************************************/
 const struct strvec *get_scenario_dirs(void)
 {
+  static struct strvec *dirs = NULL;
+
   /* The first time this function is called it will search and
    * allocate the directory listing.  Subsequently we will already
    * know the list and can just return it. */
-  if (NULL == scenario_dir_names) {
+  if (NULL == dirs) {
     const char *path;
     bool from_freeciv_path = FALSE;
 
@@ -1099,7 +1077,7 @@ const struct strvec *get_scenario_dirs(void)
         from_freeciv_path = TRUE;
       }
     }
-    scenario_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SCENARIO_PATH);
+    dirs = base_get_dirs(NULL != path ? path : DEFAULT_SCENARIO_PATH);
     if (from_freeciv_path) {
       /* Then also append subdirs every directory. */
       const char *subdirs[] = {
@@ -1109,21 +1087,21 @@ const struct strvec *get_scenario_dirs(void)
       const char **subdir;
       size_t i;
 
-      for (i = 0; i < strvec_size(scenario_dir_names); i++) {
-        path = strvec_get(scenario_dir_names, i);
+      for (i = 0; i < strvec_size(dirs); i++) {
+        path = strvec_get(dirs, i);
         for (subdir = subdirs; NULL != *subdir; subdir++) {
           fc_snprintf(buf, sizeof(buf), "%s/%s", path, *subdir);
-          strvec_insert(scenario_dir_names, ++i, buf);
+          strvec_insert(dirs, ++i, buf);
         }
       }
     }
-    strvec_remove_duplicate(scenario_dir_names, strcmp);      /* Don't set a path both. */
-    strvec_iterate(scenario_dir_names, dirname) {
+    strvec_remove_duplicate(dirs, strcmp);      /* Don't set a path both. */
+    strvec_iterate(dirs, dirname) {
       log_verbose("Scenario path component: %s", dirname);
     } strvec_iterate_end;
   }
 
-  return scenario_dir_names;
+  return dirs;
 }
 
 /***************************************************************************
@@ -1207,11 +1185,11 @@ struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix)
   read-opened.)  The returned pointer points to static memory, so this
   function can only supply one filename at a time.  Don't free that
   pointer.
-
-  TODO: Make this re-entrant
 ***************************************************************************/
 const char *fileinfoname(const struct strvec *dirs, const char *filename)
 {
+  static struct astring realfile = ASTRING_INIT;
+
   if (NULL == dirs) {
     return NULL;
   }
@@ -1228,7 +1206,6 @@ const char *fileinfoname(const struct strvec *dirs, const char *filename)
         astr_add(&realfile, "%s", dirname);
       }
     } strvec_iterate_end;
-
     return astr_str(&realfile);
   }
 
@@ -1242,16 +1219,7 @@ const char *fileinfoname(const struct strvec *dirs, const char *filename)
   } strvec_iterate_end;
 
   log_verbose("Could not find readable file \"%s\" in data path.", filename);
-
   return NULL;
-}
-
-/**************************************************************************
-  Free resources allocated for fileinfoname service
-**************************************************************************/
-void free_fileinfo_data(void)
-{
-  astr_free(&realfile);
 }
 
 /**************************************************************************
@@ -1696,41 +1664,31 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
 ***************************************************************************/
 char *get_multicast_group(bool ipv6_prefered)
 {
+  static bool init = FALSE;
+  static char *group = NULL;
   static char *default_multicast_group_ipv4 = "225.1.1.1";
 #ifdef IPV6_SUPPORT
   /* TODO: Get useful group (this is node local) */
   static char *default_multicast_group_ipv6 = "FF31::8000:15B4";
-#endif /* IPv6 support */
+#endif
 
-  if (mc_group == NULL) {
+  if (!init) {
     char *env = getenv("FREECIV_MULTICAST_GROUP");
-
     if (env) {
-      mc_group = fc_strdup(env);
+      group = fc_strdup(env);
     } else {
 #ifdef IPV6_SUPPORT
       if (ipv6_prefered) {
-        mc_group = fc_strdup(default_multicast_group_ipv6);
+        group = fc_strdup(default_multicast_group_ipv6);
       } else
 #endif /* IPv6 support */
       {
-        mc_group = fc_strdup(default_multicast_group_ipv4);
+        group = fc_strdup(default_multicast_group_ipv4);
       }
     }
+    init = TRUE;
   }
-
-  return mc_group;
-}
-
-/***************************************************************************
-  Free multicast group resources
-***************************************************************************/
-void free_multicast_group(void)
-{
-  if (mc_group != NULL) {
-    free(mc_group);
-    mc_group = NULL;
-  }
+  return group;
 }
 
 /***************************************************************************

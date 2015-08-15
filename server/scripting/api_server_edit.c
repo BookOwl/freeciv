@@ -175,30 +175,10 @@ void api_edit_unit_turn(lua_State *L, Unit *punit, Direction dir)
   if (direction8_is_valid(dir)) {
     punit->facing = dir;
 
-    send_unit_info(NULL, punit);
+    send_unit_info_to_onlookers(NULL, punit, unit_tile(punit), FALSE, TRUE);
   } else {
     log_error("Illegal direction %d for unit from lua script", dir);
   }
-}
-
-/*****************************************************************************
-  Kill the unit.
-*****************************************************************************/
-void api_edit_unit_kill(lua_State *L, Unit *punit, const char *reason,
-                        Player *killer)
-{
-  enum unit_loss_reason loss_reason;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, punit, 2, Unit);
-  LUASCRIPT_CHECK_ARG_NIL(L, reason, 3, string);
-
-  loss_reason = unit_loss_reason_by_name(reason, fc_strcasecmp);
-
-  LUASCRIPT_CHECK_ARG(L, unit_loss_reason_is_valid(loss_reason), 3,
-                      "Invalid unit loss reason");
-
-  wipe_unit(punit, loss_reason, killer);
 }
 
 /*****************************************************************************
@@ -214,9 +194,7 @@ void api_edit_create_city(lua_State *L, Player *pplayer, Tile *ptile,
   if (!name || name[0] == '\0') {
     name = city_name_suggestion(pplayer, ptile);
   }
-
-  /* TODO: Allow initial citizen to be of nationality other than owner */
-  create_city(pplayer, ptile, name, pplayer);
+  create_city(pplayer, ptile, name);
 }
 
 /*****************************************************************************
@@ -274,77 +252,32 @@ void api_edit_change_gold(lua_State *L, Player *pplayer, int amount)
 Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
                                     Tech_Type *ptech, const char *reason)
 {
-  struct research *presearch;
   Tech_type_id id;
   Tech_Type *result;
 
   LUASCRIPT_CHECK_STATE(L, NULL);
   LUASCRIPT_CHECK_ARG_NIL(L, pplayer, 2, Player, NULL);
 
-  presearch = research_get(pplayer);
   if (ptech) {
     id = advance_number(ptech);
   } else {
-    /* Can't just call give_immediate_free_tech() here as we want
-     * to pass correct reason to emitted signal. */
-    if (game.info.free_tech_method == FTM_CHEAPEST) {
-      id = pick_cheapest_tech(presearch);
-    } else if (presearch->researching == A_UNSET
-               || game.info.free_tech_method == FTM_RANDOM) {
-      id = pick_random_tech(presearch);
-    } else {
-      id = presearch->researching;
+    if (player_research_get(pplayer)->researching == A_UNSET) {
+      choose_random_tech(pplayer);
     }
+    id = player_research_get(pplayer)->researching;
   }
 
-  if (is_future_tech(id)
-      || research_invention_state(presearch, id) != TECH_KNOWN) {
-    research_apply_penalty(presearch, id, game.server.freecost);
-    found_new_tech(presearch, id, FALSE, TRUE);
+  if (player_invention_state(pplayer, id) != TECH_KNOWN) {
+    do_free_cost(pplayer, id);
+    found_new_tech(pplayer, id, FALSE, TRUE);
     result = advance_by_number(id);
-    script_tech_learned(presearch, pplayer, result, reason);
+    script_server_signal_emit("tech_researched", 3,
+                              API_TYPE_TECH_TYPE, result,
+                              API_TYPE_PLAYER, pplayer,
+                              API_TYPE_STRING, reason);
     return result;
   } else {
     return NULL;
-  }
-}
-
-/*****************************************************************************
-  Modify player's trait value.
-*****************************************************************************/
-bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
-                        const int mod)
-{
-  enum trait tr = trait_by_name(trait_name, fc_strcasecmp);
-
-  if (!trait_is_valid(tr)) {
-    return FALSE;
-  }
-
-  pplayer->ai_common.traits[tr].mod += mod;
-
-  return TRUE;
-}
-
-/*****************************************************************************
-  Create a new extra.
-*****************************************************************************/
-void api_edit_create_extra(lua_State *L, Tile *ptile, const char *name)
-{
-  struct extra_type *pextra;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
-
-  if (!name) {
-    return;
-  }
-
-  pextra = extra_type_by_rule_name(name);
-
-  if (pextra) {
-    tile_add_extra(ptile, pextra);
-    update_tile_knowledge(ptile);
   }
 }
 
@@ -368,43 +301,6 @@ void api_edit_create_base(lua_State *L, Tile *ptile, const char *name,
   if (pbase) {
     create_base(ptile, pbase, pplayer);
     update_tile_knowledge(ptile);
-  }
-}
-
-/*****************************************************************************
-  Add a new road.
-*****************************************************************************/
-void api_edit_create_road(lua_State *L, Tile *ptile, const char *name)
-{
-  struct road_type *proad;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
-
-  if (!name) {
-    return;
-  }
-
-  proad = road_type_by_rule_name(name);
-
-  if (proad) {
-    create_road(ptile, proad);
-    update_tile_knowledge(ptile);
-  }
-}
-
-/*****************************************************************************
-  Set tile label text.
-*****************************************************************************/
-void api_edit_tile_set_label(lua_State *L, Tile *ptile, const char *label)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, ptile);
-  LUASCRIPT_CHECK_ARG_NIL(L, label, 3, string);
-
-  tile_set_label(ptile, label);
-  if (server_state() >= S_S_RUNNING) {
-    send_tile_info(NULL, ptile, FALSE);
   }
 }
 
@@ -475,26 +371,4 @@ bool api_edit_unit_move(lua_State *L, Unit *punit, Tile *ptile,
   LUASCRIPT_CHECK_ARG(L, movecost >= 0, 4, "Negative move cost!", FALSE);
 
   return unit_move(punit, ptile, movecost);
-}
-
-/*****************************************************************************
-  Add history to a city
-*****************************************************************************/
-void api_edit_city_add_history(lua_State *L, City *pcity, int amount)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, pcity);
-
-  pcity->history += amount;
-}
-
-/*****************************************************************************
-  Add history to a player
-*****************************************************************************/
-void api_edit_player_add_history(lua_State *L, Player *pplayer, int amount)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, pplayer);
-
-  pplayer->culture += amount;
 }

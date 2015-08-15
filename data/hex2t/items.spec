@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -24,7 +24,7 @@ gfx = "hex2t/items"
 x_top_left = 2
 y_top_left = 2
 dx = 40
-dy = 72
+dy = 108
 pixel_border = 2
 
 tiles = { "row", "column", "tag"
@@ -228,7 +228,6 @@ tiles = { "row", "column", "tag"
   1, 17, "unit.pillage"
   1, 18, "unit.fortified"
   1, 19, "unit.fallout"
-  0, 17, "unit.convert"
 
 ; Unit hit-point bars: approx percent of hp remaining
 

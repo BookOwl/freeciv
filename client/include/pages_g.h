@@ -23,13 +23,13 @@
 #define SPECENUM_VALUE3 PAGE_LOAD       /* Load saved game page. */
 #define SPECENUM_VALUE4 PAGE_NETWORK    /* Connect to network page.  */
 #define SPECENUM_VALUE5 PAGE_GAME       /* In game page. */
+#define SPECENUM_VALUE6 PAGE_GGZ        /* In game page.
+                                         * This one must be last. */
 #include "specenum_gen.h"
 
-#include "gui_proto_constructor.h"
-
-GUI_FUNC_PROTO(void, real_set_client_page, enum client_pages page)
-GUI_FUNC_PROTO(enum client_pages, get_current_client_page, void)
-GUI_FUNC_PROTO(void, update_start_page, void)
+void real_set_client_page(enum client_pages page);
+enum client_pages get_current_client_page(void);
+void update_start_page(void);
 
 /* Actually defined in update_queue.c */
 void set_client_page(enum client_pages page);

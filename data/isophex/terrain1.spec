@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.3-spec"
 
 [info]
 
@@ -52,8 +52,6 @@ tiles = { "row", "column","tag"
 
   9,    0, "t.l0.jungle1"
 
- 10,    0, "t.l0.inaccessible1"
-
 ;currently blank?
 ; 10,   0, "t.l0.ocean1"
 
@@ -64,9 +62,6 @@ tiles = { "row", "column","tag"
 
  1,   2, "ts.buffalo"
  1,   3, "ts.wheat"
-
- 2,  2, "ts.fish"
- 2,  3, "ts.whales"
 
  7,   7, "ts.grassland_resources", "ts.river_resources"
 
@@ -90,39 +85,32 @@ tiles = { "row", "column","tag"
 
  9,   2, "ts.gems"
  9,   3, "ts.fruit"
- 9,   4, "ts.horses"
  9,   5, "ts.seals"
  9,   6, "ts.forest_game"
 
-; Maglevs
- 12, 1, "road.maglev_n"
- 12, 2, "road.maglev_ne"
- 12, 3, "road.maglev_e"
- 12, 4, "road.maglev_se"
- 12, 5, "road.maglev_s"
- 12, 6, "road.maglev_sw"
- 12, 7, "road.maglev_w"
- 12, 8, "road.maglev_nw"
+ 10,  2, "ts.fish"
+ 10,  3, "ts.whales"
+ 10,  5, "ts.horses"
 
-; Roads
- 11, 1, "road.road_n"
- 11, 2, "road.road_ne"
- 11, 3, "road.road_e"
- 11, 4, "road.road_se"
- 11, 5, "road.road_s"
- 11, 6, "road.road_sw"
- 11, 7, "road.road_w"
- 11, 8, "road.road_nw"
+;roads
+ 11, 1, "r.road_n"
+ 11, 2, "r.road_ne"
+ 11, 3, "r.road_e"
+ 11, 4, "r.road_se"
+ 11, 5, "r.road_s"
+ 11, 6, "r.road_sw"
+ 11, 7, "r.road_w"
+ 11, 8, "r.road_nw"
 
-; Rails
- 12, 1, "road.rail_n"
- 12, 2, "road.rail_ne"
- 12, 3, "road.rail_e"
- 12, 4, "road.rail_se"
- 12, 5, "road.rail_s"
- 12, 6, "road.rail_sw"
- 12, 7, "road.rail_w"
- 12, 8, "road.rail_nw"
+;rails
+ 12, 1, "r.rail_n"
+ 12, 2, "r.rail_ne"
+ 12, 3, "r.rail_e"
+ 12, 4, "r.rail_se"
+ 12, 5, "r.rail_s"
+ 12, 6, "r.rail_sw"
+ 12, 7, "r.rail_w"
+ 12, 8, "r.rail_nw"
 
 ;add-ons
  2, 7, "tx.oil_mine" 
@@ -164,7 +152,6 @@ dy = 32
 pixel_border = 1
 
 tiles = { "row", "column","tag"
-  0, 0, "road.road_isolated"
-  1, 0, "road.rail_isolated"
-  2, 0, "road.maglev_isolated"
+  0, 0, "r.road_isolated"
+  1, 0, "r.rail_isolated"
 }
