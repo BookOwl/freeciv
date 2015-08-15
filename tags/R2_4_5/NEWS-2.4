@@ -1,0 +1,1744 @@
+========================
+Welcome to Freeciv 2.4.5
+========================
+
+The changes in the 2.4.x series are summarised below.
+For changes prior to 2.4, see NEWS. For more detailed changes,
+see the ChangeLog file.
+
+
+CHANGES FROM 2.4.4 to 2.4.5
+---------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.5>)
+
+   2.4.5 is a bugfix release.
+
+Server / General
+
+Changes affecting players (supplied rulesets)
+
+     * Fix a longstanding bug in border rules:
+          + Water tiles next to cities and other border sources could
+            sometimes remain unclaimed, semi-randomly. Now they are always
+            claimed. (This had not been working as intended since at least
+            2.1.) GNA#23503
+          + (The bug that city worked tiles could be stolen, fixed in the
+            later 2.5 series, has not been fixed in this 2.4 maintenance
+            release, as it was deemed too much of a rule change.
+            GNA#23501)
+     * In the civ2 ruleset, Fanatics are now free of upkeep under a
+       Fundamentalist government; the free shield upkeep under that
+       government has been reduced from 10 to 8. GNAPATCH#3505
+     * Fix trouble with unit visibility when a city is transferred,
+       particularly by diplomatic treaty. GNA#23154
+     * When autosettlers were considering improving terrain, their
+       thoughts could accidentally be sent to the client, so the client
+       would display tiles with the wrong terrain temporarily. GNA#23286
+     * Fix possible trouble when starting a scenario game which has start
+       positions assigned to particular nations. GNA#23093
+     * When an enemy pillages a vision-granting base such as a buoy, the
+       base is now removed from the victim's view of the map. GNA#22863
+     * Fix a corner case where a technology could be granted to a dead
+       player due to changing research costs. GNA#23437
+     * When the AI proposed a treaty, it could be sent in such a way as to
+       cause the client to pop it up in front of other tabs, obscuring
+       end-of-turn activities. GNA#23565
+     * Improve checking for creation of illegal pacts, such as between
+       team-mates. GNA#23408 GNA#23421
+     * An empty 'startunits' setting will now be rejected rather than
+       causing a crash. GNA#23346
+
+Changes affecting other rulesets / modders
+
+     * Fix a server crash in rulesets with variable city map radius. This
+       could manifest for instance if city radius depends on government.
+       GNA#23591
+     * script.lua is now evaluated before default.lua, so that rulesets
+       can pre-empt signal handlers set by by default.lua (currently
+       "hut_enter" and "city_lost"). GNA#23101
+     * Attempting to move a bombarder unit into an empty city now moves,
+       rather than bombarding. GNA#20956
+     * Nations without legend text no longer crash the server. GNA#20110
+     * More robustness against invalid rulesets. GNA#23107
+
+Changes affecting server operators
+
+     * The /mapimg delete all command did not always delete every
+       definition. GNA#23095
+     * Server tab completion for save file names did not allow .xz
+       compressed savegames. GNA#23105
+
+General
+
+     * Memory leak fixes. GNA#23171 GNA#23208 GNA#23209 GNAPATCH#5741
+       GNAPATCH#5740 GNA#23221 GNA#23234 GNA#23257
+     * Various internal changes which should only affect developers.
+       GNAPATCH#5491 GNAPATCH#5579 GNA#23167 GNAPATCH#5711 GNA#23173
+       GNAPATCH#5722 GNAPATCH#5775 GNAPATCH#5780 GNAPATCH#5779
+       GNAPATCH#5777 GNA#23268 GNAPATCH#6012
+
+AI
+
+     * Fix possible AI crashes in rulesets with ocean cities. GNA#23046
+       GNA#23227 GNA#23230 GNA#23250
+     * The AI no longer asks to sign a ceasefire if circumstances prevent
+       signing any treaty. GNA#23542
+
+Clients
+
+     * In terrain info popups, show the countdown to armistice expiry as
+       well as for ceasefire. GNA#23303
+     * The client could crash if the tileset was changed with the science
+       dialog open. GNA#22625
+     * Area selection mode for cities (right-click-and-drag) now works in
+       games with national borders disabled. GNA#23058
+     * (Gtk) Prevent the main map window layout jumping about when
+       switching between unit stacks of different sizes. (This was
+       particularly noticeable with hex tilesets.) GNA#23562
+     * (Gtk) Various minor cosmetic changes. GNA#20772 GNA#22676
+       GNAPATCH#5957 GNA#23563
+     * (Gtk3) The Turn Done button now blinks if you are the last player
+       to finish a turn in a multiplayer game. GNA#23269 (This
+       functionality has theoretically been present in all clients, but
+       has been more or less broken forever. It now takes into account
+       disconnected players. GNA#23277)
+     * (Gtk3) Clicking "Show All Cities" in the Goto/Airlift dialog could
+       cause all cities to be focused in turn. GNA#20624
+     * (Gtk3) Map in city dialog is now greyed out when under governor
+       control, as for other clients. GNA#22834
+     * (SDL) It was not possible to withdraw shared vision from someone
+       you were at war with. GNA#23210
+     * (SDL) When a spy sabotaged a specific building, the dialog for
+       choosing that building could remain. GNA#23296
+     * (SDL) Correct shortcut key label for transform (to 'O' instead of
+       'M'). GNA#23162
+     * (SDL) Fix a crash and other trouble when changing to a different
+       player mid-game. GNA#23540 GNA#23551
+     * (SDL) Observers are no longer invited to end their turn. GNA#17703
+     * (SDL) Fix a possible crash if font loading fails. GNA#23195
+
+Tools
+
+     * Fix error messages and possible crashes from modpack installers on
+       Windows. GNA#22966
+     * Fix possible bugs when closing the modpack installer. GNA#23055
+
+Tilesets / Art
+
+     * All supplied tilesets now have graphics for the Refugee unit, used
+       for instance by the add-on civ2civ3 modpack. GNAPATCH#5486
+     * Fix minor glitches in various supplied tilesets. GNA#23332
+       GNAPATCH#5282
+
+Help / Documentation
+
+     * Miscellaneous improvements to in-game text and user documentation.
+       GNAPATCH#5515 GNA#23039 GNA#23197 GNA#23204 GNAPATCH#5751 GNA#23239
+       GNA#23240 GNAPATCH#5782 GNA#23214 GNA#23263 GNAPATCH#6189
+     * Miscellaneous changes to developer/ruleset docs. GNAPATCH#5477
+       GNA#23163 GNA#23145 GNA#23200 GNAPATCH#5723 GNAPATCH#5744
+       GNAPATCH#5809 GNAPATCH#5948 GNAPATCH#6024
+     * Invisible changes to assist localization. GNAPATCH#5807 GNA#23333
+       GNA#23443
+
+Translations
+
+     * Updated translations:
+          + Complete translations: French, Spanish, Polish, British
+            English.
+          + Incomplete translations: Russian (99.9%), Finnish (97.3%),
+            Japanese (96.5%), Irish (95.4%).
+
+Build/portability
+
+     * Fix some warnings from GCC 5 and cppcheck. GNAPATCH#5994
+       GNAPATCH#6092
+     * Check for __VA_ARGS__ handling at configure time, giving a less
+       obscure error when attempting to use a compiler that does not
+       implement the behavior we rely on (such as tcc). GNAPATCH#6033
+     * Improve diagnostic if configure fails to find pkg-config
+       (previously it was erroneously warning about libcurl). GNA#23133
+     * The shipped Windows installer Makefile is now compatible with the
+       environment that is used to build the Windows installers. GNA#23246
+       GNAPATCH#5845 GNATASK#7887
+
+
+CHANGES FROM 2.4.3 to 2.4.4
+---------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.4>)
+
+   2.4.4 is a bug-fix release. Notable bugs fixed include serious issues
+   in East Asian locales on Windows, occasional inability to switch
+   governments in the Gtk client, research in games with teams, and
+   premature nuclear explosion.
+
+Server / General
+
+Changes affecting players (supplied rulesets)
+
+     * Numerous fixes to research in games with teams:
+          + With team_pooled_research enabled:
+               o Technology cost now takes into account effects from all
+                 players in the team; previously it was picking a random
+                 player for penalties such as the Novice AI science
+                 penalty. GNAPATCH#5098
+               o Similarly, tech upkeep now takes into account all players
+                 in a team. GNAPATCH#5099
+               o If a technology is lost, all team members share the
+                 effects (such as losing their government), and all
+                 clients can see that the tech is lost. GNA#21935
+               o All clients are kept up to date with accurate progress of
+                 current research. GNAPATCH#5100 GNAPATCH#5185
+          + With team_pooled_research disabled: only one player per team
+            was getting the free techs given at the start of the game
+            (e.g., with the 'techlevel' setting). GNA#22522
+     * Other fixes to tech loss:
+          + The server's count of a player's technologies was not reduced.
+            This could cause technology cost to be too high and have other
+            bad effects. GNA#22579
+          + Ruleset effects that survived the global loss of a technology
+            (such as wonder obsoletion) did not survive a save/reload
+            cycle. GNA#22909
+     * Tech upkeep cost was slightly larger than intended. GNA#22912
+     * When following orders into fogged territory, a unit will now abort
+       its orders if it runs into an unexpected unit or city on its last
+       step (rather than blindly attacking, etc). GNA#20618
+     * Transported units or those in cities could fail to be revealed when
+       entering an alliance. GNA#20726 GNA#22851
+     * 'unitwaittime' now applies to exploding nuclear units in place as
+       well as to regular attacks. GNA#22838
+     * Investigating an empty city that was previously known to contain
+       units mistakenly displayed the former units as still
+       present/supported. GNA#22498
+     * When the 'foggedborders' server option was enabled, border
+       information was not included in map transfers between players.
+       GNA#22497
+     * Fix a possible server crash when a diplomat is killed after bribing
+       a unit. GNA#22762
+     * Fix some assertion failures when changing player (for instance in
+       edit mode). GNA#19848
+     * Fix bugs with taking AI players and entering/leaving AI or 'away'
+       mode: GNA#22716 GNAPATCH#5046
+          + Taking an AI player could leave the player with invalid tax
+            rates.
+          + Putting a player who'd previously been /away under full AI
+            control could leave them with the conservative 'away' skill
+            level rather than a proper AI skill level.
+          + AI state was not set up and cleared correctly when changing
+            '/away' mode. For the classic AI, this could lead to incorrect
+            defense calculations.
+          + 'autotoggle' and 'aitoggle' now work for barbarian players (as
+            'away' did before). GNA#22724
+     * In the multiplayer ruleset, ensure notifications are sent out about
+       new technologies gained from Philosophy or Darwin's Voyage.
+       GNA#22783 GNAPATCH#5355 GNAPATCH#5358 GNA#22827
+     * Prevent diplomacy with barbarian players in the civ1 and civ2
+       rulesets (in civ1, it was possible to attempt treaty with pirates
+       but not barbarians). GNA#22727 GNA#22728
+     * Prevent team-mates from withdrawing shared vision from each other.
+       GNA#22992
+     * Remove spurious assertion failures about MAP_MAX_LINEAR_SIZE when
+       generating large maps. GNA#19429 GNA#22640
+     * For the purposes of credit in the rank log, any user detaching from
+       a player (even an observer) was resetting the username used for
+       ranking. For now the ranking rules have been reverted to those used
+       up until 2.3.2. GNA#22458
+     * Fixes to voting:
+          + Do not call votes which will immediately pass (for instance if
+            a user is alone on a server). GNAPATCH#5181
+          + Fix incorrect vote information displayed in a client which
+            connects while a vote is in progress. GNA#22566
+     * The 'surrender' command now does additional sanity checks.
+       GNA#22622
+     * Fix display of team names. GNA#22394
+
+Changes affecting other rulesets / modders
+
+     * Fixes to rulesets with root requirements in their technology tree:
+          + Fix general slowness (sometimes extreme) in such rulesets.
+            GNA#22159 GNAPATCH#5357 GNA#22876
+          + Research could fail to pick the next technology toward a
+            faraway goal. GNA#22789
+
+Changes affecting server operators
+
+     * Patch CVE-2014-5461 in Freeciv's embedded Lua 5.1 interpreter. This
+       could conceivably allow a malicious modpack or script to escape the
+       sandbox. GNA#23031
+     * Fix a possible server crash on quit. GNA#22996
+     * Creating a player midgame (with /create or Lua script) didn't
+       initialize city style and gender correctly. GNA#22832
+     * The /create command now validates the AI type argument better.
+       GNA#22697
+     * When built without readline support, the server could stop
+       accepting input after an empty line. GNA#18254
+     * More robustness against loading invalid savegames. GNA#22523
+       GNA#21327
+
+General
+
+     * Several fixes to pathfinding, used for client goto and for the AI:
+          + Units which will be unable to move next turn but still have
+            move points this turn (for instance due to tech loss) are now
+            handled correctly. (This could lead to premature nuclear
+            explosion in rulesets where nuclear units require extra
+            technology to move, such as the civ2civ3 add-on.) GNA#22569
+          + A collection of general fixes which, together with
+            client-specific fixes, we hope will resolve a client crash
+            observed on Windows (GNA#21774), and probably fix other bugs
+            too. GNAPATCH#5190 GNA#22693 GNA#22756 GNA#22755
+          + Other minor fixes and speed improvements. GNA#22636 GNA#21938
+     * Already-built wonders are now dismissed when considering what
+       players can ever build. This affects the client city UI and may
+       also affect AI behavior. GNA#22667
+     * Fix a bug which could cause strings to contain invalid/truncated
+       UTF-8 sequences. GNA#22885
+     * Fix/improve diagnostic messages in error cases, notably including
+       network failures. GNA#22481 GNA#22503 GNA#22462 GNA#22706 GNA#22729
+       GNA#22282
+     * Fix a possible crash when an --enable-debug build tried to print a
+       very deep backtrace. GNA#22854
+     * Minor speed optimization. GNAPATCH#5154
+     * Memory savings and leak fixes. GNA#21552 GNA#22582 GNA#22583
+       GNA#22587 GNA#22589 GNA#22626 GNA#22627 GNA#22629 GNA#22630
+       GNA#22631 GNA#22632 GNA#22670 GNAPATCH#5123
+     * Various internal changes which should only affect developers.
+       GNAPATCH#5111 GNAPATCH#5167 GNAPATCH#5182 GNAPATCH#5192 GNA#22824
+       GNAPATCH#5381 GNA#22781 GNAPATCH#5298 GNAPATCH#5299 GNAPATCH#5297
+       GNAPATCH#5296 GNA#22955 GNAPATCH#5473 GNA#22977
+
+AI
+
+     * The AI was undervaluing units defined as good defenders in the
+       ruleset, and overvaluing 'OK' defenders. GNA#22617
+     * The AI could continue trying to build worker units in inappropriate
+       situations, such as where the population cost would cause a city to
+       disband. GNA#22972
+     * The AI now considers the effect of the 'diplcost' setting when
+       evaluating the value of a gold transfer clause in a treaty.
+       GNAPATCH#5399
+
+Clients
+
+     * The Windows Gtk client is built against a different Gtk version,
+       fixing major problems in East Asian locales, including inability to
+       use the chatline and other text boxes, and failure to display the
+       online help. GNA#21038 GNA#22607
+     * Fix a longstanding bug in the Gtk client that could make it
+       impossible to select a new government. GNA#18764
+     * The client now supports loading a save file from the command line
+       directly, with the --file command line option. GNAPATCH#3180
+     * The 'Explode Nuclear' command is now more careful; previously, if
+       the nuclear unit was unable to reach the specified destination (or
+       move at all), it would explode regardless (this could happen due to
+       'unitwaittime', due to another bug). Also, the command now supports
+       setting waypoints. GNA#21934 GNA#22624 GNA#22722
+     * Various fixes to client goto. (Some of these may resolve a client
+       crash observed on Windows: GNA#21774.)
+          + Ignore duplicate waypoints in client goto, and attempts to go
+            nowhere. GNAPATCH#5271 GNAPATCH#5191 GNA#22610
+          + Improve behaviour if a unit moves or is lost while the user is
+            in the middle of specifying a goto. GNAPATCH#5193 GNA#22577
+     * Fix client error messages when manipulating units with a zero move
+       rate. GNA#22571
+     * Some fixes to spy and caravan action dialogs:
+          + Some buttons were active when the relevant action was not
+            available. GNA#22565 GNA#22592 GNA#22593
+          + (Gtk) When multiple spy action dialogs were active at the same
+            time, orders could end up being issued to the wrong unit.
+            GNA#21636 GNAPATCH#4502 GNA#22595
+     * Fix a cause of the client starting a server which it then could not
+       connect to. GNA#22463
+     * Fix error messages and possible instability when the city governor
+       is working on a city that has been destroyed. GNA#16438
+     * Fix some graphical glitches when moving units. GNA#19946 GNA#22770
+     * Fix an error message when observing a player who is building a
+       spaceship. GNA#22933
+     * Map editor fixes and improvements:
+          + Fix bugs in tile copy and paste:
+               o Tiles were pasted in completely the wrong place.
+                 GNA#21655
+               o Copying units could cause assertion failures. GNA#22558
+               o The client could remember possibly-invalid tiles from one
+                 game to the next. GNA#22553
+          + Prevent setting normal players to barbarian and other
+            unsuitable nations. GNA#22742
+     * (Gtk) With the 'Help' box checked in the science dialog, technology
+       help would pop up randomly at turn end and other times. GNA#19882
+     * (Gtk3) Fix a bug causing the chat window to be minimised after
+       reconnecting, and assertion failures. GNA#21639 GNA#22673
+     * (Gtk3) Various display issues:
+          + Fix problems with flag display. GNA#21373 GNA#22457 GNA#22517
+          + Fix fog-of-war in some tilesets. GNA#21601
+          + Miscellaneous cosmetic tweaks. GNA#22671 GNA#22672
+     * (SDL) Fix client crash when attempting industrial sabotage of a
+       city with no buildings. GNA#22495
+     * (SDL) Fix incorrect background color on some dialogs. GNA#22511
+
+Tilesets / Art
+
+     * The Cimpletoon tileset now includes graphics for a Migrant unit,
+       like other supplied tilesets. This is used for instance in the
+       civ2civ3 add-on. GNA#20029
+     * The Crusader nation was using a large flag by mistake in small
+       tilesets such as Trident. GNA#22653
+
+Help / Documentation
+
+     * Miscellaneous improvements to in-game text and user documentation.
+       GNA#22513 GNA#22623 GNAPATCH#5314 GNA#22825 GNA#22823 GNA#22846
+       GNA#22869 GNAPATCH#5388 GNAPATCH#5389 GNA#22847 GNAPATCH#5452
+     * Miscellaneous changes to developer/ruleset docs. GNA#22444
+       GNAPATCH#5183 GNA#22793 GNAPATCH#5356 GNAPATCH#5374 GNA#22848
+       GNAPATCH#5423
+
+Translations
+
+     * Updated translations:
+          + Complete translations: Catalan, French, Polish, British
+            English, Spanish, Russian.
+          + Incomplete translations: Finnish (97.1%).
+
+Build/portability
+
+     * Fix compilation with Glib older than 2.32. GNA#22467
+     * Fix failure to build twice in a row due to missing mkinstalldirs.
+       GNA#22773
+     * Fix inability to compile with Python 3. GNA#22705
+     * Fix some compiler warnings. GNA#22886 GNA#22895 GNA#22894 GNA#22915
+     * New configure options --with-desktopdir and --with-appdatadir for
+       finer control of installation locations. GNAPATCH#5047
+     * Add search keywords to .desktop files. GNA#21573
+
+
+CHANGES FROM 2.4.2 to 2.4.3
+---------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.3>)
+
+   2.4.3 is mostly a bug-fix release.
+
+Server / General
+
+Changes affecting players (supplied rulesets)
+
+     * When units were moved in the aftermath of a broken alliance, the
+       client could crash when manipulating those units. The server no
+       longer sends unhelpful information which could trigger the crash in
+       old clients, and the client is robust against this behaviour from
+       old servers. GNA#21899
+     * The server could leak information about how many units were in an
+       enemy city, which a modified client could use to cheat. GNA#22049
+     * Some players could be accidentally given free technologies at game
+       start due to uninitialized memory. This was more likely to be
+       noticeable with multiplayer games; it did not generally happen to
+       the human player in a single-player game. GNA#22056
+     * In team games with the server setting 'team_pooled_research'
+       disabled, the server could crash, and team members' research goals
+       still affected each other. GNA#21160 GNA#21161
+     * A player unfortunate enough to lose their first city before
+       acquiring their second would not get a free Palace in their second
+       city. Also, non-barbarian players now get their free buildings if
+       they acquire their first city by conquering or diplomacy rather
+       than founding it themselves. GNA#22271 GNA#22343 GNA#22340
+     * Games with large numbers of units and/or cities in their history
+       (tens of thousands) could crash. GNA#21950
+     * When a caravan arrived in a coastal city on a ship, the caravan
+       arrival dialog was not being popped up. GNA#22054
+     * When an attack can't be carried out, a reason is now given.
+       GNAPATCH#4445 GNA#21693 GNA#21728 GNA#21733 GNA#21767
+     * A unit could not conquer a city while carrying other units (this
+       could happen with a Mech. Inf. carrying missiles in the
+       experimental ruleset). GNA#20789
+     * Fix assertion failures from a rare case of first contact between
+       AIs triggered by unit movement from alliance breakup. GNA#22245
+     * When a trade route is canceled due to a better one being
+       established, the player whose action initiated this is now
+       notified. GNAPATCH#4526
+     * Diplomats/Spies could not steal Future Tech. GNA#22057
+     * The multiplayer ruleset now defaults to an isometric topology, to
+       match the client default. GNA#22325
+     * civ1/civ2: Veteran Diplomats were vastly overpowered. Reduced their
+       relative strength back to the level they had in 2.3.x. GNA#22202
+     * civ2: Food upkeep for Settlers reduced from 3 to 2 under Communist
+       and Fundamentalist governments. GNA#21519
+     * civ2: Barbarian players without a capital no longer suffer from
+       crippling (or any) shield waste. GNA#21629
+     * Prevent Nuclear units in supplied rulesets from gaining useless
+       veteran levels from Airports. GNA#22164
+     * Barbarian and civil war leaders are now reported with the correct
+       title for their gender (previously they were always created as
+       female). GNA#21853
+
+Changes affecting other rulesets / modders
+
+     * Fixed suppression of veteran information for units with the
+       'NoVeteran' flag. This could affect rulesets with units which can
+       be trained as veteran but can't gain veterancy through experience.
+       GNA#22171 GNA#22199 GNA#22201
+     * Fix trouble loading a savefile from a ruleset where the maximum
+       number of veteran levels for a unit has decreased in more recent
+       versions. GNA#22172
+     * Enable display of mines on all kinds of terrain in all supplied
+       tilesets, to support modpacks with different mining rules from the
+       supplied rulesets (for instance civ2civ3, where Tundra can be
+       mined). GNA#21559 GNA#22424
+     * In rulesets with self root_req technologies, technology loss due to
+       tech upkeep can no longer cause loss of such technologies.
+       GNA#22161
+     * Rulesets containing unit classes other than land units which are
+       subject to zones of control could cause erroneous assertion
+       failures. GNA#21777
+     * The TerrainClass, Base, and CityTile requirement types with
+       Adjacent/CAdjacent ranges were not checking the center tile. Now
+       they do, for consistency with other requirement types. This has no
+       effect on the supplied rulesets. GNA#21470
+     * Units could be left stranded in non-native terrain such as ocean,
+       if they moved onto a tile containing a suitable transport that was
+       itself being transported (loading onto such transports not being
+       permitted). For instance, in the civ2civ3 ruleset, troops moving
+       onto a Helicopter on a Carrier on the ocean could be left dangling
+       over the ocean when the Carrier moved on. GNA#22389
+     * All attempts to enforce restrictions on the depth and type of
+       nested transport units have been removed, as they were broken.
+       2.5.x will enforce these restrictions properly. GNA#22050
+     * In a ruleset where a nation's first city is granted a free great
+       wonder, clients would not be reliably updated with its effects.
+       GNA#22276
+     * If city removal caused removal of infrastructure (such as roads in
+       a disbanded ocean city), this would not reliably be sent to
+       clients. GNA#22074
+     * A base added to a tile via Lua script would not reliably be sent to
+       clients. GNA#21738
+     * Calling (Tile):has_base() in Lua with a nonexistent base name could
+       crash the server. GNA#22341
+     * Fix trouble with changing an existing tile label on a tile.
+       GNA#21657
+     * Fix trouble loading a pre-2.3 savefile from a ruleset which has
+       since had citizen nationality enabled. GNA#20538
+     * Fix trouble in the client help for nations with an explicit
+       rule_name. GNA#22241
+     * Extra sanity checking when loading rulesets. GNAPATCH#4682
+       GNAPATCH#4972
+
+Changes affecting server operators
+
+     * A game with alternating movement (via the phasemode setting) could,
+       when saved and reloaded, give some players a second chance to move
+       within the same turn. GNA#21632
+     * Loading xz-compressed savegames could fail. GNA#21603
+     * The '/write' command wrote out scripts some of whose settings did
+       not take effect, because the 'rulesetdir' command at the end reset
+       settings set earlier in the script. GNA#22447
+     * A server started with the -e option erroneously sent a message to
+       its metaserver claiming that it would restart soon rather than
+       shutting down. GNA#21504
+     * Failure to set up the multicast socket for LAN game announcements
+       could cause trouble later. GNA#21781
+     * When the server was in edit mode, detached clients could receive
+       unwanted packets and emit warnings. GNA#21468
+     * The script for creation of MySQL authentication databases no longer
+       uses syntax incompatible with recent MySQL/MariaDB. GNA#21315
+     * Newly created savegames contain information to speed up creation of
+       a scenario list in future versions. GNAPATCH#4815
+     * Fix a very minor memory leak in the island-based map generator.
+       GNA#21553
+
+General
+
+     * Some optimization for speed, particularly on the server, some as a
+       result of profiling analysis. GNAPATCH#4609 GNAPATCH#4563
+       GNAPATCH#4672 GNA#21972 GNAPATCH#4678 GNAPATCH#4694 GNAPATCH#4883
+       GNAPATCH#4934 GNA#22392
+     * Fix logging in a rare situation. GNA#21658
+     * Various internal changes which should only affect developers.
+       GNAPATCH#4469 GNAPATCH#4483 GNAPATCH#4626 GNA#21895 GNAPATCH#4693
+       GNA#22106 GNA#22183 GNA#22277 GNAPATCH#4937 GNA#22345 GNA#22380
+       GNA#22364
+
+AI
+
+     * Fix a crash related to AI diplomacy in a game with alternating
+       phases, and possibly other similar issues. GNA#21616 GNAPATCH#4515
+     * Fix broken AI evaluation of government benefits. GNA#21742
+     * The AI now fears transport units which can carry any units which
+       can take over cities (such as Carriers which can carry
+       Helicopters), rather than land units. GNA#21892
+     * Fixes to the AI's ability to find a beachhead to land troops.
+       GNA#21913
+     * When the AI lost control of a cargo unit, any ferry unit assigned
+       to it could fail to be freed for another purpose, possibly
+       stimulating excessive AI boat production. GNAPATCH#4711
+     * The AI now counts the pillaging of any fortress it owns against the
+       responsible player, even if that caused it to lose the territory on
+       which the fortress stood. GNA#22445
+     * The default AI no longer attempts to read the mind of its ally
+       concerning intentions to declare war -- this could go wrong for
+       human allies, or in principle for custom AI implementations.
+       GNA#21630
+     * Fix a case where an AI sea bodyguard could abandon its charge after
+       meeting it. This doesn't affect the supplied rulesets.
+       GNAPATCH#4864
+     * Allow the AI to consider building-specific benefits with some
+       ruleset constructs (which are not used in the supplied ruleset).
+       GNA#21852
+     * Some fixes to the AI's evaluation of benefits in rulesets using
+       negated requirements. Does not affect the supplied rulesets.
+       GNAPATCH#4451 GNA#22399
+     * The AI's evaluation of improvement benefits was broken in the
+       presence of ruleset effect clauses with zero value. (Should not
+       affect most rulesets, but may sometimes occur when testing a new
+       ruleset.) GNA#22363
+
+Clients
+
+     * Goto pathfinding no longer treats transports with orders as
+       potential refuel points -- for instance, an aircraft will not plan
+       to land on a Carrier that's en route to somewhere else and will
+       likely not be there any more when the aircraft arrives. GNA#20625
+     * Fix some possible goto/pathfinding issues for units with more than
+       one turn of fuel, such as bombers. GNAPATCH#4931
+     * Research rates that are negative (due to tech upkeep) or very large
+       were not sent to the client correctly and could cause warnings.
+       Both client and server must be upgraded for this fix to be fully
+       effective. GNA#21549
+     * Improvements to the breakdown of city output in city dialog info
+       popups:
+          + If a city's trade is restricted by the
+            'notradesize'/'fulltradesize' settings, this size penalty is
+            now displayed separately, instead of being lumped in
+            confusingly with regular corruption. GNA#21409
+          + If the client can't correctly account for city output (may
+            happen with modpacks), it now acknowledges this rather than
+            displaying sums that don't add up. GNA#21442
+     * The client no longer overrides link text in messages from the
+       server, avoiding nonsensical messages like "You already had a city
+       called Helsinki. The city was renamed to Helsinki." GNA#21326
+     * Preparing the list of scenarios can take a while, so the client now
+       displays a message while that's going on. GNAPATCH#4814
+     * Menu music wasn't being played after leaving a game and returning
+       to the main menu. GNA#21635 GNA#22077
+     * Copying and pasting in the editor caused spurious/mangled tile
+       labels to appear. GNA#21656
+     * The editor spuriously prevented setting the veteran level of units
+       with the NoVeteran flag. GNA#22198
+     * (Gtk) The apostrophe key now focuses the chatline in pregame (as it
+       already did during play). GNA#22429 GNA#22453
+     * (Gtk) The client now quits more cleanly in some circumstances.
+       GNA#21806
+     * (Gtk) Fix an assertion failure on quit after opening the Lua
+       console. GNA#22431
+     * (Gtk2) Minor improvement to error reporting when loading graphics
+       fails. GNAPATCH#4478
+     * (Gtk3) Clicking on specialists in the city dialog did the wrong
+       thing. GNA#22366
+     * (Gtk3) Fix some causes of slowness with the Gtk3 client and its
+       default theme. GNAPATCH#4590 GNA#21726
+     * (Gtk3) Client erroneously claimed to support XPM format, meaning it
+       could potentially choke with modpacks containing XPM files
+       (although it's unlikely such modpacks exist). GNA#21604
+     * (Gtk3) Fix some minor cosmetic issues. GNA#22078 GNAPATCH#4786
+     * (SDL) Display real names of veteran levels instead of always saying
+       'veteran'. GNA#22170
+     * (SDL) Fix unclean shutdown. GNA#22124
+
+Tools
+
+     * The modpack installer could become unstable due to incorrect thread
+       usage. GNA#22168
+
+Help / Documentation
+
+     * The documentation of the --scenarios option was completely wrong.
+       GNA#21713
+     * Fix generated help text for negated requirements; these were
+       incorrect, for instance for the Aqueduct buildings in the civ2civ3
+       ruleset. GNAPATCH#3841
+     * Autogenerated help for governments now documents non-integer upkeep
+       factors, and documents veteran bonuses better. GNAPATCH#4450
+       GNA#21624
+     * Miscellaneous other improvements to in-game text and user
+       documentation. GNA#21631 GNAPATCH#4733 GNA#22150 GNA#22152
+       GNA#22165 GNA#22246 GNAPATCH#4873 GNA#21446 GNAPATCH#4908 GNA#22281
+       GNA#22300 GNAPATCH#4125 GNA#21550 GNA#22405 GNA#22416 GNAPATCH#5012
+       GNA#22427 GNA#22430 GNAPATCH#4400 GNAPATCH#4507 GNA#21712 GNA#22127
+       GNAPATCH#5016
+     * Miscellaneous changes to developer/ruleset docs. GNAPATCH#4689
+       GNA#22200 GNAPATCH#4907
+     * Invisible changes to assist localization. GNA#21528 GNA#22322
+       GNA#22303 GNA#22415
+
+Translations
+
+     * Updated translations:
+          + Complete translations: French, Polish, British English,
+            Spanish, Russian.
+          + Incomplete translations: Catalan (>99.9%), Finnish (97.3%),
+            Scottish Gaelic (95.8%), German (95.8%).
+
+Build/portability
+
+     * Building with --enable-shared could create an executable which
+       failed for lack of a readline symbol. This trouble could also show
+       up at build time using the 'gold' linker. GNA#22076
+     * Building could fail to link against libintl when needed. GNA#22266
+     * Building with a recent libtool could fail with Lua errors.
+       GNA#21696 GNA#21897
+     * Add a configure check for _setjmp(); without this, building failed
+       for the Haiku platform. GNA#22320
+     * configure now correctly checks for a minimum Curl version of 7.9.7.
+       GNAPATCH#4716
+     * Clarify configure's error message when no client can be built.
+       GNAPATCH#4870
+     * Fix various compiler warnings, many detected by the Clang
+       toolchain. GNA#21495 GNA#21496 GNAPATCH#4492 GNAPATCH#4504
+       GNA#18872 GNAPATCH#4785 GNA#19307 GNA#21773
+
+
+CHANGES FROM 2.4.1 to 2.4.2
+---------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.2>)
+
+   2.4.2 is mostly a bug-fix release; it includes an important fix to air
+   unit pathfinding, as well as fixes for server and client crashes.
+
+Server / general
+
+Changes affecting players (supplied rulesets)
+
+     * Pathfinding (goto) fixes for aerial units:
+          + Units could fail to refuel and die -- this bug was introduced
+            in 2.4.0-RC2. GNA#21359
+          + Units could take unnecessary detours in the presence of refuel
+            points. GNA#21461 GNA#21523
+          + Possible slowdown in rare circumstances where no route was
+            possible. GNA#21369
+     * Large map updates (such as at game end, or when gaining the Apollo
+       Program) could lead to cut connections, particularly on Windows. To
+       avoid this, map updates are now compressed over the network; as
+       well as fixing cut connections, this may speed up network play,
+       although the visual effect of the update is now choppier. GNA#18532
+       GNA#19452 GNAPATCH#4314
+     * Fix a server crash if a transport died due to its passenger's
+       action (this could happen in the civ1 ruleset). GNA#21462
+     * If one of your diplomatic units was on the same tile as an allied
+       player's unit/city and a second diplomat of yours acted against
+       your ally, your two diplomats would do battle with each other.
+       GNA#21596
+     * A player's view of fogged borders could fail to be updated
+       correctly in rare circumstances, such as paratroopers dropping to
+       their doom. GNA#21393
+     * Fix unlikely possibility of loot from a very large conquered city
+       causing the victim's treasury to go negative. GNA#21389
+     * The multiplayer/experimental rulesets could fail to load if a
+       development version of Freeciv was already installed. GNA#21576
+
+Changes affecting other rulesets / modders
+
+     * Various fixes on server and client to handle rulesets with
+       'negated' requirements better (the supplied rulesets don't use
+       these). This mainly corrects misleading online help for buildings,
+       notably in the 'civ2civ3' ruleset. GNA#21424 GNA#21430
+     * Some improved handling of rulesets using technology root_reqs
+       (although problems remain):
+          + Players can now select technology goals requiring reachable
+            but not-yet-known root_reqs. GNAPATCH#4395 GNAPATCH#4399
+          + The default AI now understands this. GNAPATCH#4410
+          + The built-in help no longer claims that such technologies are
+            unreachable. GNA#21480
+          + The "Show All" button in the client technology tree now
+            toggles visibility of technology trees that the player can't
+            reach (such as those rooted at nation-specific technologies).
+            GNAPATCH#4398
+     * Fix a bogus sanity check warning for units transported over
+       non-native terrain. GNA#21456
+     * The map editor vision tool now always refreshes a player's
+       knowledge to match reality. GNA#21392
+     * The "+/-" buttons that appear in the city dialog in edit mode have
+       been removed, as they have never worked. GNAPATCH#4465
+     * Fixes and improvements in ruleset checking:
+          + Allow requirement lists to refer to multiple nations.
+            GNA#21421
+          + Fix possible random spurious rejection of improvement
+            requirement lists. GNA#21418
+          + Check whether 'survives' requirement flags are valid.
+            GNAPATCH#4396
+     * Fix minor bugs in support for Continent/City-ranged building
+       requirements. It's not clear what exactly was affected, but it's
+       likely to be client help and the AI rather than the game engine.
+       GNA#21471
+     * Warn when loading a ruleset that uses the 'negated' field in
+       requirements in effects.ruleset, as Freeciv's handling of such
+       constructs is known to be buggy. This does not change Freeciv's
+       behaviour. None of the supplied rulesets use this construct.
+       GNAPATCH#4413
+          + Nevertheless, a few of the known bugs with these constructs
+            have been fixed. More remain. GNA#21417 GNA#21425
+
+Changes affecting server operators
+
+     * Clients connected to an active server but not to any player could
+       crash, due to the server erroneously sending them information about
+       combat. As well as the crash, this was an information leak; the
+       server no longer sends this information. GNA#21279
+     * Removal of a player (or, occasionally, quitting the server) could
+       cause client crashes due to old references to that player in
+       private maps. GNA#21384 GNA#21524
+     * A malformed building sabotage request from a client could cause a
+       server crash. (No standard version of the client is known to send
+       such malformed requests.) GNA#21558
+     * Nation names sent to the metaserver could become corrupted.
+       GNA#21511
+     * Reduce the amount of network-related spew in the -d 2 logging
+       level. GNA#21506
+     * Fix spurious error messages when LAN announcements are disabled
+       with -A none. GNA#21527
+     * Fix an unlikely possibility of network buffer overflow leading to
+       cut connections in the absence of congestion. This was most likely
+       to occur if the server was run with FREECIV_COMPRESSION_LEVEL=0 for
+       some reason. GNA#21297
+
+Tools
+
+     * The GUI toolkit of the 'freeciv-modpack' utility in the Gtk Windows
+       installer is now consistent with the client version. This should
+       make little difference beyond a possibly smaller installer size.
+       GNA#21474
+     * Bugfixes and small improvements to the 'freeciv-manual' utility.
+       (Note, however, that it remains of limited use outside the
+       development team.)
+          + Add a minimal help page about governments. GNAPATCH#4442
+          + Handle negated improvement requirements. GNA#21432
+          + The --ruleset option was ignored; documentation was always
+            generated for the default ruleset. GNA#21438
+     * 'freeciv-modpack' and 'freeciv-manual' now report an error for
+       unknown command-line options. GNA#21538
+
+Low-level changes
+
+   Changes that could affect any part or use of Freeciv:
+     * Stack usage has been reduced in some circumstances. GNAPATCH#4326
+       GNA#21551
+     * Various internal changes which should only affect developers.
+       GNAPATCH#4313 GNA#21349 GNA#21143 GNAPATCH#4384 GNAPATCH#4402
+       GNA#21516 GNAPATCH#4443 GNA#21529 GNA#21544
+
+AI
+
+     * The AI now only proposes a ceasefire on first contact if they're at
+       war with you (they could start at peace due to mutual alliances).
+       GNAPATCH#4365
+     * Fix AI evaluation of desirability of buildings affecting maximum
+       city size; it could mistakenly prioritise buildings which would
+       reduce the maximum size when already at the size limit. Does not
+       affect supplied rulesets. GNAPATCH#4380
+     * When declaring war on you to due to your provocation, the AI sent
+       you an inappropriate chat message. GNAPATCH#4370
+     * For AI developers: fix possible trouble on first contact between
+       two AIs of different types. (This doesn't affect games which only
+       use the default AI.) GNA#21401
+
+Clients
+
+     * The client could fail to start a local game if another client was
+       running one, or an old server was still running. The client was
+       failing to correctly choose a free port for its spawned server.
+       GNA#19720 GNA#21546 GNA#21547 GNAPATCH#4471
+     * Locally started games are no longer announced on the local LAN
+       (since they would not be connectable). There's some hope that this
+       will also reduce the number of prompts from the Mac OS X firewall.
+       GNAPATCH#4438
+     * The "Diplomat/Spy Actions" action (against an allied victim on the
+       same tile) usually did not work at all. GNA#21595
+     * Units could remain in the focus queue after having been given
+       orders. GNA#20842
+     * Middle-clicking on a unit with "connect" orders now displays its
+       path correctly. GNA#21412
+     * An attempt to set a goto path with the end point also being a
+       waypoint was silently ignored. GNA#19932
+     * Minor optimisation in the City Governor. GNAPATCH#4327
+          + It is hoped that this will fix reported stack overflows in
+            Windows clients (GNA#20940), although we're not positive this
+            is the root cause.
+     * The Cities report now explains what the number in parentheses in
+       the trade route column means (it's the total trade revenue).
+       GNA#21472
+     * (Gtk) Pressing the Tab key in the chatline could cause the client
+       to crash in games where players had been removed. GNA#21395
+     * (Gtk) The Units report now has explanatory tooltips on its column
+       headers, and includes the total number of upgradable units.
+       GNAPATCH#4426
+     * (Gtk3) Fix a resource leak. GNA#21534
+     * (SDL) Clicking on a link in the help for an improvement with a
+       'negated' requirement could cause the client to crash. (The
+       supplied rulesets have no such requirements, but the 'civ2civ3'
+       ruleset does.) GNA#21433
+     * (Xaw) It was not possible to direct a spy to sabotage the first
+       building in the ruleset (Airport in the default ruleset). GNA#21560
+
+Tilesets / Art
+
+     * City specialists (entertainers/scientists/taxmen) now have distinct
+       icons in the city dialog and the tax rate display. GNAPATCH#4422
+     * Fix some minor glitches in the Amplio2 city graphics. GNA#21387
+
+Help / Documentation
+
+     * The generation of online help for governments has been reworked to
+       fix missing and misleading information with some rulesets. In
+       particular, the civ2 ruleset had incorrect information about food
+       upkeep (and many other rulesets simply omitted this information),
+       and the Alien World ruleset's help for tax rates and civ2civ3's
+       help for corruption was incorrect. GNA#20521
+     * Correctly describe the behaviour of the FREECIV_*PATH environment
+       variables in the man pages. GNA#21517
+     * Miscellaneous improvements to developer/ruleset docs. GNAPATCH#4414
+       GNAPATCH#4431 GNAPATCH#4430 GNA#17558
+
+Translations
+
+     * Updated translations:
+          + Complete translations: Spanish, Russian, Catalan, Polish,
+            British English.
+          + Incomplete translations: German (95%).
+
+Build/portability
+
+     * Freeciv programs could be built with the wrong main(); programs
+       would build but do the wrong thing. Originally reported on Mac OS
+       X. GNA#21399
+     * Some files related to Windows installer builds were omitted from
+       the 2.4.1 tarballs. GNAPATCH#4319
+     * Added Appdata files for Freeciv programs. GNAPATCH#4280
+     * Fix a complaint from automake-ng. GNA#21453
+     * Do not distribute the generated Qt client file meta_fc_client.cpp,
+       as it is unlikely to be compatible with everyone's system. (Only
+       affects the experimental Qt client.) GNA#21526
+     * Fix a build failure building from pristine source (e.g., svn; this
+       does not affect normal building from the distributed tarballs):
+       failure to run libtoolize before autoconf could cause trouble.
+       GNA#21452
+     * Fix some compiler warnings from the clang toolchain, and suppress
+       others. (Other such warnings remain.) GNAPATCH#4373 GNAPATCH#4421
+       GNA#21494
+
+
+CHANGES FROM 2.4.0 to 2.4.1
+---------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.1>)
+
+   2.4.1 is mostly a bug-fix release; it includes fixes for server and
+   client crashes, and some AI improvements.
+
+Server / general
+
+Changes affecting players (supplied rulesets)
+
+     * If the 'revealmap' server setting was set to show the initial state
+       of the map to players on game start, loading a savegame of that
+       game would freshly reveal the current state of the map to all
+       players. GNA#21172
+     * Fix some bugs in Freeciv's inferences about ruleset effects in the
+       absence of complete information. These are low-level changes whose
+       effects are hard to quantify, but should be more correct; they are
+       most likely to affect client behavior and the AI. The bugs
+       affected:
+          + A particular ruleset definition ('negated' requirements) which
+            is not used in any of the supplied rulesets. GNA#21144
+          + Requirements for the presence of a certain building. GNA#21147
+     * Autosettlers could erroneously believe that by building irrigation
+       or a mine, specials of the other kind would be removed. This is
+       true of the supplied rulesets, but may not be true of other
+       rulesets. GNA#21192
+     * In rulesets such as civ1 where chains of adjacent cities can create
+       'channels' allowing sea units inland, if a city is lost (cutting
+       off the channel), any units now landlocked are correctly destroyed.
+       GNA#21219
+     * Quell some warnings when loading the civ1 ruleset. GNA#20770
+     * Bug fix: random connection loss could occur due to disagreement
+       between client and server about the interpretation of certain
+       compressed network packets. This only affects a very few exact
+       packet sizes, so you'd have to be quite unlucky to run into it; it
+       is most likely to manifest when the client first connects to the
+       server, in which case only the server needs upgrading to avoid the
+       issue. GNA#21300
+     * The server sent incorrect information to the client about wonders
+       which have been built by players and then lost. This is not known
+       to have any adverse effects. GNA#21096
+
+Changes affecting other rulesets / modders
+
+     * Consider bases when automatically determining a unit's Move_Type
+       when not explicitly specified by the ruleset author. GNA#21022
+     * Do not emit errors for rulesets with no nation groups defined.
+       GNAPATCH#4300
+     * If a ruleset defined too many nation groups/sets, this error was
+       not reported clearly. GNAPATCH#4299
+
+Changes affecting server operators
+
+     * The server could crash if '/remove' was used in the pre-game.
+       GNA#21202
+     * Fail more gracefully if a map is generated with no land for players
+       to start on. GNA#21068
+     * In the case where the game cannot start due to there being
+       insufficient nations for all players, ensure everyone is notified.
+       GNA#21207
+     * '/mapimg colortest' caused assertion failures and a possible server
+       crash. GNA#21159
+     * Fix a harmless warning in the verbose log 'unused entry:
+       savefile.specials_size' when loading a savefile. GNA#19836
+     * Fix some recent regressions in the 'freeciv-manual' utility. (Note,
+       however, that it still has large gaps and is of limited use outside
+       the development team.)
+          + Broken server settings documentation. GNA#21063 GNA#21099
+          + Potential trouble finding the default ruleset definitions.
+            GNA#21086
+     * Bring the included Lua 5.1 up to date with the latest patch (patch
+       2). GNAPATCH#4068
+     * Various internal changes which should only affect developers.
+       GNA#21015 GNA#21206 GNA#21232 GNA#21238
+
+AI
+
+     * Fix bugs in the AI's 'ferry' system (for handling boats and similar
+       transports):
+          + A bug which could possibly lead to AI boats left in an
+            unusable state, and overproduction of boats. GNA#20978
+          + General contradiction within the code about which units use
+            the ferry system, which could cause trouble with unusual
+            transports, such as non-seagoing ones (Triremes in the
+            experimental ruleset, which can navigate rivers) and
+            transports which cannot carry non-land units (such as
+            Carriers). GNA#21154
+     * Fix bugs in AI's evaluation of which attacker units to build:
+          + The logic for determining whether they would be built as
+            veteran was wrong in many ways, including treating
+            veterancy-granting buildings in a city as a downside rather
+            than upside, and not handling veterancy-granting wonders.
+            GNAPATCH#4014
+          + When planning to attack a city, units which could occupy
+            cities only had that ability taken into account, not any
+            ability to destroy enemy units; now both are taken into
+            account. As a result, the AI may now prefer building land
+            units rather than ships. GNAPATCH#4015
+     * The AI's logic for deciding when to try bribing units was flawed.
+       It would give up if the enemy's cities were unbribable, and would
+       not take into account whether the unit (or all the enemy's units)
+       were unbribable. GNA#21064 GNA#21136
+     * Ensure that AI never considers a ruleset effect with zero value as
+       a reason to build an improvement. (Should not affect most rulesets,
+       but may sometimes occur when testing a new ruleset.) GNAPATCH#4289
+     * Fix AI behavior in the presence of negative Size_Unlimit effects in
+       the ruleset. It could consider buildings with such effects a bonus
+       rather than a liability, and if a city ended up with a net negative
+       value for this effect, the AI would never go for buildings which
+       could increase the city size limit. GNA#21240
+     * For AI developers: the 'unit_got' callback could be called with the
+       wrong owner when a unit's home city changed. (This does not affect
+       the default AI, as it does not use this callback.) GNA#21200
+
+Clients
+
+     * National borders would disappear from the map when the local
+       settings dialog was opened for the first time. (Unit background
+       colors would also be wrongly displayed, if enabled.) GNA#21116
+       GNA#21151
+     * The client could crash if the user accepted a tileset suggestion
+       made by the ruleset. GNA#21231
+     * In the Nations report, show a status even for disconnected players
+       (including whether they are blocking turn change). GNA#21023
+     * Fix minor bugs in the handling of CMA settings. Unlikely to have a
+       functional effect on most platforms (beyond slightly smaller
+       savefiles). GNA#21295
+     * (Gtk) Fix a possible crash when pressing the Tab key in the
+       chatline, and some other issues with non-ASCII characters and tab
+       completion. GNA#21293
+     * (Gtk) Stop the 'Number of Players (including AI)' control's state
+       for single-player games from getting out of sync with the spawned
+       server. GNA#21179
+     * (Gtk2, Windows) If additional Gtk themes are installed, the Freeciv
+       theme no longer leaks through in places. As a side effect, the
+       modpack installer is no longer themed. GNA#21163
+     * (Gtk3) Activating (double-clicking) a row in the city report would
+       sometimes randomly fail to pop up the city dialog. GNAPATCH#4294
+     * (Gtk3) Fix selling buildings from the city dialog. GNA#20984
+     * (Gtk3) The end-game score list and the citizen nationality list
+       were both drawn too small. GNA#21108
+     * (Xaw) Client now identifies itself as 'gui-xaw' on its startup
+       screen. GNAPATCH#4064
+
+Tilesets / Art
+
+     * New nuclear explosion graphics for the Amplio2 and Trident
+       rulesets. GNAPATCH#4003
+
+Help / Documentation
+
+     * Minor improvements to user documentation and in-game text.
+       GNAPATCH#4092 GNAPATCH#19452
+     * Miscellaneous improvements to developer/ruleset docs. GNAPATCH#4187
+       GNAPATCH#4267 GNAPATCH#4275 GNA#20872
+     * Invisible changes to assist translation. GNAPATCH#4290
+
+Translations
+
+     * The language code 'no' is no longer listed in the Windows
+       installer, since it was just a copy of the language 'nb' (Norwegian
+       Bokmål). GNAPATCH#4134
+     * The Windows installer now lists languages by name rather than
+       obscure language code. GNA#21060
+     * Updated translations:
+          + Complete translations: Catalan, Polish, British English.
+          + Incomplete translations: French (>99.9%).
+
+Build/portability
+
+     * Fix a build failure when building from scratch in the presence of
+       automake 1.8, and document the minimum requirement of automake 1.9.
+       (This did not affect normal building from the distributed
+       tarballs.) GNA#21216
+     * Install documentation as part of 'make install'. GNAPATCH#4072
+     * A Windows installer can now be built for the Gtk3 client as well as
+       the Gtk2 client. GNATASK#7681
+     * If just the Gtk3 client was installed, it was accompanied by a
+       non-working .desktop file. Fix this, and add a .desktop file for
+       the SDL client too. GNA#21243
+     * Fix potential trouble when building for BeOS. GNA#21153
+     * Fix trouble building a distribution without localization. GNA#21139
+     * Fix a compiler warning on builds without --enable-debug. GNA#21237
+     * Build is now warning-clean on GCC 4.8 -O3. GNAPATCH#4255
+
+
+CHANGES FROM 2.4.0-RC2 TO 2.4.0
+-------------------------------
+
+   For those who've been trying the betas, the only change since RC2 is
+   the addition of a missing embedded language code to some of the
+   translation files. This will probably make no difference to users.
+   GNA#21092
+
+
+CHANGES FROM 2.4.0-RC1 TO 2.4.0-RC2
+-----------------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.0-RC2>)
+
+   This release fixes a couple of crashes:
+     * The server could crash when a unit moved at a point where a new
+       connection had attached to the server but not yet chosen a player
+       or observer. GNA#21019
+     * The client could crash when another civilisation's Settler unit
+       moved out of visibility range. GNA#21044
+
+   and some other issues:
+     * Windows-specific issues:
+          + It was not possible to install the (partial) Indonesian
+            localisation from the Windows installer. GNA#21058
+          + The installer did not offer the option to use the US English
+            (en_US) translation of Freeciv on a non-English version of
+            Windows (although it was possible to use British English,
+            en_GB). GNA#21059
+     * In rulesets with ocean cities, fix a bug where those cities could
+       not claim oceanic territory adjacent to land. GNA#21035
+
+   In addition, the source tarball has been updated with changes made to
+   the Windows installer build for 2.4.0-RC1. GNAPATCH#4095
+
+
+CHANGES FROM 2.4.0-beta2 TO 2.4.0-RC1
+-------------------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.0-RC1>)
+
+Server / General
+
+Gameplay
+
+     * City centre tiles now lose their automatic irrigation bonus if a
+       mine is built on them, since mines and irrigation cannot coexist on
+       a tile. GNA#20932
+          + Similarly, in the supplied rulesets, cities on a tile with a
+            mine can no longer get a farmland bonus.
+     * Fix a pathfinding bug where aerial units would stop to refuel at
+       any city or airbase they passed through, regardless of need.
+       GNA#20786
+     * Cities were erroneously enjoying martial law benefits from
+       unlimited numbers of units, even under governments with a
+       Martial_Law_Max specified (such as Monarchy and Communism in the
+       default ruleset). GNA#20971
+     * Auto-settler units would revert to manual control when moving
+       between adjacent landmasses through a transport. GNAPATCH#3904
+     * When a city chose food-consuming units to disband due to
+       starvation, it could choose units not actually consuming food
+       currently, for instance due to government-type related free upkeep.
+       For instance this could lead to cities disbanding all their units
+       in the 'civ2civ3' ruleset. GNAPATCH#3902
+     * Unit transport related fixes:
+          + Fix assertion failures and similar problems associated with
+            loaded transports of allied players (with whom you don't have
+            shared vision) going out of sight. GNA#20774 GNA#20727
+            GNA#20837
+          + Prevent units in nested transports (which can't disembark)
+            from being chosen to attempt to defend a tile. GNA#20747
+     * Fixes for undisbandable units in destroyed transports:
+          + If such a unit was teleported to safety and immediately died
+            (for instance due to auto-attack), the server could crash.
+            GNA#20626
+          + Such cargo on non-boat-like transports are now saved in more
+            circumstances (this does not affect the supplied rulesets).
+            (part of GNAPATCH#3856)
+     * If a city becomes landlocked due to terrain change, its
+       ocean-requiring buildings should now correctly be sold. GNA#20902
+     * When 'tinyisles' was disabled, the map generator was
+       overenthusiastic about removing 1x1 islands from the map; it could
+       also remove peninsulas from continents in some circumstances.
+       GNA#20847
+
+Clerical
+
+     * Do not prohibit loading a savegame where the number of surviving
+       players has fallen below the server's 'minplayers' setting.
+       GNA#20835
+     * When loading a savegame with automatic 'mapimg' image saving
+       enabled, do not overwrite an image created previously at the start
+       of a turn with a new one. GNA#20079
+     * The Windows packages now include support for saving map images in
+       formats other than PPM (such as PNG and JPEG). GNAPATCH#4095
+     * When a unit is created in the editor, assign it a homecity
+       appropriate for its type more often. (part of GNAPATCH#3856)
+     * Fix a possible infinite loop when logging character encoding
+       conversion errors. GNA#20721
+     * Fix a possible crash when sending server details to the metaserver.
+       (part of GNA#20778)
+     * Fix a minor memory leak. GNA#20788
+     * Various internal changes which should only affect developers.
+       GNAPATCH#3891 GNA#20777 GNA#20903
+
+Clients
+
+     * Speed up movement drawing of city-building units (the client was
+       redrawing more than necessary). GNA#20905
+     * Fix a possible crash that could occur in circumstances such as
+       viewing the terrain activity popup. (part of GNA#20778)
+     * Fix a minor memory leak. GNAPATCH#3896
+     * (Gtk3) Fix an assertion failure / crash when closing the unit
+       selection dialog. GNA#19486
+     * (Gtk3) Refactoring which should have no visible effect.
+       GNAPATCH#3550
+     * (SDL) In tilesets with unit orientation (such as Cimpletoon), do
+       not use randomly-oriented unit sprites in the unit orders or
+       production display. GNA#20998
+
+Tilesets / Art
+
+     * Use correct small flag for Liberia. GNA#20838
+
+Gameplay / Rules Changes
+
+Supplied rulesets
+
+     * Remove technology root_reqs from the experimental ruleset for now,
+       due to bugs hindering their use. GNAPATCH#3912
+     * In the civ1 and civ2 rulesets, the Oracle bonus was too generous in
+       the rare case where the player gained the Oracle by conquering
+       without knowing Mysticism; it should (and now does) double the
+       effect of Temples, which in this case means +1 content citizen
+       rather than +2. GNA#20616
+
+Other rulesets
+
+     * Prevent units being spawned to terrain to which they are not
+       native:
+          + Partisans GNAPATCH#3869
+          + Settlers and mercenaries from huts GNAPATCH#3895 GNAPATCH#3909
+     * Ruleset sanity checking could erroneously emit warnings about valid
+       effects combinations if negated requirements were used (such as a
+       base that could not be built on either mountains or hills). In
+       addition, warnings are now emitted if a requirement and its exact
+       negative are simultaneously specified, as this is probably a
+       mistake in the ruleset. GNAPATCH#3835
+     * The Lua definitions const.TRUE and const.FALSE (new in 2.4.0-beta1)
+       have been removed; the const module remains. GNAPATCH#3937
+
+AI
+
+     * When assessing the threat from enemy units near cities, fear any
+       unit that can take over a city (such as helicopters), rather than
+       just land units. GNA#20785
+     * Reduced the weighting of the AI's assessment of defence strength,
+       so that it defends its own cities more convincingly, and is less
+       fearful of its enemy's defenders when attacking their cities.
+       GNAPATCH#3960
+     * The AI now tends to keep a unit constantly defending each of its
+       cities even in the absence of an obvious threat, rather than
+       relying on being able to acquire one when a threat appears.
+       GNAPATCH#3958
+     * Remove some assumptions about units' ability to attack from/to
+       non-native terrain. Most likely to make a difference with unusual
+       rulesets. GNAPATCH#3837
+     * Military land units with nothing to do were seeking coastal cities
+       to defend rather than just the nearest, for no good reason. (part
+       of GNAPATCH#3856)
+     * The AI no longer hardcodes a food_cost of 2 when assessing
+       potential city sites. This makes no difference to its behaviour
+       with the supplied rulesets. GNA#20856
+     * Fix a possible crash when starting the (experimental) threaded AI.
+       (part of GNA#20778
+
+Help / Documentation
+
+     * Remove some redundant information from online help for ocean-going
+       units. (part of GNAPATCH#3815)
+     * Miscellaneous improvements to developer/ruleset docs. GNAPATCH#3883
+       GNAPATCH#3929
+
+Translations
+
+     * Updated translations:
+          + Complete translations: Catalan, French, Polish, British
+            English.
+          + Incomplete translations: Scottish Gaelic (95%), German (91%),
+            Finnish (84%).
+
+Build/portability
+
+     * Fix a pthread-related build failure observed on MinGW. GNA#20950
+     * Windows builds using the Crosser framework will no longer use
+       pthread even if it appears to be present. GNAPATCH#4001
+     * Fix a build failure on OpenBSD due to failure to find intptr_t.
+       GNA#20946
+     * Fix a build warning (which could prevent building with
+       --enable-debug due to -Werror). GNA#20973
+     * Fix a build warning in non-debug builds. GNA#20750
+
+
+CHANGES FROM 2.4.0-beta1 TO 2.4.0-beta2
+---------------------------------------
+
+   (from <http://www.freeciv.org/wiki/NEWS-2.4.0-beta2>)
+
+   This is mostly a bugfix release, although there are one or two new
+   features. Notably, there have been a number of improvements in AI
+   behavior.
+
+Server / General
+
+Gameplay
+
+     * Bug fix: if the server had to retry map generation, no resources
+       would be generated. GNA#20171
+     * Bug fix: various trouble with unloading transports if the server
+       had been built without assertions enabled (--disable-debug option
+       to configure). GNA#20084 GNA#20498
+     * Bug fixes in unit destruction (GNA#19821):
+          + When a transport unit was lost, loss of nested transports and
+            their cargo was not handled correctly, leading to assertion
+            failures and other misbehavior. GNA#20442 GNA#20699 GNA#20700
+            GNA#20744
+          + A loaded transport lost to causes such as autoattack could
+            cause an assertion failure. GNA#20663
+          + Many more cases of unit loss now contribute to the final
+            score, notably including units on board a transport unit when
+            it was lost. GNA#20300 GNA#20301
+          + The "unit_lost" scripting signal was not emitted for units on
+            board a transport unit when it was lost. (This bug had no
+            effect on the supplied rulesets.) GNA#20221
+          + Cases where a unit was killed due to a custom script could
+            have led to crashes/instability. GNA#20678
+     * In complicated cases of nested transports, it was possible for
+       non-allied units to occupy the same tile. GNA#20720
+     * Bug fix: when a unit was automatically moved to a transporter to
+       save it from drowning or running out of fuel, other players could
+       continue to see the transporter as empty. GNA#20454
+     * Nuclear units no longer autoattack. GNAPATCH#3803
+     * Bug fixes in unit conversion and upgrade (GNA#20452):
+          + Prevent cases where units could be converted or upgraded to a
+            type only capable of carrying different cargo to the current
+            cargo.
+          + Prevent conversion of a unit to a type that could not exist on
+            the current tile.
+     * Units of types the owner cannot build are no longer prevented from
+       upgrade. GNA#20460
+     * Bug fix: during long activities, such as a single Engineer unit
+       transforming land to or from ocean, a network value could overflow,
+       causing the client's display of remaining time to become too large.
+       Both client and server must be upgraded for this fix to be
+       effective. GNA#20495
+     * Bug fix: quell spurious "No diplomat action possible" message when
+       an ordinary attempt to move a diplomatic unit failed. GNA#20150
+     * Bug fix: assertion failure when many autosettlers try to work on
+       the same project. GNA#20240
+     * Bug fix: when a border source such as a fortress is occupied by a
+       unit of a nation other than the owner at the time a treaty between
+       the two players breaks, or a ceasefire runs out, ownership now
+       transfers to that of the occupying unit. GNA#20348
+     * When acquiring a technology such as Philosophy which gives further
+       techs by an unusual route (such as through a hut), all progress
+       toward the current research target was lost. Now it is preserved
+       (although 'freecost' is applied). GNA#20362
+     * It is now possible for bulb count to become negative, due to tech
+       loss. GNA#19973
+     * Bug fix: in tech loss situations, future tech would fail to be
+       removed from a player, with an assertion failure. GNA#20220
+     * Bug fix: when a city is traded and hence units change ownership, it
+       wasn't checked whether those units provided diplomatic contact to a
+       new nation. GNA#20431
+     * Fix assertion failure when city radius changes. GNA#20077
+     * Bug fix: the full range of the 'trademindist' setting (1-999) could
+       not be transmitted over the network to the client. This caused a
+       cosmetic problem in the help for the 'civ2civ3' ruleset. GNA#19977
+     * Bug fix: assertion failure during map generation when no unit in
+       the ruleset satisfied the first role in 'startunits'. GNA#19886
+     * Freeciv now infers that ruleset effects are possible in more cases
+       where incomplete information is available. This is a low-level
+       change whose effects are hard to quantify, but should be more
+       correct; it is most likely to affect client behavior and the AI.
+       GNA#20304
+
+Clerical
+
+     * Bug fix: if the server was started with one ruleset and then
+       another with a different number of governments was loaded (e.g.,
+       'default' then 'multiplayer'), it could crash. GNA#19800 GNA#19814
+       GNA#20517
+     * Bug fixes and improvements to the '/delegate' function
+       (GNAPATCH#3743), including:
+          + If a previously detached user used '/delegate take' to
+            temporarily control a player, the server would crash when they
+            relinquished control. GNA#20490
+          + Admins can now forcibly '/delegate cancel' an active
+            delegation (previously an attempt would cause a crash).
+          + A user observing a particular player then using '/delegate
+            take' to take over control of that player now works.
+          + More documentation.
+     * Changes to scorelog/ranklog:
+          + The ranklog format has changed; it now includes individual
+            players' scores, and can be parsed more unambiguously.
+            GNAPATCH#3346
+          + A ranklog is now generated when the game ends without a
+            victory condition (due to reaching endturn or /endgame, for
+            instance); in this case the player or team with the highest
+            total score is considered to have won. GNAPATCH#3346
+          + Player deletion was logged incorrectly in scorelog, causing
+            warnings when resuming the game from a save file. GNA#20069
+          + When a new user took over a player from another user, the old
+            username could persist in the ranklog file. GNAPATCH#3526
+          + Taking over a dead AI player no longer changes their username
+            in the ranklog. GNAPATCH#3547
+          + Bug fix: enabling scorelog twice (for instance by loading a
+            game with it enabled to a restarted server) caused an
+            assertion failure. GNA#20621
+     * Bugfixes and improvements to map image support ('/mapimg'):
+          + Automatically generated images are now saved to the savegame
+            directory, rather than the current working directory.
+            GNA#19168
+          + Bug fix: attempting to save a map image before the map has
+            been generated no longer crashes the server. GNA#20579
+          + Better error reporting. GNAPATCH#3765
+     * An internal 64kbyte limit on string length has been removed. Among
+       other things, this allows longer Lua scripts in scenarios.
+       GNA#20086
+     * When a new nation is created in the editor, city style and leader
+       sex are now set appropriately (previously they were always European
+       and male). GNA#19313
+     * Bug fixes to the maxplayers setting:
+          + When near the limit of 128 total players, there could be
+            trouble at the point of needing to create a new civil war or
+            barbarian player. GNA#20693
+          + The /create command in mid-game did not honour the maxplayers
+            setting. GNA#20690
+          + maxplayers could be set incorrectly when loading a saved game,
+            leading to errors later. GNA#20689 GNA#20751
+     * Bug fix: assertion failure when loading a pre-2.3 savegame with a
+       unit on an allied transport. GNA#19160
+     * When a scenario is saved, scenario information is included earlier
+       in the file, to speed up the 'Start Scenario Game' dialog.
+       GNAPATCH#3497
+     * Give an error when the --auth (-a) option is given without also
+       specifying --Database (-D), since it will do nothing useful.
+       GNA#20006
+     * Stop an internal counter in savefiles increasing needlessly for
+       sentried units. This should have no functional effect. GNA#20641
+     * More robustness against malformed network packets. GNA#20107
+       GNAPATCH#3685
+     * Fix some minor memory leaks. GNA#20229 GNAPATCH#3646
+     * General robustness improvements not known to be related to specific
+       symptoms. GNA#20493
+     * Various internal changes which should only affect developers.
+       GNAPATCH#3528 GNA#20458 GNAPATCH#3658 GNA#20007 GNAPATCH#3676
+       GNA#20519 GNA#20494 GNA#20565 GNAPATCH#3772 GNAPATCH#2908
+
+Clients
+
+     * The client could crash when your name was mentioned in chat but you
+       had set the 'highlight your player/user name' setting to no color.
+       This could also prevent any connection to a server with the event
+       cache enabled if your player name had been mentioned in the past.
+       GNA#20478
+          + Older clients can work around this bug by setting a highlight
+            color in their local options (you may need to start a local
+            game in order to access the configuration dialog).
+     * Fixes to the notification of new Freeciv versions:
+          + The client could crash when checking the latest version on the
+            metaserver (shortly after clicking "Connect to Network Game").
+            This is likely to start manifesting in existing 2.4.0-beta1
+            clients now that 2.4.0-beta2 has been released. GNA#20680
+          + 2.4.0-beta1 would erroneously consider itself to be newer than
+            2.4.0, when that is released. 2.4.0-beta2 and later will get
+            this right. GNA#20698
+          + The latest version from the metaserver is always logged if
+            verbose logs are enabled. GNA#20056
+     * The Gtk clients could fail to wait for their internal game server
+       to start fully after front page buttons like 'Load Saved Game' were
+       pressed, leading to symptoms such as '/load: Name
+       "./citizens.sav.gz" disallowed for security reasons.' GNA#17354
+     * Fix a couple of issues with units with a zero move rate (no such
+       units exist in the supplied rulesets):
+          + The 'exhausted' icon was always shown for such units; now it
+            is never shown. GNA#20270
+          + Such units are now not skipped when focusing on the next unit.
+            GNAPATCH#3567
+     * The client could fail to keep track of transported units correctly,
+       leading to issues such as a unit still appearing to be on a boat
+       when in fact it was not. GNA#20085 GNA#20682 GNA#20542
+     * Fix a possible assertion failure when an enemy unit occupied one of
+       your cities. GNA#19989
+     * Pathfinding (goto) now tends to take a more direct route for the
+       last step of a path when it doesn't matter how many move points are
+       left (e.g., an attack). Previously it could prioritise movement
+       points and leave the attacker in a vulnerable position. The
+       previous behavior can be forced using waypoints, if desired.
+       GNA#20361
+     * Add a client option to automatically accept a tileset suggestion
+       for the current ruleset. GNAPATCH#3599
+     * Bug fix: after loading a new tileset, viewing the map with terrain
+       disabled would not display correctly and cause numerous assertion
+       failures. GNA#20694
+     * Bug fix: on new installations, the client could fail to pick the
+       highest-priority tileset; for instance, if both 'amplio' and
+       'amplio2' were installed, it could pick 'amplio' instead of
+       'amplio2' despite the latter's higher priority. GNA#20008
+     * Bug fix: for tilesets which specify both orientation-specific and
+       "icon" sprites for units, the orientation-specific ones were
+       ignored. GNA#20553
+     * Fix possible instability when loading some tilesets. GNA#20055
+     * Bug fix: when the 'native tiles' map view option was selected, the
+       forbidden tiles for the selected unit would be shown on the city
+       map, which was confusing. GNA#19609
+     * In the Gtk clients, when using a tileset with rotatable unit
+       sprites such as Cimpletoon, the worklist would show units with a
+       random orientation, changing on mouse-over. Now a fixed orientation
+       is displayed. GNAPATCH#3779 GNAPATCH#3786
+     * In the editor, the player vision control in the tile edit dialog
+       has been disabled. It had never worked, and caused numerous
+       assertion failures while using the editor in 2.4.0-beta1. GNA#19825
+     * Bug fix: if for some reason the client couldn't gain full control
+       of its locally started server, it would fail to shut that server
+       down. GNA#20555
+     * The client now performs stricter validation of filenames received
+       from the server. GNA#20589
+     * Sources for the old win32 client (which has not built for years)
+       are no longer included in the distribution. GNAPATCH#3814
+     * Various fixes to the new Gtk3 client:
+          + Font styles were not being applied in several places; for
+            instance the city dialog did not correctly use a fixed-width
+            font when configured to. GNAPATCH#3558
+          + The initial state of the chatline toolbar is set correctly.
+            GNA#20000
+          + The origin of the unit popup menu in the city dialog has been
+            moved to not cover the unit icon. GNAPATCH#3348
+          + A batch of changes to use more modern features of the Gtk3
+            toolkit and remove deprecation warnings when compiling. These
+            mostly do not affect functionality, although the appearance of
+            some parts of the client has changed since beta1.
+            GNAPATCH#3469 GNAPATCH#3382 GNAPATCH#3543 GNAPATCH#3561
+            GNAPATCH#3564 GNAPATCH#3565 GNAPATCH#3566 GNAPATCH#3572
+            GNA#20706
+
+Tilesets / Art
+
+     * The Cimpletoon tileset now has sprites for Elephants and Crusaders,
+       making a complete set of sprites for units in the supplied
+       rulesets. GNA#19998
+     * The 'native tiles' map view option now has a new graphic in all
+       supplied tilesets. GNA#19609 GNAPATCH#3681
+     * Some internal SVG format fixes in some of the supplied flags to
+       allow their use in web browsers; this has no effect on Freeciv
+       itself. Note that not all flags have been fixed in this release.
+       GNAPATCH#3574
+
+Gameplay / Rules Changes
+
+Supplied rulesets
+
+     * The supplied "Earth (classic/small)" (earth-80x50-v3) scenario
+       could not be loaded at all in a release build. GNA#20050
+     * In the 'multiplayer' ruleset, the ability to build buoys has been
+       removed, as they do not work well with national borders disabled
+       (the default for this ruleset). It is expected that they'll be
+       re-enabled in a future major release. GNAPATCH#3541
+     * The default map topology for new games has been changed to
+       isometric, to match the default Amplio2 tileset. GNAPATCH#3764
+     * Bug fix: in the 'multiplayer' ruleset, players could gain free
+       techs multiple times by rebuilding Darwin's Voyage (fixed by
+       GNA#19852).
+     * Quell some warnings when loading the civ2 ruleset. GNA#20507
+     * Various fixes to leader titles. GNA#16976 GNA#19871
+
+Other rulesets
+
+     * Bug fix: the tech upkeep with tech_cost_style 2 or 4 was much lower
+       than intended; it only took into account a single tech rather than
+       all preceding techs. As a result, tech upkeep in such rulesets will
+       greatly increase. GNA#20063
+          + The downloadable 'civ2civ3' modpack has thus been updated to
+            disable tech upkeep (as of version 2.4-3). If you had
+            downloaded this modpack previously, you should probably fetch
+            the new version when upgrading to 2.4.0-beta2 or later.
+     * The give_technology() Lua script function now returns 'nil' if the
+       player already has the technology, as documented; previously it
+       returned the Tech_Type 'None'. GNA#19852
+     * Remove impediments to rulesets having a start year other than -4000
+       GNA#17862:
+          + The MinYear requirement can now be a year before -4000.
+          + A hardcoded start year of is no longer sent to the metaserver
+            in pregame.
+     * Some previously accepted badly-formatted ruleset constructs now
+       cause hard errors, to make typos and other errors in rulesets more
+       obvious to ruleset authors:
+          + Unknown effect requirement types (previously these were
+            silently interpreted as "None"). GNA#20462
+          + Errors in requirements lists. GNAPATCH#3691
+          + Unknown unit type/class and improvement flags. GNAPATCH#3732
+
+AI
+
+     * The city governor logic has been reworked, fixing various issues
+       such as unexpected tax collectors in cities with many buildings,
+       and a need to set minimal gold surplus to a lower target than
+       expected. GNAPATCH#3620 GNA#18767 GNA#18040
+     * The AI's workers/settlers, and human players' autosettlers, will
+       now automatically stop what they are doing and go elsewhere if
+       threatened by an enemy unit and there is no defender on their tile.
+       (Currently only threats from land units are considered.)
+       GNAPATCH#3384 GNA#20511
+     * Improvements to AI settler management:
+          + The AI now considers worker units' food consumption (e.g.
+            Settlers) to be less of a factor when deciding whether to
+            build such units, to encourage it to do so. GNAPATCH#3693
+          + Fix poor handling of rulesets containing boats which can only
+            carry a single unit. Previously, the AI would generate
+            settlers with the intention of sending them out on such boats,
+            but then refuse to do so due to lack of room for a bodyguard,
+            regardless of whether one was needed, often hurting expansion
+            and leaving useless settlers. Now it only insists on room for
+            a bodyguard if one is actually needed. GNA#19815
+     * Improvements to AI city defense:
+          + Reduced the tendency of AI city defenders to be lured out of
+            their city by nearby targets even in the presence of threats.
+            GNA#20504
+          + Cities in grave danger of invasion with no defending units
+            were tending to build City Walls, uselessly. They will now
+            prioritise acquiring a defender. GNA#20559
+     * Improvements to AI caravan management:
+          + Caravans in transit are now taken into account when a city is
+            deciding whether to build more caravans. Previously, a city
+            could end up building endless caravans if existing ones did
+            not complete their trade route. GNAPATCH#3529
+     * Fix bugs with evaluation of units' defense ability:
+          + The additional defense bonus of CanFortify units (e.g. land
+            units in the default ruleset) over other units was not
+            considered when evaluating units as city defenders.
+            GNAPATCH#3672
+          + All units were assumed to get a defense bonus from terrain,
+            rather than just units with the TerrainDefense flag. GNA#20484
+     * Fix some incorrect inferences about the ability of transported
+       units or units in cities to defend; these are most likely to affect
+       unusual rulesets (e.g., those with ocean cities). GNA#20483
+     * Fixes for some server crashes:
+          + In rulesets with tech upkeep, division by zero could occur
+            when evaluating the value of 'Tech_Parasite' effects (e.g.,
+            Great Library), players who are losing bulbs are no longer
+            considered. GNA#20234
+          + Division by zero could occur when evaluating poor city
+            locations. GNA#20239
+          + The server could crash if a caravan became homeless. Such
+            caravans now look for a new home city before they do anything
+            else. GNA#20652
+          + The server could crash when a barbarian leader died. GNA#20728
+     * Fixes for some assertion failures:
+          + In rulesets with paratroopers and ocean cities. GNA#20230
+          + When the server 'phasemode' setting was set to an
+            alternating-move mode. GNAPATCH#3532
+     * Value logic was considering effects with negative value as enabling
+       boolean effects when choosing between governments. GNA#20039
+     * AI behavior is likely to change as a result of GNA#20304. For
+       instance, it might be more likely to research a tech to allow it to
+       build a kind of building without being certain that that building's
+       other prerequisites will ever be fulfilled.
+
+Help / Documentation
+
+     * The online help for each terrain type now shows which types of
+       units can traverse it. GNAPATCH#3815
+     * A new file doc/README.AI_modules describes how to configure and use
+       the new AI modules feature. GNAPATCH#3750
+     * A new file NEWS-2.4 in the distribution lists differences between
+       minor revisions. GNAPATCH#3488
+     * A manual page is now included for the 'freeciv-manual' utility.
+       GNA#19227
+     * Other minor improvements to user documentation and in-game text.
+       GNAPATCH#3500 GNAPATCH#3530 GNAPATCH#3592 GNAPATCH#3593
+       GNAPATCH#3594 GNA#20049 GNAPATCH#3634 GNAPATCH#3662 GNA#20488
+       GNA#20501 GNAPATCH#3720 GNAPATCH#3802 GNAPATCH#3823
+     * Miscellaneous improvements to developer/ruleset docs. GNAPATCH#3575
+       GNAPATCH#3595 GNA#20054 GNAPATCH#3602 GNAPATCH#3603 GNAPATCH#3609
+       GNAPATCH#3640 GNAPATCH#3649 GNAPATCH#3650 GNAPATCH#3660
+       GNAPATCH#3712 GNAPATCH#3741 GNA#20560 GNA#20691 GNAPATCH#3855
+       GNAPATCH#3863
+     * Invisible changes to assist translation. GNAPATCH#3531
+       GNAPATCH#3717 GNA#20545
+
+Translations
+
+     * New translation: Traditional Chinese (40%) (GNAPATCH#3503)
+     * Updated translations:
+          + Complete translations: Polish, Catalan, French, British
+            English.
+          + Incomplete translations: Spanish (99.2%), Scottish Gaelic
+            (93%), German (79%).
+     * In the Finnish localisation, sentences now start with capital
+       letters in more cases. GNAPATCH#3028 GNA#20664
+
+Build/portability
+
+     * Use intptr_t, fixing an issue on LLP64 platforms such as Windows
+       native 64-bit builds. GNA#20392 GNAPATCH#3606
+     * The configure script could fail to detect SDL_mixer, for instance
+       on Fedora with hardened build options set. GNAPATCH#3519
+     * The embedded Lua build now respects the --without-readline
+       configure option, fixing a possible failure to build on systems
+       without readline. GNA#20219
+     * No longer unconditionally try to use pthread; this was causing
+       './configure' to fail on MinGW. GNA#20575
+     * Include correct header for basename(). GNAPATCH#3534
+     * Fix some possible SQLite configuration errors. GNA#20607 GNA#20608
+     * Fix a PostgresQL build failure. GNA#19030
+     * Fix a Lua-related build failure on Mac OS X. GNA#20095
+     * Fix failure when cross-compiling with MagickWand support. GNA#20149
+     * Fix a warning leading to build failure when compiling with MySQL
+       and --enable-debug=yes, seen on OpenSUSE 12.3. GNA#20585
+     * Future-proof against automake versions which ignore
+       ACLOCAL_AMFLAGS. GNAPATCH#3585
+     * Some fixes to the supplied Debian packaging material. GNA#20446
+     * Fix various compiler warnings. It's now possible to build Freeciv
+       with GCC 4.7 optimisation level -O3 without any warnings.
+       GNAPATCH#3590 GNA#19386 GNA#19385 GNA#20057 GNA#20443 GNA#20413
+       GNA#20447 GNA#20444 GNA#19384
+     * Miscellaneous autoconf build system / portability fixes. GNA#20375
+       GNAPATCH#3583
