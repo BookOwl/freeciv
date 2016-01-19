@@ -13,12 +13,8 @@
 #ifndef FC__SPACERACE_H
 #define FC__SPACERACE_H
 
-/* common */
 #include "fc_types.h"
 #include "packets.h"
-
-/* server */
-#include "hand_gen.h"
 
 struct player_spaceship;
 struct conn_list;
@@ -28,7 +24,11 @@ void send_spaceship_info(struct player *src, struct conn_list *dest);
 void spaceship_lost(struct player *pplayer);
 struct player *check_spaceship_arrival(void);
 
-bool do_spaceship_place(struct player *pplayer, enum action_requester from,
+void handle_spaceship_launch(struct player *pplayer);
+void handle_spaceship_place(struct player *pplayer,
+			    enum spaceship_place_type type, int num);
+
+bool do_spaceship_place(struct player *pplayer, bool user_initiated,
                         enum spaceship_place_type type, int num);
 
 #endif /* FC__SPACERACE_H */

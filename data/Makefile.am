@@ -4,77 +4,66 @@ pkgsysconfdir = $(sysconfdir)/$(PACKAGE)
 
 if CLIENT
 CLIENT_FILES =				\
+	hex2t.tilespec			\
 	amplio2.tilespec		\
 	cimpletoon.tilespec		\
-	hex2t.tilespec			\
-	hexemplio.tilespec		\
 	isophex.tilespec		\
 	isotrident.tilespec		\
-	toonhex.tilespec		\
-	alio.tilespec			\
 	trident.tilespec		\
-	stdmusic.musicspec		\
 	stdsounds.soundspec		\
 	helpdata.txt
+if CLIENT_GUI_XAW
+CLIENT_FILES += Freeciv
+endif
 if CLIENT_GUI_GTK_2_0
 CLIENT_FILES += \
 	freeciv.rc-2.0	\
-	gtk2_menus.xml
-endif
+	gtk_menus.xml
+else
 if CLIENT_GUI_GTK_3_0
 CLIENT_FILES += \
-	gtk3_menus.xml
+	gtk_menus.xml
 endif
-if CLIENT_GUI_GTK_3_X
-CLIENT_FILES += \
-	gtk3x_menus.xml
 endif
 else
 CLIENT_FILES =
 endif
 
-SRV_RE_FILES = \
+if SERVER
+SERVER_FILES = \
 	civ1.serv \
 	civ2.serv \
 	classic.serv \
 	default.serv \
 	experimental.serv \
 	multiplayer.serv \
-	alien.serv \
 	civ2civ3.serv
 
-if SERVER
-SERVER_FILES = $(SRV_RE_FILES)
 SERVER_CONF = database.lua
-else
-if RULEDIT
-SERVER_FILES = $(SRV_RE_FILES)
-SERVER_CONF =
+
 else
 SERVER_FILES =
 SERVER_CONF =
-endif
 endif
 
 pkgsysconf_DATA = $(SERVER_CONF)
 pkgdata_DATA = $(SERVER_FILES) $(CLIENT_FILES)
 
 EXTRA_DIST = \
+	Freeciv	\
 	freeciv-client.png \
 	freeciv.rc-2.0	\
-	gtk2_menus.xml	\
-	gtk3_menus.xml	\
-	gtk3x_menus.xml	\
+	gtk_menus.xml	\
+	civserver.dsc.in	\
+	civclient.dsc.in	\
+	civserver.room.in	\
 	database.lua	\
+	hex2t.tilespec	\
 	amplio2.tilespec \
 	cimpletoon.tilespec \
-	hex2t.tilespec	\
-	hexemplio.tilespec	\
 	isophex.tilespec	\
 	isotrident.tilespec \
-	toonhex.tilespec	\
 	trident.tilespec	\
-	stdmusic.musicspec	\
 	stdsounds.soundspec	\
 	helpdata.txt	\
 	civ1.serv	\
@@ -83,25 +72,19 @@ EXTRA_DIST = \
 	default.serv	\
 	experimental.serv \
 	multiplayer.serv \
-	alien.serv \
 	civ2civ3.serv
 
 if CLIENT
 CLIENTDATADIRS = amplio2 misc flags buildings cimpletoon isotrident trident\
- isophex hex2t hexemplio alio stdsounds stdmusic themes wonders
+ isophex hex2t stdsounds themes wonders
 else
 CLIENTDATADIRS = 
 endif
 
-SRV_RE_DATADIRS = default classic civ1 civ2 experimental multiplayer alien civ2civ3 nation
 if SERVER
-SERVERDATADIRS = $(SRV_RE_DATADIRS) scenarios
+SERVERDATADIRS = default classic civ1 civ2 experimental multiplayer civ2civ3 scenarios nation
 else
-if RULEDIT
-SERVERDATADIRS = $(SRV_RE_DATADIRS)
-else
-SERVERDATADIRS =
-endif
+SERVERDATADIRS = 
 endif
 
 if CLIENT
@@ -113,4 +96,20 @@ endif
 icondir = $(prefix)/share/pixmaps
 icon_DATA=$(ICONS)
 
-SUBDIRS = icons $(CLIENTDATADIRS) $(SERVERDATADIRS) override
+SUBDIRS = icons $(CLIENTDATADIRS) $(SERVERDATADIRS)
+
+if GGZ_CLIENT
+install-data-local:
+	$(GGZ_CONFIG) -D --install --modfile=civclient.dsc --force
+
+uninstall-local:
+	$(GGZ_CONFIG) -D --remove --modfile=civclient.dsc
+endif
+
+if GGZ_SERVER
+ggzroom_DATA = civserver.room
+ggzroomdir = $(ggzdconfdir)/rooms/
+
+ggzgame_DATA = civserver.dsc
+ggzgamedir = $(ggzdconfdir)/games/
+endif

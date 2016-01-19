@@ -33,7 +33,6 @@
 #include "timing.h"
 
 /* common */
-#include "calendar.h"
 #include "connection.h"
 #include "fc_types.h"
 #include "game.h"
@@ -1366,7 +1365,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
     generate_save_name(savename, mapimgfile, sizeof(mapimgfile),
                        mapimg_generate_name(pmapdef));
 
-    pimg = img_new(pmapdef, CURRENT_TOPOLOGY, game.map.xsize, game.map.ysize);
+    pimg = img_new(pmapdef, CURRENT_TOPOLOGY, map.xsize, map.ysize);
     img_createmap(pimg);
     if (!img_save(pimg, mapimgfile, path)) {
       ret = FALSE;
@@ -1377,7 +1376,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
   case SHOW_HUMAN:   /* one map for each human player */
     players_iterate(pplayer) {
       if (!pplayer->is_alive || (pmapdef->player.show == SHOW_HUMAN
-                                 && !is_human(pplayer))) {
+                                 && pplayer->ai_controlled)) {
         /* no map image for dead players
          * or AI players if only human players should be shown */
         continue;
@@ -1389,7 +1388,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
       generate_save_name(savename, mapimgfile, sizeof(mapimgfile),
                          mapimg_generate_name(pmapdef));
 
-      pimg = img_new(pmapdef, CURRENT_TOPOLOGY, game.map.xsize, game.map.ysize);
+      pimg = img_new(pmapdef, CURRENT_TOPOLOGY, map.xsize, map.ysize);
       img_createmap(pimg);
       if (!img_save(pimg, mapimgfile, path)) {
         ret = FALSE;
@@ -1854,7 +1853,7 @@ static struct img *img_new(struct mapdef *mapdef, int topo, int xsize, int ysize
   pimg->turn = game.info.turn;
   fc_snprintf(pimg->title, sizeof(pimg->title),
               _("Turn: %4d - Year: %10s"), game.info.turn,
-              calendar_text());
+              textyear(game.info.year));
 
   pimg->mapsize.x = xsize; /* x size of the map */
   pimg->mapsize.y = ysize; /* y size of the map */

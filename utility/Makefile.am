@@ -2,8 +2,6 @@
 
 noinst_LTLIBRARIES = libcivutility.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/dependencies/tinycthread
-
 AM_CFLAGS = $(UTILITY_CFLAGS)
 
 libcivutility_la_SOURCES = \
@@ -49,8 +47,6 @@ libcivutility_la_SOURCES = \
 		registry.h	\
 		registry_ini.c	\
 		registry_ini.h	\
-		registry_xml.c	\
-		registry_xml.h	\
 		section_file.c	\
 		section_file.h	\
 		shared.c	\

@@ -67,8 +67,6 @@ static void package_event_full(struct packet_chat_msg *packet,
   packet->tile = (NULL != ptile ? tile_index(ptile) : -1);
   packet->event = event;
   packet->conn_id = pconn ? pconn->id : -1;
-  packet->turn = game.info.turn;
-  packet->phase = game.info.phase;
 
   fc_vsnprintf(buf, sizeof(buf), format, vargs);
   if (is_capitalization_enabled()) {
@@ -284,6 +282,7 @@ void notify_player(const struct player *pplayer,
   but excluding pplayer and specified player.
 **************************************************************************/
 void notify_embassies(const struct player *pplayer,
+                      const struct player *exclude,
                       const struct tile *ptile,
                       enum event_type event,
                       const struct ft_color color,
@@ -299,6 +298,7 @@ void notify_embassies(const struct player *pplayer,
 
   players_iterate(other_player) {
     if (player_has_embassy(other_player, pplayer)
+        && exclude != other_player
         && pplayer != other_player) {
       notify_conn_packet(other_player->connections, &genmsg);
       players = event_cache_player_add(players, other_player);
@@ -356,13 +356,13 @@ void notify_team(const struct player *pplayer,
 }
 
 /****************************************************************************
-  Sends a message to all players that share research.
+  Sends a message to all players that share research with pplayer.  Currently
+  this is all players on the same team but it may not always be that way.
 
   Unlike other notify functions this one does not take a tile argument.  We
   assume no research message will have a tile associated.
 ****************************************************************************/
-void notify_research(const struct research *presearch,
-                     const struct player *exclude,
+void notify_research(const struct player *pplayer,
                      enum event_type event,
                      const struct ft_color color,
                      const char *format, ...)
@@ -370,63 +370,17 @@ void notify_research(const struct research *presearch,
   struct packet_chat_msg genmsg;
   struct event_cache_players *players = NULL;
   va_list args;
+  struct player_research *research = player_research_get(pplayer);
 
   va_start(args, format);
   vpackage_event(&genmsg, NULL, event, color, format, args);
   va_end(args);
 
-  research_players_iterate(presearch, aplayer) {
-    if (exclude != aplayer) {
-      lsend_packet_chat_msg(aplayer->connections, &genmsg);
-      players = event_cache_player_add(players, aplayer);
+  players_iterate(other_player) {
+    if (player_research_get(other_player) == research) {
+      lsend_packet_chat_msg(other_player->connections, &genmsg);
+      players = event_cache_player_add(players, other_player);
     }
-  } research_players_iterate_end;
-
-  /* Add to the cache */
-  event_cache_add_for_players(&genmsg, players);
-}
-
-/****************************************************************************
-  Sends a message to all players that have embassies with someone who
-  shares research.
-
-  Unlike other notify functions this one does not take a tile argument.  We
-  assume no research message will have a tile associated.
-
-  Exclude parameter excludes everyone who has embassy (only) with that
-  player.
-
-  FIXME: Should not send multiple messages if one has embassy with multiple
-         members of the research group, should really exclude ones having
-         embassy with the exclude -one as the use-case for exclusion is that
-         different message is being sent to those excluded here.
-****************************************************************************/
-void notify_research_embassies(const struct research *presearch,
-                               const struct player *exclude,
-                               enum event_type event,
-                               const struct ft_color color,
-                               const char *format, ...)
-{
-  struct packet_chat_msg genmsg;
-  struct event_cache_players *players = NULL;
-  va_list args;
-
-  va_start(args, format);
-  vpackage_event(&genmsg, NULL, event, color, format, args);
-  va_end(args);
-
-  players_iterate(aplayer) {
-    if (exclude == aplayer || research_get(aplayer) == presearch) {
-      continue;
-    }
-
-    research_players_iterate(presearch, rplayer) {
-      if (player_has_embassy(aplayer, rplayer)) {
-        lsend_packet_chat_msg(aplayer->connections, &genmsg);
-        players = event_cache_player_add(players, aplayer);
-        break;
-      }
-    } research_players_iterate_end;
   } players_iterate_end;
 
   /* Add to the cache */
@@ -446,6 +400,7 @@ enum event_cache_target {
 /* Events are saved in that structure. */
 struct event_cache_data {
   struct packet_chat_msg packet;
+  int turn;
   time_t timestamp;
   enum server_states server_state;
   enum event_cache_target target_type;
@@ -487,7 +442,7 @@ static void event_cache_data_destroy(struct event_cache_data *pdata)
   old entry if needed.
 **************************************************************************/
 static struct event_cache_data *
-event_cache_data_new(const struct packet_chat_msg *packet,
+event_cache_data_new(const struct packet_chat_msg *packet, int turn,
                      time_t timestamp, enum server_states server_status,
                      enum event_cache_target target_type,
                      struct event_cache_players *players)
@@ -519,6 +474,7 @@ event_cache_data_new(const struct packet_chat_msg *packet,
 
   pdata = fc_malloc(sizeof(*pdata));
   pdata->packet = *packet;
+  pdata->turn = turn;
   pdata->timestamp = timestamp;
   pdata->server_state = server_status;
   pdata->target_type = target_type;
@@ -582,7 +538,7 @@ void event_cache_clear(void)
 void event_cache_remove_old(void)
 {
   event_cache_iterate(pdata) {
-    if (pdata->packet.turn + game.server.event_cache.turns <= game.info.turn) {
+    if (pdata->turn + game.server.event_cache.turns <= game.info.turn) {
       event_cache_data_destroy(pdata);
     }
   } event_cache_iterate_end;
@@ -594,7 +550,7 @@ void event_cache_remove_old(void)
 void event_cache_add_for_all(const struct packet_chat_msg *packet)
 {
   if (0 < game.server.event_cache.turns) {
-    (void) event_cache_data_new(packet, time(NULL),
+    (void) event_cache_data_new(packet, game.info.turn, time(NULL),
                                 server_state(), ECT_ALL, NULL);
   }
 }
@@ -605,7 +561,7 @@ void event_cache_add_for_all(const struct packet_chat_msg *packet)
 void event_cache_add_for_global_observers(const struct packet_chat_msg *packet)
 {
   if (0 < game.server.event_cache.turns) {
-    (void) event_cache_data_new(packet, time(NULL),
+    (void) event_cache_data_new(packet, game.info.turn, time(NULL),
                                 server_state(), ECT_GLOBAL_OBSERVERS, NULL);
   }
 }
@@ -629,7 +585,7 @@ void event_cache_add_for_player(const struct packet_chat_msg *packet,
       && (server_state() > S_S_INITIAL || !game.info.is_new_game)) {
     struct event_cache_data *pdata;
 
-    pdata = event_cache_data_new(packet, time(NULL),
+    pdata = event_cache_data_new(packet, game.info.turn, time(NULL),
                                  server_state(), ECT_PLAYERS, NULL);
     fc_assert_ret(NULL != pdata);
     BV_SET(pdata->target, player_index(pplayer));
@@ -650,7 +606,7 @@ void event_cache_add_for_players(const struct packet_chat_msg *packet,
       && NULL != players
       && BV_ISSET_ANY(players->vector)
       && (server_state() > S_S_INITIAL || !game.info.is_new_game)) {
-    (void) event_cache_data_new(packet, time(NULL),
+    (void) event_cache_data_new(packet, game.info.turn, time(NULL),
                                 server_state(), ECT_PLAYERS, players);
   }
 
@@ -703,8 +659,8 @@ static bool event_cache_match(const struct event_cache_data *pdata,
   }
 
   if (server_state() == S_S_RUNNING
-      && game.info.turn < pdata->packet.turn
-      && game.info.turn > pdata->packet.turn - game.server.event_cache.turns) {
+      && game.info.turn < pdata->turn
+      && game.info.turn > pdata->turn - game.server.event_cache.turns) {
     return FALSE;
   }
 
@@ -741,7 +697,7 @@ void send_pending_events(struct connection *pconn, bool include_public)
                  localtime(&pdata->timestamp));
         pcm = pdata->packet;
         fc_snprintf(pcm.message, sizeof(pcm.message), "(T%d - %s) %s",
-                    pdata->packet.turn, timestr, pdata->packet.message);
+                    pdata->turn, timestr, pdata->packet.message);
         notify_conn_packet(pconn->self, &pcm);
       } else {
         notify_conn_packet(pconn->self, &pdata->packet);
@@ -759,7 +715,7 @@ void event_cache_load(struct section_file *file, const char *section)
   enum event_cache_target target_type;
   enum server_states server_status;
   struct event_cache_players *players = NULL;
-  int i, x, y, event_count;
+  int i, x, y, turn, event_count;
   time_t timestamp, now;
   const char *p, *q;
 
@@ -772,9 +728,6 @@ void event_cache_load(struct section_file *file, const char *section)
 
   now = time(NULL);
   for (i = 0; i < event_count; i++) {
-    int turn;
-    int phase;
-
     /* restore packet */
     x = secfile_lookup_int_default(file, -1, "%s.events%d.x", section, i);
     y = secfile_lookup_int_default(file, -1, "%s.events%d.y", section, i);
@@ -802,12 +755,6 @@ void event_cache_load(struct section_file *file, const char *section)
     /* restore event cache data */
     turn = secfile_lookup_int_default(file, 0, "%s.events%d.turn",
                                       section, i);
-    packet.turn = turn;
-
-    phase = secfile_lookup_int_default(file, PHASE_UNKNOWN, "%s.events%d.phase",
-                                       section, i);
-    packet.phase = phase;
-
     timestamp = secfile_lookup_int_default(file, now,
                                            "%s.events%d.timestamp",
                                            section, i);
@@ -857,7 +804,7 @@ void event_cache_load(struct section_file *file, const char *section)
     }
 
     /* insert event into the cache */
-    (void) event_cache_data_new(&packet, timestamp, server_status,
+    (void) event_cache_data_new(&packet, turn, timestamp, server_status,
                                 target_type, players);
 
     if (NULL != players) {
@@ -890,18 +837,8 @@ void event_cache_save(struct section_file *file, const char *section)
       index_to_map_pos(&tile_x, &tile_y, tile_index(ptile));
     }
 
-    secfile_insert_int(file, pdata->packet.turn, "%s.events%d.turn",
+    secfile_insert_int(file, pdata->turn, "%s.events%d.turn",
                        section, event_count);
-    if (pdata->packet.phase != PHASE_UNKNOWN) {
-      /* Do not save current value of PHASE_UNKNOWN to savegame.
-       * It practically means that "savegame had no phase stored".
-       * Note that the only case where phase might be PHASE_UNKNOWN
-       * may be present is that the event was loaded from previous
-       * savegame created by a freeciv version that did not store event
-       * phases. */
-      secfile_insert_int(file, pdata->packet.phase, "%s.events%d.phase",
-                         section, event_count);
-    }
     secfile_insert_int(file, pdata->timestamp, "%s.events%d.timestamp",
                        section, event_count);
     secfile_insert_int(file, tile_x, "%s.events%d.x", section, event_count);
@@ -941,16 +878,4 @@ void event_cache_save(struct section_file *file, const char *section)
   log_verbose("Events saved: %d.", event_count);
 
   event_cache_status = TRUE;
-}
-
-/***************************************************************
-  Mark all existing phase values in event cache invalid.
-***************************************************************/
-void event_cache_phases_invalidate(void)
-{
-  event_cache_iterate(pdata) {
-    if (pdata->packet.phase >= 0) {
-      pdata->packet.phase = PHASE_INVALIDATED;
-    }
-  } event_cache_iterate_end;
 }

@@ -51,7 +51,6 @@ struct meswin_dialog {
 
 /* Those values must match meswin_dialog_store_new(). */
 enum meswin_columns {
-  MESWIN_COL_ICON,
   MESWIN_COL_MESSAGE,
 
   /* Not visible. */
@@ -75,7 +74,6 @@ static struct meswin_dialog meswin = { NULL, };
 static GtkListStore *meswin_dialog_store_new(void)
 {
   return gtk_list_store_new(MESWIN_COL_NUM,
-                            GDK_TYPE_PIXBUF,    /* MESWIN_COL_ICON */
                             G_TYPE_STRING,      /* MESWIN_COL_MESSAGE */
                             G_TYPE_INT,         /* MESWIN_COL_WEIGHT */
                             G_TYPE_INT,         /* MESWIN_COL_STYLE */
@@ -143,35 +141,21 @@ static void meswin_dialog_refresh(struct meswin_dialog *pdialog)
 
   gtk_list_store_clear(store);
   for (i = 0; i < num; i++) {
-    GdkPixbuf *pb;
-    struct sprite *icon;
-    int x0, y0, x1, y1, w, h;
-
     pmsg = meswin_get_message(i);
 
-    if (gui_options.gui_gtk2_new_messages_go_to_top) {
+    if (gui_gtk2_new_messages_go_to_top) {
       gtk_list_store_prepend(store, &iter);
     } else {
       gtk_list_store_append(store, &iter);
     }
 
-    icon = get_event_sprite(tileset, pmsg->event);
-    sprite_get_bounding_box(icon, &x0, &y0, &x1, &y1);
-    w = (x1 - x0) + 1;
-    h = (y1 - y0) + 1;
-    pb = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, w, h);
-    gdk_pixbuf_copy_area(sprite_get_pixbuf(icon), x0, y0, w, h,
-                         pb, 0, 0);
-
     meswin_dialog_visited_get_attr(pmsg->visited, &weight, &style);
     gtk_list_store_set(store, &iter,
-                       MESWIN_COL_ICON, pb,
                        MESWIN_COL_MESSAGE, pmsg->descr,
                        MESWIN_COL_WEIGHT, weight,
                        MESWIN_COL_STYLE, style,
                        MESWIN_COL_ID, i,
                        -1);
-    g_object_unref(pb);
     if (i == selected) {
       /* Restore the selection. */
       gtk_tree_selection_select_iter(selection, &iter);
@@ -324,7 +308,7 @@ static void meswin_dialog_init(struct meswin_dialog *pdialog)
 
   fc_assert_ret(NULL != pdialog);
 
-  if (gui_options.gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_SPLIT) {
+  if (gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_SPLIT) {
     notebook = right_notebook;
   } else {
     notebook = bottom_notebook;
@@ -352,12 +336,6 @@ static void meswin_dialog_init(struct meswin_dialog *pdialog)
                    G_CALLBACK(meswin_dialog_button_press_callback), NULL);
   pdialog->tree_view = GTK_TREE_VIEW(view);
 
-  renderer = gtk_cell_renderer_pixbuf_new();
-  col = gtk_tree_view_column_new_with_attributes(NULL, renderer,
-                                                 "pixbuf", MESWIN_COL_ICON, NULL);
-  gtk_tree_view_append_column(GTK_TREE_VIEW(view), col);
-  gtk_tree_view_column_set_visible(col, !gui_options.gui_gtk2_small_display_layout);
-
   renderer = gtk_cell_renderer_text_new();
   col = gtk_tree_view_column_new_with_attributes(NULL, renderer,
                                                  "text", MESWIN_COL_MESSAGE,
@@ -371,7 +349,7 @@ static void meswin_dialog_init(struct meswin_dialog *pdialog)
   g_signal_connect(selection, "changed",
                    G_CALLBACK(meswin_dialog_selection_callback), pdialog);
 
-  if (gui_options.gui_gtk2_show_message_window_buttons) {
+  if (gui_gtk2_show_message_window_buttons) {
     cmd = gui_dialog_add_stockbutton(pdialog->shell, GTK_STOCK_JUMP_TO,
                                      _("Goto _Location"), MESWIN_RES_GOTO);
     gtk_widget_set_sensitive(cmd, FALSE);

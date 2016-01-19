@@ -71,9 +71,6 @@
   Note that if you missplace the trailing doublequote you can
   easily end up with strange errors reading the file...
 
-  - Strings read from a file: A file can be read as a string value:
-    foo = *filename.txt*
-
   - Vector format: An entry can have multiple values separated
   by commas, eg:
       foo = 10, 11, "x"
@@ -229,7 +226,7 @@ static const char *datafilename(const char *filename)
 /**************************************************************************
   Ensure name is correct to use it as section or entry name.
 **************************************************************************/
-static bool is_secfile_entry_name_valid(const char *name)
+bool is_secfile_entry_name_valid(const char *name)
 {
   static const char *const allowed = "_.,-[]";
 
@@ -595,14 +592,6 @@ struct section_file *secfile_from_stream(fz_FILE *stream,
 }
 
 /**************************************************************************
-  Returns TRUE iff the character is legal in a table entry name.
-**************************************************************************/
-static bool is_legal_table_entry_name(char c, bool num)
-{
-  return (num ? fc_isalnum(c) : fc_isalpha(c)) || c == '_';
-}
-
-/**************************************************************************
   Save the previously filled in section_file to disk.
 
   There is now limited ability to save in the new tabular format
@@ -617,7 +606,7 @@ static bool is_legal_table_entry_name(char c, bool num)
   and with all of the columns for all uN in the same order as for u0.
 
   If compression_level is non-zero, then compress using zlib.  (Should
-  only supply non-zero compression_level if already know that FREECIV_HAVE_LIBZ.)
+  only supply non-zero compression_level if already know that HAVE_LIBZ.)
   Below simply specifies FZ_ZLIB method, since fz_fromFile() automatically
   changes to FZ_PLAIN method when level == 0.
 **************************************************************************/
@@ -647,184 +636,169 @@ bool secfile_save(const struct section_file *secfile, const char *filename,
   }
 
   section_list_iterate(secfile->sections, psection) {
-    if (psection->include) {
-      for (ent_iter = entry_list_head(section_entries(psection));
-           ent_iter && (pentry = entry_list_link_data(ent_iter));
-           ent_iter = entry_list_link_next(ent_iter)) {
+    fz_fprintf(fs, "\n[%s]\n", section_name(psection));
 
-        fc_assert(!strcmp(entry_name(pentry), "file"));
+    /* Following doesn't use entry_list_iterate() because we want to do
+     * tricky things with the iterators...
+     */
+    for (ent_iter = entry_list_head(section_entries(psection));
+         ent_iter && (pentry = entry_list_link_data(ent_iter));
+         ent_iter = entry_list_link_next(ent_iter)) {
 
-        fz_fprintf(fs, "*include ");
-        entry_to_file(pentry, fs);
-        fz_fprintf(fs, "\n");
-      }
-    } else {
-      fz_fprintf(fs, "\n[%s]\n", section_name(psection));
-
-      /* Following doesn't use entry_list_iterate() because we want to do
-       * tricky things with the iterators...
+      /* Tables: break out of this loop if this is a non-table
+            * entry (pentry and ent_iter unchanged) or after table (pentry
+       * and ent_iter suitably updated, pentry possibly NULL).
+       * After each table, loop again in case the next entry
+       * is another table.
        */
-      for (ent_iter = entry_list_head(section_entries(psection));
-           ent_iter && (pentry = entry_list_link_data(ent_iter));
-           ent_iter = entry_list_link_next(ent_iter)) {
-        const char *comment;
+      for (;;) {
+        char *c, *first, base[64];
+        int offset, irow, icol, ncol;
 
-        /* Tables: break out of this loop if this is a non-table
-         * entry (pentry and ent_iter unchanged) or after table (pentry
-         * and ent_iter suitably updated, pentry possibly NULL).
-         * After each table, loop again in case the next entry
-         * is another table.
+        /* Example: for first table name of "xyz0.blah":
+         *  first points to the original string pentry->name
+         *  base contains "xyz";
+         *  offset = 5 (so first+offset gives "blah")
+         *  note strlen(base) = offset - 2
          */
+
+        if (!SAVE_TABLES) {
+          break;
+        }
+
+        sz_strlcpy(pentry_name, entry_name(pentry));
+        c = first = pentry_name;
+        if (*c == '\0' || !fc_isalpha(*c)) {
+          break;
+        }
+        for (; *c != '\0' && fc_isalpha(*c); c++) {
+          /* nothing */
+        }
+        if (0 != strncmp(c, "0.", 2)) {
+          break;
+        }
+        c += 2;
+        if (*c == '\0' || !fc_isalnum(*c)) {
+          break;
+        }
+
+        offset = c - first;
+        first[offset - 2] = '\0';
+        sz_strlcpy(base, first);
+        first[offset - 2] = '0';
+        fz_fprintf(fs, "%s={", base);
+
+        /* Save an iterator at this first entry, which we can later use
+         * to repeatedly iterate over column names:
+         */
+        save_iter = ent_iter;
+
+        /* write the column names, and calculate ncol: */
+        ncol = 0;
+        col_iter = save_iter;
+        for(; (col_pentry = entry_list_link_data(col_iter));
+            col_iter = entry_list_link_next(col_iter)) {
+          col_entry_name = entry_name(col_pentry);
+          if (strncmp(col_entry_name, first, offset) != 0) {
+            break;
+          }
+          fz_fprintf(fs, "%s\"%s\"", (ncol == 0 ? "" : ","),
+                     col_entry_name + offset);
+          ncol++;
+        }
+        fz_fprintf(fs, "\n");
+
+        /* Iterate over rows and columns, incrementing ent_iter as we go,
+         * and writing values to the table.  Have a separate iterator
+         * to the column names to check they all match.
+         */
+        irow = icol = 0;
+        col_iter = save_iter;
         for (;;) {
-          char *c, *first, base[64];
-          int offset, irow, icol, ncol;
+          char expect[128];     /* pentry->name we're expecting */
 
-          /* Example: for first table name of "xyz0.blah":
-           *  first points to the original string pentry->name
-           *  base contains "xyz";
-           *  offset = 5 (so first+offset gives "blah")
-           *  note strlen(base) = offset - 2
-           */
+          pentry = entry_list_link_data(ent_iter);
+          col_pentry = entry_list_link_data(col_iter);
 
-          if (!SAVE_TABLES) {
-            break;
-          }
+          fc_snprintf(expect, sizeof(expect), "%s%d.%s",
+                      base, irow, entry_name(col_pentry) + offset);
 
-          sz_strlcpy(pentry_name, entry_name(pentry));
-          c = first = pentry_name;
-          if (*c == '\0' || !is_legal_table_entry_name(*c, FALSE)) {
-            break;
-          }
-          for (; *c != '\0' && is_legal_table_entry_name(*c, FALSE); c++) {
-            /* nothing */
-          }
-          if (0 != strncmp(c, "0.", 2)) {
-            break;
-          }
-          c += 2;
-          if (*c == '\0' || !is_legal_table_entry_name(*c, TRUE)) {
-            break;
-          }
-
-          offset = c - first;
-          first[offset - 2] = '\0';
-          sz_strlcpy(base, first);
-          first[offset - 2] = '0';
-          fz_fprintf(fs, "%s={", base);
-
-          /* Save an iterator at this first entry, which we can later use
-           * to repeatedly iterate over column names:
-           */
-          save_iter = ent_iter;
-
-          /* write the column names, and calculate ncol: */
-          ncol = 0;
-          col_iter = save_iter;
-          for(; (col_pentry = entry_list_link_data(col_iter));
-              col_iter = entry_list_link_next(col_iter)) {
-            col_entry_name = entry_name(col_pentry);
-            if (strncmp(col_entry_name, first, offset) != 0) {
-              break;
-            }
-            fz_fprintf(fs, "%s\"%s\"", (ncol == 0 ? "" : ","),
-                       col_entry_name + offset);
-            ncol++;
-          }
-          fz_fprintf(fs, "\n");
-
-          /* Iterate over rows and columns, incrementing ent_iter as we go,
-           * and writing values to the table.  Have a separate iterator
-           * to the column names to check they all match.
-           */
-          irow = icol = 0;
-          col_iter = save_iter;
-          for (;;) {
-            char expect[128];     /* pentry->name we're expecting */
-
-            pentry = entry_list_link_data(ent_iter);
-            col_pentry = entry_list_link_data(col_iter);
-
-            fc_snprintf(expect, sizeof(expect), "%s%d.%s",
-                        base, irow, entry_name(col_pentry) + offset);
-
-            /* break out of tabular if doesn't match: */
-            if ((!pentry) || (strcmp(entry_name(pentry), expect) != 0)) {
-              if (icol != 0) {
-                /* If the second or later row of a table is missing some
-                 * entries that the first row had, we drop out of the tabular
-                 * format.  This is inefficient so we print a warning message;
-                 * the calling code probably needs to be fixed so that it can
-                 * use the more efficient tabular format.
-                 *
-                 * FIXME: If the first row is missing some entries that the
-                 * second or later row has, then we'll drop out of tabular
-                 * format without an error message. */
-                log_error("In file %s, there is no entry in the registry for\n"
-                          "%s.%s (or the entries are out of order). This means\n"
-                          "a less efficient non-tabular format will be used.\n"
-                          "To avoid this make sure all rows of a table are\n"
-                          "filled out with an entry for every column.",
-                          real_filename, section_name(psection), expect);
-                /* TRANS: No full stop after the URL, could cause confusion. */
-                log_error(_("Please report this message at %s"), BUG_URL);
-                fz_fprintf(fs, "\n");
-              }
-              fz_fprintf(fs, "}\n");
-              break;
-            }
-
-            if (icol > 0) {
-              fz_fprintf(fs, ",");
-            }
-            entry_to_file(pentry, fs);
-
-            ent_iter = entry_list_link_next(ent_iter);
-            col_iter = entry_list_link_next(col_iter);
-
-            icol++;
-            if (icol == ncol) {
+          /* break out of tabular if doesn't match: */
+          if ((!pentry) || (strcmp(entry_name(pentry), expect) != 0)) {
+            if (icol != 0) {
+              /* If the second or later row of a table is missing some
+               * entries that the first row had, we drop out of the tabular
+               * format.  This is inefficient so we print a warning message;
+               * the calling code probably needs to be fixed so that it can
+               * use the more efficient tabular format.
+               *
+               * FIXME: If the first row is missing some entries that the
+               * second or later row has, then we'll drop out of tabular
+               * format without an error message. */
+              log_error("In file %s, there is no entry in the registry for\n"
+                        "%s.%s (or the entries are out of order). This means\n"
+                        "a less efficient non-tabular format will be used.\n"
+                        "To avoid this make sure all rows of a table are\n"
+                        "filled out with an entry for every column.",
+                        real_filename, section_name(psection), expect);
+              /* TRANS: No full stop after the URL, could cause confusion. */
+              log_error(_("Please report this message at %s"), BUG_URL);
               fz_fprintf(fs, "\n");
-              irow++;
-              icol = 0;
-              col_iter = save_iter;
             }
-          }
-          if (!pentry) {
+            fz_fprintf(fs, "}\n");
             break;
+          }
+
+          if (icol > 0) {
+            fz_fprintf(fs, ",");
+          }
+          entry_to_file(pentry, fs);
+
+          ent_iter = entry_list_link_next(ent_iter);
+          col_iter = entry_list_link_next(col_iter);
+
+          icol++;
+          if (icol == ncol) {
+            fz_fprintf(fs, "\n");
+            irow++;
+            icol = 0;
+            col_iter = save_iter;
           }
         }
         if (!pentry) {
           break;
         }
+      }
+      if (!pentry) {
+        break;
+      }
 
-        /* Classic entry. */
-        col_entry_name = entry_name(pentry);
-        fz_fprintf(fs, "%s=", col_entry_name);
-        entry_to_file(pentry, fs);
+      /* Classic entry. */
+      col_entry_name = entry_name(pentry);
+      fz_fprintf(fs, "%s=", col_entry_name);
+      entry_to_file(pentry, fs);
 
-        /* Check for vector. */
-        for (i = 1;; i++) {
-          col_iter = entry_list_link_next(ent_iter);
-          col_pentry = entry_list_link_data(col_iter);
-          if (NULL == col_pentry) {
-            break;
-          }
-          fc_snprintf(pentry_name, sizeof(pentry_name),
-                      "%s,%d", col_entry_name, i);
-          if (0 != strcmp(pentry_name, entry_name(col_pentry))) {
-            break;
-          }
-          fz_fprintf(fs, ",");
-          entry_to_file(col_pentry, fs);
-          ent_iter = col_iter;
+      /* Check for vector. */
+      for (i = 1;; i++) {
+        col_iter = entry_list_link_next(ent_iter);
+        col_pentry = entry_list_link_data(col_iter);
+        if (NULL == col_pentry) {
+          break;
         }
-
-        comment = entry_comment(pentry);
-        if (comment) {
-          fz_fprintf(fs, "#%s\n", comment);
-        } else {
-          fz_fprintf(fs, "\n");
+        fc_snprintf(pentry_name, sizeof(pentry_name),
+                    "%s,%d", col_entry_name, i);
+        if (0 != strcmp(pentry_name, entry_name(col_pentry))) {
+          break;
         }
+        fz_fprintf(fs, ",");
+        entry_to_file(col_pentry, fs);
+        ent_iter = col_iter;
+      }
+
+      if (entry_comment(pentry)) {
+        fz_fprintf(fs, "#%s\n", entry_comment(pentry));
+      } else {
+        fz_fprintf(fs, "\n");
       }
     }
   } section_list_iterate_end;
@@ -861,14 +835,8 @@ void secfile_check_unused(const struct section_file *secfile)
           log_verbose("Unused entries in file %s:", secfile->name);
           any = TRUE;
         }
-#ifdef TESTMATIC_ENABLED
-        log_testmatic("%s: unused entry: %s.%s",
-                      secfile->name != NULL ? secfile->name : "nameless",
-                      section_name(psection), entry_name(pentry));
-#else  /* TESTMATIC_ENABLED */
         log_verbose("  unused entry: %s.%s",
                     section_name(psection), entry_name(pentry));
-#endif /* TESTMATIC_ENABLED */
       }
     } entry_list_iterate_end;
   } section_list_iterate_end;
@@ -1097,88 +1065,13 @@ size_t secfile_insert_int_vec_full(struct section_file *secfile,
 }
 
 /**************************************************************************
-  Insert a floating entry.
-**************************************************************************/
-struct entry *secfile_insert_float_full(struct section_file *secfile,
-                                        float value, const char *comment,
-                                        bool allow_replace,
-                                        const char *path, ...)
-{
-  char fullpath[MAX_LEN_SECPATH];
-  const char *ent_name;
-  struct section *psection;
-  struct entry *pentry = NULL;
-  va_list args;
-
-  SECFILE_RETURN_VAL_IF_FAIL(secfile, NULL, NULL != secfile, NULL);
-
-  va_start(args, path);
-  fc_vsnprintf(fullpath, sizeof(fullpath), path, args);
-  va_end(args);
-
-  psection = secfile_insert_base(secfile, fullpath, &ent_name);
-  if (!psection) {
-    return NULL;
-  }
-
-  if (allow_replace) {
-    pentry = section_entry_by_name(psection, ent_name);
-    if (NULL != pentry) {
-      if (ENTRY_FLOAT == entry_type(pentry)) {
-        if (!entry_float_set(pentry, value)) {
-          return NULL;
-        }
-      } else {
-        entry_destroy(pentry);
-        pentry = NULL;
-      }
-    }
-  }
-
-  if (NULL == pentry) {
-    pentry = section_entry_float_new(psection, ent_name, value);
-  }
-
-  if (NULL != pentry && NULL != comment) {
-    entry_set_comment(pentry, comment);
-  }
-
-  return pentry;
-}
-
-/**************************************************************************
-  Insert a include entry.
-**************************************************************************/
-struct section *secfile_insert_include(struct section_file *secfile,
-                                       const char *filename)
-{
-  struct section *psection;
-  char buffer[200];
-
-  fc_snprintf(buffer, sizeof(buffer), "include_%u", secfile->num_includes++);
-
-  fc_assert_ret_val(secfile_section_by_name(secfile, filename) == NULL, NULL);
-
-  /* Create include section. */
-  psection = secfile_section_new(secfile, buffer);
-  psection->include = TRUE;
-
-  /* Then add string entry "file" to it. */
-  secfile_insert_str_full(secfile, filename, NULL, FALSE, FALSE, TRUE, "%s.file", buffer);
-
-  return psection;
-}
-
-/**************************************************************************
   Insert a string entry.
 **************************************************************************/
 struct entry *secfile_insert_str_full(struct section_file *secfile,
                                       const char *string,
                                       const char *comment,
                                       bool allow_replace,
-                                      bool no_escape,
-                                      bool include,
-                                      const char *path, ...)
+                                      bool no_escape, const char *path, ...)
 {
   char fullpath[MAX_LEN_SECPATH];
   const char *ent_name;
@@ -1194,11 +1087,6 @@ struct entry *secfile_insert_str_full(struct section_file *secfile,
 
   psection = secfile_insert_base(secfile, fullpath, &ent_name);
   if (!psection) {
-    return NULL;
-  }
-
-  if (psection->include && !include) {
-    log_error("Tried to insert normal entry to include section");
     return NULL;
   }
 
@@ -1250,13 +1138,13 @@ size_t secfile_insert_str_vec_full(struct section_file *secfile,
    * of the file. */
   if (dim > 0
       && NULL != secfile_insert_str_full(secfile, strings[0], comment,
-                                         allow_replace, no_escape, FALSE,
+                                         allow_replace, no_escape,
                                          "%s", fullpath)) {
     ret++;
   }
   for (i = 1; i < dim; i++) {
     if (NULL != secfile_insert_str_full(secfile, strings[i], comment,
-                                        allow_replace, no_escape, FALSE,
+                                        allow_replace, no_escape,
                                         "%s,%d", fullpath, (int) i)) {
       ret++;
     }
@@ -1953,59 +1841,6 @@ int *secfile_lookup_int_vec(const struct section_file *secfile,
   }
 
   return vec;
-}
-
-/**************************************************************************
-  Lookup a floating point value in the secfile.  Returns TRUE on success.
-**************************************************************************/
-bool secfile_lookup_float(const struct section_file *secfile, float *fval,
-                          const char *path, ...)
-{
-  char fullpath[MAX_LEN_SECPATH];
-  const struct entry *pentry;
-  va_list args;
-
-  SECFILE_RETURN_VAL_IF_FAIL(secfile, NULL, NULL != secfile, FALSE);
-
-  va_start(args, path);
-  fc_vsnprintf(fullpath, sizeof(fullpath), path, args);
-  va_end(args);
-
-  if (!(pentry = secfile_entry_by_path(secfile, fullpath))) {
-    SECFILE_LOG(secfile, NULL, "\"%s\" entry doesn't exist.", fullpath);
-    return FALSE;
-  }
-
-  return entry_float_get(pentry, fval);
-}
-
-/**************************************************************************
-  Lookup a floating point value in the secfile. On failure, use the default
-  value.
-**************************************************************************/
-float secfile_lookup_float_default(const struct section_file *secfile,
-                                   float def, const char *path, ...)
-{
-  char fullpath[MAX_LEN_SECPATH];
-  const struct entry *pentry;
-  float fval;
-  va_list args;
-
-  SECFILE_RETURN_VAL_IF_FAIL(secfile, NULL, NULL != secfile, def);
-
-  va_start(args, path);
-  fc_vsnprintf(fullpath, sizeof(fullpath), path, args);
-  va_end(args);
-
-  if (!(pentry = secfile_entry_by_path(secfile, fullpath))) {
-    return def;
-  }
-
-  if (entry_float_get(pentry, &fval)) {
-    return fval;
-  }
-
-  return def;
 }
 
 /**************************************************************************
@@ -2752,14 +2587,12 @@ struct section *secfile_section_new(struct section_file *secfile,
   }
 
   if (NULL != secfile_section_by_name(secfile, name)) {
-    /* We cannot duplicate sections in any case! Not even if one is
-     * include -section and the other not. */
+    /* We cannot duplicate sections in any case! */
     SECFILE_LOG(secfile, NULL, "Section \"%s\" already exists.", name);
     return NULL;
   }
 
   psection = fc_malloc(sizeof(struct section));
-  psection->include = FALSE;
   psection->name = fc_strdup(name);
   psection->entries = entry_list_new_full(entry_destroy);
 
@@ -2954,15 +2787,10 @@ struct entry {
     struct {
       int value;
     } integer;
-    /* ENTRY_FLOAT */
-    struct {
-      float value;
-    } floating;
     /* ENTRY_STR */
     struct {
       char *value;              /* Malloced string. */
       bool escaped;             /* " or $. Usually TRUE */
-      bool gt_marking;          /* Save with gettext marking. */
     } string;
   };
 };
@@ -3045,22 +2873,6 @@ struct entry *section_entry_bool_new(struct section *psection,
 }
 
 /**************************************************************************
-  Returns a new entry of type ENTRY_FLOAT.
-**************************************************************************/
-struct entry *section_entry_float_new(struct section *psection,
-                                      const char *name, float value)
-{
-  struct entry *pentry = entry_new(psection, name);
-
-  if (NULL != pentry) {
-    pentry->type = ENTRY_FLOAT;
-    pentry->floating.value = value;
-  }
-
-  return pentry;
-}
-
-/**************************************************************************
   Returns a new entry of type ENTRY_STR.
 **************************************************************************/
 struct entry *section_entry_str_new(struct section *psection,
@@ -3073,7 +2885,6 @@ struct entry *section_entry_str_new(struct section *psection,
     pentry->type = ENTRY_STR;
     pentry->string.value = fc_strdup(NULL != value ? value : "");
     pentry->string.escaped = escaped;
-    pentry->string.gt_marking = FALSE;
   }
 
   return pentry;
@@ -3108,7 +2919,6 @@ void entry_destroy(struct entry *pentry)
   switch (pentry->type) {
   case ENTRY_BOOL:
   case ENTRY_INT:
-  case ENTRY_FLOAT:
     break;
 
   case ENTRY_STR:
@@ -3287,36 +3097,6 @@ bool entry_bool_set(struct entry *pentry, bool value)
 }
 
 /**************************************************************************
-  Gets an floating value. Returns TRUE on success.
-**************************************************************************/
-bool entry_float_get(const struct entry *pentry, float *value)
-{
-  SECFILE_RETURN_VAL_IF_FAIL(NULL, NULL, NULL != pentry, FALSE);
-  SECFILE_RETURN_VAL_IF_FAIL(pentry->psection->secfile, pentry->psection,
-                             ENTRY_FLOAT == pentry->type, FALSE);
-
-  if (NULL != value) {
-    *value = pentry->floating.value;
-  }
-
-  return TRUE;
-}
-
-/**************************************************************************
-  Sets an floating value. Returns TRUE on success.
-**************************************************************************/
-bool entry_float_set(struct entry *pentry, float value)
-{
-  SECFILE_RETURN_VAL_IF_FAIL(NULL, NULL, NULL != pentry, FALSE);
-  SECFILE_RETURN_VAL_IF_FAIL(pentry->psection->secfile, pentry->psection,
-                             ENTRY_FLOAT == pentry->type, FALSE);
-
-  pentry->floating.value = value;
-
-  return TRUE;
-}
-
-/**************************************************************************
   Gets an integer value.  Returns TRUE on success.
 **************************************************************************/
 bool entry_int_get(const struct entry *pentry, int *value)
@@ -3399,27 +3179,11 @@ bool entry_str_set_escaped(struct entry *pentry, bool escaped)
 }
 
 /**************************************************************************
-  Sets if the string should get gettext marking. Returns TRUE on success.
-**************************************************************************/
-bool entry_str_set_gt_marking(struct entry *pentry, bool gt_marking)
-{
-  SECFILE_RETURN_VAL_IF_FAIL(NULL, NULL, NULL != pentry, FALSE);
-  SECFILE_RETURN_VAL_IF_FAIL(pentry->psection->secfile, pentry->psection,
-                             ENTRY_STR == pentry->type, FALSE);
-
-  pentry->string.gt_marking = gt_marking;
-
-  return TRUE;
-}
-
-/**************************************************************************
   Push an entry into a file stream.
 **************************************************************************/
 static void entry_to_file(const struct entry *pentry, fz_FILE *fs)
 {
   static char buf[8192];
-  char *dot = NULL;
-  int i;
 
   switch (pentry->type) {
   case ENTRY_BOOL:
@@ -3428,30 +3192,10 @@ static void entry_to_file(const struct entry *pentry, fz_FILE *fs)
   case ENTRY_INT:
     fz_fprintf(fs, "%d", pentry->integer.value);
     break;
-  case ENTRY_FLOAT:
-    snprintf(buf, sizeof(buf), "%f", pentry->floating.value);
-    for (i = 0; buf[i] != '\0' ; i++) {
-      if (buf[i] == '.') {
-        dot = &(buf[i]);
-        break;
-      }
-    }
-    if (dot == NULL) {
-      /* There's no '.' so it would seem like a integer value when loaded.
-       * Force it not to look like an integer by adding ".0" */
-      fz_fprintf(fs, "%s.0", buf);
-    } else {
-      fz_fprintf(fs, "%s", buf);
-    }
-    break;
   case ENTRY_STR:
     if (pentry->string.escaped) {
       make_escapes(pentry->string.value, buf, sizeof(buf));
-      if (pentry->string.gt_marking) {
-        fz_fprintf(fs, "_(\"%s\")", buf);
-      } else {
-        fz_fprintf(fs, "\"%s\"", buf);
-      }
+      fz_fprintf(fs, "\"%s\"", buf);
     } else {
       fz_fprintf(fs, "$%s$", pentry->string.value);
     }

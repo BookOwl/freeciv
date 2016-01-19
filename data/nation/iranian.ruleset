@@ -44,7 +44,7 @@ ruler_titles = {
 
 flag="iran"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

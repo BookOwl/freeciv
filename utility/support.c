@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -65,7 +65,7 @@
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_UNISTD_H
@@ -74,19 +74,15 @@
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 #include <zlib.h>
 #endif
-#ifdef FREECIV_HAVE_WINSOCK
-#ifdef FREECIV_HAVE_WINSOCK2
-#include <winsock2.h>
-#else  /* FREECIV_HAVE_WINSOCK2 */
-#include <winsock.h>
-#endif /* FREECIV_HAVE_WINSOCK2 */
-#endif /* FREECIV_HAVE_WINSOCK */
 #ifdef WIN32_NATIVE
 #include <process.h>
 #include <windows.h>
+#endif
+#ifdef HAVE_WINSOCK
+#include <winsock.h>
 #endif
 #ifdef HAVE_STRINGS_H
 #  include <strings.h>
@@ -96,12 +92,9 @@
 #  include <libgen.h>
 #endif
 
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 #include <zlib.h>
 #endif
-
-/* ICU */
-#include "unicode/ustring.h"
 
 /* utility */
 #include "fciconv.h"
@@ -112,113 +105,29 @@
 
 #include "support.h"
 
-static int cmp_buffer_uchars = 0;
-static UChar *cmp_buffer0 = NULL;
-static UChar *cmp_buffer1 = NULL;
-fc_mutex cmp_buffer_mutex;
-
-/***************************************************************
-  Initial allocation of string comparison buffers.
-***************************************************************/
-static void cmp_buffers_initial(void)
-{
-  if (cmp_buffer0 == NULL) {
-    cmp_buffer_uchars = 255;
-    cmp_buffer0 = fc_malloc((cmp_buffer_uchars + 1) * sizeof(UChar));
-    cmp_buffer1 = fc_malloc((cmp_buffer_uchars + 1) * sizeof(UChar));
-
-    /* Make sure there's zero after the buffer published with cmp_buffer_uchars */
-    cmp_buffer0[cmp_buffer_uchars] = 0;
-    cmp_buffer1[cmp_buffer_uchars] = 0;
-  }
-}
-
-/***************************************************************
-  Make string comparison buffers bigger
-***************************************************************/
-static void cmp_buffers_increase(void)
-{
-  cmp_buffer_uchars *= 1.5;
-  cmp_buffer0 = fc_realloc(cmp_buffer0, (cmp_buffer_uchars + 1) * sizeof(UChar));
-  cmp_buffer1 = fc_realloc(cmp_buffer1, (cmp_buffer_uchars + 1) * sizeof(UChar));
-
-  /* Make sure there's zero after the buffer published with cmp_buffer_uchars */
-  cmp_buffer0[cmp_buffer_uchars] = 0;
-  cmp_buffer1[cmp_buffer_uchars] = 0;
-}
-
-/***************************************************************
-  Initialize string handling API
-***************************************************************/
-void fc_strAPI_init(void)
-{
-  if (cmp_buffer_uchars == 0) {
-    fc_init_mutex(&cmp_buffer_mutex);
-    cmp_buffers_initial();
-  }
-}
-
-/***************************************************************
-  Free string handling API resources
-***************************************************************/
-void fc_strAPI_free(void)
-{
-  if (cmp_buffer0 != NULL) {
-    free(cmp_buffer0);
-    cmp_buffer0 = NULL;
-    free(cmp_buffer1);
-    cmp_buffer1 = NULL;
-    cmp_buffer_uchars = 0;
-  }
-  fc_destroy_mutex(&cmp_buffer_mutex);
-}
-
 /***************************************************************
   Compare strings like strcmp(), but ignoring case.
 ***************************************************************/
 int fc_strcasecmp(const char *str0, const char *str1)
 {
-  UErrorCode err_code = U_ZERO_ERROR;
-  int len0;
-  int len1;
-  bool enough_mem = FALSE;
-  int ret;
-
   if (str0 == NULL) {
     return -1;
   }
   if (str1 == NULL) {
     return 1;
   }
-
-  if (cmp_buffer_uchars == 0) {
-    fc_strAPI_init();
-  }
-
-  fc_allocate_mutex(&cmp_buffer_mutex);
-
-  while (!enough_mem) {
-    UErrorCode err_code0 = U_ZERO_ERROR;
-    UErrorCode err_code1 = U_ZERO_ERROR;
-
-    u_strFromUTF8Lenient(cmp_buffer0, cmp_buffer_uchars, &len0, str0, -1, &err_code0);
-    u_strFromUTF8Lenient(cmp_buffer1, cmp_buffer_uchars, &len1, str1, -1, &err_code1);
-
-    /* No need to handle U_STRING_NOT_TERMINATED_WARNING here as there's '0' after
-     * the buffers we were using */
-    if (err_code0 == U_BUFFER_OVERFLOW_ERROR || err_code1 == U_BUFFER_OVERFLOW_ERROR) {
-      cmp_buffers_increase();
-    } else {
-      enough_mem = TRUE;
+#ifdef HAVE_STRCASECMP
+  return strcasecmp (str0, str1);
+#else
+  for (; fc_tolower(*str0) == fc_tolower(*str1); str0++, str1++) {
+    if (*str0 == '\0') {
+      return 0;
     }
   }
 
-  ret = u_strCaseCompare(cmp_buffer0, -1, cmp_buffer1, -1,
-                         0, &err_code);
-
-  fc_release_mutex(&cmp_buffer_mutex);
-
-  return ret;
+  return ((int) (unsigned char) fc_tolower(*str0))
+    - ((int) (unsigned char) fc_tolower(*str1));
+#endif /* HAVE_STRCASECMP */
 }
 
 /***************************************************************
@@ -227,54 +136,30 @@ int fc_strcasecmp(const char *str0, const char *str1)
 ***************************************************************/
 int fc_strncasecmp(const char *str0, const char *str1, size_t n)
 {
-  UErrorCode err_code = U_ZERO_ERROR;
-  int len0;
-  int len1;
-  bool enough_mem = FALSE;
-  int ret;
-
   if (str0 == NULL) {
     return -1;
   }
   if (str1 == NULL) {
     return 1;
   }
-
-  if (cmp_buffer_uchars == 0) {
-    fc_strAPI_init();
-  }
-
-  fc_allocate_mutex(&cmp_buffer_mutex);
-
-  while (!enough_mem) {
-    UErrorCode err_code0 = U_ZERO_ERROR;
-    UErrorCode err_code1 = U_ZERO_ERROR;
-
-    u_strFromUTF8Lenient(cmp_buffer0, cmp_buffer_uchars, &len0, str0, -1, &err_code0);
-    u_strFromUTF8Lenient(cmp_buffer1, cmp_buffer_uchars, &len1, str1, -1, &err_code1);
-
-    /* No need to handle U_STRING_NOT_TERMINATED_WARNING here as there's '0' after
-     * the buffers we were using */
-    if (err_code0 == U_BUFFER_OVERFLOW_ERROR || err_code1 == U_BUFFER_OVERFLOW_ERROR) {
-      cmp_buffers_increase();
-    } else {
-      enough_mem = TRUE;
+#ifdef HAVE_STRNCASECMP
+  return strncasecmp (str0, str1, n);
+#else
+  size_t i;
+  
+  for (i = 0; i < n && fc_tolower(*str0) == fc_tolower(*str1);
+       i++, str0++, str1++) {
+    if (*str0 == '\0') {
+      return 0;
     }
   }
 
-  if (len0 > n) {
-    len0 = n;
-  }
-  if (len1 > n) {
-    len1 = n;
-  }
-
-  ret = u_strCaseCompare(cmp_buffer0, len0, cmp_buffer1, len1,
-                         0, &err_code);
-
-  fc_release_mutex(&cmp_buffer_mutex);
-
-  return ret;
+  if (i == n)
+    return 0;
+  else
+    return ((int) (unsigned char) fc_tolower(*str0))
+      - ((int) (unsigned char) fc_tolower(*str1));
+#endif /* HAVE_STRNCASECMP */
 }
 
 /***************************************************************
@@ -445,7 +330,7 @@ FILE *fc_fopen(const char *filename, const char *opentype)
   Wrapper function for gzopen() with filename conversion to local
   encoding on Windows.
 *****************************************************************/
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 gzFile fc_gzopen(const char *filename, const char *opentype)
 {
 #ifdef WIN32_NATIVE
@@ -459,7 +344,7 @@ gzFile fc_gzopen(const char *filename, const char *opentype)
 	return gzopen(filename, opentype);
 #endif /* WIN32_NATIVE */
 }
-#endif /* FREECIV_HAVE_LIBZ */
+#endif /* HAVE_LIBZ */
 
 /******************************************************************
   Wrapper function for opendir() with filename conversion to local
@@ -605,7 +490,6 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
                        const char *replace)
 {
   size_t len_max;
-  bool success;
 
   fc_assert_ret_val(str != NULL, NULL);
   fc_assert_ret_val(len != NULL, NULL);
@@ -621,9 +505,8 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
     str = fc_realloc(str, len_max);
   }
 
-  success = fc_strrep(str, (*len), search, replace);
   /* should never happen */
-  fc_assert_ret_val_msg(success == TRUE, NULL,
+  fc_assert_ret_val_msg(fc_strrep(str, (*len), search, replace), NULL,
                         "Can't replace '%s' by '%s' in '%s'. To small "
                         "size after reallocation: %lu.", search, replace,
                         str, (long unsigned int)*len);
@@ -938,24 +821,21 @@ int fc_gethostname(char *buf, size_t len)
   Support for console I/O in case SOCKET_ZERO_ISNT_STDIN.
 ***********************************************************************/
 
-#define CONSOLE_BUF_SIZE 100
-static char console_buf[CONSOLE_BUF_SIZE + 1];
+#define MYBUFSIZE 100
+static char mybuf[MYBUFSIZE+1];
 
 /**********************************************************************/
 
 #ifdef WIN32_NATIVE
-static HANDLE console_thread = INVALID_HANDLE_VALUE;
+static HANDLE mythread = INVALID_HANDLE_VALUE;
 
-static DWORD WINAPI thread_proc(LPVOID arg)
+static unsigned int WINAPI thread_proc(LPVOID data)
 {
-  if (fgets(console_buf, CONSOLE_BUF_SIZE, stdin)) {
+  if (fgets(mybuf, MYBUFSIZE, stdin)) {
     char *s;
-
-    if ((s = strchr(console_buf, '\n'))) {
+    if ((s = strchr(mybuf, '\n')))
       *s = '\0';
-    }
   }
-
   return 0;
 }
 #endif /* WIN32_NATIVE */
@@ -966,19 +846,17 @@ static DWORD WINAPI thread_proc(LPVOID arg)
 void fc_init_console(void)
 {
 #ifdef WIN32_NATIVE
-  DWORD threadid;
+  unsigned int threadid;
 
-  if (console_thread != INVALID_HANDLE_VALUE) {
+  if (mythread != INVALID_HANDLE_VALUE)
     return;
-  }
 
-  console_buf[0] = '\0';
-  console_thread = (HANDLE) CreateThread(NULL, 0, thread_proc, NULL, 0, &threadid);
+  mybuf[0] = '\0';
+  mythread = (HANDLE)_beginthreadex(NULL, 0, thread_proc, NULL, 0, &threadid);
 #else  /* WIN32_NATIVE */
-  static bool initialized = FALSE;
-
+  static int initialized = 0;
   if (!initialized) {
-    initialized = TRUE;
+    initialized = 1;
 #ifdef HAVE_FILENO
     fc_nonblock(fileno(stdin));
 #endif
@@ -996,35 +874,26 @@ void fc_init_console(void)
 char *fc_read_console(void)
 {
 #ifdef WIN32_NATIVE
-  if (WaitForSingleObject(console_thread, 0) == WAIT_OBJECT_0) {
-    CloseHandle(console_thread);
-    console_thread = INVALID_HANDLE_VALUE;
-
-    return console_buf;
+  if (WaitForSingleObject(mythread, 0) == WAIT_OBJECT_0) {
+    CloseHandle(mythread);
+    mythread = INVALID_HANDLE_VALUE;
+    return mybuf;
   }
-
   return NULL;
 #else  /* WIN32_NATIVE */
   if (!feof(stdin)) {    /* input from server operator */
-    static char *bufptr = console_buf;
-
+    static char *bufptr = mybuf;
     /* fetch chars until \n, or run out of space in buffer */
     /* blocks if fc_nonblock() in fc_init_console() failed */
     while ((*bufptr = fgetc(stdin)) != EOF) {
-      if (*bufptr == '\n') {
-        *bufptr = '\0';
-      }
+      if (*bufptr == '\n') *bufptr = '\0';
       if (*bufptr == '\0') {
-	bufptr = console_buf;
-
-	return console_buf;
+	bufptr = mybuf;
+	return mybuf;
       }
-      if ((bufptr - console_buf) <= CONSOLE_BUF_SIZE) {
-        bufptr++; /* prevent overrun */
-      }
+      if ((bufptr - mybuf) <= MYBUFSIZE) bufptr++; /* prevent overrun */
     }
   }
-
   return NULL;
 #endif /* WIN32_NATIVE */
 }
@@ -1317,16 +1186,4 @@ const char *fc_basename(const char *path)
   fc_strlcpy(buf, path, sizeof(buf));
 
   return basename(buf);
-}
-
-/*****************************************************************
-  Set quick_exit() callback if possible.
-*****************************************************************/
-int fc_at_quick_exit(void (*func)(void))
-{
-#ifdef HAVE_AT_QUICK_EXIT
-  return at_quick_exit(func);
-#else  /* HAVE_AT_QUICK_EXIT */
-  return -1;
-#endif /* HAVE_AT_QUICK_EXIT */
 }

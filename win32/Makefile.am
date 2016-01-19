@@ -12,7 +12,6 @@ dist_noinst_DATA = \
 		installer/create-freeciv-gtk3-nsi.sh	\
 		installer/create-freeciv-qt-nsi.sh	\
 		installer/create-freeciv-sdl-nsi.sh	\
-		installer/create-freeciv-ruledit-nsi.sh	\
 		installer/freeciv-gtk2.cmd		\
 		installer/freeciv-gtk3.cmd		\
 		installer/freeciv-mp-gtk2.cmd		\
@@ -21,7 +20,6 @@ dist_noinst_DATA = \
 		installer/freeciv-qt.cmd		\
 		installer/freeciv-sdl.cmd		\
 		installer/freeciv-server.cmd		\
-		installer/freeciv-ruledit.cmd		\
 		installer/Freeciv.url			\
 		installer/Makefile
 

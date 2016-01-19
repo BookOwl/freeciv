@@ -470,12 +470,12 @@ static void menu_item_callback(GtkMenuItem *item, struct worklist_data *ptr)
 
   for (i = 0; i < worklist_length(pwl); i++) {
     GtkTreeIter it;
-    cid id;
+    cid cid;
 
-    id = cid_encode(pwl->entries[i]);
+    cid = cid_encode(pwl->entries[i]);
 
     gtk_list_store_append(ptr->dst, &it);
-    gtk_list_store_set(ptr->dst, &it, 0, (gint) id, -1);
+    gtk_list_store_set(ptr->dst, &it, 0, (gint) cid, -1);
   }
 
   commit_worklist(ptr);
@@ -529,11 +529,11 @@ static void help_callback(GtkWidget *w, gpointer data)
   selection = ptr->src_selection;
 
   if (gtk_tree_selection_get_selected(selection, &model, &it)) {
-    gint id;
+    gint cid;
     struct universal target;
 
-    gtk_tree_model_get(model, &it, 0, &id, -1);
-    target = cid_decode(id);
+    gtk_tree_model_get(model, &it, 0, &cid, -1);
+    target = cid_decode(cid);
 
     if (VUT_UTYPE == target.kind) {
       popup_help_dialog_typed(utype_name_translation(target.value.utype),
@@ -564,11 +564,11 @@ static void change_callback(GtkWidget *w, gpointer data)
   selection = ptr->src_selection;
 
   if (gtk_tree_selection_get_selected(selection, &model, &it)) {
-    gint id;
+    gint cid;
 
-    gtk_tree_model_get(model, &it, 0, &id, -1);
+    gtk_tree_model_get(model, &it, 0, &cid, -1);
 
-    city_change_production(ptr->pcity, cid_production(id));
+    city_change_production(ptr->pcity, cid_production(cid));
   }
 }
 
@@ -934,11 +934,11 @@ static void cell_render_func(GtkTreeViewColumn *col, GtkCellRenderer *rend,
 			     GtkTreeModel *model, GtkTreeIter *it,
 			     gpointer data)
 {
-  gint id;
+  gint cid;
   struct universal target;
 
-  gtk_tree_model_get(model, it, 0, &id, -1);
-  target = cid_production(id);
+  gtk_tree_model_get(model, it, 0, &cid, -1);
+  target = cid_production(cid);
 
   if (GTK_IS_CELL_RENDERER_PIXBUF(rend)) {
     GdkPixbuf *pix;
@@ -1015,14 +1015,14 @@ static void populate_view(GtkTreeView *view, struct city **ppcity,
                    i, titles[i], rend, cell_render_func, ppcity, NULL);
   col = gtk_tree_view_get_column(view, i);
 
-  if (gui_options.gui_gtk2_show_task_icons) {
+  if (gui_gtk2_show_task_icons) {
     if (max_unit_width == -1 || max_unit_height == -1) {
       update_max_unit_size();
     }
   } else {
     g_object_set(col, "visible", FALSE, NULL);
   }
-  if (gui_options.gui_gtk2_show_task_icons) {
+  if (gui_gtk2_show_task_icons) {
     g_object_set(rend, "height", max_unit_height, NULL);
   }
 
@@ -1045,7 +1045,7 @@ static void populate_view(GtkTreeView *view, struct city **ppcity,
     if (pos == 3) {
       *pcol = col;
     }
-    if (gui_options.gui_gtk2_show_task_icons) {
+    if (gui_gtk2_show_task_icons) {
       g_object_set(rend, "height", max_unit_height, NULL);
     }
   }
@@ -1447,16 +1447,16 @@ static void commit_worklist(struct worklist_data *ptr)
   i = 0;
   if (gtk_tree_model_get_iter_first(model, &it)) {
     do {
-      gint id;
+      gint cid;
 
       /* oops, the player has a worklist longer than what we can store. */
       if (i >= MAX_LEN_WORKLIST) {
         break;
       }
 
-      gtk_tree_model_get(model, &it, 0, &id, -1);
+      gtk_tree_model_get(model, &it, 0, &cid, -1);
 
-      worklist_append(&queue, cid_production(id));
+      worklist_append(&queue, cid_production(cid));
 
       i++;
     } while (gtk_tree_model_iter_next(model, &it));

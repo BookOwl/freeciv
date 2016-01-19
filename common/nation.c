@@ -42,6 +42,25 @@ struct nation_set {
   char description[MAX_LEN_MSG];
 };
 
+/* Nation group structure. */
+struct nation_group {
+  struct name_translation name;
+
+  union {
+    struct {
+      /* Only used in the server (./server/). */
+
+      /* How much the AI will try to select a nation in the same group */
+      int match;
+    } server;
+
+    struct {
+      /* Only used at the client. */
+      /* Nothing yet. */
+    } client;
+  };
+};
+
 static struct nation_type *nations = NULL;
 
 static int num_nation_sets;
@@ -147,7 +166,7 @@ const char *nation_rule_name(const struct nation_type *pnation)
 const char *nation_adjective_translation(const struct nation_type *pnation)
 {
   NATION_CHECK(pnation, return "");
-  return name_translation_get(&pnation->adjective);
+  return name_translation(&pnation->adjective);
 }
 
 /****************************************************************************
@@ -157,7 +176,7 @@ const char *nation_adjective_translation(const struct nation_type *pnation)
 const char *nation_plural_translation(const struct nation_type *pnation)
 {
   NATION_CHECK(pnation, return "");
-  return name_translation_get(&pnation->noun_plural);
+  return name_translation(&pnation->noun_plural);
 }
 
 /****************************************************************************
@@ -647,12 +666,12 @@ void nations_free(void)
 }
 
 /****************************************************************************
-  Returns nation's style.
+  Returns nation's city style.
 ****************************************************************************/
-struct nation_style *style_of_nation(const struct nation_type *pnation)
+int city_style_of_nation(const struct nation_type *pnation)
 {
   NATION_CHECK(pnation, return 0);
-  return pnation->style;
+  return pnation->city_style;
 }
 
 /****************************************************************************
@@ -784,7 +803,7 @@ const char *nation_set_rule_name(const struct nation_set *pset)
 const char *nation_set_name_translation(const struct nation_set *pset)
 {
   fc_assert_ret_val(NULL != pset, NULL);
-  return name_translation_get(&pset->name);
+  return name_translation(&pset->name);
 }
 
 /****************************************************************************
@@ -986,15 +1005,6 @@ struct nation_group *nation_group_by_rule_name(const char *name)
 }
 
 /****************************************************************************
-  Set whether this group should appear in the nation selection UI.
-****************************************************************************/
-void nation_group_set_hidden(struct nation_group *pgroup, bool hidden)
-{
-  fc_assert_ret(NULL != pgroup);
-  pgroup->hidden = hidden;
-}
-
-/****************************************************************************
   Set how much the AI will try to select a nation in the same group.
   Server only function.
 ****************************************************************************/
@@ -1003,15 +1013,6 @@ void nation_group_set_match(struct nation_group *pgroup, int match)
   fc_assert_ret(is_server());
   fc_assert_ret(NULL != pgroup);
   pgroup->server.match = match;
-}
-
-/****************************************************************************
-  Return whether this group should appear in the nation selection UI.
-****************************************************************************/
-bool is_nation_group_hidden(struct nation_group *pgroup)
-{
-  fc_assert_ret_val(NULL != pgroup, TRUE);
-  return pgroup->hidden;
 }
 
 /****************************************************************************
@@ -1043,7 +1044,7 @@ const char *nation_group_rule_name(const struct nation_group *pgroup)
 const char *nation_group_name_translation(const struct nation_group *pgroup)
 {
   fc_assert_ret_val(NULL != pgroup, NULL);
-  return name_translation_get(&pgroup->name);
+  return name_translation(&pgroup->name);
 }
 
 /****************************************************************************

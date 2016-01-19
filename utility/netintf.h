@@ -18,47 +18,38 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <freeciv_config.h>
-
 /********************************************************************** 
   Common network interface.
 ***********************************************************************/
 
-#ifdef FREECIV_HAVE_NETINET_IN_H
+#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_SELECT_H
+#ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_SOCKET_H
+#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_TIME_H
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#ifdef FREECIV_HAVE_UNISTD_H
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#ifdef FREECIV_HAVE_WS2TCPIP_H
-#include <ws2tcpip.h>
-#endif
-#ifdef FREECIV_HAVE_WINSOCK
-#ifdef FREECIV_HAVE_WINSOCK2
-#include <winsock2.h>
-#else  /* FREECIV_HAVE_WINSOCK2 */
+#ifdef HAVE_WINSOCK
 #include <winsock.h>
-#endif /* FREECIV_HAVE_WINSOCK2 */
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif
 
 /* utility */
 #include "ioz.h"
 #include "support.h"            /* bool type */
 
 /* map symbolic Winsock error names to symbolic errno names */
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
 #undef EINTR
 #undef EINPROGRESS
 #undef EWOULDBLOCK
@@ -73,7 +64,7 @@ extern "C" {
 #define ECONNREFUSED  WSAECONNREFUSED
 #define EADDRNOTAVAIL WSAEADDRNOTAVAIL
 #define ETIMEDOUT     WSAETIMEDOUT
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
 #ifdef FD_ZERO
 #define FC_FD_ZERO FD_ZERO
@@ -87,9 +78,9 @@ extern "C" {
 #define FC_IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
 #endif
 
-#ifndef FREECIV_HAVE_SOCKLEN_T
+#ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
-#endif  /* FREECIV_HAVE_SOCKLEN_T */
+#endif
 
 union fc_sockaddr {
   struct sockaddr saddr;
@@ -135,7 +126,6 @@ void fc_shutdown_network(void);
 void fc_nonblock(int sockfd);
 struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
 					    enum fc_addr_family family);
-bool fc_inet_aton(const char *cp, struct in_addr *inp, bool addr_none_ok);
 fz_FILE *fc_querysocket(int sock, void *buf, size_t size);
 int find_next_free_port(int starting_port, int highest_port,
                         enum fc_addr_family family,

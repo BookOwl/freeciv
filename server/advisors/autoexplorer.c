@@ -22,7 +22,6 @@
 #include "log.h"
 
 /* common */
-#include "ai.h"
 #include "movement.h"
 #include "player.h"
 #include "unit.h"
@@ -38,43 +37,38 @@
 /* server/advisors */
 #include "advgoto.h"
 
-/* ai */
-#include "handicaps.h"
-
 #include "autoexplorer.h"
 
 
 /**************************************************************************
-  Determine if a tile is likely to be native, given information that
-  the player actually has. Return the % certainty that it's native
+  Determine if a tile is likely to be water, given information that
+  the player actually has. Return the % certainty that it's water
   (100 = certain, 50 = no idea, 0 = certainly not).
 **************************************************************************/
-static int likely_native(struct tile *ptile,
-                         struct player *pplayer,
-                         struct unit_class *pclass)
+static int likely_ocean(struct tile *ptile, struct player *pplayer)
 {
-  int native = 0;
-  int foreign = 0;
+  int ocean = 0;
+  int land = 0;
   
   /* We do not check H_MAP here, it should be done by map_is_known() */
   if (map_is_known(ptile, pplayer)) {
     /* we've seen the tile already. */
-    return (is_native_tile_to_class(pclass, ptile) ? 100 : 0);
+    return (is_ocean_tile(ptile) ? 100 : 0);
   }
 
   /* The central tile is likely to be the same as the
    * nearby tiles. */
   adjc_dir_iterate(ptile, ptile1, dir) {
     if (map_is_known(ptile1, pplayer)) {
-      if (is_native_tile_to_class(pclass, ptile)) {
-        native++;
+      if (is_ocean_tile(ptile1)) {
+        ocean++;
       } else {
-        foreign++;
+        land++;
       }
     }
   } adjc_dir_iterate_end;
 
-  return 50 + (50 / game.map.num_valid_dirs * (native - foreign));
+  return 50 + (50 / map.num_valid_dirs * (ocean - land));
 }
 
 /**************************************************************************
@@ -84,10 +78,10 @@ static int likely_native(struct tile *ptile,
 **************************************************************************/
 static bool player_may_explore(const struct tile *ptile,
                                const struct player *pplayer,
-                               const struct unit_type *punittype)
+                               const bv_unit_type_flags unit_flags)
 {
   /* Don't allow military units to cross borders. */
-  if (!utype_has_flag(punittype, UTYF_CIVILIAN)
+  if (!BV_ISSET(unit_flags, UTYF_CIVILIAN)
       && !player_can_invade_tile(pplayer, ptile)) {
     return FALSE;
   }
@@ -113,7 +107,7 @@ static enum tile_behavior explorer_tb(const struct tile *ptile,
                                       enum known_type k,
                                       const struct pf_parameter *param)
 {
-  if (!player_may_explore(ptile, param->owner, param->utype)) {
+  if (!player_may_explore(ptile, param->owner, param->unit_flags)) {
     return TB_IGNORE;
   }
   return TB_NORMAL;
@@ -129,15 +123,10 @@ static bool explorer_goto(struct unit *punit, struct tile *ptile)
   bool alive = TRUE;
   struct pf_map *pfm;
   struct pf_path *path;
-  struct player *pplayer = unit_owner(punit);
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   parameter.get_TB = explorer_tb;
   adv_avoid_risks(&parameter, &risk_cost, punit, NORMAL_STACKING_FEARFULNESS);
-
-  /* Show the destination in the client */
-  punit->goto_tile = ptile;
 
   UNIT_LOG(LOG_DEBUG, punit, "explorer_goto to %d,%d", TILE_XY(ptile));
 
@@ -170,14 +159,14 @@ comment below.
 #define KNOWN_DIFF_TER_SCORE   51
 
 /* The maximum number of tiles that the unit might uncover in a move. 
- * #define MAX_NEW_TILES          (1 + 4 * (unit_type_get(punit)->vision_range))
+ * #define MAX_NEW_TILES          (1 + 4 * (unit_type(punit)->vision_range))
  * The previous line would be ideal, but we'd like these to be constants
  * for efficiency, so pretend vision_range == 1 */
 #define MAX_NEW_TILES          5
 
 /* The number of tiles that the unit can see. =(1 + 2r)^2
- * #define VISION_TILES           (1 + 2 * unit_type_get(punit)->vision_range)*\
- *                                (1 + 2 * unit_type_get(punit)->vision_range)
+ * #define VISION_TILES           (1 + 2 * unit_type(punit)->vision_range)*\
+ *                                (1 + 2 * unit_type(punit)->vision_range)
  * As above, set vision_range == 1 */
 #define VISION_TILES           9
 
@@ -200,23 +189,38 @@ comment below.
 static int explorer_desirable(struct tile *ptile, struct player *pplayer, 
                               struct unit *punit)
 {
-  int radius_sq = unit_type_get(punit)->vision_radius_sq;
+  int land_score, ocean_score, known_land_score, known_ocean_score;
+  int radius_sq = unit_type(punit)->vision_radius_sq;
   int desirable = 0;
   int unknown = 0;
 
   /* First do some checks that would make a tile completely non-desirable.
    * If we're a barbarian and the tile has a hut, don't go there. */
-  if (is_barbarian(pplayer) && tile_has_cause_extra(ptile, EC_HUT)) {
+  if (is_barbarian(pplayer) && tile_has_special(ptile, S_HUT)) {
     return 0;
   }
 
   /* Do no try to cross borders and break a treaty, etc. */
-  if (!player_may_explore(ptile, punit->owner, unit_type_get(punit))) {
+  if (!player_may_explore(ptile, punit->owner, unit_type(punit)->flags)) {
     return 0;
   }
 
+  /* What value we assign to the number of land and water tiles
+   * depends on if we're a land or water unit. */
+  if (is_ground_unit(punit)) {
+    land_score = SAME_TER_SCORE;
+    ocean_score = DIFF_TER_SCORE;
+    known_land_score = KNOWN_SAME_TER_SCORE;
+    known_ocean_score = KNOWN_DIFF_TER_SCORE;
+  } else {
+    land_score = DIFF_TER_SCORE;
+    ocean_score = SAME_TER_SCORE;
+    known_land_score = KNOWN_DIFF_TER_SCORE;
+    known_ocean_score = KNOWN_SAME_TER_SCORE;
+  }
+
   circle_iterate(ptile, radius_sq, ptile1) {
-    int native = likely_native(ptile1, pplayer, unit_class_get(punit));
+    int ocean = likely_ocean(ptile1, pplayer);
 
     if (!map_is_known(ptile1, pplayer)) {
       unknown++;
@@ -229,13 +233,13 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
        * sometimes needs to be recalculated (actually all changes 
        * only require local recalculation, but that could be unstable). */
 
-      desirable += (native * SAME_TER_SCORE + (100 - native) * DIFF_TER_SCORE);
+      desirable += (ocean * ocean_score + (100 - ocean) * land_score);
     } else {
       if(is_tiles_adjacent(ptile, ptile1)) {
 	/* we don't value staying offshore from land,
 	 * only adjacent. Otherwise destroyers do the wrong thing. */
-	desirable += (native * KNOWN_SAME_TER_SCORE
-                      + (100 - native) * KNOWN_DIFF_TER_SCORE);
+	desirable += (ocean * known_ocean_score 
+                      + (100 - ocean) * known_land_score);
       }
     }
   } circle_iterate_end;
@@ -245,9 +249,9 @@ static int explorer_desirable(struct tile *ptile, struct player *pplayer,
     desirable = 0;
   }
 
-  if ((!is_ai(pplayer) || !has_handicap(pplayer, H_HUTS))
+  if ((!pplayer->ai_controlled || !ai_handicap(pplayer, H_HUTS))
       && map_is_known(ptile, pplayer)
-      && tile_has_cause_extra(ptile, EC_HUT)) {
+      && tile_has_special(ptile, S_HUT)) {
     /* we want to explore huts whenever we can,
      * even if doing so will not uncover any tiles. */
     desirable += HUT_SCORE;
@@ -297,7 +301,7 @@ enum unit_move_result manage_auto_explorer(struct unit *punit)
 
   UNIT_LOG(LOG_DEBUG, punit, "auto-exploring.");
 
-  if (!is_human(pplayer) && unit_has_type_flag(punit, UTYF_GAMELOSS)) {
+  if (pplayer->ai_controlled && unit_has_type_flag(punit, UTYF_GAMELOSS)) {
     UNIT_LOG(LOG_DEBUG, punit, "exploration too dangerous!");
     return MR_BAD_ACTIVITY; /* too dangerous */
   }
@@ -373,15 +377,6 @@ enum unit_move_result manage_auto_explorer(struct unit *punit)
   if (best_tile != NULL) {
     /* TODO: read the path off the map we made.  Then we can make a path 
      * which goes beside the unknown, with a good EC callback... */
-    enum override_bool allow = NO_OVERRIDE;
-
-    if (is_ai(pplayer)) {
-      CALL_PLR_AI_FUNC(want_to_explore, pplayer, punit, best_tile, &allow);
-    }
-    if (allow == OVERRIDE_FALSE) {
-      UNIT_LOG(LOG_DEBUG, punit, "not allowed to explore");
-      return MR_NOT_ALLOWED;
-    }
     if (!explorer_goto(punit, best_tile)) {
       /* Died?  Strange... */
       return MR_DEATH;

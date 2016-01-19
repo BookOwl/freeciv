@@ -36,13 +36,9 @@
 #ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
 #endif
-#ifdef FREECIV_HAVE_WINSOCK
-#ifdef FREECIV_HAVE_WINSOCK2
-#include <winsock2.h>
-#else  /* FREECIV_HAVE_WINSOCK2 */
+#ifdef HAVE_WINSOCK
 #include <winsock.h>
-#endif /* FREECIV_HAVE_WINSOCK2 */
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif
 
 /* utility */
 #include "fcintl.h"
@@ -59,7 +55,6 @@
 #include "connection.h"
 #include "dataio.h"
 #include "game.h"
-#include "map.h"
 #include "version.h"
 
 /* server */
@@ -115,18 +110,6 @@ const char *get_meta_patches_string(void)
 const char *get_meta_message_string(void)
 {
   return meta_message;
-}
-
-/*************************************************************************
- The server metaserver type
-*************************************************************************/
-static const char *get_meta_type_string(void)
-{
-  if (game.server.meta_info.type[0] != '\0') {
-    return game.server.meta_info.type;
-  }
-
-  return NULL;
 }
 
 /*************************************************************************
@@ -247,7 +230,7 @@ static void send_metaserver_post(void *arg)
     addr = srvarg.bind_addr;
   }
 
-  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, NULL, addr)) {
+  if (!netfile_send_post(srvarg.metaserver_addr, post, NULL, addr)) {
     con_puts(C_METAERROR, _("Error connecting to metaserver"));
     metaserver_failed();
   }
@@ -286,11 +269,7 @@ static bool send_to_metaserver(enum meta_flag flag)
     sz_strlcpy(host, "unknown");
   }
 
-  if (game.control.version[0] != '\0') {
-    fc_snprintf(rs, sizeof(rs), "%s %s", game.control.name, game.control.version);
-  } else {
-    sz_strlcpy(rs, game.control.name);
-  }
+  sz_strlcpy(rs, game.control.name);
 
   /* Freed in metaserver thread function send_metaserver_post() */
   post = netfile_start_post();
@@ -303,11 +282,6 @@ static bool send_to_metaserver(enum meta_flag flag)
   if (flag == META_GOODBYE) {
     netfile_add_form_int(post, "bye", 1);
   } else {
-    const char *srvtype = get_meta_type_string();
-
-    if (srvtype != NULL) {
-      netfile_add_form_str(post, "type", srvtype);
-    }
     netfile_add_form_str(post, "version", VERSION_STRING);
     netfile_add_form_str(post, "patches",
                          get_meta_patches_string());
@@ -333,12 +307,10 @@ static bool send_to_metaserver(enum meta_flag flag)
           sz_strlcpy(type, "Dead");
         } else if (is_barbarian(plr)) {
           sz_strlcpy(type, "Barbarian");
-        } else if (is_ai(plr)) {
+        } else if (plr->ai_controlled) {
           sz_strlcpy(type, "A.I.");
-        } else if (is_human(plr)) {
-          sz_strlcpy(type, "Human");
         } else {
-          sz_strlcpy(type, "-");
+          sz_strlcpy(type, "Human");
         }
 
         netfile_add_form_str(post, "plu[]", plr->username);
@@ -362,11 +334,11 @@ static bool send_to_metaserver(enum meta_flag flag)
           is_player_available = FALSE;
         } else if (!plr->is_alive && !strchr(game.server.allow_take, 'd')) {
           is_player_available = FALSE;
-        } else if (is_ai(plr)
+        } else if (plr->ai_controlled
                    && !strchr(game.server.allow_take,
                               (game.info.is_new_game ? 'A' : 'a'))) {
           is_player_available = FALSE;
-        } else if (is_human(plr)
+        } else if (!plr->ai_controlled
                    && !strchr(game.server.allow_take,
                               (game.info.is_new_game ? 'H' : 'h'))) {
           is_player_available = FALSE;
@@ -379,8 +351,8 @@ static bool send_to_metaserver(enum meta_flag flag)
         if (is_player_available) {
           players++;
         }
-
-        if (is_human(plr) && plr->is_alive) {
+          
+        if (!plr->ai_controlled && plr->is_alive) {
           humans++;
         }
       } players_iterate_end;
@@ -403,7 +375,7 @@ static bool send_to_metaserver(enum meta_flag flag)
       }
 
       /* HACK: send the most determinant setting for the map size. */
-      switch (game.map.server.mapsize) {
+      switch (map.server.mapsize) {
       case MAPSIZE_FULLSIZE:
         meta_insert_setting(post, "size");
         break;
@@ -476,7 +448,7 @@ bool is_metaserver_open(void)
 }
 
 /**************************************************************************
-  Control when we send info to the metaserver.
+ control when we send info to the metaserver.
 **************************************************************************/
 bool send_server_info_to_metaserver(enum meta_flag flag)
 {
@@ -497,7 +469,6 @@ bool send_server_info_to_metaserver(enum meta_flag flag)
 
     /* Wait metaserver thread to finish */
     fc_thread_wait(meta_srv_thread);
-    free(meta_srv_thread);
     meta_srv_thread = NULL;
 
     return TRUE;

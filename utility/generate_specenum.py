@@ -14,7 +14,7 @@
 #
 
 # The maximum number of enumerators.
-max_enum_values=150
+max_enum_values=125
 
 # The target file.
 target="utility/specenum_gen.h"
@@ -81,9 +81,6 @@ def make_documentation(file):
  * SPECENUM_NAMEOVERRIDE: call callback function foo_name_cb(enum foo),
  * defined by specnum user, to get name of the enum value. If the function
  * returns NULL, compiled in names are used.
- *
- * SPECENUM_BITVECTOR: specifies the name of a bit vector for the enum
- * values. It can not be used in combination with SPECENUM_BITWISE.
  *
  * Assuming SPECENUM_NAME were 'foo', including this file would provide
  * the definition for the enumeration type 'enum foo', and prototypes for
@@ -185,13 +182,6 @@ extern "C" {
 #define SPECENUM_VALUE(value) (value)
 #endif /* SPECENUM_BITWISE */
 
-#ifdef SPECENUM_BITVECTOR
-#include "bitvector.h"
-#ifdef SPECENUM_BITWISE
-#error SPECENUM_BITWISE and SPECENUM_BITVECTOR cannot both be defined.
-#endif /* SPECENUM_BITWISE */
-#endif /* SPECENUM_BITVECTOR */
-
 #undef SPECENUM_MIN_VALUE
 #undef SPECENUM_MAX_VALUE
 ''')
@@ -207,9 +197,7 @@ extern "C" {
     macros.append("SPECENUM_ZERO")
     macros.append("SPECENUM_MIN_VALUE")
     macros.append("SPECENUM_MAX_VALUE")
-    macros.append("SPECENUM_SIZE")
     macros.append("SPECENUM_NAMEOVERRIDE")
-    macros.append("SPECENUM_BITVECTOR")
 
 def make_enum(file):
     file.write('''
@@ -224,19 +212,15 @@ enum SPECENUM_NAME {
         file.write('''
 #ifdef SPECENUM_VALUE%d
   SPECENUM_VALUE%d = SPECENUM_VALUE(%d),
-#  ifndef SPECENUM_MIN_VALUE
-#    define SPECENUM_MIN_VALUE SPECENUM_VALUE%d
-#  endif
-#  ifdef SPECENUM_MAX_VALUE
-#    undef SPECENUM_MAX_VALUE
-#  endif
-#  define SPECENUM_MAX_VALUE SPECENUM_VALUE%d
-#  ifdef SPECENUM_SIZE
-#    undef SPECENUM_SIZE
-#  endif
-#  define SPECENUM_SIZE (%d + 1)
+#ifndef SPECENUM_MIN_VALUE
+#define SPECENUM_MIN_VALUE SPECENUM_VALUE%d
+#endif
+#ifdef SPECENUM_MAX_VALUE
+#undef SPECENUM_MAX_VALUE
+#endif
+#define SPECENUM_MAX_VALUE SPECENUM_VALUE%d
 #endif /* SPECENUM_VALUE%d */
-'''%(i,i,i,i,i,i,i))
+'''%(i,i,i,i,i,i))
 
     file.write('''
 #ifdef SPECENUM_COUNT
@@ -254,7 +238,6 @@ def make_is_bitwise(file):
 /**************************************************************************
   Returns TRUE if this enumeration is in bitwise mode.
 **************************************************************************/
-fc__attribute((const))
 static inline bool SPECENUM_FOO(_is_bitwise)(void)
 {
 #ifdef SPECENUM_BITWISE
@@ -270,7 +253,6 @@ def make_min(file):
 /**************************************************************************
   Returns the value of the minimal enumerator.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_min)(void)
 {
   return SPECENUM_MIN_VALUE;
@@ -282,7 +264,6 @@ def make_max(file):
 /**************************************************************************
   Returns the value of the maximal enumerator.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_max)(void)
 {
   return SPECENUM_MAX_VALUE;
@@ -294,54 +275,30 @@ def make_is_valid(file):
 /**************************************************************************
   Returns TRUE if this enumerator was defined.
 **************************************************************************/
-fc__attribute((const))
 static inline bool SPECENUM_FOO(_is_valid)(enum SPECENUM_NAME enumerator)
 {
-#ifdef SPECENUM_BITWISE
-  static const unsigned long valid = (
-    0''')
+  switch (enumerator) {
+#ifdef SPECENUM_ZERO
+  case SPECENUM_ZERO:
+#endif
+''')
 
     for i in range(max_enum_values):
         file.write('''
-#  ifdef SPECENUM_VALUE%d
-    | SPECENUM_VALUE%d
-#  endif'''%(i,i))
+#ifdef SPECENUM_VALUE%d
+  case SPECENUM_VALUE%d:
+#endif
+'''%(i,i))
 
     file.write('''
-  );
-
-  FC_STATIC_ASSERT(sizeof(valid) * 8 >= SPECENUM_SIZE,
-                   valid_sizeof_check);
-
-#  ifdef SPECENUM_ZERO
-  if (enumerator == SPECENUM_ZERO) {
     return TRUE;
+#ifdef SPECENUM_COUNT
+  case SPECENUM_COUNT:
+    return FALSE;
+#endif /* SPECENUM_COUNT */
   }
-#  endif
-  return (enumerator & valid) == enumerator;
-#else
-  static const bool valid[] = {''')
 
-    for i in range(max_enum_values):
-        file.write('''
-#  if %d < SPECENUM_SIZE
-#    ifdef SPECENUM_VALUE%d
-       TRUE,
-#    else
-       FALSE,
-#    endif
-#  endif'''%(i,i))
-
-    file.write('''
-  };
-
-  FC_STATIC_ASSERT(ARRAY_SIZE(valid) == SPECENUM_SIZE,
-                   valid_array_size_check);
-
-  return (enumerator >= 0
-          && enumerator < ARRAY_SIZE(valid)
-          && valid[enumerator]);
-#endif /* SPECENUM_BITWISE */
+  return FALSE;
 }
 ''')
 
@@ -350,7 +307,6 @@ def make_invalid(file):
 /**************************************************************************
   Returns an invalid enumerator value.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_invalid)(void)
 {
   fc_assert(!SPECENUM_FOO(_is_valid(SPECENUM_INVALID)));
@@ -363,7 +319,6 @@ def make_begin(file):
 /**************************************************************************
   Beginning of the iteration of the enumerators.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_begin)(void)
 {
   return SPECENUM_FOO(_min)();
@@ -375,7 +330,6 @@ def make_end(file):
 /**************************************************************************
   End of the iteration of the enumerators.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_end)(void)
 {
   return SPECENUM_FOO(_invalid)();
@@ -387,7 +341,6 @@ def make_next(file):
 /**************************************************************************
   Find the next valid enumerator value.
 **************************************************************************/
-fc__attribute((const))
 static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 {
   do {
@@ -410,89 +363,61 @@ static inline enum SPECENUM_NAME SPECENUM_FOO(_next)(enum SPECENUM_NAME e)
 def make_name(file):
     file.write('''
 #ifdef SPECENUM_NAMEOVERRIDE
-const char *SPECENUM_FOO(_name_cb)(enum SPECENUM_NAME value);
+char *SPECENUM_FOO(_name_cb)(enum SPECENUM_NAME value);
 #endif /* SPECENUM_NAMEOVERRIDE */
 
 /**************************************************************************
   Returns the name of the enumerator.
 **************************************************************************/
-#ifndef SPECENUM_NAMEOVERRIDE
-fc__attribute((const))
-#endif
 static inline const char *SPECENUM_FOO(_name)(enum SPECENUM_NAME enumerator)
 {
-#ifdef SPECENUM_COUNT
-  static const char *names[SPECENUM_SIZE + 1];
-#else
-  static const char *names[SPECENUM_SIZE];
-#endif
-  static bool initialized = FALSE;
-
 #ifdef SPECENUM_NAMEOVERRIDE
-  {
-    const char *name = SPECENUM_FOO(_name_cb)(enumerator);
+  char *name = SPECENUM_FOO(_name_cb)(enumerator);
 
-    if (name != NULL) {
-      return Qn_(name);
-    }
+  if (name != NULL) {
+    return skip_intl_qualifier_prefix(name);
   }
 #endif /* SPECENUM_NAMEOVERRIDE */
 
-  if (!initialized) {''')
+  switch (enumerator) {
+#ifdef SPECENUM_ZERO
+  case SPECENUM_ZERO:
+#ifdef SPECENUM_ZERONAME
+    return skip_intl_qualifier_prefix(SPECENUM_ZERONAME);
+#else
+    return SPECENUM_STRING(SPECENUM_ZERO);
+#endif
+#endif /* SPECENUM_ZERO */
+''')
+    macros.append("SPECENUM_ZERONAME")
 
     for i in range(max_enum_values):
         file.write('''
-#if %d < SPECENUM_SIZE
-#  ifndef SPECENUM_VALUE%d
-     names[%d] = NULL;
-#  elif defined(SPECENUM_VALUE%dNAME)
-     names[%d] = Qn_(SPECENUM_VALUE%dNAME);
-#  else
-     names[%d] = SPECENUM_STRING(SPECENUM_VALUE%d);
-#  endif
-#endif'''%(i,i,i,i,i,i,i,i))
+#ifdef SPECENUM_VALUE%d
+  case SPECENUM_VALUE%d:
+#ifdef SPECENUM_VALUE%dNAME
+    return skip_intl_qualifier_prefix(SPECENUM_VALUE%dNAME);
+#else
+    return SPECENUM_STRING(SPECENUM_VALUE%d);
+#endif
+#endif /* SPECENUM_VALUE%d */
+'''%(i,i,i,i,i,i))
         macros.append("SPECENUM_VALUE%dNAME"%i)
 
     file.write('''
 #ifdef SPECENUM_COUNT
-#  ifdef SPECENUM_COUNTNAME
-  names[SPECENUM_COUNT] = Qn_(SPECENUM_COUNTNAME);
-#  else
-  names[SPECENUM_COUNT] = SPECENUM_STRING(SPECENUM_COUNT);
-#  endif
-#endif
-    initialized = TRUE;
-  }
-
-#ifdef SPECENUM_BITWISE
-#  ifdef SPECENUM_ZERO
-  if (enumerator == SPECENUM_ZERO) {
-#    ifdef SPECENUM_ZERONAME
-    return Qn_(SPECENUM_ZERONAME);
-#    else
-    return SPECENUM_STRING(SPECENUM_ZERO);
-#    endif
-  }
-#  endif
-  {
-    size_t i;
-
-    for (i = 0; i < ARRAY_SIZE(names); i++) {
-      if (1 << i == enumerator) {
-        return names[i];
-      }
-    }
-  }
+  case SPECENUM_COUNT:
+#ifdef SPECENUM_COUNTNAME
+    return skip_intl_qualifier_prefix(SPECENUM_COUNTNAME);
 #else
-  if (enumerator >= 0 && enumerator < ARRAY_SIZE(names)) {
-    return names[enumerator];
+    return SPECENUM_STRING(SPECENUM_COUNT);
+#endif
+#endif /* SPECENUM_COUNT */
   }
-#endif /* SPECENUM_BITWISE */
+
   return NULL;
 }
 ''')
-    macros.append("SPECENUM_COUNTNAME")
-    macros.append("SPECENUM_ZERONAME")
 
 def make_by_name(file):
     file.write('''
@@ -522,88 +447,53 @@ def make_translated_name(file):
 /**************************************************************************
   Returns the translated name of the enumerator.
 **************************************************************************/
-#ifndef SPECENUM_NAMEOVERRIDE
-fc__attribute((const))
-#endif
 static inline const char *
 SPECENUM_FOO(_translated_name)(enum SPECENUM_NAME enumerator)
 {
-#ifdef SPECENUM_COUNT
-  static const char *names[SPECENUM_SIZE + 1];
-#else
-  static const char *names[SPECENUM_SIZE];
-#endif
-  static bool initialized = FALSE;
-
 #ifdef SPECENUM_NAMEOVERRIDE
-  {
-    const char *name = SPECENUM_FOO(_name_cb)(enumerator);
+  char *name = SPECENUM_FOO(_name_cb)(enumerator);
 
-    if (name != NULL) {
-      return Q_(name);
-    }
+  if (name != NULL) {
+    return Q_(name);
   }
 #endif /* SPECENUM_NAMEOVERRIDE */
 
-  if (!initialized) {''')
+  switch (enumerator) {
+#ifdef SPECENUM_ZERO
+  case SPECENUM_ZERO:
+#ifdef SPECENUM_ZERONAME
+    return Q_(SPECENUM_ZERONAME);
+#else
+    return SPECENUM_STRING(SPECENUM_ZERO);
+#endif
+#endif /* SPECENUM_ZERO */
+''')
 
     for i in range(max_enum_values):
         file.write('''
-#if %d < SPECENUM_SIZE
-#  ifndef SPECENUM_VALUE%d
-     names[%d] = NULL;
-#  elif defined(SPECENUM_VALUE%dNAME)
-     names[%d] = Q_(SPECENUM_VALUE%dNAME);
-#  else
-     names[%d] = SPECENUM_STRING(SPECENUM_VALUE%d);
-#  endif
-#endif'''%(i,i,i,i,i,i,i,i))
-        macros.append("SPECENUM_VALUE%dNAME"%i)
+#ifdef SPECENUM_VALUE%d
+  case SPECENUM_VALUE%d:
+#ifdef SPECENUM_VALUE%dNAME
+    return Q_(SPECENUM_VALUE%dNAME);
+#else
+    return SPECENUM_STRING(SPECENUM_VALUE%d);
+#endif
+#endif /* SPECENUM_VALUE%d */
+'''%(i,i,i,i,i,i))
 
     file.write('''
 #ifdef SPECENUM_COUNT
-#  ifdef SPECENUM_COUNTNAME
-  names[SPECENUM_COUNT] = Q_(SPECENUM_COUNTNAME);
-#  else
-  names[SPECENUM_COUNT] = SPECENUM_STRING(SPECENUM_COUNT);
-#  endif
-#endif
-    initialized = TRUE;
-  }
-
-#ifdef SPECENUM_BITWISE
-#  ifdef SPECENUM_ZERO
-  if (enumerator == SPECENUM_ZERO) {
-#    ifdef SPECENUM_ZERONAME
-    return Q_(SPECENUM_ZERONAME);
-#    else
-    return SPECENUM_STRING(SPECENUM_ZERO);
-#    endif
-  }
-#  endif
-  {
-    size_t i;
-
-    for (i = 0; i < ARRAY_SIZE(names); i++) {
-      if (1 << i == enumerator) {
-        return names[i];
-      }
-    }
-  }
+  case SPECENUM_COUNT:
+#ifdef SPECENUM_COUNTNAME
+    return Q_(SPECENUM_COUNTNAME);
 #else
-  if (enumerator >= 0 && enumerator < ARRAY_SIZE(names)) {
-    return names[enumerator];
+    return SPECENUM_STRING(SPECENUM_COUNT);
+#endif
+#endif /* SPECENUM_COUNT */
   }
-#endif /* SPECENUM_BITWISE */
+
   return NULL;
 }
-''')
-
-def make_bitvector(file):
-    file.write('''
-#ifdef SPECENUM_BITVECTOR
-BV_DEFINE(SPECENUM_BITVECTOR, (SPECENUM_MAX_VALUE + 1));
-#endif /* SPECENUM_BITVECTOR */
 ''')
 
 def make_undef(file):
@@ -637,7 +527,6 @@ def main():
     make_name(output)
     make_by_name(output)
     make_translated_name(output)
-    make_bitvector(output)
     make_undef(output)
 
     output.write('''

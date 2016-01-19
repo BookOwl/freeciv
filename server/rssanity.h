@@ -13,15 +13,6 @@
 #ifndef FC__RSSANITY_H
 #define FC__RSSANITY_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
-bool autoadjust_ruleset_data(void);
 bool sanity_check_ruleset_data(void);
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 #endif  /* FC__RSSANITY_H */

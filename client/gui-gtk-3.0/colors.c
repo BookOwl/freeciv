@@ -19,14 +19,11 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 
-/* common */
 #include "rgbcolor.h"
 
-/* client/gui-gtk-3.0 */
 #include "gui_main.h"
 
 #include "colors.h"

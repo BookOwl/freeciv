@@ -396,7 +396,7 @@ void city_widget::city_view()
   pcity = selected_cities[0];
 
   Q_ASSERT(pcity != NULL);
-  if (gui_options.center_when_popup_city) {
+  if (center_when_popup_city) {
     center_tile_mapcanvas(pcity->tile);
   }
   qtg_real_city_dialog_popup(pcity);
@@ -462,7 +462,7 @@ void city_widget::display_list_menu(const QPoint &)
   bool need_clear = true;
   bool select_only = false;
   char buf[200];
-  cid id;
+  cid cid;
   const char *imprname;
   enum menu_labels m_state;
   int sell_count;
@@ -551,19 +551,19 @@ void city_widget::display_list_menu(const QPoint &)
     qvar2 = act->property("FC");
     m_state = static_cast<menu_labels>(qvar2.toInt());
     qvar = act->data();
-    id = qvar.toInt();
-    target = cid_decode(id);
+    cid = qvar.toInt();
+    target = cid_decode(cid);
 
-    city_list_iterate(client_player()->cities, iter_city) {
-      if (NULL != iter_city) {
+    city_list_iterate(client_player()->cities, pcity) {
+      if (NULL != pcity) {
         switch (m_state) {
         case SELECT_IMPR:
           if (need_clear) {
             clearSelection();
           }
           need_clear = false;
-          if (city_building_present(iter_city, target)) {
-            select_city(iter_city);
+          if (city_building_present(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_WONDERS:
@@ -571,8 +571,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (city_building_present(iter_city, target)) {
-            select_city(iter_city);
+          if (city_building_present(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_SUPP_UNITS:
@@ -580,8 +580,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (city_unit_supported(iter_city, target)) {
-            select_city(iter_city);
+          if (city_unit_supported(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_PRES_UNITS:
@@ -589,8 +589,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (city_unit_present(iter_city, target)) {
-            select_city(iter_city);
+          if (city_unit_present(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_AVAIL_UNITS:
@@ -598,8 +598,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (can_city_build_now(iter_city, target)) {
-            select_city(iter_city);
+          if (can_city_build_now(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_AVAIL_IMPR:
@@ -607,8 +607,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (can_city_build_now(iter_city, target)) {
-            select_city(iter_city);
+          if (can_city_build_now(pcity, target)) {
+            select_city(pcity);
           }
           break;
         case SELECT_AVAIL_WONDERS:
@@ -616,8 +616,8 @@ void city_widget::display_list_menu(const QPoint &)
             clearSelection();
           }
           need_clear = false;
-          if (can_city_build_now(iter_city, target)) {
-            select_city(iter_city);
+          if (can_city_build_now(pcity, target)) {
+            select_city(pcity);
           }
           break;
         default:
@@ -667,11 +667,11 @@ void city_widget::display_list_menu(const QPoint &)
           break;
         case CMA:
           if (NULL != pcity) {
-            if (CMA_NONE == id) {
+            if (CMA_NONE == cid) {
               cma_release_city(pcity);
             } else {
               cma_put_city_under_agent(pcity,
-                                       cmafec_preset_get_parameter(id));
+                                       cmafec_preset_get_parameter(cid));
             }
           }
 
@@ -679,14 +679,14 @@ void city_widget::display_list_menu(const QPoint &)
         case WORKLIST_ADD:
           if (worklist_defined) {
             city_queue_insert_worklist(pcity, -1,
-                           global_worklist_get(global_worklist_by_id(id)));
+              global_worklist_get(global_worklist_by_id(cid)));
           }
           break;
 
         case WORKLIST_CHANGE:
           if (worklist_defined) {
             city_set_queue(pcity,
-                           global_worklist_get(global_worklist_by_id(id)));
+                           global_worklist_get(global_worklist_by_id(cid)));
           }
           break;
         default:
@@ -1015,9 +1015,8 @@ void city_widget::gen_production_labels(city_widget::menu_labels what,
   QString str;
   char *row[4];
   char buf[4][64];
-  struct city **city_data;
+  struct city **data;
   int num_sel = 0;
-
   if (global) {
     num_sel = list_model->rowCount();
   } else {
@@ -1036,9 +1035,9 @@ void city_widget::gen_production_labels(city_widget::menu_labels what,
       array[i] = selected_cities.at(i);
     }
   }
-  city_data = &array[0];
+  data = &array[0];
   targets_used
-      = collect_production_targets(targets, city_data, num_sel, append_units,
+      = collect_production_targets(targets, data, num_sel, append_units,
                                    append_wonders, true, test_func);
   name_and_sort_items(targets, targets_used, items, true, NULL);
   for (i = 0; i < 4; i++) {
