@@ -7,13 +7,11 @@ dist_noinst_DATA = \
 		clienticon.rc 	\
 		mpicon.rc	\
 		servericon.rc	\
-		installer/licenses/COPYING.installer	\
 		installer/create-freeciv-gtk-qt-nsi.sh	\
 		installer/create-freeciv-gtk2-nsi.sh	\
 		installer/create-freeciv-gtk3-nsi.sh	\
 		installer/create-freeciv-qt-nsi.sh	\
 		installer/create-freeciv-sdl-nsi.sh	\
-		installer/create-freeciv-ruledit-nsi.sh	\
 		installer/freeciv-gtk2.cmd		\
 		installer/freeciv-gtk3.cmd		\
 		installer/freeciv-mp-gtk2.cmd		\
@@ -22,28 +20,8 @@ dist_noinst_DATA = \
 		installer/freeciv-qt.cmd		\
 		installer/freeciv-sdl.cmd		\
 		installer/freeciv-server.cmd		\
-		installer/freeciv-ruledit.cmd		\
 		installer/Freeciv.url			\
-		installer/Makefile			\
-		installer_msys2/licenses/COPYING.installer	\
-		installer_msys2/create-freeciv-gtk-qt-nsi.sh	\
-		installer_msys2/create-freeciv-gtk2-nsi.sh	\
-		installer_msys2/create-freeciv-gtk3-nsi.sh	\
-		installer_msys2/create-freeciv-qt-nsi.sh	\
-		installer_msys2/create-freeciv-sdl2-nsi.sh	\
-		installer_msys2/create-freeciv-ruledit-nsi.sh	\
-		installer_msys2/freeciv-gtk2.cmd		\
-		installer_msys2/freeciv-gtk3.cmd		\
-		installer_msys2/freeciv-mp-gtk2.cmd		\
-		installer_msys2/freeciv-mp-gtk3.cmd		\
-		installer_msys2/freeciv-mp-qt.cmd		\
-		installer_msys2/freeciv-qt.cmd			\
-		installer_msys2/freeciv-sdl2.cmd		\
-		installer_msys2/freeciv-server.cmd		\
-		installer_msys2/freeciv-ruledit.cmd		\
-		installer_msys2/Freeciv.url			\
-		installer_msys2/Makefile			\
-		installer_msys2/win_arch.sh
+		installer/Makefile
 
 if MINGW32
 nodist_noinst_DATA = 		\

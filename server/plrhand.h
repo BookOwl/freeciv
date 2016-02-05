@@ -23,11 +23,9 @@ struct unit_list;
 
 enum plr_info_level { INFO_MINIMUM, INFO_MEETING, INFO_EMBASSY, INFO_FULL };
 
-struct player *server_create_player(int player_id, const char *ai_tname,
-                                    struct rgbcolor *prgbcolor,
-                                    bool allow_ai_type_fallbacking);
+struct player *server_create_player(int player_id, const char *ai_type,
+                                    struct rgbcolor *prgbcolor);
 const struct rgbcolor *player_preferred_color(struct player *pplayer);
-bool player_color_changeable(const struct player *pplayer, const char **reason);
 void assign_player_colors(void);
 void server_player_set_color(struct player *pplayer,
                              const struct rgbcolor *prgbcolor);
@@ -86,7 +84,7 @@ struct conn_list *player_reply_dest(struct player *pplayer);
 void shuffle_players(void);
 void set_shuffled_players(int *shuffled_players);
 struct player *shuffled_player(int i);
-void reset_all_start_commands(bool plrchange);
+void reset_all_start_commands(void);
 
 #define shuffled_players_iterate(NAME_pplayer)\
 do {\

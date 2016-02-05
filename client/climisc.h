@@ -106,7 +106,7 @@ int num_present_units_in_city(struct city* pcity);
 int num_supported_units_in_city(struct city* pcity);	
 
 void handle_event(const char *featured_text, struct tile *ptile,
-                  enum event_type event, int turn, int phase, int conn_id);
+                  enum event_type event, int conn_id);
 void create_event(struct tile *ptile, enum event_type event,
                   const struct ft_color color, const char *format, ...)
                   fc__attribute((__format__ (__printf__, 4, 5)));
@@ -118,10 +118,7 @@ void common_taxrates_callback(int i);
 
 bool can_units_do_connect(struct unit_list *punits,
 			  enum unit_activity activity,
-                          struct extra_type *tgt);
-
-bool can_unit_act_against_own_tile(struct unit *punit);
-bool can_units_act_against_own_tile(struct unit_list *punits);
+                          struct act_tgt *tgt);
 
 enum unit_bg_color_type { UNIT_BG_HP_LOSS,
                           UNIT_BG_LAND,

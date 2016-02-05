@@ -2,7 +2,7 @@
 BUGS
 ====
 
-Freeciv 3.0 certainly contains some bugs. Please report all
+Freeciv 2.5 certainly contains some bugs. Please report all
 you find to http://gna.org/bugs/?func=additem&group=freeciv.
 
 
@@ -40,7 +40,7 @@ Here's what to do:
 
    - Describe the problem, including any messages that were displayed.
 
-   - Indicate which client(s) you are using (gtk2, gtk3, gtk3x, SDL2, or Qt).
+   - Indicate which client(s) you are using (gtk2, gtk3, SDL, Xaw, or Qt).
 
    - Tell us the name and version of:
 
@@ -51,16 +51,18 @@ Here's what to do:
 
        - If you are using the GTK+ client, the version numbers
          (if you know them) of your GTK+ and GLib libraries.
-         Gtk-clients show those version numbers on 'About Freeciv'
-         dialog found from under 'Help' menu.
 
        - If you are using Qt client, the version number of Qt libraries.
          In Qt-client that can be find by opening 'About Freeciv' dialog
          from under 'Help' menu and clicking 'About Qt' button there.
 
-       - If you are using the SDL2 client, the version numbers (if you
-         know them) of the SDL2, SDL2_image, SDL2_gfx, and SDL2_ttf
-         libraries.
+       - If you are using the SDL client, the version numbers (if you
+         know them) of the SDL, SDL_image, SDL_gfx, and SDL_ttf libraries.
+
+       - If you are using the Xaw client, the version numbers (if you
+         know them) of the X libraries, the PNG library, the Z library,
+         and the Xaw library, and particularly whether it is standard
+         Xaw, or a variant such as Xaw3d, Xaw95, or Nextaw.
 
        - If you're compiling from source code, the name
          and version number of the compiler.

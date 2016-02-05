@@ -33,7 +33,7 @@ ruler_titles = {
 
 flag = "kiev"
 flag_alt = "russia"
-style = "celtic"
+city_style = "celtic"
 
 init_techs=""
 init_buildings=""

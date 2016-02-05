@@ -216,6 +216,8 @@ void goto_dialog::show_me()
 ***************************************************************************/
 void goto_dialog::update_dlg()
 {
+  struct player *pplayer;
+
   goto_tab->clearContents();
   goto_tab->setRowCount(0);
   goto_tab->setSortingEnabled(false);
@@ -224,7 +226,8 @@ void goto_dialog::update_dlg()
       fill_tab(pplayer);
     } players_iterate_end;
   } else {
-    fill_tab(client_player());
+    pplayer = client_player();
+    fill_tab(pplayer);
   }
   goto_tab->setSortingEnabled(true);
   goto_tab->horizontalHeader()->setStretchLastSection(false);

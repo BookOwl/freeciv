@@ -15,12 +15,10 @@
 #include <fc_config.h>
 #endif
 
-/* gui-gtk-3.0 */
+#include "canvas.h"
 #include "colors.h"
 #include "gui_main.h"
 #include "mapview.h"
-
-#include "canvas.h"
 
 /****************************************************************************
   Create a canvas of the given size.
@@ -32,8 +30,6 @@ struct canvas *canvas_create(int width, int height)
   result->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
                                                width, height);
   result->drawable = NULL;
-  result->zoom = 1.0;
-
   return result;
 }
 
@@ -45,22 +41,6 @@ void canvas_free(struct canvas *store)
 {
   cairo_surface_destroy(store->surface);
   free(store);
-}
-
-/****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  store->zoom = zoom;
-}
-
-/****************************************************************************
-  This gui has zoom support.
-****************************************************************************/
-bool has_zoom_support(void)
-{
-  return TRUE;
 }
 
 /****************************************************************************
@@ -82,11 +62,10 @@ void canvas_copy(struct canvas *dest, struct canvas *src,
     cairo_save(cr);
   }
 
-  cairo_scale(cr, dest->zoom / src->zoom, dest->zoom / src->zoom);
-  cairo_set_source_surface(cr, src->surface, dest_x - src_x, dest_y - src_y);
-  cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_NEAREST);
   cairo_rectangle(cr, dest_x, dest_y, width, height);
-  cairo_fill(cr);
+  cairo_clip(cr);
+  cairo_set_source_surface(cr, src->surface, dest_x-src_x, dest_y-src_y);
+  cairo_paint(cr);
 
   if (!dest->drawable) {
     cairo_destroy(cr);
@@ -118,13 +97,12 @@ void canvas_put_sprite(struct canvas *pcanvas,
     cairo_save(cr);
   }
 
-  cairo_scale(cr, pcanvas->zoom, pcanvas->zoom);
-  cairo_set_source_surface(cr, sprite->surface, canvas_x - offset_x, canvas_y - offset_y);
-  cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_NEAREST);
-  cairo_rectangle(cr, canvas_x - offset_x, canvas_y - offset_y,
+  cairo_rectangle(cr, offset_x + canvas_x, offset_y + canvas_y,
                   MIN(width, MAX(0, sswidth - offset_x)),
                   MIN(height, MAX(0, ssheight - offset_y)));
-  cairo_fill(cr);
+  cairo_clip(cr);
+  cairo_set_source_surface(cr, sprite->surface, canvas_x, canvas_y);
+  cairo_paint(cr);
 
   if (!pcanvas->drawable) {
     cairo_destroy(cr);
@@ -141,7 +119,6 @@ void canvas_put_sprite_full(struct canvas *pcanvas,
 			    struct sprite *sprite)
 {
   int width, height;
-
   get_sprite_dimensions(sprite, &width, &height);
   canvas_put_sprite(pcanvas, canvas_x, canvas_y, sprite,
 		    0, 0, width, height);
@@ -179,9 +156,7 @@ void canvas_put_rectangle(struct canvas *pcanvas,
     cairo_save(cr);
   }
 
-  cairo_scale(cr, pcanvas->zoom, pcanvas->zoom);
   gdk_cairo_set_source_rgba(cr, &pcolor->color);
-  cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_NEAREST);
   cairo_rectangle(cr, canvas_x, canvas_y, width, height);
   cairo_fill(cr);
 
@@ -203,6 +178,42 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
   int width, height;
   get_sprite_dimensions(psprite, &width, &height);
   canvas_put_rectangle(pcanvas, pcolor, canvas_x, canvas_y, width, height);
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with the given color.
+****************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  cairo_t *cr;
+  int width, height;
+
+  canvas_fill_sprite_area(pcanvas, psprite,
+                          get_color(tileset, COLOR_MAPVIEW_UNKNOWN),
+                          canvas_x, canvas_y);
+  get_sprite_dimensions(psprite, &width, &height);
+
+  if (!pcanvas->drawable) {
+    cr = cairo_create(pcanvas->surface);
+  } else {
+    cr = pcanvas->drawable;
+  }
+
+  if (pcanvas->drawable) {
+    cairo_save(cr);
+  }
+
+  cairo_rectangle(cr, canvas_x, canvas_y, width, height);
+  cairo_set_operator(cr, CAIRO_OPERATOR_HSL_COLOR);
+  cairo_set_source_rgb(cr, 0.65, 0.65, 0.65);
+  cairo_fill(cr);
+
+  if (!pcanvas->drawable) {
+    cairo_destroy(cr);
+  } else {
+    cairo_restore(cr);
+  }
 }
 
 /****************************************************************************
@@ -378,13 +389,12 @@ void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
 
     if (!gdk_rgba_equal(&pcolor->color, &black)) {
       gdk_cairo_set_source_rgba(cr, &black);
-      cairo_move_to(cr, canvas_x * pcanvas->zoom + 1,
-                    canvas_y * pcanvas->zoom + 1);
+      cairo_move_to(cr, canvas_x + 1, canvas_y + 1);
       pango_cairo_show_layout (cr, layout);
     }
   }
 
-  cairo_move_to(cr, canvas_x * pcanvas->zoom, canvas_y * pcanvas->zoom);
+  cairo_move_to(cr, canvas_x, canvas_y);
   gdk_cairo_set_source_rgba(cr, &pcolor->color);
   pango_cairo_show_layout(cr, layout);
 

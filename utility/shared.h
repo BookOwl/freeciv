@@ -25,6 +25,12 @@ extern "C" {
 #include "log.h"
 #include "support.h" /* bool, fc__attribute */
 
+#ifdef HAVE_CONFIG_H
+#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
+#error Files including fcintl.h should also include fc_config.h directly
+#endif
+#endif
+
 /* Changing these will break network compatability! */
 #define MAX_LEN_ADDR     256	/* see also MAXHOSTNAMELEN and RFC 1123 2.1 */
 #define MAX_LEN_PATH    4095
@@ -32,14 +38,6 @@ extern "C" {
 /* Use FC_INFINITY to denote that a certain event will never occur or
    another unreachable condition. */
 #define FC_INFINITY    	(1000 * 1000 * 1000)
-
-#ifndef TESTMATIC_ENABLED
-/* Initialize something for the sole purpose of silencing false compiler warning
- * about variable possibly used uninitialized. */
-#define BAD_HEURISTIC_INIT(_ini_val_) = _ini_val_
-#else  /* TESTMATIC_ENABLED */
-#define BAD_HEURISTIC_INIT(_ini_val_)
-#endif /* TESTMATIC_ENABLED */
 
 enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
 #define BOOL_TO_TRISTATE(tri) ((tri) ? TRI_YES : TRI_NO)
@@ -72,6 +70,7 @@ enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
 #define DIVIDE(n, d) \
     ( (n) / (d) - (( (n) < 0 && (n) % (d) < 0 ) ? 1 : 0) )
 
+/* This is duplicated in rand.h to avoid extra includes: */
 #define MAX_UINT32 0xFFFFFFFF
 #define MAX_UINT16 0xFFFF
 #define MAX_UINT8 0xFF
@@ -142,7 +141,6 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
 char *end_of_strn(char *str, int *nleft);
 
 bool str_to_int(const char *str, int *pint);
-bool str_to_float(const char *str, float *pfloat);
 
 /**************************************************************************
 ...
@@ -163,8 +161,6 @@ struct fileinfo {
 char *user_home_dir(void);
 void free_user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
-char *freeciv_storage_dir(void);
-void free_freeciv_storage_dir(void);
 
 const struct strvec *get_data_dirs(void);
 const struct strvec *get_save_dirs(void);
@@ -224,7 +220,7 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
                                     int max_matches,
                                     int *pnum_matches);
 
-char *get_multicast_group(bool ipv6_preferred);
+char *get_multicast_group(bool ipv6_prefered);
 void free_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
 char *interpret_tilde_alloc(const char* filename);

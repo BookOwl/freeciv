@@ -21,7 +21,6 @@
 
 /* common */
 #include "game.h"
-#include "map.h"
 #include "tile.h"
 #include "unit.h"
 
@@ -111,7 +110,7 @@ bool is_border_source(struct tile *ptile)
     return TRUE;
   }
 
-  if (extra_owner(ptile) != NULL) {
+  if (tile_owner(ptile) != NULL) {
     base_type_iterate(pbase) {
       if (tile_has_base(ptile, pbase) && territory_claiming_base(pbase)) {
         return TRUE;

@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -219,7 +219,7 @@ tiles = { "row", "column", "tag"
   1, 8, "unit.transform"
   1, 9, "unit.sentry"
   1, 10, "unit.goto"
-  1, 11, "unit.plant"
+  1, 11, "unit.mine"
   1, 12, "unit.pollution"
   1, 13, "unit.road"
   1, 14, "unit.irrigate"

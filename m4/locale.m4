@@ -1,6 +1,6 @@
-#serial 1
+#serial 0
 
-AC_DEFUN([FC_LIBCHARSET],
+AC_DEFUN([AM_LIBCHARSET],
 [
   AC_CACHE_CHECK([for libcharset], am_cv_libcharset,
     [lc_save_LIBS="$LIBS"

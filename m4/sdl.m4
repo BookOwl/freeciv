@@ -13,17 +13,12 @@ AC_DEFUN([AM_PATH_SDL],
 [dnl 
 dnl Get the cflags and libraries from the sdl-config script
 dnl
-AC_ARG_WITH([sdl-prefix],
-  AS_HELP_STRING([--with-sdl-prefix=PFX], [Prefix where SDL is installed (optional)]),
-[sdl_prefix="$withval"], [sdl_prefix=""])
-
-AC_ARG_WITH([sdl-exec-prefix],
-  AS_HELP_STRING([--with-sdl-exec-prefix=PFX], [Exec prefix where SDL is installed (optional)]),
-[sdl_exec_prefix="$withval"], [sdl_exec_prefix=""])
-
-AC_ARG_ENABLE([sdltest],
-  AS_HELP_STRING([--disable-sdltest], [Do not try to compile and run a test SDL program]), [],
-[enable_sdltest=yes])
+AC_ARG_WITH(sdl-prefix,[  --with-sdl-prefix=PFX   Prefix where SDL is installed (optional)],
+            sdl_prefix="$withval", sdl_prefix="")
+AC_ARG_WITH(sdl-exec-prefix,[  --with-sdl-exec-prefix=PFX Exec prefix where SDL is installed (optional)],
+            sdl_exec_prefix="$withval", sdl_exec_prefix="")
+AC_ARG_ENABLE(sdltest, [  --disable-sdltest       Do not try to compile and run a test SDL program],
+		    , enable_sdltest=yes)
 
   if test x$sdl_exec_prefix != x ; then
     sdl_args="$sdl_args --exec-prefix=$sdl_exec_prefix"
@@ -167,7 +162,7 @@ int main(int argc, char *argv[])
 	  echo "***"
           echo "*** If you have an old version installed, it is best to remove it, although"
           echo "*** you may also be able to get things to work by modifying LD_LIBRARY_PATH"],[ echo "*** The test program failed to compile or link. See the file config.log for the"
-          echo "*** exact error that occurred. This usually means SDL was incorrectly installed"
+          echo "*** exact error that occured. This usually means SDL was incorrectly installed"
           echo "*** or that you have moved SDL since it was installed. In the latter case, you"
           echo "*** may want to edit the sdl-config script: $SDL_CONFIG" ])
           CFLAGS="$ac_save_CFLAGS"

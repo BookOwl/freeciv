@@ -35,14 +35,14 @@ bool diplomacy_possible(const struct player *pplayer1,
   case DIPLO_FOR_ALL:
     return TRUE;
   case DIPLO_FOR_HUMANS:
-    return (is_human(pplayer1) && is_human(pplayer2));
+    return (!pplayer1->ai_controlled && !pplayer2->ai_controlled);
   case DIPLO_FOR_AIS:
-    return (is_ai(pplayer1) && is_ai(pplayer2));
+    return (pplayer1->ai_controlled && pplayer2->ai_controlled);
   case DIPLO_NO_AIS:
-    return (!is_ai(pplayer1) || !is_ai(pplayer2));
+    return (!pplayer1->ai_controlled || !pplayer2->ai_controlled);
   case DIPLO_NO_MIXED:
-    return ((is_human(pplayer1) && is_human(pplayer2))
-            || (is_ai(pplayer1) && is_ai(pplayer2)));
+    return ((pplayer1->ai_controlled && pplayer2->ai_controlled)
+            || (!pplayer1->ai_controlled && !pplayer2->ai_controlled));
   case DIPLO_FOR_TEAMS:
     return players_on_same_team(pplayer1, pplayer2);
   case DIPLO_DISABLED:
@@ -147,7 +147,7 @@ bool add_clause(struct Treaty *ptreaty, struct player *pfrom,
   enum diplstate_type ds
     = player_diplstate_get(ptreaty->plr0, ptreaty->plr1)->type;
 
-  if (!clause_type_is_valid(type)) {
+  if (type < 0 || type >= CLAUSE_LAST) {
     log_error("Illegal clause type encountered.");
     return FALSE;
   }

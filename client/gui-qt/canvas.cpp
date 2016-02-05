@@ -46,22 +46,6 @@ void qtg_canvas_free(struct canvas *store)
 }
 
 /****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void qtg_canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* Qt-client has no zoom support */
-}
-
-/****************************************************************************
-  This gui has zoom support.
-****************************************************************************/
-bool qtg_has_zoom_support()
-{
-  return FALSE;
-}
-
-/****************************************************************************
   Copies an area from the source canvas to the destination canvas.
 ****************************************************************************/
 void qtg_canvas_copy(struct canvas *dest, struct canvas *src,
@@ -189,6 +173,20 @@ void qtg_canvas_fill_sprite_area(struct canvas *pcanvas,
 
   get_sprite_dimensions(psprite, &width, &height);
   qtg_canvas_put_rectangle(pcanvas, pcolor, canvas_x, canvas_y, width, height);
+}
+
+/****************************************************************************
+  Fill the area covered by the sprite with fog.
+****************************************************************************/
+void qtg_canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+                                int canvas_x, int canvas_y)
+{
+  QPainter p;
+
+  p.begin(&pcanvas->map_pixmap);
+  p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+  p.drawPixmap(canvas_x, canvas_y, *psprite->pm);
+  p.end();
 }
 
 /****************************************************************************

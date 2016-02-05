@@ -174,18 +174,13 @@ void output_window_event(const char *plain_text,
 /****************************************************************************
   Standard welcome message.
 ****************************************************************************/
-void chat_welcome_message(bool gui_has_copying_mitem)
+void chat_welcome_message(void)
 {
   output_window_append(ftc_any, _("Freeciv is free software and you are "
                                   "welcome to distribute copies of it "
                                   "under certain conditions;"));
-  if (gui_has_copying_mitem) {
-    output_window_append(ftc_any, _("See the \"Copying\" item on the "
-                                    "Help menu."));
-  } else {
-    output_window_append(ftc_any, _("See COPYING file distributed with "
-                                    "this program."));
-  }
+  output_window_append(ftc_any, _("See the \"Copying\" item on the "
+                                  "Help menu."));
   output_window_append(ftc_any, _("Now ... Go give 'em hell!"));
 }
 
@@ -195,11 +190,11 @@ void chat_welcome_message(bool gui_has_copying_mitem)
 **************************************************************************/
 void write_chatline_content(const char *txt)
 {
-  FILE *fp = fc_fopen(gui_options.default_chat_logfile, "w");
+  FILE *fp = fc_fopen(default_chat_logfile, "w");
   char buf[512];
 
   fc_snprintf(buf, sizeof(buf), _("Exporting output window to '%s' ..."),
-              gui_options.default_chat_logfile);
+              default_chat_logfile);
   output_window_append(ftc_client, buf);
 
   if (fp) {
