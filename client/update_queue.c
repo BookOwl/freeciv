@@ -25,7 +25,6 @@
 #include "player.h"
 
 /* client/include */
-#include "canvas_g.h"
 #include "citydlg_g.h"
 #include "cityrep_g.h"
 #include "dialogs_g.h"
@@ -33,14 +32,11 @@
 #include "menu_g.h"
 #include "pages_g.h"
 #include "plrdlg_g.h"
-#include "ratesdlg_g.h"
 #include "repodlgs_g.h"
 
 /* client */
 #include "client_main.h"
 #include "connectdlg_common.h"
-#include "options.h"
-#include "zoom.h"
 
 #include "update_queue.h"
 
@@ -55,9 +51,9 @@ static void update_queue_data_destroy(struct update_queue_data *pdata);
 
 /* 'struct update_queue_hash' and related functions. */
 #define SPECHASH_TAG update_queue
-#define SPECHASH_IKEY_TYPE uq_callback_t
-#define SPECHASH_IDATA_TYPE struct update_queue_data *
-#define SPECHASH_IDATA_FREE update_queue_data_destroy
+#define SPECHASH_KEY_TYPE uq_callback_t
+#define SPECHASH_DATA_TYPE struct update_queue_data *
+#define SPECHASH_DATA_FREE update_queue_data_destroy
 #include "spechash.h"
 #define update_queue_hash_iterate(hash, callback, uq_data)                  \
   TYPED_HASH_ITERATE(uq_callback_t, const struct update_queue_data *,       \
@@ -82,9 +78,11 @@ struct waiting_queue_data {
 
 /* 'struct waiting_queue_hash' and related functions. */
 #define SPECHASH_TAG waiting_queue
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct waiting_queue_list *
-#define SPECHASH_IDATA_FREE waiting_queue_list_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct waiting_queue_list *
+#define SPECHASH_DATA_FREE waiting_queue_list_destroy
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 static struct update_queue_hash *update_queue = NULL;
@@ -475,19 +473,7 @@ void update_queue_connect_processing_finished_full(int request_id,
 ****************************************************************************/
 static void set_client_page_callback(void *data)
 {
-  enum client_pages page = FC_PTR_TO_INT(data);
-
-  real_set_client_page(page);
-
-  if (page == PAGE_GAME) {
-    if (has_zoom_support()) {
-      if (gui_options.zoom_set) {
-        zoom_set(gui_options.zoom_default_level);
-      } else {
-        zoom_1_0();
-      }
-    }
-  }
+  real_set_client_page(FC_PTR_TO_INT(data));
 }
 
 /****************************************************************************
@@ -559,12 +545,6 @@ void menus_update(void)
   }
 }
 
-/****************************************************************************
-  Update multipliers/policy dialog.
-****************************************************************************/
-void multipliers_dialog_update(void) {
-  update_queue_add(UQ_CALLBACK(real_multipliers_dialog_update), NULL);
-}
 
 /****************************************************************************
   Update cities gui.

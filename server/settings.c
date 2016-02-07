@@ -30,8 +30,8 @@
 
 /* server */
 #include "gamehand.h"
+#include "ggzserver.h"
 #include "maphand.h"
-#include "meta.h"
 #include "notify.h"
 #include "plrhand.h"
 #include "report.h"
@@ -55,7 +55,6 @@ enum sset_class {
   SSET_PLAYERS,
   SSET_GAME_INIT,
   SSET_RULES,
-  SSET_RULES_SCENARIO,
   SSET_RULES_FLEXIBLE,
   SSET_META
 };
@@ -79,7 +78,7 @@ typedef bool (*bitwise_validate_func_t) (unsigned value,
                                          size_t reject_msg_len);
 
 typedef void (*action_callback_func_t) (const struct setting *pset);
-typedef const char *(*help_callback_func_t) (const struct setting *pset);
+typedef char *(*help_callback_func_t) (void);
 typedef const struct sset_val_name * (*val_name_func_t) (int value);
 
 struct setting {
@@ -164,9 +163,6 @@ struct setting {
 
   /* ruleset lock for game settings */
   bool locked;
-
-  /* It's not "default", even if value is the same as default */
-  enum setting_default_level setdef;
 };
 
 static struct {
@@ -174,6 +170,7 @@ static struct {
   struct setting_list *level[OLEVELS_NUM];
 } setting_sorted = { .init = FALSE };
 
+static void setting_set_to_default(struct setting *pset);
 static bool setting_ruleset_one(struct section_file *file,
                                 const char *name, const char *path);
 static void setting_game_set(struct setting *pset, bool init);
@@ -191,6 +188,7 @@ int settings_list_cmp(const struct setting *const *pset1,
   }
 
 static bool set_enum_value(struct setting *pset, int val);
+static int read_enum_value(const struct setting *pset);
 
 /****************************************************************************
   Enumerator name accessors.
@@ -294,35 +292,6 @@ static const struct sset_val_name *teamplacement_name(int team_placement)
 }
 
 /****************************************************************************
-  Persistentready setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *persistentready_name(int persistent_ready)
-{
-  switch (persistent_ready) {
-  NAME_CASE(PERSISTENTR_DISABLED, "DISABLED",
-            N_("Disabled"));
-  NAME_CASE(PERSISTENTR_CONNECTED, "CONNECTED",
-            N_("As long as connected"));
-  }
-
-  return NULL;
-}
-
-/****************************************************************************
-  Victory conditions setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *victory_conditions_name(int condition_bit)
-{
-  switch (condition_bit) {
-  NAME_CASE(VC_SPACERACE, "SPACERACE", N_("Spacerace"));
-  NAME_CASE(VC_ALLIED, "ALLIED", N_("Allied victory"));
-  NAME_CASE(VC_CULTURE, "CULTURE", N_("Culture victory"));
-  };
-
-  return NULL;
-}
-
-/****************************************************************************
   Autosaves setting names accessor.
 ****************************************************************************/
 static const struct sset_val_name *autosaves_name(int autosaves_bit)
@@ -332,7 +301,6 @@ static const struct sset_val_name *autosaves_name(int autosaves_bit)
   NAME_CASE(AS_GAME_OVER, "GAMEOVER", N_("Game over"));
   NAME_CASE(AS_QUITIDLE, "QUITIDLE", N_("No player connections"));
   NAME_CASE(AS_INTERRUPT, "INTERRUPT", N_("Server interrupted"));
-  NAME_CASE(AS_TIMER, "TIMER", N_("Timer"));
   };
 
   return NULL;
@@ -355,18 +323,6 @@ static const struct sset_val_name *borders_name(int borders)
 }
 
 /****************************************************************************
-  Trait distribution setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *trait_dist_name(int trait_dist)
-{
-  switch (trait_dist) {
-  NAME_CASE(TDM_FIXED, "FIXED", N_("Fixed"));
-  NAME_CASE(TDM_EVEN, "EVEN", N_("Even"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
   Player colors configuration setting names accessor.
 ****************************************************************************/
 static const struct sset_val_name *plrcol_name(int plrcol)
@@ -377,19 +333,6 @@ static const struct sset_val_name *plrcol_name(int plrcol)
   NAME_CASE(PLRCOL_PLR_SET,      "PLR_SET",      N_("Set manually"));
   NAME_CASE(PLRCOL_TEAM_ORDER,   "TEAM_ORDER",   N_("Per-team, in order"));
   NAME_CASE(PLRCOL_NATION_ORDER, "NATION_ORDER", N_("Per-nation, in order"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
-  Happyborders setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *happyborders_name(int happyborders)
-{
-  switch (happyborders) {
-  NAME_CASE(HB_DISABLED, "DISABLED", N_("Borders are not helping"));
-  NAME_CASE(HB_NATIONAL, "NATIONAL", N_("Happy within own borders"));
-  NAME_CASE(HB_ALLIANCE, "ALLIED", N_("Happy within allied borders"));
   }
   return NULL;
 }
@@ -442,20 +385,6 @@ static const struct sset_val_name *barbarians_name(int barbarians)
 }
 
 /****************************************************************************
-  Revolution length type setting names accessor.
-****************************************************************************/
-static const struct sset_val_name *revolentype_name(int revolentype)
-{
-  switch (revolentype) {
-  NAME_CASE(REVOLEN_FIXED, "FIXED", N_("Fixed to 'revolen' turns"));
-  NAME_CASE(REVOLEN_RANDOM, "RANDOM", N_("Randomly 1-'revolen' turns"));
-  NAME_CASE(REVOLEN_QUICKENING, "QUICKENING", N_("First time 'revolen', then always quicker"));
-  NAME_CASE(REVOLEN_RANDQUICK, "RANDQUICK", N_("Random, max always quicker"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
   Revealmap setting names accessor.
 ****************************************************************************/
 static const struct sset_val_name *revealmap_name(int bit)
@@ -500,19 +429,6 @@ static const struct sset_val_name *phasemode_name(int phasemode)
 }
 
 /****************************************************************************
-  Scorelog level names accessor.
-****************************************************************************/
-static const struct sset_val_name *
-scoreloglevel_name(enum scorelog_level sl_level) 
-{
-  switch (sl_level) {
-  NAME_CASE(SL_ALL, "ALL", N_("Scorelog all players, AI included"));
-  NAME_CASE(SL_HUMANS, "HUMANS", N_("Scorelog only human players"));
-  }
-  return NULL;
-}
-
-/****************************************************************************
   Savegame compress type names accessor.
 ****************************************************************************/
 static const struct sset_val_name *
@@ -520,13 +436,13 @@ compresstype_name(enum fz_method compresstype)
 {
   switch (compresstype) {
   NAME_CASE(FZ_PLAIN, "PLAIN", N_("No compression"));
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
   NAME_CASE(FZ_ZLIB, "LIBZ", N_("Using zlib (gzip format)"));
 #endif
-#ifdef FREECIV_HAVE_LIBBZ2
+#ifdef HAVE_LIBBZ2
   NAME_CASE(FZ_BZIP2, "BZIP2", N_("Using bzip2"));
 #endif
-#ifdef FREECIV_HAVE_LIBLZMA
+#ifdef HAVE_LIBLZMA
   NAME_CASE(FZ_XZ, "XZ", N_("Using xz"));
 #endif
   }
@@ -554,7 +470,7 @@ static const struct sset_val_name *bool_name(int enable)
 /*************************************************************************
   Help about phasemode setting
 *************************************************************************/
-static const char *phasemode_help(const struct setting *pset)
+static char *phasemode_help(void)
 {
   static char pmhelp[512];
 
@@ -567,28 +483,6 @@ static const char *phasemode_help(const struct setting *pset)
               phasemode_name(game.info.phase_mode)->pretty);
 
   return pmhelp;
-}
-
-/*************************************************************************
-  Help about huts setting
-*************************************************************************/
-static const char *huts_help(const struct setting *pset)
-{
-  if (game.map.server.huts_absolute >= 0) {
-    static char hutshelp[512];
-
-    /* Translated here */
-    fc_snprintf(hutshelp, sizeof(hutshelp),
-                _("%s\n"
-                  "Currently this is being overridden by absolute "
-                  "number of huts set to %d. Explicitly set this "
-                  "setting again to make it take effect instead."),
-                _(pset->extra_help), game.map.server.huts_absolute);
-
-    return hutshelp;
-  }
-
-  return pset->extra_help;
 }
 
 /*************************************************************************
@@ -676,7 +570,7 @@ static void autotoggle_action(const struct setting *pset)
 {
   if (*pset->boolean.pvalue) {
     players_iterate(pplayer) {
-      if (is_human(pplayer) && !pplayer->is_connected) {
+      if (!pplayer->ai_controlled && !pplayer->is_connected) {
         toggle_ai_player_direct(NULL, pplayer);
         send_player_info_c(pplayer, game.est_connections);
       }
@@ -693,9 +587,9 @@ static void timeout_action(const struct setting *pset)
   if (S_S_RUNNING == server_state()) {
     int timeout = *pset->integer.pvalue;
 
-    if (game.info.turn != 1 || game.info.first_timeout == -1) {
+    if (game.info.turn != 0 || game.server.first_timeout == -1) {
       /* This may cause the current turn to end immediately. */
-      game.tinfo.seconds_to_phasedone = timeout;
+      game.info.seconds_to_phasedone = timeout;
     }
     send_game_info(NULL);
   }
@@ -710,54 +604,15 @@ static void first_timeout_action(const struct setting *pset)
   if (S_S_RUNNING == server_state()) {
     int timeout = *pset->integer.pvalue;
 
-    if (game.info.turn == 1) {
+    if (game.info.turn == 0) {
       /* This may cause the current turn to end immediately. */
       if (timeout != -1) {
-        game.tinfo.seconds_to_phasedone = timeout;
+        game.info.seconds_to_phasedone = timeout;
       } else {
-        game.tinfo.seconds_to_phasedone = game.info.timeout;
+        game.info.seconds_to_phasedone = game.info.timeout;
       }
     }
     send_game_info(NULL);
-  }
-}
-
-/*************************************************************************
-  Clean out absolute number of huts when relative setting set.
-*************************************************************************/
-static void huts_action(const struct setting *pset)
-{
-  game.map.server.huts_absolute = -1;
-}
-
-/*************************************************************************
-  Topology setting changed.
-*************************************************************************/
-static void topology_action(const struct setting *pset)
-{
-  struct packet_set_topology packet;
-
-  packet.topology_id = *pset->integer.pvalue;
-
-  conn_list_iterate(game.est_connections, pconn) {
-    send_packet_set_topology(pconn, &packet);
-  } conn_list_iterate_end;
-}
-
-/*************************************************************************
-  Update metaserver message string from changed user meta server message
-  string.
-*************************************************************************/
-static void metamessage_action(const struct setting *pset)
-{
-  /* Set the metaserver message based on the new meta server user message.
-   * An empty user metaserver message results in an automatic meta message.
-   * A non empty user meta message results in the user meta message. */
-  set_user_meta_message_string(pset->string.value);
-
-  if (is_metaserver_open()) {
-    /* Update the meta server. */
-    send_server_info_to_metaserver(META_INFO);
   }
 }
 
@@ -848,29 +703,6 @@ static bool demography_callback(const char *value,
 }
 
 /*************************************************************************
-  Autosaves setting callback
-*************************************************************************/
-static bool autosaves_callback(unsigned value, struct connection *caller,
-                               char *reject_msg, size_t reject_msg_len)
-{
-  if (S_S_RUNNING == server_state()) {
-    if ((value & (1 << AS_TIMER))
-        && !(game.server.autosaves & (1 << AS_TIMER))) {
-      game.server.save_timer = timer_renew(game.server.save_timer,
-                                           TIMER_USER, TIMER_ACTIVE);
-      timer_start(game.server.save_timer);
-    } else if (!(value & (1 << AS_TIMER))
-               && (game.server.autosaves & (1 << AS_TIMER))) {
-      timer_stop(game.server.save_timer);
-      timer_destroy(game.server.save_timer);
-      game.server.save_timer = NULL;
-    }
-  }
-
-  return TRUE;
-}
-
-/*************************************************************************
   Verify that a given allowtake string is valid.  See
   game.allow_take.
 *************************************************************************/
@@ -926,12 +758,20 @@ static bool startunits_callback(const char *value,
                                 size_t reject_msg_len)
 {
   int len = strlen(value), i;
-  Unit_Class_id  first_role;
-  bool firstnative = FALSE;
 
-  /* We check each character individually to see if it's valid. */
+  if (len == 0) {
+    settings_snprintf(reject_msg, reject_msg_len,
+                      _("Starting units string cannot be empty."));
+
+    return FALSE;
+  }
+
+  /* We check each character individually to see if it's valid, and
+   * also make sure there is at least one city founder. */
+
   for (i = 0; i < len; i++) {
-    if (strchr("cwxksfdDaA", value[i])) {
+    /* TODO: add 'f' back in here when we can support ferry units */
+    if (strchr("cwxksdDaA", value[i])) {
       continue;
     }
 
@@ -943,27 +783,7 @@ static bool startunits_callback(const char *value,
     return FALSE;
   }
 
-  /* Check the first character to make sure it can use a startpos. */
-  first_role = uclass_index(utype_class(get_role_unit(
-                                            crole_to_role_id(value[0]), 0)));
-  terrain_type_iterate(pterrain) {
-    if (terrain_has_flag(pterrain, TER_STARTER)
-        && BV_ISSET(pterrain->native_to, first_role)) {
-      firstnative = TRUE;
-      break;
-    }
-  } terrain_type_iterate_end;
-
-  if (!firstnative) {
-    /* Loading would cause an infinite loop hunting for a valid startpos. */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("The first starting unit must be native to at "
-                        "least one \"Starter\" terrain. "
-                        " Try \"help startunits\"."));
-    return FALSE;
-  }
-
-  /* Everything seems fine. */
+  /* All characters were valid. */
   return TRUE;
 }
 
@@ -988,6 +808,16 @@ static bool endturn_callback(int value, struct connection *caller,
 static bool maxplayers_callback(int value, struct connection *caller,
                                 char *reject_msg, size_t reject_msg_len)
 {
+#ifdef GGZ_SERVER
+  if (with_ggz) {
+    /* In GGZ mode the maxplayers is the number of actual players - set
+     * when the game is lauched and not changed thereafter.  This may be
+     * changed in future. */
+    settings_snprintf(reject_msg, reject_msg_len,
+                      _("Cannot change maxplayers in GGZ mode."));
+    return FALSE;
+  }
+#endif /* GGZ_SERVER */
   if (value < player_count()) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("Number of players (%d) is higher than requested "
@@ -1116,7 +946,7 @@ static bool mapsize_callback(int value, struct connection *caller,
                              char *reject_msg, size_t reject_msg_len)
 {
   if (value == MAPSIZE_XYSIZE && MAP_IS_ISOMETRIC &&
-      game.map.ysize % 2 != 0) {
+      map.ysize % 2 != 0) {
     /* An isometric map needs a even ysize. Is is calculated automatically
      * for all settings but mapsize=XYSIZE. */
     settings_snprintf(reject_msg, reject_msg_len,
@@ -1134,18 +964,18 @@ static bool mapsize_callback(int value, struct connection *caller,
 static bool xsize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
 {
-  int size = value * game.map.ysize;
+  int size = value * map.ysize;
 
   if (size < MAP_MIN_SIZE * 1000) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("The map size (%d * %d = %d) must be larger than "
-                        "%d tiles."), value, game.map.ysize, size,
+                        "%d tiles."), value, map.ysize, size,
                         MAP_MIN_SIZE * 1000);
     return FALSE;
   } else if (size > MAP_MAX_SIZE * 1000) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("The map size (%d * %d = %d) must be lower than "
-                        "%d tiles."), value, game.map.ysize, size,
+                        "%d tiles."), value, map.ysize, size,
                         MAP_MAX_SIZE * 1000);
     return FALSE;
   }
@@ -1159,21 +989,21 @@ static bool xsize_callback(int value, struct connection *caller,
 static bool ysize_callback(int value, struct connection *caller,
                            char *reject_msg, size_t reject_msg_len)
 {
-  int size = game.map.xsize * value;
+  int size = map.xsize * value;
 
   if (size < MAP_MIN_SIZE * 1000) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("The map size (%d * %d = %d) must be larger than "
-                        "%d tiles."), game.map.xsize, value, size,
+                        "%d tiles."), map.xsize, value, size,
                         MAP_MIN_SIZE * 1000);
     return FALSE;
   } else if (size > MAP_MAX_SIZE * 1000) {
     settings_snprintf(reject_msg, reject_msg_len,
                       _("The map size (%d * %d = %d) must be lower than "
-                        "%d tiles."), game.map.xsize, value, size,
+                        "%d tiles."), map.xsize, value, size,
                         MAP_MAX_SIZE * 1000);
     return FALSE;
-  } else if (game.map.server.mapsize == MAPSIZE_XYSIZE && MAP_IS_ISOMETRIC &&
+  } else if (map.server.mapsize == MAPSIZE_XYSIZE && MAP_IS_ISOMETRIC &&
              value % 2 != 0) {
     /* An isometric map needs a even ysize. Is is calculated automatically
      * for all settings but mapsize=XYSIZE. */
@@ -1192,9 +1022,9 @@ static bool ysize_callback(int value, struct connection *caller,
 static bool topology_callback(unsigned value, struct connection *caller,
                               char *reject_msg, size_t reject_msg_len)
 {
-  if (game.map.server.mapsize == MAPSIZE_XYSIZE &&
+  if (map.server.mapsize == MAPSIZE_XYSIZE &&
       ((value & (TF_ISO)) != 0 || (value & (TF_HEX)) != 0) &&
-      game.map.ysize % 2 != 0) {
+      map.ysize % 2 != 0) {
     /* An isometric map needs a even ysize. Is is calculated automatically
      * for all settings but mapsize=XYSIZE. */
     settings_snprintf(reject_msg, reject_msg_len,
@@ -1237,10 +1067,9 @@ static bool plrcol_validate(int value, struct connection *caller,
                    FALSE}}, func_action, FALSE},
 
 #define GEN_INT(name, value, sclass, scateg, slevel, to_client,         \
-                short_help, extra_help, func_help,                      \
-                func_validate, func_action,                             \
+                short_help, extra_help, func_validate, func_action,     \
                 _min, _max, _default)                                   \
-  {name, sclass, to_client, short_help, extra_help, func_help, SSET_INT, \
+  {name, sclass, to_client, short_help, extra_help, NULL, SSET_INT,     \
       scateg, slevel,                                                   \
       {.integer = {(int *) &value, _default, _min, _max, func_validate, \
                    0}},                                                 \
@@ -1277,7 +1106,7 @@ static struct setting settings[] = {
   /* These should be grouped by sclass */
 
   /* Map size parameters: adjustable if we don't yet have a map */
-  GEN_ENUM("mapsize", game.map.server.mapsize, SSET_MAP_SIZE,
+  GEN_ENUM("mapsize", map.server.mapsize, SSET_MAP_SIZE,
           SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Map size definition"),
           /* TRANS: The strings between double quotes are also translated
@@ -1294,7 +1123,7 @@ static struct setting settings[] = {
              "tiles (options 'xsize' and 'ysize')."), NULL,
           mapsize_callback, NULL, mapsize_name, MAP_DEFAULT_MAPSIZE)
 
-  GEN_INT("size", game.map.server.size, SSET_MAP_SIZE,
+  GEN_INT("size", map.server.size, SSET_MAP_SIZE,
           SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Map area (in thousands of tiles)"),
           /* TRANS: The strings between double quotes are also translated
@@ -1307,10 +1136,10 @@ static struct setting settings[] = {
              "  size = 20 is a huge map of 20,000 tiles\n"
              "For this option to take effect, the \"Map size definition\" "
              "option ('mapsize') must be set to \"Number of tiles\" "
-             "(FULLSIZE)."), NULL, NULL, NULL,
+             "(FULLSIZE)."), NULL, NULL,
           MAP_MIN_SIZE, MAP_MAX_SIZE, MAP_DEFAULT_SIZE)
 
-  GEN_INT("tilesperplayer", game.map.server.tilesperplayer, SSET_MAP_SIZE,
+  GEN_INT("tilesperplayer", map.server.tilesperplayer, SSET_MAP_SIZE,
           SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Number of (land) tiles per player"),
           /* TRANS: The strings between double quotes are also translated
@@ -1324,10 +1153,10 @@ static struct setting settings[] = {
              "For this option to take effect, the \"Map size definition\" "
              "option ('mapsize') must be set to \"Tiles per player\" "
              "(PLAYER)."),
-          NULL, NULL, NULL, MAP_MIN_TILESPERPLAYER,
+          NULL, NULL, MAP_MIN_TILESPERPLAYER,
           MAP_MAX_TILESPERPLAYER, MAP_DEFAULT_TILESPERPLAYER)
 
-  GEN_INT("xsize", game.map.xsize, SSET_MAP_SIZE,
+  GEN_INT("xsize", map.xsize, SSET_MAP_SIZE,
           SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Map width in tiles"),
           /* TRANS: The strings between double quotes are also translated
@@ -1339,9 +1168,9 @@ static struct setting settings[] = {
              "For this option to take effect, the \"Map size definition\" "
              "option ('mapsize') must be set to \"Width and height\" "
              "(XYSIZE)."),
-          NULL, xsize_callback, NULL,
+          xsize_callback, NULL,
           MAP_MIN_LINEAR_SIZE, MAP_MAX_LINEAR_SIZE, MAP_DEFAULT_LINEAR_SIZE)
-  GEN_INT("ysize", game.map.ysize, SSET_MAP_SIZE,
+  GEN_INT("ysize", map.ysize, SSET_MAP_SIZE,
           SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Map height in tiles"),
           /* TRANS: The strings between double quotes are also translated
@@ -1353,10 +1182,10 @@ static struct setting settings[] = {
              "For this option to take effect, the \"Map size definition\" "
              "option ('mapsize') must be set to \"Width and height\" "
              "(XYSIZE)."),
-          NULL, ysize_callback, NULL,
+          ysize_callback, NULL,
           MAP_MIN_LINEAR_SIZE, MAP_MAX_LINEAR_SIZE, MAP_DEFAULT_LINEAR_SIZE)
 
-  GEN_BITWISE("topology", game.map.topology_id, SSET_MAP_SIZE,
+  GEN_BITWISE("topology", map.topology_id, SSET_MAP_SIZE,
               SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
               N_("Map topology index"),
               /* TRANS: do not edit the ugly ASCII art */
@@ -1380,9 +1209,9 @@ static struct setting settings[] = {
                  "   | | | | | | |            / \\_/ \\_/ \\_/ \\_/ \\\n"
                  "   \\/\\/\\/\\/\\/\\/"
                  "             \\_/ \\_/ \\_/ \\_/ \\_/\n"),
-              topology_callback, topology_action, topology_name, MAP_DEFAULT_TOPO)
+              topology_callback, NULL, topology_name, MAP_DEFAULT_TOPO)
 
-  GEN_ENUM("generator", game.map.server.generator,
+  GEN_ENUM("generator", map.server.generator,
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
            N_("Method used to generate map"),
            /* TRANS: The strings between double quotes are also translated
@@ -1415,7 +1244,7 @@ static struct setting settings[] = {
               "settings, the server may fall back to another generator."),
            NULL, generator_validate, NULL, generator_name, MAP_DEFAULT_GENERATOR)
 
-  GEN_ENUM("startpos", game.map.server.startpos,
+  GEN_ENUM("startpos", map.server.startpos,
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
            N_("Method used to choose start positions"),
            /* TRANS: The strings between double quotes are also translated
@@ -1450,7 +1279,7 @@ static struct setting settings[] = {
               "unlikely to occur.)"),
            NULL, NULL, NULL, startpos_name, MAP_DEFAULT_STARTPOS)
 
-  GEN_ENUM("teamplacement", game.map.server.team_placement,
+  GEN_ENUM("teamplacement", map.server.team_placement,
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
            N_("Method used for placement of team mates"),
            /* TRANS: The strings between double quotes are also translated
@@ -1475,27 +1304,20 @@ static struct setting settings[] = {
               "team will be placed vertically."),
            NULL, NULL, NULL, teamplacement_name, MAP_DEFAULT_TEAM_PLACEMENT)
 
-  GEN_BOOL("tinyisles", game.map.server.tinyisles,
+  GEN_BOOL("tinyisles", map.server.tinyisles,
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_RARE, SSET_TO_CLIENT,
            N_("Presence of 1x1 islands"),
            N_("This setting controls whether the map generator is allowed "
               "to make islands of one only tile size."), NULL, NULL,
            MAP_DEFAULT_TINYISLES)
 
-  GEN_BOOL("separatepoles", game.map.server.separatepoles,
+  GEN_BOOL("separatepoles", map.server.separatepoles,
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
            N_("Whether the poles are separate continents"),
            N_("If this setting is disabled, the continents may attach to "
               "poles."), NULL, NULL, MAP_DEFAULT_SEPARATE_POLES)
 
-  GEN_BOOL("singlepole", game.map.server.single_pole,
-           SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-           N_("Whether there's just one pole generated"),
-           N_("If this setting is enabled, only one side of the map will have "
-              "pole. This setting has no effect if the map wraps both "
-              "directions."), NULL, NULL, MAP_DEFAULT_SINGLE_POLE)
-
-  GEN_BOOL("alltemperate", game.map.server.alltemperate, 
+  GEN_BOOL("alltemperate", map.server.alltemperate, 
            SSET_MAP_GEN, SSET_GEOLOGY, SSET_RARE, SSET_TO_CLIENT,
            N_("All the map is temperate"),
            N_("If this setting is enabled, the temperature will be "
@@ -1503,7 +1325,7 @@ static struct setting settings[] = {
               "poles won't be generated."),
            NULL, NULL, MAP_DEFAULT_ALLTEMPERATE)
 
-  GEN_INT("temperature", game.map.server.temperature,
+  GEN_INT("temperature", map.server.temperature,
           SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
           N_("Average temperature of the planet"),
           N_("Small values will give a cold map, while larger values will "
@@ -1518,30 +1340,29 @@ static struct setting settings[] = {
              " 30 means a cold planet with small tropical zones.\n"
              "  0 means a very cold planet with large polar zones and no "
              "tropics."),
-          NULL, NULL, NULL,
+          NULL, NULL,
           MAP_MIN_TEMPERATURE, MAP_MAX_TEMPERATURE, MAP_DEFAULT_TEMPERATURE)
  
-  GEN_INT("landmass", game.map.server.landpercent,
-          SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Percentage of the map that is land"),
-          N_("This setting gives the approximate percentage of the map "
-             "that will be made into land."), NULL, NULL, NULL,
-          MAP_MIN_LANDMASS, MAP_MAX_LANDMASS, MAP_DEFAULT_LANDMASS)
+  GEN_INT("landmass", map.server.landpercent,
+	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Percentage of the map that is land"),
+	  N_("This setting gives the approximate percentage of the map "
+             "that will be made into land."), NULL, NULL,
+	  MAP_MIN_LANDMASS, MAP_MAX_LANDMASS, MAP_DEFAULT_LANDMASS)
 
-  GEN_INT("steepness", game.map.server.steepness,
-          SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Amount of hills/mountains"),
-          N_("Small values give flat maps, while higher values give a "
-             "steeper map with more hills and mountains."),
-          NULL, NULL, NULL,
-          MAP_MIN_STEEPNESS, MAP_MAX_STEEPNESS, MAP_DEFAULT_STEEPNESS)
+  GEN_INT("steepness", map.server.steepness,
+	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Amount of hills/mountains"),
+	  N_("Small values give flat maps, while higher values give a "
+             "steeper map with more hills and mountains."), NULL, NULL,
+	  MAP_MIN_STEEPNESS, MAP_MAX_STEEPNESS, MAP_DEFAULT_STEEPNESS)
 
-  GEN_INT("wetness", game.map.server.wetness,
-          SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Amount of water on landmasses"), 
-          N_("Small values mean lots of dry, desert-like land; "
-             "higher values give a wetter map with more swamps, "
-             "jungles, and rivers."), NULL, NULL, NULL,
+  GEN_INT("wetness", map.server.wetness,
+ 	  SSET_MAP_GEN, SSET_GEOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+ 	  N_("Amount of water on landmasses"), 
+	  N_("Small values mean lots of dry, desert-like land; "
+	     "higher values give a wetter map with more swamps, "
+             "jungles, and rivers."), NULL, NULL,
           MAP_MIN_WETNESS, MAP_MAX_WETNESS, MAP_DEFAULT_WETNESS)
 
   GEN_BOOL("globalwarming", game.info.global_warming,
@@ -1559,69 +1380,59 @@ static struct setting settings[] = {
               "as a result of nuclear war."), NULL, NULL,
            GAME_DEFAULT_NUCLEAR_WINTER)
 
-  GEN_INT("mapseed", game.map.server.seed_setting,
-          SSET_MAP_GEN, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-          N_("Map generation random seed"),
-          N_("The same seed will always produce the same map; "
-             "for zero (the default) a seed will be chosen based on "
-             "the time to give a random map."),
-          NULL, NULL, NULL,
-          MAP_MIN_SEED, MAP_MAX_SEED, MAP_DEFAULT_SEED)
+  GEN_INT("mapseed", map.server.seed,
+	  SSET_MAP_GEN, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
+	  N_("Map generation random seed"),
+	  N_("The same seed will always produce the same map; "
+	     "for zero (the default) a seed will be chosen based on "
+	     "the time to give a random map. This setting is usually "
+             "only of interest while debugging the game."), NULL, NULL,
+	  MAP_MIN_SEED, MAP_MAX_SEED, MAP_DEFAULT_SEED)
 
   /* Map additional stuff: huts and specials.  gameseed also goes here
    * because huts and specials are the first time the gameseed gets used (?)
    * These are done when the game starts, so these are historical and
    * fixed after the game has started.
    */
-  GEN_INT("gameseed", game.server.seed_setting,
-          SSET_MAP_ADD, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-          N_("Game random seed"),
+  GEN_INT("gameseed", game.server.seed,
+	  SSET_MAP_ADD, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
+	  N_("Game random seed"),
           N_("For zero (the default) a seed will be chosen based "
-             "on the current time."),
-          NULL, NULL, NULL,
-          GAME_MIN_SEED, GAME_MAX_SEED, GAME_DEFAULT_SEED)
+             "on the current time. This setting is usually "
+             "only of interest while debugging the game."), NULL, NULL,
+	  GAME_MIN_SEED, GAME_MAX_SEED, GAME_DEFAULT_SEED)
 
-  GEN_INT("specials", game.map.server.riches,
-          SSET_MAP_ADD, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Amount of \"special\" resource tiles"),
-          N_("Special resources improve the basic terrain type they "
-             "are on. The server variable's scale is parts per "
-             "thousand."), NULL, NULL, NULL,
-          MAP_MIN_RICHES, MAP_MAX_RICHES, MAP_DEFAULT_RICHES)
+  GEN_INT("specials", map.server.riches,
+	  SSET_MAP_ADD, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Amount of \"special\" resource tiles"),
+	  N_("Special resources improve the basic terrain type they "
+	     "are on. The server variable's scale is parts per "
+             "thousand."), NULL, NULL,
+	  MAP_MIN_RICHES, MAP_MAX_RICHES, MAP_DEFAULT_RICHES)
 
-  GEN_INT("huts", game.map.server.huts,
-          SSET_MAP_ADD, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Amount of huts (bonus extras)"),
-          N_("This setting gives number of huts that will be "
-             "placed on every one thousand tiles. Huts are "
-             "tile extras that may be investigated by units."),
-          huts_help, NULL, huts_action,
+  GEN_INT("huts", map.server.huts,
+	  SSET_MAP_ADD, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Amount of huts (minor tribe villages)"),
+	  N_("This setting gives the exact number of huts that will be "
+	     "placed on the entire map. Huts are small tribal villages "
+             "that may be investigated by units."), NULL, NULL,
           MAP_MIN_HUTS, MAP_MAX_HUTS, MAP_DEFAULT_HUTS)
-
-  GEN_INT("animals", game.map.server.animals,
-          SSET_MAP_ADD, SSET_GEOLOGY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Amount of animals"),
-          N_("Amount of animals initially created to terrains "
-             "defined for them in the ruleset. "
-             "The server variable's scale is animals per "
-             "thousand tiles."), NULL, NULL, NULL,
-          MAP_MIN_ANIMALS, MAP_MAX_ANIMALS, MAP_DEFAULT_ANIMALS)
 
   /* Options affecting numbers of players and AI players.  These only
    * affect the start of the game and can not be adjusted after that.
    */
   GEN_INT("minplayers", game.server.min_players,
-          SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL,
+	  SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL,
           SSET_TO_CLIENT,
-          N_("Minimum number of players"),
-          N_("There must be at least this many players (connected "
-             "human players) before the game can start."),
-          NULL, NULL, NULL,
-          GAME_MIN_MIN_PLAYERS, GAME_MAX_MIN_PLAYERS, GAME_DEFAULT_MIN_PLAYERS)
+	  N_("Minimum number of players"),
+	  N_("There must be at least this many players (connected "
+	     "human players) before the game can start."),
+          NULL, NULL,
+	  GAME_MIN_MIN_PLAYERS, GAME_MAX_MIN_PLAYERS, GAME_DEFAULT_MIN_PLAYERS)
 
   GEN_INT("maxplayers", game.server.max_players,
-          SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Maximum number of players"),
+	  SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Maximum number of players"),
           N_("The maximal number of human and AI players who can be in "
              "the game. When this number of players are connected in "
              "the pregame state, any new players who try to connect "
@@ -1629,28 +1440,19 @@ static struct setting settings[] = {
              "When playing a scenario which defines player start positions, "
              "this setting cannot be set to greater than the number of "
              "defined start positions."),
-          NULL, maxplayers_callback, NULL,
-          GAME_MIN_MAX_PLAYERS, GAME_MAX_MAX_PLAYERS, GAME_DEFAULT_MAX_PLAYERS)
+          maxplayers_callback, NULL,
+	  GAME_MIN_MAX_PLAYERS, GAME_MAX_MAX_PLAYERS, GAME_DEFAULT_MAX_PLAYERS)
 
   GEN_INT("aifill", game.info.aifill,
-          SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Limited number of AI players"),
+	  SSET_PLAYERS, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Limited number of AI players"),
           N_("If set to a positive value, then AI players will be "
              "automatically created or removed to keep the total "
              "number of players at this amount. As more players join, "
              "these AI players will be replaced. When set to zero, "
-             "all AI players will be removed."),
-          NULL, NULL, aifill_action,
-          GAME_MIN_AIFILL, GAME_MAX_AIFILL, GAME_DEFAULT_AIFILL)
-
-  GEN_ENUM("persistentready", game.info.persistent_ready,
-           SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
-	  N_("When the Readiness of a player gets autotoggled off"),
-	  N_("In pre-game, usually when new players join or old ones leave, "
-             "those who have already accepted game to start by toggling \"Ready\" "
-             "get that autotoggled off in the changed situation. This setting "
-             "can be used to make readiness more persistent."),
-           NULL, NULL, NULL, persistentready_name, GAME_DEFAULT_PERSISTENTREADY)
+             "all AI players will be removed."), NULL,
+          aifill_action, GAME_MIN_AIFILL, GAME_MAX_AIFILL,
+          GAME_DEFAULT_AIFILL)
 
   GEN_STRING("nationset", game.server.nationset,
              SSET_PLAYERS, SSET_INTERNAL, SSET_RARE, SSET_TO_CLIENT,
@@ -1673,7 +1475,7 @@ static struct setting settings[] = {
           N_("Event cache for this number of turns"),
           N_("Event messages are saved for this number of turns. A value of "
              "0 deactivates the event cache."),
-          NULL, NULL, NULL, GAME_MIN_EVENT_CACHE_TURNS, GAME_MAX_EVENT_CACHE_TURNS,
+          NULL, NULL, GAME_MIN_EVENT_CACHE_TURNS, GAME_MAX_EVENT_CACHE_TURNS,
           GAME_DEFAULT_EVENT_CACHE_TURNS)
 
   GEN_INT("ec_max_size", game.server.event_cache.max_size,
@@ -1681,7 +1483,7 @@ static struct setting settings[] = {
           SSET_TO_CLIENT,
           N_("Size of the event cache"),
           N_("This defines the maximal number of events in the event cache."),
-          NULL, NULL, NULL, GAME_MIN_EVENT_CACHE_MAX_SIZE,
+          NULL, NULL, GAME_MIN_EVENT_CACHE_MAX_SIZE,
           GAME_MAX_EVENT_CACHE_MAX_SIZE, GAME_DEFAULT_EVENT_CACHE_MAX_SIZE)
 
   GEN_BOOL("ec_chat", game.server.event_cache.chat,
@@ -1702,19 +1504,20 @@ static struct setting settings[] = {
   /* Game initialization parameters (only affect the first start of the game,
    * and not reloads).  Can not be changed after first start of game.
    */
+  /* TODO: Add this line back when we can support Ferry units */
+  /* "    f   = Ferryboat (eg., Trireme)\n" */
   GEN_STRING("startunits", game.server.start_units,
 	     SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
              N_("List of players' initial units"),
              N_("This should be a string of characters, each of which "
-		"specifies a unit role. The first character must be native to "
-                "at least one \"Starter\" terrain. The characters and their "
+		"specifies a unit role. There must be at least one city "
+		"founder in the string. The characters and their "
 		"meanings are:\n"
 		"    c   = City founder (eg., Settlers)\n"
 		"    w   = Terrain worker (eg., Engineers)\n"
 		"    x   = Explorer (eg., Explorer)\n"
 		"    k   = Gameloss (eg., King)\n"
 		"    s   = Diplomat (eg., Diplomat)\n"
-                "    f   = Ferryboat (eg., Trireme)\n"
 		"    d   = Ok defense unit (eg., Warriors)\n"
 		"    D   = Good defense unit (eg., Phalanx)\n"
 		"    a   = Fast attack unit (eg., Horsemen)\n"
@@ -1729,52 +1532,50 @@ static struct setting settings[] = {
            NULL, NULL, GAME_DEFAULT_START_CITY)         
 
   GEN_INT("dispersion", game.server.dispersion,
-          SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Area where initial units are located"),
-          N_("This is the radius within "
-             "which the initial units are dispersed."),
-          NULL, NULL, NULL,
-          GAME_MIN_DISPERSION, GAME_MAX_DISPERSION, GAME_DEFAULT_DISPERSION)
+	  SSET_GAME_INIT, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Area where initial units are located"),
+	  N_("This is the radius within "
+             "which the initial units are dispersed."), NULL, NULL,
+	  GAME_MIN_DISPERSION, GAME_MAX_DISPERSION, GAME_DEFAULT_DISPERSION)
 
   GEN_INT("gold", game.info.gold,
-          SSET_GAME_INIT, SSET_ECONOMICS, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Starting gold per player"), 
-          N_("At the beginning of the game, each player is given this "
-             "much gold."), NULL, NULL, NULL,
-          GAME_MIN_GOLD, GAME_MAX_GOLD, GAME_DEFAULT_GOLD)
+	  SSET_GAME_INIT, SSET_ECONOMICS, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Starting gold per player"), 
+	  N_("At the beginning of the game, each player is given this "
+             "much gold."), NULL, NULL,
+	  GAME_MIN_GOLD, GAME_MAX_GOLD, GAME_DEFAULT_GOLD)
 
   GEN_INT("techlevel", game.info.tech,
-          SSET_GAME_INIT, SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Number of initial techs per player"), 
+	  SSET_GAME_INIT, SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Number of initial techs per player"), 
           /* TRANS: The string between single quotes is a setting name and
            * should not be translated. */
-          N_("At the beginning of the game, each player is given this "
-             "many technologies. The technologies chosen are random for "
-             "each player. Depending on the value of tech_cost_style in "
+	  N_("At the beginning of the game, each player is given this "
+	     "many technologies. The technologies chosen are random for "
+	     "each player. Depending on the value of tech_cost_style in "
              "the ruleset, a big value for 'techlevel' can make the next "
-             "techs really expensive."), NULL, NULL, NULL,
-          GAME_MIN_TECHLEVEL, GAME_MAX_TECHLEVEL, GAME_DEFAULT_TECHLEVEL)
+             "techs really expensive."), NULL, NULL,
+	  GAME_MIN_TECHLEVEL, GAME_MAX_TECHLEVEL, GAME_DEFAULT_TECHLEVEL)
 
   GEN_INT("sciencebox", game.info.sciencebox,
-          SSET_RULES_SCENARIO, SSET_SCIENCE, SSET_SITUATIONAL,
-          SSET_TO_CLIENT,
-          N_("Technology cost multiplier percentage"),
-          N_("This affects how quickly players can research new "
-             "technology. All tech costs are multiplied by this amount "
-             "(as a percentage). The base tech costs are determined by "
-             "the ruleset or other game settings."),
-          NULL, NULL, NULL, GAME_MIN_SCIENCEBOX, GAME_MAX_SCIENCEBOX,
-          GAME_DEFAULT_SCIENCEBOX)
+	  SSET_RULES, SSET_SCIENCE, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Technology cost multiplier percentage"),
+	  N_("This affects how quickly players can research new "
+	     "technology. All tech costs are multiplied by this amount "
+	     "(as a percentage). The base tech costs are determined by "
+	     "the ruleset or other game settings."),
+          NULL, NULL, GAME_MIN_SCIENCEBOX, GAME_MAX_SCIENCEBOX,
+	  GAME_DEFAULT_SCIENCEBOX)
 
   GEN_INT("techpenalty", game.server.techpenalty,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Percentage penalty when changing tech"),
-          N_("If you change your current research technology, and you have "
-             "positive research points, you lose this percentage of those "
-             "research points. This does not apply when you have just gained "
-             "a technology this turn."), NULL, NULL, NULL,
-          GAME_MIN_TECHPENALTY, GAME_MAX_TECHPENALTY,
-          GAME_DEFAULT_TECHPENALTY)
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Percentage penalty when changing tech"),
+	  N_("If you change your current research technology, and you have "
+	     "positive research points, you lose this percentage of those "
+	     "research points. This does not apply when you have just gained "
+             "a technology this turn."), NULL, NULL,
+	  GAME_MIN_TECHPENALTY, GAME_MAX_TECHPENALTY,
+	  GAME_DEFAULT_TECHPENALTY)
 
   GEN_INT("techlost_recv", game.server.techlost_recv,
           SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
@@ -1782,7 +1583,7 @@ static struct setting settings[] = {
           N_("If you receive an invention via a treaty, this setting "
              "defines the chance that the invention is lost during the "
              "transfer."),
-          NULL, NULL, NULL, GAME_MIN_TECHLOST_RECV, GAME_MAX_TECHLOST_RECV,
+          NULL, NULL, GAME_MIN_TECHLOST_RECV, GAME_MAX_TECHLOST_RECV,
           GAME_DEFAULT_TECHLOST_RECV)
 
   GEN_INT("techlost_donor", game.server.techlost_donor,
@@ -1791,7 +1592,7 @@ static struct setting settings[] = {
           N_("If you give an invention via a treaty, this setting "
              "defines the chance that the invention is lost for your "
              "civilization during the transfer."),
-          NULL, NULL, NULL, GAME_MIN_TECHLOST_DONOR, GAME_MAX_TECHLOST_DONOR,
+          NULL, NULL, GAME_MIN_TECHLOST_DONOR, GAME_MAX_TECHLOST_DONOR,
           GAME_DEFAULT_TECHLOST_DONOR)
 
   GEN_BOOL("team_pooled_research", game.info.team_pooled_research,
@@ -1802,105 +1603,95 @@ static struct setting settings[] = {
               "have to make its own."),
            NULL, NULL, GAME_DEFAULT_TEAM_POOLED_RESEARCH)
 
-  GEN_INT("diplbulbcost", game.server.diplbulbcost,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Penalty when getting tech from treaty"),
-          N_("For each technology you gain from a diplomatic treaty, you "
-             "lose research points equal to this percentage of the cost to "
-             "research a new technology. If this is non-zero, you can end up "
-             "with negative research points."),
-          NULL, NULL, NULL,
-          GAME_MIN_DIPLBULBCOST, GAME_MAX_DIPLBULBCOST, GAME_DEFAULT_DIPLBULBCOST)
-
-  GEN_INT("diplgoldcost", game.server.diplgoldcost,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Penalty when getting gold from treaty"),
-          N_("Gold transfer in diplomatic treaties suffer loss percentage "
-             "equal to this percentage. The sum of the treaty is what gets "
-             "subtracted from the one giving gold. Receiver gets the "
-             "penalty."),
-          NULL, NULL, NULL,
-          GAME_MIN_DIPLGOLDCOST, GAME_MAX_DIPLGOLDCOST, GAME_DEFAULT_DIPLGOLDCOST)
+  GEN_INT("diplcost", game.server.diplcost,
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Penalty when getting tech or gold from treaty"),
+	  N_("For each technology you gain from a diplomatic treaty, you "
+	     "lose research points equal to this percentage of the cost to "
+	     "research a new technology. If this is non-zero, you can end up "
+	     "with negative research points. Also applies to gold "
+             "transfers in diplomatic treaties."),
+          NULL, NULL,
+	  GAME_MIN_DIPLCOST, GAME_MAX_DIPLCOST, GAME_DEFAULT_DIPLCOST)
 
   GEN_INT("conquercost", game.server.conquercost,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Penalty when getting tech from conquering"),
-          N_("For each technology you gain by conquering an enemy city, you "
-             "lose research points equal to this percentage of the cost to "
-             "research a new technology. If this is non-zero, you can end up "
-             "with negative research points."),
-          NULL, NULL, NULL,
-          GAME_MIN_CONQUERCOST, GAME_MAX_CONQUERCOST,
-          GAME_DEFAULT_CONQUERCOST)
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Penalty when getting tech from conquering"),
+	  N_("For each technology you gain by conquering an enemy city, you "
+	     "lose research points equal to this percentage of the cost to "
+	     "research a new technology. If this is non-zero, you can end up "
+	     "with negative research points."),
+          NULL, NULL,
+	  GAME_MIN_CONQUERCOST, GAME_MAX_CONQUERCOST,
+	  GAME_DEFAULT_CONQUERCOST)
 
   GEN_INT("freecost", game.server.freecost,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Penalty when getting a free tech"),
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Penalty when getting a free tech"),
           /* TRANS: The strings between single quotes are setting names and
            * shouldn't be translated. */
-          N_("For each technology you gain \"for free\" (other than "
-             "covered by 'diplcost' or 'conquercost': for instance, from huts "
-             "or from Great Library effects), you lose research points "
-             "equal to this percentage of the cost to research a new "
-             "technology. If this is non-zero, you can end up "
+	  N_("For each technology you gain \"for free\" (other than "
+	     "covered by 'diplcost' or 'conquercost': for instance, from huts "
+	     "or from Great Library effects), you lose research points "
+	     "equal to this percentage of the cost to research a new "
+	     "technology. If this is non-zero, you can end up "
              "with negative research points."),
-          NULL, NULL, NULL,
-          GAME_MIN_FREECOST, GAME_MAX_FREECOST, GAME_DEFAULT_FREECOST)
+          NULL, NULL,
+	  GAME_MIN_FREECOST, GAME_MAX_FREECOST, GAME_DEFAULT_FREECOST)
 
   GEN_INT("techlossforgiveness", game.server.techloss_forgiveness,
-          SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-          N_("Research point debt threshold for losing tech"),
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Research point debt threshold for losing tech"),
           N_("When you have negative research points, and your shortfall is "
              "greater than this percentage of the cost of your current "
              "research, you forget a technology you already knew.\n"
              "The special value -1 prevents loss of technology regardless of "
              "research points."),
-          NULL, NULL, NULL,
-          GAME_MIN_TECHLOSSFG, GAME_MAX_TECHLOSSFG,
-          GAME_DEFAULT_TECHLOSSFG)
+          NULL, NULL,
+	  GAME_MIN_TECHLOSSFG, GAME_MAX_TECHLOSSFG,
+	  GAME_DEFAULT_TECHLOSSFG)
 
  GEN_INT("techlossrestore", game.server.techloss_restore,
-         SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
-         N_("Research points restored after losing a tech"),
-         N_("When you lose a technology due to a negative research balance "
-            "(see 'techlossforgiveness'), this percentage of its research "
-            "cost is credited to your research balance (this may not be "
-            "sufficient to make it positive).\n"
-            "The special value -1 means that your research balance is always "
-            "restored to zero, regardless of your previous shortfall."),
-         NULL, NULL, NULL,
-         GAME_MIN_TECHLOSSREST, GAME_MAX_TECHLOSSREST,
-         GAME_DEFAULT_TECHLOSSREST)
+	  SSET_RULES, SSET_SCIENCE, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Research points restored after losing a tech"),
+          N_("When you lose a technology due to a negative research balance "
+             "(see 'techlossforgiveness'), this percentage of its research "
+             "cost is credited to your research balance (this may not be "
+             "sufficient to make it positive).\n"
+             "The special value -1 means that your research balance is always "
+             "restored to zero, regardless of your previous shortfall."),
+          NULL, NULL,
+	  GAME_MIN_TECHLOSSREST, GAME_MAX_TECHLOSSREST,
+	  GAME_DEFAULT_TECHLOSSREST)
 
   GEN_INT("foodbox", game.info.foodbox,
-          SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Food required for a city to grow"),
-          N_("This is the base amount of food required to grow a city. "
-             "This value is multiplied by another factor that comes from "
-             "the ruleset and is dependent on the size of the city."),
-          NULL, NULL, NULL,
-          GAME_MIN_FOODBOX, GAME_MAX_FOODBOX, GAME_DEFAULT_FOODBOX)
+	  SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Food required for a city to grow"),
+	  N_("This is the base amount of food required to grow a city. "
+	     "This value is multiplied by another factor that comes from "
+	     "the ruleset and is dependent on the size of the city."),
+          NULL, NULL,
+	  GAME_MIN_FOODBOX, GAME_MAX_FOODBOX, GAME_DEFAULT_FOODBOX)
 
   GEN_INT("aqueductloss", game.server.aqueductloss,
-          SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
+	  SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
           N_("Percentage food lost when city can't grow"),
           N_("If a city would expand, but it can't because it lacks some "
              "prerequisite (traditionally an Aqueduct or Sewer System), "
              "this is the base percentage of its foodbox that is lost "
              "each turn; the penalty may be reduced by buildings or other "
-             "circumstances, depending on the ruleset."),
-          NULL, NULL, NULL,
-          GAME_MIN_AQUEDUCTLOSS, GAME_MAX_AQUEDUCTLOSS, 
-          GAME_DEFAULT_AQUEDUCTLOSS)
+             "circumstances, depending on the ruleset."), NULL, NULL,
+	  GAME_MIN_AQUEDUCTLOSS, GAME_MAX_AQUEDUCTLOSS, 
+	  GAME_DEFAULT_AQUEDUCTLOSS)
 
   GEN_INT("shieldbox", game.info.shieldbox,
-          SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Multiplier percentage for production costs"),
-          N_("This affects how quickly units and buildings can be "
-             "produced.  The base costs are multiplied by this value (as "
-             "a percentage)."),
-          NULL, NULL, NULL,
-          GAME_MIN_SHIELDBOX, GAME_MAX_SHIELDBOX, GAME_DEFAULT_SHIELDBOX)
+	  SSET_RULES, SSET_ECONOMICS, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Multiplier percentage for production costs"),
+	  N_("This affects how quickly units and buildings can be "
+	     "produced.  The base costs are multiplied by this value (as "
+	     "a percentage)."),
+          NULL, NULL, GAME_MIN_SHIELDBOX, GAME_MAX_SHIELDBOX,
+	  GAME_DEFAULT_SHIELDBOX)
 
   /* Notradesize and fulltradesize used to have callbacks to prevent them
    * from being set illegally (notradesize > fulltradesize).  However this
@@ -1909,43 +1700,42 @@ static struct setting settings[] = {
    * removed and instead the game now knows how to deal with invalid
    * settings. */
   GEN_INT("fulltradesize", game.info.fulltradesize,
-          SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
-          N_("Minimum city size to get full trade"),
+	  SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Minimum city size to get full trade"),
           /* TRANS: The strings between single quotes are setting names and
            * shouldn't be translated. */
-          N_("There is a trade penalty in all cities smaller than this. "
-             "The penalty is 100% (no trade at all) for sizes up to "
-             "'notradesize', and decreases gradually to 0% (no penalty "
-             "except the normal corruption) for size='fulltradesize'. "
-             "See also 'notradesize'."), NULL, NULL, NULL,
-          GAME_MIN_FULLTRADESIZE, GAME_MAX_FULLTRADESIZE, 
-          GAME_DEFAULT_FULLTRADESIZE)
+	  N_("There is a trade penalty in all cities smaller than this. "
+	     "The penalty is 100% (no trade at all) for sizes up to "
+	     "'notradesize', and decreases gradually to 0% (no penalty "
+	     "except the normal corruption) for size='fulltradesize'. "
+             "See also 'notradesize'."), NULL, NULL,
+	  GAME_MIN_FULLTRADESIZE, GAME_MAX_FULLTRADESIZE, 
+	  GAME_DEFAULT_FULLTRADESIZE)
 
   GEN_INT("notradesize", game.info.notradesize,
-          SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
-          N_("Maximum size of a city without trade"),
+	  SSET_RULES, SSET_ECONOMICS, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Maximum size of a city without trade"),
           /* TRANS: The strings between single quotes are setting names and
            * shouldn't be translated. */
-          N_("Cities do not produce any trade at all unless their size "
-             "is larger than this amount. The produced trade increases "
-             "gradually for cities larger than 'notradesize' and smaller "
-             "than 'fulltradesize'. See also 'fulltradesize'."),
-          NULL, NULL, NULL,
-          GAME_MIN_NOTRADESIZE, GAME_MAX_NOTRADESIZE,
-          GAME_DEFAULT_NOTRADESIZE)
+	  N_("Cities do not produce any trade at all unless their size "
+	     "is larger than this amount. The produced trade increases "
+	     "gradually for cities larger than 'notradesize' and smaller "
+             "than 'fulltradesize'. See also 'fulltradesize'."), NULL, NULL,
+	  GAME_MIN_NOTRADESIZE, GAME_MAX_NOTRADESIZE,
+	  GAME_DEFAULT_NOTRADESIZE)
 
   GEN_INT("citymindist", game.info.citymindist,
-          SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
-          N_("Minimum distance between cities"),
-          N_("When a player attempts to found a new city, it is prevented "
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  N_("Minimum distance between cities"),
+	  N_("When a player attempts to found a new city, it is prevented "
              "if the distance from any existing city is less than this "
              "setting. For example, when this setting is 3, there must be "
              "at least two clear tiles in any direction between all existing "
              "cities and the new city site. A value of 1 removes any such "
              "restriction on city placement."),
-          NULL, NULL, NULL,
-          GAME_MIN_CITYMINDIST, GAME_MAX_CITYMINDIST,
-          GAME_DEFAULT_CITYMINDIST)
+          NULL, NULL,
+	  GAME_MIN_CITYMINDIST, GAME_MAX_CITYMINDIST,
+	  GAME_DEFAULT_CITYMINDIST)
 
   GEN_BOOL("trading_tech", game.info.trading_tech,
            SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
@@ -1975,17 +1765,17 @@ static struct setting settings[] = {
              "a trade route, they must be at least this far apart on the "
              "map. For square grids, the distance is calculated as "
              "\"Manhattan distance\", that is, the sum of the displacements "
-             "along the x and y directions."), NULL, NULL, NULL,
+             "along the x and y directions."), NULL, NULL,
           GAME_MIN_TRADEMINDIST, GAME_MAX_TRADEMINDIST,
           GAME_DEFAULT_TRADEMINDIST)
 
   GEN_INT("rapturedelay", game.info.rapturedelay,
-          SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
+	  SSET_RULES, SSET_SOCIOLOGY, SSET_SITUATIONAL, SSET_TO_CLIENT,
           N_("Number of turns between rapture effect"),
           N_("Sets the number of turns between rapture growth of a city. "
              "If set to n a city will grow after celebrating for n+1 "
              "turns."),
-          NULL, NULL, NULL,
+          NULL, NULL,
           GAME_MIN_RAPTUREDELAY, GAME_MAX_RAPTUREDELAY,
           GAME_DEFAULT_RAPTUREDELAY)
 
@@ -1996,35 +1786,28 @@ static struct setting settings[] = {
              "if any are defined by the ruleset. The relative frequency "
              "of disaster types is set by the ruleset. Zero prevents "
              "any random disasters from occurring."),
-          NULL, NULL, NULL,
+          NULL, NULL,
           GAME_MIN_DISASTERS, GAME_MAX_DISASTERS,
           GAME_DEFAULT_DISASTERS)
 
-  GEN_ENUM("traitdistribution", game.server.trait_dist,
-           SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-           N_("AI trait distribution method"),
-           N_("How trait values are given to AI players."),
-           NULL, NULL, NULL, trait_dist_name, GAME_DEFAULT_TRAIT_DIST_MODE)
-
   GEN_INT("razechance", game.server.razechance,
-          SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Chance for conquered building destruction"),
-          N_("When a player conquers a city, each city improvement has this "
-             "percentage chance to be destroyed."), NULL, NULL, NULL,
-          GAME_MIN_RAZECHANCE, GAME_MAX_RAZECHANCE, GAME_DEFAULT_RAZECHANCE)
+	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Chance for conquered building destruction"),
+	  N_("When a player conquers a city, each city improvement has this "
+             "percentage chance to be destroyed."), NULL, NULL,
+	  GAME_MIN_RAZECHANCE, GAME_MAX_RAZECHANCE, GAME_DEFAULT_RAZECHANCE)
 
   GEN_INT("occupychance", game.server.occupychance,
-          SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Chance of moving into tile after attack"),
-          N_("If set to 0, combat is Civ1/2-style (when you attack, "
-             "you remain in place). If set to 100, attacking units "
-             "will always move into the tile they attacked when they win "
-             "the combat (and no enemy units remain in the tile). If "
-             "set to a value between 0 and 100, this will be used as "
-             "the percent chance of \"occupying\" territory."),
-          NULL, NULL, NULL,
-          GAME_MIN_OCCUPYCHANCE, GAME_MAX_OCCUPYCHANCE, 
-          GAME_DEFAULT_OCCUPYCHANCE)
+	  SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Chance of moving into tile after attack"),
+	  N_("If set to 0, combat is Civ1/2-style (when you attack, "
+	     "you remain in place). If set to 100, attacking units "
+	     "will always move into the tile they attacked when they win "
+	     "the combat (and no enemy units remain in the tile). If "
+	     "set to a value between 0 and 100, this will be used as "
+             "the percent chance of \"occupying\" territory."), NULL, NULL,
+	  GAME_MIN_OCCUPYCHANCE, GAME_MAX_OCCUPYCHANCE, 
+	  GAME_DEFAULT_OCCUPYCHANCE)
 
   GEN_BOOL("autoattack", game.server.autoattack, SSET_RULES_FLEXIBLE, SSET_MILITARY,
            SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -2033,8 +1816,8 @@ static struct setting settings[] = {
               "consider attacking enemy units that move adjacent to them."),
            NULL, NULL, GAME_DEFAULT_AUTOATTACK)
 
-  GEN_BOOL("killstack", game.info.killstack,
-           SSET_RULES_SCENARIO, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+  GEN_BOOL("killstack", game.info.killstack, SSET_RULES, SSET_MILITARY,
+           SSET_RARE, SSET_TO_CLIENT,
            N_("Do all units in tile die with defender"),
            N_("If this is enabled, each time a defender unit loses in combat, "
               "and is not inside a city or suitable base, all units in the same "
@@ -2059,7 +1842,7 @@ static struct setting settings[] = {
              "given by 'killunhomed' percent of the hitpoints of the unit "
              "type. At least one hitpoint is lost every turn until the "
              "death of the unit."),
-          NULL, NULL, NULL, GAME_MIN_KILLUNHOMED, GAME_MAX_KILLUNHOMED,
+          NULL, NULL, GAME_MIN_KILLUNHOMED, GAME_MAX_KILLUNHOMED,
           GAME_DEFAULT_KILLUNHOMED)
 
   GEN_ENUM("borders", game.info.borders,
@@ -2069,14 +1852,13 @@ static struct setting settings[] = {
               "fortress or city will be owned by that nation."),
            NULL, NULL, NULL, borders_name, GAME_DEFAULT_BORDERS)
 
-  GEN_ENUM("happyborders", game.info.happyborders,
-           SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL,
-           SSET_TO_CLIENT,
-           N_("Units inside borders cause no unhappiness"),
-           N_("If this is set, units will not cause unhappiness when "
-              "inside your borders, or even allies borders, depending "
-              "on value."), NULL, NULL, NULL,
-           happyborders_name, GAME_DEFAULT_HAPPYBORDERS)
+  GEN_BOOL("happyborders", game.info.happyborders,
+	   SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL,
+	   SSET_TO_CLIENT,
+	   N_("Units inside borders cause no unhappiness"),
+	   N_("If this is set, units will not cause unhappiness when "
+              "inside your own borders."), NULL, NULL,
+	   GAME_DEFAULT_HAPPYBORDERS)
 
   GEN_ENUM("diplomacy", game.info.diplomacy,
            SSET_RULES, SSET_MILITARY, SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -2159,30 +1941,21 @@ static struct setting settings[] = {
            NULL, NULL, NULL, barbarians_name, GAME_DEFAULT_BARBARIANRATE)
 
   GEN_INT("onsetbarbs", game.server.onsetbarbarian,
-          SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Barbarian onset turn"),
-          N_("Barbarians will not appear before this turn."),
-          NULL, NULL, NULL,
-          GAME_MIN_ONSETBARBARIAN, GAME_MAX_ONSETBARBARIAN, 
-          GAME_DEFAULT_ONSETBARBARIAN)
-
-  GEN_ENUM("revolentype", game.info.revolentype,
-           SSET_RULES, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-           N_("Way to determine revolution length"),
-           N_("Which method is used in determining how long period of anarchy "
-              "lasts when changing government. The actual value is set with "
-              "'revolen' setting."),
-           NULL, NULL, NULL, revolentype_name, GAME_DEFAULT_REVOLENTYPE)
+	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Barbarian onset turn"),
+          N_("Barbarians will not appear before this turn."), NULL, NULL,
+	  GAME_MIN_ONSETBARBARIAN, GAME_MAX_ONSETBARBARIAN, 
+	  GAME_DEFAULT_ONSETBARBARIAN)
 
   GEN_INT("revolen", game.server.revolution_length,
-          SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Length in turns of revolution"),
-          N_("When changing governments, a period of anarchy will occur. "
-             "Value of this setting, used the way 'revolentype' setting "
-             "dictates, defines the length of the anarchy."),
-          NULL, NULL, NULL,
-          GAME_MIN_REVOLUTION_LENGTH, GAME_MAX_REVOLUTION_LENGTH, 
-          GAME_DEFAULT_REVOLUTION_LENGTH)
+	  SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Length in turns of revolution"),
+	  N_("When changing governments, a period of anarchy lasting this "
+	     "many turns will occur. "
+             "Setting this value to 0 will give a random "
+             "length of 1-5 turns."), NULL, NULL,
+	  GAME_MIN_REVOLUTION_LENGTH, GAME_MAX_REVOLUTION_LENGTH, 
+	  GAME_DEFAULT_REVOLUTION_LENGTH)
 
   GEN_BOOL("fogofwar", game.info.fogofwar,
            SSET_RULES, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -2230,27 +2003,14 @@ static struct setting settings[] = {
           N_("Base chance for diplomats and spies to succeed"),
           N_("The base chance of a spy returning from a successful mission and "
              "the base chance of success for diplomats and spies."),
-          NULL, NULL, NULL,
+          NULL, NULL,
           GAME_MIN_DIPLCHANCE, GAME_MAX_DIPLCHANCE, GAME_DEFAULT_DIPLCHANCE)
 
-  GEN_BITWISE("victories", game.info.victory_conditions,
-              SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-              N_("What kinds of victories are possible"),
-              /* TRANS: The strings between double quotes are also translated
-               * separately (they must match!). The strings between single
-               * quotes are setting names and shouldn't be translated. The
-               * strings between parentheses and in uppercase must stay as
-               * untranslated. */
-              N_("This setting controls how game can be won. One can always "
-                 "win by conquering entire planet, but other victory conditions "
-                 "can be enabled or disabled:\n"
-                 "- \"Spacerace\" (SPACERACE): Spaceship is built and travels to "
-                 "Alpha Centauri.\n"
-                 "- \"Allied\" (ALLIED): After defeating enemies, all remaining "
-                 "players are allied.\n"
-                 "- \"Culture\" (CULTURE): Player meets ruleset defined cultural "
-                 "domination criteria.\n"),
-              NULL, NULL, victory_conditions_name, GAME_DEFAULT_VICTORY_CONDITIONS)
+  GEN_BOOL("spacerace", game.info.spacerace,
+           SSET_RULES_FLEXIBLE, SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
+           N_("Whether to allow space race"),
+           N_("If this option is enabled, players can build spaceships."),
+           NULL, NULL, GAME_DEFAULT_SPACERACE)
 
   GEN_BOOL("endspaceship", game.server.endspaceship, SSET_RULES_FLEXIBLE,
            SSET_SCIENCE, SSET_VITAL, SSET_TO_CLIENT,
@@ -2260,14 +2020,14 @@ static struct setting settings[] = {
            NULL, NULL, GAME_DEFAULT_END_SPACESHIP)
 
   GEN_INT("civilwarsize", game.server.civilwarsize,
-          SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Minimum number of cities for civil war"),
-          N_("A civil war is triggered when a player has at least this "
-             "many cities and the player's capital is captured. If "
-             "this option is set to the maximum value, civil wars are "
-             "turned off altogether."), NULL, NULL, NULL,
-          GAME_MIN_CIVILWARSIZE, GAME_MAX_CIVILWARSIZE,
-          GAME_DEFAULT_CIVILWARSIZE)
+	  SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Minimum number of cities for civil war"),
+	  N_("A civil war is triggered when a player has at least this "
+	     "many cities and the player's capital is captured. If "
+	     "this option is set to the maximum value, civil wars are "
+             "turned off altogether."), NULL, NULL,
+	  GAME_MIN_CIVILWARSIZE, GAME_MAX_CIVILWARSIZE, 
+	  GAME_DEFAULT_CIVILWARSIZE)
 
   GEN_BOOL("restrictinfra", game.info.restrictinfra,
            SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -2286,15 +2046,15 @@ static struct setting settings[] = {
            NULL, NULL, GAME_DEFAULT_UNRPROTECTS)
 
   GEN_INT("contactturns", game.server.contactturns,
-          SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
-          N_("Turns until player contact is lost"),
-          N_("Players may meet for diplomacy this number of turns "
-             "after their units have last met, even when they do not have "
-             "an embassy. If set to zero, then players cannot meet unless "
-             "they have an embassy."),
-          NULL, NULL, NULL,
-          GAME_MIN_CONTACTTURNS, GAME_MAX_CONTACTTURNS,
-          GAME_DEFAULT_CONTACTTURNS)
+	  SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Turns until player contact is lost"),
+	  N_("Players may meet for diplomacy this number of turns "
+	     "after their units have last met, even when they do not have "
+	     "an embassy. If set to zero, then players cannot meet unless "
+	     "they have an embassy."),
+          NULL, NULL,
+	  GAME_MIN_CONTACTTURNS, GAME_MAX_CONTACTTURNS, 
+	  GAME_DEFAULT_CONTACTTURNS)
 
   GEN_BOOL("savepalace", game.server.savepalace,
            SSET_RULES_FLEXIBLE, SSET_MILITARY, SSET_RARE, SSET_TO_CLIENT,
@@ -2315,6 +2075,17 @@ static struct setting settings[] = {
            N_("If unset, caught units will have no homecity and will be "
               "subject to the 'killunhomed' option."),
            NULL, NULL, GAME_DEFAULT_HOMECAUGHTUNITS)
+
+  GEN_BOOL("alliedvictory", game.server.allied_victory,
+           SSET_RULES_FLEXIBLE, SSET_MILITARY,
+           SSET_SITUATIONAL, SSET_TO_CLIENT,
+           N_("Whether allied players can win together"),
+           N_("If this option is turned on and a point is reached where "
+              "all the players still able to win the game are allies, and "
+              "at least one defeated player is not part of this alliance, "
+              "then the game will end in an immediate shared victory for "
+              "the allied players."),
+           NULL, NULL, GAME_DEFAULT_ALLIED_VICTORY)
 
   GEN_BOOL("naturalcitynames", game.server.natural_city_names,
            SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
@@ -2347,7 +2118,7 @@ static struct setting settings[] = {
   GEN_INT("mgr_turninterval", game.server.mgr_turninterval,
           SSET_RULES_FLEXIBLE, SSET_SOCIOLOGY, SSET_RARE, SSET_TO_CLIENT,
           N_("Number of turns between migrations from a city"),
-          /* TRANS: Do not translate 'migration' setting name. */
+           /* TRANS: Do not translate 'migration' setting name. */
           N_("This setting controls the number of turns between migration "
              "checks for a given city. The interval is calculated from "
              "the founding turn of the city. So for example if this "
@@ -2355,9 +2126,8 @@ static struct setting settings[] = {
              "destination every five turns from the founding of their "
              "current city. Migration will never occur the same turn "
              "that a city is built. This setting has no effect unless "
-             "migration is enabled by the 'migration' setting."),
-          NULL, NULL, NULL,
-          GAME_MIN_MGR_TURNINTERVAL, GAME_MAX_MGR_TURNINTERVAL,
+             "migration is enabled by the 'migration' setting."), NULL,
+          NULL, GAME_MIN_MGR_TURNINTERVAL, GAME_MAX_MGR_TURNINTERVAL,
           GAME_DEFAULT_MGR_TURNINTERVAL)
 
   GEN_BOOL("mgr_foodneeded", game.server.mgr_foodneeded,
@@ -2381,7 +2151,7 @@ static struct setting settings[] = {
              "the distance is lower or equal, migration is possible. This "
              "setting has no effect unless migration is activated by the "
              "'migration' setting."),
-          NULL, NULL, NULL, GAME_MIN_MGR_DISTANCE, GAME_MAX_MGR_DISTANCE,
+          NULL, NULL, GAME_MIN_MGR_DISTANCE, GAME_MAX_MGR_DISTANCE,
           GAME_DEFAULT_MGR_DISTANCE)
 
   GEN_INT("mgr_nationchance", game.server.mgr_nationchance,
@@ -2393,8 +2163,7 @@ static struct setting settings[] = {
              "indicates migration will never occur, 100 means that "
              "migration will always occur if the citizens find a suitable "
              "destination. This setting has no effect unless migration "
-             "is activated by the 'migration' setting."),
-          NULL, NULL, NULL,
+             "is activated by the 'migration' setting."), NULL, NULL,
           GAME_MIN_MGR_NATIONCHANCE, GAME_MAX_MGR_NATIONCHANCE,
           GAME_DEFAULT_MGR_NATIONCHANCE)
 
@@ -2407,8 +2176,7 @@ static struct setting settings[] = {
              "Zero indicates migration will never occur, 100 means "
              "that citizens will always migrate if they find a suitable "
              "destination. This setting has no effect if migration is "
-             "not enabled by the 'migration' setting."),
-          NULL, NULL, NULL,
+             "not enabled by the 'migration' setting."), NULL, NULL,
           GAME_MIN_MGR_WORLDCHANCE, GAME_MAX_MGR_WORLDCHANCE,
           GAME_DEFAULT_MGR_WORLDCHANCE)
 
@@ -2468,7 +2236,7 @@ static struct setting settings[] = {
           SSET_META, SSET_SOCIOLOGY, SSET_VITAL, SSET_TO_CLIENT,
           N_("Turn the game ends"),
           N_("The game will end at the end of the given turn."),
-          NULL, endturn_callback, NULL,
+          endturn_callback, NULL,
           GAME_MIN_END_TURN, GAME_MAX_END_TURN, GAME_DEFAULT_END_TURN)
 
   GEN_BITWISE("revealmap", game.server.revealmap, SSET_GAME_INIT,
@@ -2504,29 +2272,27 @@ static struct setting settings[] = {
              "command \"timeoutincrease\" to have a dynamic timer. "
              "The first turn is treated as a special case and is controlled "
              "by the 'first_timeout' setting."),
-          NULL, timeout_callback, timeout_action,
+          timeout_callback, timeout_action,
           GAME_MIN_TIMEOUT, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUT)
 
-  GEN_INT("first_timeout", game.info.first_timeout,
+  GEN_INT("first_timeout", game.server.first_timeout,
           SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
           N_("First turn timeout"),
           /* TRANS: The strings between single quotes are setting names and
            * should not be translated. */
-          N_("If greater than 0, T1 will last for 'first_timeout' seconds.\n"
-             "If set to 0, T1 will not have a timeout.\n"
-             "If set to -1, the special treatment of T1 will be disabled.\n"
+          N_("If greater than 0, T0 will last for 'first_timeout' seconds.\n"
+             "If set to 0, T0 will not have a timeout.\n"
+             "If set to -1, the special treatment of T0 will be disabled.\n"
              "See also 'timeout'."),
-          NULL, first_timeout_callback, first_timeout_action,
-          GAME_MIN_FIRST_TIMEOUT, GAME_MAX_FIRST_TIMEOUT,
-          GAME_DEFAULT_FIRST_TIMEOUT)
+          first_timeout_callback, first_timeout_action, GAME_MIN_FIRST_TIMEOUT,
+          GAME_MAX_FIRST_TIMEOUT, GAME_DEFAULT_FIRST_TIMEOUT)
 
   GEN_INT("timeaddenemymove", game.server.timeoutaddenemymove,
-          SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
-          N_("Timeout at least n seconds when enemy moved"),
-          N_("Any time a unit moves while in sight of an enemy player, "
-             "the remaining timeout is increased to this value."),
-          NULL, NULL, NULL,
-          0, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUTADDEMOVE)
+	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
+	  N_("Timeout at least n seconds when enemy moved"),
+	  N_("Any time a unit moves while in sight of an enemy player, "
+	     "the remaining timeout is increased to this value."),
+          NULL, NULL, 0, GAME_MAX_TIMEOUT, GAME_DEFAULT_TIMEOUTADDEMOVE)
 
   GEN_INT("unitwaittime", game.server.unitwaittime,
           SSET_RULES_FLEXIBLE, SSET_INTERNAL, SSET_VITAL, SSET_TO_CLIENT,
@@ -2540,7 +2306,7 @@ static struct setting settings[] = {
              "before the turn change, it will not be able to move or act "
              "in the next turn for at least 15 seconds. This value is "
              "limited to a maximum value of 2/3 'timeout'."),
-          NULL, unitwaittime_callback, NULL, GAME_MIN_UNITWAITTIME,
+          unitwaittime_callback, NULL, GAME_MIN_UNITWAITTIME,
           GAME_MAX_UNITWAITTIME, GAME_DEFAULT_UNITWAITTIME)
 
   /* This setting points to the "stored" value; changing it won't have
@@ -2555,38 +2321,38 @@ static struct setting settings[] = {
            phasemode_help, NULL, NULL, phasemode_name, GAME_DEFAULT_PHASE_MODE)
 
   GEN_INT("nettimeout", game.server.tcptimeout,
-          SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
-          N_("Seconds to let a client's network connection block"),
-          N_("If a network connection is blocking for a time greater than "
-             "this value, then the connection is closed. Zero "
-             "means there is no timeout (although connections will be "
-             "automatically disconnected eventually)."),
-          NULL, NULL, NULL,
-          GAME_MIN_TCPTIMEOUT, GAME_MAX_TCPTIMEOUT, GAME_DEFAULT_TCPTIMEOUT)
+	  SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Seconds to let a client's network connection block"),
+	  N_("If a network connection is blocking for a time greater than "
+	     "this value, then the connection is closed. Zero "
+	     "means there is no timeout (although connections will be "
+	     "automatically disconnected eventually)."),
+          NULL, NULL,
+	  GAME_MIN_TCPTIMEOUT, GAME_MAX_TCPTIMEOUT, GAME_DEFAULT_TCPTIMEOUT)
 
   GEN_INT("netwait", game.server.netwait,
-          SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
-          N_("Max seconds for network buffers to drain"),
-          N_("The server will wait for up to the value of this "
-             "parameter in seconds, for all client connection network "
-             "buffers to unblock. Zero means the server will not "
-             "wait at all."), NULL, NULL, NULL,
-          GAME_MIN_NETWAIT, GAME_MAX_NETWAIT, GAME_DEFAULT_NETWAIT)
+	  SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Max seconds for network buffers to drain"),
+	  N_("The server will wait for up to the value of this "
+	     "parameter in seconds, for all client connection network "
+	     "buffers to unblock. Zero means the server will not "
+             "wait at all."), NULL, NULL,
+	  GAME_MIN_NETWAIT, GAME_MAX_NETWAIT, GAME_DEFAULT_NETWAIT)
 
   GEN_INT("pingtime", game.server.pingtime,
-          SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
-          N_("Seconds between PINGs"),
-          N_("The server will poll the clients with a PING request "
-             "each time this period elapses."), NULL, NULL, NULL,
-          GAME_MIN_PINGTIME, GAME_MAX_PINGTIME, GAME_DEFAULT_PINGTIME)
+	  SSET_META, SSET_NETWORK, SSET_RARE, SSET_TO_CLIENT,
+	  N_("Seconds between PINGs"),
+	  N_("The server will poll the clients with a PING request "
+             "each time this period elapses."), NULL, NULL,
+	  GAME_MIN_PINGTIME, GAME_MAX_PINGTIME, GAME_DEFAULT_PINGTIME)
 
   GEN_INT("pingtimeout", game.server.pingtimeout,
-          SSET_META, SSET_NETWORK, SSET_RARE,
+	  SSET_META, SSET_NETWORK, SSET_RARE,
           SSET_TO_CLIENT,
-          N_("Time to cut a client"),
-          N_("If a client doesn't reply to a PING in this time the "
-             "client is disconnected."), NULL, NULL, NULL,
-          GAME_MIN_PINGTIMEOUT, GAME_MAX_PINGTIMEOUT, GAME_DEFAULT_PINGTIMEOUT)
+	  N_("Time to cut a client"),
+	  N_("If a client doesn't reply to a PING in this time the "
+             "client is disconnected."), NULL, NULL,
+	  GAME_MIN_PINGTIMEOUT, GAME_MAX_PINGTIMEOUT, GAME_DEFAULT_PINGTIMEOUT)
 
   GEN_BOOL("turnblock", game.server.turnblock,
            SSET_META, SSET_INTERNAL, SSET_SITUATIONAL, SSET_TO_CLIENT,
@@ -2624,7 +2390,6 @@ static struct setting settings[] = {
                 "    E = include Economics\n"
                 "    M = include Military Service\n"
                 "    O = include Pollution\n"
-                "    C = include Culture\n"
                 "Additionally, the following characters control whether "
                 "or not certain columns are displayed in the report:\n"
                 "    q = display \"quantity\" column\n"
@@ -2635,28 +2400,15 @@ static struct setting settings[] = {
              demography_callback, NULL, GAME_DEFAULT_DEMOGRAPHY)
 
   GEN_INT("saveturns", game.server.save_nturns,
-          SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
-          N_("Turns per auto-save"),
+	  SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
+	  N_("Turns per auto-save"),
           /* TRANS: The string between double quotes is also translated
            * separately (it must match!). The string between single
            * quotes is a setting name and shouldn't be translated. */
-          N_("How many turns elapse between automatic game saves. This "
+	  N_("How many turns elapse between automatic game saves. This "
              "setting only has an effect when the 'autosaves' setting "
-             "includes \"New turn\"."), NULL, NULL, NULL,
+             "includes \"New turn\"."), NULL, NULL,
           GAME_MIN_SAVETURNS, GAME_MAX_SAVETURNS, GAME_DEFAULT_SAVETURNS)
-
-  GEN_INT("savefrequency", game.server.save_frequency,
-          SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
-          N_("Minutes per auto-save"),
-          /* TRANS: The string between double quotes is also translated
-           * separately (it must match!). The string between single
-           * quotes is a setting name and shouldn't be translated. */
-          N_("How many minutes elapse between automatic game saves. "
-             "Unlike other save types, this save is only meant as backup "
-             "for computer memory, and it always uses the same name, older "
-             "saves are not kept. This setting only has an effect when the "
-             "'autosaves' setting includes \"Timer\"."), NULL, NULL, NULL,
-          GAME_MIN_SAVEFREQUENCY, GAME_MAX_SAVEFREQUENCY, GAME_DEFAULT_SAVEFREQUENCY)
 
   GEN_BITWISE("autosaves", game.server.autosaves,
               SSET_META, SSET_INTERNAL, SSET_VITAL, SSET_SERVER_ONLY,
@@ -2673,20 +2425,8 @@ static struct setting settings[] = {
                  "- \"No player connections\" (QUITIDLE): "
                  "Save before server restarts due to lack of players.\n"
                  "- \"Server interrupted\" (INTERRUPT): Save when server "
-                 "quits due to interrupt.\n"
-                 "- \"Timer\" (TIMER): Save every 'savefrequency' minutes."),
-              autosaves_callback, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
-
-  GEN_BOOL("threaded_save", game.server.threaded_save,
-           SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-           N_("Whether to do saving in separate thread"),
-           /* TRANS: The string between single quotes is a setting name and
-            * should not be translated. */
-           N_("If this is turned in, compressing and saving the actual "
-              "file containing the game situation takes place in "
-              "the background while game otherwise continues. This way "
-              "users are not required to wait for the save to finish."),
-           NULL, NULL, GAME_DEFAULT_THREADED_SAVE)
+                 "quits due to interrupt."),
+              NULL, NULL, autosaves_name, GAME_DEFAULT_AUTOSAVES)
 
   GEN_INT("compress", game.server.save_compress_level,
           SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
@@ -2695,8 +2435,8 @@ static struct setting settings[] = {
           N_("If non-zero, saved games will be compressed depending on the "
              "'compresstype' setting. Larger values will give better "
              "compression but take longer."),
-          NULL, NULL, NULL,
-          GAME_MIN_COMPRESS_LEVEL, GAME_MAX_COMPRESS_LEVEL, GAME_DEFAULT_COMPRESS_LEVEL)
+          NULL, NULL, GAME_MIN_COMPRESS_LEVEL, GAME_MAX_COMPRESS_LEVEL,
+          GAME_DEFAULT_COMPRESS_LEVEL)
 
   GEN_ENUM("compresstype", game.server.save_compress_type,
            SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
@@ -2737,13 +2477,6 @@ static struct setting settings[] = {
               "These statistics can be used to create power graphs after "
               "the game."), NULL, scorelog_action, GAME_DEFAULT_SCORELOG)
 
-  GEN_ENUM("scoreloglevel", game.server.scoreloglevel,
-           SSET_META, SSET_INTERNAL, SSET_SITUATIONAL, SSET_SERVER_ONLY,
-           N_("Scorelog level"),
-           N_("Whether scores are logged from all players, AI included, "
-              "or only from human players."), NULL, NULL, NULL,
-           scoreloglevel_name, GAME_DEFAULT_SCORELOGLEVEL)
-
   GEN_STRING("scorefile", game.server.scorefile,
              SSET_META, SSET_INTERNAL, SSET_SITUATIONAL, SSET_SERVER_ONLY,
              N_("Name for the score log file"),
@@ -2759,7 +2492,7 @@ static struct setting settings[] = {
              "the total number of connections from the very same host "
              "equals or exceeds this value. A value of 0 means that "
              "there is no limit, at least up to the maximum number of "
-             "connections supported by the server."), NULL, NULL, NULL,
+             "connections supported by the server."), NULL, NULL,
           GAME_MIN_MAXCONNECTIONSPERHOST, GAME_MAX_MAXCONNECTIONSPERHOST,
           GAME_DEFAULT_MAXCONNECTIONSPERHOST)
 
@@ -2770,18 +2503,8 @@ static struct setting settings[] = {
            * should not be translated */
           N_("Gives the time in seconds before a user kicked using the "
              "\"kick\" command may reconnect. Changing this setting will "
-             "affect users kicked in the past."), NULL, NULL, NULL,
+             "affect users kicked in the past."), NULL, NULL,
           GAME_MIN_KICK_TIME, GAME_MAX_KICK_TIME, GAME_DEFAULT_KICK_TIME)
-
-  GEN_STRING("metamessage", game.server.meta_info.user_message,
-             SSET_META, SSET_INTERNAL, SSET_RARE, SSET_SERVER_ONLY,
-             N_("Metaserver info line"),
-             N_("User defined metaserver info line. For most of the time "
-                "a user defined metamessage will be used instead of an "
-                "automatically generated message. "
-                "Set to empty (\"\", not \"empty\") to always use an "
-                "automatically generated meta server message."),
-             NULL, metamessage_action, GAME_DEFAULT_USER_META_MESSAGE)
 };
 
 #undef GEN_BOOL
@@ -2848,7 +2571,7 @@ const char *setting_short_help(const struct setting *pset)
 const char *setting_extra_help(const struct setting *pset, bool constant)
 {
   if (!constant && pset->help_func != NULL) {
-    return pset->help_func(pset);
+    return pset->help_func();
   }
 
   return _(pset->extra_help);
@@ -2880,13 +2603,30 @@ enum sset_category setting_category(const struct setting *pset)
 
 /****************************************************************************
   Returns whether the specified server setting (option) can currently
-  be changed without breaking data consistency (map dimension options
-  can't change when map has already been created with certain dimensions)
+  be changed by the caller. If it returns FALSE, the reason of the failure
+  is available by the function setting_error().
 ****************************************************************************/
-static bool setting_is_free_to_change(const struct setting *pset,
-                                      char *reject_msg,
-                                      size_t reject_msg_len)
+bool setting_is_changeable(const struct setting *pset,
+                           struct connection *caller, char *reject_msg,
+                           size_t reject_msg_len)
 {
+  if (caller
+      && (caller->access_level < ALLOW_BASIC
+          || (caller->access_level < ALLOW_HACK && !pset->to_client))) {
+    settings_snprintf(reject_msg, reject_msg_len,
+                      _("You are not allowed to change the setting '%s'."),
+                      setting_name(pset));
+    return FALSE;
+  }
+
+  if (setting_locked(pset)) {
+    /* setting is locked by the ruleset */
+    settings_snprintf(reject_msg, reject_msg_len,
+                      _("The setting '%s' is locked by the ruleset."),
+                      setting_name(pset));
+    return FALSE;
+  }
+
   switch (pset->sclass) {
   case SSET_MAP_SIZE:
   case SSET_MAP_GEN:
@@ -2899,24 +2639,6 @@ static bool setting_is_free_to_change(const struct setting *pset,
                       _("The setting '%s' can't be modified after the map "
                         "is fixed."), setting_name(pset));
     return FALSE;
-
-  case SSET_RULES_SCENARIO:
-    /* Like SSET_RULES except that it can be changed before the game starts
-     * for heavy scenarios. A heavy scenario comes with players. It can
-     * include cities, units, diplomatic relations and other complex
-     * state. Make sure that changing a setting can't make the state of a
-     * heavy scenario illegal if you want to change it from SSET_RULES to
-     * SSET_RULES_SCENARIO. */
-
-    if (game.scenario.is_scenario && game.scenario.players
-        && server_state() == S_S_INITIAL) {
-      /* Special case detected. */
-      return TRUE;
-    }
-
-    /* The special case didn't make it legal to change the setting. Don't
-     * give up. It could still be legal. Fall through so the non special
-     * cases are checked too. */
 
   case SSET_MAP_ADD:
   case SSET_PLAYERS:
@@ -2946,35 +2668,6 @@ static bool setting_is_free_to_change(const struct setting *pset,
   settings_snprintf(reject_msg, reject_msg_len, _("Internal error."));
 
   return FALSE;
-}
-
-/****************************************************************************
-  Returns whether the specified server setting (option) can currently
-  be changed by the caller. If it returns FALSE, the reason of the failure
-  is available by the function setting_error().
-****************************************************************************/
-bool setting_is_changeable(const struct setting *pset,
-                           struct connection *caller, char *reject_msg,
-                           size_t reject_msg_len)
-{
-  if (caller
-      && (caller->access_level < ALLOW_BASIC
-          || (caller->access_level < ALLOW_HACK && !pset->to_client))) {
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("You are not allowed to change the setting '%s'."),
-                      setting_name(pset));
-    return FALSE;
-  }
-
-  if (setting_locked(pset)) {
-    /* setting is locked by the ruleset */
-    settings_snprintf(reject_msg, reject_msg_len,
-                      _("The setting '%s' is locked by the ruleset."),
-                      setting_name(pset));
-    return FALSE;
-  }
-
-  return setting_is_free_to_change(pset, reject_msg, reject_msg_len);
 }
 
 /****************************************************************************
@@ -3150,16 +2843,6 @@ bool setting_bool_set(struct setting *pset, const char *val,
 }
 
 /****************************************************************************
-  Get value of boolean setting
-****************************************************************************/
-bool setting_bool_get(struct setting *pset)
-{
-  fc_assert(setting_type(pset) == SSET_BOOL);
-
-  return *pset->boolean.pvalue;
-}
-
-/****************************************************************************
   Returns TRUE if 'val' is a valid value for this setting. If it's not,
   the reason of the failure is available in the optionnal parameter
   'reject_msg'.
@@ -3262,16 +2945,6 @@ bool setting_int_validate(const struct setting *pset, int val,
 }
 
 /****************************************************************************
-  Get value of integer setting
-****************************************************************************/
-int setting_int_get(struct setting *pset)
-{
-  fc_assert(setting_type(pset) == SSET_INT);
-
-  return *pset->integer.pvalue;
-}
-
-/****************************************************************************
   Compute the string representation of the value for this string setting.
 ****************************************************************************/
 static const char *setting_str_to_str(const struct setting *pset,
@@ -3333,20 +3006,10 @@ bool setting_str_validate(const struct setting *pset, const char *val,
 }
 
 /****************************************************************************
-  Get value of string setting
-****************************************************************************/
-char *setting_str_get(struct setting *pset)
-{
-  fc_assert(setting_type(pset) == SSET_STRING);
-
-  return pset->string.value;
-}             
-
-/****************************************************************************
   Convert the integer to the long support string representation of an
   enumerator. This function must match the secfile_enum_name_data_fn_t type.
 ****************************************************************************/
-const char *setting_enum_secfile_str(secfile_data_t data, int val)
+static const char *setting_enum_secfile_str(secfile_data_t data, int val)
 {
   const struct sset_val_name *name =
       ((const struct setting *) data)->enumerator.name(val);
@@ -3461,7 +3124,7 @@ static bool set_enum_value(struct setting *pset, int val)
 /****************************************************************************
   Helper function to read value from enumerator setting 
 ****************************************************************************/
-int read_enum_value(const struct setting *pset)
+static int read_enum_value(const struct setting *pset)
 {
   int val;
 
@@ -3531,7 +3194,7 @@ bool setting_enum_validate(const struct setting *pset, const char *val,
   Convert the integer to the long support string representation of an
   enumerator. This function must match the secfile_enum_name_data_fn_t type.
 ****************************************************************************/
-const char *setting_bitwise_secfile_str(secfile_data_t data, int bit)
+static const char *setting_bitwise_secfile_str(secfile_data_t data, int bit)
 {
   const struct sset_val_name *name =
       ((const struct setting *) data)->bitwise.name(bit);
@@ -3710,16 +3373,6 @@ bool setting_bitwise_validate(const struct setting *pset, const char *val,
 }
 
 /****************************************************************************
-  Get value of bitwise setting
-****************************************************************************/
-int setting_bitwise_get(struct setting *pset)
-{
-  fc_assert(setting_type(pset) == SSET_BITWISE);
-
-  return *pset->bitwise.pvalue;
-}
-
-/****************************************************************************
   Compute the name of the current value of the setting.
 ****************************************************************************/
 const char *setting_value_name(const struct setting *pset, bool pretty,
@@ -3788,7 +3441,7 @@ const char *setting_default_name(const struct setting *pset, bool pretty,
 /****************************************************************************
   Update the setting to the default value
 ****************************************************************************/
-void setting_set_to_default(struct setting *pset)
+static void setting_set_to_default(struct setting *pset)
 {
   switch (pset->stype) {
   case SSET_BOOL:
@@ -3808,8 +3461,6 @@ void setting_set_to_default(struct setting *pset)
     (*pset->bitwise.pvalue) = pset->bitwise.default_value;
     break;
   }
-
-  pset->setdef = SETDEF_INTERNAL;
 }
 
 /********************************************************************
@@ -3842,15 +3493,16 @@ bool settings_ruleset(struct section_file *file, const char *section,
     /* no settings in ruleset file */
     log_verbose("no [%s] section for game settings in %s", section,
                 secfile_name(file));
-  } else {
-    for (j = 0; (name = secfile_lookup_str_default(file, NULL, "%s.set%d.name",
-                                                   section, j)); j++) {
-      char path[256];
-      fc_snprintf(path, sizeof(path), "%s.set%d", section, j);
+    return FALSE;
+  }
 
-      if (!setting_ruleset_one(file, name, path)) {
-        log_error("unknown setting in '%s': %s", secfile_name(file), name);
-      }
+  for (j = 0; (name = secfile_lookup_str_default(file, NULL, "%s.set%d.name",
+                                                 section, j)); j++) {
+    char path[256];
+    fc_snprintf(path, sizeof(path), "%s.set%d", section, j);
+
+    if (!setting_ruleset_one(file, name, path)) {
+      log_error("unknown setting in '%s': %s", secfile_name(file), name);
     }
   }
 
@@ -4011,8 +3663,6 @@ static bool setting_ruleset_one(struct section_file *file,
     break;
   }
 
-  pset->setdef = SETDEF_RULESET;
-
   /* set lock */
   lock = secfile_lookup_bool_default(file, FALSE, "%s.lock", path);
 
@@ -4027,9 +3677,9 @@ static bool setting_ruleset_one(struct section_file *file,
 }
 
 /**************************************************************************
-  Returns whether the setting has non-default value.
+  Returns whether the setting has been changed (is not default).
 **************************************************************************/
-bool setting_non_default(const struct setting *pset)
+bool setting_changed(const struct setting *pset)
 {
   switch (setting_type(pset)) {
   case SSET_BOOL:
@@ -4183,53 +3833,45 @@ void settings_game_save(struct section_file *file, const char *section)
   int set_count = 0;
 
   settings_iterate(SSET_ALL, pset) {
-    char errbuf[200];
-
-    if (/* It's explicitly set to some value to save */
-        setting_get_setdef(pset) == SETDEF_CHANGED
-         /* It must be same at loading time as it was saving time, even if
-          * freeciv's default has changed. */
-        || !setting_is_free_to_change(pset, errbuf, sizeof(errbuf))) {
-      secfile_insert_str(file, setting_name(pset),
-                         "%s.set%d.name", section, set_count);
-      switch (setting_type(pset)) {
-      case SSET_BOOL:
-        secfile_insert_bool(file, *pset->boolean.pvalue,
-                            "%s.set%d.value", section, set_count);
-        secfile_insert_bool(file, pset->boolean.game_value,
-                            "%s.set%d.gamestart", section, set_count);
-        break;
-      case SSET_INT:
-        secfile_insert_int(file, *pset->integer.pvalue,
-                           "%s.set%d.value", section, set_count);
-        secfile_insert_int(file, pset->integer.game_value,
-                           "%s.set%d.gamestart", section, set_count);
-        break;
-      case SSET_STRING:
-        secfile_insert_str(file, pset->string.value,
-                           "%s.set%d.value", section, set_count);
-        secfile_insert_str(file, pset->string.game_value,
-                           "%s.set%d.gamestart", section, set_count);
-        break;
-      case SSET_ENUM:
-        secfile_insert_enum_data(file, read_enum_value(pset), FALSE,
-                                 setting_enum_secfile_str, pset,
-                                 "%s.set%d.value", section, set_count);
-        secfile_insert_enum_data(file, pset->enumerator.game_value, FALSE,
-                                 setting_enum_secfile_str, pset,
-                                 "%s.set%d.gamestart", section, set_count);
-        break;
-      case SSET_BITWISE:
-        secfile_insert_enum_data(file, *pset->bitwise.pvalue, TRUE,
-                                 setting_bitwise_secfile_str, pset,
-                                 "%s.set%d.value", section, set_count);
-        secfile_insert_enum_data(file, pset->bitwise.game_value, TRUE,
-                                 setting_bitwise_secfile_str, pset,
-                                 "%s.set%d.gamestart", section, set_count);
-        break;
-      }
-      set_count++;
+    secfile_insert_str(file, setting_name(pset),
+                       "%s.set%d.name", section, set_count);
+    switch (setting_type(pset)) {
+    case SSET_BOOL:
+      secfile_insert_bool(file, *pset->boolean.pvalue,
+                          "%s.set%d.value", section, set_count);
+      secfile_insert_bool(file, pset->boolean.game_value,
+                          "%s.set%d.gamestart", section, set_count);
+      break;
+    case SSET_INT:
+      secfile_insert_int(file, *pset->integer.pvalue,
+                          "%s.set%d.value", section, set_count);
+      secfile_insert_int(file, pset->integer.game_value,
+                          "%s.set%d.gamestart", section, set_count);
+      break;
+    case SSET_STRING:
+      secfile_insert_str(file, pset->string.value,
+                          "%s.set%d.value", section, set_count);
+      secfile_insert_str(file, pset->string.game_value,
+                          "%s.set%d.gamestart", section, set_count);
+      break;
+    case SSET_ENUM:
+      secfile_insert_enum_data(file, read_enum_value(pset), FALSE,
+                               setting_enum_secfile_str, pset,
+                               "%s.set%d.value", section, set_count);
+      secfile_insert_enum_data(file, pset->enumerator.game_value, FALSE,
+                               setting_enum_secfile_str, pset,
+                               "%s.set%d.gamestart", section, set_count);
+      break;
+    case SSET_BITWISE:
+      secfile_insert_enum_data(file, *pset->bitwise.pvalue, TRUE,
+                               setting_bitwise_secfile_str, pset,
+                               "%s.set%d.value", section, set_count);
+      secfile_insert_enum_data(file, pset->bitwise.game_value, TRUE,
+                               setting_bitwise_secfile_str, pset,
+                               "%s.set%d.gamestart", section, set_count);
+      break;
     }
+    set_count++;
   } settings_iterate_end;
 
   secfile_insert_int(file, set_count, "%s.set_count", section);
@@ -4248,7 +3890,7 @@ void settings_game_load(struct section_file *file, const char *section)
   int oldcitymindist = game.info.citymindist; /* backwards compat, see below */
 
   /* Compatibility with savegames created with older versions is usually
-   * handled as conversions in savecompat.c compat_load_<version>() */
+   * handled as conversions in savegame2.c compat_load_<version>() */
 
   if (!secfile_lookup_int(file, &set_count, "%s.set_count", section)) {
     /* Old savegames and scenarios doesn't contain this, not an error. */
@@ -4279,26 +3921,19 @@ void settings_game_load(struct section_file *file, const char *section)
                                    i)) {
             log_verbose("Option '%s' not defined in the savegame: %s", name,
                         secfile_error());
-          } else {
-            pset->setdef = SETDEF_CHANGED;
-
-            if (val != *pset->boolean.pvalue) {
-              if (setting_is_changeable(pset, NULL, reject_msg,
-                                        sizeof(reject_msg))
-                  && (NULL == pset->boolean.validate
-                      || pset->boolean.validate(val, NULL, reject_msg,
-                                                sizeof(reject_msg)))) {
-                *pset->boolean.pvalue = val;
-                log_normal(_("Savegame: '%s' has been set to %s."),
-                           setting_name(pset),
-                           setting_value_name(pset, TRUE, buf, sizeof(buf)));
-              } else {
-                log_error("Savegame: error restoring '%s' . (%s)",
-                          setting_name(pset), reject_msg);
-              }
+          } else if (val != *pset->boolean.pvalue) {
+            if (setting_is_changeable(pset, NULL, reject_msg,
+                                      sizeof(reject_msg))
+                && (NULL == pset->boolean.validate
+                    || pset->boolean.validate(val, NULL, reject_msg,
+                                              sizeof(reject_msg)))) {
+              *pset->boolean.pvalue = val;
+              log_normal(_("Savegame: '%s' has been set to %s."),
+                         setting_name(pset),
+                         setting_value_name(pset, TRUE, buf, sizeof(buf)));
             } else {
-              log_normal(_("Savegame: '%s' explicitly set to value same as default."),
-                         setting_name(pset));
+              log_error("Savegame: error restoring '%s' . (%s)",
+                        setting_name(pset), reject_msg);
             }
           }
         }
@@ -4311,26 +3946,19 @@ void settings_game_load(struct section_file *file, const char *section)
           if (!secfile_lookup_int(file, &val, "%s.set%d.value", section, i)) {
             log_verbose("Option '%s' not defined in the savegame: %s", name,
                         secfile_error());
-          } else {
-            pset->setdef = SETDEF_CHANGED;
-
-            if (val != *pset->integer.pvalue) {
-              if (setting_is_changeable(pset, NULL, reject_msg,
-                                        sizeof(reject_msg))
-                  && (NULL == pset->integer.validate
-                      || pset->integer.validate(val, NULL, reject_msg,
-                                                sizeof(reject_msg)))) {
-                *pset->integer.pvalue = val;
-                log_normal(_("Savegame: '%s' has been set to %s."),
-                           setting_name(pset),
-                           setting_value_name(pset, TRUE, buf, sizeof(buf)));
-              } else {
-                log_error("Savegame: error restoring '%s' . (%s)",
-                          setting_name(pset), reject_msg);
-              }
+          } else if (val != *pset->integer.pvalue) {
+            if (setting_is_changeable(pset, NULL, reject_msg,
+                                      sizeof(reject_msg))
+                && (NULL == pset->integer.validate
+                    || pset->integer.validate(val, NULL, reject_msg,
+                                              sizeof(reject_msg)))) {
+              *pset->integer.pvalue = val;
+              log_normal(_("Savegame: '%s' has been set to %s."),
+                         setting_name(pset),
+                         setting_value_name(pset, TRUE, buf, sizeof(buf)));
             } else {
-              log_normal(_("Savegame: '%s' explicitly set to value same as default."),
-                         setting_name(pset));
+              log_error("Savegame: error restoring '%s' . (%s)",
+                        setting_name(pset), reject_msg);
             }
           }
         }
@@ -4344,22 +3972,15 @@ void settings_game_load(struct section_file *file, const char *section)
           if (NULL == val) {
             log_verbose("Option '%s' not defined in the savegame: %s", name,
                         secfile_error());
-          } else {
-            pset->setdef = SETDEF_CHANGED;
-
-            if (0 != strcmp(val, pset->string.value)) {
-              if (setting_str_set(pset, val, NULL, reject_msg,
-                                  sizeof(reject_msg))) {
-                log_normal(_("Savegame: '%s' has been set to %s."),
-                           setting_name(pset),
-                           setting_value_name(pset, TRUE, buf, sizeof(buf)));
-              } else {
-                log_error("Savegame: error restoring '%s' . (%s)",
-                          setting_name(pset), reject_msg);
-              }
+          } else if (0 != strcmp(val, pset->string.value)) {
+            if (setting_str_set(pset, val, NULL, reject_msg,
+                                sizeof(reject_msg))) {
+              log_normal(_("Savegame: '%s' has been set to %s."),
+                         setting_name(pset),
+                         setting_value_name(pset, TRUE, buf, sizeof(buf)));
             } else {
-              log_normal(_("Savegame: '%s' explicitly set to value same as default."),
-                         setting_name(pset));
+              log_error("Savegame: error restoring '%s' . (%s)",
+                        setting_name(pset), reject_msg);
             }
           }
         }
@@ -4374,26 +3995,19 @@ void settings_game_load(struct section_file *file, const char *section)
                                         "%s.set%d.value", section, i)) {
             log_verbose("Option '%s' not defined in the savegame: %s", name,
                         secfile_error());
-          } else {
-            pset->setdef = SETDEF_CHANGED;
-
-            if (val != read_enum_value(pset)) {
-              if (setting_is_changeable(pset, NULL, reject_msg,
-                                        sizeof(reject_msg))
-                  && (NULL == pset->enumerator.validate
-                      || pset->enumerator.validate(val, NULL, reject_msg,
-                                                   sizeof(reject_msg)))) {
-                set_enum_value(pset, val);
-                log_normal(_("Savegame: '%s' has been set to %s."),
-                           setting_name(pset),
-                           setting_value_name(pset, TRUE, buf, sizeof(buf)));
-              } else {
-                log_error("Savegame: error restoring '%s' . (%s)",
-                          setting_name(pset), reject_msg);
-              }
+          } else if (val != read_enum_value(pset)) {
+            if (setting_is_changeable(pset, NULL, reject_msg,
+                                      sizeof(reject_msg))
+                && (NULL == pset->enumerator.validate
+                    || pset->enumerator.validate(val, NULL, reject_msg,
+                                                 sizeof(reject_msg)))) {
+              set_enum_value(pset, val);
+              log_normal(_("Savegame: '%s' has been set to %s."),
+                         setting_name(pset),
+                         setting_value_name(pset, TRUE, buf, sizeof(buf)));
             } else {
-              log_normal(_("Savegame: '%s' explicitly set to value same as default."),
-                         setting_name(pset));
+              log_error("Savegame: error restoring '%s' . (%s)",
+                        setting_name(pset), reject_msg);
             }
           }
         }
@@ -4408,26 +4022,19 @@ void settings_game_load(struct section_file *file, const char *section)
                                         "%s.set%d.value", section, i)) {
             log_verbose("Option '%s' not defined in the savegame: %s", name,
                         secfile_error());
-          } else {
-            pset->setdef = SETDEF_CHANGED;
-
-            if (val != *pset->bitwise.pvalue) {
-              if (setting_is_changeable(pset, NULL, reject_msg,
-                                        sizeof(reject_msg))
-                  && (NULL == pset->bitwise.validate
-                      || pset->bitwise.validate(val, NULL, reject_msg,
-                                                sizeof(reject_msg)))) {
-                *pset->bitwise.pvalue = val;
-                log_normal(_("Savegame: '%s' has been set to %s."),
-                           setting_name(pset),
-                           setting_value_name(pset, TRUE, buf, sizeof(buf)));
-              } else {
-                log_error("Savegame: error restoring '%s' . (%s)",
-                          setting_name(pset), reject_msg);
-              }
+          } else if (val != *pset->bitwise.pvalue) {
+            if (setting_is_changeable(pset, NULL, reject_msg,
+                                      sizeof(reject_msg))
+                && (NULL == pset->bitwise.validate
+                    || pset->bitwise.validate(val, NULL, reject_msg,
+                                              sizeof(reject_msg)))) {
+              *pset->bitwise.pvalue = val;
+              log_normal(_("Savegame: '%s' has been set to %s."),
+                         setting_name(pset),
+                         setting_value_name(pset, TRUE, buf, sizeof(buf)));
             } else {
-              log_normal(_("Savegame: '%s' explicitly set to value same as default."),
-                         setting_name(pset));
+              log_error("Savegame: error restoring '%s' . (%s)",
+                        setting_name(pset), reject_msg);
             }
           }
         }
@@ -4471,8 +4078,6 @@ void settings_game_load(struct section_file *file, const char *section)
                   pset, "%s.set%d.gamestart", section, i);
           break;
         }
-
-        pset->setdef = SETDEF_CHANGED;
       }
     } settings_iterate_end;
   }
@@ -4819,7 +4424,7 @@ void settings_list_update(void)
 
   /* Refill them. */
   for (i = 0; (pset = setting_by_number(i)); i++) {
-    if (setting_non_default(pset)) {
+    if (setting_changed(pset)) {
       setting_list_append(setting_sorted.level[SSET_CHANGED], pset);
     }
     if (setting_locked(pset)) {
@@ -4872,32 +4477,4 @@ static void settings_list_free(void)
   }
 
   setting_sorted.init = FALSE;
-}
-
-/*****************************************************************************
-  Mark setting changed
-*****************************************************************************/
-void setting_changed(struct setting *pset)
-{
-  pset->setdef = SETDEF_CHANGED;
-}
-
-/*****************************************************************************
-  Is the setting in changed state, or the default
-*****************************************************************************/
-enum setting_default_level setting_get_setdef(struct setting *pset)
-{
-  return pset->setdef;
-}
-
-/*****************************************************************************
-  Compatibility function. In the very old times there was no concept of
-  'default' value outside setting initialization, all values were handled
-  like we now want to handle non-default ones.
-*****************************************************************************/
-void settings_consider_all_changed(void)
-{
-  settings_iterate(SSET_ALL, pset) {
-    pset->setdef = SETDEF_CHANGED;
-  } settings_iterate_end;
 }

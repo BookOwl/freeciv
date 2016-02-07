@@ -26,7 +26,7 @@ ruler_titles = {
 
 flag="ethiopia_old"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""

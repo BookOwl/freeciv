@@ -15,13 +15,10 @@
 #include <fc_config.h>
 #endif
 
-/* utility */
+/* common & utility */
 #include "fcintl.h"
-#include "support.h"
-
-/* common */
-#include "calendar.h"
 #include "game.h"
+#include "support.h"
 
 /* gui main header */
 #include "gui_stub.h"
@@ -50,7 +47,7 @@ void update_info_label(void)
                 "Gold %d\n"
                 "Tax: %d Lux: %d Sci: %d"),
               population_to_text(civ_population(client_player())),
-              calendar_text(),
+              textyear(game.info.year),
               client.conn.playing->economic.gold,
               client.conn.playing->economic.tax,
               client.conn.playing->economic.luxury,

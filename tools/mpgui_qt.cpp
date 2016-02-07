@@ -180,7 +180,7 @@ static void progress_callback_thr(int downloaded, int max)
 /**************************************************************************
   Setup GUI object
 **************************************************************************/
-void mpgui::setup(QWidget *central, struct fcmp_params *params)
+void mpgui::setup(QWidget *central, struct fcmp_params *fcmp)
 {
 #define URL_LABEL_TEXT N_("Modpack URL")
   QVBoxLayout *main_layout = new QVBoxLayout();
@@ -239,10 +239,10 @@ void mpgui::setup(QWidget *central, struct fcmp_params *params)
   hl->addWidget(URL_label);
 
   URLedit = new QLineEdit(central);
-  if (params->autoinstall == nullptr) {
+  if (fcmp->autoinstall == nullptr) {
     URLedit->setText(DEFAULT_URL_START);
   } else {
-    URLedit->setText(QString::fromUtf8(params->autoinstall));
+    URLedit->setText(QString::fromUtf8(fcmp->autoinstall));
   }
   URLedit->setFocus();
 

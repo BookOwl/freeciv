@@ -38,10 +38,11 @@
 /* client */
 #include "chatline_common.h"
 #include "client_main.h"
-#include "dialogs_g.h"
 #include "editor.h"
 #include "mapview_common.h"
 #include "tilespec.h"
+
+#include "dialogs_g.h"
 
 /* client/gui-gtk-3.0 */
 #include "canvas.h"
@@ -50,7 +51,6 @@
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "plrdlg.h"
-#include "sprite.h"
 
 
 enum tool_value_selector_columns {
@@ -686,7 +686,7 @@ static void editbar_refresh(struct editbar *eb)
 }
 
 /****************************************************************************
-  Create a pixbuf containing a representative image for the given extra
+  Create a pixbuf containing a representative image for the given road
   type, to be used as an icon in the GUI.
 
   May return NULL on error.
@@ -694,7 +694,7 @@ static void editbar_refresh(struct editbar *eb)
   NB: You must call g_object_unref on the non-NULL return value when you
   no longer need it.
 ****************************************************************************/
-static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
+static GdkPixbuf *create_road_pixbuf(const struct road_type *proad)
 {
   struct drawn_sprite sprs[80];
   int count, w, h, canvas_x, canvas_y;
@@ -714,8 +714,46 @@ static GdkPixbuf *create_extra_pixbuf(const struct extra_type *pextra)
   cairo_paint(cr);
   cairo_destroy(cr);
 
-  count = fill_basic_extra_sprite_array(tileset, sprs, pextra);
-  put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+  count = fill_basic_road_sprite_array(tileset, sprs, proad);
+  put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
+
+  pixbuf = surface_get_pixbuf(canvas.surface, w, h);
+  cairo_surface_destroy(canvas.surface);
+
+  return pixbuf;
+}
+
+/****************************************************************************
+  Create a pixbuf containing a representative image for the given base
+  type, to be used as an icon in the GUI.
+
+  May return NULL on error.
+
+  NB: You must call g_object_unref on the non-NULL return value when you
+  no longer need it.
+****************************************************************************/
+static GdkPixbuf *create_military_base_pixbuf(const struct base_type *pbase)
+{
+  struct drawn_sprite sprs[80];
+  int count, w, h, canvas_x, canvas_y;
+  GdkPixbuf *pixbuf;
+  struct canvas canvas = FC_STATIC_CANVAS_INIT;
+  cairo_t *cr;
+
+  w = tileset_tile_width(tileset);
+  h = tileset_tile_height(tileset);
+
+  canvas.surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+  canvas_x = 0;
+  canvas_y = 0;
+
+  cr = cairo_create(canvas.surface);
+  cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+  cairo_paint(cr);
+  cairo_destroy(cr);
+
+  count = fill_basic_base_sprite_array(tileset, sprs, pbase);
+  put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
 
   pixbuf = surface_get_pixbuf(canvas.surface, w, h);
   cairo_surface_destroy(canvas.surface);
@@ -755,7 +793,7 @@ static GdkPixbuf *create_terrain_pixbuf(struct terrain *pterrain)
   for (i = 0; i < 3; i++) {
     count = fill_basic_terrain_layer_sprite_array(tileset, sprs,
                                                   i, pterrain);
-    put_drawn_sprites(&canvas, 1.0, canvas_x, canvas_y, count, sprs, FALSE);
+    put_drawn_sprites(&canvas, canvas_x, canvas_y, count, sprs, FALSE);
   }
 
   pixbuf = surface_get_pixbuf(canvas.surface, w, h);
@@ -838,11 +876,14 @@ static void editbar_reload_tileset(struct editbar *eb)
       continue;
     }
     pixbuf = sprite_get_pixbuf(sprite);
-    if (pixbuf != NULL) {
-      gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(G_OBJECT(pixbuf));
+    if (pixbuf == NULL) {
+      continue;
     }
+
+    gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
+    g_object_unref(G_OBJECT(pixbuf));
   } resource_type_iterate_end;
+
 
   /* Reload terrain specials. */
 
@@ -850,18 +891,22 @@ static void editbar_reload_tileset(struct editbar *eb)
   store = tvs->store;
   clear_tool_store(store);
 
-  extra_type_by_cause_iterate(EC_SPECIAL, spe) {
+  tile_special_type_iterate(special) {
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
-                       TVS_COL_ID, spe->data.special_idx,
-                       TVS_COL_NAME, extra_name_translation(spe),
+                       TVS_COL_ID, special,
+                       TVS_COL_NAME, special_name_translation(special),
                        -1);
-    pixbuf = create_extra_pixbuf(spe);
+    sprite = get_basic_special_sprite(tileset, special);
+    if (sprite == NULL) {
+      continue;
+    }
+    pixbuf = sprite_get_pixbuf(sprite);
     if (pixbuf != NULL) {
       gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
-      g_object_unref(pixbuf);
+      g_object_unref(G_OBJECT(pixbuf));
     }
-  } extra_type_by_cause_iterate_end;
+  } tile_special_type_iterate_end;
 
   /* Reload roads. */
 
@@ -879,7 +924,7 @@ static void editbar_reload_tileset(struct editbar *eb)
                        TVS_COL_ID, id,
                        TVS_COL_NAME, road_name_translation(proad),
                        -1);
-    pixbuf = create_extra_pixbuf(road_extra_get(proad));
+    pixbuf = create_road_pixbuf(proad);
     if (pixbuf != NULL) {
       gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
       g_object_unref(pixbuf);
@@ -902,7 +947,7 @@ static void editbar_reload_tileset(struct editbar *eb)
                        TVS_COL_ID, id,
                        TVS_COL_NAME, base_name_translation(pbase),
                        -1);
-    pixbuf = create_extra_pixbuf(base_extra_get(pbase));
+    pixbuf = create_military_base_pixbuf(pbase);
     if (pixbuf != NULL) {
       gtk_list_store_set(store, &iter, TVS_COL_IMAGE, pixbuf, -1);
       g_object_unref(pixbuf);
@@ -1449,7 +1494,7 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
   struct sprite *sprite = NULL;
   GdkPixbuf *pixbuf = NULL;
   struct terrain *pterrain;
-  struct resource_type *presource;
+  struct resource *presource;
   struct unit_type *putype;
   struct base_type *pbase;
   struct road_type *proad;
@@ -1474,21 +1519,15 @@ static GdkPixbuf *get_tool_value_pixbuf(enum editor_tool_type ett,
     }
     break;
   case ETT_TERRAIN_SPECIAL:
-    if (value >= 0) {
-      pixbuf = create_extra_pixbuf(special_extra_get(value));
-    }
+    sprite = get_basic_special_sprite(tileset, value);
     break;
   case ETT_ROAD:
     proad = road_by_number(value);
-    if (proad != NULL) {
-      pixbuf = create_extra_pixbuf(road_extra_get(proad));
-    }
+    pixbuf = create_road_pixbuf(proad);
     break;
   case ETT_MILITARY_BASE:
     pbase = base_by_number(value);
-    if (pbase != NULL) {
-      pixbuf = create_extra_pixbuf(base_extra_get(pbase));
-    }
+    pixbuf = create_military_base_pixbuf(pbase);
     break;
   case ETT_UNIT:
     putype = utype_by_number(value);

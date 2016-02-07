@@ -35,16 +35,11 @@
 #include "unittools.h"
 
 /* server/advisors */
-#include "advbuilding.h"
 #include "advgoto.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "aicity.h"
 #include "aiplayer.h"
-#include "ailog.h"
 #include "aitools.h"
 #include "aiunit.h"
 
@@ -65,7 +60,6 @@ static struct tile *find_nearest_airbase(const struct unit *punit,
   struct pf_map *pfm;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   pf_map_move_costs_iterate(pfm, ptile, move_cost, TRUE) {
@@ -140,7 +134,7 @@ static int dai_evaluate_tile_for_air_attack(struct unit *punit,
   /* Cost of our unit */
   unit_cost = unit_build_shield_cost(punit);
   /* This is to say "wait, ill unit will get better!" */
-  unit_cost = unit_cost * unit_type_get(punit)->hp / punit->hp; 
+  unit_cost = unit_cost * unit_type(punit)->hp / punit->hp; 
 
   /* Determine cost of enemy units */
   victim_cost = stack_cost(punit, pdefender);
@@ -149,16 +143,16 @@ static int dai_evaluate_tile_for_air_attack(struct unit *punit,
   }
 
   /* Missile would die 100% so we adjust the victim_cost -- GB */
-  if (uclass_has_flag(unit_class_get(punit), UCF_MISSILE)) {
+  if (uclass_has_flag(unit_class(punit), UCF_MISSILE)) {
     victim_cost -= unit_build_shield_cost(punit);
   }
 
-  unit_attack = (int) (PROB_MULTIPLIER
+  unit_attack = (int) (PROB_MULTIPLIER 
                        * unit_win_chance(punit, pdefender));
 
   victim_defence = PROB_MULTIPLIER - unit_attack;
 
-  balanced_cost = build_cost_balanced(unit_type_get(punit));
+  balanced_cost = build_cost_balanced(unit_type(punit));
 
   sortie_time = (unit_has_type_flag(punit, UTYF_ONEATTACK) ? 1 : 0);
 
@@ -200,7 +194,6 @@ static int find_something_to_bomb(struct ai_type *ait, struct unit *punit,
   int best = 0;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   /* Let's find something to bomb */
@@ -210,12 +203,12 @@ static int find_something_to_bomb(struct ai_type *ait, struct unit *punit,
       break;
     }
 
-    if (has_handicap(pplayer, H_MAP) && !map_is_known(ptile, pplayer)) {
+    if (ai_handicap(pplayer, H_MAP) && !map_is_known(ptile, pplayer)) {
       /* The target tile is unknown */
       continue;
     }
 
-    if (has_handicap(pplayer, H_FOG) 
+    if (ai_handicap(pplayer, H_FOG) 
         && !map_is_known_and_seen(ptile, pplayer, V_MAIN)) {
       /* The tile is fogged */
       continue;
@@ -265,7 +258,6 @@ static struct tile *dai_find_strategic_airbase(struct ai_type *ait,
   int best_worth = 0, target_worth;
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
   pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
     if (move_cost >= punit->moves_left) {
@@ -286,7 +278,7 @@ static struct tile *dai_find_strategic_airbase(struct ai_type *ait,
       pvirtual =
         unit_virtual_create(pplayer,
                             player_city_by_number(pplayer, punit->homecity),
-                            unit_type_get(punit), punit->veteran);
+                            unit_type(punit), punit->veteran);
     }
 
     unit_tile_set(pvirtual, ptile);
@@ -374,7 +366,7 @@ void dai_manage_airunit(struct ai_type *ait, struct player *pplayer,
       return;
     }
 
-  } else if (punit->fuel == unit_type_get(punit)->fuel) {
+  } else if (punit->fuel == unit_type(punit)->fuel) {
     /* We only leave a refuel point when we are on full fuel */
 
     if (find_something_to_bomb(ait, punit, &path, &dst_tile) > 0) {
@@ -393,27 +385,7 @@ void dai_manage_airunit(struct ai_type *ait, struct player *pplayer,
       /* We could use ai_military_findvictim here, but I don't trust it... */
       unit_activity_handling(punit, ACTIVITY_IDLE);
       if (is_tiles_adjacent(unit_tile(punit), dst_tile)) {
-        if (is_action_enabled_unit_on_units(ACTION_CAPTURE_UNITS,
-                                            punit, dst_tile)) {
-          /* Choose capture. */
-          handle_unit_do_action(unit_owner(punit),
-                                punit->id, tile_index(dst_tile),
-                                0, "", ACTION_CAPTURE_UNITS);
-        } else if (is_action_enabled_unit_on_units(ACTION_BOMBARD,
-                                                   punit, dst_tile)) {
-          /* Choose bombard. */
-          handle_unit_do_action(unit_owner(punit),
-                                punit->id, tile_index(dst_tile),
-                                0, "", ACTION_BOMBARD);
-        } else if (is_action_enabled_unit_on_tile(ACTION_NUKE,
-                                                  punit, dst_tile)) {
-          /* Choose explode nuclear. */
-          handle_unit_do_action(unit_owner(punit),
-                                punit->id, tile_index(dst_tile),
-                                0, "", ACTION_NUKE);
-        } else {
-          (void) unit_move_handling(punit, dst_tile, TRUE, FALSE);
-        }
+        (void) unit_move_handling(punit, dst_tile, TRUE, FALSE);
       }
     } else if ((dst_tile = dai_find_strategic_airbase(ait, punit, &path))) {
       log_debug("%s will fly to (%i, %i) (%s) to fight there",
@@ -454,7 +426,7 @@ bool dai_choose_attacker_air(struct ai_type *ait, struct player *pplayer,
   bool want_something = FALSE;
 
   /* This AI doesn't know to build planes */
-  if (has_handicap(pplayer, H_NOPLANES)) {
+  if (ai_handicap(pplayer, H_NOPLANES)) {
     return FALSE;
   }
 
@@ -478,12 +450,6 @@ bool dai_choose_attacker_air(struct ai_type *ait, struct player *pplayer,
       /* We don't consider this a plane */
       continue;
     }
-
-    /* Temporary hack because pathfinding can't handle Fighters. */
-    if (!uclass_has_flag(pclass, UCF_MISSILE) && 1 == utype_fuel(punittype)) {
-      continue;
-    }
-
     if (can_city_build_unit_now(pcity, punittype)) {
       struct unit *virtual_unit = 
 	unit_virtual_create(pplayer, pcity, punittype,
@@ -496,7 +462,6 @@ bool dai_choose_attacker_air(struct ai_type *ait, struct player *pplayer,
         choice->value.utype = punittype;
         choice->type = CT_ATTACKER;
         choice->need_boat = FALSE;
-        adv_choice_set_use(choice, "offensive air");
         want_something = TRUE;
         log_debug("%s wants to build %s (want=%d)",
                   city_name(pcity), utype_rule_name(punittype), profit);

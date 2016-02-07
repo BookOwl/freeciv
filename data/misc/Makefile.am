@@ -18,8 +18,6 @@ pkgdata_DATA =          \
 	cursors.spec	\
 	editor.png	\
 	editor.spec	\
-	events.png	\
-	events.spec	\
 	flags-large.spec	\
 	flags.spec	\
 	governments.png \
@@ -29,6 +27,7 @@ pkgdata_DATA =          \
 	mpicon.png	\
 	overlays.png	\
 	overlays.spec	\
+	radar.png	\
 	shields-large.spec	\
 	shields.spec	\
 	small.png	\

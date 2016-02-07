@@ -488,7 +488,7 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
                                      bool reorder_notebook)
 {
   const int category = option_category(poption);
-  GtkWidget *main_hbox, *label, *ebox, *w = NULL;
+  GtkWidget *hbox, *label, *ebox, *w = NULL;
 
   fc_assert(NULL == option_get_gui_data(poption));
 
@@ -514,7 +514,8 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
                                    GTK_ORIENTATION_VERTICAL);
     g_object_set(pdialog->vboxes[category], "margin", 8, NULL);
     gtk_widget_set_hexpand(pdialog->vboxes[category], TRUE);
-    gtk_container_add(GTK_CONTAINER(sw), pdialog->vboxes[category]);
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(sw),
+                                          pdialog->vboxes[category]);
 
     gtk_widget_show_all(sw);
   }
@@ -526,11 +527,11 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
   g_signal_connect(ebox, "button_press_event",
                    G_CALLBACK(option_button_press_callback), poption);
 
-  main_hbox = gtk_grid_new();
+  hbox = gtk_grid_new();
   label = gtk_label_new(option_description(poption));
   g_object_set(label, "margin", 2, NULL);
-  gtk_container_add(GTK_CONTAINER(main_hbox), label);
-  gtk_container_add(GTK_CONTAINER(ebox), main_hbox);
+  gtk_container_add(GTK_CONTAINER(hbox), label);
+  gtk_container_add(GTK_CONTAINER(ebox), hbox);
 
   switch (option_type(poption)) {
   case OT_BOOLEAN:
@@ -656,7 +657,7 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
     g_object_set_data(G_OBJECT(w), "main_widget", ebox);
     gtk_widget_set_hexpand(w, TRUE);
     gtk_widget_set_halign(w, GTK_ALIGN_END);
-    gtk_container_add(GTK_CONTAINER(main_hbox), w);
+    gtk_container_add(GTK_CONTAINER(hbox), w);
   }
 
   gtk_widget_show_all(ebox);
@@ -959,7 +960,7 @@ static void option_dialog_option_apply(struct option *poption)
       if (color) bg_color_text = gdk_rgba_to_string(color);
 
       (void) option_color_set(poption,
-                              ft_color_construct(fg_color_text, bg_color_text));
+                              ft_color(fg_color_text, bg_color_text));
       g_free(fg_color_text);
       g_free(bg_color_text);
     }

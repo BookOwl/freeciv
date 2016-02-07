@@ -57,8 +57,8 @@ static GtkWidget *dshell = NULL;
 static GtkWidget *view;
 static GtkWidget *source;
 static GtkWidget *all_toggle;
-static GtkListStore *goto_list_store;
-static GtkTreeSelection *goto_list_selection;
+static GtkListStore *store;
+static GtkTreeSelection *selection;
 struct tile *original_tile;
 static bool gotodlg_updating = FALSE;
 
@@ -179,16 +179,16 @@ static void create_goto_dialog(void)
   gtk_grid_set_row_spacing(GTK_GRID(vbox), 6);
   gtk_container_add(GTK_CONTAINER(frame), vbox);
 
-  goto_list_store = gtk_list_store_new(GD_COL_NUM, G_TYPE_INT, G_TYPE_STRING,
-                                       GDK_TYPE_PIXBUF, G_TYPE_STRING, G_TYPE_STRING);
-  gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(goto_list_store),
-                                       GD_COL_CITY_NAME, GTK_SORT_ASCENDING);
+  store = gtk_list_store_new(GD_COL_NUM, G_TYPE_INT, G_TYPE_STRING,
+                             GDK_TYPE_PIXBUF, G_TYPE_STRING, G_TYPE_STRING);
+  gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(store),
+    GD_COL_CITY_NAME, GTK_SORT_ASCENDING);
 
-  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(goto_list_store));
+  view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
   gtk_widget_set_hexpand(view, TRUE);
   gtk_widget_set_vexpand(view, TRUE);
-  g_object_unref(goto_list_store);
-  goto_list_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
+  g_object_unref(store);
+  selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
   gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(view), TRUE);
   gtk_tree_view_set_search_column(GTK_TREE_VIEW(view), GD_COL_CITY_NAME);
   gtk_tree_view_set_enable_search(GTK_TREE_VIEW(view), TRUE);
@@ -240,7 +240,7 @@ static void create_goto_dialog(void)
 
   g_signal_connect(all_toggle, "toggled", G_CALLBACK(update_goto_dialog), NULL);
 
-  g_signal_connect(goto_list_selection, "changed",
+  g_signal_connect(selection, "changed",
     G_CALLBACK(goto_selection_callback), NULL);
 
   gtk_widget_show_all(dshell);
@@ -277,14 +277,13 @@ static struct city *get_selected_city(void)
   GtkTreeIter it;
   int city_id;
 
-  if (!gtk_tree_selection_get_selected(goto_list_selection, NULL, &it)) {
+  if (!gtk_tree_selection_get_selected(selection, NULL, &it)) {
     return NULL;
   }
 
   model = gtk_tree_view_get_model(GTK_TREE_VIEW(view));
 
   gtk_tree_model_get(model, &it, GD_COL_CITY_ID, &city_id, -1);
-
   return game_city_by_number(city_id);
 }
 
@@ -432,7 +431,7 @@ static void update_source_label(void)
 static void update_goto_dialog(GtkToggleButton *button)
 {
   bool nonempty = FALSE;
-  
+
   if (!client_has_player()) {
     /* Case global observer. */
     return;
@@ -440,14 +439,14 @@ static void update_goto_dialog(GtkToggleButton *button)
 
   gotodlg_updating = TRUE;
 
-  gtk_list_store_clear(goto_list_store);
+  gtk_list_store_clear(store);
 
   if (gtk_toggle_button_get_active(button)) {
     players_iterate(pplayer) {
-      nonempty |= list_store_append_player_cities(goto_list_store, pplayer);
+      nonempty |= list_store_append_player_cities(store, pplayer);
     } players_iterate_end;
   } else {
-    nonempty |= list_store_append_player_cities(goto_list_store, client_player());
+    nonempty |= list_store_append_player_cities(store, client_player());
   }
 
   gotodlg_updating = FALSE;
@@ -468,21 +467,19 @@ static void refresh_airlift_column(void)
 {
   GtkTreeIter iter;
   bool valid;
-
-  valid = gtk_tree_model_get_iter_first(GTK_TREE_MODEL(goto_list_store), &iter);
+  valid = gtk_tree_model_get_iter_first(GTK_TREE_MODEL(store), &iter);
   while (valid) {
     int city_id;
     const struct city *pcity;
     const char *air_text;
-
-    gtk_tree_model_get(GTK_TREE_MODEL(goto_list_store), &iter,
+    gtk_tree_model_get(GTK_TREE_MODEL(store), &iter,
                        GD_COL_CITY_ID, &city_id, -1);
     pcity = game_city_by_number(city_id);
     fc_assert_ret(pcity != NULL);
     air_text = get_airlift_text(get_units_in_focus(), pcity);
-    gtk_list_store_set(GTK_LIST_STORE(goto_list_store), &iter,
+    gtk_list_store_set(GTK_LIST_STORE(store), &iter,
                        GD_COL_AIRLIFT, air_text ? air_text : "-", -1);
-    valid = gtk_tree_model_iter_next(GTK_TREE_MODEL(goto_list_store), &iter);
+    valid = gtk_tree_model_iter_next(GTK_TREE_MODEL(store), &iter);
   }
 }
 

@@ -21,6 +21,8 @@
 
 #include <gtk/gtk.h>
 
+#include "gtkpixcomm.h"
+
 /* utility */
 #include "log.h"
 #include "mem.h"
@@ -51,17 +53,19 @@ struct sprite *radar_gfx_sprite;
 GdkCursor *fc_cursors[CURSOR_LAST][NUM_CURSOR_FRAMES];
 
 /***************************************************************************
-  Returns TRUE to indicate that gtk3-client supports given view type
+  Returns TRUE to indicate that gtk-client supports isometric view
 ***************************************************************************/
-bool is_view_supported(enum ts_type type)
+bool isometric_view_supported(void)
 {
-  switch (type) {
-  case TS_ISOMETRIC:
-  case TS_OVERHEAD:
-    return TRUE;
-  }
+  return TRUE;
+}
 
-  return FALSE;
+/***************************************************************************
+  Returns TRUE to indicate that gtk-client supports overhead view
+***************************************************************************/
+bool overhead_view_supported(void)
+{
+  return TRUE;
 }
 
 #define COLOR_MOTTO_FACE_R    0x2D

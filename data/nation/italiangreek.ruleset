@@ -38,7 +38,7 @@ leaders = {
 }
 flag="italian_greek"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 ruler_titles = {
  "government",      "male_title",      "female_title"

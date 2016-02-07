@@ -556,10 +556,10 @@ static void sell_impr_iterate(GtkTreeModel *model, GtkTreePath *path,
   Some build target, either improvement or unit, has been selected from
   some menu.
 ****************************************************************************/
-static void select_impr_or_unit_callback(GtkWidget *wdg, gpointer data)
+static void select_impr_or_unit_callback(GtkWidget *w, gpointer data)
 {
   struct universal target = cid_decode(GPOINTER_TO_INT(data));
-  GObject *parent = G_OBJECT(wdg->parent);
+  GObject *parent = G_OBJECT(w->parent);
   TestCityFunc test_func = g_object_get_data(parent, "freeciv_test_func");
   enum city_operation_type city_operation = 
     GPOINTER_TO_INT(g_object_get_data(parent, "freeciv_city_operation"));
@@ -1163,8 +1163,11 @@ static void create_city_report_dialog(bool make_modal)
   gtk_box_pack_end(GTK_BOX(city_dialog_shell->action_area),
                    city_total_buy_cost_label, TRUE, TRUE, 0);
 
+  gui_dialog_add_button(city_dialog_shell,
+			GTK_STOCK_CLOSE, GTK_RESPONSE_CLOSE);
+
   gui_dialog_set_default_response(city_dialog_shell,
-                                  GTK_RESPONSE_CLOSE);
+				  GTK_RESPONSE_CLOSE);
 
   /* tree view */
   buf = fc_realloc(buf, NUM_CREPORT_COLS * sizeof(buf[0]));
@@ -1370,7 +1373,7 @@ static void popup_iterate(GtkTreeModel *model, GtkTreePath *path,
   struct city *pcity = city_model_get(model, iter);
 
   if (NULL != pcity) {
-    if (gui_options.center_when_popup_city) {
+    if (center_when_popup_city) {
       center_tile_mapcanvas(pcity->tile);
     }
     popup_city_dialog(pcity);

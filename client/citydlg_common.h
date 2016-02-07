@@ -32,7 +32,7 @@ int get_citydlg_canvas_width(void);
 int get_citydlg_canvas_height(void);
 void generate_citydlg_dimensions(void);
 
-bool city_to_canvas_pos(float *canvas_x, float *canvas_y, int city_x,
+bool city_to_canvas_pos(int *canvas_x, int *canvas_y, int city_x,
                         int city_y, int city_radius_sq);
 bool canvas_to_city_pos(int *city_x, int *city_y, int city_radius_sq,
                         int canvas_x, int canvas_y);
@@ -53,14 +53,12 @@ void get_city_dialog_output_text(const struct city *pcity,
                                  Output_type_id otype,
                                  char *buffer, size_t bufsz);
 void get_city_dialog_pollution_text(const struct city *pcity,
-                                    char *buf, size_t bufsz);
-void get_city_dialog_culture_text(const struct city *pcity,
-                                  char *buf, size_t bufsz);
+                                    char *buffer, size_t bufsz);
 void get_city_dialog_illness_text(const struct city *pcity,
                                   char *buf, size_t bufsz);
 
 int get_city_citizen_types(struct city *pcity, enum citizen_feeling index,
-                           enum citizen_category *categories);
+                           enum citizen_category *citizens);
 void city_rotate_specialist(struct city *pcity, int citizen_index);
 
 void activate_all_units(struct tile *ptile);

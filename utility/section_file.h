@@ -21,13 +21,9 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
-#include "support.h"
-
 /* Section structure. */
 struct section {
   struct section_file *secfile; /* Parent structure. */
-  enum entry_special_type special;
   char *name;                   /* Name of the section. */
   struct entry_list *entries;   /* The list of the children. */
 };
@@ -36,11 +32,6 @@ struct section {
 struct section_file {
   char *name;                           /* Can be NULL. */
   size_t num_entries;
-  /* num_includes should be size_t, but as there's no truly portable
-   * printf format for size_t and we need to construct string containing
-   * num_includes with fc_snprintf(), we set for unsigned int. */
-  unsigned int num_includes;
-  unsigned int num_long_comments;
   struct section_list *sections;
   bool allow_duplicates;
   bool allow_digital_boolean;
@@ -71,13 +62,19 @@ void secfile_log(const struct section_file *secfile,
   }
 
 #define SPECHASH_TAG section
-#define SPECHASH_CSTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct section *
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE struct section *
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
 #include "spechash.h"
 
 #define SPECHASH_TAG entry
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct entry *
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE struct entry *
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
 #include "spechash.h"
 
 bool entry_from_token(struct section *psection, const char *name,

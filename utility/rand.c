@@ -37,7 +37,6 @@
 
 /* utility */
 #include "log.h"
-#include "shared.h"
 #include "support.h"            /* TRUE, FALSE */
 
 #include "rand.h"

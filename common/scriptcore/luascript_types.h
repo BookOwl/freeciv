@@ -21,8 +21,6 @@ extern "C" {
 #include "genlist.h"
 
 /* common */
-#include "achievements.h"
-#include "actions.h"
 #include "city.h"
 #include "connection.h"
 #include "events.h"
@@ -41,7 +39,7 @@ extern "C" {
 /* Classes. */
 /* If a new class is defined, an entry should be added to the enum api_types
  * below and the class name should be added to the api_types list in
- * tolua_common_z.pkg. */
+ * tolua_common_a.pkg. */
 typedef struct player Player;
 typedef struct player_ai Player_ai;
 typedef struct city City;
@@ -56,8 +54,6 @@ typedef struct terrain Terrain;
 typedef struct connection Connection;
 typedef enum direction8 Direction;
 typedef struct disaster_type Disaster;
-typedef struct achievement Achievement;
-typedef struct action Action;
 
 typedef void Nonexistent;
 
@@ -101,10 +97,6 @@ typedef const struct city_list_link City_List_Link;
 #define SPECENUM_VALUE14NAME "Direction"
 #define SPECENUM_VALUE15      API_TYPE_DISASTER
 #define SPECENUM_VALUE15NAME "Disaster"
-#define SPECENUM_VALUE16      API_TYPE_ACHIEVEMENT
-#define SPECENUM_VALUE16NAME "Achievement"
-#define SPECENUM_VALUE17      API_TYPE_ACTION
-#define SPECENUM_VALUE17NAME "Action"
 #include "specenum_gen.h"
 
 #ifdef __cplusplus

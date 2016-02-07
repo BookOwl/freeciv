@@ -37,13 +37,17 @@
 #include "optiondlg.h"
 #include "sprite.h"
 
-fc_icons* fc_icons::m_instance = 0;
 
+extern QApplication *qapp;
+fc_icons* fc_icons::m_instance = 0;
 /****************************************************************************
   Constructor
 ****************************************************************************/
 fc_client::fc_client() : QMainWindow()
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
+#endif
   QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
   /**
    * Somehow freeciv-client-common asks to switch to page when all widgets
@@ -91,6 +95,8 @@ fc_client::fc_client() : QMainWindow()
   unit_sel = NULL;
   info_tile_wdg = NULL;
   opened_dialog = NULL;
+  current_unit_id = -1;
+  current_unit_target_id = -1;
   current_file = "";
   status_bar_queue.clear();
   quitting = false;
@@ -98,7 +104,7 @@ fc_client::fc_client() : QMainWindow()
   x_vote = NULL;
   gtd = NULL;
   update_info_timer = nullptr;
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i <= PAGE_GGZ; i++) {
     pages_layout[i] = NULL;
     pages[i] = NULL;
   }
@@ -117,9 +123,10 @@ void fc_client::init()
   central_layout->setContentsMargins(2, 2, 2, 2);
 
   // General part not related to any single page
-  fc_fonts.init_fonts();
   history_pos = -1;
+  fc_fonts.init_fonts();
   menu_bar = new mr_menu();
+  menu_bar->setup_menus();
   setMenuBar(menu_bar);
   status_bar = statusBar();
   status_bar_label = new QLabel;
@@ -163,6 +170,8 @@ void fc_client::init()
   create_game_page();
   pages[PAGE_GAME]->setVisible(false);
 
+  // PAGE_GGZ
+  pages[PAGE_GGZ] = NULL;
   central_layout->addLayout(pages_layout[PAGE_MAIN], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_NETWORK], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_LOAD], 1, 1);
@@ -175,7 +184,6 @@ void fc_client::init()
   connect(switch_page_mapper, SIGNAL(mapped( int)),
                 this, SLOT(switch_page(int)));
   setVisible(true);
-
 }
 
 /****************************************************************************
@@ -192,12 +200,13 @@ fc_client::~fc_client()
 ****************************************************************************/
 void fc_client::main(QApplication *qapp)
 {
+
   qRegisterMetaType<QTextCursor>("QTextCursor");
   qRegisterMetaType<QTextBlock>("QTextBlock");
   fc_allocate_ow_mutex();
   real_output_window_append(_("This is Qt-client for Freeciv."), NULL, -1);
   fc_release_ow_mutex();
-  chat_welcome_message(true);
+  chat_welcome_message();
 
   set_client_state(C_S_DISCONNECTED);
 
@@ -281,7 +290,7 @@ void fc_client::switch_page(int new_pg)
     status_bar->setVisible(true);
   }
 
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i < PAGE_GGZ + 1; i++) {
     if (i == new_page) {
       show_children(pages_layout[i], true);
     } else {
@@ -303,7 +312,7 @@ void fc_client::switch_page(int new_pg)
     gui()->infotab->chtwdg->update_widgets();
     status_bar->setVisible(false);
     gui()->infotab->chtwdg->update_font();
-    if (gui_options.gui_qt_fullscreen){
+    if (fullscreen_mode){
       gui()->showFullScreen();
       gui()->mapview_wdg->showFullScreen();
     } else {
@@ -332,6 +341,7 @@ void fc_client::switch_page(int new_pg)
     connect_password_edit->setDisabled(true);
     connect_confirm_password_edit->setDisabled(true);
     break;
+  case PAGE_GGZ:
   default:
     if (client.conn.used) {
       disconnect_from_server();
@@ -446,11 +456,7 @@ void fc_client::timerEvent(QTimerEvent *event)
 ****************************************************************************/
 void fc_client::quit()
 {
-  QApplication *qapp = current_app();
-
-  if (qapp != nullptr) {
-    qapp->quit();
-  }
+  qapp->quit();
 }
 
 /****************************************************************************
@@ -762,6 +768,7 @@ void fc_font::release_fonts()
   }
 }
 
+
 /****************************************************************************
   Adds new font or overwrite old one
 ****************************************************************************/
@@ -856,17 +863,16 @@ void pregame_options::init()
 
   l1 = new QLabel(_("Number of Players\n(including AI):"));
   l2 = new QLabel(_("AI Skill Level:"));
-  l3 = new QLabel(_("Ruleset:"));
+  l3 = new QLabel(_("Ruleset Version:"));
   layout = new QGridLayout(this);
   max_players = new QSpinBox(this);
   ailevel = new QComboBox(this);
   cruleset = new QComboBox(this);
   max_players->setRange(1, MAX_NUM_PLAYERS);
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = AI_LEVEL_AWAY; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(static_cast<ai_level>(level))) {
-      const char *level_name = ai_level_translated_name(
-                                        static_cast<ai_level>(level));
+      const char *level_name = ai_level_name(static_cast<ai_level>(level));
       ailevel->addItem(level_name, level);
     }
   }
@@ -913,6 +919,7 @@ void pregame_options::ailevel_change(int i)
   k = ailevel->currentData().toInt();
   name = ai_level_cmd(static_cast<ai_level>(k));
   send_chat_printf("/%s", name);
+
 }
 
 /****************************************************************************
