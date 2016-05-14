@@ -18,53 +18,42 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* gen_headers */
-#include "freeciv_config.h"
-
-/* utility */
 #include "support.h" /* bool */
 
-#ifdef FREECIV_HAVE_TINYCTHR
-#include "tinycthread.h"
-#define FREECIV_C11_THR
-#else
-#ifdef FREECIV_HAVE_C11_THREADS
-#include <threads.h>
-#define FREECIV_C11_THR
-#endif /* FREECIV_HAVE_C11_THREADS */
-#endif /* FREECIV_hAVE_TINYCTHR */
-
-#ifdef FREECIV_C11_THR
-
-#define fc_thread      thrd_t
-#define fc_mutex       mtx_t
-#define fc_thread_cond cnd_t
-
-#elif defined(FREECIV_HAVE_PTHREAD)
-
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 
 #define fc_thread      pthread_t
 #define fc_mutex       pthread_mutex_t
 #define fc_thread_cond pthread_cond_t
 
-#elif defined (FREECIV_HAVE_WINTHREADS)
+#elif defined (HAVE_WINTHREADS)
+
+/* No way needed by threading, but if the one including us will ever need it,
+ * it can't be included after we have included <windows.h> directly or indirectly. */
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
 
 #include <windows.h>
 #define fc_thread      HANDLE *
 #define fc_mutex       HANDLE *
 
-#ifndef FREECIV_HAVE_THREAD_COND
+#ifndef HAVE_THREAD_COND
 #define fc_thread_cond char
-#else  /* FREECIV_HAVE_THREAD_COND */
-#warning FREECIV_HAVE_THREAD_COND defined but we have no real Windows implementation
-#endif /* FREECIV_HAVE_THREAD_COND */
+#else  /* HAVE_THREAD_COND */
+#warning HAVE_THREAD_COND defined but we have no real Windows implementation
+#endif /* HAVE_THREAD_COND */
 
 #else /* No pthreads nor winthreads */
 
 #error "No working thread implementation"
 
-#endif /* FREECIV_HAVE_PTHREAD */
+#endif /* HAVE_PTHREAD */
 
 int fc_thread_start(fc_thread *thread, void (*function) (void *arg), void *arg);
 void fc_thread_wait(fc_thread *thread);

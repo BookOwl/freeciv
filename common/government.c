@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -132,7 +132,7 @@ struct government *government_of_city(const struct city *pcity)
 const char *government_rule_name(const struct government *pgovern)
 {
   fc_assert_ret_val(NULL != pgovern, NULL);
-  return rule_name_get(&pgovern->name);
+  return rule_name(&pgovern->name);
 }
 
 /****************************************************************************
@@ -142,8 +142,7 @@ const char *government_rule_name(const struct government *pgovern)
 const char *government_name_translation(const struct government *pgovern)
 {
   fc_assert_ret_val(NULL != pgovern, NULL);
-
-  return name_translation_get(&pgovern->name);
+  return name_translation(&pgovern->name);
 }
 
 /****************************************************************************
@@ -177,7 +176,7 @@ bool can_change_to_government(struct player *pplayer,
   }
 
   return are_reqs_active(pplayer, NULL, NULL, NULL, NULL, NULL, NULL,
-                         NULL, NULL, NULL, &gov->reqs, RPT_CERTAIN);
+			 &gov->reqs, RPT_CERTAIN);
 }
 
 
@@ -239,70 +238,66 @@ static bool ruler_title_check(const struct ruler_title *pruler_title)
 {
   bool ret = TRUE;
 
-  if (!formats_match(rule_name_get(&pruler_title->male), "%s")) {
+  if (!formats_match(rule_name(&pruler_title->male), "%s")) {
     if (NULL != pruler_title->pnation) {
       log_error("\"%s\" male ruler title for nation \"%s\" (nb %d) "
                 "is not a format. It should match \"%%s\"",
-                rule_name_get(&pruler_title->male),
+                rule_name(&pruler_title->male),
                 nation_rule_name(pruler_title->pnation),
                 nation_number(pruler_title->pnation));
     } else {
       log_error("\"%s\" male ruler title is not a format. "
                 "It should match \"%%s\"",
-                rule_name_get(&pruler_title->male));
+                rule_name(&pruler_title->male));
     }
     ret = FALSE;
   }
-
-  if (!formats_match(rule_name_get(&pruler_title->female), "%s")) {
+  if (!formats_match(rule_name(&pruler_title->female), "%s")) {
     if (NULL != pruler_title->pnation) {
       log_error("\"%s\" female ruler title for nation \"%s\" (nb %d) "
                 "is not a format. It should match \"%%s\"",
-                rule_name_get(&pruler_title->female),
+                rule_name(&pruler_title->female),
                 nation_rule_name(pruler_title->pnation),
                 nation_number(pruler_title->pnation));
     } else {
       log_error("\"%s\" female ruler title is not a format. "
                 "It should match \"%%s\"",
-                rule_name_get(&pruler_title->female));
+                rule_name(&pruler_title->female));
     }
     ret = FALSE;
   }
-
-  if (!formats_match(name_translation_get(&pruler_title->male), "%s")) {
+  if (!formats_match(name_translation(&pruler_title->male), "%s")) {
     if (NULL != pruler_title->pnation) {
       log_error("Translation of \"%s\" male ruler title for nation \"%s\" "
                 "(nb %d) is not a format (\"%s\"). It should match \"%%s\"",
-                rule_name_get(&pruler_title->male),
+                rule_name(&pruler_title->male),
                 nation_rule_name(pruler_title->pnation),
                 nation_number(pruler_title->pnation),
-                name_translation_get(&pruler_title->male));
+                name_translation(&pruler_title->male));
     } else {
       log_error("Translation of \"%s\" male ruler title is not a format "
                 "(\"%s\"). It should match \"%%s\"",
-                rule_name_get(&pruler_title->male),
-                name_translation_get(&pruler_title->male));
+                rule_name(&pruler_title->male),
+                name_translation(&pruler_title->male));
     }
     ret = FALSE;
   }
-
-  if (!formats_match(name_translation_get(&pruler_title->female), "%s")) {
+  if (!formats_match(name_translation(&pruler_title->female), "%s")) {
     if (NULL != pruler_title->pnation) {
       log_error("Translation of \"%s\" female ruler title for nation \"%s\" "
                 "(nb %d) is not a format (\"%s\"). It should match \"%%s\"",
-                rule_name_get(&pruler_title->female),
+                rule_name(&pruler_title->female),
                 nation_rule_name(pruler_title->pnation),
                 nation_number(pruler_title->pnation),
-                name_translation_get(&pruler_title->female));
+                name_translation(&pruler_title->female));
     } else {
       log_error("Translation of \"%s\" female ruler title is not a format "
                 "(\"%s\"). It should match \"%%s\"",
-                rule_name_get(&pruler_title->female),
-                name_translation_get(&pruler_title->female));
+                rule_name(&pruler_title->female),
+                name_translation(&pruler_title->female));
     }
     ret = FALSE;
   }
-
   return ret;
 }
 
@@ -414,9 +409,9 @@ const char *ruler_title_for_player(const struct player *pplayer,
     }
   } else {
     fc_snprintf(buf, buf_len,
-                name_translation_get(pplayer->is_male
-                                     ? &pruler_title->male
-                                     : &pruler_title->female),
+                name_translation(pplayer->is_male
+                                 ? &pruler_title->male
+                                 : &pruler_title->female),
                 player_name(pplayer));
   }
 
@@ -492,7 +487,6 @@ static inline void government_init(struct government *pgovern)
       ruler_title_hash_new_full(nation_hash_val, nation_hash_comp,
                                 NULL, NULL, NULL, ruler_title_destroy);
   requirement_vector_init(&pgovern->reqs);
-  pgovern->changed_to_times = 0;
 }
 
 /****************************************************************************

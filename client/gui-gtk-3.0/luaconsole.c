@@ -186,7 +186,7 @@ static void luaconsole_dialog_create(struct luaconsole_data *pdialog)
 
   fc_assert_ret(NULL != pdialog);
 
-  if (GUI_GTK_OPTION(message_chat_location) == GUI_GTK_MSGCHAT_SPLIT) {
+  if (gui_gtk3_message_chat_location == GUI_GTK_MSGCHAT_SPLIT) {
     notebook = right_notebook;
   } else {
     notebook = bottom_notebook;
@@ -268,11 +268,11 @@ static void luaconsole_input_return(GtkEntry *w, gpointer data)
     script_client_do_string(theinput);
 
     if (genlist_size(pdialog->history_list) >= MAX_LUACONSOLE_HISTORY) {
-      void *history_data;
+      void *data;
 
-      history_data = genlist_get(pdialog->history_list, -1);
-      genlist_remove(pdialog->history_list, history_data);
-      free(history_data);
+      data = genlist_get(pdialog->history_list, -1);
+      genlist_remove(pdialog->history_list, data);
+      free(data);
     }
 
     genlist_prepend(pdialog->history_list, fc_strdup(theinput));
@@ -471,7 +471,7 @@ void real_luaconsole_append(const char *astring,
   gtk_text_buffer_insert(buf, &iter, "\n", -1);
   mark = gtk_text_buffer_create_mark(buf, NULL, &iter, TRUE);
 
-  if (GUI_GTK_OPTION(show_chat_message_time)) {
+  if (gui_gtk3_show_chat_message_time) {
     char timebuf[64];
     time_t now;
     struct tm *now_tm;

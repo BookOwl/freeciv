@@ -2,8 +2,7 @@
 
 noinst_LTLIBRARIES = libaicore.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common \
- -I$(top_srcdir)/common/networking -I$(top_srcdir)/dependencies/tinycthread
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I.. -I$(top_srcdir)/common
 
 libaicore_la_SOURCES = 		\
 	aisupport.c		\

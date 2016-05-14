@@ -27,9 +27,6 @@
 /* server */
 #include "srv_main.h"           /* enum server_states */
 
-struct research;
-
-
 void package_chat_msg(struct packet_chat_msg *packet,
                       const struct connection *sender,
                       const struct ft_color color,
@@ -59,12 +56,6 @@ void notify_conn(struct conn_list *dest,
                  const struct ft_color color,
                  const char *format, ...)
                  fc__attribute((__format__ (__printf__, 5, 6)));
-void notify_conn_early(struct conn_list *dest,
-                       const struct tile *ptile,
-                       enum event_type event,
-                       const struct ft_color color,
-                       const char *format, ...)
-                       fc__attribute((__format__ (__printf__, 5, 6)));
 void notify_player(const struct player *pplayer,
                    const struct tile *ptile,
                    enum event_type event,
@@ -72,29 +63,23 @@ void notify_player(const struct player *pplayer,
                    const char *format, ...)
                    fc__attribute((__format__ (__printf__, 5, 6)));
 void notify_embassies(const struct player *pplayer,
+                      const struct player *exclude,
                       const struct tile *ptile,
                       enum event_type event,
                       const struct ft_color color,
                       const char *format, ...)
-                      fc__attribute((__format__ (__printf__, 5, 6)));
+                      fc__attribute((__format__ (__printf__, 6, 7)));
 void notify_team(const struct player *pplayer,
                  const struct tile *ptile,
                  enum event_type event,
                  const struct ft_color color,
                  const char *format, ...)
                  fc__attribute((__format__ (__printf__, 5, 6)));
-void notify_research(const struct research *presearch,
-                     const struct player *exclude,
+void notify_research(const struct player *pplayer,
                      enum event_type event,
                      const struct ft_color color,
                      const char *format, ...)
-                     fc__attribute((__format__ (__printf__, 5, 6)));
-void notify_research_embassies(const struct research *presearch,
-                               const struct player *exclude,
-                               enum event_type event,
-                               const struct ft_color color,
-                               const char *format, ...)
-                               fc__attribute((__format__ (__printf__, 5, 6)));
+                     fc__attribute((__format__ (__printf__, 4, 5)));
 
 /* Event cache. */
 
@@ -118,8 +103,6 @@ void event_cache_add_for_players(const struct packet_chat_msg *packet,
                                  struct event_cache_players *players);
 
 void send_pending_events(struct connection *pconn, bool include_public);
-
-void event_cache_phases_invalidate(void);
 
 struct section_file;
 void event_cache_load(struct section_file *file, const char *section);

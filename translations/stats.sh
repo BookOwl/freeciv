@@ -25,7 +25,7 @@ declare -i PRCT
 for POFILE in $@
 do
   if test "x$POFILE" != "x" ; then
-    CODE=$(echo "$POFILE" | sed -e 's/.po//' -e 's,.*/,,' -e 's,.*\\,,')
+    CODE=$(echo "$POFILE" | sed 's/.po//')
     FSTR="$(LANG=C msgfmt --stat "$POFILE" 2>&1)"
     if echo $FSTR | grep translated >/dev/null ; then
       TRANS=$(echo $FSTR | sed 's/ translated.*//')
@@ -53,25 +53,12 @@ do
 done
 }
 
-if test "x$1" = "x-h" || test "x$1" = "x--help" ; then
-    echo "Usage: $(basename $0) [domain=all]"
-    exit
-fi
-
-if test "x$1" != "x" && test "x$1" != "xall" ; then
-    DOMAINLIST="$1"
-else
-    DOMAINLIST="core nations ruledit"
-fi
-
-for domain in $DOMAINLIST
+for domain in freeciv nations
 do
-  if test "x$1" = "x" ; then
-    echo
-    echo "$domain"
-    echo "----------"
-  fi
-
-  dir_stats "$SRCDIR/$domain/*.po"
-  rm messages.mo
+  echo
+  echo "$domain"
+  echo "----------"
+  ( cd "$SRCDIR/$domain"
+    dir_stats *.po
+    rm messages.mo )
 done

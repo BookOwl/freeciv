@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -25,10 +25,8 @@
 #include "timing.h"
 
 /* common */
-#include "ai.h"
 #include "city.h"
 #include "game.h"
-#include "map.h"
 #include "unit.h"
 
 /* server */
@@ -44,6 +42,39 @@ static struct timer *aitimer[AIT_LAST][2];
 static int recursion[AIT_LAST];
 
 /* General AI logging functions */
+
+/**************************************************************************
+  Log player tech messages.
+**************************************************************************/
+void real_tech_log(const char *file, const char *function, int line,
+                   enum log_level level, bool notify,
+                   const struct player *pplayer, struct advance *padvance,
+                   const char *msg, ...)
+{
+  char buffer[500];
+  char buffer2[500];
+  va_list ap;
+
+  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
+    return;
+  }
+
+  fc_snprintf(buffer, sizeof(buffer), "%s::%s (want %d, dist %d) ",
+              player_name(pplayer),
+              advance_name_by_player(pplayer, advance_number(padvance)),
+              pplayer->ai_common.tech_want[advance_index(padvance)],
+              num_unknown_techs_for_goal(pplayer, advance_number(padvance)));
+
+  va_start(ap, msg);
+  fc_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
+  va_end(ap);
+
+  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
+  if (notify) {
+    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
+  }
+  do_log(file, function, line, FALSE, level, "%s", buffer);
+}
 
 /**************************************************************************
   Log city messages, they will appear like this
@@ -62,7 +93,7 @@ void real_city_log(const char *file, const char *function, int line,
 
   fc_snprintf(buffer, sizeof(buffer), "%s %s(%d,%d) [s%d] {%s} ",
               nation_rule_name(nation_of_city(pcity)),
-              city_name_get(pcity),
+              city_name(pcity),
               TILE_XY(pcity->tile), city_size_get(pcity),
               aibuf);
 

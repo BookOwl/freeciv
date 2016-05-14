@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 
 #include "log.h"
 
-#define MAX_LEN_LOG_LINE 5120
+#define MAX_LEN_LOG_LINE 512
 
 static void log_write(FILE *fs, enum log_level level, bool print_from_where,
                       const char *where, const char *message);
@@ -64,10 +64,6 @@ static int log_num_files = 0;
 static struct log_fileinfo *log_files = NULL;
 #endif /* DEBUG */
 
-static char *log_level_names[] = {
-  "Fatal", "Error", "Normal", "Verbose", "Debug", NULL
-};
-
 /* A helper variable to indicate that there is no log message. The '%s' is
  * added to use it as format string as well as the argument. */
 const char *nologmsg = "nologmsg:%s";
@@ -89,37 +85,24 @@ bool log_parse_level_str(const char *level_str, enum log_level *ret_level)
   const char *c;
   int n = 0;                    /* number of filenames */
   int level;
-  int ln;
-  int first_len = -1;
 #ifdef DEBUG
   const char *tok;
   int i;
-  char *dupled;
+  char *dup;
   bool ret = TRUE;
 #endif /* DEBUG */
 
   c = level_str;
   n = 0;
   while ((c = strchr(c, ':'))) {
-    if (first_len < 0) {
-      first_len = c - level_str;
-    }
     c++;
     n++;
   }
   if (n == 0) {
     /* Global log level. */
     if (!str_to_int(level_str, &level)) {
-      level = -1;
-      for (ln = 0; log_level_names[ln] != NULL && level < 0; ln++) {
-        if (!fc_strncasecmp(level_str, log_level_names[ln], strlen(level_str))) {
-          level = ln;
-        }
-      }
-      if (level < 0) {
-        fc_fprintf(stderr, _("Bad log level \"%s\".\n"), level_str);
-        return FALSE;
-      }
+      fc_fprintf(stderr, _("Bad log level \"%s\".\n"), level_str);
+      return FALSE;
     }
     if (level >= LOG_FATAL && level <= max_level) {
       if (NULL != ret_level) {
@@ -141,35 +124,25 @@ bool log_parse_level_str(const char *level_str, enum log_level *ret_level)
 
 #ifdef DEBUG
   c = level_str;
-  level = -1;
-  if (first_len > 0) {
-    for (ln = 0; log_level_names[ln] != NULL && level < 0; ln++) {
-      if (!fc_strncasecmp(level_str, log_level_names[ln], first_len)) {
-        level = ln;
-      }
-    }
-  }
-  if (level < 0) {
-    level = c[0] - '0';
-    if (c[1] == ':') {
-      if (level < LOG_FATAL || level > max_level) {
-        fc_fprintf(stderr, _("Bad log level %c in \"%s\".\n"),
-                   c[0], level_str);
-        return FALSE;
-      }
-    } else {
-      fc_fprintf(stderr, _("Badly formed log level argument \"%s\".\n"),
-                 level_str);
+  level = c[0] - '0';
+  if (c[1] == ':') {
+    if (level < LOG_FATAL || level > max_level) {
+      fc_fprintf(stderr, _("Bad log level %d in \"%s\".\n"),
+                 level, level_str);
       return FALSE;
     }
+  } else {
+    fc_fprintf(stderr, _("Badly formed log level argument \"%s\".\n"),
+               level_str);
+    return FALSE;
   }
   i = log_num_files;
   log_num_files += n;
   log_files = fc_realloc(log_files,
                          log_num_files * sizeof(struct log_fileinfo));
 
-  dupled = fc_strdup(c + 2);
-  tok = strtok(dupled, ":");
+  dup = fc_strdup(c + 2);
+  tok = strtok(dup, ":");
 
   if (!tok) {
     fc_fprintf(stderr, _("Badly formed log level argument \"%s\".\n"),
@@ -222,7 +195,7 @@ bool log_parse_level_str(const char *level_str, enum log_level *ret_level)
   }
 
 out:
-  free(dupled);
+  free(dup);
   return ret;
 #else  /* DEBUG */
   fc_fprintf(stderr, _("Freeciv must be compiled with the DEBUG flag "
@@ -319,18 +292,6 @@ enum log_level log_get_level(void)
   return fc_log_level;
 }
 
-/**************************************************************************
-  Return name of the given log level
-**************************************************************************/
-const char *log_level_name(enum log_level lvl)
-{
-  if (lvl < LOG_FATAL || lvl > LOG_DEBUG) {
-    return NULL;
-  }
-
-  return log_level_names[lvl];
-}
-
 #ifdef DEBUG
 /**************************************************************************
   Returns wether we should do an output for this level, in this file,
@@ -397,22 +358,23 @@ static void log_write(FILE *fs, enum log_level level, bool print_from_where,
 *****************************************************************************/
 void vdo_log(const char *file, const char *function, int line,
              bool print_from_where, enum log_level level,
-             char *buf, int buflen, const char *message, va_list args)
+             const char *message, va_list args)
 {
   char buf_where[MAX_LEN_LOG_LINE];
+  char buf_msg[MAX_LEN_LOG_LINE];
 
   /* There used to be check against recursive logging here, but
    * the way it worked prevented any kind of simultaneous logging,
    * not just recursive. Multiple threads should be able to log
    * simultaneously. */
 
-  fc_vsnprintf(buf, buflen, message, args);
+  fc_vsnprintf(buf_msg, sizeof(buf_msg), message, args);
   fc_snprintf(buf_where, sizeof(buf_where), "in %s() [%s::%d]: ",
               function, file, line);
 
   /* In the default configuration log_pre_callback is equal to log_real(). */
   if (log_pre_callback) {
-    log_pre_callback(level, print_from_where, buf_where, buf);
+    log_pre_callback(level, print_from_where, buf_where, buf_msg);
   }
 }
 
@@ -509,12 +471,10 @@ void do_log(const char *file, const char *function, int line,
             bool print_from_where, enum log_level level,
             const char *message, ...)
 {
-  char buf[MAX_LEN_LOG_LINE];
   va_list args;
 
   va_start(args, message);
-  vdo_log(file, function, line, print_from_where, level,
-          buf, MAX_LEN_LOG_LINE, message, args);
+  vdo_log(file, function, line, print_from_where, level, message, args);
   va_end(args);
 }
 
@@ -527,7 +487,7 @@ void fc_assert_set_fatal(int fatal_assertions)
   fc_fatal_assertions = fatal_assertions;
 }
 
-#ifndef FREECIV_NDEBUG
+#ifndef NDEBUG
 /**************************************************************************
   Returns wether the fc_assert* macros should raise a signal on failed
   assertion.
@@ -544,12 +504,10 @@ void fc_assert_fail(const char *file, const char *function, int line,
 
   if (NULL != message && NOLOGMSG != message) {
     /* Additional message. */
-    char buf[MAX_LEN_LOG_LINE];
     va_list args;
 
     va_start(args, message);
-    vdo_log(file, function, line, FALSE, level, buf, MAX_LEN_LOG_LINE,
-            message, args);
+    vdo_log(file, function, line, FALSE, level, message, args);
     va_end(args);
   }
 
@@ -562,4 +520,4 @@ void fc_assert_fail(const char *file, const char *function, int line,
     raise(fc_fatal_assertions);
   }
 }
-#endif /* FREECIV_NDEBUG */
+#endif /* NDEBUG */

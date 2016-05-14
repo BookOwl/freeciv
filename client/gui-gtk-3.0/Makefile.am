@@ -1,23 +1,16 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LTLIBRARIES = libgui-gtk3.la
-AM_CPPFLAGS = \
-	-I$(srcdir)/.. \
-	-I$(srcdir)/../include \
-	-I$(top_srcdir)/utility \
-	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/common/networking \
-	-I$(top_srcdir)/common/scriptcore \
-	-I$(srcdir)/../agents \
-	-I$(srcdir)/../luascript \
-	-I$(top_srcdir)/dependencies/tinycthread \
-	$(gui_gtk3_cflags) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I$(srcdir)/.. -I$(srcdir)/../include \
+	-I$(top_srcdir)/utility -I$(top_srcdir)/common \
+	-I$(top_srcdir)/common/aicore -I$(top_srcdir)/common/scriptcore \
+	-I$(srcdir)/../agents  -I$(srcdir)/../luascript \
+	$(gui_gtk3_cflags) $(GGZ_GTK_INCLUDES) $(SOUND_CFLAGS)
 
 libgui_gtk3_la_SOURCES = \
-	action_dialog.c \
 	canvas.c	\
 	canvas.h	\
+	caravan_dialog.c \
 	chatline.h	\
 	chatline.c	\
 	choice_dialog.c	\
@@ -42,14 +35,17 @@ libgui_gtk3_la_SOURCES = \
 	editgui.h	\
 	editprop.c	\
 	editprop.h	\
+	embedggz.c	\
+	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\
 	gamedlgs.c	\
-	gamedlgs.h	\
 	gotodlg.c	\
 	gotodlg.h	\
 	graphics.c	\
 	graphics.h	\
+	gtkpixcomm.c	\
+	gtkpixcomm.h	\
 	gui_main.c	\
 	gui_main.h	\
 	gui_stuff.c	\
@@ -91,13 +87,11 @@ libgui_gtk3_la_SOURCES = \
 	theme_dlg.c	\
 	themes.c	\
 	tileset_dlg.c	\
-	transportdlg.c	\
-	transportdlg.h	\
 	unitselect.h	\
 	unitselect.c	\
 	voteinfo_bar.c	\
 	voteinfo_bar.h	\
 	wldlg.c		\
-	wldlg.h
+	wldlg.h	
 
 libgui_gtk3_la_LIBADD = -lm

@@ -14,19 +14,26 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <signal.h>             /* SIGTERM and kill */
 #include <string.h>
 #include <time.h>
 
+/* Must be before <windows.h> */
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+
 #ifdef WIN32_NATIVE
 #include <windows.h>
 #endif
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>		/* fchmod */
 #endif
 
@@ -41,7 +48,6 @@ Freeciv - Copyright (C) 2004 - The Freeciv Project
 /* utility */
 #include "astring.h"
 #include "capability.h"
-#include "deprecations.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "ioz.h"
@@ -196,22 +202,19 @@ bool client_start_server(void)
 #else /* HAVE_USABLE_FORK || WIN32_NATIVE */
   char buf[512];
   int connect_tries = 0;
-  char savesdir[MAX_LEN_PATH];
-  char scensdir[MAX_LEN_PATH];
-  char *storage;
-
 #if !defined(HAVE_USABLE_FORK)
-  /* Above also implies that this is FREECIV_MS_WINDOWS ->
+  /* Above also implies that this is WIN32_NATIVE ->
    * Win32 that can't use fork() */
   STARTUPINFO si;
   PROCESS_INFORMATION pi;
 
+  char savesdir[MAX_LEN_PATH];
+  char scensdir[MAX_LEN_PATH];
   char options[512];
-  char *depr;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   char cmdline1[512];
   char cmdline2[512];
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   char cmdline3[512];
   char cmdline4[512];
   char logcmdline[512];
@@ -221,11 +224,11 @@ bool client_start_server(void)
   char scenscmdline[512];
 #endif /* !HAVE_USABLE_FORK -> WIN32_NATIVE */
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   enum fc_addr_family family = FC_ADDR_ANY;
 #else
   enum fc_addr_family family = FC_ADDR_IPV4;
-#endif /* FREECIV_IPV6_SUPPORT */
+#endif /* IPV6_SUPPORT */
 
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
@@ -248,18 +251,10 @@ bool client_start_server(void)
     return FALSE;
   }
 
-  storage = freeciv_storage_dir();
-  if (storage == NULL) {
-    output_window_append(ftc_client, _("Cannot find freeciv storage directory"));
-    output_window_append(ftc_client,
-                         _("You'll have to start server manually. Sorry..."));
-    return FALSE;
-  }
-
 #ifdef HAVE_USABLE_FORK
   {
     int argc = 0;
-    const int max_nargs = 23;
+    const int max_nargs = 22;
     char *argv[max_nargs + 1];
     char port_buf[32];
     char dbg_lvl_buf[32]; /* Do not move this inside the block where it gets filled,
@@ -268,8 +263,6 @@ bool client_start_server(void)
 
     /* Set up the command-line parameters. */
     fc_snprintf(port_buf, sizeof(port_buf), "%d", internal_server_port);
-    fc_snprintf(savesdir, sizeof(savesdir), "%s" DIR_SEPARATOR "saves", storage);
-    fc_snprintf(scensdir, sizeof(scensdir), "%s" DIR_SEPARATOR "scenarios", storage);
     argv[argc++] = "freeciv-server";
     argv[argc++] = "-p";
     argv[argc++] = port_buf;
@@ -279,16 +272,17 @@ bool client_start_server(void)
     argv[argc++] = "1";
     argv[argc++] = "-e";
     argv[argc++] = "--saves";
-    argv[argc++] = savesdir;
+    argv[argc++] = "~/.freeciv/saves";
     argv[argc++] = "--scenarios";
-    argv[argc++] = scensdir;
+    argv[argc++] = "~/.freeciv/scenarios";
     argv[argc++] = "-A";
     argv[argc++] = "none";
     if (logfile) {
       enum log_level llvl = log_get_level();
 
       argv[argc++] = "--debug";
-      fc_snprintf(dbg_lvl_buf, sizeof(dbg_lvl_buf), "%d", llvl);
+      /* Use of LOG_DEBUG would require limiting also the logged files. */
+      fc_snprintf(dbg_lvl_buf, sizeof(dbg_lvl_buf), "%d", llvl < LOG_DEBUG ? llvl : LOG_DEBUG - 1);
       argv[argc++] = dbg_lvl_buf;
       argv[argc++] = "--log";
       argv[argc++] = logfile;
@@ -301,22 +295,18 @@ bool client_start_server(void)
       argv[argc++] = "--file";
       argv[argc++] = savefile;
     }
-    if (are_deprecation_warnings_enabled()) {
-      argv[argc++] = "--warnings";
-    }
     argv[argc] = NULL;
     fc_assert(argc <= max_nargs);
 
     {
-      struct astring srv_cmdline_opts = ASTRING_INIT;
+      struct astring options = ASTRING_INIT;
       int i;
-
       for (i = 1; i < argc; i++) {
-        astr_add(&srv_cmdline_opts, i == 1 ? "%s" : " %s", argv[i]);
+        astr_add(&options, i == 1 ? "%s" : " %s", argv[i]);
       }
       log_verbose("Arguments to spawned server: %s",
-                  astr_str(&srv_cmdline_opts));
-      astr_free(&srv_cmdline_opts);
+                  astr_str(&options));
+      astr_free(&options);
     }
 
     server_pid = fork();
@@ -395,7 +385,9 @@ bool client_start_server(void)
         internal_to_local_string_malloc(logfile);
     enum log_level llvl = log_get_level();
 
-    fc_snprintf(logcmdline, sizeof(logcmdline), " --debug %d --log %s", llvl,
+    fc_snprintf(logcmdline, sizeof(logcmdline), " --debug %d --log %s",
+                /* Use of LOG_DEBUG would require limiting also the logged files. */
+                llvl < LOG_DEBUG ? llvl : LOG_DEBUG - 1,
                 logfile_in_local_encoding);
     free(logfile_in_local_encoding);
   }
@@ -416,23 +408,17 @@ bool client_start_server(void)
     free(savefile_in_local_encoding);
   }
 
-  fc_snprintf(savesdir, sizeof(savesdir), "%s" DIR_SEPARATOR "saves", storage);
+  interpret_tilde(savesdir, sizeof(savesdir), "~/.freeciv/saves");
   internal_to_local_string_buffer(savesdir, savescmdline, sizeof(savescmdline));
 
-  fc_snprintf(scensdir, sizeof(scensdir), "%s" DIR_SEPARATOR "scenarios", storage);
+  interpret_tilde(scensdir, sizeof(scensdir), "~/.freeciv/scenarios");
   internal_to_local_string_buffer(scensdir, scenscmdline, sizeof(scenscmdline));
-
-  if (are_deprecation_warnings_enabled()) {
-    depr = " --warnings";
-  } else {
-    depr = "";
-  }
 
   fc_snprintf(options, sizeof(options),
               "-p %d --bind localhost -q 1 -e%s%s%s --saves \"%s\" "
-              "--scenarios \"%s\" -A none %s",
+              "--scenarios \"%s\" -A none",
               internal_server_port, logcmdline, scriptcmdline, savefilecmdline,
-              savescmdline, scenscmdline, depr);
+              savescmdline, scenscmdline);
 #ifdef DEBUG
   fc_snprintf(cmdline1, sizeof(cmdline1), "./fcser %s", options);
   fc_snprintf(cmdline2, sizeof(cmdline2),
@@ -532,16 +518,16 @@ bool client_start_server(void)
    * Don't send it now, it will be sent to the server when receiving the
    * server setting infos. */
   {
-    char topobuf[16];
+    char buf[16];
 
-    fc_strlcpy(topobuf, "WRAPX", sizeof(topobuf));
+    fc_strlcpy(buf, "WRAPX", sizeof(buf));
     if (tileset_is_isometric(tileset) && 0 == tileset_hex_height(tileset)) {
-      fc_strlcat(topobuf, "|ISO", sizeof(topobuf));
+      fc_strlcat(buf, "|ISO", sizeof(buf));
     }
     if (0 < tileset_hex_width(tileset) || 0 < tileset_hex_height(tileset)) {
-      fc_strlcat(topobuf, "|HEX", sizeof(topobuf));
+      fc_strlcat(buf, "|HEX", sizeof(buf));
     }
-    desired_settable_option_update("topology", topobuf, FALSE);
+    desired_settable_option_update("topology", buf, FALSE);
   }
 
   return TRUE;
@@ -576,20 +562,17 @@ void send_client_wants_hack(const char *filename)
   if (filename[0] != '\0') {
     struct packet_single_want_hack_req req;
     struct section_file *file;
-    const char *sdir = freeciv_storage_dir();
-
-    if (sdir == NULL) {
-      return;
-    }
 
     if (!is_safe_filename(filename)) {
       return;
     }
 
-    make_dir(sdir);
+    /* get the full filename path */
+    interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
+		    "~/.freeciv/");
+    make_dir(challenge_fullname);
 
-    fc_snprintf(challenge_fullname, sizeof(challenge_fullname),
-                "%s" DIR_SEPARATOR "%s", sdir, filename);
+    sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
     randomize_string(req.token, sizeof(req.token));
@@ -666,7 +649,7 @@ void handle_ruleset_choices(const struct packet_ruleset_choices *packet)
       rulesets[i][len - suf_len] = '\0';
     }
   }
-  set_rulesets(packet->ruleset_count, rulesets);
+  gui_set_rulesets(packet->ruleset_count, rulesets);
 
   for (i = 0; i < packet->ruleset_count; i++) {
     free(rulesets[i]);
@@ -675,7 +658,7 @@ void handle_ruleset_choices(const struct packet_ruleset_choices *packet)
 
 /**************************************************************************
   Called by the GUI code when the user sets the ruleset.  The ruleset
-  passed in here should match one of the strings given to set_rulesets().
+  passed in here should match one of the strings given to gui_set_rulesets.
 **************************************************************************/
 void set_ruleset(const char *ruleset)
 {

@@ -195,11 +195,11 @@ void chat_welcome_message(bool gui_has_copying_mitem)
 **************************************************************************/
 void write_chatline_content(const char *txt)
 {
-  FILE *fp = fc_fopen(gui_options.default_chat_logfile, "w");
+  FILE *fp = fc_fopen(default_chat_logfile, "w");
   char buf[512];
 
   fc_snprintf(buf, sizeof(buf), _("Exporting output window to '%s' ..."),
-              gui_options.default_chat_logfile);
+              default_chat_logfile);
   output_window_append(ftc_client, buf);
 
   if (fp) {

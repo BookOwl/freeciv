@@ -486,7 +486,7 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
                                      bool reorder_notebook)
 {
   const int category = option_category(poption);
-  GtkWidget *main_hbox, *ebox, *w = NULL;
+  GtkWidget *hbox, *ebox, *w = NULL;
 
   fc_assert(NULL == option_get_gui_data(poption));
 
@@ -525,11 +525,11 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
   g_signal_connect(ebox, "button_press_event",
                    G_CALLBACK(option_button_press_callback), poption);
 
-  main_hbox = gtk_hbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(main_hbox),
+  hbox = gtk_hbox_new(FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(hbox),
                      gtk_label_new(option_description(poption)),
                      FALSE, FALSE, 5);
-  gtk_container_add(GTK_CONTAINER(ebox), main_hbox);
+  gtk_container_add(GTK_CONTAINER(ebox), hbox);
 
   switch (option_type(poption)) {
   case OT_BOOLEAN:
@@ -651,7 +651,7 @@ static void option_dialog_option_add(struct option_dialog *pdialog,
               option_number(poption), option_name(poption));
   } else {
     g_object_set_data(G_OBJECT(w), "main_widget", ebox);
-    gtk_box_pack_end(GTK_BOX(main_hbox), w, FALSE, FALSE, 0);
+    gtk_box_pack_end(GTK_BOX(hbox), w, FALSE, FALSE, 0);
   }
 
   gtk_widget_show_all(ebox);
@@ -954,7 +954,7 @@ static void option_dialog_option_apply(struct option *poption)
       color_to_string(color, bg_color_text, sizeof(bg_color_text));
 
       (void) option_color_set(poption,
-                              ft_color_construct(fg_color_text, bg_color_text));
+                              ft_color(fg_color_text, bg_color_text));
     }
     break;
 

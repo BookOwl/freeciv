@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,7 +28,6 @@
 // common
 #include "game.h"
 #include "government.h"
-#include "goto.h"
 #include "name_translation.h"
 #include "road.h"
 #include "unit.h"
@@ -38,6 +37,9 @@
 #include "control.h"
 #include "helpdata.h"
 
+// client/include
+#include "helpdlg_g.h"
+
 // gui-qt
 #include "qtg_cxxside.h"
 #include "fc_client.h"
@@ -46,7 +48,6 @@
 #include "dialogs.h"
 #include "gotodlg.h"
 #include "gui_main.h"
-#include "mapctrl.h"
 #include "messagedlg.h"
 #include "plrdlg.h"
 #include "ratesdlg.h"
@@ -57,43 +58,14 @@
 #include "menu.h"
 
 extern QApplication *qapp;
-
-/**************************************************************************
-  Constructor for units used in delayed orders
-**************************************************************************/
-qfc_units_list::qfc_units_list()
-{
-}
-
-/**************************************************************************
-  Adds givent unit to list
-**************************************************************************/
-void qfc_units_list::add(qfc_delayed_unit_item* fui)
-{
-  unit_list.append(fui);
-}
-
-/**************************************************************************
-  Clears list of units
-**************************************************************************/
-void qfc_units_list::clear()
-{
-  unit_list.clear();
-}
-
 /**************************************************************************
   Initialize menus (sensitivity, name, etc.) based on the
   current state and current ruleset, etc.  Call menus_update().
 **************************************************************************/
 void real_menus_init(void)
 {
-  gui()->menu_bar->clear();
-  gui()->menu_bar->setup_menus();
-
+  /* PORTME */
   gov_menu::create_all();
-
-  /* A new ruleset may have been loaded. */
-  go_act_menu::reset_all();
 }
 
 /**************************************************************************
@@ -103,12 +75,8 @@ void real_menus_init(void)
 void real_menus_update(void)
 {
   if (C_S_RUNNING == client_state()) {
-    gui()->menuBar()->setVisible(true);
     gui()->menu_bar->menus_sensitive();
     gov_menu::update_all();
-    go_act_menu::update_all();
-  } else {
-    gui()->menuBar()->setVisible(false);
   }
 }
 
@@ -123,7 +91,7 @@ static const char *get_tile_change_menu_text(struct tile *ptile,
   struct tile *newtile = tile_virtual_new(ptile);
   const char *text;
 
-  tile_apply_activity(newtile, activity, NULL);
+  tile_apply_activity(newtile, activity);
   text = tile_get_info_text(newtile, FALSE, 0);
   tile_virtual_destroy(newtile);
   return text;
@@ -241,7 +209,7 @@ void gov_menu::create() {
   for (i = 0; i < gov_count; ++i) {
     gov = government_by_number(i);
     if (gov != revol_gov) { // Skip revolution goverment
-      action = addAction(government_name_translation(gov));
+      action = addAction(name_translation(&gov->name));
       // We need to keep track of the gov <-> action mapping to be able to
       // set enabled/disabled depending on available govs.
       actions.append(action);
@@ -320,177 +288,6 @@ void gov_menu::update_all()
   }
 }
 
-/**************************************************************************
-  Instantiate a new goto and act sub menu.
-**************************************************************************/
-go_act_menu::go_act_menu(QWidget* parent)
-  : QMenu(_("Go to and..."), parent)
-{
-  go_act_mapper = new QSignalMapper(this);
-
-  /* Will need auto updates etc. */
-  instances << this;
-}
-
-/**************************************************************************
-  Destructor.
-**************************************************************************/
-go_act_menu::~go_act_menu()
-{
-  /* Updates are no longer needed. */
-  instances.remove(this);
-}
-
-/**************************************************************************
-  Reset the goto and act menu so it will be recreated.
-**************************************************************************/
-void go_act_menu::reset()
-{
-  QAction *action;
-
-  /* Clear out each existing menu item. */
-  foreach(action, QWidget::actions()) {
-    removeAction(action);
-    action->deleteLater();
-  }
-
-  /* Clear menu item to action ID mapping. */
-  items.clear();
-
-  /* Reset the Qt signal mapper */
-  go_act_mapper->deleteLater();
-  go_act_mapper = new QSignalMapper(this);
-}
-
-/**************************************************************************
-  Fill the new goto and act sub menu with menu items.
-**************************************************************************/
-void go_act_menu::create()
-{
-  QAction *item;
-  int tgt_kind_group;
-
-  /* Group goto and perform action menu items by target kind. */
-  for (tgt_kind_group = 0; tgt_kind_group < ATK_COUNT; tgt_kind_group++) {
-    action_iterate(action_id) {
-      if (action_get_actor_kind(action_id) != AAK_UNIT) {
-        /* This action isn't performed by a unit. */
-        continue;
-      }
-
-      if (action_get_target_kind(action_id) != tgt_kind_group) {
-        /* Wrong group. */
-        continue;
-      }
-
-      if (action_requires_details(action_id)) {
-        /* This menu doesn't support specifying a detailed target (think
-         * "Go to and..."->"Industrial Sabotage"->"City Walls") for the
-         * action order. */
-        continue;
-      }
-
-      if (action_by_number(action_id)->max_distance > 1) {
-        /* The order system doesn't support actions that can be done to a
-         * target that isn't at or next to the actor unit's tile.
-         *
-         * Full explanation in handle_unit_orders(). */
-        continue;
-      }
-
-      /* Create and add the menu item. It will be hidden or shown based on
-       * unit type.  */
-      item = addAction(action_get_ui_name(action_id));
-      items.insert(item, action_id);
-      connect(item, SIGNAL(triggered()),
-              go_act_mapper, SLOT(map()));
-      go_act_mapper->setMapping(item, action_id);
-    } action_iterate_end;
-  }
-
-  connect(go_act_mapper, SIGNAL(mapped(int)), this, SLOT(start_go_act(int)));
-}
-
-/**************************************************************************
-  Update the goto and act menu based on the selected unit(s)
-**************************************************************************/
-void go_act_menu::update()
-{
-  bool can_do_something = false;
-
-  if (!actions_are_ready()) {
-    /* Nothing to do. */
-    return;
-  }
-
-  if (items.isEmpty()) {
-    /* The goto and act menu needs menu items. */
-    create();
-  }
-
-  /* Enable a menu item if it is theoretically possible that one of the
-   * selected units can perform it. Checking if the action can be performed
-   * at the current tile is pointless since it should be performed at the
-   * target tile. */
-  foreach(QAction *item, items.keys()) {
-    if (units_can_do_action(get_units_in_focus(),
-                            items.value(item), TRUE)) {
-      item->setVisible(true);
-      can_do_something = true;
-    } else {
-      item->setVisible(false);
-    }
-  }
-
-  if (can_do_something) {
-    /* At least one menu item is enabled for one of the selected units. */
-    setEnabled(true);
-  } else {
-    /* No menu item is enabled any of the selected units. */
-    setEnabled(false);
-  }
-}
-
-/**************************************************************************
-  Activate the goto system
-**************************************************************************/
-void go_act_menu::start_go_act(int action_id)
-{
-  /* This menu doesn't support specifying a detailed target (think
-   * "Go to and..."->"Industrial Sabotage"->"City Walls") for the
-   * action order. */
-  fc_assert_ret_msg(!action_requires_details(action_id),
-                    "Underspecified target for %s.",
-                    action_get_ui_name(action_id));
-
-  request_unit_goto(ORDER_PERFORM_ACTION, action_id, EXTRA_NONE);
-}
-
-/**************************************************************************
-  Store all goto and act menu items so they can be updated etc
-**************************************************************************/
-QSet<go_act_menu *> go_act_menu::instances;
-
-/**************************************************************************
-  Reset all goto and act menu instances.
-**************************************************************************/
-void go_act_menu::reset_all()
-{
-  foreach (go_act_menu *m, instances) {
-    m->reset();
-  }
-}
-
-/**************************************************************************
-  Update all goto and act menu instances
-**************************************************************************/
-void go_act_menu::update_all()
-{
-  foreach (go_act_menu *m, instances) {
-    m->update();
-  }
-}
-
 /****************************************************************************
   Applies activity filter to given unit
 ****************************************************************************/
@@ -508,48 +305,6 @@ void mr_menu::apply_filter(struct unit *punit)
   if (u_filter.any_activity){
     apply_2nd_filter(punit);
   }
-}
-
-/****************************************************************************
-  Predicts last unit position
-****************************************************************************/
-struct tile *mr_menu::find_last_unit_pos(unit *punit, int pos)
-{
-  qfc_delayed_unit_item *fui;
-  struct tile *ptile = nullptr;
-  struct unit *zunit;
-  struct unit *qunit;
-
-  int i = 0;
-  qunit = punit;
-  foreach (fui, units_list.unit_list) {
-    zunit = unit_list_find(client_player()->units, fui->id);
-    i++;
-    if (i >= pos) {
-      punit = qunit;
-      return ptile;
-    }
-    if (zunit == nullptr) {
-      continue;
-    }
-
-    if (punit == zunit) {  /* Unit found */
-      /* Unit was ordered to attack city so it might stay in
-         front of that city */
-      if (is_non_allied_city_tile(fui->ptile, unit_owner(punit))) {
-        ptile = tile_before_end_path(punit, fui->ptile);
-        if (ptile == nullptr) {
-          ptile = fui->ptile;
-        }
-      } else {
-        ptile = fui->ptile;
-      }
-      /* unit found in tranporter */
-    } else if (unit_contained_in(punit, zunit)) {
-      ptile = fui->ptile;
-    }
-  }
-  return nullptr;
 }
 
 /****************************************************************************
@@ -604,7 +359,7 @@ void mr_menu::unit_select(struct unit_list *punits,
   pplayer = unit_owner(punit_first);
   unit_list_iterate(punits, punit) {
     if (seltype == SELTYPE_SAME) {
-      types.append(unit_type_get(punit));
+      types.append(unit_type(punit));
     }
 
     ptile = unit_tile(punit);
@@ -622,7 +377,7 @@ void mr_menu::unit_select(struct unit_list *punits,
           continue;
         }
         if (seltype == SELTYPE_SAME
-            && !types.contains(unit_type_get(punit))) {
+            && !types.contains(unit_type(punit))) {
           continue;
         }
         apply_filter(punit);
@@ -632,7 +387,7 @@ void mr_menu::unit_select(struct unit_list *punits,
     unit_list_iterate(pplayer->units, punit) {
       ptile = unit_tile(punit);
       if ((seltype == SELTYPE_SAME
-           && !types.contains(unit_type_get(punit)))
+           && !types.contains(unit_type(punit)))
           || (selloc == SELLOC_CONT
               && !conts.contains(ptile->continent))) {
         continue;
@@ -659,7 +414,6 @@ void mr_menu::setup_menus()
 {
   QAction *act;
   QMenu *pr;
-  delayed_order = false;
 
   /* Game Menu */
   menu = this->addMenu(_("Game"));
@@ -676,7 +430,7 @@ void mr_menu::setup_menus()
   connect(act, SIGNAL(triggered()), this, SLOT(save_options_now()));
   act = menu->addAction(_("Save Options on Exit"));
   act->setCheckable(true);
-  act->setChecked(gui_options.save_options_on_exit);
+  act->setChecked(save_options_on_exit);
   menu = pr;
   menu->addSeparator();
   act = menu->addAction(_("Save Game"));
@@ -705,7 +459,7 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("Fullscreen"));
   act->setShortcut(QKeySequence(tr("alt+return")));
   act->setCheckable(true);
-  act->setChecked(gui_options.gui_qt_fullscreen);
+  act->setChecked(fullscreen_mode);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_fullscreen()));
   menu->addSeparator();
   minimap_status = menu->addAction(_("Minimap"));
@@ -726,61 +480,56 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("City Outlines"));
   act->setShortcut(QKeySequence(tr("Ctrl+y")));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_outlines);
+  act->setChecked(draw_city_outlines);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_outlines()));
   act = menu->addAction(_("City Output"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_output);
+  act->setChecked(draw_city_output);
   act->setShortcut(QKeySequence(tr("ctrl+w")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_output()));
   act = menu->addAction(_("Map Grid"));
   act->setShortcut(QKeySequence(tr("ctrl+g")));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_map_grid);
+  act->setChecked(draw_map_grid);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_map_grid()));
   act = menu->addAction(_("National Borders"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_borders);
+  act->setChecked(draw_borders);
   act->setShortcut(QKeySequence(tr("ctrl+b")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_borders()));
-  act = menu->addAction(_("Native Tiles"));
-  act->setCheckable(true);
-  act->setChecked(gui_options.draw_native);
-  act->setShortcut(QKeySequence(tr("ctrl+shift+n")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_native_tiles()));
   act = menu->addAction(_("City Full Bar"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_full_citybar);
+  act->setChecked(draw_full_citybar);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_fullbar()));
   act = menu->addAction(_("City Names"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_names);
+  act->setChecked(draw_city_names);
   act->setShortcut(QKeySequence(tr("ctrl+n")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_names()));
   act = menu->addAction(_("City Growth"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_growth);
+  act->setChecked(draw_city_growth);
   act->setShortcut(QKeySequence(tr("ctrl+r")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_growth()));
   act = menu->addAction(_("City Production Levels"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_productions);
+  act->setChecked(draw_city_productions);
   act->setShortcut(QKeySequence(tr("ctrl+p")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_production()));
   act = menu->addAction(_("City Buy Cost"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_buycost);
+  act->setChecked(draw_city_buycost);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_buycost()));
   act = menu->addAction(_("City Traderoutes"));
   act->setCheckable(true);
-  act->setChecked(gui_options.draw_city_trade_routes);
+  act->setChecked(draw_city_trade_routes);
   act->setShortcut(QKeySequence(tr("ctrl+d")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_city_traderoutes()));
 
   /* Select Menu */
   menu = this->addMenu(_("Select"));
   act = menu->addAction(_("Single Unit (Unselect Others)"));
-  act->setShortcut(QKeySequence(tr("shift+z")));
+  act->setShortcut(QKeySequence(tr("z")));
   menu_list.insertMulti(STANDARD, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_select_one()));
   act = menu->addAction(_("All On Tile"));
@@ -880,10 +629,6 @@ void mr_menu::setup_menus()
   act->setShortcut(QKeySequence(tr("g")));
   menu_list.insertMulti(STANDARD, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_goto()));
-
-  /* The goto and act sub menu is handled as a separate object. */
-  menu->addMenu(new go_act_menu());
-
   act = menu->addAction(_("Go to Nearest City"));
   act->setShortcut(QKeySequence(tr("shift+g")));
   menu_list.insertMulti(GOTO_CITY, act);
@@ -925,7 +670,7 @@ void mr_menu::setup_menus()
   menu_list.insertMulti(TRANSPORTER, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unload_all()));
   menu->addSeparator();
-  act = menu->addAction(action_get_ui_name(ACTION_HOME_CITY));
+  act = menu->addAction(_("Set Home City"));
   menu_list.insertMulti(HOMECITY, act);
   act->setShortcut(QKeySequence(tr("h")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_set_home()));
@@ -945,35 +690,30 @@ void mr_menu::setup_menus()
   /* Combat Menu */
   menu = this->addMenu(_("Combat"));
   act = menu->addAction(_("Fortify Unit"));
-  menu_list.insertMulti(FORTIFY, act);
+  menu_list.insertMulti(FORTRESS, act);
   act->setShortcut(QKeySequence(tr("f")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_fortify()));
-  act = menu->addAction(Q_(terrain_control.gui_type_base0));
-  menu_list.insertMulti(FORTRESS, act);
-  act->setShortcut(QKeySequence(tr("shift+f")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_fortress()));
-  act = menu->addAction(Q_(terrain_control.gui_type_base1));
+  act = menu->addAction(_("Build Type B Base"));
   menu_list.insertMulti(AIRBASE, act);
-  act->setShortcut(QKeySequence(tr("shift+e")));
+  act->setShortcut(QKeySequence(tr("e")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_unit_airbase()));
   menu->addSeparator();
   act = menu->addAction(_("Pillage"));
   menu_list.insertMulti(PILLAGE, act);
   act->setShortcut(QKeySequence(tr("shift+p")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_pillage()));
-  /* TRANS: Menu item to bring up the action selection dialog. */
-  act = menu->addAction(_("Do..."));
+  act = menu->addAction(_("Diplomat/Spy actions"));
   menu_list.insertMulti(ORDER_DIPLOMAT_DLG, act);
   act->setShortcut(QKeySequence(tr("d")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_action()));
-  act = menu->addAction(action_get_ui_name(ACTION_NUKE));
+  act = menu->addAction(_("Explode Nuclear"));
   menu_list.insertMulti(NUKE, act);
   act->setShortcut(QKeySequence(tr("shift+n")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_nuke()));
+  connect(act, SIGNAL(triggered()), this, SLOT(slot_explode_nuclear()));
 
   /* Work Menu */
   menu = this->addMenu(_("Work"));
-  act = menu->addAction(action_get_ui_name(ACTION_FOUND_CITY));
+  act = menu->addAction(_("Build City"));
   act->setShortcut(QKeySequence(tr("b")));
   menu_list.insertMulti(BUILD, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_build_city()));
@@ -981,10 +721,6 @@ void mr_menu::setup_menus()
   menu_list.insertMulti(GO_AND_BUILD_CITY, act);
   act->setShortcut(QKeySequence(tr("shift+b")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_go_build_city()));
-  act = menu->addAction(_("Go And Join City"));
-  menu_list.insertMulti(MIGRANT, act);
-  act->setShortcut(QKeySequence(tr("shift+j")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_go_join_city()));
   act = menu->addAction(_("Auto Settler"));
   act->setShortcut(QKeySequence(tr("a")));
   menu_list.insertMulti(AUTOSETTLER, act);
@@ -1028,25 +764,14 @@ void mr_menu::setup_menus()
   menu_list.insertMulti(FALLOUT, act);
   act->setShortcut(QKeySequence(tr("n")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_clean_fallout()));
-  act = menu->addAction(action_get_ui_name(ACTION_HELP_WONDER));
+  act = menu->addAction(_("Help build Wonder"));
   act->setShortcut(QKeySequence(tr("b")));
   menu_list.insertMulti(BUILD_WONDER, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_build_city()));
-  act = menu->addAction(action_get_ui_name(ACTION_TRADE_ROUTE));
+  act = menu->addAction(_("Establish Trade Route"));
   act->setShortcut(QKeySequence(tr("r")));
   menu_list.insertMulti(ORDER_TRADEROUTE, act);
   connect(act, SIGNAL(triggered()), this, SLOT(slot_build_road()));
-
-  menu = this->addMenu(_("Multiplayer"));
-  act = menu->addAction(_("Delayed Goto"));
-  act->setShortcut(QKeySequence(tr("z")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_delayed_goto()));
-  act = menu->addAction(_("Delayed Orders Execute"));
-  act->setShortcut(QKeySequence(tr("ctrl+z")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_execute_orders()));
-  act = menu->addAction(_("Clear Orders"));
-  act->setShortcut(QKeySequence(tr("ctrl+shift+c")));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_orders_clear()));
 
   /* Civilization menu */
   menu = this->addMenu(_("Civilization"));
@@ -1098,9 +823,6 @@ void mr_menu::setup_menus()
   act = menu->addAction(_("Spaceship"));
   act->setShortcut(QKeySequence(tr("F12")));
   connect(act, SIGNAL(triggered()), this, SLOT(slot_spaceship()));
-
-  act = menu->addAction(_("Achievements"));
-  connect(act, SIGNAL(triggered()), this, SLOT(slot_achievements()));
 
   /* Help Menu */
   menu = this->addMenu(_("Help"));
@@ -1221,17 +943,6 @@ void mr_menu::setup_menus()
 }
 
 /****************************************************************************
-  Sets given tile for delayed order
-****************************************************************************/
-void mr_menu::set_tile_for_order(tile *ptile)
-{
-  for (int i=0; i < units_list.nr_units; i++) {
-    units_list.unit_list.at(units_list.unit_list.count() - i -1)->ptile = ptile;
-  }
-}
-
-
-/****************************************************************************
   Enables/disables menu items and renames them depending on key in menu_list
 ****************************************************************************/
 void mr_menu::menus_sensitive()
@@ -1241,7 +952,7 @@ void mr_menu::menus_sensitive()
   QHash <munit, QAction *>::iterator i;
   struct unit_list *punits = NULL;
   struct road_type *proad;
-  struct extra_type *tgt;
+  struct act_tgt tgt;
   bool any_cities = false;
   bool city_on_tile = false;
   bool units_all_same_tile = true;
@@ -1301,9 +1012,9 @@ void mr_menu::menus_sensitive()
       if (unit_tile(punit) != ptile) {
         units_all_same_tile = false;
       }
-      if (unit_type_get(punit) == ptype) {
+      if (unit_type(punit) == ptype) {
         ptile = unit_tile(punit);
-        ptype = unit_type_get(punit);
+        ptype = unit_type(punit);
       }
     }
   } unit_list_iterate_end;
@@ -1354,37 +1065,16 @@ void mr_menu::menus_sensitive()
 
         if (units_all_same_tile) {
           struct unit *punit = unit_list_get(punits, 0);
-
           pterrain = tile_terrain(unit_tile(punit));
           if (pterrain->mining_result != T_NONE
               && pterrain->mining_result != pterrain) {
             i.value()->setText(
               QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                      (unit_tile(punit), ACTIVITY_MINE))));
-          } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)){
-            struct extra_type *pextra = NULL;
-
-            /* FIXME: this overloading doesn't work well with multiple focus
-             * units. */
-            unit_list_iterate(punits, builder) {
-              pextra = next_extra_for_tile(unit_tile(builder), EC_MINE,
-                                           unit_owner(builder), builder);
-              if (pextra != NULL) {
-                break;
-              }
-            } unit_list_iterate_end;
-
-            if (pextra != NULL) {
-              /* TRANS: Build mine of specific type */
-              i.value()->setText(QString(_("Build %1"))
-                .arg(extra_name_translation(pextra)));
-            } else {
-              i.value()->setText(QString(_("Build Mine")));
-            }
+              /* TRANS: Transfrom terrain to specific type */
+              arg(QString(get_tile_change_menu_text
+                          (unit_tile(punit), ACTIVITY_MINE))));
           } else {
-            i.value()->setText(QString(_("Build Mine")));
+            i.value()->setText(_("Build Mine"));
           }
         }
         break;
@@ -1395,34 +1085,18 @@ void mr_menu::menus_sensitive()
         }
         if (units_all_same_tile) {
           struct unit *punit = unit_list_get(punits, 0);
-
           pterrain = tile_terrain(unit_tile(punit));
           if (pterrain->irrigation_result != T_NONE
               && pterrain->irrigation_result != pterrain) {
             i.value()->setText(QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                      (unit_tile(punit), ACTIVITY_IRRIGATE))));
-          } else if (units_have_type_flag(punits, UTYF_SETTLERS, TRUE)){
-            struct extra_type *pextra = NULL;
-
-            /* FIXME: this overloading doesn't work well with multiple focus
-             * units. */
-            unit_list_iterate(punits, builder) {
-              pextra = next_extra_for_tile(unit_tile(builder), EC_IRRIGATION,
-                                           unit_owner(builder), builder);
-              if (pextra != NULL) {
-                break;
-              }
-            } unit_list_iterate_end;
-
-            if (pextra != NULL) {
-              /* TRANS: Build irrigation of specific type */
-              i.value()->setText(QString(_("Build %1"))
-                .arg(extra_name_translation(pextra)));
-            } else {
-              i.value()->setText(QString(_("Build Irrigation")));
-            }
+                               /* TRANS: Transfrom terrain to specific type */
+                               arg(QString(get_tile_change_menu_text
+                                           (unit_tile(punit),
+                                           ACTIVITY_IRRIGATE))));
+          } else if (tile_has_special(unit_tile(punit), S_IRRIGATION)
+                     && player_knows_techs_with_flag(unit_owner(punit),
+                                                     TF_FARMLAND)) {
+            i.value()->setText(QString(_("Build Farmland")));
           } else {
             i.value()->setText(QString(_("Build Irrigation")));
           }
@@ -1443,9 +1117,9 @@ void mr_menu::menus_sensitive()
           if (pterrain->transform_result != T_NONE
               && pterrain->transform_result != pterrain) {
             i.value()->setText(QString(_("Transform to %1")).
-                      /* TRANS: Transfrom terrain to specific type */
-                      arg(QString(get_tile_change_menu_text
-                              (unit_tile(punit), ACTIVITY_TRANSFORM))));
+                        /* TRANS: Transfrom terrain to specific type */
+                        arg(QString(get_tile_change_menu_text
+                        (unit_tile(punit), ACTIVITY_TRANSFORM))));
           } else {
             i.value()->setText(_("Transform Terrain"));
           }
@@ -1455,12 +1129,14 @@ void mr_menu::menus_sensitive()
       case BUILD:
         if (can_units_do(punits, unit_can_add_or_build_city)) {
           i.value()->setEnabled(true);
+        } else {
+          break;
         }
         if (city_on_tile
-            && units_can_do_action(punits, ACTION_JOIN_CITY, true)) {
-          i.value()->setText(action_get_ui_name(ACTION_JOIN_CITY));
+            && units_have_type_flag(punits, UTYF_ADD_TO_CITY, true)) {
+          i.value()->setText(_("Add to City"));
         } else {
-          i.value()->setText(action_get_ui_name(ACTION_FOUND_CITY));
+          i.value()->setText(_("Build City"));
         }
         break;
 
@@ -1470,21 +1146,15 @@ void mr_menu::menus_sensitive()
         }
         break;
 
-      case MIGRANT:
-        if (units_can_do_action(punits, ACTION_JOIN_CITY, true)) {
-          i.value()->setEnabled(true);
-        }
-        break;
-
-      case FORTIFY:
-        if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
-          i.value()->setEnabled(true);
-        }
-        break;
-
       case FORTRESS:
-        if (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)) {
+        if (can_units_do_base_gui(punits, BASE_GUI_FORTRESS)
+            || can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
           i.value()->setEnabled(true);
+        }
+        if (can_units_do_activity(punits, ACTIVITY_FORTIFYING)) {
+          i.value()->setText(_("Fortify Unit"));
+        } else {
+          i.value()->setText(_("Build Type A Base"));
         }
         break;
 
@@ -1499,8 +1169,8 @@ void mr_menu::menus_sensitive()
             || can_units_do(punits, can_unit_paradrop)) {
           i.value()->setEnabled(true);
         }
-        if (units_can_do_action(punits, ACTION_PARADROP, true)) {
-          i.value()->setText(action_get_ui_name(ACTION_PARADROP));
+        if (units_have_type_flag(punits, UTYF_PARATROOPERS, true)) {
+          i.value()->setText(_("Drop Paratrooper"));
         } else {
           i.value()->setText(_("Clean Pollution"));
         }
@@ -1540,58 +1210,51 @@ void mr_menu::menus_sensitive()
         if (can_units_do(punits, can_unit_do_autosettlers)) {
           i.value()->setEnabled(true);
         }
-        if (units_contain_cityfounder(punits)) {
+        if (units_have_type_flag(punits, UTYF_CITIES, true)) {
           i.value()->setText(_("Auto Settler"));
         } else {
           i.value()->setText(_("Auto Worker"));
         }
         break;
       case GO_AND_BUILD_CITY:
-        if (units_contain_cityfounder(punits)) {
+        if (units_have_type_flag(punits, UTYF_CITIES, TRUE)) {
           i.value()->setEnabled(true);
         }
         break;
       case CONNECT_ROAD:
         proad = road_by_compat_special(ROCO_ROAD);
         if (proad != NULL) {
-          tgt = road_extra_get(proad);
+          tgt.type = ATT_ROAD;
+          tgt.obj.road = road_number(proad);
         } else {
           break;
         }
-        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt)) {
+        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, &tgt)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case DISBAND:
-        if (units_can_do_action(punits, ACTION_DISBAND_UNIT, true)) {
+        if (units_have_type_flag(punits, UTYF_UNDISBANDABLE, false)) {
           i.value()->setEnabled(true);
         }
 
       case CONNECT_RAIL:
         proad = road_by_compat_special(ROCO_RAILROAD);
         if (proad != NULL) {
-          tgt = road_extra_get(proad);
+          tgt.type = ATT_ROAD;
+          tgt.obj.road = road_number(proad);
         } else {
           break;
         }
-        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, tgt)) {
+        if (can_units_do_connect(punits, ACTIVITY_GEN_ROAD, &tgt)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case CONNECT_IRRIGATION:
-        {
-          struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-          if (extra_type_list_size(extras) > 0) {
-            struct extra_type *pextra;
-
-            pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-            if (can_units_do_connect(punits, ACTIVITY_IRRIGATE, pextra)) {
-              i.value()->setEnabled(true);
-            }
-          }
+        if (can_units_do_connect(punits, ACTIVITY_IRRIGATE, NULL)) {
+          i.value()->setEnabled(true);
         }
         break;
 
@@ -1608,28 +1271,25 @@ void mr_menu::menus_sensitive()
         break;
 
       case BUILD_WONDER:
-        i.value()->setText(action_get_ui_name(ACTION_HELP_WONDER));
         if (can_units_do(punits, unit_can_help_build_wonder_here)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case ORDER_TRADEROUTE:
-        i.value()->setText(action_get_ui_name(ACTION_TRADE_ROUTE));
         if (can_units_do(punits, unit_can_est_trade_route_here)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case ORDER_DIPLOMAT_DLG:
-        if (can_units_act_against_own_tile(punits)) {
+        if (can_units_do_diplomat_action(punits, DIPLOMAT_ANY_ACTION)) {
           i.value()->setEnabled(true);
         }
         break;
 
       case NUKE:
-        i.value()->setText(action_get_ui_name(ACTION_NUKE));
-        if (units_can_do_action(punits, ACTION_NUKE, TRUE)) {
+        if (units_have_type_flag(punits, UTYF_NUCLEAR, true)) {
           i.value()->setEnabled(true);
         }
         break;
@@ -1718,8 +1378,8 @@ void mr_menu::slot_build_city()
        get an eventual error message from the server if we try. */
     if (unit_can_add_or_build_city(punit)) {
       request_unit_build_city(punit);
-    } else if (utype_can_do_action(unit_type_get(punit), ACTION_HELP_WONDER)) {
-      request_unit_caravan_action(punit, ACTION_HELP_WONDER);
+    } else if (unit_has_type_flag(punit, UTYF_HELP_WONDER)) {
+      request_unit_caravan_action(punit, PACKET_UNIT_HELP_BUILD_WONDER);
     }
   } unit_list_iterate_end;
 }
@@ -1740,12 +1400,8 @@ void mr_menu::slot_clean_pollution()
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *pextra;
-
-    pextra = prev_extra_in_tile(unit_tile(punit), ERM_CLEANPOLLUTION,
-                                unit_owner(punit), punit);
-    if (pextra != NULL) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_POLLUTION, pextra);
+    if (can_unit_do_activity(punit, ACTIVITY_POLLUTION)) {
+      request_new_unit_activity(punit, ACTIVITY_POLLUTION);
     } else if (can_unit_paradrop(punit)) {
       /* FIXME: This is getting worse, we use a key_unit_*() function
        * which assign the order for all units!  Very bad! */
@@ -1759,15 +1415,7 @@ void mr_menu::slot_clean_pollution()
 ***************************************************************************/
 void mr_menu::slot_conn_irrigation()
 {
-  struct extra_type_list *extras = extra_type_list_by_cause(EC_IRRIGATION);
-
-  if (extra_type_list_size(extras) > 0) {
-    struct extra_type *pextra;
-
-    pextra = extra_type_list_get(extra_type_list_by_cause(EC_IRRIGATION), 0);
-
-    key_unit_connect(ACTIVITY_IRRIGATE, pextra);
-  }
+  key_unit_connect(ACTIVITY_IRRIGATE, NULL);
 }
 
 /***************************************************************************
@@ -1776,21 +1424,12 @@ void mr_menu::slot_conn_irrigation()
 void mr_menu::slot_conn_rail()
 {
   struct road_type *prail = road_by_compat_special(ROCO_RAILROAD);
-
+  struct act_tgt tgt;
   if (prail != NULL) {
-    struct extra_type *tgt;
-
-    tgt = road_extra_get(prail);
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    tgt.type = ATT_ROAD;
+    tgt.obj.road = road_number(prail);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
-}
-
-/***************************************************************************
-  Action "BUILD FORTRESS"
-***************************************************************************/
-void mr_menu::slot_unit_fortress()
-{
-  key_unit_fortress();
 }
 
 /***************************************************************************
@@ -1807,12 +1446,11 @@ void mr_menu::slot_unit_airbase()
 void mr_menu::slot_conn_road()
 {
   struct road_type *proad = road_by_compat_special(ROCO_ROAD);
-
+  struct act_tgt tgt;
   if (proad != NULL) {
-    struct extra_type *tgt;
-
-    tgt = road_extra_get(proad);
-    key_unit_connect(ACTIVITY_GEN_ROAD, tgt);
+    tgt.type = ATT_ROAD;
+    tgt.obj.road = road_number(proad);
+    key_unit_connect(ACTIVITY_GEN_ROAD, &tgt);
   }
 }
 
@@ -1821,15 +1459,7 @@ void mr_menu::slot_conn_road()
 ***************************************************************************/
 void mr_menu::slot_go_build_city()
 {
-  request_unit_goto(ORDER_PERFORM_ACTION, ACTION_FOUND_CITY, EXTRA_NONE);
-}
-
-/***************************************************************************
-  Action "GO TO AND JOIN CITY"
-***************************************************************************/
-void mr_menu::slot_go_join_city()
-{
-  request_unit_goto(ORDER_PERFORM_ACTION, ACTION_JOIN_CITY, EXTRA_NONE);
+  request_unit_goto(ORDER_BUILD_CITY);
 }
 
 /***************************************************************************
@@ -1849,19 +1479,19 @@ void mr_menu::slot_pillage()
 }
 
 /***************************************************************************
+  Action "EXPLODE NUCLEAR"
+***************************************************************************/
+void mr_menu::slot_explode_nuclear()
+{
+  key_unit_nuke();
+}
+
+/***************************************************************************
   Diplomat/Spy action
 ***************************************************************************/
 void mr_menu::slot_action()
 {
   key_unit_diplomat_actions();
-}
-
-/***************************************************************************
-  Explode Nuclear
-***************************************************************************/
-void mr_menu::slot_nuke()
-{
-  key_unit_nuke();
 }
 
 
@@ -1878,23 +1508,27 @@ void mr_menu::slot_auto_settler()
 *****************************************************************/
 void mr_menu::slot_build_road()
 {
+  struct act_tgt tgt;
   unit_list_iterate(get_units_in_focus(), punit) {
     /* FIXME: this can provide different actions for different units...
      * not good! */
-    struct extra_type *tgt = next_extra_for_tile(unit_tile(punit),
-                                                 EC_ROAD,
+    struct road_type *proad = next_road_for_tile(unit_tile(punit),
                                                  unit_owner(punit),
                                                  punit);
     bool building_road = false;
 
-    if (tgt != NULL
-        && can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt)) {
-      request_new_unit_activity_targeted(punit, ACTIVITY_GEN_ROAD, tgt);
-      building_road = true;
+    if (proad != NULL) {
+      tgt.type = ATT_ROAD;
+      tgt.obj.road = road_number(proad);
+
+      if (can_unit_do_activity_targeted(punit, ACTIVITY_GEN_ROAD, &tgt)) {
+        request_new_unit_activity_road(punit, proad);
+        building_road = true;
+      }
     }
 
     if (!building_road && unit_can_est_trade_route_here(punit)) {
-      request_unit_caravan_action(punit, ACTION_TRADE_ROUTE);
+      request_unit_caravan_action(punit, PACKET_UNIT_ESTABLISH_TRADE);
     }
   } unit_list_iterate_end;
 }
@@ -1915,13 +1549,23 @@ void mr_menu::slot_build_mine()
   key_unit_mine();
 }
 /****************************************************************
-  Action "FORTIFY"
+  Action "FORTIFY AND BUILD BASE A (USUALLY FORTRESS)"
 *****************************************************************/
 void mr_menu::slot_unit_fortify()
 {
-  key_unit_fortify();
-}
+  unit_list_iterate(get_units_in_focus(), punit) {
+    /* FIXME: this can provide different actions for different units...
+     * not good! */
+    struct base_type *pbase = get_base_by_gui_type(BASE_GUI_FORTRESS,
+                                                   punit, unit_tile(punit));
 
+    if (pbase && can_unit_do_activity_base(punit, pbase->item_number)) {
+      request_new_unit_activity_base(punit, pbase);
+    } else {
+      request_unit_fortify(punit);
+    }
+  } unit_list_iterate_end;
+}
 /****************************************************************
   Action "SENTRY"
 *****************************************************************/
@@ -1947,84 +1591,12 @@ void mr_menu::slot_disband()
 }
 
 /***************************************************************************
-  Clears delayed orders
-***************************************************************************/
-void mr_menu::slot_orders_clear()
-{
-  delayed_order = false;
-  units_list.clear();
-}
-
-/***************************************************************************
-  Delayed goto
-***************************************************************************/
-void mr_menu::slot_delayed_goto()
-{
-  qfc_delayed_unit_item *unit_item;
-  int i = 0;
-  delay_order dg;
-  delayed_order = true;
-  dg = D_GOTO;
-
-  struct unit_list *punits = get_units_in_focus();
-  if (unit_list_size(punits) == 0) {
-    return;
-  }
-  if (hover_state != HOVER_GOTO) {
-    set_hover_state(punits, HOVER_GOTO, ACTIVITY_LAST, NULL,
-                    EXTRA_NONE, ACTION_COUNT, ORDER_LAST);
-    enter_goto_state(punits);
-    create_line_at_mouse_pos();
-    control_mouse_cursor(NULL);
-  }
-  unit_list_iterate(get_units_in_focus(), punit) {
-    i++;
-    unit_item = new qfc_delayed_unit_item(dg, punit->id);
-    units_list.add(unit_item);
-    units_list.nr_units = i;
-  } unit_list_iterate_end;
-}
-
-/***************************************************************************
-  Executes stored orders
-***************************************************************************/
-void mr_menu::slot_execute_orders()
-{
-  qfc_delayed_unit_item *fui;
-  struct unit *punit;
-  struct tile *last_tile;
-  struct tile *new_tile;
-  int i = 0;
-
-  foreach (fui, units_list.unit_list) {
-    i++;
-    punit = unit_list_find(client_player()->units, fui->id);
-    if (punit == nullptr) {
-      continue;
-    }
-    last_tile = punit->tile;
-    new_tile = find_last_unit_pos(punit, i);
-    if (new_tile != nullptr) {
-      punit->tile = new_tile;
-    }
-    if (is_tiles_adjacent(punit->tile, fui->ptile)) {
-      request_move_unit_direction(punit, get_direction_for_step(punit->tile,
-                                  fui->ptile));
-    } else {
-      send_attack_tile(punit, fui->ptile);
-    }
-    punit->tile = last_tile;
-  }
-  units_list.clear();
-}
-
-/***************************************************************************
   Action "LOAD INTO TRANSPORTER"
 ***************************************************************************/
 void mr_menu::slot_load()
 {
   unit_list_iterate(get_units_in_focus(), punit) {
-    request_unit_load(punit, NULL, unit_tile(punit));
+    request_unit_load(punit, NULL);
   } unit_list_iterate_end;
 }
 
@@ -2125,13 +1697,13 @@ void mr_menu::slot_center_view()
 ***************************************************************************/
 void mr_menu::slot_fullscreen()
 {
-  if (!gui_options.gui_qt_fullscreen) {
+  if (!fullscreen_mode){
     gui()->showFullScreen();
     gui()->mapview_wdg->showFullScreen();
   } else {
     gui()->showNormal();
   }
-  gui_options.gui_qt_fullscreen = !gui_options.gui_qt_fullscreen;
+  fullscreen_mode = !fullscreen_mode;
 }
 
 /***************************************************************************
@@ -2192,19 +1764,11 @@ void mr_menu::slot_minimap_view()
 }
 
 /****************************************************************
-  Action "SHOW BORDERS"
+  Action "SHOW DEMOGRAPGHICS REPORT"
 *****************************************************************/
 void mr_menu::slot_borders()
 {
   key_map_borders_toggle();
-}
-
-/****************************************************************
-  Action "SHOW NATIVE TILES"
-*****************************************************************/
-void mr_menu::slot_native_tiles()
-{
-  key_map_native_toggle();
 }
 
 /***************************************************************************
@@ -2383,14 +1947,6 @@ void mr_menu::slot_demographics()
 }
 
 /****************************************************************
-  Action "SHOW ACHIEVEMENTS REPORT"
-*****************************************************************/
-void mr_menu::slot_achievements()
-{
-  send_report_request(REPORT_ACHIEVEMENTS);
-}
-
-/****************************************************************
   Action "SHOW TOP FIVE CITIES"
 *****************************************************************/
 void mr_menu::slot_top_five()
@@ -2502,7 +2058,6 @@ void mr_menu::back_to_menu()
 {
   QMessageBox ask(gui()->central_wdg);
   int ret;
-
   if (is_server_running()) {
     ask.setText(_("Leaving a local game will end it!"));
     ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
@@ -2524,3 +2079,4 @@ void mr_menu::back_to_menu()
     disconnect_from_server();
   }
 }
+

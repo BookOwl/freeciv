@@ -18,12 +18,8 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
-#include "log.h"
-
 void backtrace_init(void);
 void backtrace_deinit(void);
-void backtrace_print(enum log_level level);
 
 #ifdef __cplusplus
 }

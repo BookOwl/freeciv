@@ -23,6 +23,9 @@ extern "C" {
 #include "log.h"
 #include "support.h"            /* bool type */
 
+/* This is duplicated in shared.h to avoid extra includes: */
+#define MAX_UINT32 0xFFFFFFFF
+
 typedef uint32_t RANDOM_TYPE;
 
 typedef struct {

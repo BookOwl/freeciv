@@ -35,6 +35,7 @@
 
 #define log_citizens log_debug
 
+
 /*****************************************************************************
   Update the nationality according to the city size. New citiens are added
   using the nationality of the owner. If the city size is reduced, the
@@ -42,7 +43,7 @@
 *****************************************************************************/
 #define log_citizens_add(_pcity, _delta, _pplayer)                           \
   log_citizens("%s (size %d; %s): %+d citizen(s) for %s (now: %d)",          \
-               city_name_get(_pcity), city_size_get(_pcity),                 \
+               city_name(_pcity), city_size_get(_pcity),                     \
                player_name(city_owner(_pcity)), _delta,                      \
                player_name(_pplayer),                                        \
                citizens_nation_get(_pcity, _pplayer->slot));
@@ -95,8 +96,8 @@ void citizens_update(struct city *pcity, struct player *plr)
 
     /* First remove from foreign nationalities. */
     while (count > 0 && delta < 0) {
-      int selected = fc_rand(count);
-      struct player_slot *pslot = city_nations[selected];
+      int select = fc_rand(count);
+      struct player_slot *pslot = city_nations[select];
       struct player *pplayer = player_slot_get_player(pslot);
       citizens nationality = citizens_nation_get(pcity, pslot);
 
@@ -108,8 +109,8 @@ void citizens_update(struct city *pcity, struct player *plr)
         delta++;
         citizens_nation_set(pcity, pslot, 0);
         /* Remove this nation from the list of nationalities. */
-        if (selected != count) {
-          city_nations[selected] = city_nations[count - 1];
+        if (select != count) {
+          city_nations[select] = city_nations[count - 1];
         }
         count--;
 
@@ -152,7 +153,7 @@ void citizens_print(const struct city *pcity)
   }
 
   log_citizens("%s (size %d; %s): %d citizen(s)",
-               city_name_get(pcity), city_size_get(pcity),
+               city_name(pcity), city_size_get(pcity),
                player_name(city_owner(pcity)), citizens_count(pcity));
 
   citizens_iterate(pcity, pslot, nationality) {
@@ -161,7 +162,7 @@ void citizens_print(const struct city *pcity)
     fc_assert_ret(pplayer != NULL);
 
     log_citizens("%s (size %d; %s): %d citizen(s) for %s",
-                 city_name_get(pcity), city_size_get(pcity),
+                 city_name(pcity), city_size_get(pcity),
                  player_name(city_owner(pcity)), nationality,
                  player_name(pplayer));
   } citizens_iterate_end;
@@ -204,9 +205,9 @@ void citizens_convert(struct city *pcity)
   }
 
   /* Create a list of foreign nationalities. */
-  citizens_foreign_iterate(pcity, foreign_slot, nationality) {
+  citizens_foreign_iterate(pcity, pslot, nationality) {
     if (nationality != 0) {
-      city_nations[count++] = foreign_slot;
+      city_nations[count++] = pslot;
     }
   } citizens_foreign_iterate_end;
 
@@ -217,7 +218,7 @@ void citizens_convert(struct city *pcity)
   fc_assert_ret(pplayer != NULL);
 
   log_citizens("%s (size %d; %s): convert 1 citizen from %s",
-               city_name_get(pcity), city_size_get(pcity),
+               city_name(pcity), city_size_get(pcity),
                player_name(city_owner(pcity)), player_name(pplayer));
   citizens_nation_move(pcity, pslot, city_owner(pcity)->slot, 1);
 }

@@ -2,13 +2,13 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
 artists = "
     Tatu Rissanen <tatu.rissanen@hut.fi>
-    The Square Cow (u.migrants)
+    The Square Cow (u.refugee)
 "
 
 [file]
@@ -77,5 +77,5 @@ tiles = { "row", "column", "tag"
   2, 13, "u.awacs"
   2, 14, "u.worker"
   2, 15, "u.leader"
-  2, 16, "u.migrants"
+  2, 16, "u.refugee"
 }

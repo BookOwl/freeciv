@@ -18,13 +18,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/***********************************************************************
+/********************************************************************** 
   Replacements for functions which are not available on all platforms.
   Where the functions are available natively, these are just wrappers.
   See also mem.h, netintf.h, rand.h, and see support.c for more comments.
 ***********************************************************************/
-
-#include <freeciv_config.h>
 
 #include <dirent.h>
 #include <stdarg.h>
@@ -32,7 +30,7 @@ extern "C" {
 #include <stdlib.h>		/* size_t */
 #include <sys/stat.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 
@@ -52,30 +50,31 @@ extern "C" {
 #include <posix/be_prim.h>
 #define __bool_true_false_are_defined 1
 #else
-#ifdef FREECIV_HAVE_STDBOOL_H
+#ifdef HAVE_STDBOOL_H
 #include <stdbool.h>
 #else /* Implement <stdbool.h> ourselves */
 #undef bool
 #undef true
 #undef false
 #undef __bool_true_false_are_defined
-#define bool unsigned int
+#define bool fc_bool
 #define true  1
 #define false 0
 #define __bool_true_false_are_defined 1
-#endif /* ! FREECIV_HAVE_STDBOOL_H */
+typedef unsigned int fc_bool;
+#endif /* ! HAVE_STDBOOL_H */
 #endif /* ! __BEOS__ */
 #endif /* __cplusplus */
 
 /* intptr_t header */
 /* Prefer full inttypes.h if present. */
-#ifdef FREECIV_HAVE_INTTYPES_H
+#ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #else
-#ifdef FREECIV_HAVE_STDINT_H
+#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif /* FREECIV_HAVE_STDINT_H */
-#endif /* FREECIV_HAVE_INTTYPES_H */
+#endif /* HAVE_STDINT_H */
+#endif /* HAVE_INTTYPES_H */
 
 /* Want to use GCC's __attribute__ keyword to check variadic
  * parameters to printf-like functions, without upsetting other
@@ -100,7 +99,7 @@ extern "C" {
 #define fc__warn_unused_result
 #endif
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
 typedef long int fc_errno;
 #else
 typedef int fc_errno;
@@ -110,9 +109,6 @@ int fc_strcasecmp(const char *str0, const char *str1);
 int fc_strncasecmp(const char *str0, const char *str1, size_t n);
 int fc_strncasequotecmp(const char *str0, const char *str1, size_t n);
 
-void fc_strAPI_init(void);
-void fc_strAPI_free(void);
-
 size_t effectivestrlenquote(const char *str);
 
 char *fc_strcasestr(const char *haystack, const char *needle);
@@ -121,11 +117,11 @@ int fc_strcoll(const char *str0, const char *str1);
 int fc_stricoll(const char *str0, const char *str1);
 
 FILE *fc_fopen(const char *filename, const char *opentype);
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 #include <zlib.h>
 gzFile fc_gzopen(const char *filename, const char *opentype);
 #endif
-DIR *fc_opendir(const char *dir_to_open);
+DIR *fc_opendir(const char *dirname);
 int fc_remove(const char *filename);
 int fc_stat(const char *filename, struct stat *buf);
 
@@ -157,11 +153,11 @@ int cat_snprintf(char *str, size_t n, const char *format, ...)
 
 int fc_gethostname(char *buf, size_t len);
 
-#ifdef FREECIV_SOCKET_ZERO_NOT_STDIN
-/* Support for console I/O in case FREECIV_SOCKET_ZERO_NOT_STDIN. */
+#ifdef SOCKET_ZERO_ISNT_STDIN
+/* Support for console I/O in case SOCKET_ZERO_ISNT_STDIN. */
 void fc_init_console(void);
 char *fc_read_console(void);
-#endif /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#endif
 
 bool is_reg_file_for_access(const char *name, bool write_access);
 
@@ -176,18 +172,9 @@ bool fc_isupper(char c);
 char fc_toupper(char c);
 char fc_tolower(char c);
 
+void fc_uname(char *buf, size_t len);
+
 const char *fc_basename(const char *path);
-
-static bool inline is_bigendian(void)
-{
-#ifdef WORDS_BIGENDIAN 
-  return TRUE;
-#else  /* WORDS_BIGENDIAN */
-  return FALSE;
-#endif /* WORDS_BIGENDIAN */
-}
-
-int fc_at_quick_exit(void (*func)(void));
 
 #ifdef __cplusplus
 }

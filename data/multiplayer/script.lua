@@ -17,7 +17,7 @@
 
 -- Place Ruins at the location of the destroyed city.
 function city_destroyed_callback(city, loser, destroyer)
-  city.tile:create_extra("Ruins", NIL)
+  city.tile:create_base("Ruins", NIL)
   -- continue processing
   return false
 end
@@ -37,11 +37,11 @@ function building_built_handler(btype, city)
     -- getting two free advances again.
     -- This also prevents those they share research with from getting two
     -- free advances from building Darwin`s Voyage themselves.
-    if player:give_tech(find.tech_type("Theory of Evolution"),
-                        0, "researched") then
+    if player:give_technology(find.tech_type("Theory of Evolution"),
+                              "researched") then
       -- Give the player two free advances.
-      gained[0] = player:give_tech(nil, 0, false, "researched")
-      gained[1] = player:give_tech(nil, 0, false, "researched")
+      gained[0] = player:give_technology(nil, "researched")
+      gained[1] = player:give_technology(nil, "researched")
 
       -- Notify the player. Include the tech names in a way that makes it
       -- look natural no matter if each tech is announced or not.
@@ -51,21 +51,14 @@ function building_built_handler(btype, city)
         gained[0]:name_translation(),
         gained[1]:name_translation())
 
-      notify.research(player, false, E.TECH_GAIN,
-        _("%s boosts %s research; you gain the immediate advances %s and %s."),
-        darw_btype:name_translation(),
-        player.nation:plural_translation(),
-        gained[0]:name_translation(),
-        gained[1]:name_translation())
-
       -- default.lua informs the embassies when the tech source is a hut.
       -- They should therefore be informed about the source here too.
-      notify.research_embassies(player, E.TECH_EMBASSY,
-                                _("The %s gain %s and %s from %s."),
-                                player:research_name_translation(),
-                                gained[0]:name_translation(),
-                                gained[1]:name_translation(),
-                                darw_btype:name_translation())
+      notify.embassies(player, NIL, E.TECH_GAIN,
+                       _("The %s gain %s and %s from %s."),
+                       player.nation:plural_translation(),
+                       gained[0]:name_translation(),
+                       gained[1]:name_translation(),
+                       darw_btype:name_translation())
     end
   end
 end
@@ -118,7 +111,7 @@ function tech_researched_handler(tech, player, how)
 
     -- Give the player a free advance.
     -- This will give a free advance for each player that shares research.
-    gained = player:give_tech(nil, -1, false, "researched")
+    gained = player:give_technology(nil, "researched")
 
       -- Notify the player. Include the tech names in a way that makes it
       -- look natural no matter if each tech is announced or not.
@@ -126,18 +119,12 @@ function tech_researched_handler(tech, player, how)
                  _("Great philosophers from all the world join your civilization: you get the immediate advance %s."),
                  gained:name_translation())
 
-    -- Notify research partners
-    notify.research(player, false, E.TECH_GAIN,
-                    _("Great philosophers from all the world join the %s: you get the immediate advance %s."),
-                    player.nation:plural_translation(),
-                    gained:name_translation())
-
     -- default.lua informs the embassies when the tech source is a hut.
     -- They should therefore be informed about the source here too.
-    notify.research_embassies(player, E.TECH_EMBASSY,
-            _("Great philosophers from all the world join the %s: they get %s as an immediate advance."),
-            player:research_name_translation(),
-            gained:name_translation())
+    notify.embassies(player, NIL, E.TECH_GAIN,
+                     _("Great philosophers from all the world join the %s: they get %s as an immediate advance."),
+                       player.nation:plural_translation(),
+                       gained:name_translation())
   end
 end 
 

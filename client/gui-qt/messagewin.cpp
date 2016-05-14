@@ -65,7 +65,7 @@ info_tab::info_tab(QWidget *parent)
   chat_button = new right_click_button;
   chat_button->setText(_("Chat"));
   hide_button = new QPushButton(
-                  style()->standardIcon(QStyle::SP_ArrowDown), "");
+                    style()->standardIcon(QStyle::SP_ArrowDown), "");
 
   layout->addWidget(hide_button, 1, 0, 1, 1);
   layout->addWidget(msg_button, 1, 1, 1, 4);
@@ -500,7 +500,6 @@ void messagewdg::clr()
 void messagewdg::msg(const struct message *pmsg)
 {
   int i;
-  struct sprite *icon;
   QFont f;
   QTableWidgetItem *item;
 
@@ -512,11 +511,6 @@ void messagewdg::msg(const struct message *pmsg)
     f = item->font();
     f.setItalic(true);
     item->setFont(f);
-  }
-  icon = get_event_sprite(tileset, pmsg->event);
-  if (icon != NULL) {
-    pix = icon->pm;
-    item->setIcon(QIcon(*pix));
   }
   mesg_table->setItem(i, 0, item);
   msg_update();

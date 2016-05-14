@@ -2,8 +2,6 @@
 
 noinst_LTLIBRARIES = libcivutility.la
 
-AM_CPPFLAGS = -I$(top_srcdir)/dependencies/tinycthread
-
 AM_CFLAGS = $(UTILITY_CFLAGS)
 
 libcivutility_la_SOURCES = \
@@ -13,13 +11,10 @@ libcivutility_la_SOURCES = \
 		bitvector.h     \
 		capability.c	\
 		capability.h	\
-		deprecations.c	\
-		deprecations.h	\
 		distribute.c	\
 		distribute.h	\
 		fc_utf8.c	\
 		fc_utf8.h	\
-		fc_prehdrs.h	\
 		fcbacktrace.c	\
 		fcbacktrace.h	\
 		fciconv.c	\
@@ -40,7 +35,6 @@ libcivutility_la_SOURCES = \
 		iterator.h	\
 		log.c		\
 		log.h		\
-		net_types.h	\
 		netfile.c	\
 		netfile.h	\
 		netintf.c	\
@@ -53,8 +47,6 @@ libcivutility_la_SOURCES = \
 		registry.h	\
 		registry_ini.c	\
 		registry_ini.h	\
-		registry_xml.c	\
-		registry_xml.h	\
 		section_file.c	\
 		section_file.h	\
 		shared.c	\

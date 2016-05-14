@@ -1,19 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
 noinst_LTLIBRARIES = libgui-gtk2.la
-AM_CPPFLAGS = \
-	-I. \
-	-I$(srcdir)/.. \
-	-I$(srcdir)/../include \
-	-I$(top_srcdir)/utility \
-	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/common/networking \
-	-I$(top_srcdir)/common/scriptcore \
-	-I$(srcdir)/../agents \
-	-I$(srcdir)/../luascript \
-	-I$(top_srcdir)/dependencies/tinycthread \
-	$(gui_gtk2_cflags) $(SOUND_CFLAGS)
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include \
+	-I$(top_srcdir)/utility -I$(top_srcdir)/common \
+	-I$(top_srcdir)/common/aicore -I$(top_srcdir)/common/scriptcore \
+	-I$(srcdir)/../agents  -I$(srcdir)/../luascript \
+	$(gui_gtk2_cflags) $(GGZ_GTK_INCLUDES) $(SOUND_CFLAGS)
 
 # The AM_CPPFLAGS "-I." is so resources.c includes the locally generated 
 # Freeciv.h in the builddir, in preference to the one 
@@ -33,9 +25,9 @@ libgui_gtk2_la_DEPENDENCIES = rc2c
 libgui_gtk2_la_SOURCES = \
 	rc2c		\
 	Freeciv.h	\
-	action_dialog.c \
 	canvas.c	\
 	canvas.h	\
+	caravan_dialog.c \
 	chatline.h	\
 	chatline.c	\
 	choice_dialog.c	\
@@ -60,10 +52,11 @@ libgui_gtk2_la_SOURCES = \
 	editgui.h	\
 	editprop.c	\
 	editprop.h	\
+	embedggz.c	\
+	diplomat_dialog.c \
 	finddlg.c	\
 	finddlg.h	\
 	gamedlgs.c	\
-	gamedlgs.h	\
 	gotodlg.c	\
 	gotodlg.h	\
 	graphics.c	\

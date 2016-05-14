@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include "map.h"
 #include "movement.h"
 #include "player.h"
-#include "research.h"
 #include "specialist.h"
 #include "terrain.h"
 #include "unit.h"
@@ -54,7 +53,7 @@
 #define SANITY_CITY(_city, check)                                           \
   fc_assert_full(file, function, line, check, ,                             \
                  "(%4d, %4d) in \"%s\"[%d]", TILE_XY((_city)->tile),        \
-                 city_name_get(_city), city_size_get(_city))
+                 city_name(_city), city_size_get(_city))
 
 #define SANITY_TERRAIN(_tile, check)                                        \
   fc_assert_full(file, function, line, check, ,                             \
@@ -81,25 +80,18 @@ static void check_specials(const char *file, const char *function, int line)
 {
   whole_map_iterate(ptile) {
     const struct terrain *pterrain = tile_terrain(ptile);
+    bv_special special = tile_specials(ptile);
 
-    extra_type_iterate(pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        extra_deps_iterate(&(pextra->reqs), pdep) {
-          SANITY_TILE(ptile, tile_has_extra(ptile, pdep));
-        } extra_deps_iterate_end;
-      }
-    } extra_type_iterate_end;
+    if (contains_special(special, S_FARMLAND)) {
+      SANITY_TILE(ptile, contains_special(special, S_IRRIGATION));
+    }
 
-    extra_type_by_cause_iterate(EC_MINE, pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        SANITY_TILE(ptile, pterrain->mining_result == pterrain);
-      }
-    } extra_type_by_cause_iterate_end;
-    extra_type_by_cause_iterate(EC_IRRIGATION, pextra) {
-      if (tile_has_extra(ptile, pextra)) {
-        SANITY_TILE(ptile, pterrain->irrigation_result == pterrain);
-      }
-    } extra_type_by_cause_iterate_end;
+    if (contains_special(special, S_MINE)) {
+      SANITY_TILE(ptile, pterrain->mining_result == pterrain);
+    }
+    if (contains_special(special, S_IRRIGATION)) {
+      SANITY_TILE(ptile, pterrain->irrigation_result == pterrain);
+    }
 
     SANITY_TILE(ptile, terrain_index(pterrain) >= T_FIRST 
                        && terrain_index(pterrain) < terrain_count());
@@ -229,7 +221,7 @@ static bool check_city_good(struct city *pcity, const char *file,
     SANITY_FAIL("(----,----) city has no tile (skipping remaining tests), "
                 "at %s \"%s\"[%d]%s",
                 nation_rule_name(nation_of_player(pplayer)),
-                city_name_get(pcity), city_size_get(pcity),
+                city_name(pcity), city_size_get(pcity),
                 "{city center}");
     return FALSE;
   }
@@ -246,7 +238,7 @@ static bool check_city_good(struct city *pcity, const char *file,
                   TILE_XY(pcenter),
                   nation_rule_name(nation_of_player(tile_owner(pcenter))),
                   nation_rule_name(nation_of_player(pplayer)),
-                  city_name_get(pcity), city_size_get(pcity),
+                  city_name(pcity), city_size_get(pcity),
                   "{city center}");
     }
   }
@@ -264,39 +256,6 @@ static bool check_city_good(struct city *pcity, const char *file,
     }
   } city_built_iterate_end;
 
-  trade_routes_iterate(pcity, proute) {
-    struct city *partner = game_city_by_number(proute->partner);
-
-    if (partner != NULL) {
-      struct trade_route *back_route = NULL;
-
-      trade_routes_iterate(partner, pback) {
-        if (pback->partner == pcity->id) {
-          back_route = pback;
-          break;
-        }
-      } trade_routes_iterate_end;
-
-      SANITY_CITY(pcity, back_route != NULL);
-
-      if (back_route != NULL) {
-        switch (back_route->dir) {
-        case RDIR_TO:
-          SANITY_CITY(pcity, proute->dir == RDIR_FROM);
-          break;
-        case RDIR_FROM:
-          SANITY_CITY(pcity, proute->dir == RDIR_TO);
-          break;
-        case RDIR_BIDIRECTIONAL:
-          SANITY_CITY(pcity, proute->dir == RDIR_BIDIRECTIONAL);
-          break;
-        }
-
-        SANITY_CITY(pcity, proute->goods == back_route->goods);
-      }
-    }
-  } trade_routes_iterate_end;
-
   return TRUE;
 }
 
@@ -307,7 +266,7 @@ static void check_city_size(struct city *pcity, const char *file,
                             const char *function, int line)
 {
   int delta;
-  int citizen_count = 0;
+  int citizens = 0;
   struct tile *pcenter = city_tile(pcity);
 
   SANITY_CITY(pcity, city_size_get(pcity) >= 1);
@@ -315,19 +274,19 @@ static void check_city_size(struct city *pcity, const char *file,
   city_tile_iterate_skip_free_worked(city_map_radius_sq_get(pcity), pcenter,
                                   ptile, _index, _x, _y) {
     if (tile_worked(ptile) == pcity) {
-      citizen_count++;
+      citizens++;
     }
   } city_tile_iterate_skip_free_worked_end;
 
-  citizen_count += city_specialists(pcity);
-  delta = city_size_get(pcity) - citizen_count;
+  citizens += city_specialists(pcity);
+  delta = city_size_get(pcity) - citizens;
   if (0 != delta) {
     SANITY_FAIL("(%4d,%4d) %d citizens not equal [size], "
                 "repairing \"%s\"[%d]", TILE_XY(pcity->tile),
-                citizen_count, city_name_get(pcity), city_size_get(pcity));
+                citizens, city_name(pcity), city_size_get(pcity));
 
     citylog_map_workers(LOG_DEBUG, pcity);
-    log_debug("[%s (%d)] specialists: %d", city_name_get(pcity), pcity->id,
+    log_debug("[%s (%d)] specialists: %d", city_name(pcity), pcity->id,
               city_specialists(pcity));
 
     city_repair_size(pcity, delta);
@@ -352,12 +311,6 @@ static void check_city_feelings(const struct city *pcity, const char *file,
     for (ccategory = CITIZEN_HAPPY; ccategory < CITIZEN_LAST; ccategory++) {
       sum += pcity->feel[ccategory][feel];
     }
-
-    /* While loading savegame, we want to check sanity of values read from the
-     * savegame despite the fact that city workers_frozen level of the city
-     * is above zero -> can't limit sanitycheck callpoints by that. Instead
-     * we check even more relevant needs_arrange. */
-    SANITY_CITY(pcity, !pcity->server.needs_arrange);
 
     SANITY_CITY(pcity, city_size_get(pcity) - spe == sum);
   }
@@ -397,7 +350,6 @@ static void check_units(const char *file, const char *function, int line)
   players_iterate(pplayer) {
     unit_list_iterate(pplayer->units, punit) {
       struct tile *ptile = unit_tile(punit);
-      struct terrain *pterr = tile_terrain(ptile);
       struct city *pcity;
       struct city *phome;
       struct unit *ptrans = unit_transport_get(punit);
@@ -422,12 +374,6 @@ static void check_units(const char *file, const char *function, int line)
                     TILE_XY(ptile), unit_rule_name(punit),
                     get_activity_text(punit->activity),
                     tile_get_info_text(ptile, TRUE, 0));
-      }
-
-      if (activity_requires_target(punit->activity)
-          && (punit->activity != ACTIVITY_IRRIGATE || pterr->irrigation_result == pterr)
-          && (punit->activity != ACTIVITY_MINE || pterr->mining_result == pterr)) {
-        SANITY_CHECK(punit->activity_target != NULL);
       }
 
       pcity = tile_city(ptile);
@@ -526,9 +472,7 @@ static void check_players(const char *file, const char *function, int line)
       state1 = player_diplstate_get(pplayer, pplayer2);
       state2 = player_diplstate_get(pplayer2, pplayer);
       SANITY_CHECK(state1->type == state2->type);
-      SANITY_CHECK(state1->max_state == state2->max_state);
-      if (state1->type == DS_CEASEFIRE
-          || state1->type == DS_ARMISTICE) {
+      if (state1->type == DS_CEASEFIRE) {
         SANITY_CHECK(state1->turns_left == state2->turns_left);
       }
       if (state1->type == DS_TEAM) {
@@ -604,24 +548,6 @@ static void check_teams(const char *file, const char *function, int line)
   } team_slots_iterate_end;
 }
 
-/****************************************************************************
-  Sanity checks on all players.
-****************************************************************************/
-static void
-check_researches(const char *file, const char *function, int line)
-{
-  researches_iterate(presearch) {
-    SANITY_CHECK(S_S_RUNNING != server_state()
-                 || A_UNSET == presearch->researching
-                 || is_future_tech(presearch->researching)
-                 || (A_NONE != presearch->researching
-                     && valid_advance_by_number(presearch->researching)));
-    SANITY_CHECK(A_UNSET == presearch->tech_goal
-                 || (A_NONE != presearch->tech_goal
-                     && valid_advance_by_number(presearch->tech_goal)));
-  } researches_iterate_end;
-}
-
 /**************************************************************************
   Sanity checking on connections.
 **************************************************************************/
@@ -656,7 +582,6 @@ void real_sanity_check(const char *file, const char *function, int line)
   check_misc(file, function, line);
   check_players(file, function, line);
   check_teams(file, function, line);
-  check_researches(file, function, line);
   check_connections(file, function, line);
 }
 

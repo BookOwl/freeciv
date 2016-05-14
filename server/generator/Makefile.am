@@ -1,13 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 noinst_LTLIBRARIES = libgenerator.la
 
-AM_CPPFLAGS = \
-	-I$(top_srcdir)/utility \
-	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/networking \
-	-I$(top_srcdir)/server \
-	-I$(top_srcdir)/server/generator \
-	-I$(top_srcdir)/dependencies/tinycthread
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common -I$(top_srcdir)/server -I$(top_srcdir)/server/generator
 
 libgenerator_la_SOURCES = \
 	mapgen.c \
@@ -24,3 +18,4 @@ libgenerator_la_SOURCES = \
 	temperature_map.h
 
 libgenerator_la_LIBADD = -lm
+

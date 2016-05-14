@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,15 +28,14 @@ void qtg_ui_main(int argc, char *argv[]);
 void qtg_ui_exit();
 
 enum gui_type qtg_get_gui_type();
-void qtg_insert_client_build_info(char *outbuf, size_t outlen);
-void qtg_adjust_default_options();
 
 void qtg_version_message(char *vertext);
 void qtg_real_output_window_append(const char *astring,
                                    const struct text_tag_list *tags,
                                    int conn_id);
 
-bool qtg_is_view_supported(enum ts_type type);
+bool qtg_isometric_view_supported();
+bool qtg_overhead_view_supported();
 void qtg_free_intro_radar_sprites();
 struct sprite *qtg_load_gfxfile(const char *filename);
 struct sprite *qtg_create_sprite(int width, int height, struct color *pcolor);
@@ -52,8 +51,6 @@ void qtg_color_free(struct color *pcolor);
 
 struct canvas *qtg_canvas_create(int width, int height);
 void qtg_canvas_free(struct canvas *store);
-void qtg_canvas_set_zoom(struct canvas *store, float zoom);
-bool qtg_has_zoom_support();
 void qtg_canvas_copy(struct canvas *dest, struct canvas *src,
 		     int src_x, int src_y, int dest_x, int dest_y, int width,
 		     int height);
@@ -75,6 +72,8 @@ void qtg_canvas_put_rectangle(struct canvas *pcanvas,
 void qtg_canvas_fill_sprite_area(struct canvas *pcanvas,
                                  struct sprite *psprite, struct color *pcolor,
                                  int canvas_x, int canvas_y);
+void qtg_canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+                                int canvas_x, int canvas_y);
 void qtg_canvas_put_line(struct canvas *pcanvas, struct color *pcolor,
                          enum line_type ltype, int start_x, int start_y,
                          int dx, int dy);
@@ -87,9 +86,9 @@ void qtg_canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
                          enum client_font font, struct color *pcolor,
                          const char *text);
 
-void qtg_set_rulesets(int num_rulesets, char **rulesets);
-void qtg_options_extra_init();
-void qtg_server_connect();
+void qtg_gui_set_rulesets(int num_rulesets, char **rulesets);
+void qtg_gui_options_extra_init();
+void qtg_gui_server_connect();
 void qtg_add_net_input(int sock);
 void qtg_remove_net_input();
 void qtg_real_conn_list_dialog_update();
@@ -109,21 +108,23 @@ void qtg_set_city_names_font_sizes(int my_city_names_font_size,
 
 void qtg_editgui_refresh();
 void qtg_editgui_notify_object_created(int tag, int id);
-void qtg_editgui_notify_object_changed(int objtype, int object_id, bool removal);
+void qtg_editgui_notify_object_changed(int objtype, int object_id, bool remove);
 void qtg_editgui_popup_properties(const struct tile_list *tiles, int objtype);
 void qtg_editgui_tileset_changed();
 void qtg_editgui_popdown_all();
+
+void qtg_gui_ggz_embed_ensure_server();
+void qtg_gui_ggz_embed_leave_table();
+void qtg_add_ggz_input(int sock);
+void qtg_remove_ggz_input();
 
 void qtg_update_timeout_label();
 void qtg_real_city_dialog_popup(struct city *pcity);
 void qtg_real_city_dialog_refresh(struct city *pcity);
 void qtg_popdown_city_dialog(struct city *pcity);
 void qtg_popdown_all_city_dialogs();
-bool qtg_handmade_scenario_warning();
 void qtg_refresh_unit_city_dialogs(struct unit *punit);
 bool qtg_city_dialog_is_open(struct city *pcity);
-
-bool qtg_request_transport(struct unit *pcargo, struct tile *ptile);
 
 void qtg_gui_load_theme(const char *directory, const char *theme_name);
 void qtg_gui_clear_theme();

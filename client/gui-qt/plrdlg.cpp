@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -389,7 +389,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
   QModelIndexList indexes = sl.indexes();
   struct city *pcity;
   const struct player_diplstate *state;
-  struct research *my_research, *research;
+  struct player_research *research;
   char tbuf[256];
   QString res;
   QString sp = " ";
@@ -422,7 +422,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     return;
   }
   pcity = player_capital(pplayer);
-  research = research_get(pplayer);
+  research = player_research_get(pplayer);
 
   switch (research->researching) {
   case A_UNKNOWN:
@@ -432,8 +432,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     res = _("(none)");
     break;
   default:
-    res = QString(research_advance_name_translation(research,
-                                                    research->researching))
+    res = QString(advance_name_researching(pplayer))
           + sp + "(" + QString::number(research->bulbs_researched) + "/"
           + QString::number(research->client.researching_cost) + ")";
     break;
@@ -448,7 +447,7 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     + QString("</b></td><td>") + QString(government_name_for_player(pplayer))
     + QString("</td></tr><tr><td><b>") + _("Capital:")
     + QString("</b></td><td>")
-    + QString(((!pcity) ? _("(unknown)") : city_name_get(pcity)))
+    + QString(((!pcity) ? _("(unknown)") : city_name(pcity)))
     + QString("</td></tr><tr><td><b>") + _("Gold:")
     + QString("</b></td><td>") + QString::number(pplayer->economic.gold)
     + QString("</td></tr><tr><td><b>") + _("Tax:")
@@ -474,9 +473,8 @@ void plr_widget::nation_selected(const QItemSelection &sl,
       if (static_cast<int>(state->type) == i) {
         if (added == false) {
           ally_str = ally_str  + QString("<b>")
-                     + QString(diplstate_type_translated_name(
-                                 static_cast<diplstate_type>(i)))
-                     + ": "  + QString("</b>") + nl;
+                   + QString(diplstate_text(static_cast<diplstate_type>(i)))
+                   + ": "  + QString("</b>") + nl;
           added = true;
         }
         ally_str = ally_str + nation_plural_for_player(other) + ", ";
@@ -488,7 +486,6 @@ void plr_widget::nation_selected(const QItemSelection &sl,
     }
   }
   me = client_player();
-  my_research = research_get(me);
   if (!client_is_global_observer()) {
     if (player_has_embassy(me, pplayer) && me != pplayer) {
       a = 0;
@@ -499,18 +496,15 @@ void plr_widget::nation_selected(const QItemSelection &sl,
 
       advance_iterate(A_FIRST, padvance) {
         tech_id = advance_number(padvance);
-        if (research_invention_state(my_research, tech_id) == TECH_KNOWN
-            && (research_invention_state(research, tech_id) 
-                != TECH_KNOWN)) {
+        if (player_invention_state(me, tech_id) == TECH_KNOWN
+            && (player_invention_state(pplayer, tech_id) != TECH_KNOWN)) {
           a++;
-          sorted_list_a << research_advance_name_translation(research,
-                                                             tech_id);
+          sorted_list_a << advance_name_for_player(pplayer, tech_id);
         }
-        if (research_invention_state(my_research, tech_id) != TECH_KNOWN
-            && (research_invention_state(research, tech_id) == TECH_KNOWN)) {
+        if (player_invention_state(me, tech_id) != TECH_KNOWN
+            && (player_invention_state(pplayer, tech_id) == TECH_KNOWN)) {
           b++;
-          sorted_list_b << research_advance_name_translation(research,
-                                                             tech_id);
+          sorted_list_b << advance_name_for_player(pplayer, tech_id);
         }
       } advance_iterate_end;
       sorted_list_a.sort(Qt::CaseInsensitive);
@@ -542,8 +536,8 @@ void plr_widget::nation_selected(const QItemSelection &sl,
                arg(nation_plural_for_player(pplayer));
     advance_iterate(A_FIRST, padvance) {
       tech_id = advance_number(padvance);
-      if (research_invention_state(research, tech_id) == TECH_KNOWN) {
-        sorted_list_a << research_advance_name_translation(research, tech_id);
+      if (player_invention_state(pplayer, tech_id) == TECH_KNOWN) {
+        sorted_list_a << advance_name_for_player(pplayer, tech_id);
       }
     } advance_iterate_end;
     sorted_list_a.sort(Qt::CaseInsensitive);
@@ -711,12 +705,11 @@ void plr_report::update_report(bool update_selection)
 
   /* Force updating selected player information */
   if (update_selection == true) {
+    qmi = plr_wdg->currentIndex();
     if (qmi.isValid()){
       plr_wdg->clearSelection();
       plr_wdg->setCurrentIndex(qmi);
     }
-    plr_wdg->clearSelection();
-    plr_wdg->setCurrentIndex(qmi);
   }
 
   plr_wdg->header()->resizeSections(QHeaderView::ResizeToContents);
@@ -755,16 +748,13 @@ void plr_report::update_report(bool update_selection)
 void popup_players_dialog(bool raise)
 {
   int i;
+  plr_report *pr;
   QWidget *w;
-
   if (!gui()->is_repo_dlg_open("PLR")) {
     plr_report *pr = new plr_report;
-
     pr->init();
     pr->update_report();
   } else {
-    plr_report *pr;
-
     i = gui()->gimme_index_of("PLR");
     fc_assert(i != -1);
     w = gui()->game_tab_widget->widget(i);

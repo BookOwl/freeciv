@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,12 +18,12 @@
 /* client */
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 
 #include "chatline_g.h"
 #include "citydlg_g.h"
 #include "connectdlg_g.h"
-#include "dialogs_g.h"
 #include "editgui_g.h"
 #include "graphics_g.h"
 #include "gui_main_g.h"
@@ -94,27 +94,19 @@ enum gui_type get_gui_type(void)
 }
 
 /**************************************************************************
-  Call insert_client_build_info callback
+  Call isometric_view_supported callback
 **************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
+bool isometric_view_supported(void)
 {
-  funcs.insert_client_build_info(outbuf, outlen);
+  return funcs.isometric_view_supported();
 }
 
 /**************************************************************************
-  Call adjust_default_options callback
+  Call overhead_view_supported callback
 **************************************************************************/
-void adjust_default_options(void)
+bool overhead_view_supported(void)
 {
-  funcs.adjust_default_options();
-}
-
-/**************************************************************************
-  Call is_view_supported callback
-**************************************************************************/
-bool is_view_supported(enum ts_type type)
-{
-  return funcs.is_view_supported(type);
+  return funcs.overhead_view_supported();
 }
 
 /**************************************************************************
@@ -202,22 +194,6 @@ void canvas_free(struct canvas *store)
 }
 
 /**************************************************************************
-  Call canvas_set_zoom callback
-**************************************************************************/
-void canvas_set_zoom(struct canvas *store, float zoom)
-{
-  funcs.canvas_set_zoom(store, zoom);
-}
-
-/**************************************************************************
-  Call has_zoom_support callback
-**************************************************************************/
-bool has_zoom_support(void)
-{
-  return funcs.has_zoom_support();
-}
-
-/**************************************************************************
   Call canvas_copy callback
 **************************************************************************/
 void canvas_copy(struct canvas *dest, struct canvas *src,
@@ -283,6 +259,15 @@ void canvas_fill_sprite_area(struct canvas *pcanvas,
 }
 
 /**************************************************************************
+  Call canvas_fog_sprite_area callback
+**************************************************************************/
+void canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+			    int canvas_x, int canvas_y)
+{
+  funcs.canvas_fog_sprite_area(pcanvas, psprite, canvas_x, canvas_y);
+}
+
+/**************************************************************************
   Call canvas_put_line callback
 **************************************************************************/
 void canvas_put_line(struct canvas *pcanvas, struct color *pcolor,
@@ -323,27 +308,27 @@ void canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
 }
 
 /**************************************************************************
-  Call set_rulesets callback
+  Call gui_set_rulesets callback
 **************************************************************************/
-void set_rulesets(int num_rulesets, char **rulesets)
+void gui_set_rulesets(int num_rulesets, char **rulesets)
 {
-  funcs.set_rulesets(num_rulesets, rulesets);
+  funcs.gui_set_rulesets(num_rulesets, rulesets);
 }
 
 /**************************************************************************
-  Call options_extra_init callback
+  Call gui_options_extra_init callback
 **************************************************************************/
-void options_extra_init(void)
+void gui_options_extra_init(void)
 {
-  funcs.options_extra_init();
+  funcs.gui_options_extra_init();
 }
 
 /**************************************************************************
-  Call server_connect callback
+  Call gui_server_connect callback
 **************************************************************************/
-void server_connect(void)
+void gui_server_connect(void)
 {
-  funcs.server_connect();
+  funcs.gui_server_connect();
 }
 
 /**************************************************************************
@@ -471,9 +456,9 @@ void editgui_notify_object_created(int tag, int id)
 /****************************************************************************
   Call editgui_notify_object_changed callback
 ****************************************************************************/
-void editgui_notify_object_changed(int objtype, int object_id, bool removal)
+void editgui_notify_object_changed(int objtype, int object_id, bool remove)
 {
-  funcs.editgui_notify_object_changed(objtype, object_id, removal);
+  funcs.editgui_notify_object_changed(objtype, object_id, remove);
 }
 
 /****************************************************************************
@@ -498,6 +483,38 @@ void editgui_tileset_changed(void)
 void editgui_popdown_all(void)
 {
   funcs.editgui_popdown_all();
+}
+
+/**************************************************************************
+  Call gui_ggz_embed_ensure_server callback
+**************************************************************************/
+void gui_ggz_embed_ensure_server(void)
+{
+  funcs.gui_ggz_embed_ensure_server();
+}
+
+/**************************************************************************
+  Call add_ggz_input callback
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+  funcs.add_ggz_input(sock);
+}
+
+/**************************************************************************
+  Call remove_ggz_input callback
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  funcs.remove_ggz_input();
+}
+
+/****************************************************************************
+  Call gui_ggz_embed_leave_table callback
+****************************************************************************/
+void gui_ggz_embed_leave_table(void)
+{
+  funcs.gui_ggz_embed_leave_table();
 }
 
 /****************************************************************************
@@ -541,14 +558,6 @@ void popdown_all_city_dialogs()
 }
 
 /**************************************************************************
-  Call handmade_scenario_warning callback
-**************************************************************************/
-bool handmade_scenario_warning()
-{
-  return funcs.handmade_scenario_warning();
-}
-
-/**************************************************************************
   Call refresh_unit_city_dialogs callback
 **************************************************************************/
 void refresh_unit_city_dialogs(struct unit *punit)
@@ -562,14 +571,6 @@ void refresh_unit_city_dialogs(struct unit *punit)
 bool city_dialog_is_open(struct city *pcity)
 {
   return funcs.city_dialog_is_open(pcity);
-}
-
-/**************************************************************************
-  Call request_transport callback
-**************************************************************************/
-bool request_transport(struct unit *pcargo, struct tile *ptile)
-{
-  return funcs.request_transport(pcargo, ptile);
 }
 
 /**************************************************************************

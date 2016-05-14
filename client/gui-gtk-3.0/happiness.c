@@ -42,8 +42,8 @@
 /* semi-arbitrary number that controls the width of the happiness widget */
 #define HAPPINESS_PIX_WIDTH 30
 
-#define	FEELING_WIDTH	(HAPPINESS_PIX_WIDTH * tileset_small_sprite_width(tileset))
-#define	FEELING_HEIGHT	(tileset_small_sprite_height(tileset))
+#define	PIXCOMM_WIDTH	(HAPPINESS_PIX_WIDTH * tileset_small_sprite_width(tileset))
+#define	PIXCOMM_HEIGHT	(tileset_small_sprite_height(tileset))
 
 #define NUM_HAPPINESS_MODIFIERS 6
 
@@ -53,8 +53,7 @@ struct happiness_dialog {
   struct city *pcity;
   GtkWidget *shell;
   GtkWidget *cityname_label;
-  cairo_surface_t *feeling_surfaces[NUM_HAPPINESS_MODIFIERS];
-  GtkWidget *feeling_images[NUM_HAPPINESS_MODIFIERS];
+  GtkWidget *hpixmaps[NUM_HAPPINESS_MODIFIERS];
   GtkWidget *happiness_ebox[NUM_HAPPINESS_MODIFIERS];
   GtkWidget *happiness_label[NUM_HAPPINESS_MODIFIERS];
   GtkWidget *close;
@@ -226,8 +225,6 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
   gtk_container_add(GTK_CONTAINER(pdialog->cityname_label), table);
 
   for (i = 0; i < NUM_HAPPINESS_MODIFIERS; i++) {
-    GdkPixbuf *pb;
-
     /* set spacing between lines of citizens*/
 
     /* happiness labels */
@@ -248,14 +245,10 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
                      G_CALLBACK(show_happiness_popup), GUINT_TO_POINTER(i));
     pdialog->happiness_ebox[i] = ebox;
 
-    pdialog->feeling_surfaces[i] = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                                              FEELING_WIDTH, FEELING_HEIGHT);
-    pb = surface_get_pixbuf(pdialog->feeling_surfaces[i], FEELING_WIDTH, FEELING_HEIGHT);
-    pdialog->feeling_images[i] = gtk_image_new_from_pixbuf(pb);
-    g_object_unref(pb);
-    gtk_container_add(GTK_CONTAINER(ebox), pdialog->feeling_images[i]);
-    gtk_widget_set_halign(pdialog->feeling_images[i], GTK_ALIGN_START);
-    gtk_widget_set_valign(pdialog->feeling_images[i], GTK_ALIGN_START);
+    pdialog->hpixmaps[i] = gtk_pixcomm_new(PIXCOMM_WIDTH, PIXCOMM_HEIGHT);
+    gtk_container_add(GTK_CONTAINER(ebox), pdialog->hpixmaps[i]);
+    gtk_widget_set_halign(pdialog->hpixmaps[i], GTK_ALIGN_START);
+    gtk_widget_set_valign(pdialog->hpixmaps[i], GTK_ALIGN_START);
 
     gtk_grid_attach(GTK_GRID(table), ebox, 1, i, 1, 1);
   }
@@ -276,28 +269,22 @@ static struct happiness_dialog *create_happiness_dialog(struct city *pcity)
 }
 
 /**************************************************************************
-  Refresh citizens surface
+  Refresh citizens pixcomm
 **************************************************************************/
-static void refresh_feeling_surface(cairo_surface_t *dst, struct city *pcity,
-                                    enum citizen_feeling index)
+static void refresh_pixcomm(GtkPixcomm *dst, struct city *pcity,
+			    enum citizen_feeling index)
 {
-  enum citizen_category categories[MAX_CITY_SIZE];
+  enum citizen_category citizens[MAX_CITY_SIZE];
   int i;
-  int num_citizens = get_city_citizen_types(pcity, index, categories);
-  int offset = MIN(tileset_small_sprite_width(tileset), FEELING_WIDTH / num_citizens);
-  cairo_t *cr;
+  int num_citizens = get_city_citizen_types(pcity, index, citizens);
+  int offset = MIN(tileset_small_sprite_width(tileset), PIXCOMM_WIDTH / num_citizens);
 
-  cr = cairo_create(dst);
+  gtk_pixcomm_clear(dst);
 
   for (i = 0; i < num_citizens; i++) {
-    cairo_set_source_surface(cr,
-                             get_citizen_sprite(tileset, categories[i], i, pcity)->surface,
-                             i * offset, 0);
-    cairo_rectangle(cr, i * offset, 0, offset, FEELING_HEIGHT);
-    cairo_fill(cr);
+    gtk_pixcomm_copyto(dst, get_citizen_sprite(tileset, citizens[i], i, pcity),
+		       i * offset, 0);
   }
-
-  cairo_destroy(cr);
 }
 
 /**************************************************************************
@@ -309,13 +296,7 @@ void refresh_happiness_dialog(struct city *pcity)
   struct happiness_dialog *pdialog = get_happiness_dialog(pcity);
 
   for (i = 0; i < FEELING_LAST; i++) {
-    GdkPixbuf *pb;
-
-    refresh_feeling_surface(pdialog->feeling_surfaces[i], pdialog->pcity, i);
-
-    pb = surface_get_pixbuf(pdialog->feeling_surfaces[i], FEELING_WIDTH, FEELING_HEIGHT);
-    gtk_image_set_from_pixbuf(GTK_IMAGE(pdialog->feeling_images[i]), pb);
-    g_object_unref(pb);
+    refresh_pixcomm(GTK_PIXCOMM(pdialog->hpixmaps[i]), pdialog->pcity, i);
   }
 }
 
@@ -325,8 +306,6 @@ void refresh_happiness_dialog(struct city *pcity)
 void close_happiness_dialog(struct city *pcity)
 {
   struct happiness_dialog *pdialog = get_happiness_dialog(pcity);
-  int i;
-
   if (pdialog == NULL) {
     /* City which is being investigated doesn't contain happiness tab */
     return;
@@ -337,11 +316,6 @@ void close_happiness_dialog(struct city *pcity)
   dialog_list_remove(dialog_list, pdialog);
 
   gtk_widget_destroy(pdialog->shell);
-
-  for (i = 0; i < NUM_HAPPINESS_MODIFIERS; i++) {
-    cairo_surface_destroy(pdialog->feeling_surfaces[i]);
-  }
-
   free(pdialog);
 }
 

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2001 - R. Falke
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +11,10 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-/***********************************************************************
+/**************************************************************************
  This is the common file for all front-end (Front End Common) for the
  citizen management agent (CMA).
-***********************************************************************/
+**************************************************************************/
 
 #ifdef HAVE_CONFIG_H
 #include <fc_config.h>
@@ -103,7 +103,7 @@ void cmafec_free(void)
  Sets the front-end parameter.
 **************************************************************************/
 void cmafec_set_fe_parameter(struct city *pcity,
-                             const struct cm_parameter *const parameter)
+			     const struct cm_parameter *const parameter)
 {
   cma_set_parameter(ATTR_CITY_CMAFE_PARAMETER, pcity->id, parameter);
 }
@@ -150,13 +150,13 @@ void cmafec_preset_add(const char *descr_name, struct cm_parameter *pparam)
 /**************************************************************************
  Removes a preset.
 **************************************************************************/
-void cmafec_preset_remove(int idx)
+void cmafec_preset_remove(int index)
 {
   struct cma_preset *ppreset;
 
-  fc_assert_ret(idx >= 0 && idx < cmafec_preset_num());
+  fc_assert_ret(index >= 0 && index < cmafec_preset_num());
 
-  ppreset = preset_list_get(preset_list, idx);
+  ppreset = preset_list_get(preset_list, index);
   preset_list_remove(preset_list, ppreset);
 
   free(ppreset->descr);
@@ -166,26 +166,26 @@ void cmafec_preset_remove(int idx)
 /**************************************************************************
  Returns the indexed preset's description.
 **************************************************************************/
-char *cmafec_preset_get_descr(int idx)
+char *cmafec_preset_get_descr(int index)
 {
   struct cma_preset *ppreset;
 
-  fc_assert_ret_val(idx >= 0 && idx < cmafec_preset_num(), NULL);
+  fc_assert_ret_val(index >= 0 && index < cmafec_preset_num(), NULL);
 
-  ppreset = preset_list_get(preset_list, idx);
+  ppreset = preset_list_get(preset_list, index);
   return ppreset->descr;
 }
 
 /**************************************************************************
  Returns the indexed preset's parameter.
 **************************************************************************/
-const struct cm_parameter *cmafec_preset_get_parameter(int idx)
+const struct cm_parameter *cmafec_preset_get_parameter(int index)
 {
   struct cma_preset *ppreset;
 
-  fc_assert_ret_val(idx >= 0 && idx < cmafec_preset_num(), NULL);
+  fc_assert_ret_val(index >= 0 && index < cmafec_preset_num(), NULL);
 
-  ppreset = preset_list_get(preset_list, idx);
+  ppreset = preset_list_get(preset_list, index);
   return &ppreset->parameter;
 }
 
@@ -194,7 +194,7 @@ const struct cm_parameter *cmafec_preset_get_parameter(int idx)
  parameter. Returns -1 if no preset could be found.
 **************************************************************************/
 int cmafec_preset_get_index_of_parameter(const struct cm_parameter
-                                         *const parameter)
+					 *const parameter)
 {
   int i;
 
@@ -234,14 +234,14 @@ const char *cmafec_get_short_descr_of_city(const struct city *pcity)
  preset could be found.
 **************************************************************************/
 const char *cmafec_get_short_descr(const struct cm_parameter *const
-                                   parameter)
+				   parameter)
 {
-  int idx = cmafec_preset_get_index_of_parameter(parameter);
+  int index = cmafec_preset_get_index_of_parameter(parameter);
 
-  if (idx == -1) {
+  if (index == -1) {
     return _("custom");
   } else {
-    return cmafec_preset_get_descr(idx);
+    return cmafec_preset_get_descr(index);
   }
 }
 
@@ -326,20 +326,20 @@ const char *cmafec_get_result_descr(struct city *pcity,
 {
   int j;
   char buf[RESULT_COLUMNS][BUFFER_SIZE];
-  char citizen_types[BUFFER_SIZE];
+  char citizens[BUFFER_SIZE];
   static char buffer[600];
 
   /* TRANS: "W" is worker citizens, as opposed to specialists;
    * %s will represent the specialist types, for instance "E/S/T" */
-  fc_snprintf(citizen_types, BUFFER_SIZE, _("People (W/%s)"),
+  fc_snprintf(citizens, BUFFER_SIZE, _("People (W/%s)"),
               specialists_abbreviation_string());
 
   if (!result->found_a_valid) {
     for (j = 0; j < RESULT_COLUMNS; j++)
       fc_snprintf(buf[j], BUFFER_SIZE, "---");
   } else {
-    output_type_iterate(o) {
-      fc_snprintf(buf[o], BUFFER_SIZE, "%+3d", result->surplus[o]);
+    output_type_iterate(j) {
+      fc_snprintf(buf[j], BUFFER_SIZE, "%+3d", result->surplus[j]);
     } output_type_iterate_end;
 
     fc_snprintf(buf[6], BUFFER_SIZE, "%d/%s%s",
@@ -366,8 +366,8 @@ const char *cmafec_get_result_descr(struct city *pcity,
                 "Production completed: %s"),
               buf[9], buf[O_FOOD], buf[O_GOLD], buf[O_SHIELD], buf[O_LUXURY],
               buf[O_TRADE], buf[O_SCIENCE],
-              MAX(0, 20 - (int)get_internal_string_length(citizen_types)), "",
-              citizen_types,
+              MAX(0, 20 - (int)get_internal_string_length(citizens)), "",
+              citizens,
               buf[6], buf[7], buf[8]);
 
   log_debug("\n%s", buffer);

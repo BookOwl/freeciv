@@ -5,16 +5,8 @@ MOCCMD=@MOCCMD@
 include $(top_srcdir)/bootstrap/Makerules.mk
 
 noinst_LTLIBRARIES = libgui-qt.la
-AM_CPPFLAGS = \
-	-I. \
-	-I$(srcdir)/.. \
-	-I$(srcdir)/../include \
-	-I$(top_srcdir)/utility \
-        -I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/common/networking \
-	-I$(srcdir)/../agents \
-	-I$(top_srcdir)/dependencies/tinycthread \
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility \
+        -I$(top_srcdir)/common -I$(srcdir)/../agents -I$(top_srcdir)/common/aicore \
         $(gui_qt_cppflags) $(SOUND_CFLAGS)
 
 AM_CFLAGS = $(gui_qt_cflags)
@@ -23,6 +15,7 @@ AM_CXXFLAGS = $(gui_qt_cxxflags)
 
 MOC_FILES = \
 	meta_fc_client.cpp	\
+	meta_helpdlg.cpp	\
 	meta_ratesdlg.cpp	\
 	meta_mapview.cpp	\
 	meta_menu.cpp		\
@@ -31,7 +24,6 @@ MOC_FILES = \
 	meta_optiondlg.cpp	\
 	meta_citydlg.cpp	\
 	meta_cityrep.cpp	\
-	meta_helpdlg.cpp	\
 	meta_plrdlg.cpp		\
 	meta_diplodlg.cpp	\
 	meta_spaceshipdlg.cpp	\

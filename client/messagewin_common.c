@@ -32,10 +32,9 @@
 
 /* client */
 #include "client_main.h"
+#include "messagewin_common.h"
 #include "options.h"
 #include "update_queue.h"
-
-#include "messagewin_common.h"
 
 static struct message *messages = NULL;
 static int messages_total = 0;
@@ -54,7 +53,7 @@ static void meswin_dialog_update(void)
     update_queue_add(UQ_CALLBACK(real_meswin_dialog_update), NULL);
   } else if (0 < messages_total
              && (!client_has_player()
-                 || is_human(client.conn.playing))) {
+                 || !client.conn.playing->ai_controlled)) {
     meswin_dialog_popup(FALSE);
   }
 }
@@ -168,7 +167,7 @@ void meswin_popup_city(int message_index)
     struct tile *ptile = messages[message_index].tile;
     struct city *pcity = tile_city(ptile);
 
-    if (gui_options.center_when_popup_city) {
+    if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
     }
 

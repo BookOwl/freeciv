@@ -5,7 +5,7 @@
 
 AC_DEFUN([FC_GTK2_CLIENT],
 [
-  if test "x$gui_gtk2" = "xyes" ||
+  if test "x$gui_gtk2" = "xyes" || test "x$client" = "xauto" ||
      test "x$client" = "xall" ; then
     AM_PATH_GTK_2_0(2.12.0,
       [
@@ -15,7 +15,7 @@ AC_DEFUN([FC_GTK2_CLIENT],
         fi
         gui_gtk2_cflags="$GTK2_CFLAGS"
         gui_gtk2_libs="$GTK2_LIBS"
-        if test "x$MINGW" = "xyes"; then
+        if test "x$MINGW32" = "xyes"; then
           dnl Required to compile gtk2 on Windows platform
           gui_gtk2_cflags="$gui_gtk2_cflags -mms-bitfields"
           gui_gtk2_ldflags="$gui_gtk2_ldflags -mwindows"

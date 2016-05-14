@@ -26,17 +26,10 @@ struct lua_State;
 int api_utilities_random(lua_State *L, int min, int max);
 
 Direction api_utilities_str2dir(lua_State *L, const char *dir);
-Direction api_utilities_dir_ccw(lua_State *L, Direction dir);
-Direction api_utilities_dir_cw(lua_State *L, Direction dir);
-Direction api_utilities_opposite_dir(lua_State *L, Direction dir);
 
 const char *api_utilities_fc_version(lua_State *L);
 
 void api_utilities_log_base(lua_State *L, int level, const char *message);
-
-void api_utilities_deprecation_warning(lua_State *L, char *method,
-                                       char *replacement,
-                                       char *deprecated_since);
 
 #ifdef __cplusplus
 }

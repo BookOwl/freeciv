@@ -44,7 +44,6 @@
 #include <stdarg.h>
 
 /* utility */
-#include "deprecations.h"
 #include "log.h"
 
 /* common/scriptcore */
@@ -76,7 +75,6 @@ struct signal {
   int nargs;                              /* number of arguments to pass */
   enum api_types *arg_types;              /* argument types */
   struct signal_callback_list *callbacks; /* connected callbacks */
-  char *depr_msg;                         /* deprecation message to show if handler added */
 };
 
 /* Signal callback datastructure. */
@@ -88,9 +86,13 @@ struct signal_callback {
   Signal hash table.
 *****************************************************************************/
 #define SPECHASH_TAG luascript_signal
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct signal *
-#define SPECHASH_IDATA_FREE signal_destroy
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE struct signal *
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
+#define SPECHASH_DATA_FREE signal_destroy
 #include "spechash.h"
 
 #define signal_hash_iterate(phash, key, data)                                \
@@ -139,8 +141,6 @@ static struct signal *signal_new(int nargs, enum api_types *parg_types)
   psignal->arg_types = parg_types;
   psignal->callbacks
     = signal_callback_list_new_full(signal_callback_destroy);
-  psignal->depr_msg = NULL;
-
   return psignal;
 }
 
@@ -151,9 +151,6 @@ static void signal_destroy(struct signal *psignal)
 {
   if (psignal->arg_types) {
     free(psignal->arg_types);
-  }
-  if (psignal->depr_msg) {
-    free(psignal->depr_msg);
   }
   signal_callback_list_destroy(psignal->callbacks);
   free(psignal);
@@ -210,82 +207,44 @@ void luascript_signal_emit(struct fc_lua *fcl, const char *signal_name,
 /*****************************************************************************
   Create a new signal type.
 *****************************************************************************/
-static struct signal *luascript_signal_create_valist(struct fc_lua *fcl,
-                                                     const char *signal_name,
-                                                     int nargs, va_list args)
+void luascript_signal_create_valist(struct fc_lua *fcl,
+                                    const char *signal_name,
+                                    int nargs, va_list args)
 {
   struct signal *psignal;
 
-  fc_assert_ret_val(fcl, NULL);
-  fc_assert_ret_val(fcl->signals, NULL);
+  fc_assert_ret(fcl);
+  fc_assert_ret(fcl->signals);
 
   if (luascript_signal_hash_lookup(fcl->signals, signal_name, &psignal)) {
     luascript_log(fcl, LOG_ERROR, "Signal \"%s\" was already created.",
                   signal_name);
-    return NULL;
   } else {
     enum api_types *parg_types = fc_calloc(nargs, sizeof(*parg_types));
     int i;
     char *sn = fc_malloc(strlen(signal_name) + 1);
-    struct signal *created;
 
     for (i = 0; i < nargs; i++) {
       *(parg_types + i) = va_arg(args, int);
     }
-    created = signal_new(nargs, parg_types);
     luascript_signal_hash_insert(fcl->signals, signal_name,
-                                 created);
+                                 signal_new(nargs, parg_types));
     strcpy(sn, signal_name);
     luascript_signal_name_list_append(fcl->signal_names, sn);
-
-    return created;
   }
 }
 
 /*****************************************************************************
   Create a new signal type.
 *****************************************************************************/
-signal_deprecator *luascript_signal_create(struct fc_lua *fcl, const char *signal_name,
-                                          int nargs, ...)
+void luascript_signal_create(struct fc_lua *fcl, const char *signal_name,
+                             int nargs, ...)
 {
   va_list args;
-  struct signal *created;
 
   va_start(args, nargs);
-  created = luascript_signal_create_valist(fcl, signal_name, nargs, args);
+  luascript_signal_create_valist(fcl, signal_name, nargs, args);
   va_end(args);
-
-  if (created != NULL) {
-    return &(created->depr_msg);
-  }
-
-  return NULL;
-}
-
-/*****************************************************************************
-  Mark signal deprecated.
-*****************************************************************************/
-void deprecate_signal(signal_deprecator *deprecator, char *signal_name,
-                      char *replacement, char *deprecated_since)
-{
-  if (deprecator != NULL) {
-    char buffer[1024];
-
-    if (deprecated_since != NULL && replacement != NULL) {
-      fc_snprintf(buffer, sizeof(buffer),
-                  "Deprecated: lua signal \"%s\", deprecated since \"%s\", used. "
-                  "Use \"%s\" instead", signal_name, deprecated_since, replacement);
-    } else if (replacement != NULL) {
-      fc_snprintf(buffer, sizeof(buffer),
-                  "Deprecated: lua signal \"%s\" used. Use \"%s\" instad",
-                  signal_name, replacement);
-    } else {
-      fc_snprintf(buffer, sizeof(buffer),
-                  "Deprecated: lua signal \"%s\" used.", signal_name);
-    }
-
-    *deprecator = fc_strdup(buffer);
-  }
 }
 
 /*****************************************************************************
@@ -308,10 +267,6 @@ void luascript_signal_callback(struct fc_lua *fcl, const char *signal_name,
         break;
       }
     } signal_callback_list_iterate_end;
-
-    if (psignal->depr_msg != NULL) {
-      log_deprecation("%s", psignal->depr_msg);
-    }
 
     if (create) {
       if (pcallback_found) {
@@ -396,12 +351,12 @@ void luascript_signal_free(struct fc_lua *fcl)
 /*****************************************************************************
   Return the name of the signal with the given index.
 *****************************************************************************/
-const char *luascript_signal_by_index(struct fc_lua *fcl, int sindex)
+const char *luascript_signal_by_index(struct fc_lua *fcl, int index)
 {
   fc_assert_ret_val(fcl != NULL, NULL);
   fc_assert_ret_val(fcl->signal_names != NULL, NULL);
 
-  return luascript_signal_name_list_get(fcl->signal_names, sindex);
+  return luascript_signal_name_list_get(fcl->signal_names, index);
 }
 
 /*****************************************************************************
@@ -410,7 +365,7 @@ const char *luascript_signal_by_index(struct fc_lua *fcl, int sindex)
 *****************************************************************************/
 const char *luascript_signal_callback_by_index(struct fc_lua *fcl,
                                                const char *signal_name,
-                                               int sindex)
+                                               int index)
 {
   struct signal *psignal;
 
@@ -419,7 +374,7 @@ const char *luascript_signal_callback_by_index(struct fc_lua *fcl,
 
   if (luascript_signal_hash_lookup(fcl->signals, signal_name, &psignal)) {
     struct signal_callback *pcallback
-      = signal_callback_list_get(psignal->callbacks, sindex);
+      = signal_callback_list_get(psignal->callbacks, index);
     if (pcallback) {
       return pcallback->name;
     }

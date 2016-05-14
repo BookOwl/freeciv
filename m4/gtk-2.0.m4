@@ -9,9 +9,8 @@ AC_DEFUN([AM_PATH_GTK_2_0],
 [dnl 
 dnl Get the cflags and libraries from pkg-config
 dnl
-AC_ARG_ENABLE([gtktest],
-  AS_HELP_STRING([--disable-gtktest], [do not try to compile and run a test GTK+ program]),
-[], [enable_gtktest=yes])
+AC_ARG_ENABLE(gtktest, [  --disable-gtktest       do not try to compile and run a test GTK+ program],
+		    , enable_gtktest=yes)
 
   pkg_config_args=gtk+-2.0
   for module in . $4
@@ -47,8 +46,6 @@ AC_ARG_ENABLE([gtktest],
 
   if test x"$no_gtk" = x ; then
     GTK2_CFLAGS=`$PKG_CONFIG $pkg_config_args --cflags`
-    GTK2_CFLAGS="$GTK2_CFLAGS -DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_2_12 -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_2_12"
-    GTK2_CFLAGS="$GTK2_CFLAGS -DGLIB_DISABLE_DEPRECATION_WARNINGS"
     GTK2_LIBS=`$PKG_CONFIG $pkg_config_args --libs`
     gtk_config_major_version=`$PKG_CONFIG --modversion gtk+-2.0 | \
            sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`

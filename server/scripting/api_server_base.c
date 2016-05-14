@@ -19,7 +19,6 @@
 #include "luascript.h"
 
 /* server */
-#include "savegame.h"
 #include "score.h"
 #include "settings.h"
 #include "srv_main.h"
@@ -63,40 +62,21 @@ bool api_server_save(lua_State *L, const char *filename)
   }
 
   save_game(filename, "User request (Lua)", FALSE);
-
-  return TRUE;
-}
-
-/*****************************************************************************
-  Play music track for player
-*****************************************************************************/
-bool api_play_music(lua_State *L, Player *pplayer, const char *tag)
-{
-  struct packet_play_music p;
-
-  LUASCRIPT_CHECK_STATE(L, FALSE);
-  LUASCRIPT_CHECK_SELF(L, pplayer, FALSE);
-  LUASCRIPT_CHECK_ARG_NIL(L, tag, 3, API_TYPE_STRING, FALSE);
-
-  strncpy(p.tag, tag, sizeof(p.tag));
-
-  lsend_packet_play_music(pplayer->connections, &p);
-
   return TRUE;
 }
 
 /*****************************************************************************
   Return the formated value of the setting or NULL if no such setting exists,
 *****************************************************************************/
-const char *api_server_setting_get(lua_State *L, const char *sett_name)
+const char *api_server_setting_get(lua_State *L, const char *setting_name)
 {
   struct setting *pset;
   static char buf[512];
 
   LUASCRIPT_CHECK_STATE(L, NULL);
-  LUASCRIPT_CHECK_ARG_NIL(L, sett_name, 2, API_TYPE_STRING, NULL);
+  LUASCRIPT_CHECK_ARG_NIL(L, setting_name, 2, API_TYPE_STRING, NULL);
 
-  pset = setting_by_name(sett_name);
+  pset = setting_by_name(setting_name);
 
   if (!pset) {
     return NULL;

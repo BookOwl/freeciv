@@ -50,7 +50,6 @@ enum munit {
   PILLAGE,
   BUILD,
   ROAD,
-  FORTIFY,
   FORTRESS,
   AIRBASE,
   POLLUTION,
@@ -69,42 +68,10 @@ enum munit {
   ORDER_DIPLOMAT_DLG,
   NUKE,
   UPGRADE,
-  MIGRANT,
   GO_AND_BUILD_CITY,
   NOT_4_OBS,
   SAVE
 };
-
-enum delay_order{
-  D_GOTO,
-  D_NUKE,
-  D_PARADROP,
-  D_FORT
-};
-
-class qfc_delayed_unit_item
-{
-public:
-  qfc_delayed_unit_item(delay_order dg, int i) {
-   order = dg;
-   id = i;
-   ptile = nullptr;
-  }
-  delay_order order;
-  int id;
-  struct tile *ptile;
-};
-
-class qfc_units_list
-{
-public:
-  qfc_units_list();
-  void add(qfc_delayed_unit_item* fui);
-  void clear();
-  QList<qfc_delayed_unit_item*> unit_list;
-  int nr_units;
-};
-
 
 /**************************************************************************
   Class for filtering chosen units
@@ -167,32 +134,6 @@ public slots:
   void update();
 };
 
-/****************************************************************************
-  Go to and... menu.
-****************************************************************************/
-class go_act_menu : public QMenu
-{
-  Q_OBJECT
-  static QSet<go_act_menu *> instances;
-
-  QSignalMapper *go_act_mapper;
-  QMap<QAction *, int> items;
-
-public:
-  go_act_menu(QWidget* parent = 0);
-  virtual ~go_act_menu();
-
-  static void reset_all();
-  static void update_all();
-
-public slots:
-  void start_go_act(int action_id);
-
-  void reset();
-  void create();
-  void update();
-};
-
 /**************************************************************************
   Class representing global menus in gameview
 **************************************************************************/
@@ -205,16 +146,13 @@ class mr_menu : public QMenuBar
   QActionGroup *filter_any;;
   QHash<munit, QAction*> menu_list;
   unit_filter u_filter;
-  qfc_units_list units_list;
 public:
   mr_menu();
   void setup_menus();
   void menus_sensitive();
-  void set_tile_for_order(struct tile *ptile);
   QAction *minimap_status;
   QAction *chat_status;
   QAction *messages_status;
-  bool delayed_order;
 private slots:
   /* game menu */
   void local_options();
@@ -232,7 +170,6 @@ private slots:
   /*used by work menu*/
   void slot_build_city();
   void slot_go_build_city();
-  void slot_go_join_city();
   void slot_auto_settler();
   void slot_build_road();
   void slot_build_irrigation();
@@ -262,11 +199,10 @@ private slots:
 
   /*used by combat menu*/
   void slot_unit_fortify();
-  void slot_unit_fortress();
   void slot_unit_airbase();
   void slot_pillage();
   void slot_action();
-  void slot_nuke();
+  void slot_explode_nuclear();
 
   /*used by view menu*/
   void slot_center_view();
@@ -277,7 +213,6 @@ private slots:
   void slot_map_grid();
   void slot_borders();
   void slot_fullbar();
-  void slot_native_tiles();
   void slot_city_growth();
   void slot_city_production();
   void slot_city_buycost();
@@ -295,11 +230,6 @@ private slots:
   void slot_filter();
   void slot_filter_other();
 
-  /* used by multiplayer menu */
-  void slot_orders_clear();
-  void slot_execute_orders();
-  void slot_delayed_goto();
-
   /*used by civilization menu */
   void slot_show_map();
   void slot_popup_tax_rates();
@@ -310,7 +240,6 @@ private slots:
   void slot_show_research_tab();
   void slot_spaceship();
   void slot_demographics();
-  void slot_achievements();
   void slot_top_five();
   void slot_traveler();
   void slot_show_chat();
@@ -322,7 +251,6 @@ private:
                    enum unit_select_location_mode selloc);
   void apply_filter(struct unit *punit);
   void apply_2nd_filter(struct unit *punit);
-  struct tile* find_last_unit_pos(struct unit* punit, int pos);
   QSignalMapper *signal_help_mapper;
 };
 

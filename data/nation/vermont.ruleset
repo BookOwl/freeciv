@@ -29,7 +29,7 @@ ruler_titles = {
 
 flag="vermont"
 flag_alt = "usa"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

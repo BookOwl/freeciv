@@ -15,12 +15,8 @@
 
 #include <gtk/gtk.h>
 
-/* client */
+#include "gtkpixcomm.h"
 #include "gui_main_g.h"
-
-#define GUI_GTK_OPTION(optname) gui_options.gui_gtk3_##optname
-#define GUI_GTK_OPTION_STR(optname) "gui_gtk3_" #optname
-#define GUI_GTK_DEFAULT_THEME_NAME FC_GTK3_DEFAULT_THEME_NAME
 
 /* network string charset conversion */
 gchar *ntoh_str(const gchar *netstr);
@@ -81,7 +77,6 @@ void refresh_chat_buttons(void);
 
 int screen_width(void);
 int screen_height(void);
-struct video_mode *resolution_request_get(void);
 
 bool is_gui_up(void);
 

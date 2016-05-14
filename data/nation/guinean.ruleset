@@ -22,7 +22,7 @@ ruler_titles = { "government",     "male_title",         "female_title"
 	       }
 flag="guinea"
 flag_alt = "-"
-style = "tropical"
+city_style = "tropical"
 
 init_techs=""
 init_buildings=""

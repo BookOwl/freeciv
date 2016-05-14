@@ -15,129 +15,14 @@
 #include <fc_config.h>
 #endif
 
-/* utility */
+// utility
 #include "log.h"
 #include "mem.h"
 #include "support.h"
 
 #include "fcthread.h"
 
-#ifdef FREECIV_C11_THR
-
-struct fc_thread_wrap_data {
-  void *arg;
-  void (*func)(void *arg);
-};
-
-/**********************************************************************
-  Wrapper which fingerprint matches one required by pthread_create().
-  Calls function which matches fingerprint required by fc_thread_start()
-***********************************************************************/
-static int fc_thread_wrapper(void *arg)
-{
-  struct fc_thread_wrap_data *data = (struct fc_thread_wrap_data *) arg;
-
-  data->func(data->arg);
-
-  free(data);
-
-  return EXIT_SUCCESS;
-}
-
-/**********************************************************************
-  Create new thread
-***********************************************************************/
-int fc_thread_start(fc_thread *thread, void (*function) (void *arg),
-                    void *arg)
-{
-  int ret;
-
-  /* Freed by child thread once it's finished with data */
-  struct fc_thread_wrap_data *data = fc_malloc(sizeof(*data));
-
-  data->arg = arg;
-  data->func = function;
-
-  ret = thrd_create(thread, &fc_thread_wrapper, data);
-
-  return ret != thrd_success;
-}
-
-/**********************************************************************
-  Wait for thread to finish
-***********************************************************************/
-void fc_thread_wait(fc_thread *thread)
-{
-  int *return_value = NULL;
-
-  thrd_join(*thread, return_value);
-}
-
-/**********************************************************************
-  Initialize mutex
-***********************************************************************/
-void fc_init_mutex(fc_mutex *mutex)
-{
-  mtx_init(mutex, mtx_plain|mtx_recursive);
-}
-
-/**********************************************************************
-  Destroy mutex
-***********************************************************************/
-void fc_destroy_mutex(fc_mutex *mutex)
-{
-  mtx_destroy(mutex);
-}
-
-/**********************************************************************
-  Lock mutex
-***********************************************************************/
-void fc_allocate_mutex(fc_mutex *mutex)
-{
-  mtx_lock(mutex);
-}
-
-/**********************************************************************
-  Release mutex
-***********************************************************************/
-void fc_release_mutex(fc_mutex *mutex)
-{
-  mtx_unlock(mutex);
-}
-
-/**********************************************************************
-  Initialize condition
-***********************************************************************/
-void fc_thread_cond_init(fc_thread_cond *cond)
-{
-  cnd_init(cond);
-}
-
-/**********************************************************************
-  Destroy condition
-***********************************************************************/
-void fc_thread_cond_destroy(fc_thread_cond *cond)
-{
-  cnd_destroy(cond);
-}
-
-/**********************************************************************
-  Wait for condition to be fulfilled
-***********************************************************************/
-void fc_thread_cond_wait(fc_thread_cond *cond, fc_mutex *mutex)
-{
-  cnd_wait(cond, mutex);
-}
-
-/**********************************************************************
-  Signal other thread to continue on fulfilled condition
-***********************************************************************/
-void fc_thread_cond_signal(fc_thread_cond *cond)
-{
-  cnd_signal(cond);
-}
-
-#elif defined(FREECIV_HAVE_PTHREAD)
+#ifdef HAVE_PTHREAD
 
 struct fc_thread_wrap_data {
   void *arg;
@@ -267,7 +152,7 @@ void fc_thread_cond_signal(fc_thread_cond *cond)
   pthread_cond_signal(cond);
 }
 
-#elif defined(FREECIV_HAVE_WINTHREADS)
+#elif defined(HAVE_WINTHREADS)
 
 struct fc_thread_wrap_data {
   void *arg;
@@ -360,16 +245,16 @@ void fc_release_mutex(fc_mutex *mutex)
 
 /* TODO: Windows thread condition variable support.
  *       Currently related functions are always dummy ones below
- *       (see #ifndef FREECIV_HAVE_THREAD_COND) */
+ *       (see #ifndef HAVE_THREAD_COND) */
 
 #else /* No thread implementation */
 
 #error "No working thread implementation"
 
-#endif /* FREECIV_HAVE_PTHREAD || FREECIV_HAVE_WINTHREADS */
+#endif /* HAVE_PTHREAD || HAVE_WINTHREADS */
 
 
-#ifndef FREECIV_HAVE_THREAD_COND
+#ifndef HAVE_THREAD_COND
 
 /* Dummy thread condition variable functions */
 
@@ -397,14 +282,14 @@ void fc_thread_cond_wait(fc_thread_cond *cond, fc_mutex *mutex)
 void fc_thread_cond_signal(fc_thread_cond *cond)
 {}
 
-#endif /* !FREECIV_HAVE_THREAD_COND */
+#endif /* !HAVE_THREAD_COND */
 
 /**********************************************************************
   Has freeciv thread condition variable implementation
 ***********************************************************************/
 bool has_thread_cond_impl(void)
 {
-#ifdef FREECIV_HAVE_THREAD_COND
+#ifdef HAVE_THREAD_COND
   return TRUE;
 #else
   return FALSE;

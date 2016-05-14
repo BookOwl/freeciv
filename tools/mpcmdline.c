@@ -124,10 +124,15 @@ int fcmp_parse_cmdline(int argc, char *argv[])
   log_init(NULL, loglevel, NULL, NULL, -1);
 
   if (fcmp.inst_prefix == NULL) {
-    fcmp.inst_prefix = freeciv_storage_dir();
+    const char *home = user_home_dir();
 
-    if (fcmp.inst_prefix == NULL) {
-      log_error("Cannot determine freeciv storage directory");
+    if (home == NULL) {
+      log_error("Cannot determine user home directory");
+    } else {
+      static char pfx_buf[500];
+
+      snprintf(pfx_buf, sizeof(pfx_buf), "%s/.freeciv", home);
+      fcmp.inst_prefix = pfx_buf;
     }
   }
 

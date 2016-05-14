@@ -17,7 +17,6 @@
 
 /* common */
 #include "game.h"
-#include "victory.h"
 
 // gui-qt
 #include "canvas.h"
@@ -84,8 +83,9 @@ void ss_report::update_report()
 
   pship = &(player->spaceship);
 
-  if (victory_enabled(VC_SPACERACE) && player == client.conn.playing
+  if (game.info.spacerace && player == client.conn.playing
       && pship->state == SSHIP_STARTED && pship->success_rate > 0.0) {
+
     launch_button->setEnabled(true);
   } else {
     launch_button->setEnabled(false);

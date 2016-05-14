@@ -20,7 +20,6 @@
 #include <QStyleFactory>
 
 // client
-#include "audio.h"
 #include "climisc.h"      /* for write_chatline_content */
 #include "climap.h"
 #include "control.h"
@@ -34,6 +33,7 @@
 
 #include "chatline.h"
 
+static bool gui_qt_allied_chat_only = false;
 static bool is_plain_public_message(QString s);
 static QString replace_html(QString str);
 /***************************************************************************
@@ -63,7 +63,7 @@ chatwdg::chatwdg(QWidget *parent)
   setParent(parent);
   si = new QSpacerItem(0,0,QSizePolicy::Expanding);
   cb = new QCheckBox(_("Allies only"));
-  cb->setChecked(gui_options.gui_qt_allied_chat_only);
+  cb->setChecked(gui_qt_allied_chat_only);
   vb = new QVBoxLayout;
   hl = new QHBoxLayout;
   chat_line = new QLineEdit;
@@ -99,9 +99,9 @@ chatwdg::chatwdg(QWidget *parent)
 void chatwdg::state_changed(int state)
 {
   if (state > 0) {
-    gui_options.gui_qt_allied_chat_only = true;
+    ::gui_qt_allied_chat_only = true;
   } else {
-    gui_options.gui_qt_allied_chat_only = false;
+    ::gui_qt_allied_chat_only = false;
   }
 }
 
@@ -185,7 +185,7 @@ void chatwdg::send()
 {
   gui()->chat_history.prepend(chat_line->text());
   if (chat_line->text() != "") {
-    if (client_state() >= C_S_RUNNING && gui_options.gui_qt_allied_chat_only
+    if (client_state() >= C_S_RUNNING && ::gui_qt_allied_chat_only
         && is_plain_public_message(chat_line->text())) {
       send_chat(QString(". %1")
                   .arg(chat_line->text().toUtf8().data()).toUtf8().data());
@@ -530,25 +530,12 @@ void qtg_real_output_window_append(const char *astring,
                                    int conn_id)
 {
   QString str;
-  QString wakeup;
 
   str = QString::fromUtf8(astring);
   gui()->set_status_bar(str);
   gui()->update_completer();
 
   str = replace_html(str);
-  wakeup = gui_options.gui_qt_wakeup_text;
-
-  /* Format wakeup string if needed */
-  if (wakeup.contains("%1")) {
-    wakeup = wakeup.arg(client.conn.username);
-  }
-
-  /* Play sound if we encountered wakeup string */
-  if (str.contains(wakeup) && client_state() < C_S_RUNNING
-      && !wakeup.isEmpty()) {
-    audio_play_sound("e_player_wake", NULL);
-  }
   gui()->append_output_window(apply_tags(str, tags, false));
   if (gui()->infotab != NULL) {
     gui()->infotab->chtwdg->append(apply_tags(str, tags, true));

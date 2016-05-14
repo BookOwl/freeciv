@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2002 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,9 +18,7 @@
 #include <stdarg.h>
 
 /* common */
-#include "map.h"
 #include "player.h"
-#include "research.h"
 
 /* server */
 #include "notify.h"
@@ -60,49 +58,13 @@ void dai_unit_log(struct ai_type *ait, char *buffer, int buflength,
 }
 
 /**************************************************************************
-  Log player tech messages.
-**************************************************************************/
-void real_tech_log(struct ai_type *ait, const char *file, const char *function,
-                   int line, enum log_level level, bool send_notify,
-                   const struct player *pplayer, struct advance *padvance,
-                   const char *msg, ...)
-{
-  char buffer[500];
-  char buffer2[500];
-  va_list ap;
-  struct ai_plr *plr_data;
-
-  if (!valid_advance(padvance) || advance_by_number(A_NONE) == padvance) {
-    return;
-  }
-
-  plr_data = def_ai_player_data(pplayer, ait);
-  fc_snprintf(buffer, sizeof(buffer), "%s::%s (want " ADV_WANT_PRINTF ", dist %d) ",
-              player_name(pplayer),
-              advance_rule_name(padvance),
-              plr_data->tech_want[advance_index(padvance)],
-              research_goal_unknown_techs(research_get(pplayer),
-                                          advance_number(padvance)));
-
-  va_start(ap, msg);
-  fc_vsnprintf(buffer2, sizeof(buffer2), msg, ap);
-  va_end(ap);
-
-  cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (send_notify) {
-    notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
-  }
-  do_log(file, function, line, FALSE, level, "%s", buffer);
-}
-
-/**************************************************************************
   Log player messages, they will appear like this
     
   where ti is timer, co countdown and lo love for target, who is e.
 **************************************************************************/
 void real_diplo_log(struct ai_type *ait, const char *file,
                     const char *function, int line,
-                    enum log_level level, bool send_notify,
+                    enum log_level level, bool notify,
                     const struct player *pplayer,
                     const struct player *aplayer, const char *msg, ...)
 {
@@ -128,7 +90,7 @@ void real_diplo_log(struct ai_type *ait, const char *file,
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (send_notify) {
+  if (notify) {
     notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
   }
   do_log(file, function, line, FALSE, level, "%s", buffer);
@@ -141,7 +103,7 @@ void real_diplo_log(struct ai_type *ait, const char *file,
 **************************************************************************/
 void real_bodyguard_log(struct ai_type *ait, const char *file,
                         const char *function, int line,
-                        enum log_level level,  bool send_notify,
+                        enum log_level level,  bool notify,
                         const struct unit *punit, const char *msg, ...)
 {
   char buffer[500];
@@ -167,7 +129,7 @@ void real_bodyguard_log(struct ai_type *ait, const char *file,
     index_to_map_pos(&charge_x, &charge_y, tile_index(city_tile(pcity)));
     id = pcity->id;
     type = "cityguard";
-    s = city_name_get(pcity);
+    s = city_name(pcity);
   }
   /* else perhaps the charge died */
 
@@ -185,7 +147,7 @@ void real_bodyguard_log(struct ai_type *ait, const char *file,
   va_end(ap);
 
   cat_snprintf(buffer, sizeof(buffer), "%s", buffer2);
-  if (send_notify) {
+  if (notify) {
     notify_conn(NULL, NULL, E_AI_DEBUG, ftc_log, "%s", buffer);
   }
   do_log(file, function, line, FALSE, level, "%s", buffer);
