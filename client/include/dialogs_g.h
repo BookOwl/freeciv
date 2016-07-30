@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,18 +13,14 @@
 #ifndef FC__DIALOGS_G_H
 #define FC__DIALOGS_G_H
 
-/* utility */
 #include "support.h"            /* bool type */
 
-/* common */
-#include "actions.h"
 #include "fc_types.h"
 #include "featured_text.h"      /* struct text_tag_list */
 #include "nation.h"		/* Nation_type_id */
 #include "terrain.h"		/* enum tile_special_type */
 #include "unitlist.h"
 
-/* client */
 #include "gui_proto_constructor.h"
 
 struct packet_nations_selected_info;
@@ -47,37 +43,31 @@ GUI_FUNC_PROTO(void, unit_select_dialog_update_real, void)
 GUI_FUNC_PROTO(void, races_toggles_set_sensitive, void)
 GUI_FUNC_PROTO(void, races_update_pickable, bool nationset_change)
 
-GUI_FUNC_PROTO(void, popup_action_selection, struct unit *actor_unit,
-               struct city *target_city, struct unit *target_unit,
-               struct tile *target_tile,
-               const struct act_prob *act_probs)
-GUI_FUNC_PROTO(int, action_selection_actor_unit, void)
-GUI_FUNC_PROTO(int, action_selection_target_city, void)
-GUI_FUNC_PROTO(int, action_selection_target_unit, void)
-GUI_FUNC_PROTO(void, action_selection_close, void)
-GUI_FUNC_PROTO(void, action_selection_refresh, struct unit *actor_unit,
-               struct city *target_city, struct unit *target_unit,
-               struct tile *target_tile,
-               const struct act_prob *act_probs)
+GUI_FUNC_PROTO(void, popup_caravan_dialog, struct unit *punit,
+               struct city *phomecity, struct city *pdestcity)
+GUI_FUNC_PROTO(bool, caravan_dialog_is_open, int* unit_id, int* city_id)
+GUI_FUNC_PROTO(void, caravan_dialog_update, void)
+
+GUI_FUNC_PROTO(void, popup_diplomat_dialog, struct unit *punit,
+               struct tile *ptile)
+GUI_FUNC_PROTO(int, diplomat_handled_in_diplomat_dialog, void)
+GUI_FUNC_PROTO(void, close_diplomat_dialog, void)
 GUI_FUNC_PROTO(void, popup_incite_dialog, struct unit *actor,
                struct city *pcity, int cost)
 GUI_FUNC_PROTO(void, popup_bribe_dialog, struct unit *actor,
                struct unit *punit, int cost)
 GUI_FUNC_PROTO(void, popup_sabotage_dialog, struct unit *actor,
                struct city *pcity)
-GUI_FUNC_PROTO(void, popup_pillage_dialog, struct unit *punit, bv_extras extras)
+GUI_FUNC_PROTO(void, popup_pillage_dialog, struct unit *punit,
+               bv_special spe, bv_bases bases, bv_roads roads)
 GUI_FUNC_PROTO(void, popup_upgrade_dialog, struct unit_list *punits)
 GUI_FUNC_PROTO(void, popup_disband_dialog, struct unit_list *punits)
 GUI_FUNC_PROTO(void, popup_tileset_suggestion_dialog, void)
 GUI_FUNC_PROTO(void, popup_soundset_suggestion_dialog, void)
-GUI_FUNC_PROTO(void, popup_musicset_suggestion_dialog, void)
 GUI_FUNC_PROTO(bool, popup_theme_suggestion_dialog, const char *theme_name)
 GUI_FUNC_PROTO(void, show_tech_gained_dialog, Tech_type_id tech)
 GUI_FUNC_PROTO(void, show_tileset_error, const char *msg)
-GUI_FUNC_PROTO(bool, handmade_scenario_warning, void)
 
 GUI_FUNC_PROTO(void, popdown_all_game_dialogs, void)
-
-GUI_FUNC_PROTO(bool, request_transport, struct unit *pcargo, struct tile *ptile)
 
 #endif  /* FC__DIALOGS_G_H */

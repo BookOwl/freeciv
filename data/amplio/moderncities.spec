@@ -16,7 +16,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -59,7 +59,7 @@ tiles = { "row", "column", "tag"
  0,  6, "city.modern_occupied_0"
  0,  6, "city.postmodern_occupied_0"
  0,  8, "base.buoy_mg"
- 0,  9, "extra.ruins_mg"
+ 0,  9, "base.ruins_mg"
 
  1,  1, "base.airstrip_mg"
  1,  4, "base.fortress_fg"

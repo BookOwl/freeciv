@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2005 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ struct team_slot {
   struct team *team;
   char *defined_name;                   /* Defined by the ruleset. */
   char *rule_name;                      /* Usable untranslated name. */
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
   char *name_translation;               /* Translated name. */
 #endif
 };
@@ -64,7 +64,7 @@ void team_slots_init(void)
     tslot->team = NULL;
     tslot->defined_name = NULL;
     tslot->rule_name = NULL;
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
     tslot->name_translation = NULL;
 #endif
   }
@@ -94,11 +94,11 @@ void team_slots_free(void)
     if (NULL != tslot->rule_name) {
       free(tslot->rule_name);
     }
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
     if (NULL != tslot->name_translation) {
       free(tslot->name_translation);
     }
-#endif /* FREECIV_ENABLE_NLS */
+#endif
   } team_slots_iterate_end;
   free(team_slots.slots);
   team_slots.slots = NULL;
@@ -210,17 +210,17 @@ static inline void team_slot_create_default_name(struct team_slot *tslot)
 
   fc_assert(NULL == tslot->defined_name);
   fc_assert(NULL == tslot->rule_name);
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
   fc_assert(NULL == tslot->name_translation);
-#endif /* FREECIV_ENABLE_NLS */
+#endif
 
-  fc_snprintf(buf, sizeof(buf), "Team %d", team_slot_index(tslot) + 1);
+  fc_snprintf(buf, sizeof(buf), "Team %d", team_slot_index(tslot));
   tslot->rule_name = fc_strdup(buf);
 
-#ifdef FREECIV_ENABLE_NLS
-  fc_snprintf(buf, sizeof(buf), _("Team %d"), team_slot_index(tslot) + 1);
+#ifdef ENABLE_NLS
+  fc_snprintf(buf, sizeof(buf), _("Team %d"), team_slot_index(tslot));
   tslot->name_translation = fc_strdup(buf);
-#endif /* FREECIV_ENABLE_NLS */
+#endif
 
   log_verbose("No name defined for team %d! Creating a default name: %s.",
               team_slot_index(tslot), tslot->rule_name);
@@ -252,7 +252,7 @@ const char *team_slot_rule_name(const struct team_slot *tslot)
 ****************************************************************************/
 const char *team_slot_name_translation(const struct team_slot *tslot)
 {
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
   fc_assert_ret_val(team_slots_initialised(), NULL);
   fc_assert_ret_val(NULL != tslot, NULL);
 
@@ -265,9 +265,9 @@ const char *team_slot_name_translation(const struct team_slot *tslot)
   }
 
   return tslot->name_translation;
-#else  /* FREECIV_ENABLE_NLS */
+#else
   return team_slot_rule_name(tslot);
-#endif /* FREECIV_ENABLE_NLS */
+#endif /* ENABLE_NLS */
 }
 
 /****************************************************************************
@@ -302,13 +302,14 @@ void team_slot_set_defined_name(struct team_slot *tslot,
   }
   tslot->rule_name = fc_strdup(Qn_(team_name));
 
-#ifdef FREECIV_ENABLE_NLS
+#ifdef ENABLE_NLS
   if (NULL != tslot->name_translation) {
     free(tslot->name_translation);
   }
   tslot->name_translation = fc_strdup(Q_(team_name));
-#endif /* FREECIV_ENABLE_NLS */
+#endif
 }
+
 
 /****************************************************************************
   Creates a new team for the slot. If slot is NULL, it will lookup to a

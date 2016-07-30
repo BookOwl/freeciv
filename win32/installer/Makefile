@@ -19,13 +19,6 @@
 # 7. find the installer executables in the 'Output' directory
 #
 
-#
-# Variable setup
-#
-
-ifeq ($(MIN_WIN_VER),)
-MIN_WIN_VER=0x0600
-endif
 
 #
 # Make rules
@@ -33,22 +26,19 @@ endif
 
 
 # by default build all installers
-all: gtk3-installer gtk2-installer sdl2-installer qt-installer ruledit-installer
+all: gtk3-installer gtk2-installer sdl-installer qt-installer
 
 gtk3-installer:
-	make GUI=gtk3 FCMP=gtk3 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-gtk3
+	make GUI=gtk3 FCMP=gtk3 wrap-gtk3
 
 gtk2-installer:
-	make GUI=gtk2 FCMP=gtk2 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-gtk2
+	make GUI=gtk2 FCMP=gtk2 wrap-gtk2
 
-sdl2-installer:
-	make GUI=sdl2 FCMP=gtk3 EXTRA_CONFIG="--disable-ruledit $(EXTRA_CONFIG)" wrap-sdl2
+sdl-installer:
+	make GUI=sdl FCMP=gtk2 wrap-sdl
 
 qt-installer:
 	make GUI=qt FCMP=qt wrap-qt
-
-ruledit-installer:
-	make wrap-ruledit
 
 snapshot:
 	cd ../.. ; ./autogen.sh --no-configure-run
@@ -61,27 +51,15 @@ build-freeciv-common:
 	# create build directory
 	mkdir -p build-$(GUI)
 	# configure
-	cd build-$(GUI); ../../../configure CPPFLAGS="-D_WIN32_WINNT=$(MIN_WIN_VER)" --enable-client=$(GUI) --with-followtag="win32-S3_0" --enable-fcdb=sqlite3 --enable-fcmp=$(FCMP) $(EXTRA_CONFIG)
+	cd build-$(GUI); ../../../configure --enable-client=$(GUI) --with-followtag="win32" --enable-fcdb=sqlite3 --enable-fcmp=$(FCMP) $(EXTRA_CONFIG)
 	# make
 	make -C build-$(GUI)
-	make -C build-$(GUI)/translations/core update-po
-	make -C build-$(GUI)/bootstrap langstat_core.txt
-
-build-freeciv-ruledit:
-	# create build directory
-	mkdir -p build-ruledit
-	# configure
-	cd build-ruledit; ../../../configure CPPFLAGS="-D_WIN32_WINNT=$(MIN_WIN_VER)" --disable-client --disable-server --disable-fcmp --disable-freeciv-manual --enable-ruledit $(EXTRA_CONFIG)
-	# make
-	make -C build-ruledit
-	make -C build-ruledit/translations/ruledit update-po
-	make -C build-ruledit/bootstrap langstat_ruledit.txt
 
 build-freeciv-gtk3: build-freeciv-common
 
 build-freeciv-gtk2: build-freeciv-common
 
-build-freeciv-sdl2: build-freeciv-common
+build-freeciv-sdl: build-freeciv-common
 
 build-freeciv-qt: build-freeciv-common
 
@@ -98,7 +76,7 @@ install-freeciv-common:
 	mv install-$(GUI)/usr/local/share/locale install-$(GUI)/share/
 	mv install-$(GUI)/usr/local/share/doc install-$(GUI)/doc
 	mkdir -p install-$(GUI)/debuginfo
-	cp build-$(GUI)/gen_headers/fc_config.h install-$(GUI)/debuginfo
+	cp build-$(GUI)/fc_config.h install-$(GUI)/debuginfo
 	mkdir -p install-$(GUI)/doc/freeciv/installer
 	cp licenses/COPYING.installer install-$(GUI)/doc/freeciv/installer/
 	# delete unneeded files
@@ -112,46 +90,22 @@ install-freeciv-gtk3: install-freeciv-common
 
 install-freeciv-gtk2: install-freeciv-common
 
-install-freeciv-sdl2: install-freeciv-common
+install-freeciv-sdl: install-freeciv-common
 	# add CJK fonts
-	cp /opt/fireflysung-1.3.0/fireflysung.ttf install-sdl2/data/themes/gui-sdl2/human/
-	cp /opt/fireflysung-1.3.0/COPYRIGHT install-sdl2/data/themes/gui-sdl2/human/COPYING.fireflysung
-	cp /opt/sazanami-20040629/sazanami-gothic.ttf install-sdl2/data/themes/gui-sdl2/human/
-	cp /opt/sazanami-20040629/README install-sdl2/data/themes/gui-sdl2/human/COPYING.sazanami
-	cp /opt/un-fonts/UnDotum.ttf install-sdl2/data/themes/gui-sdl2/human/
-	cp /opt/un-fonts/COPYING install-sdl2/data/themes/gui-sdl2/human/COPYING.UnDotum
+	cp /opt/fireflysung-1.3.0/fireflysung.ttf install-sdl/data/themes/gui-sdl/human/
+	cp /opt/fireflysung-1.3.0/COPYRIGHT install-sdl/data/themes/gui-sdl/human/COPYING.fireflysung
+	cp /opt/sazanami-20040629/sazanami-gothic.ttf install-sdl/data/themes/gui-sdl/human/
+	cp /opt/sazanami-20040629/README install-sdl/data/themes/gui-sdl/human/COPYING.sazanami
+	cp /opt/un-fonts/UnDotum.ttf install-sdl/data/themes/gui-sdl/human/
+	cp /opt/un-fonts/COPYING install-sdl/data/themes/gui-sdl/human/COPYING.UnDotum
 
 install-freeciv-qt: install-freeciv-common
-	# strip 'freeciv-ruledit' executable
-	strip install-$(GUI)/freeciv-ruledit.exe
-	cp freeciv-ruledit.cmd install-$(GUI)/
-
-install-ruledit-dir:
-	mkdir -p install-ruledit/share
-
-install-ruledit: install-ruledit-dir
-	# make install
-	make -C build-ruledit DESTDIR=`pwd`/install-ruledit install
-	# reorder directory layout
-	mv install-ruledit/usr/local/bin/* install-ruledit/
-	mv install-ruledit/usr/local/etc install-ruledit/
-	mv install-ruledit/usr/local/share/freeciv install-ruledit/data
-	mv install-ruledit/usr/local/share/locale install-ruledit/share/
-	mv install-ruledit/usr/local/share/doc install-ruledit/doc
-	mkdir -p install-ruledit/debuginfo
-	cp build-ruledit/gen_headers/fc_config.h install-ruledit/debuginfo
-	mkdir -p install-ruledit/doc/freeciv/installer
-	cp licenses/COPYING.installer install-ruledit/doc/freeciv/installer/
-	# delete unneeded files
-	rm -r install-ruledit/usr
-	# strip 'freeciv-ruledit' executable
-	strip install-ruledit/freeciv-ruledit.exe
-	# add start menu files
-	cp freeciv-ruledit.cmd Freeciv.url install-ruledit/
 
 # install Freeciv environment
 
 COMMON_DLLS := \
+	SDL.dll \
+	SDL_mixer.dll \
 	exchndl.dll \
 	freetype6.dll \
 	intl.dll \
@@ -191,20 +145,18 @@ COMMON_DLLS := \
 	libxml2-2.dll \
 	pthreadGC2.dll \
 	ssleay32.dll \
-	zlib1.dll \
-	SDL2.dll \
-	SDL2_mixer.dll
+	zlib1.dll
 
 install-env-common:
 	# add DLLs
 	cp -R $(addprefix /bin/, $(COMMON_DLLS)) install-$(GUI)
 
-DEFAULT_FCMP_DLLS := \
+GTK3_DLLS := \
 	libgdk-3-0.dll \
 	libgtk-3-0.dll
 
-install-env-default-fcmp: install-env-common
-	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
+install-env-gtk3: install-env-common
+	cp -R $(addprefix /bin/, $(GTK3_DLLS)) install-$(GUI)
 	# add additional GTK+3 files
 	mkdir -p install-$(GUI)/etc
 	cp -R /etc/gtk-3.0 install-$(GUI)/etc/
@@ -213,15 +165,13 @@ install-env-default-fcmp: install-env-common
 	cp -R /share/locale install-$(GUI)/share/
 	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk30.mo -delete
 
-install-env-gtk3: install-env-default-fcmp
-
-GTK2_DLLS := \
+DEFAULT_FCMP_DLLS := \
 	libgdk-win32-2.0-0.dll \
 	libgtk-win32-2.0-0.dll
 
-install-env-gtk2: install-env-common
+install-env-default-fcmp: install-env-common
 	# add DLLs
-	cp -R $(addprefix /bin/, $(GTK2_DLLS)) install-$(GUI)
+	cp -R $(addprefix /bin/, $(DEFAULT_FCMP_DLLS)) install-$(GUI)
 	# add additional GTK+2 files
 	mkdir -p install-$(GUI)/etc
 	cp -R /etc/gtk-2.0 install-$(GUI)/etc/
@@ -230,15 +180,17 @@ install-env-gtk2: install-env-common
 	cp -R /share/locale install-$(GUI)/share/
 	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -and -not -name gtk20.mo -delete
 
-SDL2_DLLS := \
-	libpng16-16.dll \
-	libSDL2_gfx-1-0-0.dll \
-	SDL2_image.dll \
-	SDL2_ttf.dll
+install-env-gtk2: install-env-default-fcmp
 
-install-env-sdl2: install-env-default-fcmp
+SDL_DLLS := \
+	libpng12-0.dll \
+	libSDL_gfx-15.dll \
+	SDL_image.dll \
+	SDL_ttf.dll
+
+install-env-sdl: install-env-default-fcmp
 	# add DLLs
-	cp -R $(addprefix /bin/, $(SDL2_DLLS)) install-$(GUI)
+	cp -R $(addprefix /bin/, $(SDL_DLLS)) install-$(GUI)
 
 QT_DLLS := \
 	libstdc++-6.dll \
@@ -254,15 +206,6 @@ install-env-qt: install-env-common
 	cp -R /share/locale install-$(GUI)/share/
 	find install-$(GUI)/share/locale -type f -not -name "freeciv*.mo" -delete
 
-install-env-ruledit:
-	# add DLLs
-	cp -R $(addprefix /bin/, $(COMMON_DLLS)) install-ruledit
-	cp -R $(addprefix /bin/, $(QT_DLLS)) install-ruledit
-	# add additional Qt files
-	cp -R /plugins install-ruledit/
-	cp -R /share/locale install-ruledit/share/
-	find install-ruledit/share/locale -type f -not -name "freeciv-ruledit.mo" -delete
-
 # build installer
 
 installer-common: clean-install-common install-freeciv-$(GUI) install-env-$(GUI)
@@ -274,24 +217,13 @@ installer-common: clean-install-common install-freeciv-$(GUI) install-env-$(GUI)
 	mkdir -p Output
 	makensis Freeciv-$(FREECIV_VERSION)-$(GUI).nsi
 
-installer-ruledit: clean-install-ruledit install-ruledit install-env-ruledit
-	# extract Freeciv version
-	$(eval FREECIV_VERSION := $(shell ../../fc_version))
-	# create NSIS script
-	./create-freeciv-ruledit-nsi.sh install-ruledit $(FREECIV_VERSION) > Freeciv-$(FREECIV_VERSION)-ruledit.nsi
-	# create installer executable
-	mkdir -p Output
-	makensis Freeciv-$(FREECIV_VERSION)-ruledit.nsi
-
 wrap-gtk3: build-freeciv-gtk3 installer-common
 
 wrap-gtk2: build-freeciv-gtk2 installer-common
 
-wrap-sdl2: build-freeciv-sdl2 installer-common
+wrap-sdl: build-freeciv-sdl installer-common
 
 wrap-qt: build-freeciv-qt installer-common
-
-wrap-ruledit: build-freeciv-ruledit installer-ruledit
 
 
 # cleanup
@@ -299,28 +231,15 @@ wrap-ruledit: build-freeciv-ruledit installer-ruledit
 clean-build-common:
 	rm -rf build-$(GUI)
 
-clean-build-ruledit:
-	rm -rf build-ruledit
-
 clean-install-common:
 	rm -rf install-$(GUI)
-	./cleanup_checkout.sh ../..
-
-clean-install-ruledit:
-	rm -rf install-ruledit
-	./cleanup_checkout.sh ../..
 
 clean-installer-common:
 	rm -f Output/Freeciv-*-$(GUI)-setup.exe
 	rm -f Freeciv-*-$(GUI).nsi
 
-clean-installer-ruledit:
-	rm -f Output/Freeciv-ruledit-*-setup.exe
-	rm -f Freeciv-*-ruledit.nsi
-
 clean:
 	make GUI=gtk3 clean-build-common clean-install-common clean-installer-common
 	make GUI=gtk2 clean-build-common clean-install-common clean-installer-common
-	make GUI=sdl2 clean-build-common clean-install-common clean-installer-common
+	make GUI=sdl clean-build-common clean-install-common clean-installer-common
 	make GUI=qt clean-build-common clean-install-common clean-installer-common
-	make clean-build-ruledit clean-install-ruledit clean-installer-ruledit

@@ -11,32 +11,31 @@
 # ----------
 # * 'martial law' tłumaczymy jako 'stan wyjątkowy';
 # * 'happy' tłumaczymy jako 'szczęśliwy, 'content' - 'zadowolony',
-#   'unhappy' - 'niezadowolony', 'angry' - 'wzburzony'
+# 'unhappy' - 'niezadowolony', 'angry' - 'wzburzony'
 # * 'military unit' tłumaczymy jako 'jednostka zbrojna',
-#   'hit point' - 'punkt obrażeń', 'vision' - 'pole widzenia'
+# 'hit point' - 'punkt obrażeń', 'vision' - 'pole widzenia'
 # * 'bulbs' tłumaczymy jako 'punkty odkryć'
 # * 'ruleset' - 'zestaw zasad', 'tileset' - 'zestaw graficzny',
-#   'theme' - 'motyw', 'modpack' - 'dodatek'
+# 'theme' - 'motyw', 'modpack' - 'dodatek'
 # * 'space structural' - 'łącznik rakiety', 'space component' - 'napęd rakiety',
-#   'space module' - 'moduł rakiety', 'spaceship' - 'rakieta (kosmiczna)',
-#   'propulsion' - 'silnik', 'habitation module' - 'moduł mieszkalny',
-#   'solar panel' - 'panel słoneczny', 'fuel component' - 'zbiornik paliwa'
+# 'space module' - 'moduł rakiety', 'spaceship' - 'rakieta (kosmiczna)',
+# 'propulsion' - 'silnik', 'habitation module' - 'moduł mieszkalny',
+# 'solar panel' - 'panel słoneczny', 'fuel component' - 'zbiornik paliwa'
 # * Opisy komend serwera zapisane są w czasie teraźniejszym, osobie trzeciej
-#   (np. 'wyświetla', a nie 'wyświetli', 'wyświetl', 'wyświetlane jest')
+# (np. 'wyświetla', a nie 'wyświetli', 'wyświetl', 'wyświetlane jest')
 # * Nazwy budynków, jednostek, cudów, technologii, ustrojów, stanów dyplomatycznych
-#   oraz wyrażenie 'Rakieta Kosmiczna' piszemy z dużej litery.
+# oraz wyrażenie 'Rakieta Kosmiczna' piszemy z dużej litery.
 # **************************************************************************
 # UWAGA! Powyższe konwencje różnią się znacznie od rozwiązań zastosowanych w
-#        we fragmentach przestarzałych (zakomentowanych na końcu pliku). W
-#        razie wątpliwości należy wziąć pod uwagę rozwiązania opisane w
-#        powyższej sekcji ('KONWENCJE').
-#
+# we fragmentach przestarzałych (zakomentowanych na końcu pliku). W
+# razie wątpliwości należy wziąć pod uwagę rozwiązania opisane w
+# powyższej sekcji ('KONWENCJE').
 msgid ""
 msgstr ""
-"Project-Id-Version: Freeciv S2_6 (nations)\n"
-"Report-Msgid-Bugs-To: http://gna.org/projects/freeciv/\n"
-"POT-Creation-Date: 2015-10-23 19:07+0300\n"
-"PO-Revision-Date: 2015-02-09 15:06+0100\n"
+"Project-Id-Version: freeciv\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2016-07-30 12:10+0100\n"
+"PO-Revision-Date: 2015-02-09 15:05+0100\n"
 "Last-Translator: Hubert Kowalewski <hubkow@gmail.com>\n"
 "Language-Team: polski <hubkow@gmail.com>\n"
 "Language: pl\n"
@@ -46,7 +45,6 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 "
 "|| n%100>=20) ? 1 : 2;\n"
 "X-Generator: Poedit 1.5.4\n"
-"X-Language: pl-PL\n"
 
 #: data/nation/abkhaz.ruleset:3
 msgid "Abkhaz"
@@ -553,7 +551,8 @@ msgid "African"
 msgstr "Afrykański"
 
 #: data/nation/african.ruleset:4
-msgid "?plural:African"
+#, fuzzy
+msgid "?plural:Africans"
 msgstr "?plural:Afrykanie"
 
 #: data/nation/african.ruleset:6
@@ -995,7 +994,8 @@ msgstr "?female:Baliw %s"
 #: data/nation/bavarian.ruleset:24 data/nation/belgian.ruleset:25
 #: data/nation/belizean.ruleset:26 data/nation/british.ruleset:25
 #: data/nation/burgundian.ruleset:30 data/nation/canadian.ruleset:26
-#: data/nation/chiapanec.ruleset:34 data/nation/congolesebrazzaville.ruleset:28
+#: data/nation/chiapanec.ruleset:34
+#: data/nation/congolesebrazzaville.ruleset:28
 #: data/nation/costarican.ruleset:26 data/nation/croatian.ruleset:33
 #: data/nation/curonian.ruleset:30 data/nation/cuyavian.ruleset:27
 #: data/nation/dominican.ruleset:22 data/nation/easttimorese.ruleset:22
@@ -1015,13 +1015,13 @@ msgstr "?female:Baliw %s"
 #: data/nation/panamanian.ruleset:30 data/nation/riograndense.ruleset:21
 #: data/nation/romansh.ruleset:29 data/nation/saintlucian.ruleset:24
 #: data/nation/savoyard.ruleset:32 data/nation/saxon.ruleset:22
-#: data/nation/schleswig-holsteinian.ruleset:27 data/nation/silesian.ruleset:23
-#: data/nation/slovenian.ruleset:19 data/nation/thuringian.ruleset:43
-#: data/nation/transylvanian.ruleset:28 data/nation/uruguayan.ruleset:24
-#: data/nation/venezuelan.ruleset:34 data/nation/vincentian.ruleset:25
-#: data/nation/volgagerman.ruleset:38 data/nation/westindian.ruleset:24
-#: data/nation/wuerttembergian.ruleset:24 data/nation/yucatecan.ruleset:31
-#: data/nation/zimbabwean.ruleset:26
+#: data/nation/schleswig-holsteinian.ruleset:27
+#: data/nation/silesian.ruleset:23 data/nation/slovenian.ruleset:19
+#: data/nation/thuringian.ruleset:43 data/nation/transylvanian.ruleset:28
+#: data/nation/uruguayan.ruleset:24 data/nation/venezuelan.ruleset:34
+#: data/nation/vincentian.ruleset:25 data/nation/volgagerman.ruleset:38
+#: data/nation/westindian.ruleset:24 data/nation/wuerttembergian.ruleset:24
+#: data/nation/yucatecan.ruleset:31 data/nation/zimbabwean.ruleset:26
 #, c-format
 msgid "Bishop %s"
 msgstr "Biskup %s"
@@ -13906,6 +13906,12 @@ msgstr ""
 #~ msgid "?female:Shaykha %s"
 #~ msgstr "?female:Szamanka  %s"
 
+#~ msgid "Ruthenian"
+#~ msgstr "Ruski"
+
+#~ msgid "?plural:Ruthenians"
+#~ msgstr "?plural:Rusini"
+
 #~ msgid "*%s (AI)* In away mode AI can't sign such a treaty."
 #~ msgstr ""
 #~ "*%s (AI)* W trybie 'nieobecny' AI nie może podpisywać takiego traktatu."
@@ -15854,8 +15860,12 @@ msgstr ""
 #~ msgid "Choose Your %s's Strategy"
 #~ msgstr "Wybierz strategię dla %s"
 
-#~ msgid "Your %s is waiting for your command."
-#~ msgstr "%s czeka na twe rozkazy."
+#~ msgid ""
+#~ "Your %s has arrived at %s.\n"
+#~ "What is your command?"
+#~ msgstr ""
+#~ "Twoja %s dotarł do miasta %s.\n"
+#~ "Co jej polecisz?"
 
 #~ msgid "Establish _Embassy"
 #~ msgstr "Załóż ambasadę"
@@ -15863,20 +15873,26 @@ msgstr ""
 #~ msgid "_Investigate City"
 #~ msgstr "Zbadaj miasto"
 
-#~ msgid "_Poison City"
-#~ msgstr "Zatruj miasto"
-
 #~ msgid "_Sabotage City"
 #~ msgstr "Sabotuj Miasto"
-
-#~ msgid "Industrial _Sabotage"
-#~ msgstr "Sabotaż przemysłowy"
 
 #~ msgid "Steal _Technology"
 #~ msgstr "Wykradnij Technologię"
 
 #~ msgid "Incite a _Revolt"
 #~ msgstr "Wznieć Bunt"
+
+#~ msgid "_Poison City"
+#~ msgstr "Zatruj miasto"
+
+#~ msgid "Industrial _Sabotage"
+#~ msgstr "Sabotaż przemysłowy"
+
+#~ msgid "Your %s is waiting for your command."
+#~ msgstr "%s czeka na twe rozkazy."
+
+#~ msgid "Subvert Enemy Unit"
+#~ msgstr "Przekup jednostkę wroga"
 
 #~ msgid "_Bribe Enemy Unit"
 #~ msgstr "Przekup jednostkę wroga"
@@ -16676,7 +16692,7 @@ msgstr ""
 #~ msgstr "Linia brzegu"
 
 #~ msgid "_Paths"
-#~ msgstr "_Ścieżki"
+#~ msgstr "Ścieżki"
 
 #~ msgid "_Irrigation"
 #~ msgstr "Nawodnienie"
@@ -16899,6 +16915,9 @@ msgstr ""
 
 #~ msgid "Change to %s"
 #~ msgstr "Zmień na %s"
+
+#~ msgid "Bu_ild Farmland"
+#~ msgstr "Zbuduj farmę"
 
 #~ msgid "Transf_orm to %s"
 #~ msgstr "Przekształć na %s"
@@ -17498,10 +17517,10 @@ msgstr ""
 #~ msgstr "Ogólne"
 
 #~ msgid "Click to change current production"
-#~ msgstr "Kliknij, aby zmienić bieżącą produkcję"
+#~ msgstr "Kliknij, aby zmienić obecną produkcję miasta"
 
 #~ msgid "Click left button to change currentproduction"
-#~ msgstr "Kliknij lewym przyciskiem myszy, aby zmienić bieżącą produkcję"
+#~ msgstr "Kliknij lewym przyciskiem myszy, by zmienić bieżącą produkcję"
 
 #~ msgid "Supported units"
 #~ msgstr "Jednostki na utrzymaniu"
@@ -17513,7 +17532,7 @@ msgstr ""
 #~ msgstr "Opcje planu prac"
 
 #~ msgid "Click left button to changecurrent production"
-#~ msgstr "Kliknij lewym przyciskiem myszy, aby zmienić bieżącą produkcję"
+#~ msgstr "Kliknij lewym przyciskiem myszy, by zmienić bieżącą produkcję"
 
 #~ msgid "Show future targets"
 #~ msgstr "Pokaż przyszłe cele"
@@ -17579,13 +17598,13 @@ msgstr ""
 #~ msgstr "Poprzednie miasto"
 
 #~ msgid "No CMA defined"
-#~ msgstr "Nie zdefiniowano zarządcy"
+#~ msgstr "Nie określono zarządcy"
 
 #~ msgid "CMA is enabled"
-#~ msgstr "Zarządca włączony"
+#~ msgstr "Zarządca jest włączony"
 
 #~ msgid "CMA is disabled"
-#~ msgstr "Zarządca wyłączony"
+#~ msgstr "Zarządca jest wyłączony"
 
 #~ msgid "Disable"
 #~ msgstr "Wyłącz"
@@ -17621,7 +17640,7 @@ msgstr ""
 #~ msgstr "Zapisz bieżący plan prac"
 
 #~ msgid "What should we name new worklist?"
-#~ msgstr "Jaka nazwać nowy plan prac?"
+#~ msgstr "Jak nazwać nowy plan prac?"
 
 #~ msgid "New worklist"
 #~ msgstr "Nowy plan prac"
@@ -17645,7 +17664,7 @@ msgstr ""
 #~ msgstr "Centruj"
 
 #~ msgid "Add next"
-#~ msgstr "Ustaw następny"
+#~ msgstr "Wstaw kolejny"
 
 #~ msgid "Add before last"
 #~ msgstr "Wstaw przed ostatnim"
@@ -17692,14 +17711,14 @@ msgstr ""
 #~ msgid "Investigate City"
 #~ msgstr "Zbadaj miasto"
 
+#~ msgid "Incite a Revolt"
+#~ msgstr "Wznieć rewoltę"
+
 #~ msgid "Poison City"
 #~ msgstr "Zatruj miasto"
 
 #~ msgid "Industrial Sabotage"
 #~ msgstr "Sabotaż przemysłowy"
-
-#~ msgid "Incite a Revolt"
-#~ msgstr "Wznieć rewoltę"
 
 #~ msgid "Sabotage Enemy Unit"
 #~ msgstr "Sabotuj jednostkę wroga"
@@ -17708,7 +17727,7 @@ msgstr ""
 #~ msgstr "Nie rób nic"
 
 #~ msgid "Are you sure you want to disband those %1 units?"
-#~ msgstr "Na pewno chcesz rozwiązać te %1 jednostki?"
+#~ msgstr "Czy na pewno chcesz rozwiązać te %1 jednostki?"
 
 #~ msgid "Disband"
 #~ msgstr "Rozwiąż"
@@ -17744,7 +17763,7 @@ msgstr ""
 #~ "Shows your current luxury/science/tax rates. Use mouse wheel to change "
 #~ "them"
 #~ msgstr ""
-#~ "Wyświetla twoje aktualne stawki dla luksusu/nauki/podatków; użyj kółka "
+#~ "Wyświetla twoje aktualne stawki dla luksusu/nauki/podatków. Użyj kółka "
 #~ "myszki, aby je zmienić."
 
 #~ msgid "Turn"
@@ -17916,8 +17935,8 @@ msgstr ""
 #~ msgid "Transform to"
 #~ msgstr "Przekształć na"
 
-#~ msgid "Build %1"
-#~ msgstr "Zbuduj %1"
+#~ msgid "Build Farmland"
+#~ msgstr "Zbuduj farmę"
 
 #~ msgid "Drop Paratrooper"
 #~ msgstr "Zrzuć spadochroniarzy"
@@ -18012,7 +18031,7 @@ msgstr ""
 #~ msgstr "Umieść w drużynie"
 
 #~ msgid "Techs unknown by"
-#~ msgstr "Technologia nieznana dla"
+#~ msgstr "Tednolocgia nieznana dla"
 
 #~ msgid "nation"
 #~ msgstr "naród"
@@ -18417,9 +18436,6 @@ msgstr ""
 
 #~ msgid "Send him back"
 #~ msgstr "Odeślij go"
-
-#~ msgid "Subvert Enemy Unit"
-#~ msgstr "Przekup jednostkę wroga"
 
 #~ msgid "Establish Embassy"
 #~ msgstr "Załóż ambasadę"
@@ -19245,13 +19261,6 @@ msgstr ""
 #~ msgstr "BRAK"
 
 #~ msgid ""
-#~ "Your %s has arrived at %s.\n"
-#~ "What is your command?"
-#~ msgstr ""
-#~ "Twoja %s dotarł do miasta %s.\n"
-#~ "Co jej polecisz?"
-
-#~ msgid ""
 #~ "This client accepts the standard X toolkit command-line options\n"
 #~ "after '--'. See the X(7) man page.\n"
 #~ "\n"
@@ -19355,7 +19364,7 @@ msgstr ""
 #~ msgstr "Linia brzegu"
 
 #~ msgid "Paths"
-#~ msgstr "Ścieżki"
+#~ msgstr "ścieżki"
 
 #~ msgid "Irrigation"
 #~ msgstr "Nawodnienie"
@@ -19492,20 +19501,13 @@ msgstr ""
 
 #~ msgid ""
 #~ "Requires that no player has researched technology with \"%s\" flag.\n"
-#~ msgstr ""
-#~ "Wymagania: żaden gracz nie może musi znać technologii z flagą \"%s\".\n"
+#~ msgstr "Wymagania: żaden gracz nie może znać technologii z flagą \"%s\".\n"
 
 #~ msgid "Requires the %s government.\n"
 #~ msgstr "Wymagania: ustrój %s.\n"
 
 #~ msgid "Not available under the %s government.\n"
 #~ msgstr "Niedostępne w ustroju %s.\n"
-
-#~ msgid "Requires the %s achievement.\n"
-#~ msgstr "Wymagania: osiągnięcie %s.\n"
-
-#~ msgid "Not available under the %s achievement.\n"
-#~ msgstr "Niedostępne przy osiagnięciu %s.\n"
 
 #~ msgid "Requires that the %s wonder has been built by any player.\n"
 #~ msgstr "Wymagania: dowolny gracz musi zbudować cud %s.\n"
@@ -19543,42 +19545,41 @@ msgstr ""
 #~ msgid "Does not apply to \"%s\" buildings.\n"
 #~ msgstr "Nie dotyczy budynków \"%s\".\n"
 
-#, fuzzy
-#~ msgid "Requires the %s extra on the tile.\n"
-#~ msgstr "Wymagania: teren %s.\n"
+#~ msgid "Requires the %s terrain special on the tile.\n"
+#~ msgstr "Wymagania: zasób specjalny %s.\n"
 
-#, fuzzy
-#~ msgid "Prevented by the %s extra on the tile.\n"
-#~ msgstr "Niemożliwe na polu z terenem %s.\n"
+#~ msgid "Prevented by the %s terrain special on the tile.\n"
+#~ msgstr "Niemożliwe, jeśli na polu jest zasób specjalny %s.\n"
 
-#, fuzzy
-#~ msgid "Requires the %s extra on the tile or a cardinally adjacent tile.\n"
-#~ msgstr ""
-#~ "Wymagania: teren %s na tym samym lub na polu przylegającym bezpośrednio.\n"
-
-#, fuzzy
 #~ msgid ""
-#~ "Prevented by the %s extra on the tile or a cardinally adjacent tile.\n"
+#~ "Requires the %s terrain special on the tile or a cardinally adjacent "
+#~ "tile.\n"
 #~ msgstr ""
-#~ "Niemożliwe na polu z terenem %s i na polu przylegającym bezpośrednio do "
-#~ "tego terenu.\n"
+#~ "Wymagania: zasób specjalny %s na tym samym lub na polu przylegającym "
+#~ "bezpośrednio.\n"
 
-#, fuzzy
-#~ msgid "Requires the %s extra on the tile or an adjacent tile.\n"
-#~ msgstr "Wymagania: teren %s na tym samym lub na przylegającym polu.\n"
+#~ msgid ""
+#~ "Prevented by the %s terrain special on the tile or a cardinally adjacent "
+#~ "tile.\n"
+#~ msgstr ""
+#~ "Niemożliwe, jeśli na tym samym lub na polu przylegającym bezpośrednio "
+#~ "jest zasób specjalny %s.\n"
 
-#, fuzzy
-#~ msgid "Prevented by the %s extra on the tile or an adjacent tile.\n"
+#~ msgid "Requires the %s terrain special on the tile or an adjacent tile.\n"
+#~ msgstr ""
+#~ "Wymagania: zasób specjalny %s na tym samym lub na przylegającym polu.\n"
+
+#~ msgid ""
+#~ "Prevented by the %s terrain special on the tile or an adjacent tile.\n"
 #~ msgstr ""
 #~ "Niemożliwe na polu z terenem %s i na polu przylegającym do tego terenu.\n"
 
-#, fuzzy
-#~ msgid "Requires the %s extra on a tile within the city radius.\n"
-#~ msgstr "Wymagania: teren %s w promieniu miasta.\n"
+#~ msgid "Requires the %s terrain special on a tile within the city radius.\n"
+#~ msgstr "Wymagania: zasób specjalny %s w promieniu miasta.\n"
 
-#, fuzzy
-#~ msgid "Prevented by the %s extra on a tile within the city radius.\n"
-#~ msgstr "Niemożliwe, jeśli w promieniu miasta jest teren %s.\n"
+#~ msgid ""
+#~ "Prevented by the %s terrain special on a tile within the city radius.\n"
+#~ msgstr "Niemożliwe, jeśli w promieniu miasta jest zasób specjalny %s.\n"
 
 #~ msgid "Requires the %s terrain on the tile.\n"
 #~ msgstr "Wymagania: teren %s.\n"
@@ -19656,39 +19657,6 @@ msgstr ""
 
 #~ msgid "Requires no %s citizens in the city.\n"
 #~ msgstr "Wymagania: brak mieszkańców %s w mieście.\n"
-
-#~ msgid ""
-#~ "Requires that your diplomatic relationship to at least one other living "
-#~ "player is %s.\n"
-#~ msgstr ""
-#~ "Wymagania: stanem dyplomatycznym z przynajmniej jednym żywym graczem musi "
-#~ "być %s.\n"
-
-#~ msgid ""
-#~ "Requires that no diplomatic relationship you have to any living player is "
-#~ "%s.\n"
-#~ msgstr ""
-#~ "Wymagania: z żadnym żywym graczem nie może łączyć cię stan dyplomatyczny "
-#~ "%s.\n"
-
-#~ msgid ""
-#~ "Requires the diplomatic relationship %s between two living players.\n"
-#~ msgstr ""
-#~ "Wymagania: dwóch zywych graczy musi łączącyć stan dyplomatyczny %s.\n"
-
-#~ msgid ""
-#~ "Requires the abstinence of the diplomatic relationship %s between any "
-#~ "living players.\n"
-#~ msgstr ""
-#~ "Wymagania: żadnych żywych graczy nie może łączyć stan dyplomatyczny %s.\n"
-
-#~ msgid ""
-#~ "Requires that your diplomatic relationship to the other player is %s.\n"
-#~ msgstr "Wymagania: stanem dyplomatycznym z innym graczem musi być %s.\n"
-
-#~ msgid ""
-#~ "Requires that your diplomatic relationship to the other player isn't %s.\n"
-#~ msgstr "Wymagania: stanem dyplomatycznym z innym graczem nie może być %s.\n"
 
 #~ msgid "?unit:Requires %s.\n"
 #~ msgstr "?unit:Wymaga %s.\n"
@@ -19789,57 +19757,29 @@ msgstr ""
 #~ msgstr ""
 #~ "Niemożliwe, jeśli w promieniu miasta jest pole z flagą terenu \"%s\".\n"
 
-#~ msgid "Requires \"%s\" base flag on the tile.\n"
-#~ msgstr "Wymagania: flaga bazy \"%s\" na polu.\n"
+#~ msgid "Requires a %s on the tile.\n"
+#~ msgstr "Wymagania: %s na polu.\n"
 
-#~ msgid "Prevented by \"%s\" base flag on the tile.\n"
-#~ msgstr "Niemożliwe na polu z flagą bazy \"%s\".\n"
+#~ msgid "Prevented by a %s on the tile.\n"
+#~ msgstr "Niemożliwe na polu z %s.\n"
 
-#~ msgid "Requires \"%s\" base flag on a cardinally adjacent tile.\n"
-#~ msgstr "Wymagania: flaga bazy \"%s\" na polu przylegającym bezpośrednio.\n"
+#~ msgid "Requires a %s on a cardinally adjacent tile.\n"
+#~ msgstr "Wymagania: %s na polu przylegającym bezpośrednio.\n"
 
-#~ msgid "Prevented by \"%s\" base flag on a cardinally adjacent tile.\n"
-#~ msgstr ""
-#~ "Niemożliwe na polu z flagą bazy %s na polu przylegającym bezpośrednio.\n"
+#~ msgid "Prevented by a %s on a cardinally adjacent tile.\n"
+#~ msgstr "Niemożliwe na polu z %s na polu przylegającym bezpośrednio.\n"
 
-#~ msgid "Requires \"%s\" base flag on an adjacent tile.\n"
-#~ msgstr "Wymagania: flaga bazy \"%s\" na przylegającym polu.\n"
+#~ msgid "Requires a %s on an adjacent tile.\n"
+#~ msgstr "Tylko dla narodu %s na przylegającym polu.\n"
 
-#~ msgid "Prevented by \"%s\" base flag on an adjacent tile.\n"
-#~ msgstr "Niemożliwe na polu z flagą bazy %s na przylegającym polu.\n"
+#~ msgid "Prevented by a %s on an adjacent tile.\n"
+#~ msgstr "Niemożliwe na polu z %s na przylegającym polu.\n"
 
-#~ msgid "Requires \"%s\" base flag on a tile in the city.\n"
-#~ msgstr "Wymagania: flaga bazy \"%s\" w promieniu miasta.\n"
+#~ msgid "Requires a %s on a tile within the city radius.\n"
+#~ msgstr "Wymagania: budynek %s w promieniu miasta.\n"
 
-#~ msgid "Prevented by \"%s\" base flag on a tile in the city.\n"
-#~ msgstr ""
-#~ "Niemożliwe, jeśli w promieniu miasta jest pole z flagą bazy \"%s\".\n"
-
-#~ msgid "Requires \"%s\" road flag on the tile.\n"
-#~ msgstr "Wymagania: flaga drogi \"%s\" na polu.\n"
-
-#~ msgid "Prevented by \"%s\" road flag on the tile.\n"
-#~ msgstr "Niemożliwe na polu z flagą drogi \"%s\".\n"
-
-#~ msgid "Requires \"%s\" road flag on a cardinally adjacent tile.\n"
-#~ msgstr "Wymagania: flaga drogi \"%s\" na polu przylegającym bezpośrednio.\n"
-
-#~ msgid "Prevented by \"%s\" road flag on a cardinally adjacent tile.\n"
-#~ msgstr ""
-#~ "Niemożliwe na polu z flagą drogi %s na polu przylegającym bezpośrednio.\n"
-
-#~ msgid "Requires \"%s\" road flag on an adjacent tile.\n"
-#~ msgstr "Wymagania: flaga drogi \"%s\" na przylegającym polu.\n"
-
-#~ msgid "Prevented by \"%s\" road flag on an adjacent tile.\n"
-#~ msgstr "Niemożliwe na polu z flagą drogi %s na przylegającym polu.\n"
-
-#~ msgid "Requires \"%s\" road flag on a tile in the city.\n"
-#~ msgstr "Wymagania: flaga drogi \"%s\" w promieniu miasta.\n"
-
-#~ msgid "Prevented by \"%s\" road flag on a tile in the city.\n"
-#~ msgstr ""
-#~ "Niemożliwe, jeśli w promieniu miasta jest pole z flagą drogi \"%s\".\n"
+#~ msgid "Prevented by a %s on a tile within the city radius.\n"
+#~ msgstr "Niemożliwe, jeśli w promieniu miasta jest pole z %s.\n"
 
 #~ msgid "Requires we reached the year %d.\n"
 #~ msgstr "Wymagania: od roku %d.\n"
@@ -20038,8 +19978,19 @@ msgstr ""
 #~ msgid "* Can build mines on tiles.\n"
 #~ msgstr "* Potrafi budować kopalnie.\n"
 
-#~ msgid "* Can build irrigation and farmland on tiles.\n"
-#~ msgstr "* Potrafi budować nawodnienie i farmy na polach.\n"
+#~ msgid "* Can build irrigation on tiles.\n"
+#~ msgstr "* Potrafi budować nawodnienie.\n"
+
+#~ msgid "* Can build farmland.\n"
+#~ msgstr "* Potrafi budować farmy.\n"
+
+#~ msgid "* Can build farmland (if %s is known).\n"
+#~ msgstr "* Potrafi budować farmy (gracz zna technologię %s).\n"
+
+#~ msgid "* Can build farmland (if any of the following are known: %s).\n"
+#~ msgstr ""
+#~ "* Potrafi budować farmy (jeśli gracz zna którąkolwiek z technologii: "
+#~ "%s).\n"
 
 #~ msgid "* Can clean pollution from tiles.\n"
 #~ msgstr "* Potrafi usuwać zanieczyszczenia.\n"
@@ -20213,6 +20164,9 @@ msgstr ""
 
 #~ msgid "* Allows %s to build roads on river tiles.\n"
 #~ msgstr "* Pozwala %s budować drogi na rzekach.\n"
+
+#~ msgid "* Allows %s to upgrade irrigation to farmland.\n"
+#~ msgstr "* Pozwala %s ulepszać nawodnienie do farmy.\n"
 
 #~ msgid ""
 #~ "* To preserve this technology for our nation some bulbs are needed each "
@@ -20468,20 +20422,11 @@ msgstr ""
 #~ msgstr "* Twoje miasta nie mogą zostać podburzone.\n"
 
 #~ msgid ""
-#~ "* If a city is in disorder for more than %d turn in a row, government "
+#~ "* If any city is in disorder for more than two turns in a row, government "
 #~ "will fall into anarchy.\n"
-#~ msgid_plural ""
-#~ "* If a city is in disorder for more than %d turns in a row, government "
-#~ "will fall into anarchy.\n"
-#~ msgstr[0] ""
+#~ msgstr ""
 #~ "* Państwo popadnie w anarchię, jeśli w którymkolwiek mieście zamieszki "
-#~ "będą trwały dłużej niż %d turę z rzędu.\n"
-#~ msgstr[1] ""
-#~ "* Państwo popadnie w anarchię, jeśli w którymkolwiek mieście zamieszki "
-#~ "będą trwały dłużej niż %d tury z rzędu.\n"
-#~ msgstr[2] ""
-#~ "* Państwo popadnie w anarchię, jeśli w którymkolwiek mieście zamieszki "
-#~ "będą trwały dłużej niż %d tur z rzędu.\n"
+#~ "będą trwały dwie tury z rzędu.\n"
 
 #~ msgid "* Has a senate that may prevent declaration of war.\n"
 #~ msgstr "* Senat może blokować wypowiadanie wojen.\n"
@@ -21853,6 +21798,9 @@ msgstr ""
 #~ msgid "Food/Prod/Trade: %s"
 #~ msgstr "Żywn/Prod/Handel: %s"
 
+#~ msgid "Minor Tribe Village"
+#~ msgstr "Mała osada plemienna"
+
 #~ msgid "Our territory"
 #~ msgstr "Nasze terytorium"
 
@@ -21925,8 +21873,8 @@ msgstr ""
 #~ msgid "A:%d D:%d FP:%d HP:%d/%d"
 #~ msgstr "A:%d O:%d SO:%d PO:%d/%d"
 
-#~ msgid "Probable bribe cost: %d"
-#~ msgstr "Przypuszczalny koszt łapówki: %d"
+#~ msgid "Bribe cost: %d"
+#~ msgstr "Koszt łapówki: %d"
 
 #~ msgid "Estimated bribe cost: > %d"
 #~ msgstr "Szcowany koszt łapówki: > %d"
@@ -22330,30 +22278,6 @@ msgstr ""
 #~ "Zestaw graficzny \"%s\" nie wspiera dużych miast, takich jak %d. Rozmiar "
 #~ "miasta nie wyświetlony zgodnie z oczekiwaniami."
 
-#, fuzzy
-#~ msgid "You have launched spaceship towards Alpha Centauri!"
-#~ msgstr "%s Rakieta Kosmiczna dotarła do Alfa Centauri."
-
-#, fuzzy
-#~ msgid "You have entire world mapped!"
-#~ msgstr "Otrzymałeś/aś mapę świata od %s."
-
-#, fuzzy
-#~ msgid "You have %d%% of the world mapped!"
-#~ msgstr "Otrzymałeś/aś mapę świata od %s."
-
-#, fuzzy
-#~ msgid "Sabotage Unit"
-#~ msgstr "Sabotuj miasto"
-
-#, fuzzy
-#~ msgid "Bribe Unit"
-#~ msgstr "Przekup Jednostkę Wroga"
-
-#, fuzzy
-#~ msgid "Targeted Sabotage City"
-#~ msgstr "Sabotuj miasto"
-
 #~ msgid "Too many AI modules. Max is %d."
 #~ msgstr "Zbyt wiele modułów AI. Maksymalna liczba to %d."
 
@@ -22578,9 +22502,6 @@ msgstr ""
 
 #~ msgid "Unit Spared by Barbarians"
 #~ msgstr "Barbarzyńcy oszczędzili jednostkę"
-
-#~ msgid "Achievements"
-#~ msgstr "Osiągnięcia"
 
 #~ msgid "Barbarian Uprising"
 #~ msgstr "Powstanie barbarzyńców"
@@ -23126,27 +23047,6 @@ msgstr ""
 #~ msgid "?diplomatic_state:Team"
 #~ msgstr "?diplomatic_state:Zespół"
 
-#~ msgid "Gives shared vision"
-#~ msgstr "Daje widok dzielony"
-
-#~ msgid "Receives shared vision"
-#~ msgstr "Otrzymuje widok dzielony"
-
-#, fuzzy
-#~ msgid "Hosts embassy"
-#~ msgstr "Załóż ambasadę"
-
-#~ msgid "Has embassy"
-#~ msgstr "Ma ambasadę"
-
-#, fuzzy
-#~ msgid "Hosts real embassy"
-#~ msgstr "Załóż ambasadę"
-
-#, fuzzy
-#~ msgid "Has real embassy"
-#~ msgstr "Załóż ambasadę"
-
 #~ msgid "World-ranged requirements are only supported for wonders."
 #~ msgstr "Wymagania o zasięgu globalnym mogą być przypisane jedynie cudom."
 
@@ -23183,11 +23083,11 @@ msgstr ""
 #~ msgid "\"%s\" terrain"
 #~ msgstr "Teren \"%s\""
 
-#~ msgid "\"%s\" base"
-#~ msgstr "Baza %s"
+#~ msgid "%s base"
+#~ msgstr "Forteca %s"
 
-#~ msgid "\"%s\" road"
-#~ msgstr "Droga \"%s\""
+#~ msgid "?road:%s"
+#~ msgstr "?road:%s"
 
 #~ msgid "After %s"
 #~ msgstr "Po %s"
@@ -23213,6 +23113,18 @@ msgstr ""
 #~ msgid "Future Tech."
 #~ msgstr "Tech. Przysz."
 
+#~ msgid "Mine"
+#~ msgstr "Kopalnia"
+
+#~ msgid "Hut"
+#~ msgstr "Chatka"
+
+#~ msgid "Farmland"
+#~ msgstr "Farma"
+
+#~ msgid "Fallout"
+#~ msgstr "Skażenie"
+
 #~ msgid "Land"
 #~ msgstr "Lądowy"
 
@@ -23221,9 +23133,6 @@ msgstr ""
 
 #~ msgid "Idle"
 #~ msgstr "Bezczynny"
-
-#~ msgid "Mine"
-#~ msgstr "Kopalnia"
 
 #~ msgid "Fortifying"
 #~ msgstr "Fortyfikuje się"
@@ -23239,9 +23148,6 @@ msgstr ""
 
 #~ msgid "Transform"
 #~ msgstr "Zmień"
-
-#~ msgid "Fallout"
-#~ msgstr "Skażenie"
 
 #~ msgid "Base"
 #~ msgstr "Baza"
@@ -24342,9 +24248,6 @@ msgstr ""
 #~ msgid "Russian"
 #~ msgstr "Rosyjski"
 
-#~ msgid "?plural:Russians"
-#~ msgstr "?plural:Rosjanie"
-
 #~ msgid ""
 #~ "According to legend, Slavic and Finnic tribes of Novgorod invited in the "
 #~ "year 862 the Varangian (Viking) king Rurik to bring order to their land. "
@@ -24723,20 +24626,14 @@ msgstr ""
 #~ msgid "Seals"
 #~ msgstr "Foki"
 
-#~ msgid "Minor Tribe Village"
-#~ msgstr "Mała osada plemienna"
-
-#~ msgid "Farmland"
-#~ msgstr "Farma"
-
 #~ msgid "Fortress"
 #~ msgstr "Forteca"
 
-#~ msgid "River"
-#~ msgstr "Rzeka"
-
 #~ msgid "Fortresses improve defense for land units."
 #~ msgstr "Fortece poprawiają zdolności obronne jednostek lądowych."
+
+#~ msgid "River"
+#~ msgstr "Rzeka"
 
 #~ msgid "green"
 #~ msgstr "zielony"
@@ -25474,7 +25371,7 @@ msgstr ""
 #~ "dochody podatkowe i produkcję punktów luksusu o 150%"
 
 #~ msgid "Super Highways"
-#~ msgstr "Super Autostrady"
+#~ msgstr "Autostrady"
 
 #~ msgid ""
 #~ "Increases trade resources by 50% on all tiles with roads or railroads."
@@ -25990,9 +25887,6 @@ msgstr ""
 #~ msgid "Wine"
 #~ msgstr "Wino"
 
-#~ msgid "Airbase"
-#~ msgstr "Baza lotnicza"
-
 #~ msgid ""
 #~ "Fortresses improve defense for land units. Among other effects, a land "
 #~ "unit remaining in a fortress for a whole turn without moving recovers a "
@@ -26001,6 +25895,9 @@ msgstr ""
 #~ "Fortece poprawiają zdolności obronne jednostek lądowych. Ponadto "
 #~ "jednostki lądowe pozostające w fortecy przez całą turę odzyskują 1/4 "
 #~ "punktów obrażeń."
+
+#~ msgid "Airbase"
+#~ msgstr "Baza lotnicza"
 
 #~ msgid ""
 #~ "Airbases allow your air units to land and refuel. Air units in an airbase "
@@ -26025,7 +25922,7 @@ msgstr ""
 #~ "Roads and railroads can only be built on River tiles if your civilization "
 #~ "has learned Bridge Building technology."
 #~ msgstr ""
-#~ "Drogi i koleje mogą być budowane na Rzekach tylko jeśli cywilizacja "
+#~ "Drogi i Koleje mogą być budowane na Rzekach tylko jeśli cywilizacja "
 #~ "poznała już technologię Budowa Mostów."
 
 #~ msgid "Can build Airbases."
@@ -26796,12 +26693,6 @@ msgstr ""
 #~ "Głęboki Ocean pokrywają większość obszary z dala od wybrzeży; jedynie "
 #~ "lepsze jednostki morskie (wyłączając Triremy) mogą się po nich poruszać."
 
-#~ msgid "Buoy"
-#~ msgstr "Boja"
-
-#~ msgid "Ruins"
-#~ msgstr "Ruiny"
-
 #~ msgid ""
 #~ "Fortresses improve defense for land units. Among other effects, a land "
 #~ "unit remaining in a fortress for a whole turn without moving recovers a "
@@ -26814,8 +26705,14 @@ msgstr ""
 #~ "wieże obserwacyjne, dzięki którym zwiększa się pole widzenia jednostek "
 #~ "przebywających w fortecy."
 
+#~ msgid "Buoy"
+#~ msgstr "Boja"
+
 #~ msgid "Buoys may be built in the ocean (by units on a sea-going vessel)."
 #~ msgstr "Boje mogą być stawiane na oceanie przez jednostki na statkach."
+
+#~ msgid "Ruins"
+#~ msgstr "Ruiny"
 
 #~ msgid ""
 #~ "Ruins mark the former site of a city that was destroyed or abandoned. "
@@ -27012,7 +26909,7 @@ msgstr ""
 #~ "the city radius is further increased."
 #~ msgstr ""
 #~ "Jeśli metropolia (miasto o rozmiarze większym niż 30) posiada Transport "
-#~ "Publiczny i Super Autostrady, zwiększa się zasięg miasta."
+#~ "Publiczny i Autostrady, zwiększa się zasięg miasta."
 
 #~ msgid ""
 #~ "The work of the priests also reduces the effect of plague in the city."
@@ -27031,12 +26928,6 @@ msgstr ""
 #~ "dla nowych i nietypowych funkcji we Freeciv, które mogą na razie zaburzać "
 #~ "grywalność. Opis różnic z domyślnym zestawem zasad znajduje się w pliku "
 #~ "README.ruleset_experimental."
-
-#~ msgid "Spaceship Launch"
-#~ msgstr "Start Rakiety Kosmicznej"
-
-#~ msgid "Entire Map Known"
-#~ msgstr "Cała mapa znana"
 
 #~ msgid "Under Anarchy, technology cannot be lost due to lack of upkeep."
 #~ msgstr ""
@@ -27349,8 +27240,8 @@ msgstr ""
 #~ "Super Highways also increase the pollution caused by the population of "
 #~ "the city (+25%)."
 #~ msgstr ""
-#~ "Super Autostrady zwiększają o 25% zanieczyszczenie powodowane przez "
-#~ "mieszkańców miasta."
+#~ "Autostrady zwiększają o 25% zanieczyszczenie powodowane przez mieszkańców "
+#~ "miasta."
 
 #~ msgid ""
 #~ "Makes one unhappy citizen content.  The Mysticism advance doubles this "
@@ -27889,1706 +27780,6 @@ msgstr ""
 #~ msgstr ""
 #~ "Karawany mogą podróżować jedynie po drogach, torach kolejowych, rzekach i "
 #~ "na statkach; nie dotyczą ich modyfikatory ruchu "
-
-#~ msgid "Antigrav Port"
-#~ msgstr "Port Antygrawitacyjny"
-
-#~ msgid ""
-#~ "Allows one unit airlift from and to city, increased to three once Low-"
-#~ "Level Orbit is known."
-#~ msgstr ""
-#~ "Pozwala jednej jednostce przenosić się do i z miasta (trzem po odkryciu "
-#~ "Lotów Na Niskiej Orbicie)."
-
-#~ msgid "Archive"
-#~ msgstr "Archiwum"
-
-#~ msgid "Increases the science production of a city by 75%."
-#~ msgstr "Zwiększa produkcję punktów nauki miasta o 75%."
-
-#~ msgid "Basic Infrastructure"
-#~ msgstr "Podstawowa infrastruktura"
-
-#~ msgid ""
-#~ "Basic Infrastructure to the city. This improvement has no maintenance, "
-#~ "and cannot be sabotaged by enemy Stealth Spy.\n"
-#~ "\n"
-#~ "Without this improvement city cannot grow bigger than size 2."
-#~ msgstr ""
-#~ "Podstawowa infrastruktura miasta. Budynek ten nie wymaga utrzymywania i "
-#~ "nie może być sabotowany przez wrogiego Cicho-Szpiega.\n"
-#~ "\n"
-#~ "Bez tego budynku miasto nie może wzrosnąć powyżej rozmiaru 2."
-
-#~ msgid "Bunker"
-#~ msgstr "Schron"
-
-#~ msgid "Revolt cannot be incited in a city with bunker."
-#~ msgstr " W mieście ze Schronem nie da się podburzyć ludności."
-
-#~ msgid "Central Mine"
-#~ msgstr "Kopalnia Miejska"
-
-#~ msgid "City center tile produces three extra shields."
-#~ msgstr "Pole pośrodku miasta daje 3 dodatkowe tarcze."
-
-#~ msgid "Cyberpart Factory"
-#~ msgstr "Fabryka Cyberczęści"
-
-#~ msgid "Increases the tax output in a city by 75%."
-#~ msgstr "Zwiększa produkcję podatków z miasta o 50%."
-
-#~ msgid ""
-#~ "Factory produces spare parts for two units removing their production "
-#~ "upkeep."
-#~ msgstr ""
-#~ "Fabryka produkuje części zamienne dla 2 jednostek, eliminując tym samym "
-#~ "koszt ich utrzymania."
-
-#~ msgid "Filter"
-#~ msgstr "Filtr"
-
-#~ msgid ""
-#~ "Filter System gets 1 extra food and 1 extra production from each oceanic "
-#~ "tile."
-#~ msgstr ""
-#~ "System Filtrów daje 1 dodatkowy punkt żywności i 1 dodatkowy punkt "
-#~ "produkcji z każdego pola morskiego."
-
-#~ msgid "Force Walls"
-#~ msgstr "Pole Siłowe"
-
-#~ msgid ""
-#~ "Force Walls doubles city defense against all kind of attacks. Bonus is "
-#~ "increased to 150% when Strong Force technology is known."
-#~ msgstr ""
-#~ "Pola Siłowe podwajają zdolności obronne miasta przed wszystkimi rodzajami "
-#~ "ataków. Obronność wzrasta o 150% po odkryciu Mocnego Oddziaływania."
-
-#~ msgid "Headquarters"
-#~ msgstr "Centrum Dowodzenia"
-
-#~ msgid ""
-#~ "Headquarters building marks city as your capital. City with headquarters "
-#~ "is also safe from enemy's incite revolt attacks."
-#~ msgstr ""
-#~ "Miasto z Centrum Dowodzenia jest twoją stolicą. W mieście takim nie da "
-#~ "się podburzyć ludności."
-
-#~ msgid ""
-#~ "Damaged units which stay in city without moving, heal 50% of their "
-#~ "hitpoints each turn."
-#~ msgstr ""
-#~ "Uszkodzone jednostki, które pozostają z obrębie miasta i nie ruszają się, "
-#~ "odzyskują 50% punktów obrażeń na turę."
-
-#~ msgid "Information Distillery"
-#~ msgstr "Ośrodek Przetwarzania Informacji"
-
-#~ msgid ""
-#~ "Improved information gathering. Only 2 other civilizations needs to know "
-#~ "given technology before we gain access to it."
-#~ msgstr ""
-#~ "Ulepszone pozyskiwanie informacji. Tylko 2 inne cywilizacje muszą znać "
-#~ "daną technologię, nim my zyskamy do niej dostęp."
-
-#~ msgid "Mood Center"
-#~ msgstr "Centrum Nastroju"
-
-#~ msgid "Makes 3 unhappy citizens content."
-#~ msgstr "Czyni 3 niezadowolonych mieszkańców zadowolonymi."
-
-#~ msgid "Training Facility"
-#~ msgstr "Centrum Szkoleniowe"
-
-#~ msgid "All new units are built as Elite ones."
-#~ msgstr "Wszystkie nowe jednostki tworzone są jako elitarne."
-
-#~ msgid "Transportation"
-#~ msgstr "Transport"
-
-#~ msgid ""
-#~ "City workers can travel further from city center to work and goods can be "
-#~ "transported from further away to city center. Makes city area 8 tiles "
-#~ "bigger."
-#~ msgstr ""
-#~ "Robotnicy miejscy mogą udawać się dalej poza miasto i dostarczać dobra z "
-#~ "odleglejszych pól. Zwiększa obszar miasta o 8 pól."
-
-#~ msgid "Radar Tower"
-#~ msgstr "Wieża Radarowa"
-
-#~ msgid "City with Radar Tower sees much further than one without."
-#~ msgstr "Miasto z Wieżą Radarową na znacznie większe pole widzenia."
-
-#~ msgid "Radiation Resistor"
-#~ msgstr "Osłona Przeciwpromienna"
-
-#~ msgid "Radiation Resistor increases maximum city size by 3."
-#~ msgstr "Osłona Przeciwpromienna zwiąksza maksymalny rozmiar miasta o 3."
-
-#~ msgid "Research Nest"
-#~ msgstr "Centrum Nauki"
-
-#~ msgid "Increases the science production of a city by 100%."
-#~ msgstr "Zwiększa produkcję punktów nauki miasta o 100%."
-
-#~ msgid "Secret Police"
-#~ msgstr "Tajna Policja"
-
-#~ msgid ""
-#~ "Secret Police is good at leading army.\n"
-#~ "\n"
-#~ "Makes martial law possible. Each military unit in city makes one unhappy "
-#~ "citizen content, to the maximum of 2."
-#~ msgstr ""
-#~ "Tajna Policja dobrze sprawdza się w kierowaniu armią.\n"
-#~ "\n"
-#~ "Umożliwia ona wprowadzanie stanu wyjątkowego. Każda jednostka zbrojna w "
-#~ "mieście czyni 1 niezadowolonego mieszkańca zadowolonym (maksymalnie 2)."
-
-#~ msgid "Skyscraper"
-#~ msgstr "Drapacz Chmur"
-
-#~ msgid ""
-#~ "Radiation is weaker miles high. Top levels of really tall buildings can "
-#~ "safely house more people.\n"
-#~ "\n"
-#~ "Cities can grow 5 sizes bigger."
-#~ msgstr ""
-#~ "Promieniowanie jest niższe kilka kilometrów nad powierzchnią ziemi. Górne "
-#~ "piętra bardzo wysokich budynków dają schronienie większej ilości "
-#~ "mieszkańców.\n"
-#~ "\n"
-#~ "Miasto może wzrosnąć o kolejnych 5 rozmiarów."
-
-#~ msgid "Virtual Reality Theatre"
-#~ msgstr "Teatr VR"
-
-#~ msgid "Makes two unhappy citizens content."
-#~ msgstr "Czyni 2 niezadowolonych mieszkańców zadowolonymi."
-
-#~ msgid ""
-#~ "Space Modules are the most expensive parts of spaceships.  There are "
-#~ "three different types of Space Module:\n"
-#~ "\n"
-#~ "- Habitation Module: provides living space for 10,000 people.\n"
-#~ "\n"
-#~ "- Life Support Module: provides food and water for the population of  one "
-#~ "Habitation Module.\n"
-#~ "\n"
-#~ "- Solar Panels: provides the energy needed for any two of the other  "
-#~ "Modules.\n"
-#~ "\n"
-#~ "You can build up to 4 Space Modules of each kind."
-#~ msgstr ""
-#~ "Moduły to najdroższe części Rakiet Kosmicznych. Mamy trzy różne typy "
-#~ "modułów:\n"
-#~ "\n"
-#~ "- Moduły Mieszkalne: zapewniają mieszkanie dla 10 000 osób.\n"
-#~ "\n"
-#~ "- Moduły Podtrzymywania Życia: zapewniają żywność i wodę dla jednego "
-#~ "modułu mieszkalnego.\n"
-#~ "\n"
-#~ "- Baterie Słoneczne: zapewniają energię dla dowolnych dwóch modułów.\n"
-#~ "\n"
-#~ "Możesz zbudować do 4 modułów z każdego typu."
-
-#~ msgid "Earth Monument"
-#~ msgstr "Pomnik Ziemi"
-
-#~ msgid ""
-#~ "Monument to celebrate our true home planet, Earth.\n"
-#~ "\n"
-#~ "Each square around the city where this wonder is built that is already "
-#~ "generating some trade produces one extra trade resource."
-#~ msgstr ""
-#~ "Pomnik upamiętniający nasz prawdziwy dom - Ziemię.\n"
-#~ "\n"
-#~ "Każde pole wokół miasta, w których zbudowano ten cud, jeśli daje już "
-#~ "jakieś punkty handlu, przynosi 1 dodatkowy punkt handlu."
-
-#~ msgid "Great Tunnel"
-#~ msgstr "Wielki Tunel"
-
-#~ msgid ""
-#~ "Real deep mining.\n"
-#~ "\n"
-#~ "Each square around the city where this wonder is built that is already "
-#~ "generating some production produces one extra shield resource."
-#~ msgstr ""
-#~ "Umożliwie głębokie prace wydobywcze.\n"
-#~ "\n"
-#~ "Każda pole wokół miasta, w którym zbudowano ten cud, jeśli daje już "
-#~ "jakieś tarcze, przynosi 1 dodatkową tarczę."
-
-#~ msgid "Antigrav Control Center"
-#~ msgstr "Centrum Sterowania Antygrawitacją"
-
-#~ msgid ""
-#~ "All player's antigravity units will regenerate 50% of their hitpoints "
-#~ "each turn."
-#~ msgstr ""
-#~ "Jednostki antygrawitacyjne wszystkich graczy odzyskują 50% punktów "
-#~ "obrażeń na turę."
-
-#~ msgid "Oceanic Downtown"
-#~ msgstr "Oceaniczne Śródmieście"
-
-#~ msgid ""
-#~ "Each oceanic city center generates 3 points more trade and production."
-#~ msgstr ""
-#~ "Cenrum każdego wodnego miasta daje o 3 punkty handlu i produkcji więcej."
-
-#~ msgid "Monument of Co-operation"
-#~ msgstr "Pomnik Współpracy"
-
-#~ msgid ""
-#~ "All player's native alien units will regenerate 50% of their hitpoints "
-#~ "each turn."
-#~ msgstr ""
-#~ "Wszystkie natywne jednostki gracza odzyskują 50% punktów obrażeń na turę."
-
-#~ msgid "Protector"
-#~ msgstr "Egida"
-
-#~ msgid ""
-#~ "Provides additional protection against radiation making it possible for "
-#~ "all cities player owns to grow 2 sizes bigger."
-#~ msgstr ""
-#~ "Zapewnia dodatkową ochronę przed promieniowaniem, więc wszystkie miasta "
-#~ "gracza mogą osiągnąć rozmiar większy o 2."
-
-#~ msgid "elvis"
-#~ msgstr "komik"
-
-#~ msgid "scientist"
-#~ msgstr "naukowiec"
-
-#~ msgid "taxman"
-#~ msgstr "poborca pod."
-
-#~ msgid "?citystyle:Human"
-#~ msgstr "?citystyle:Ludzki"
-
-#~ msgid "?citystyle:Dual"
-#~ msgstr "?citystyle:Dwie Rasy"
-
-#~ msgid "Alien World"
-#~ msgstr "Obcy Świat"
-
-#~ msgid ""
-#~ "One of the design goals of this ruleset is that it has to provide "
-#~ "gameplay different from standard rules. Do not assume that any rules you "
-#~ "know from default rules apply with this ruleset.\n"
-#~ "\n"
-#~ "See README.ruleset_alien and http://www.cazfi.net/freeciv/alien/ for "
-#~ "ruleset info."
-#~ msgstr ""
-#~ "Jednym z celów tego zestawu zasad jest stworzenie zasad gry zupełnie "
-#~ "odmiennych od standardowych. Nie zakładaj, że będę tu działały "
-#~ "jakiekolwiek prawa znane ci z innych zestawów zasad.\n"
-#~ "\n"
-#~ "Więcej informacji znajdziesz w pliku README.ruleset_alien oraz na http://"
-#~ "www.cazfi.net/freeciv/alien/ ."
-
-#~ msgid "GE"
-#~ msgstr "e.g."
-
-#~ msgid "BGE"
-#~ msgstr "p.e.g."
-
-#~ msgid "Radiation Burst"
-#~ msgstr "Wzrost promieniowania"
-
-#~ msgid "Rebels"
-#~ msgstr "Buntownicy"
-
-#~ msgid "Alien Microbes"
-#~ msgstr "Obce mikroby"
-
-#~ msgid "Anarchy happens between government changes."
-#~ msgstr "Do Anarchii dochodzi w okresie przejściowym podczas zmiany ustroju."
-
-#~ msgid ""
-#~ "This is the only available form of government in the beginning.\n"
-#~ "\n"
-#~ "Max tax/science/lux rate is 40%.\n"
-#~ "\n"
-#~ "Despotism suffers 20% penalty to both trade and production."
-#~ msgstr ""
-#~ "Jest to jedyny ustrój dostępny na początku rozgrywki.\n"
-#~ "\n"
-#~ "Maksymalna stawka podatku/nauki/luksusu to 40%.\n"
-#~ "\n"
-#~ "Despotyzm zmniejsza handel i produkcję o 20%."
-
-#~ msgid ""
-#~ "Government type for military might.\n"
-#~ "\n"
-#~ "Max tax/science/lux rate is 60%.\n"
-#~ "\n"
-#~ "Communism suffers 20% penalty to trade."
-#~ msgstr ""
-#~ "Jest to ustrój dla rządów wojskowych.\n"
-#~ "\n"
-#~ "Maksymalna stawka podatku/nauki/luksusu to 60%.\n"
-#~ "\n"
-#~ "Komunizm zmniejsza handel o 20%u."
-
-#~ msgid ""
-#~ "Government type of freedom.\n"
-#~ "\n"
-#~ "Max tax/science/lux rate is 70%.\n"
-#~ "\n"
-#~ "Democracy suffers 20% penalty to production."
-#~ msgstr ""
-#~ "Jest to ustrój, w którym najważnejsza jest wolność.\n"
-#~ "\n"
-#~ "Maksymalna stawka podatku/nauki/luksusu to 70%.\n"
-#~ "\n"
-#~ "Demokracja zmniejsza produkcję o 20%."
-
-#~ msgid "Dual Communism"
-#~ msgstr "DwuKomunizm"
-
-#~ msgid ""
-#~ "Government type for military might for both humans and aliens alike.\n"
-#~ "\n"
-#~ "Max tax/science/lux rate is 80%.\n"
-#~ "\n"
-#~ "Dual Communism gains 20% production bonus."
-#~ msgstr ""
-#~ "Jest to ustrój dla rządów wojskowych zarówno dla ludzi, jak i dla "
-#~ "obcych.\n"
-#~ "\n"
-#~ "Maksymalna stawka podatku/nauki/luksusu to 80%.\n"
-#~ "\n"
-#~ "DwuKomunizm zwiększa produkcję o 20%."
-
-#~ msgid "Dual Democracy"
-#~ msgstr "DwuDemokracja"
-
-#~ msgid ""
-#~ "Government type of freedom for both humans and aliens alike.\n"
-#~ "\n"
-#~ "Max tax/science/lux rate is 90%.\n"
-#~ "\n"
-#~ "Dual Democracy gains 20% trade bonus."
-#~ msgstr ""
-#~ "Jest to ustrój, w którym najważnejsza jest wolność zarówno dla ludzi, jak "
-#~ "i dla obcych.\n"
-#~ "\n"
-#~ "Maksymalna stawka podatku/nauki/luksusu to 90%.\n"
-#~ "\n"
-#~ "DwuDemokracja zwiększa handel o 20%."
-
-#~ msgid ""
-#~ "Deneb 7 was known to have strange force field surrounding itthat made it "
-#~ "impossible to get near planet with year 250 Galactic Era Earthtechnology. "
-#~ "However, when you were flying past, that field suddenlyreverted and "
-#~ "sucked you to the planet.\n"
-#~ "\n"
-#~ "You find yourself in a strange world, probably touched by "
-#~ "superiortechnology, where big portion of Earth science is invalid. "
-#~ "Youhave to learn new rules, rules of this world.\n"
-#~ "\n"
-#~ "There's deadly radiation that no known shielding works against.There's "
-#~ "alien life, but more surprisingly also some edibleplants just like on "
-#~ "Earth.\n"
-#~ "\n"
-#~ "Radio doesn't work, air doesn't allow flying, some basic Physicsdoes not "
-#~ "apply here.\n"
-#~ "\n"
-#~ "You struggle to live on this planet, and read Roadside Picnic by "
-#~ "Strugatskybrothers once more."
-#~ msgstr ""
-#~ "Deneb 7 otoczony jest dziwnym polem siłowym, które uniemożliwiało ludziom "
-#~ "zbliżenie się do planety przy użyciu ziemskiej techniki z roku 250 Ery "
-#~ "Galaktycznej. Jednak gdy przelatywaliście w pobliżu Deneba 7, pole nagle "
-#~ "zmieniło kierunek i ściągnęło was na powierzchnię.\n"
-#~ "\n"
-#~ "Znaleźliście się w dziwnym świecie, prawdopodobnie zmienionym przez jakąś "
-#~ "supertechnologię, w którym nie obowiązuje wiele praw ziemskiej nauki. "
-#~ "Teraz musisz odkryć nowe prawa, prawa tego świata.\n"
-#~ "\n"
-#~ "Występuje to śmiercionośne promieniowanie, przeciw któremu nie działają "
-#~ "żadne znane ci osłony. Istnieją tu obce formy życia zwierzęcego, ale "
-#~ "także jadalne rośliny, podobne do tych na Ziemi.\n"
-#~ "\n"
-#~ "Radio nie działa, atmosfera nie pozwala na latanie, nie obowiązują też "
-#~ "niektóre podstawowe prawa fizyki.\n"
-#~ "\n"
-#~ "Próbujesz nauczyć się żyć na tej dziwnej planecie i ponownie czytasz "
-#~ "\"Piknik na skraju drogi\" braci Strugackich."
-
-#~ msgid "Alien Rights"
-#~ msgstr "Prawa Obcych"
-
-#~ msgid ""
-#~ "They're smart. Should they have rights too?\n"
-#~ "\n"
-#~ "Alien Forest tiles produce +1 production."
-#~ msgstr ""
-#~ "Są inteligentni. Czy oni też powinni mieć prawa?\n"
-#~ "\n"
-#~ "Pola Obcego Lasu dają o 1 punkt produkcji więcej."
-
-#~ msgid "Alien Taming"
-#~ msgstr "Oswajanie Obcych"
-
-#~ msgid "Some of the Alien lifeforms now work for us."
-#~ msgstr "Niektóre lokalne formy życia teraz z nami współpracują."
-
-#~ msgid "Alien Training"
-#~ msgstr "Szkolenie Obcych"
-
-#~ msgid "Trained native lifeforms - deadly."
-#~ msgstr "Szkolenie lokalnych form życia - z zabójczym efektem..."
-
-#~ msgid "Amphibious Tactics"
-#~ msgstr "Taktyka Wodno-lądowa"
-
-#~ msgid "Warfare with amphibious units."
-#~ msgstr "Wojna przy użyciu jednostek wodno-lądowych."
-
-#~ msgid "Antigravity"
-#~ msgstr "Antygrawitacja"
-
-#~ msgid ""
-#~ "Even if normal method of flying is impossible in this world antigravity "
-#~ "works. We just need to master it."
-#~ msgstr ""
-#~ "Mimo że normalny lot nie jest tu możliwy, działa antygrawitacja. Musimy "
-#~ "jedynie nauczyć się ją wykorzystywać."
-
-#~ msgid "Burrowing"
-#~ msgstr "Drążenie"
-
-#~ msgid ""
-#~ "Since it seems to be impossible to fly in this world, we focus on "
-#~ "opposite direction. Burrowing through earth is possible."
-#~ msgstr ""
-#~ "Wydaje się, że latanie nie jest możliwe na tej planecie, więc idziemu w "
-#~ "drugą stronę. Drążenie w ziemi jest możliwe."
-
-#~ msgid "Brain Development"
-#~ msgstr "Rozwój mózgu"
-
-#~ msgid "Brute Force"
-#~ msgstr "Wojna Totalna"
-
-#~ msgid "It's time to make more powerfull weapons than ever before."
-#~ msgstr "Czas stworzyć broń potężniejszą niż kiedykolwiek przedtem."
-
-#~ msgid "City Defense"
-#~ msgstr "Obrona Miasta"
-
-#~ msgid ""
-#~ "Advanced form of force channeling allows us to protect city size objects "
-#~ "with channeled radiation energy."
-#~ msgstr ""
-#~ "Zaawansowana inżynieria pola siłowego pozwala nam chronić obiekty "
-#~ "wielkości miasta przy pomocy energii planety."
-
-#~ msgid "Commercial Antigravity"
-#~ msgstr "Komercyjna Antygrawitacja"
-
-#~ msgid ""
-#~ "Antigravity is not only for military. It has commercial applications as "
-#~ "well."
-#~ msgstr ""
-#~ "Antygrawitacja nie jest technologią wyłącznie wojskową; ma także cywilne "
-#~ "zastosowania komercyjne."
-
-#~ msgid "Communication"
-#~ msgstr "Komunikacja"
-
-#~ msgid ""
-#~ "Conventional radio does not work here. Develop working alternative that "
-#~ "takes advantage of the local radiation. You'll get contact to other "
-#~ "factions."
-#~ msgstr ""
-#~ "Tradycyjne radio nie działa na tej planecie. Rozwiń alternatywne formy "
-#~ "komunikacji wykorzystujące lokalne promieniowanie. Dzięki temu nawiążesz "
-#~ "kontakt z innymi grupami."
-
-#~ msgid "Composites"
-#~ msgstr "Kompozyty"
-
-#~ msgid "Stronger materials mean stronger armors."
-#~ msgstr "Mocniejsze materiały to mocniejsze pancerze."
-
-#~ msgid "Crust Defense"
-#~ msgstr "Obrona Podziemna"
-
-#~ msgid "Defense against burrowing units."
-#~ msgstr "Obrona przed jednostkami drążącymi."
-
-#~ msgid "Cyber Aliens"
-#~ msgstr "Cyber-Obcy"
-
-#~ msgid "Alliance of the machine and alien organisms."
-#~ msgstr "Sojusz maszyn i obcych form życia."
-
-#~ msgid "Cybermodules"
-#~ msgstr "Cybermoduły"
-
-#~ msgid ""
-#~ "Standardized cyber units save money - or make money to those producing "
-#~ "them."
-#~ msgstr ""
-#~ "Standaryzowane cyber jednostki to oszczędność pieniędzy lub niezły "
-#~ "interes dla tych, którzy je produkują."
-
-#~ msgid "Cybernetics"
-#~ msgstr "Cybernetyka"
-
-#~ msgid ""
-#~ "Making old Earth technology better than before is relatively easy task to "
-#~ "do. For small investment, cybernetics gives us much better attack units."
-#~ msgstr ""
-#~ "Rozwijanie starych ziemskich technologii to stosunkowo łatwe zadanie. "
-#~ "Dzięki cybernetyce można niewielkim kosztem stworzyć znacznie lepsze "
-#~ "jednostki zaczepne."
-
-#~ msgid "Data Storage"
-#~ msgstr "Przechowywanie Danych"
-
-#~ msgid ""
-#~ "Needs to archive all the media produced for and by politics drive "
-#~ "development of better data storage methods."
-#~ msgstr ""
-#~ "Potrzeba przechowywanie wszystkich przekazów tworzonych przez polityków "
-#~ "dała impuls do rozwoju lepszych metod przechowywanie danych."
-
-#~ msgid "Deep Pumping"
-#~ msgstr "Pompy Głębinowe"
-
-#~ msgid ""
-#~ "We can pump water from the depths of the crust. We no longerneed any of "
-#~ "the adjacent tiles to have water in order to build irrigation."
-#~ msgstr ""
-#~ "Możemy teraz pompować wodę z głębin skorupy planetarnej. Od teraz "
-#~ "nawodnienia budować można także na polach nie sąsiadujących ze źródłami "
-#~ "wody."
-
-#~ msgid "Deneb Radar"
-#~ msgstr "Radar denebański"
-
-#~ msgid ""
-#~ "Not really an conventional radar, but named so as it fills similar role. "
-#~ "It's based on Deneb 7 radiation and works on this planet."
-#~ msgstr ""
-#~ "Nie jest to wprawdzie konwencjonalny radar, ale pełni podobną rolę "
-#~ "wykorzystując promieniowanie Deneba 7 i tylko on działa na tej planecie."
-
-#~ msgid "Dual Government"
-#~ msgstr "DwuRząd"
-
-#~ msgid "Government should consider both Humans and Native aliens."
-#~ msgstr ""
-#~ "Ustrój powinien uwzględniać przedstawicieli zarówno Ludzi, jak i Obcych"
-
-#~ msgid ""
-#~ "We are finally able to escape force field surrounding Deneb 7. In "
-#~ "addition to technical insight it requires correct attitude."
-#~ msgstr ""
-#~ "Możemy wreszcie wyrwać się poza pole siłowe otaczające Deneb 7. Oprócz "
-#~ "odpowiedniej wiedzy technicznej potrzebne jest także odpowiednie "
-#~ "podejście."
-
-#~ msgid "Faction Government"
-#~ msgstr "Rząd Frakcyjny"
-
-#~ msgid "Familiar government types adjusted to local environment."
-#~ msgstr "Znane typy ustrojów dostosowane do lokalnych warunków."
-
-#~ msgid "Faction Politics"
-#~ msgstr "Polityka Frakcyjna"
-
-#~ msgid ""
-#~ "Human relations in this situation, where various factions have been "
-#~ "forced to this strange planet, are quite unlike anything seen before. It "
-#~ "very well deserves small study. Maybe we then can co-operate with other "
-#~ "factions."
-#~ msgstr ""
-#~ "Na planecie, na której różne grupy zmuszone zostały do życia obok siebie, "
-#~ "relacje społeczne nie są podobne do niczego w znanym Wszechświecie. Może "
-#~ "jeśli dokładnie zbadamy tą nietypową sytuację, współpraca między różnymi "
-#~ "grupami będzie układać się gładko?"
-
-#~ msgid "Food Regeneration"
-#~ msgstr "Odzyskiwanie Żywności"
-
-#~ msgid ""
-#~ "If what we harvest grows back faster, we get more food. It's simple as "
-#~ "that.\n"
-#~ "\n"
-#~ "Farmland tiles get additional 50% food production bonus."
-#~ msgstr ""
-#~ "To proste: jeśli rośiny, które zbierzemy będą odrastać szybciej, będziemy "
-#~ "mieli więcej żywności.\n"
-#~ "\n"
-#~ "Pola z farmami dają o 50% więcej żywności."
-
-#~ msgid "Force Channeling"
-#~ msgstr "Inżynieria Pola Siłowego"
-
-#~ msgid ""
-#~ "Radiation is obstacle for us, but now also an resource. We know how to "
-#~ "channel Deneb 7's power to our own use.\n"
-#~ "\n"
-#~ "Engineers can build Force Fortresses."
-#~ msgstr ""
-#~ "Promieniowanie jest dla nas przeszkodą, lecz także dobrodziejstwem, odkąd "
-#~ "nauczyliśmy się wykorzystywać pole siłowe Deneba 7 do naszych potrzeb.\n"
-#~ "\n"
-#~ "Inżynierowie mogą budować Fortece Siłowe."
-
-#~ msgid "Gravity Manipulation"
-#~ msgstr "Inżynieria Grawitacyjna"
-
-#~ msgid ""
-#~ "From inside the crust we gather information required to understand how "
-#~ "gravity works and what one can do with it."
-#~ msgstr ""
-#~ "Badając skorupę planety, gromadzimy informację o tym, jak działa "
-#~ "grawitacja i jak możemy ją wykorzystać."
-
-#~ msgid "Global Knowledge"
-#~ msgstr "Globalna Wiedza"
-
-#~ msgid ""
-#~ "Information flows to us. We learn any tech known by four other "
-#~ "civilizations."
-#~ msgstr ""
-#~ "Spływają do nas informacje. Poznajemy każdą technologię znaną czterem "
-#~ "innym cywilizacjom."
-
-#~ msgid "High-Tech Filtering"
-#~ msgstr "Zaawansowane Filtrowanie"
-
-#~ msgid "You can get a lot of things from ocean if you know how."
-#~ msgstr "Oceany mogą dać nam wiele rzeczy, jeśli tylko wiemy jak je wydobyć."
-
-#~ msgid ""
-#~ "Simply knowing this tech makes two content citizens happy in each city."
-#~ msgstr ""
-#~ "Znajomość tej technologii czyni 2 zadowolonych mieszkańców szczęśliwymi w "
-#~ "każdym mieście."
-
-#~ msgid "Low-Level Orbit"
-#~ msgstr "Loty Na Niskiej Orbicie"
-
-#~ msgid ""
-#~ "With further advances in antigravitics we are able to enter orbit even if "
-#~ "we still are prisoners of the force field surronding Deneb 7.\n"
-#~ "\n"
-#~ "Makes Antigrav Ports more efficient. They can airlift three units instead "
-#~ "of just one."
-#~ msgstr ""
-#~ "Dalsze postępy w badaniach nad antygrawitacją pozwoliły nam wchodzić na "
-#~ "orbitę, mimo tego że nadal jesteśmy więźniami pola siłowego otaczającego "
-#~ "Deneb 7.\n"
-#~ "\n"
-#~ "Usprawnia działanie Portów Antygrawitacyjnych. Mogą się w nich "
-#~ "przemieszczać trzy jednostki na turę."
-
-#~ msgid ""
-#~ "Using Deneb 7's own power available everywhere land travel speeds can "
-#~ "reach levels never seen before."
-#~ msgstr ""
-#~ "Wykorzystując energię planety, może podróżować po lądzie z niespotykaną "
-#~ "dotąd szybkością."
-
-#~ msgid "Manufacturing"
-#~ msgstr "Wytwórstwo"
-
-#~ msgid ""
-#~ "It takes some research to even make basic manufacturing in this alien "
-#~ "world."
-#~ msgstr ""
-#~ "Na tej planecie nawet podstawowa działalność wytwórcza jest trudna bez "
-#~ "dodatkowych badań."
-
-#~ msgid "Martial Law"
-#~ msgstr "Stan Wyjątkowy"
-
-#~ msgid ""
-#~ "Effective martial law requires that we can react quickly, to immediately "
-#~ "send forces where they are needed.\n"
-#~ "\n"
-#~ "Maximum martial law for cities with Secret Police is increased from two "
-#~ "to five."
-#~ msgstr ""
-#~ "Aby stan wyjątkowy był skuteczny, musimy być w stanie szybko wysyłać "
-#~ "wojsko tam, gdzie jest potrzebne.\n"
-#~ "\n"
-#~ "Maksymalny stan wyjątkowy dla miast z Tajną Policją zwiększa się z 2 do 5."
-
-#~ msgid "Mental Powers"
-#~ msgstr "Zdolności Mentalne"
-
-#~ msgid ""
-#~ "I WANT\n"
-#~ "\n"
-#~ "One way to resist radiation is willpower.\n"
-#~ "\n"
-#~ "Simply knowing this tech allows cities to grow 3 sizes bigger."
-#~ msgstr ""
-#~ "CHCĘ\n"
-#~ "\n"
-#~ "Jednym ze sposobów na uchronienie się przed promieniowaniem jest siła "
-#~ "woli.\n"
-#~ "\n"
-#~ "Znajomość tej technologii pozwala miastom wzrosnąć o 3 rozmiary."
-
-#~ msgid "Mining"
-#~ msgstr "Kopalnie"
-
-#~ msgid ""
-#~ "Earthly mining technologies were not sufficient for heavy scale mining on "
-#~ "this planet."
-#~ msgstr ""
-#~ "Ziemska technologia górnicza nie wystarczała, by prowadzić duże prace "
-#~ "wydobywcze na tej planecie."
-
-#~ msgid "Modified Spitter"
-#~ msgstr "Zmodyfikowana Plujka"
-
-#~ msgid ""
-#~ "We already know how to make modifications to alien lifeforms. Let's "
-#~ "improve spitters."
-#~ msgstr "Potrafimy już modyfikować ocbe formy życia. Ulepszmy plujki!"
-
-#~ msgid "Mood Manipulation"
-#~ msgstr "Inżynieria Nastroju"
-
-#~ msgid "People are happy if they believe that they are happy."
-#~ msgstr "Ludzie są szczęśliwi, jeśli wierzą, że są szczęśliwi."
-
-#~ msgid "Naval Superiority"
-#~ msgstr "Zaawansowana Wojna Morska"
-
-#~ msgid ""
-#~ "It's no longer enough to replicate old Earth technologies. We want "
-#~ "superiority."
-#~ msgstr ""
-#~ "Nie wystarcza nam już kopiowanie ziemskiej technologii. Chcemy ją "
-#~ "prześcignąć."
-
-#~ msgid "New Frontier"
-#~ msgstr "Nowe Granice"
-
-#~ msgid ""
-#~ "We finally fully realize that we are not limited to what we had as part "
-#~ "of Earth empire.\n"
-#~ "\n"
-#~ "Increases max tax/science/lux rate by 10%."
-#~ msgstr ""
-#~ "Zdaliśmy sobie wreszcie sprawę, że nie musimy się ograniczać do tego, co "
-#~ "mieliśmy w ziemskim imperium.\n"
-#~ "\n"
-#~ "Zwiększa maksymalną stawkę podatków/nauki/luksusu o 10%."
-
-#~ msgid "Ocean Cities"
-#~ msgstr "Wodne Miasta"
-
-#~ msgid "Cities on ocean. Why not?"
-#~ msgstr "Miasta na Oceanie. Dlaczegóż by nie?"
-
-#~ msgid "Organic Structures"
-#~ msgstr "Struktury Organiczne"
-
-#~ msgid ""
-#~ "The art of making armor from alien organisms resistant to Deneb 7's "
-#~ "strange radiation allows us to enter new areas.\n"
-#~ "\n"
-#~ "Cities can work radiating tiles."
-#~ msgstr ""
-#~ "Umiejętność tworzenia pancerzy z lokalnych organizmów odpornych na dziwne "
-#~ "promieniowanie Deneba 7 pozwala nam wkroczyć na nowe tereny.\n"
-#~ "\n"
-#~ "Miasta mogą zagospodarować radioaktywne pola."
-
-#~ msgid "Paradrop"
-#~ msgstr "Desant"
-
-#~ msgid ""
-#~ "It's easy to fall all the way from orbit, but to hit small target and to "
-#~ "be ready to act immediately after landing are hard for aliens. They need "
-#~ "extra mental powers for that."
-#~ msgstr ""
-#~ "Łatwo jest spaść z orbity, lecz trafić w niewielki cel i być gotowym do "
-#~ "działania od razu po wylądowaniu jest dla obcych znacznie trudniejsze. "
-#~ "Potrzebne są im do tego dodatkowe zdolności mentalne."
-
-#~ msgid "Personal Contact"
-#~ msgstr "Kontakt Osobisty"
-
-#~ msgid ""
-#~ "With Virtual Reality it's like actor actually was there with you. When "
-#~ "you allow actors to teleport to meet their audience, maybe she is.\n"
-#~ "\n"
-#~ "Stealth Spies protecting your cities against enemy Spies will get 40% "
-#~ "bonus. It also gets 40% harder for enemies to sabotage specific buildings."
-#~ msgstr ""
-#~ "Dzięki wirtualnej rzeczywistości masz wrażenie, że aktor naprawdę jest "
-#~ "tuż obok ciebie. Gdy pozwolisz aktorom, by teleportowali się na spotkania "
-#~ "z widownią, może rzeczywiście tak jest.\n"
-#~ "\n"
-#~ "Skuteczność Cicho-Szpiegów broniący miasta przed wrogimi Szpiegami "
-#~ "zwiększa się o 40%. Szansa na skuteczny sabotaż konkretnego budynku spada "
-#~ "o 40%."
-
-#~ msgid "Protein Modifications"
-#~ msgstr "Modyfikowane Białka"
-
-#~ msgid ""
-#~ "Turns out we can make alien lifeforms edible.\n"
-#~ "\n"
-#~ "Engineers can build Farmland, which increases tile food production by 50%."
-#~ msgstr ""
-#~ "Okazuje się, że możemy sprawić, by obce formy życia były jadalne.\n"
-#~ "\n"
-#~ "Inżynierowie mogą budować Farmy, które zwiększają produkcję żywności na "
-#~ "polu o 50%."
-
-#~ msgid "Radiation Resistance"
-#~ msgstr "Odporność Na Promieniowanie"
-
-#~ msgid ""
-#~ "By closely examining alien lifeform and how they survive the radiation, "
-#~ "we are able to build some radiation resistance to our cities. \n"
-#~ "\n"
-#~ "Simply knowing this tech allows cities to grow 1 size bigger."
-#~ msgstr ""
-#~ "Po gruntownym zbadaniu lokalnych form życia i tego, jak radzą sobie z "
-#~ "promieniowaniem, udało nam się zwiększych odporność na promieniowanie "
-#~ "naszych miast. \n"
-#~ "\n"
-#~ "Znajomość tej technologii pozwala naszym miastom wzrosnąć o 1."
-
-#~ msgid "Regeneration"
-#~ msgstr "Regeneracja"
-
-#~ msgid ""
-#~ "We know how aliens regenerate, we know how self-repairing machines "
-#~ "regenerate, we know how Earth organisms regenerate."
-#~ msgstr ""
-#~ "Wiemy jak regenerują się obcy, wiemy jak regenerują się samonaprawiające "
-#~ "się maszyny, wiemy jak regenerują się ziemskie organizmy."
-
-#~ msgid "Research Methods"
-#~ msgstr "Metody Badawcze"
-
-#~ msgid ""
-#~ "Research methods suitable for tackling challenges here allow us to gain "
-#~ "knowledge much faster.\n"
-#~ "\n"
-#~ "Simply knowing this tech increases science output by 35%."
-#~ msgstr ""
-#~ "Metody badawcze przydatne w rozwiązywaniu tutejszych problemów pozwalają "
-#~ "nam zdobywać wiedzę znacznie szybciej.\n"
-#~ "\n"
-#~ "Znajomość tej technologii zwiększa produkcję punktów nauki o 35%."
-
-#~ msgid "Smart Aliens"
-#~ msgstr "Inteligentni Obcy"
-
-#~ msgid ""
-#~ "Once we have given some smarts, backed with some remote control, to them, "
-#~ "they can work on more demanding tasks."
-#~ msgstr ""
-#~ "Uczyniliśmy je bardziej inteligentnymi i wsparliśmy zdalnym sterowaniem, "
-#~ "dzięki czemu mogą wykonywać trudniejsze zadania."
-
-#~ msgid "Soul"
-#~ msgstr "Dusza"
-
-#~ msgid ""
-#~ "By combining our knowledge about humans and aliens we finally understand "
-#~ "universal concept of soul.\n"
-#~ "\n"
-#~ "We can cause terror in our enemies. Once somebody knows Soul, two content "
-#~ "citizens is converted to unhappy in every city in the world unless owner "
-#~ "of the city also knows Soul."
-#~ msgstr ""
-#~ "Łącząc naszą wiedzę o ludziach i obcych, poznaliśmy uniwersalną naturę "
-#~ "duszy.\n"
-#~ "\n"
-#~ "Możemy wzbudzać przerażenie w naszych wrogach. Gdy któryś z graczy pozna "
-#~ "Duszę, 2 mieszkańców staje się niezadowolonymi w każdym mieście na "
-#~ "świecie, chyba że dany naród również posiadł wiedzę Dusza."
-
-#~ msgid "Specialist Training"
-#~ msgstr "Szkolenia Specjalistów"
-
-#~ msgid ""
-#~ "Based on our Tactics teaching techniques, we can teach our specialists "
-#~ "trick or two.\n"
-#~ "\n"
-#~ "Output of all specialists doubles."
-#~ msgstr ""
-#~ "Dzięki Taktyce udoskonaliliśmy nasze techniki nauczanie i możemy "
-#~ "podszkolić naszych specjalistów.\n"
-#~ "\n"
-#~ "Wydajność specjalistów zwiększa się dwukrotnie."
-
-#~ msgid "Spitter Control"
-#~ msgstr "Plujki Bojowe"
-
-#~ msgid ""
-#~ "Alien lifeforms spitting solid objects are interesting research subject."
-#~ msgstr ""
-#~ "Obce formy życia plujące twardymi \"pociskami\" to ciekawy przedmiot "
-#~ "badań."
-
-#~ msgid "Stealth Module"
-#~ msgstr "Moduł Niewidzialności"
-
-#~ msgid ""
-#~ "Even when we know this technology making our units invisible, it's far "
-#~ "too expensive to be used for armies. It's perfect for individuals in "
-#~ "espionage mission."
-#~ msgstr ""
-#~ "Choć dzięki tej technologii nasze jednostki mogą stać się niewidzialne, "
-#~ "jest ona zbyt kosztowna, by objąć nią całe armie. Sprawdza się za to "
-#~ "znakomicie w misjach szpiegowskich."
-
-#~ msgid "Strong Force"
-#~ msgstr "Mocne Oddziaływanie"
-
-#~ msgid ""
-#~ "We are quite capable of making different energy fields out of radiation. "
-#~ "We can still improve, though.\n"
-#~ "\n"
-#~ "Allows Engineers to build Towers instead of Force Fortresses."
-#~ msgstr ""
-#~ "Potrafimy już wykorzystywać promieniowanie do tworzenia różnych typów "
-#~ "pola siłowego. Nadal możemy jednak ulepszyć to i owo.\n"
-#~ "\n"
-#~ "Inżynierowie mogą budować Wieże zamiast Fortec Siłowych."
-
-#~ msgid "Strong Resistance"
-#~ msgstr "Zwiększona Odporność"
-
-#~ msgid ""
-#~ "We get better at building resistance against radiation.\n"
-#~ "\n"
-#~ "Simply knowing this tech allows cities to grow 2 sizes bigger."
-#~ msgstr ""
-#~ "Umiemy lepiej bronić się przed promieniowaniem.\n"
-#~ "\n"
-#~ "Znajomość tej technologii pozwala miastom wzrosnąć o 2 rozmiary."
-
-#~ msgid "Supermodule"
-#~ msgstr "Supermoduł"
-
-#~ msgid "Supermodule combines lesser modules in one extremely efficient pack."
-#~ msgstr ""
-#~ "Supermoduł pozwala łączyć mniejsze moduły w niezwykle wydajne systemy."
-
-#~ msgid "Synthetic Food"
-#~ msgstr "Syntetyczna Żywność"
-
-#~ msgid ""
-#~ "This is completely new, and extremely efficient, way of making synthetic "
-#~ "food.\n"
-#~ "\n"
-#~ "As their food consumption is no longer an problem, we can grow bigger, "
-#~ "meaner, aliens."
-#~ msgstr ""
-#~ "To zupełnie nowa i niezwykle wydajna metoda pozyskiwania żywności.\n"
-#~ "\n"
-#~ "Skoro pozyskiwanie żywności nie stanowi już problemu, możemy teraz "
-#~ "hodować większych i groźniejszych obcych."
-
-#~ msgid "Teleportation"
-#~ msgstr "Teleportacja"
-
-#~ msgid ""
-#~ "We can teleport relatively small objects relatively short distances. This "
-#~ "reduces problem of not being able to fly."
-#~ msgstr ""
-#~ "Potrafimy teleportować stosunkowo małe przedmioty na niewielkie "
-#~ "odległości. Zmniejsza to problem niemożności latania."
-
-#~ msgid "Thermal Module"
-#~ msgstr "Moduł Cieplny"
-
-#~ msgid ""
-#~ "To be competent in boiling waters requires good control of temperature "
-#~ "surrounding vessels. Also, knowledge about basic module technology allows "
-#~ "more advanced modules in the future.\n"
-#~ "\n"
-#~ "Cities can work Boiling Ocean tiles."
-#~ msgstr ""
-#~ "Aby radzić sobie z wrzącymi wodami, musisz nauczyć się kontrolować "
-#~ "temperaturę na zewnątrz statków. Ponadto wiedza na temat podstawowych "
-#~ "modułów pozwoli ci tworzyć bardziej zaawansowane moduły w przyszłości.\n"
-#~ "\n"
-#~ "Miasta mogą korzystać z pól Wrzącego Oceanu."
-
-#~ msgid "Underground Habitat"
-#~ msgstr "Podziemne Osiedle"
-
-#~ msgid ""
-#~ "If needed, we can produce everything we need without ever leaving "
-#~ "underground bunker."
-#~ msgstr ""
-#~ "Jeśli zajdzie taka potrzeba, możemy wyprodukować wszystko bez "
-#~ "konieczności opuszczania podziemniego schronu."
-
-#~ msgid "Travel"
-#~ msgstr "Podróż"
-
-#~ msgid ""
-#~ "Once we master ship manufacturing, traveling more hospitable seas of "
-#~ "Deneb 7 proved to be no different from other planets."
-#~ msgstr ""
-#~ "Gdy już opanowaliśmy sztukę budowania statków, podróżowanie po gościnnych "
-#~ "wodach Deneba 7 stało się proste."
-
-#~ msgid "Unified Theory"
-#~ msgstr "Teoria Unifikacji"
-
-#~ msgid ""
-#~ "We now understand that radiation and antigravity are two sides of the "
-#~ "same phenomenom."
-#~ msgstr ""
-#~ "Wiemy już teraz, że promieniowanie i grawitacja to dwa aspekty tego "
-#~ "samego zjawiska."
-
-#~ msgid "Virtual Entertainment"
-#~ msgstr "Wirtualna Rozrywka"
-
-#~ msgid "Another tech that Earth has long been close to mastering."
-#~ msgstr "Kolejna technologia, którą na Ziemi prawie udało się rozwinąć."
-
-#~ msgid "Virtual Reality Training"
-#~ msgstr "Szkolenia VR"
-
-#~ msgid ""
-#~ "Virtual Reality provides excellent way to train our forces, both infantry "
-#~ "and naval forces."
-#~ msgstr ""
-#~ "Ćwiczenia w wirtualnej rzeczywistości to znakomity sposób na szkolenie "
-#~ "naszych wojsk, zarówno lądowych, jak i morskich."
-
-#~ msgid "War Monsters"
-#~ msgstr "Potwory Bojowe"
-
-#~ msgid ""
-#~ "We can tame monsters suitable for war. These might be relatively weak, "
-#~ "but they are the only thing that can wage war on radiating areas for the "
-#~ "time being."
-#~ msgstr ""
-#~ "Potrafimy oswajać potwory nadające się do walki. Są wprawdzie stosunkowo "
-#~ "słabe, lecz jak na razie tylko one potrafią prowadzić działania wojenne "
-#~ "na radioaktywnych terenach."
-
-#~ msgid "Water Flow"
-#~ msgstr "Fizyka Płynów"
-
-#~ msgid ""
-#~ "We understand Deneb 7 fluid dynamics and can get water to flow where we "
-#~ "want. Irrigation becomes possible in tiles adjacent to cities and rivers."
-#~ msgstr ""
-#~ "Wiedza na temat fizyki płynów na Denebie 7 pozwala nam doprowadzić wodą "
-#~ "tam, gdzie chcemy. Możemy teraz tworzyć nawodnienie na polach "
-#~ "przylegających do miast i rzek."
-
-#~ msgid "Terrain has alien radiation"
-#~ msgstr "Teren, na którym występuje obce promieniowanie."
-
-#~ msgid "For some reason, there is Earth like grass and animals around."
-#~ msgstr ""
-#~ "Z jakichś dziwnych powodów występują tu trawa i zwierzęta podobne do "
-#~ "ziemskich."
-
-#~ msgid "Alien Forest"
-#~ msgstr "Obcy Las"
-
-#~ msgid ""
-#~ "These forests are filled with strange alien organisms. This planet's "
-#~ "radiation makes it impossible for Earthly organisms to survive here.\n"
-#~ "\n"
-#~ "Cities can work these tiles only when Organic Structures is known. "
-#~ "Inventing Alien Rights gives +1 production bonus to Alien Forest tiles."
-#~ msgstr ""
-#~ "Lasy te zamieszkują dziwne obce formy życia. Promieniowanie planety "
-#~ "sprawia, że ziemskie organizmy nie są tu wstanie przetrwać.\n"
-#~ "\n"
-#~ "Miasta mogą korzystać z tych pól tylko, jeśli poznaliśmy technologię "
-#~ "Struktury Organiczne. Poznanie Praw Obcych zwiększa produkcję na polach "
-#~ "Obcego Lasu o 1."
-
-#~ msgid "Radiating Rocks"
-#~ msgstr "Radioaktywne Skały"
-
-#~ msgid ""
-#~ "Planet's radiation makes it impossible for Earth organisms to survive "
-#~ "here.\n"
-#~ "\n"
-#~ "Cities can work these tiles only when Organic Structures is known."
-#~ msgstr ""
-#~ "Promieniowanie planety sprawia, że ziemskie organizmy nie są w stanie tu "
-#~ "żyć.\n"
-#~ "\n"
-#~ "Miasta mogą zagospodarować te pola tylko jeśli poznamy technologię "
-#~ "Struktury Organiczne."
-
-#~ msgid "Hills just like on Earth."
-#~ msgstr "Wzgórza takie jak na Ziemi."
-
-#~ msgid "Thick Mountains"
-#~ msgstr "Twarde Góry"
-
-#~ msgid ""
-#~ "What are these mountains made of?!? Diamond drill makes no scratch on "
-#~ "them.\n"
-#~ "\n"
-#~ "Burrowing units are unable to burrow through these mountains."
-#~ msgstr ""
-#~ "Z czego zrobione są te góry?!? Diamentowe wiertła nie mogą ich nawet "
-#~ "zadrasnąć.\n"
-#~ "\n"
-#~ "Jednostki drążące nie mogą przedostać się przez te góry."
-
-#~ msgid "This is normal oceanic terrain."
-#~ msgstr "Normalny teren morski."
-
-#~ msgid "Boiling Ocean"
-#~ msgstr "Wrzący Ocean"
-
-#~ msgid ""
-#~ "This ocean is boiling. No ship without special equipment can enter.\n"
-#~ "\n"
-#~ "Cities can work these tiles only when Thermal Module is known."
-#~ msgstr ""
-#~ "Ten ocean wrze. Mogą go przemierzać jedynie jednostki ze specjalnym "
-#~ "wyposażeniem.\n"
-#~ "\n"
-#~ "Miasta mogą zagospodarować te pola tylko, jeśli znana jest technologia "
-#~ "Moduł Cieplny."
-
-#~ msgid "Alien mine"
-#~ msgstr "Kopalnia obcych"
-
-#~ msgid "Huge Plant"
-#~ msgstr "Wielkie rośliny"
-
-#~ msgid "Thermal Vent"
-#~ msgstr "Gejzer termiczny"
-
-#~ msgid "Glowing Rocks"
-#~ msgstr "Świecące skały"
-
-#, fuzzy
-#~ msgid "Space Capsule"
-#~ msgstr "Moduł Rakiety"
-
-#~ msgid "Tower"
-#~ msgstr "Wieża"
-
-#~ msgid "Force Fortress"
-#~ msgstr "Forteca Siłowa"
-
-#~ msgid "Antigrav Base"
-#~ msgstr "Baza Antygrawitacyjna"
-
-#~ msgid "Highway"
-#~ msgstr "Autostrada"
-
-#~ msgid "Tunnel"
-#~ msgstr "Tunel"
-
-#~ msgid "Burrow Tube"
-#~ msgstr "Kanał Drążniczy"
-
-#~ msgid "Green River"
-#~ msgstr "Zielona Rzeka"
-
-#~ msgid "Brown River"
-#~ msgstr "Brązowa Rzeka"
-
-#~ msgid ""
-#~ "Basic Road is available for building from the beginning of the game.\n"
-#~ "\n"
-#~ "Having Road on Grassland tile provides increase of +1 to trade on that "
-#~ "tile."
-#~ msgstr ""
-#~ "Podstawowe drogi można budować od samego początku rozgrywki.\n"
-#~ "\n"
-#~ "Droga na trawach zwiększa produkcję handlu na tym polu o 1."
-
-#~ msgid "You can upgrade Roads to Highways."
-#~ msgstr "Możesz ulepszyć drogi do autostrad."
-
-#~ msgid ""
-#~ "You can upgrade Highways to Maglevs.\n"
-#~ "\n"
-#~ "Units can move via Maglevs indefinitely, Shield production of any tile "
-#~ "with Maglev is increased by 50%."
-#~ msgstr ""
-#~ "Możesz ulepszych autostrady do maglewów.\n"
-#~ "\n"
-#~ "Poruszanie po maglewach nie zużywa punktów ruchu, a pole z maglewem "
-#~ "zwiększa produkcję tarcz o 50%."
-
-#~ msgid ""
-#~ "Earthly units can travel on radiating tiles with tunnel built on them. "
-#~ "Tunnel provides no increase to unit speed, but they give 35% defense "
-#~ "bonus."
-#~ msgstr ""
-#~ "Ziemskie jednostki mogą poruszać się po radioaktywnych polach tylko, "
-#~ "jeśli zbudowano na nich tunele. Tunele nie zwiększają szybkości "
-#~ "jednostki, lecz polepszają ich walory obronne o 35%."
-
-#~ msgid ""
-#~ "Burrow Tubes provide the only way for burrowing units to cross oceans."
-#~ msgstr ""
-#~ "Tylko Kanały Drążnicze pozwalają jednostkom drążącym przekraczać oceany."
-
-#~ msgid ""
-#~ "Any river increases a tile's defense factor by 50%. Native and Amphibious "
-#~ "units may move along a River (but not diagonally) for fast travel."
-#~ msgstr ""
-#~ "Każda Rzeka zwiększa współczynnik obrony pola o 50%. Jednostki natywne i "
-#~ "wodno-lądowe mogą poruszać się szybciej wzdłuż Rzeki (ale nie po "
-#~ "przekątnych)."
-
-#~ msgid "Green River increases also tile's food production by 1."
-#~ msgstr "Zielona Rzeka zwiększa produkcję żywności na polu o 1."
-
-#~ msgid "Brown River increases also tile's shield production by 1. "
-#~ msgstr "Brązowa Rzeka zwiększa produkcję tarcz na polu o 1."
-
-#~ msgid "Regular"
-#~ msgstr "Zwykły"
-
-#~ msgid "Elite"
-#~ msgstr "Elitarny"
-
-#~ msgid "?unitclass:Earthly"
-#~ msgstr "?unitclass:Ziemska"
-
-#~ msgid "?unitclass:Native"
-#~ msgstr "?unitclass:Natywna"
-
-#~ msgid "?unitclass:Amphibious"
-#~ msgstr "?unitclass:Wodno-lądowa"
-
-#~ msgid "?unitclass:Antigravity"
-#~ msgstr "?unitclass:Antygrawitacyjna"
-
-#~ msgid "?unitclass:Burrowing"
-#~ msgstr "?unitclass:Drążąca"
-
-#~ msgid ""
-#~ "This is Earth technology settler. Most military enemy units can capture "
-#~ "it instead of killing it."
-#~ msgstr ""
-#~ "Ten osadnik używa ziemskiej technologii. Większość jednostek zbrojnych "
-#~ "może pojmać tą jednostkę, zamiast ją niszczyć."
-
-#~ msgid "Native Settlers"
-#~ msgstr "Natywni Osadnicy"
-
-#~ msgid ""
-#~ "This is native Settler that can enter radiating areas. Most military "
-#~ "enemy units can capture it instead of killing it."
-#~ msgstr ""
-#~ "Ten natywne osadnik może poruszać się po promieniotwórczych terenach. "
-#~ "Większość jednostek zbrojnych może pojmać tą jednostkę, zamiast ją "
-#~ "niszczyć."
-
-#~ msgid "Engineer"
-#~ msgstr "Inżynier"
-
-#~ msgid "This is Earth technology engineer."
-#~ msgstr "To jest inżynier w zakresie ziemskiej technologii."
-
-#~ msgid "Native Engineer"
-#~ msgstr "Natywny Inżynier"
-
-#~ msgid "Native version of the Engineer unit."
-#~ msgstr "Natywna wersja Inżyniera."
-
-#~ msgid "Water Engineer"
-#~ msgstr "Inżynier Wodno-lądowy"
-
-#~ msgid ""
-#~ "Amphibious Engineer that can also establish new cities on Ocean.Cities it "
-#~ "builds, start at size 2."
-#~ msgstr ""
-#~ "Inżynierowie wodno-lądowi mogą też budować nowe miasta na Oceanie. "
-#~ "Miasta, które zbudują, mają od razu rozmiar 2."
-
-#~ msgid "Star Marines"
-#~ msgstr "Piechota Gwiezdna"
-
-#~ msgid ""
-#~ "This unit may be built from the start of the game.  It is the weakest "
-#~ "military unit."
-#~ msgstr ""
-#~ "Ta jednostka może zostać utworzona już na początku rozgrywki. Jest to "
-#~ "najsłabsza jednostka zbrojna."
-
-#~ msgid "Cyborgs"
-#~ msgstr "Cyborgi"
-
-#~ msgid "Attack power to the early game."
-#~ msgstr "Jednostka zaczepna we wczesnej fazie gry."
-
-#~ msgid "Tank"
-#~ msgstr "Czołg"
-
-#~ msgid "This is the most powerful Earth technology unit."
-#~ msgstr "Najsilniejsza jednostka bazująca na ziemskiej technologii."
-
-#~ msgid "War Monster"
-#~ msgstr "Potwór Bojowy"
-
-#~ msgid "As a native unit, this can move and fight on radiating areas too."
-#~ msgstr ""
-#~ "Jako jednostka natywna może poruszać się i walczyć także na "
-#~ "radioaktywnych terenach."
-
-#~ msgid "Crusher"
-#~ msgstr "Ścigacz"
-
-#~ msgid "Alien lifeform trained to be fast."
-#~ msgstr "Obca forma życia o zwiększonej szybkości."
-
-#~ msgid "Cyber Alien"
-#~ msgstr "Cyber-Obcy"
-
-#~ msgid ""
-#~ "Alien lifeform with cybernetic implants. Good in combat, and has better "
-#~ "vision than any purely organic unit."
-#~ msgstr ""
-#~ "Obca forma życia z cybernetycznymi implantami. Dobra w walce; ma większe "
-#~ "pole widzenia niż jakakolwiek czysto biologiczna jednostka."
-
-#~ msgid "Rex"
-#~ msgstr "Rex"
-
-#~ msgid "Most powerful alien lifeform, like one from Earth's Jurassic period."
-#~ msgstr ""
-#~ "Najpotężniejsza obca forma życia, podobna do ziemskich organizmów z "
-#~ "okresu jurajskiego."
-
-#~ msgid "Paradropper"
-#~ msgstr "Desantowiec"
-
-#~ msgid "Alien lifeform able to paradrop."
-#~ msgstr "Obca forma życia wyszkolona do zrzutów na teren wroga."
-
-#~ msgid "Turtle Defender"
-#~ msgstr "Tankietka"
-
-#~ msgid "This is excellent defense vehicle."
-#~ msgstr "Jest to znakomity pojazd obronny."
-
-#~ msgid "Earth Sub"
-#~ msgstr "Kret"
-
-#~ msgid ""
-#~ "Burrow through earth. Only some special units can attack against Earth "
-#~ "Sub. These can pass ocean tiles only through Burrow Tubes."
-#~ msgstr ""
-#~ "Porusza się pod ziemią, drążąc przejścia. Tylko niektóre jednostki mogą "
-#~ "atakować Kreta. Jednostka może przekraczać oceany tylko przez Kanały "
-#~ "Drążnicze."
-
-#~ msgid "Hunter"
-#~ msgstr "Łowca"
-
-#~ msgid ""
-#~ "Burrowing unit that also has capability to attack Antigravity units with "
-#~ "its own minimissiles.\n"
-#~ "\n"
-#~ "It's also an settler type unit for hostile areas, well capable of "
-#~ "defending itself."
-#~ msgstr ""
-#~ "Jednostka drążąca potrafiąca atakować jednostki antygrawitacyjne przy "
-#~ "pomocy własnych minipocisków.\n"
-#~ "\n"
-#~ "Jest to też typ jednostki osadniczej działającej na nieprzyjaznych "
-#~ "terenach, zdolna do bronienia się przed atakiem."
-
-#~ msgid "Light Saucer"
-#~ msgstr "Lekki Spodek"
-
-#~ msgid ""
-#~ "Nobody, but some of the other Antigravity units and Hunters can attack "
-#~ "this unit. This unit itself can attack other Antigravity units."
-#~ msgstr ""
-#~ "Tylko inne jednostki antygrawitacyjne i Łowcy mogą atakować tę jednostkę. "
-#~ "Lekki Spodek może atakować inne jednostki antygrawitacyjne."
-
-#~ msgid "Bomb Saucer"
-#~ msgstr "Spodek Bombardujący"
-
-#~ msgid ""
-#~ "Nobody, but some of the other Antigravity and Hunters units can attack "
-#~ "this unit."
-#~ msgstr ""
-#~ "Tylko inne jednostki antygrawitacyjne i Łowcy mogą atakować tę jednostkę."
-
-#~ msgid "Spitter"
-#~ msgstr "Plujka"
-
-#~ msgid "This alien lifeform is first bombarding unit."
-#~ msgstr ""
-#~ "Ta obca forma życia to pierwsza jednostka mogąca przeprowadzać "
-#~ "bombardowania."
-
-#~ msgid "Heavy Spitter"
-#~ msgstr "Ciężka Plujka"
-
-#~ msgid ""
-#~ "This improved spitter can both make bombard attacks, and transport "
-#~ "missiles next to targets."
-#~ msgstr ""
-#~ "Ulepszona Plujka może przeprowadzać bombardowania i przenosić pociski w "
-#~ "pobliże celów."
-
-#~ msgid ""
-#~ "Like all Earthly units, Explorer are unable to enter radiating tiles. "
-#~ "They can maintain themselves, no upkeep cost to homecity."
-#~ msgstr ""
-#~ "Tak jak wszystkie ziemskie jednostki, Badacz nie jest może wchodzić na "
-#~ "radioaktywne pola. Utrzymują się sami, więc nie obciążają kosztami miasta "
-#~ "pochodzenia."
-
-#~ msgid "Scout Animal"
-#~ msgstr "Łazik"
-
-#~ msgid "This is native scout animal that can enter any land terrain."
-#~ msgstr ""
-#~ "Jest to lokalne zwierzę wędrowne zdolne do poruszania się na dowolnych "
-#~ "terenie lądowym"
-
-#~ msgid "Raft"
-#~ msgstr "Tratwa"
-
-#~ msgid "  This vessel allows coastal travel, but not on Boiling Seas."
-#~ msgstr ""
-#~ "  Ten środek transportu pozwala pływać po wodach przybrzeżnych, lecz nie "
-#~ "po Wrzącym Oceanie."
-
-#~ msgid "Ship"
-#~ msgstr "Statek"
-
-#~ msgid ""
-#~ "  This is basic ship type. It has no any special equipment, so it cannot "
-#~ "enter boiling seas."
-#~ msgstr ""
-#~ "  Jest to podstawowy rodzaj statku. Nie ma specjalnego wyposażenia, więc "
-#~ "nie może zapuszczać się na Wrzący Ocean."
-
-#~ msgid "This vessel is for battle! Too bad it cannot enter boiling oceans."
-#~ msgstr ""
-#~ "To jest okręt wojenny! Szkoda, że nie może zapuszczać się na Wrzący Ocean."
-
-#~ msgid "Battle Unit"
-#~ msgstr "Amfibia"
-
-#~ msgid "Amphibious battle machine."
-#~ msgstr "Wodno-lądowa maszyna wojenna."
-
-#~ msgid "Amphibious Transport"
-#~ msgstr "Transport wodno-lądowy"
-
-#~ msgid "This is first unit that can enter boiling oceans - and more."
-#~ msgstr ""
-#~ "Jest to pierwsza jednostka, która może pływać po Wrzącym Oceanie (i nie "
-#~ "tylko)."
-
-#~ msgid ""
-#~ "Earth technology unit that can establish traderoutes and transfer goods "
-#~ "to help building wonders in other cities."
-#~ msgstr ""
-#~ "Jednostka wykorzystująca ziemską technologię, może ustanawiać szlaki "
-#~ "handlowe i przewozić dobra, by wspomóc budowę cudów w innych miastach."
-
-#~ msgid "Native caravan unit, that can move on all land terrains."
-#~ msgstr ""
-#~ "Natywne jednostki handlowe mogą poruszać się po wszystkich polach lądowch."
-
-#~ msgid "Stealth Spy"
-#~ msgstr "Cicho-Szpieg"
-
-#~ msgid ""
-#~ "Stealth Spy can make diplomatic actions, and is invisible until next to "
-#~ "enemy unit or city."
-#~ msgstr ""
-#~ "Cicho-Szpieg może przeprowadzać działania dyplomatyczna i pozostaje "
-#~ "niewidoczny, jeśli nie znajduje się obok wrogiej jednostki lub miasta."
-
-#~ msgid "Teleporting Missile"
-#~ msgstr "Pocisk Teleportujący"
-
-#~ msgid "Teleporting Missile can teleport and attack to neighbour tile."
-#~ msgstr ""
-#~ "Pocisk Teleportacyjny może być przeteleportowany w celu zaatakowania "
-#~ "sąsiedniego pola."
-
-#~ msgid "Antiburrow Missile"
-#~ msgstr "Pocisk Przeciwdrążący"
-
-#~ msgid ""
-#~ "Missile that can attack also against burrowing units. Since more "
-#~ "expensive than normal Teleporting Missile, does not completely replace it."
-#~ msgstr ""
-#~ "Pocisk, który może atakować jednostki drążące. Jest droższy niż Pocisk "
-#~ "Teleportacyjny, nie jest więc jego zamiennikiem."
-
-#~ msgid "Adventurers"
-#~ msgstr "Łowcy Przygód"
-
-#~ msgid "?plural:Adventurers"
-#~ msgstr "?plural:Łowcy Przygód"
-
-#~ msgid ""
-#~ "Without any destination, they were just traveling around, looking for "
-#~ "trouble.\n"
-#~ "\n"
-#~ "* All units have one extra movement point"
-#~ msgstr ""
-#~ "Rozbijali się bez celu po galaktyce i szukali kłopotów.\n"
-#~ "\n"
-#~ "* Wszystkie jednostki mają 1 dodatkowy punkt ruchu."
-
-#~ msgid "Galactic Sound"
-#~ msgstr "Dźwięk Galaktyki"
-
-#~ msgid "?plural:Fans"
-#~ msgstr "?plural:Fani Muzyki"
-
-#~ msgid ""
-#~ "Shipful of music fans originally heading to big concert happening.\n"
-#~ "\n"
-#~ "* Three unhappy citizens in each city becomes content"
-#~ msgstr ""
-#~ "Tłum fanów muzyki, którzy lecieli na wielki koncert.\n"
-#~ "\n"
-#~ "* Trzej niezadowoleni mieszkańcy stają się zadowoleni w każdym mieście."
-
-#~ msgid "J&W Corporation"
-#~ msgstr "Korporacja J&W"
-
-#~ msgid "?plural:JeeWees"
-#~ msgstr "?plural:JotWutowcy"
-
-#~ msgid ""
-#~ "J&W Corporation ship was heading to establish another branch.\n"
-#~ "\n"
-#~ "* 40% bonus to trade."
-#~ msgstr ""
-#~ "Statek korporacji J&W przemierzał kosmos w celu założenia nowej filii "
-#~ "przedsiębiorstwa.\n"
-#~ "\n"
-#~ "* 40% dodatku do handlu."
-
-#~ msgid "Kindergarden"
-#~ msgstr "Przedszkole"
-
-#~ msgid "?plural:Children"
-#~ msgstr "?plural:Przedszkolanie"
-
-#~ msgid ""
-#~ "Deneb 7 ended vacation of children and their parents. Everyone had kids, "
-#~ "so obviously there was nobody supporting zero child policy.\n"
-#~ "\n"
-#~ "* Granary is not emptied when city grows, but set to 25% full"
-#~ msgstr ""
-#~ "Deneb 7 położył kres wakacjom dzieci i ich rodziców. Wszyscy mieli "
-#~ "dzieci, więc rzecz jasna nikt nie popierał polityki \"zero potomstwa\".\n"
-#~ "\n"
-#~ "* Spichlerz nie jest opróżniany, gdy miasto wzrasta, lecz zachowuje 25% "
-#~ "zapasów."
-
-#~ msgid "Lunatic"
-#~ msgstr "Wariaci"
-
-#~ msgid "?plural:Lunatics"
-#~ msgstr "?plural:Wariaci"
-
-#~ msgid "Something drove them crazy, made them escape the society to seas."
-#~ msgstr "Zwariowali i uciekli od reszty społeczeństwa."
-
-#~ msgid "Madmen"
-#~ msgstr "Szaleńcy"
-
-#~ msgid "?plural:Madmen"
-#~ msgstr "?plural:Szaleńcy"
-
-#~ msgid "They have escaped society, and attack it for no sane reason."
-#~ msgstr "Opuścili społeczeństwo i atakują je bez żadnego sensownego powodu."
-
-#~ msgid "Math Club"
-#~ msgstr "Klub Matematyków"
-
-#~ msgid "?plural:Mathematicians"
-#~ msgstr "?plural:Matematycy"
-
-#~ msgid ""
-#~ "Math Club was traveling home from Math Competition when Deneb 7 got their "
-#~ "ship.\n"
-#~ "\n"
-#~ "* 35% bonus to science output"
-#~ msgstr ""
-#~ "Członkowie Klubu Matematyków wracali do domu z Konkursu Matematycznego, "
-#~ "gdy Deneb 7 przechwycił ich statek.\n"
-#~ "\n"
-#~ "* 35% dodatek do produkcji punktów nauki."
-
-#~ msgid "Secret Society"
-#~ msgstr "Tajne Stowarzyszenie"
-
-#~ msgid "?plural:Billionaries"
-#~ msgstr "?plural:Miliarderzy"
-
-#~ msgid ""
-#~ "They are the truly rich of whom nobody knows anything since they "
-#~ "socialize only in their own circles.\n"
-#~ "\n"
-#~ "* Builds veteran Stealth Spies\n"
-#~ "* Has 50% spy resistance bonus\n"
-#~ "* 20% bonus to trade"
-#~ msgstr ""
-#~ "Wielcy bogacze, o których niewiele wiadomo, gdyż przebywają tylko w swoim "
-#~ "gronie.\n"
-#~ "\n"
-#~ "* Tworzą doświadczonych Cicho-Szpiegów.\n"
-#~ "* 50% dodatku do obrony przed działaniami szpiegowskimi.\n"
-#~ "* 20% dodatku do handlu."
-
-#~ msgid "Team Gladiators"
-#~ msgstr "Drużyna Gladiatorów"
-
-#~ msgid "?plural:Athletes"
-#~ msgstr "?plural:Sportowcy"
-
-#~ msgid ""
-#~ "Spaceball is sport of massive teams. Team Gladiators ship contained "
-#~ "enough players to start entire planetary faction.\n"
-#~ "\n"
-#~ "* Builds veteran units\n"
-#~ "* Each city receives free unit upkeep worth one shield"
-#~ msgstr ""
-#~ "Kosmiczny Futbol to sport ogromnych drużyn. Statek z Drużyną Gladiatorów "
-#~ "wiózł wystarczająco wielu graczy, by mogli teraz stworzyć oddzielną "
-#~ "frakcję.\n"
-#~ "\n"
-#~ "* Tworzą doświadczone jednostki.\n"
-#~ "* Każde miasta utrzymuje za darmo jedną jednostkę, która kosztuje 1 "
-#~ "tarczę."
 
 #~ msgid "Connect to Freeciv Server"
 #~ msgstr "Połącz się z serwerem Freeciv"
@@ -33851,6 +32042,9 @@ msgstr ""
 #~ "Tę technologię zdobywa się jedynie za pierwszym razem, gdy zbuduje się "
 #~ "Wyprawę Darwina."
 
+#~ msgid "Buoys cannot be built in the multiplayer ruleset."
+#~ msgstr "Boi nie można budować w zestawie zasad dla gry wieloosobowej."
+
 #~ msgid ""
 #~ "Upkeep for Settlers is in food as well as production, and a Settler can "
 #~ "die if its supporting city runs out of food. Settlers in a Republic or "
@@ -35266,11 +33460,11 @@ msgstr ""
 #~ msgid "?vertag:win32"
 #~ msgstr "?vertag:win32"
 
+#~ msgid "?vertag:S2_4"
+#~ msgstr "?vertag:S2_4"
+
 #~ msgid "?vertag:S2_5"
 #~ msgstr "?vertag:S2_5"
-
-#~ msgid "?vertag:S2_6"
-#~ msgstr "?vertag:S2_6"
 
 #~ msgid "?vertag:crosser"
 #~ msgstr "?vertag:crosser"
@@ -35363,6 +33557,9 @@ msgstr ""
 
 #~ msgid "Defense bonus"
 #~ msgstr "Bonus obrony"
+
+#~ msgid "Mining"
+#~ msgstr "Kopalnie"
 
 #~ msgid "% of Road bonus"
 #~ msgstr "% dodatku drogi"
@@ -35737,9 +33934,11 @@ msgstr ""
 #~ msgid "The people in %s are stunned by your technological insight!"
 #~ msgstr "Mieszkańcy miasta %s są oszołomieni twoją wiedzą technologiczną!"
 
-#, fuzzy
-#~ msgid "Workers spontaneously gather and upgrade %s infrastructure."
+#~ msgid "Workers spontaneously gather and upgrade %s roads."
 #~ msgstr "Robotnicy w mieście %s spontanicznie ulepszają drogi miejskie."
+
+#~ msgid "Workers spontaneously gather and upgrade %s bases."
+#~ msgstr "Robotnicy spontanicznie ulepszają bazy w mieście %s."
 
 #~ msgid "You have founded %s."
 #~ msgstr "Założyłeś/aś miasto %s."
@@ -35901,17 +34100,10 @@ msgstr ""
 #~ "Przesunięto na późniejszy termin..."
 
 #~ msgid ""
-#~ "%s can't build %s from the worklist; it needs %s achievement.  "
+#~ "%s can't build %s from the worklist; %s special is required.  "
 #~ "Postponing..."
 #~ msgstr ""
-#~ "%s nie może budować zaplanowanego/ej %s; wymagane osiągnięcie to %s. "
-#~ "Przesunięto na późniejszy termin..."
-
-#, fuzzy
-#~ msgid ""
-#~ "%s can't build %s from the worklist; %s extra is required.  Postponing..."
-#~ msgstr ""
-#~ "%s nie może budować zaplanowanego/ej %s; wymagana droga to %s. "
+#~ "%s nie może budować zaplanowanego/ej %s; wymagany zasób to %s. "
 #~ "Przesunięto na późniejszy termin..."
 
 #~ msgid ""
@@ -35943,13 +34135,6 @@ msgstr ""
 #~ "budować. Przesunięto na późniejszy termin..."
 
 #~ msgid ""
-#~ "%s can't build %s from the worklist; The diplomatic relationship %s is "
-#~ "required.  Postponing..."
-#~ msgstr ""
-#~ "%s nie może budować zaplanowanego/ej %s; wymagany stan dyplomatyczny to "
-#~ "%s. Przesunięto na późniejszy termin..."
-
-#~ msgid ""
 #~ "%s can't build %s from the worklist; city must be of size %d.  "
 #~ "Postponing..."
 #~ msgstr ""
@@ -35978,17 +34163,9 @@ msgstr ""
 #~ "Przesunięto na późniejszy termin..."
 
 #~ msgid ""
-#~ "%s can't build %s from the worklist; %s base flag is required.  "
-#~ "Postponing..."
+#~ "%s can't build %s from the worklist; %s road is required.  Postponing..."
 #~ msgstr ""
-#~ "%s nie może budować %s z planu prac; wymagana jest flaga bazy %s. "
-#~ "Przesunięto na późniejszy termin..."
-
-#~ msgid ""
-#~ "%s can't build %s from the worklist; %s road flag is required.  "
-#~ "Postponing..."
-#~ msgstr ""
-#~ "%s nie może budować zaplanowanego/ej %s; wymagana jest flaga drogi %s. "
+#~ "%s nie może budować zaplanowanego/ej %s; wymagana droga to %s. "
 #~ "Przesunięto na późniejszy termin..."
 
 #~ msgid ""
@@ -37518,19 +35695,14 @@ msgstr ""
 #~ msgid "Your diplomatic envoy was decapitated!"
 #~ msgstr "Twoi wysłannicy zostali zabici!"
 
+#~ msgid "Your %s could not poison the water supply in %s."
+#~ msgstr "Twoja jednostka %s nie mogła zatruć wodociągów w mieście %s."
+
 #~ msgid "Your %s poisoned the water supply of %s."
 #~ msgstr "Twoja jednostka %s zatruła wodociągi w mieście %s."
 
 #~ msgid "%s is suspected of poisoning the water supply of %s."
 #~ msgstr "Jednostka %s jest podejrzewana o zatrucie wody w mieście %s."
-
-#~ msgid "Your %s destroyed %s by poisoning its water supply."
-#~ msgstr "Twoja jednostka %s zniszczyła %s poprzez zatrucie ujęcia wody."
-
-#~ msgid "%s is suspected of destroying %s by poisoning its water supply."
-#~ msgstr ""
-#~ "Jednostka %s jest podejrzewana o zniszczenie %s poprzez zatrucie ujęcia "
-#~ "wody."
 
 #~ msgid "Your %s was executed in %s by primitive %s."
 #~ msgstr "Twoja jednostka %s została zabita w mieście %s przez %s."
@@ -37693,12 +35865,6 @@ msgstr ""
 #~ msgid "%s has caused an incident while bribing your %s."
 #~ msgstr "Jednostka %s spowodowała skandal przekupując twoją jednostkę %s."
 
-#~ msgid "You have caused an incident while sabotaging the %s %s."
-#~ msgstr "Spowodowałeś/aś skandal dyplomatyczny sobotując %s %s."
-
-#~ msgid "The %s have caused an incident while sabotaging your %s."
-#~ msgstr "%s spowodowali skandal dyplomatyczny sabotując twoją jednostkę %s."
-
 #~ msgid "You have caused an incident while attempting to steal tech from %s."
 #~ msgstr "Kradnąc technologię z %s, wywołałeś/aś skandal dyplomatyczny."
 
@@ -37711,20 +35877,6 @@ msgstr ""
 
 #~ msgid "The %s have caused an incident while inciting a revolt in %s."
 #~ msgstr "%s wywołali skandal dyplomatyczny wszczynając bunt w %s."
-
-#~ msgid "You have caused an incident while poisoning %s."
-#~ msgstr "Spowodowałeś/aś skandal dyplomatyczny zatruwając %s."
-
-#~ msgid "The %s have caused an incident while posioning %s."
-#~ msgstr "%s wywołali skandal dyplomatyczny zatruwając %s."
-
-#, fuzzy
-#~ msgid "You have caused an incident while sabotaging %s."
-#~ msgstr "Spowodowałeś/aś skandal dyplomatyczny sobotując %s %s."
-
-#, fuzzy
-#~ msgid "The %s have caused an incident while sabotaging %s."
-#~ msgstr "%s spowodowali skandal dyplomatyczny sabotując twoją jednostkę %s."
 
 #~ msgid " *** Server set to edit mode by %s! *** "
 #~ msgstr " *** Serwer przełączony na tryb edycji przez %s! ***"
@@ -38091,28 +36243,45 @@ msgstr ""
 #~ "Wetlands have dried up and vast ranges of grassland have become tundra."
 #~ msgstr "Lądy wyschły, a wielkie obszary traw zamieniły się w tundrę."
 
-#, fuzzy
 #~ msgid ""
 #~ "New hope sweeps like fire through the country as the discovery of new "
-#~ "infrastructure building technology is announced."
+#~ "road building technology is announced."
+#~ msgstr ""
+#~ "Nowe nadzieje związane z odkryciem nowoczesnej technologii budowy dróg."
+
+#~ msgid ""
+#~ "The people are pleased to hear that your scientists finally know about "
+#~ "new road building technology."
+#~ msgstr ""
+#~ "Ludzie są zadowoleni z tego, że twoi naukowcy w końcu odkryli nową "
+#~ "technologię budowy dróg."
+
+#~ msgid ""
+#~ "Workers spontaneously gather and upgrade all possible cities with better "
+#~ "roads."
+#~ msgstr ""
+#~ "Robotnicy we wszystkich miastach spontanicznie ulepszają drogi miejskie, "
+#~ "jeśli to tylko możliwe."
+
+#~ msgid ""
+#~ "New hope sweeps like fire through the country as the discovery of new "
+#~ "base building technology is announced."
 #~ msgstr ""
 #~ "Nowe nadzieje związane z odkryciem nowoczesnej technologii budowy baz."
 
-#, fuzzy
 #~ msgid ""
 #~ "The people are pleased to hear that your scientists finally know about "
-#~ "new infrastructure building technology."
+#~ "new base building technology."
 #~ msgstr ""
 #~ "Ludzie są zadowoleni z tego, że twoi naukowcy w końcu odkryli nową "
 #~ "technologię budowy baz."
 
-#, fuzzy
 #~ msgid ""
 #~ "Workers spontaneously gather and upgrade all possible cities with better "
-#~ "infrastructure."
+#~ "bases."
 #~ msgstr ""
-#~ "Robotnicy we wszystkich miastach spontanicznie ulepszają drogi miejskie, "
-#~ "jeśli to tylko możliwe."
+#~ "Robotnicy we wszystkich miastach spontanicznie ulepszają bazy, jeśli to "
+#~ "tylko możliwe."
 
 #~ msgid "Moved your %s due to changing terrain."
 #~ msgstr "Przesunięto jednostkę %s z powodu zmiany terenu."
@@ -38560,11 +36729,6 @@ msgstr ""
 #~ msgstr "Zmniejszam wartość allfill - za mało dostępnych narodów."
 
 #~ msgid ""
-#~ "Run compatibility function for version: <%d (save file: %d; server: %d)."
-#~ msgstr ""
-#~ "Uruchom funkcję zgodności dla wersji <%d (plik gry: %d; serwer: %d)."
-
-#~ msgid ""
 #~ "Saved game contains incomplete map data. This can happen with old saved "
 #~ "games, or it may indicate an invalid saved game file. Proceed at your own "
 #~ "risk."
@@ -38583,6 +36747,11 @@ msgstr ""
 #~ msgstr "%s miał/a nieprawidłowy naród; zmieniam na %s."
 
 #~ msgid ""
+#~ "Run compatibility function for version: <%d (save file: %d; server: %d)."
+#~ msgstr ""
+#~ "Uruchom funkcję zgodności dla wersji <%d (plik gry: %d; serwer: %d)."
+
+#~ msgid ""
 #~ "Saved game uses the ancient \"classic\" terrain ruleset, and is no longer "
 #~ "supported."
 #~ msgstr ""
@@ -38596,9 +36765,9 @@ msgstr ""
 #~ "Ostrzeżenie: Różne katalogi zasad ('%s' i '%s') nie są już wspierane. "
 #~ "Używam '%s'"
 
-#~ msgid "Saved game is too old, at least version 2.0.0 required."
+#~ msgid "Saved game is too old, at least version 1.9.0 required."
 #~ msgstr ""
-#~ "Plik zapisanej gry jest za stary, wymagana jest wersja co najmniej 2.0.0."
+#~ "Plik zapisanej gry jest za stary, wymagana jest wersja co najmniej 1.9.0."
 
 #~ msgid "Server cannot read standard input. Ignoring input."
 #~ msgstr ""
@@ -38678,12 +36847,6 @@ msgstr ""
 
 #~ msgid "Depending on size of continents"
 #~ msgstr "Zależnie od wielkości kontynentu"
-
-#~ msgid "Spacerace"
-#~ msgstr "Wyścig Kosmiczny"
-
-#~ msgid "Allied victory"
-#~ msgstr "Zwycięstwo sojuszników"
 
 #~ msgid "New turn"
 #~ msgstr "Nowa tura"
@@ -39898,25 +38061,12 @@ msgstr ""
 #~ "Szansa na powrót Szpiega z udanej misji oraz szansa powodzenia różnych "
 #~ "działań podejmowanych przez Dyplomatów i Szpiegów."
 
-#~ msgid "What kind of vicrories are possible"
-#~ msgstr "Jakie zwycięstwa są możliwe"
+#~ msgid "Whether to allow space race"
+#~ msgstr "Czy pozwolić na Wyścig Kosmiczny?"
 
-#~ msgid ""
-#~ "This setting controls how game can be won. One can always win by "
-#~ "conquering entire planet, but other victory conditions can be enabled or "
-#~ "disabled:\n"
-#~ "- \"Spacerace\" (SPACERACE): Spaceship is built and travels to Alpha "
-#~ "Centauri.\n"
-#~ "- \"Allied\" (ALLIED): After defeating enemies, all remaining players are "
-#~ "allied."
+#~ msgid "If this option is enabled, players can build spaceships."
 #~ msgstr ""
-#~ "To ustawiene określa w jaki sposób można wygrać grę. Zwycięstwo poprzez "
-#~ "podbicie całej planety jest zawsze możliwe, lecz można też ustawiać inne "
-#~ "warunki zwycięstwa:\n"
-#~ "- \"Wyścig Kosmiczny\" (SPACERACE): Naród buduja Rakietę Kosmiczną i leci "
-#~ "do Alfa Centauri.\n"
-#~ "- \"Zwycięstwo sojuszników\" (ALLIED): Po pokonaniu wrogów wszystkie "
-#~ "narody są sojusznikami."
+#~ "Włączenie tej opcji sprawia, że gracze mogą budować Rakiety Kosmiczne."
 
 #~ msgid "Should the game end if the spaceship arrives?"
 #~ msgstr "Czy zakończyć grę po przybyciu Rakiety Kosmicznej?"
@@ -40002,6 +38152,20 @@ msgstr ""
 #~ "Wyłączenie tej opcji sprawia, że schwytane jednostki nie będą miały "
 #~ "miasta pochodzenia i będą podlegały opcji 'killunhomed' (tj. będą "
 #~ "stopniowo traciły punkty obrażeń, jeśli włączono 'killunhomed')."
+
+#~ msgid "Whether allied players can win together"
+#~ msgstr "Czy sprzymierzeni gracze mogą wygrać razem?"
+
+#~ msgid ""
+#~ "If this option is turned on and a point is reached where all the players "
+#~ "still able to win the game are allies, and at least one defeated player "
+#~ "is not part of this alliance, then the game will end in an immediate "
+#~ "shared victory for the allied players."
+#~ msgstr ""
+#~ "Włączenie tej opcji sprawia, że jeśli nastąpi sytuacja, w której wszyscy "
+#~ "gracze, którzy mogą jeszcze wygrać grę są sprzymierzeni, a co najmniej "
+#~ "jeden pokonany gracz nie jest częścią sojuszu, gra zakończy się "
+#~ "natychmiastowym zwycięstwem wszystkich sprzymierzonych graczy."
 
 #~ msgid "Whether to use natural city names"
 #~ msgstr "Czy używać inteligentnego nazywania miast?"
@@ -42658,52 +40822,6 @@ msgstr ""
 #~ "połączyć się można jedynie poprzez parametr autoconnect wiersza poleceń "
 #~ "\"-a\""
 
-#~ msgid "Hut"
-#~ msgstr "Chatka"
-
-#~ msgid "Workers spontaneously gather and upgrade %s bases."
-#~ msgstr "Robotnicy spontanicznie ulepszają bazy w mieście %s."
-
-#~ msgid ""
-#~ "New hope sweeps like fire through the country as the discovery of new "
-#~ "road building technology is announced."
-#~ msgstr ""
-#~ "Nowe nadzieje związane z odkryciem nowoczesnej technologii budowy dróg."
-
-#~ msgid ""
-#~ "The people are pleased to hear that your scientists finally know about "
-#~ "new road building technology."
-#~ msgstr ""
-#~ "Ludzie są zadowoleni z tego, że twoi naukowcy w końcu odkryli nową "
-#~ "technologię budowy dróg."
-
-#~ msgid ""
-#~ "Workers spontaneously gather and upgrade all possible cities with better "
-#~ "bases."
-#~ msgstr ""
-#~ "Robotnicy we wszystkich miastach spontanicznie ulepszają bazy, jeśli to "
-#~ "tylko możliwe."
-
-#~ msgid "Bu_ild Farmland"
-#~ msgstr "Zbuduj farmę"
-
-#~ msgid "Build Farmland"
-#~ msgstr "Zbuduj farmę"
-
-#~ msgid "* Can build farmland.\n"
-#~ msgstr "* Potrafi budować farmy.\n"
-
-#~ msgid "* Can build farmland (if %s is known).\n"
-#~ msgstr "* Potrafi budować farmy (gracz zna technologię %s).\n"
-
-#~ msgid "* Can build farmland (if any of the following are known: %s).\n"
-#~ msgstr ""
-#~ "* Potrafi budować farmy (jeśli gracz zna którąkolwiek z technologii: "
-#~ "%s).\n"
-
-#~ msgid "* Allows %s to upgrade irrigation to farmland.\n"
-#~ msgstr "* Pozwala %s ulepszać nawodnienie do farmy.\n"
-
 #~ msgid "Enable alpha blending"
 #~ msgstr "Włącz alpha blending"
 
@@ -42716,41 +40834,8 @@ msgstr ""
 #~ "wspiera alpha blendingu, to rysowanie grafiki może być znacznie "
 #~ "wolniejsze."
 
-#~ msgid ""
-#~ "You can upgrade Roads to Highways.\n"
-#~ "\n"
-#~ "Movement via Highway costs 1/3 movement points."
-#~ msgstr ""
-#~ "Możesz ulepszyć drogi do autostrad.\n"
-#~ "\n"
-#~ "Ruch po autostradzie zużywa 1/3 punktu ruchu."
-
-#~ msgid "Ruthenian"
-#~ msgstr "Ruski"
-
-#~ msgid "?plural:Ruthenians"
-#~ msgstr "?plural:Rusini"
-
-#~ msgid "Whether to allow space race"
-#~ msgstr "Czy pozwolić na Wyścig Kosmiczny?"
-
-#~ msgid "If this option is enabled, players can build spaceships."
-#~ msgstr ""
-#~ "Włączenie tej opcji sprawia, że gracze mogą budować Rakiety Kosmiczne."
-
-#~ msgid "Whether allied players can win together"
-#~ msgstr "Czy sprzymierzeni gracze mogą wygrać razem?"
-
-#~ msgid ""
-#~ "If this option is turned on and a point is reached where all the players "
-#~ "still able to win the game are allies, and at least one defeated player "
-#~ "is not part of this alliance, then the game will end in an immediate "
-#~ "shared victory for the allied players."
-#~ msgstr ""
-#~ "Włączenie tej opcji sprawia, że jeśli nastąpi sytuacja, w której wszyscy "
-#~ "gracze, którzy mogą jeszcze wygrać grę są sprzymierzeni, a co najmniej "
-#~ "jeden pokonany gracz nie jest częścią sojuszu, gra zakończy się "
-#~ "natychmiastowym zwycięstwem wszystkich sprzymierzonych graczy."
+#~ msgid "_Roads & Rails"
+#~ msgstr "Drogi i koleje"
 
 #~ msgid "Activate given unit"
 #~ msgstr "Aktywuj jednostkę"
@@ -42800,90 +40885,6 @@ msgstr ""
 #~ msgid "Tax rates"
 #~ msgstr "Stawki podatkowe"
 
-#~ msgid "Requires the %s terrain special on the tile.\n"
-#~ msgstr "Wymagania: zasób specjalny %s.\n"
-
-#~ msgid "Prevented by the %s terrain special on the tile.\n"
-#~ msgstr "Niemożliwe, jeśli na polu jest zasób specjalny %s.\n"
-
-#~ msgid ""
-#~ "Requires the %s terrain special on the tile or a cardinally adjacent "
-#~ "tile.\n"
-#~ msgstr ""
-#~ "Wymagania: zasób specjalny %s na tym samym lub na polu przylegającym "
-#~ "bezpośrednio.\n"
-
-#~ msgid ""
-#~ "Prevented by the %s terrain special on the tile or a cardinally adjacent "
-#~ "tile.\n"
-#~ msgstr ""
-#~ "Niemożliwe, jeśli na tym samym lub na polu przylegającym bezpośrednio "
-#~ "jest zasób specjalny %s.\n"
-
-#~ msgid "Requires the %s terrain special on the tile or an adjacent tile.\n"
-#~ msgstr ""
-#~ "Wymagania: zasób specjalny %s na tym samym lub na przylegającym polu.\n"
-
-#~ msgid ""
-#~ "Prevented by the %s terrain special on the tile or an adjacent tile.\n"
-#~ msgstr ""
-#~ "Niemożliwe na polu z terenem %s i na polu przylegającym do tego terenu.\n"
-
-#~ msgid "Requires the %s terrain special on a tile within the city radius.\n"
-#~ msgstr "Wymagania: zasób specjalny %s w promieniu miasta.\n"
-
-#~ msgid ""
-#~ "Prevented by the %s terrain special on a tile within the city radius.\n"
-#~ msgstr "Niemożliwe, jeśli w promieniu miasta jest zasób specjalny %s.\n"
-
-#~ msgid "Requires a %s on the tile.\n"
-#~ msgstr "Wymagania: %s na polu.\n"
-
-#~ msgid "Prevented by a %s on the tile.\n"
-#~ msgstr "Niemożliwe na polu z %s.\n"
-
-#~ msgid "Requires a %s on a cardinally adjacent tile.\n"
-#~ msgstr "Wymagania: %s na polu przylegającym bezpośrednio.\n"
-
-#~ msgid "Prevented by a %s on a cardinally adjacent tile.\n"
-#~ msgstr "Niemożliwe na polu z %s na polu przylegającym bezpośrednio.\n"
-
-#~ msgid "Requires a %s on an adjacent tile.\n"
-#~ msgstr "Tylko dla narodu %s na przylegającym polu.\n"
-
-#~ msgid "Prevented by a %s on an adjacent tile.\n"
-#~ msgstr "Niemożliwe na polu z %s na przylegającym polu.\n"
-
-#~ msgid "Requires a %s on a tile within the city radius.\n"
-#~ msgstr "Wymagania: budynek %s w promieniu miasta.\n"
-
-#~ msgid "Prevented by a %s on a tile within the city radius.\n"
-#~ msgstr "Niemożliwe, jeśli w promieniu miasta jest pole z %s.\n"
-
-#~ msgid "?road:%s"
-#~ msgstr "?road:%s"
-
-#~ msgid ""
-#~ "Increases the luxury and tax output in a city by an additional 50%.  The "
-#~ "total bonus is 150% if there are Marketplace, Bank, and Stock Exchange "
-#~ "together in the same city."
-#~ msgstr ""
-#~ "Zwiększa o 50% produkcję luksusu i podatków w mieście. Całkowity wzrost "
-#~ "wynosi 150%, jeśli w mieście jest Targowisko, Bank oraz Giełda."
-
-#~ msgid "Increases the luxury and tax output in a city by an additional 50%."
-#~ msgstr "Zwiększa produkcję luksusu i dochody podatkowe miasta o 50%."
-
-#~ msgid ""
-#~ "%s can't build %s from the worklist; %s special is required.  "
-#~ "Postponing..."
-#~ msgstr ""
-#~ "%s nie może budować zaplanowanego/ej %s; wymagany zasób to %s. "
-#~ "Przesunięto na późniejszy termin..."
-
-#~ msgid "_Roads & Rails"
-#~ msgstr "Drogi i koleje"
-
 #~ msgid "Roads & Rails"
 #~ msgstr "Drogi i koleje"
 
@@ -42899,8 +40900,16 @@ msgstr ""
 #~ "Modules."
 #~ msgstr "- Panele Słoneczne: zapewniają energię dla dwóch innych Modułów."
 
-#~ msgid "Buoys cannot be built in the multiplayer ruleset."
-#~ msgstr "Boi nie można budować w zestawie zasad dla gry wieloosobowej."
+#~ msgid ""
+#~ "Increases the luxury and tax output in a city by an additional 50%.  The "
+#~ "total bonus is 150% if there are Marketplace, Bank, and Stock Exchange "
+#~ "together in the same city."
+#~ msgstr ""
+#~ "Zwiększa o 50% produkcję luksusu i podatków w mieście. Całkowity wzrost "
+#~ "wynosi 150%, jeśli w mieście jest Targowisko, Bank oraz Giełda."
+
+#~ msgid "Increases the luxury and tax output in a city by an additional 50%."
+#~ msgstr "Zwiększa produkcję luksusu i dochody podatkowe miasta o 50%."
 
 #~ msgid ""
 #~ "Oceans cover much of the world, and only sea units (Triremes and other "
@@ -42918,6 +40927,9 @@ msgstr ""
 #~ msgstr ""
 #~ "* Może atakować z jednostek morskich, zarówno miasta jak i jednostki na "
 #~ "lądzie.\n"
+
+#~ msgid "* Land units cannot travel on oceanic terrains."
+#~ msgstr "* Jednostki lądowe nie mogą podróżować po polach morskich."
 
 #~ msgid "Only %s can attack from sea."
 #~ msgstr "Tylko %s mogą atakować z morza."
@@ -44976,6 +42988,38 @@ msgstr ""
 #~ "\n"
 #~ "W Despotyzmie, Pałac zwiększa produkcję o +75%, a w Monarchii o50% ."
 
+#~ msgid ""
+#~ "Space Modules are the most expensive parts of spaceships.  There are "
+#~ "three different types of Space Module:\n"
+#~ "\n"
+#~ "- Habitation Module: provides living space for 10,000 people.\n"
+#~ "\n"
+#~ "- Life Support Module: provides food and water for the population of  one "
+#~ "Habitation Module.\n"
+#~ "\n"
+#~ "- Solar Panels: provides the energy needed for any two of the other  "
+#~ "Modules.\n"
+#~ "\n"
+#~ "You can build up to 4 Space Modules of each kind.\n"
+#~ "\n"
+#~ "Before you can build any spaceship parts, the Apollo Program wonder must "
+#~ "have been built by any player."
+#~ msgstr ""
+#~ "Moduły to najdroższe części statku kosmicznego.  Są trzy różne typy "
+#~ "modułów:\n"
+#~ "\n"
+#~ "- Moduły mieszkalne: zapewniają mieszkanie dla 10 000 osób.\n"
+#~ "\n"
+#~ "- Moduły podtrzymywania życia: zapewniają pożywienie i wodę dla jednego "
+#~ "modułu mieszkalnego.\n"
+#~ "\n"
+#~ "- Baterie Słoneczne: zapewniają energię dla dowolnych dwóch modułów.\n"
+#~ "\n"
+#~ "Możesz zbudować do 4 modułów z każdego typu.\n"
+#~ "\n"
+#~ "Aby rozpocząć budowę statku kosmicznego, cud Program Apollo musi być "
+#~ "zbudowany przez jednego z graczy."
+
 #~ msgid "?nationgroup:Fictional"
 #~ msgstr "?nationgroup:Fikcyjne"
 
@@ -45053,6 +43097,15 @@ msgstr ""
 #~ "Miasto może mieć tylko jedną elektrownię: wodną, cieplną lub atomową.  "
 #~ "Elektrownia wodna może być budowana tylko obok albo na polu z rzeką lub "
 #~ "górą."
+
+#~ msgid "elvis"
+#~ msgstr "komik"
+
+#~ msgid "scientist"
+#~ msgstr "naukowiec"
+
+#~ msgid "taxman"
+#~ msgstr "poborca pod."
 
 #~ msgid "King"
 #~ msgstr "Król"
@@ -45548,6 +43601,9 @@ msgstr ""
 
 #~ msgid "?female:Bohmugyi"
 #~ msgstr "?female:Bohmugyi"
+
+#~ msgid "Rei"
+#~ msgstr "Król"
 
 #~ msgid "Reina"
 #~ msgstr "Królowa"
@@ -46732,6 +44788,9 @@ msgstr ""
 #~ msgid "Wake Up Others"
 #~ msgstr "Obudź innych"
 
+#~ msgid "Paradrop"
+#~ msgstr "Zrzut"
+
 #, fuzzy
 #~ msgid "Form Traderoute"
 #~ msgstr "Szlaki handlowe"
@@ -47651,6 +45710,9 @@ msgstr ""
 #~ msgid "Gov_ernment"
 #~ msgstr "Ustrój"
 
+#~ msgid "_Change Government"
+#~ msgstr "_Zmień Ustrój"
+
 #~ msgid "Chan_ge Production"
 #~ msgstr "_Zmień produkcję"
 
@@ -48045,6 +46107,13 @@ msgstr ""
 
 #~ msgid "Petroleum"
 #~ msgstr "Ropa"
+
+#~ msgid ""
+#~ "This unit may be built from the start of the game.  It is the weakest "
+#~ "unit."
+#~ msgstr ""
+#~ "Ta jednostka może zostać utworzona już na początku gry. Jest to "
+#~ "najsłabsza z jednostek."
 
 #~ msgid ""
 #~ "A number of Partisans are granted free when an enemy conquers your city, "
@@ -48587,6 +46656,9 @@ msgstr ""
 #~ msgid "_Goto and Close"
 #~ msgstr "Idź do i zamknij"
 
+#~ msgid "_Establish embassy"
+#~ msgstr "Załóż ambasadę"
+
 #~ msgid "_Investigate city"
 #~ msgstr "_Zbadaj miasto"
 
@@ -48772,6 +46844,9 @@ msgstr ""
 
 #~ msgid "with City Walls"
 #~ msgstr "z murami miejskimi"
+
+#~ msgid "Infrastructure: "
+#~ msgstr "Infrastruktura: "
 
 #~ msgid "Unit: %s(%s%s)"
 #~ msgstr "Jednostka: %s(%s%s)"

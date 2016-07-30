@@ -17,13 +17,10 @@
 
 #ifdef AUDIO_SDL
 /* Though it would happily compile without this include,
- * it is needed for sound to work.
- * It defines "main" macro to rename our main() so that
+ * it is needed for sound to work as long as SDL-1.2 mixer is
+ * being used. It defines "main" macro to rename our main() so that
  * it can install SDL's own. */
-#ifdef SDL2_PLAIN_INCLUDE
-#include <SDL.h>
-#include <SDL_mixer.h>
-#elif AUDIO_SDL1_2
+#ifdef AUDIO_SDL1_2
 /* SDL */
 #include <SDL/SDL.h>
 #else  /* AUDIO_SDL1_2 */
@@ -48,12 +45,16 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
+#ifdef GGZ_GTK
+#  include <ggz-gtk.h>
+#endif
+
 /* utility */
-#include "fc_cmdline.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
+#include "shared.h"
 #include "support.h"
 
 /* common */
@@ -73,6 +74,7 @@
 #include "connectdlg_common.h"
 #include "control.h"
 #include "editor.h"
+#include "ggzclient.h"
 #include "options.h"
 #include "text.h"
 #include "tilespec.h"
@@ -199,7 +201,8 @@ static GtkWidget *allied_chat_toggle_button;
 static enum Display_color_type display_color_type;  /* practically unused */
 static gint timer_id;                               /*       ditto        */
 static GIOChannel *srv_channel;
-static guint srv_id;
+static GIOChannel *ggz_channel;
+static guint srv_id, ggz_id;
 gint cur_x, cur_y;
 
 static bool gui_up = FALSE;
@@ -213,7 +216,7 @@ static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
 static void set_wait_for_writable_socket(struct connection *pc,
                                          bool socket_writable);
 
-static void print_usage(void);
+static void print_usage(const char *argv0);
 static void parse_options(int argc, char **argv);
 static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev, gpointer data);
 static gboolean toplevel_key_release_handler(GtkWidget *w, GdkEventKey *ev, gpointer data);
@@ -221,7 +224,7 @@ static gboolean mouse_scroll_mapcanvas(GtkWidget *w, GdkEventScroll *ev);
 
 static void tearoff_callback(GtkWidget *b, gpointer data);
 static GtkWidget *detached_widget_new(void);
-static GtkWidget *detached_widget_fill(GtkWidget *tearbox);
+static GtkWidget *detached_widget_fill(GtkWidget *ahbox);
 
 static gboolean select_unit_pixmap_callback(GtkWidget *w, GdkEvent *ev,
                                             gpointer data);
@@ -283,7 +286,7 @@ static gboolean timer_callback(gpointer data)
   Print extra usage information, including one line help on each option,
   to stderr. 
 **************************************************************************/
-static void print_usage(void)
+static void print_usage(const char *argv0)
 {
   /* add client-specific usage information here */
   fc_fprintf(stderr,
@@ -295,8 +298,8 @@ static void print_usage(void)
 }
 
 /**************************************************************************
-  Search for command line options. right now, it's just help
-  semi-useless until we have options that aren't the same across all clients.
+ search for command line options. right now, it's just help
+ semi-useless until we have options that aren't the same across all clients.
 **************************************************************************/
 static void parse_options(int argc, char **argv)
 {
@@ -304,7 +307,7 @@ static void parse_options(int argc, char **argv)
 
   while (i < argc) {
     if (is_option("--help", argv[i])) {
-      print_usage();
+      print_usage(argv[0]);
       exit(EXIT_SUCCESS);
     }
     /* Can't check against unknown options, as those might be gtk options */
@@ -617,7 +620,7 @@ static gboolean toplevel_key_press_handler(GtkWidget *w, GdkEventKey *ev,
      * at the bottom of other dialogs. */
     if (GTK_WIDGET_MAPPED(top_vbox)) {
       /* The main game view is visible. May need to switch notebook. */
-      if (gui_options.gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
+      if (gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
         gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 1);
       } else {
         gtk_notebook_set_current_page(GTK_NOTEBOOK(bottom_notebook), 0);
@@ -801,18 +804,17 @@ static GtkWidget *detached_widget_new(void)
  creates the toggle button necessary to detach and reattach the widget
  and returns a vbox in which you fill your goodies.
 **************************************************************************/
-static GtkWidget *detached_widget_fill(GtkWidget *tearbox)
+static GtkWidget *detached_widget_fill(GtkWidget *ahbox)
 {
-  GtkWidget *b, *fillbox;
+  GtkWidget *b, *avbox;
 
   b = gtk_toggle_button_new();
-  gtk_box_pack_start(GTK_BOX(tearbox), b, FALSE, FALSE, 0);
-  g_signal_connect(b, "toggled", G_CALLBACK(tearoff_callback), tearbox);
+  gtk_box_pack_start(GTK_BOX(ahbox), b, FALSE, FALSE, 0);
+  g_signal_connect(b, "toggled", G_CALLBACK(tearoff_callback), ahbox);
 
-  fillbox = gtk_vbox_new(FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(tearbox), fillbox, TRUE, TRUE, 0);
-
-  return fillbox;
+  avbox = gtk_vbox_new(FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(ahbox), avbox, TRUE, TRUE, 0);
+  return avbox;
 }
 
 /**************************************************************************
@@ -831,7 +833,7 @@ static void populate_unit_pixmap_table(void)
   width = (overview_canvas_store_width > GUI_GTK_OVERVIEW_MIN_XSIZE) ? overview_canvas_store_width
                                                : GUI_GTK_OVERVIEW_MIN_XSIZE;
 
-  if (gui_options.gui_gtk2_small_display_layout) {
+  if (gui_gtk2_small_display_layout) {
     /* We want arrow to appear if there is other units in addition
        to active one in tile. Active unit is not counted, so there
        can be 0 other units to not to display arrow. */
@@ -857,7 +859,7 @@ static void populate_unit_pixmap_table(void)
 		   G_CALLBACK(select_unit_pixmap_callback), 
 		   GINT_TO_POINTER(-1));
 
-  if (!gui_options.gui_gtk2_small_display_layout) {
+  if (!gui_gtk2_small_display_layout) {
     /* Bottom row: other units in the same tile. */
     for (i = 0; i < num_units_below; i++) {
       unit_below_pixmap[i] = gtk_pixcomm_new(tileset_unit_width(tileset),
@@ -904,7 +906,7 @@ static void populate_unit_pixmap_table(void)
                                 gdk_pixbuf_get_width(more_arrow), -1);
   }
 
-  if (!gui_options.gui_gtk2_small_display_layout) {
+  if (!gui_gtk2_small_display_layout) {
     /* Display on bottom row. */
     gtk_table_attach_defaults(GTK_TABLE(table), more_arrow_pixmap_container,
                               MAX_NUM_UNITS_BELOW, MAX_NUM_UNITS_BELOW+1, 1, 2);
@@ -927,7 +929,7 @@ static void free_unit_table(void)
                          unit_pixmap_button);
     g_object_unref(unit_pixmap);
     g_object_unref(unit_pixmap_button);
-    if (!gui_options.gui_gtk2_small_display_layout) {
+    if (!gui_gtk2_small_display_layout) {
       int i;
 
       for (i = 0; i < num_units_below; i++) {
@@ -1075,7 +1077,7 @@ static void setup_widgets(void)
   top_vbox = gtk_vbox_new(FALSE, 5);
   hbox = gtk_hbox_new(FALSE, 0);
 
-  if (gui_options.gui_gtk2_small_display_layout) {
+  if (gui_gtk2_small_display_layout) {
     /* The window is divided into two horizontal panels: overview +
      * civinfo + unitinfo, main view + message window. */
     right_vbox = gtk_vbox_new(FALSE, 0);
@@ -1103,6 +1105,11 @@ static void setup_widgets(void)
     overview_canvas_store_width = OVERVIEW_CANVAS_STORE_WIDTH;
     overview_canvas_store_height = OVERVIEW_CANVAS_STORE_HEIGHT;
   }
+
+#ifdef GGZ_GTK
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
+			   ggz_gtk_create_main_area(toplevel), NULL);
+#endif
 
   /* this holds the overview canvas, production info, etc. */
   vbox = gtk_vbox_new(FALSE, 3);
@@ -1316,9 +1323,9 @@ static void setup_widgets(void)
   gtk_notebook_set_scrollable(GTK_NOTEBOOK(top_notebook), TRUE);
 
   
-  if (gui_options.gui_gtk2_small_display_layout) {
+  if (gui_gtk2_small_display_layout) {
     gtk_paned_pack1(GTK_PANED(paned), top_notebook, TRUE, TRUE);
-  } else if (gui_options.gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
+  } else if (gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
     right_vbox = gtk_vbox_new(FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(right_vbox), top_notebook, TRUE, TRUE, 0);
@@ -1402,7 +1409,7 @@ static void setup_widgets(void)
 
   /* *** The message window -- this is a detachable widget *** */
 
-  if (gui_options.gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
+  if (gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_MERGED) {
     bottom_hpaned = hpaned = paned;
     right_notebook = bottom_notebook = top_notebook;
   } else {
@@ -1411,12 +1418,12 @@ static void setup_widgets(void)
     avbox = detached_widget_fill(sbox);
 
     vbox = gtk_vbox_new(FALSE, 0);
-    if (!gui_options.gui_gtk2_small_display_layout) {
+    if (!gui_gtk2_small_display_layout) {
       gtk_box_pack_start(GTK_BOX(vbox), ingame_votebar, FALSE, FALSE, 2);
     }
     gtk_box_pack_start(GTK_BOX(avbox), vbox, TRUE, TRUE, 0);
 
-    if (gui_options.gui_gtk2_small_display_layout) {
+    if (gui_gtk2_small_display_layout) {
       hpaned = gtk_vpaned_new();
     } else {
       hpaned = gtk_hpaned_new();
@@ -1435,7 +1442,7 @@ static void setup_widgets(void)
     gtk_notebook_set_scrollable(GTK_NOTEBOOK(right_notebook), TRUE);
     g_signal_connect(right_notebook, "button-release-event",
                      G_CALLBACK(right_notebook_button_release), NULL);
-    if (gui_options.gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_SPLIT) {
+    if (gui_gtk2_message_chat_location == GUI_GTK_MSGCHAT_SPLIT) {
       gtk_paned_pack2(GTK_PANED(hpaned), right_notebook, TRUE, TRUE);
     }
   }
@@ -1476,7 +1483,7 @@ static void setup_widgets(void)
   button = gtk_check_button_new_with_label(_("Allies Only"));
   gtk_button_set_focus_on_click(GTK_BUTTON(button), FALSE);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
-                               gui_options.gui_gtk2_allied_chat_only);
+                               gui_gtk2_allied_chat_only);
   g_signal_connect(button, "toggled",
                    G_CALLBACK(allied_chat_button_toggled), NULL);
   inputline_toolkit_view_append_button(view, button);
@@ -1491,24 +1498,63 @@ static void setup_widgets(void)
 
   gtk_widget_show_all(gtk_bin_get_child(GTK_BIN(toplevel)));
 
-  if (gui_options.gui_gtk2_enable_tabs) {
+  if (gui_gtk2_enable_tabs) {
     meswin_dialog_popup(FALSE);
   }
 
   gtk_notebook_set_current_page(GTK_NOTEBOOK(top_notebook), 0);
   gtk_notebook_set_current_page(GTK_NOTEBOOK(bottom_notebook), 0);
 
-  if (!gui_options.gui_gtk2_map_scrollbars) {
+  if (!gui_gtk2_map_scrollbars) {
     gtk_widget_hide(map_horizontal_scrollbar);
     gtk_widget_hide(map_vertical_scrollbar);
   }
 }
+
+#ifdef GGZ_GTK
+/****************************************************************************
+  Callback function that's called by the library when a connection is
+  established (or lost) to the GGZ server.  The server parameter gives
+  the server (or NULL).
+****************************************************************************/
+static void ggz_connected(GGZServer *server)
+{
+  in_ggz = (server != NULL);
+  set_client_page(in_ggz ? PAGE_GGZ : PAGE_MAIN);
+}
+
+/****************************************************************************
+  Callback function that's called by the library when we launch a game.  This
+  means we now have a connection to a freeciv server so handling can be given
+  back to the regular freeciv code.
+****************************************************************************/
+static void ggz_game_launched(void)
+{
+  ggz_begin();
+}
+
+/****************************************************************************
+  Callback function that's invoked when GGZ is exited.
+****************************************************************************/
+static void ggz_closed(void)
+{
+  set_client_page(PAGE_MAIN);
+}
+#endif /* GGZ_GTK */
 
 /**************************************************************************
  called from main().
 **************************************************************************/
 void ui_init(void)
 {
+#ifdef GGZ_GTK
+  /* Engine and version match what is provided in civclient.dsc.in and
+   * civserver.dsc.in. */
+  ggz_gtk_initialize(FALSE,
+		     ggz_connected, ggz_game_launched, ggz_closed,
+		     "Freeciv", NETWORK_CAPSTRING_MANDATORY, "Pubserver");
+#endif
+
   log_set_callback(log_callback_utf8);
 }
 
@@ -1518,20 +1564,6 @@ void ui_init(void)
 int main(int argc, char **argv)
 {
   return client_main(argc, argv);
-}
-
-/**************************************************************************
-  Migrate gtk2 client specific options from freeciv-2.5 options
-**************************************************************************/
-static void migrate_options_from_2_5(void)
-{
-  if (!gui_options.first_boot) {
-    log_normal(_("Migrating gtk2-client options from freeciv-2.5 options."));
-
-    gui_options.gui_gtk2_fullscreen = gui_options.migrate_fullscreen;
-
-    gui_options.gui_gtk2_migrated_from_2_5 = TRUE;
-  }
 }
 
 /**************************************************************************
@@ -1572,14 +1604,10 @@ void ui_main(int argc, char **argv)
   gtk_widget_set_name(toplevel, "Freeciv");
   root_window = toplevel->window;
 
-  if (!gui_options.gui_gtk2_migrated_from_2_5) {
-    migrate_options_from_2_5();
-  }
-
-  if (gui_options.gui_gtk2_fullscreen) {
+  if (fullscreen_mode) {
     gtk_window_fullscreen(GTK_WINDOW(toplevel));
   }
-
+  
   gtk_window_set_title(GTK_WINDOW (toplevel), _("Freeciv"));
 
   g_signal_connect(toplevel, "delete_event",
@@ -1672,7 +1700,7 @@ void ui_main(int argc, char **argv)
   tileset_load_tiles(tileset);
 
   /* keep the icon of the executable on Windows (see PR#36491) */
-#ifndef FREECIV_MSWINDOWS
+#ifndef WIN32_NATIVE
   /* Only call this after tileset_load_tiles is called. */
   gtk_window_set_icon(GTK_WINDOW(toplevel),
 		sprite_get_pixbuf(get_icon_sprite(tileset, ICON_FREECIV)));
@@ -1690,7 +1718,7 @@ void ui_main(int argc, char **argv)
   chatline_init();
   init_mapcanvas_and_overview();
 
-  tileset_use_preferred_theme(tileset);
+  tileset_use_prefered_theme(tileset);
 
   gtk_widget_show(toplevel);
 
@@ -1931,6 +1959,17 @@ static gboolean get_net_input(GIOChannel *source, GIOCondition condition,
 }
 
 /**************************************************************************
+  Callback for when the GGZ socket has data pending.
+**************************************************************************/
+static gboolean get_ggz_input(GIOChannel *source, GIOCondition condition,
+                              gpointer data)
+{
+  input_from_ggz(g_io_channel_unix_get_fd(source));
+
+  return TRUE;
+}
+
+/**************************************************************************
   Set socket writability state
 **************************************************************************/
 static void set_wait_for_writable_socket(struct connection *pc,
@@ -1960,7 +1999,7 @@ static void set_wait_for_writable_socket(struct connection *pc,
 **************************************************************************/
 void add_net_input(int sock)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   srv_channel = g_io_channel_win32_new_socket(sock);
 #else
   srv_channel = g_io_channel_unix_new(sock);
@@ -1981,6 +2020,32 @@ void remove_net_input(void)
   g_source_remove(srv_id);
   g_io_channel_unref(srv_channel);
   gdk_window_set_cursor(root_window, NULL);
+}
+
+/**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void add_ggz_input(int sock)
+{
+#ifdef WIN32_NATIVE
+  ggz_channel = g_io_channel_win32_new_socket(sock);
+#else
+  ggz_channel = g_io_channel_unix_new(sock);
+#endif
+  ggz_id = g_io_add_watch(ggz_channel,
+                          G_IO_IN,
+                          get_ggz_input,
+                          NULL);
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void remove_ggz_input(void)
+{
+  g_source_remove(ggz_id);
+  g_io_channel_unref(ggz_channel);
 }
 
 /****************************************************************
@@ -2131,7 +2196,7 @@ static void apply_reqtree_text_font(struct option *poption)
   Extra initializers for client options.  Here we make set the callback
   for the specific gui-gtk-2.0 options.
 ****************************************************************************/
-void options_extra_init(void)
+void gui_options_extra_init(void)
 {
 
   struct option *poption;
@@ -2173,7 +2238,7 @@ void refresh_chat_buttons(void)
   } else {
     gtk_widget_show(button);
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
-                                 gui_options.gui_gtk2_allied_chat_only);
+                                 gui_gtk2_allied_chat_only);
   }
 }
 
@@ -2183,26 +2248,5 @@ void refresh_chat_buttons(void)
 static void allied_chat_button_toggled(GtkToggleButton *button,
                                        gpointer user_data)
 {
-  gui_options.gui_gtk2_allied_chat_only = gtk_toggle_button_get_active(button);
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void insert_client_build_info(char *outbuf, size_t outlen)
-{
-  cat_snprintf(outbuf, outlen, _("\nBuilt against gtk+ %d.%d.%d, using %d.%d.%d"
-                                 "\nBuilt against glib %d.%d.%d, using %d.%d.%d"),
-               GTK_MAJOR_VERSION, GTK_MINOR_VERSION, GTK_MICRO_VERSION,
-               gtk_major_version, gtk_minor_version, gtk_micro_version,
-               GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION,
-               glib_major_version, glib_minor_version, glib_micro_version);
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
+  gui_gtk2_allied_chat_only = gtk_toggle_button_get_active(button);
 }

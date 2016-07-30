@@ -87,7 +87,7 @@ void init_themes(void)
 /****************************************************************************
   Return a static string vector of useable theme names.
 ****************************************************************************/
-const struct strvec *get_themes_list(const struct option *poption)
+const struct strvec *get_themes_list(void)
 {
   static struct strvec *themes_list = NULL;
 

@@ -272,44 +272,15 @@ extern "C" {
 
 /* =========================== Structures ================================ */
 
-/* Specifies the type of the action. */
-enum pf_action {
-  PF_ACTION_NONE = 0,
-  PF_ACTION_ATTACK,
-  PF_ACTION_DIPLOMAT,
-  PF_ACTION_TRADE_ROUTE,
-  PF_ACTION_IMPOSSIBLE = -1
-};
-
-/* Specifies the actions to consider. */
-enum pf_action_account {
-  PF_AA_NONE = 0,
-  PF_AA_UNIT_ATTACK = 1 << 0,
-  /* When this option is turned on, the move to a city will be considered
-   * as attacking a unit, even if we ignore if there is a unit in the city.
-   * This does not mean we are considering taking over a city! */
-  PF_AA_CITY_ATTACK = 1 << 1,
-  PF_AA_DIPLOMAT = 1 << 2,
-  PF_AA_TRADE_ROUTE = 1 << 3
-};
-
 /* Specifies the way path-finding will treat a tile. */
 enum tile_behavior {
-  TB_NORMAL = 0,        /* Well, normal .*/
-  TB_IGNORE,            /* This one will be ignored. */
-  TB_DONT_LEAVE         /* Paths can lead _to_ such tile, but are not
+  TB_IGNORE = 0,        /* This one will be ignored. */
+  TB_DONT_LEAVE,        /* Paths can lead _to_ such tile, but are not
                          * allowed to go _through_. This move cost is
                          * always evaluated to a constant single move cost,
                          * prefering straight paths because we don't need
                          * moves left to leave this tile. */
-};
-
-/* Specifies the possibility to move from/to a tile. */
-enum pf_move_scope {
-  PF_MS_NONE = 0,
-  PF_MS_NATIVE = 1 << 0,
-  PF_MS_CITY = 1 << 1,
-  PF_MS_TRANSPORT = 1 << 2
+  TB_NORMAL             /* Well, normal .*/
 };
 
 /* Full specification of a position and time to reach it. */
@@ -348,37 +319,24 @@ struct pf_parameter {
 
   int moves_left_initially;
   int fuel_left_initially;      /* Ignored for non-air units. */
-  /* Set if the unit is transported. */
-  const struct unit_type *transported_by_initially;
-  /* See unit_cargo_depth(). */
-  int cargo_depth;
-  /* All cargo unit types. */
-  bv_unit_types cargo_types;
 
   int move_rate;                /* Move rate of the virtual unit */
   int fuel;                     /* Should be 1 for units without fuel. */
 
-  const struct unit_type *utype;
   const struct player *owner;
+  const struct unit_class *uclass;
 
+  bv_unit_type_flags unit_flags; /* Like F_MARINE and F_TRIREME */
   bool omniscience;             /* Do we care if the tile is visible? */
 
   /* Callback to get MC of a move from 'from_tile' to 'to_tile' and in the
    * direction 'dir'. Note that the callback can calculate 'to_tile' by
    * itself based on 'from_tile' and 'dir'. Excessive information 'to_tile'
    * is provided to ease the implementation of the callback. */
-  int (*get_MC) (const struct tile *from_tile,
-                 enum pf_move_scope src_move_scope,
+  int (*get_MC) (const struct tile *from_tile, enum direction8 dir,
                  const struct tile *to_tile,
-                 enum pf_move_scope dst_move_scope,
                  const struct pf_parameter *param);
-
-  /* Callback which determines if we can move from/to 'ptile'. */
-  enum pf_move_scope (*get_move_scope) (const struct tile *ptile,
-                                        bool *can_disembark,
-                                        enum pf_move_scope previous_scope,
-                                        const struct pf_parameter *param);
-  bool ignore_none_scopes;
+  int unknown_MC; /* Move cost into unknown - very large by default. */
 
   /* Callback which determines the behavior of a tile. If NULL
    * TB_NORMAL is assumed. It can be assumed that the implementation
@@ -393,20 +351,10 @@ struct pf_parameter {
   int (*get_EC) (const struct tile *ptile, enum known_type known,
                  const struct pf_parameter *param);
 
-  /* Callback which determines whether an action would be performed at
-   * 'ptile' instead of moving to it. */
-  enum pf_action (*get_action) (const struct tile *ptile,
-                                enum known_type known,
-                                const struct pf_parameter *param);
-  enum pf_action_account actions;
-
-  /* Callback which determines whether the action from 'from_tile' to
-   * 'to_tile' is effectively possible. */
-  bool (*is_action_possible) (const struct tile *from_tile,
-                              enum pf_move_scope src_move_scope,
-                              const struct tile *to_tile,
-                              enum pf_action action,
-                              const struct pf_parameter *param);
+  /* Callback to determines if we could invade the tile. Returns TRUE if we
+   * can enter in the territory of the tile owner. */
+  bool (*can_invade_tile) (const struct player *pplayer,
+                           const struct tile *ptile);
 
   /* Although the rules governing ZoC are universal, the amount of
    * information available at server and client is different. To
@@ -499,7 +447,6 @@ void pf_path_destroy(struct pf_path *path);
 struct pf_path *pf_path_concat(struct pf_path *dest_path,
                                const struct pf_path *src_path);
 bool pf_path_advance(struct pf_path *path, struct tile *ptile);
-bool pf_path_backtrack(struct pf_path *path, struct tile *ptile);
 const struct pf_position *pf_path_last_position(const struct pf_path *path);
 void pf_path_print_real(const struct pf_path *path, enum log_level level,
                         const char *file, const char *function, int line);
@@ -512,11 +459,14 @@ void pf_path_print_real(const struct pf_path *path, enum log_level level,
 /* Reverse map functions (Costs to go to start tile). */
 struct pf_reverse_map *pf_reverse_map_new(const struct player *pplayer,
                                           struct tile *start_tile,
-                                          int max_turns, bool omniscient)
+                                          int max_turns)
                        fc__warn_unused_result;
 struct pf_reverse_map *pf_reverse_map_new_for_city(const struct city *pcity,
                                                    const struct player *attacker,
-                                                   int max_turns, bool omniscient)
+                                                   int max_turns)
+                       fc__warn_unused_result;
+struct pf_reverse_map *pf_reverse_map_new_for_unit(const struct unit *punit,
+                                                   int max_turns)
                        fc__warn_unused_result;
 void pf_reverse_map_destroy(struct pf_reverse_map *prfm);
 
@@ -525,6 +475,11 @@ int pf_reverse_map_utype_move_cost(struct pf_reverse_map *pfrm,
                                    struct tile *ptile);
 int pf_reverse_map_unit_move_cost(struct pf_reverse_map *pfrm,
                                   const struct unit *punit);
+struct pf_path *pf_reverse_map_utype_path(struct pf_reverse_map *pfrm,
+                                          const struct unit_type *punittype,
+                                          struct tile *ptile);
+struct pf_path *pf_reverse_map_unit_path(struct pf_reverse_map *pfrm,
+                                         const struct unit *punit);
 bool pf_reverse_map_utype_position(struct pf_reverse_map *pfrm,
                                    const struct unit_type *punittype,
                                    struct tile *ptile,
@@ -544,7 +499,7 @@ bool pf_reverse_map_unit_position(struct pf_reverse_map *pfrm,
  *                   which indicate if the start tile should be iterated or
  *                   not. */
 #define pf_map_tiles_iterate(ARG_pfm, NAME_tile, COND_from_start)           \
-if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
+if ((COND_from_start) || pf_map_iterate((ARG_pfm))) {                       \
   struct pf_map *_MY_pf_map_ = (ARG_pfm);                                   \
   struct tile *NAME_tile;                                                   \
   do {                                                                      \
@@ -566,7 +521,7 @@ if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
  *                   not. */
 #define pf_map_move_costs_iterate(ARG_pfm, NAME_tile, NAME_cost,            \
                                   COND_from_start)                          \
-if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
+if ((COND_from_start) || pf_map_iterate((ARG_pfm))) {                       \
   struct pf_map *_MY_pf_map_ = (ARG_pfm);                                   \
   struct tile *NAME_tile;                                                   \
   int NAME_cost;                                                            \
@@ -588,7 +543,7 @@ if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
  *                   which indicate if the start tile should be iterated or
  *                   not. */
 #define pf_map_positions_iterate(ARG_pfm, NAME_pos, COND_from_start)        \
-if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
+if ((COND_from_start) || pf_map_iterate((ARG_pfm))) {                       \
   struct pf_map *_MY_pf_map_ = (ARG_pfm);                                   \
   struct pf_position NAME_pos;                                              \
   do {                                                                      \
@@ -608,7 +563,7 @@ if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
  *                   which indicate if the start tile should be iterated or
  *                   not. */
 #define pf_map_paths_iterate(ARG_pfm, NAME_path, COND_from_start)           \
-if (COND_from_start || pf_map_iterate((ARG_pfm))) {                         \
+if ((COND_from_start) || pf_map_iterate((ARG_pfm))) {                       \
   struct pf_map *_MY_pf_map_ = (ARG_pfm);                                   \
   struct pf_path *NAME_path;\
   do {\

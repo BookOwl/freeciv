@@ -1,30 +1,22 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = aicore networking scriptcore
+SUBDIRS = aicore scriptcore
 
 lib_LTLIBRARIES = libfreeciv.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/utility \
 	-I$(srcdir)/aicore \
-	-I$(srcdir)/networking \
 	-I$(srcdir)/scriptcore \
-	-I$(top_srcdir)/dependencies/tinycthread \
-	$(MAPIMG_WAND_CFLAGS) $(JANSSON_CFLAGS)
+	$(MAPIMG_WAND_CFLAGS)
 
 libfreeciv_la_SOURCES = \
-		achievements.c	\
-		achievements.h	\
-		actions.c	\
-		actions.h	\
 		ai.c		\
 		ai.h		\
 		base.c		\
 		base.h		\
 		borders.c	\
 		borders.h	\
-		calendar.c	\
-		calendar.h	\
 		capstr.c	\
 		capstr.h	\
 		chat.h		\
@@ -32,12 +24,12 @@ libfreeciv_la_SOURCES = \
 		citizens.h	\
 		city.c		\
 		city.h		\
-		clientutils.c	\
-		clientutils.h	\
 		combat.c	\
 		combat.h	\
-		culture.c	\
-		culture.h	\
+		connection.c	\
+		connection.h	\
+		dataio.c	\
+		dataio.h	\
 		diptreaty.c	\
 		diptreaty.h	\
 		disaster.c	\
@@ -46,8 +38,6 @@ libfreeciv_la_SOURCES = \
 		effects.h	\
 		events.c	\
 		events.h	\
-		extras.c	\
-		extras.h	\
 		featured_text.c	\
 		featured_text.h	\
 		fc_cmdhelp.c	\
@@ -65,18 +55,15 @@ libfreeciv_la_SOURCES = \
 		improvement.h	\
 		map.c		\
 		map.h		\
-		map_types.h	\
 		mapimg.c	\
 		mapimg.h	\
-		metaknowledge.c \
-		metaknowledge.h \
 		movement.c	\
 		movement.h	\
-		multipliers.c   \
-		multipliers.h   \
 		name_translation.h \
 		nation.c        \
 		nation.h        \
+		packets.c	\
+		packets.h	\
 		packets_gen.c	\
 		packets_gen.h	\
 		player.c	\
@@ -93,8 +80,6 @@ libfreeciv_la_SOURCES = \
 		spaceship.h	\
 		specialist.c	\
 		specialist.h	\
-		style.c		\
-		style.h		\
 		team.c		\
 		team.h		\
 		tech.c		\
@@ -112,30 +97,27 @@ libfreeciv_la_SOURCES = \
 		unitlist.h	\
 		unittype.c	\
 		unittype.h	\
-		version.c	\
-		version.h	\
-		victory.c	\
-		victory.h	\
 		vision.c	\
 		vision.h	\
 		workertask.c	\
 		workertask.h	\
 		worklist.c	\
-		worklist.h
+		worklist.h	\
+		version.c	\
+		version.h
 
 EXTRA_DIST = \
+		packets.def	\
 		generate_packets.py
 
 libfreeciv_la_DEPENDENCIES = \
 	$(top_builddir)/utility/libcivutility.la \
 	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/networking/libfcivnetwork.la \
 	$(top_builddir)/common/scriptcore/libscriptcore.la
 
 libfreeciv_la_LIBADD = \
 	$(top_builddir)/utility/libcivutility.la \
 	$(top_builddir)/common/aicore/libaicore.la \
-	$(top_builddir)/common/networking/libfcivnetwork.la \
 	$(top_builddir)/common/scriptcore/libscriptcore.la \
 	$(COMMON_LIBS)
 
@@ -151,7 +133,7 @@ BUILT_SOURCES = packets_gen.c packets_gen.h
 # have to resolve conflicts (since there could then be 2 copies).
 packets_gen.h packets_gen.c: packets_generate
 .INTERMEDIATE: packets_generate
-packets_generate: networking/packets.def generate_packets.py
+packets_generate: packets.def generate_packets.py
 	cd $(srcdir) && ./generate_packets.py
 	touch packets_generate
 

@@ -15,6 +15,8 @@
 
 struct section_file;
 
-void savegame2_load(struct section_file *sfile);
+void savegame2_load(struct section_file *file);
+void savegame2_save(struct section_file *file, const char *save_reason,
+                    bool scenario);
 
 #endif /* FC__SAVEGAME2_H */

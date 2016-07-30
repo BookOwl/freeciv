@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -54,7 +54,6 @@
 #include "connectdlg_common.h"
 #include "global_worklist.h"
 #include "mapview_common.h"
-#include "music.h"
 #include "overview_common.h"
 #include "packhand_gen.h"
 #include "plrdlg_common.h"
@@ -66,276 +65,197 @@
 #include "options.h"
 
 
-struct client_options gui_options = {
 /** Defaults for options normally on command line **/
 
-  .default_user_name = "\0",
-  .default_server_host = "localhost",
-  .default_server_port = DEFAULT_SOCK_PORT,
-  .default_metaserver = DEFAULT_METASERVER_OPTION,
-  .default_tileset_overhead_name = "\0",
-  .default_tileset_iso_name = "\0",
-  .default_tileset_hex_name = "\0",
-  .default_tileset_isohex_name = "\0",
-  .default_sound_set_name = "stdsounds",
-  .default_music_set_name = "stdmusic",
-  .default_sound_plugin_name = "\0",
-  .default_chat_logfile = GUI_DEFAULT_CHAT_LOGFILE,
+char default_user_name[512] = "\0";
+char default_server_host[512] = "localhost";
+int  default_server_port = DEFAULT_SOCK_PORT;
+char default_metaserver[512] = DEFAULT_METASERVER_OPTION;
+char default_tileset_name[512] = "\0";
+char default_sound_set_name[512] = "stdsounds";
+char default_sound_plugin_name[512] = "\0";
+char default_chat_logfile[512] = GUI_DEFAULT_CHAT_LOGFILE;
 
-  .save_options_on_exit = TRUE,
-
-  .use_prev_server = FALSE,
-  .heartbeat_enabled = FALSE,
+bool save_options_on_exit = TRUE;
+bool fullscreen_mode = FALSE;
 
 /** Migrations **/
-  .first_boot = FALSE,
-  .default_tileset_name = "\0",
-  .gui_gtk3_migrated_from_gtk2 = FALSE,
-  .gui_gtk4_migrated_from_gtk3 = FALSE,
-  .gui_sdl2_migrated_from_sdl = FALSE,
-  .gui_gtk2_migrated_from_2_5 = FALSE,
-  .gui_gtk3_migrated_from_2_5 = FALSE,
-  .gui_qt_migrated_from_2_5 = FALSE,
-
-  .migrate_fullscreen = FALSE,
+bool gui_gtk3_migrated_from_gtk2 = FALSE;
 
 /** Local Options: **/
 
-  .solid_color_behind_units = FALSE,
-  .sound_bell_at_new_turn = FALSE,
-  .smooth_move_unit_msec = 30,
-  .smooth_center_slide_msec = 200,
-  .smooth_combat_step_msec = 10,
-  .ai_manual_turn_done = TRUE,
-  .auto_center_on_unit = TRUE,
-  .auto_center_on_automated = TRUE,
-  .auto_center_on_combat = FALSE,
-  .auto_center_each_turn = TRUE,
-  .wakeup_focus = TRUE,
-  .goto_into_unknown = TRUE,
-  .center_when_popup_city = TRUE,
-  .show_previous_turn_messages = TRUE,
-  .concise_city_production = FALSE,
-  .auto_turn_done = FALSE,
-  .meta_accelerators = TRUE,
-  .ask_city_name = TRUE,
-  .popup_new_cities = TRUE,
-  .popup_actor_arrival = TRUE,
-  .popup_attack_actions = TRUE,
-  .keyboardless_goto = TRUE,
-  .enable_cursor_changes = TRUE,
-  .separate_unit_selection = FALSE,
-  .unit_selection_clears_orders = TRUE,
-  .highlight_our_names = FT_COLOR("#000000", "#FFFF00"),
+bool solid_color_behind_units = FALSE;
+bool sound_bell_at_new_turn = FALSE;
+int smooth_move_unit_msec = 30;
+int smooth_center_slide_msec = 200;
+int smooth_combat_step_msec = 10;
+bool ai_manual_turn_done = TRUE;
+bool auto_center_on_unit = TRUE;
+bool auto_center_on_combat = FALSE;
+bool auto_center_each_turn = TRUE;
+bool wakeup_focus = TRUE;
+bool goto_into_unknown = TRUE;
+bool center_when_popup_city = TRUE;
+bool concise_city_production = FALSE;
+bool auto_turn_done = FALSE;
+bool meta_accelerators = TRUE;
+bool ask_city_name = TRUE;
+bool popup_new_cities = TRUE;
+bool popup_caravan_arrival = TRUE;
+bool keyboardless_goto = TRUE;
+bool enable_cursor_changes = TRUE;
+bool separate_unit_selection = FALSE;
+bool unit_selection_clears_orders = TRUE;
+struct ft_color highlight_our_names = FT_COLOR("#000000", "#FFFF00");
 
-  .voteinfo_bar_use = TRUE,
-  .voteinfo_bar_always_show = FALSE,
-  .voteinfo_bar_hide_when_not_player = FALSE,
-  .voteinfo_bar_new_at_front = FALSE,
+bool voteinfo_bar_use = TRUE;
+bool voteinfo_bar_always_show = FALSE;
+bool voteinfo_bar_hide_when_not_player = FALSE;
+bool voteinfo_bar_new_at_front = FALSE;
 
-  .autoaccept_tileset_suggestion = FALSE,
-  .autoaccept_soundset_suggestion = FALSE,
-  .autoaccept_musicset_suggestion = FALSE,
-
-  .sound_enable_effects = TRUE,
-  .sound_enable_menu_music = TRUE,
-  .sound_enable_game_music = TRUE,
+bool autoaccept_tileset_suggestion = FALSE;
+bool autoaccept_soundset_suggestion = FALSE;
 
 /* This option is currently set by the client - not by the user. */
-  .update_city_text_in_refresh_tile = TRUE,
+bool update_city_text_in_refresh_tile = TRUE;
 
-  .draw_city_outlines = TRUE,
-  .draw_city_output = FALSE,
-  .draw_map_grid = FALSE,
-  .draw_city_names = TRUE,
-  .draw_city_growth = TRUE,
-  .draw_city_productions = TRUE,
-  .draw_city_buycost = FALSE,
-  .draw_city_trade_routes = FALSE,
-  .draw_terrain = TRUE,
-  .draw_coastline = FALSE,
-  .draw_roads_rails = TRUE,
-  .draw_irrigation = TRUE,
-  .draw_mines = TRUE,
-  .draw_fortress_airbase = TRUE,
-  .draw_specials = TRUE,
-  .draw_huts = TRUE,
-  .draw_pollution = TRUE,
-  .draw_cities = TRUE,
-  .draw_units = TRUE,
-  .draw_focus_unit = FALSE,
-  .draw_fog_of_war = TRUE,
-  .draw_borders = TRUE,
-  .draw_native = FALSE,
-  .draw_full_citybar = TRUE,
-  .draw_unit_shields = TRUE,
-  .player_dlg_show_dead_players = TRUE,
-  .reqtree_show_icons = TRUE,
-  .reqtree_curved_lines = FALSE,
+bool draw_city_outlines = TRUE;
+bool draw_city_output = FALSE;
+bool draw_map_grid = FALSE;
+bool draw_city_names = TRUE;
+bool draw_city_growth = TRUE;
+bool draw_city_productions = TRUE;
+bool draw_city_buycost = FALSE;
+bool draw_city_trade_routes = FALSE;
+bool draw_terrain = TRUE;
+bool draw_coastline = FALSE;
+bool draw_roads_rails = TRUE;
+bool draw_irrigation = TRUE;
+bool draw_mines = TRUE;
+bool draw_fortress_airbase = TRUE;
+bool draw_specials = TRUE;
+bool draw_pollution = TRUE;
+bool draw_cities = TRUE;
+bool draw_units = TRUE;
+bool draw_focus_unit = FALSE;
+bool draw_fog_of_war = TRUE;
+bool draw_borders = TRUE;
+bool draw_native = FALSE;
+bool draw_full_citybar = TRUE;
+bool draw_unit_shields = TRUE;
+bool player_dlg_show_dead_players = TRUE;
+bool reqtree_show_icons = TRUE;
+bool reqtree_curved_lines = FALSE;
 
 /* options for map images */
-/*  .mapimg_format, */
-  .mapimg_zoom = 2,
+char mapimg_format[64];
+int mapimg_zoom = 2;
 /* See the definition of MAPIMG_LAYER in mapimg.h. */
-  .mapimg_layer = {
-    FALSE, /* a - MAPIMG_LAYER_AREA */
-    TRUE,  /* b - MAPIMG_LAYER_BORDERS */
-    TRUE,  /* c - MAPIMG_LAYER_CITIES */
-    TRUE,  /* f - MAPIMG_LAYER_FOGOFWAR */
-    TRUE,  /* k - MAPIMG_LAYER_KNOWLEDGE */
-    TRUE,  /* t - MAPIMG_LAYER_TERRAIN */
-    TRUE   /* u - MAPIMG_LAYER_UNITS */
-  },
-/*  .mapimg_filename, */
-
-  .zoom_set = FALSE,
-  .zoom_default_level = 1.0,
+bool mapimg_layer[MAPIMG_LAYER_COUNT] = {
+  FALSE, /* a - MAPIMG_LAYER_AREA */
+  TRUE,  /* b - MAPIMG_LAYER_BORDERS */
+  TRUE,  /* c - MAPIMG_LAYER_CITIES */
+  TRUE,  /* f - MAPIMG_LAYER_FOGOFWAR */
+  TRUE,  /* k - MAPIMG_LAYER_KNOWLEDGE */
+  TRUE,  /* t - MAPIMG_LAYER_TERRAIN */
+  TRUE   /* u - MAPIMG_LAYER_UNITS */
+};
+char mapimg_filename[512];
 
 /* gui-gtk-2.0 client specific options. */
-  .gui_gtk2_default_theme_name = FC_GTK2_DEFAULT_THEME_NAME,
-  .gui_gtk2_fullscreen = FALSE,
-  .gui_gtk2_map_scrollbars = FALSE,
-  .gui_gtk2_dialogs_on_top = TRUE,
-  .gui_gtk2_show_task_icons = TRUE,
-  .gui_gtk2_enable_tabs = TRUE,
-  .gui_gtk2_better_fog = TRUE,
-  .gui_gtk2_show_chat_message_time = FALSE,
-  .gui_gtk2_new_messages_go_to_top = FALSE,
-  .gui_gtk2_show_message_window_buttons = TRUE,
-  .gui_gtk2_metaserver_tab_first = FALSE,
-  .gui_gtk2_allied_chat_only = FALSE,
-  .gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_MERGED,
-  .gui_gtk2_small_display_layout = TRUE,
-  .gui_gtk2_mouse_over_map_focus = FALSE,
-  .gui_gtk2_chatline_autocompletion = TRUE,
-  .gui_gtk2_citydlg_xsize = GUI_GTK2_CITYDLG_DEFAULT_XSIZE,
-  .gui_gtk2_citydlg_ysize = GUI_GTK2_CITYDLG_DEFAULT_YSIZE,
-  .gui_gtk2_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET,
-  .gui_gtk2_font_city_label = "Monospace 8",
-  .gui_gtk2_font_notify_label = "Monospace Bold 9",
-  .gui_gtk2_font_spaceship_label = "Monospace 8",
-  .gui_gtk2_font_help_label = "Sans Bold 10",
-  .gui_gtk2_font_help_link = "Sans 9",
-  .gui_gtk2_font_help_text = "Monospace 8",
-  .gui_gtk2_font_chatline = "Monospace 8",
-  .gui_gtk2_font_beta_label = "Sans Italic 10",
-  .gui_gtk2_font_small = "Sans 9",
-  .gui_gtk2_font_comment_label = "Sans Italic 9",
-  .gui_gtk2_font_city_names = "Sans Bold 10",
-  .gui_gtk2_font_city_productions = "Serif 10",
-  .gui_gtk2_font_reqtree_text = "Serif 10",
+char gui_gtk2_default_theme_name[512] = FC_GTK2_DEFAULT_THEME_NAME;
+bool gui_gtk2_map_scrollbars = FALSE;
+bool gui_gtk2_dialogs_on_top = TRUE;
+bool gui_gtk2_show_task_icons = TRUE;
+bool gui_gtk2_enable_tabs = TRUE;
+bool gui_gtk2_better_fog = TRUE;
+bool gui_gtk2_show_chat_message_time = FALSE;
+bool gui_gtk2_new_messages_go_to_top = FALSE;
+bool gui_gtk2_show_message_window_buttons = TRUE;
+bool gui_gtk2_metaserver_tab_first = FALSE;
+bool gui_gtk2_allied_chat_only = FALSE;
+int gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_MERGED;
+bool gui_gtk2_small_display_layout = TRUE;
+bool gui_gtk2_mouse_over_map_focus = FALSE;
+bool gui_gtk2_chatline_autocompletion = TRUE;
+int gui_gtk2_citydlg_xsize = GUI_GTK2_CITYDLG_DEFAULT_XSIZE;
+int gui_gtk2_citydlg_ysize = GUI_GTK2_CITYDLG_DEFAULT_YSIZE;
+int  gui_gtk2_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET;
+char gui_gtk2_font_city_label[512] = "Monospace 8";
+char gui_gtk2_font_notify_label[512] = "Monospace Bold 9";
+char gui_gtk2_font_spaceship_label[512] = "Monospace 8";
+char gui_gtk2_font_help_label[512] = "Sans Bold 10";
+char gui_gtk2_font_help_link[512] = "Sans 9";
+char gui_gtk2_font_help_text[512] = "Monospace 8";
+char gui_gtk2_font_chatline[512] = "Monospace 8";
+char gui_gtk2_font_beta_label[512] = "Sans Italic 10";
+char gui_gtk2_font_small[512] = "Sans 9";
+char gui_gtk2_font_comment_label[512] = "Sans Italic 9";
+char gui_gtk2_font_city_names[512] = "Sans Bold 10";
+char gui_gtk2_font_city_productions[512] = "Serif 10";
+char gui_gtk2_font_reqtree_text[512] = "Serif 10";
 
 /* gui-gtk-3.0 client specific options. */
-  .gui_gtk3_default_theme_name = FC_GTK3_DEFAULT_THEME_NAME,
-  .gui_gtk3_fullscreen = FALSE,
-  .gui_gtk3_map_scrollbars = FALSE,
-  .gui_gtk3_dialogs_on_top = TRUE,
-  .gui_gtk3_show_task_icons = TRUE,
-  .gui_gtk3_enable_tabs = TRUE,
-  .gui_gtk3_show_chat_message_time = FALSE,
-  .gui_gtk3_new_messages_go_to_top = FALSE,
-  .gui_gtk3_show_message_window_buttons = TRUE,
-  .gui_gtk3_metaserver_tab_first = FALSE,
-  .gui_gtk3_allied_chat_only = FALSE,
-  .gui_gtk3_message_chat_location = GUI_GTK_MSGCHAT_MERGED,
-  .gui_gtk3_small_display_layout = TRUE,
-  .gui_gtk3_mouse_over_map_focus = FALSE,
-  .gui_gtk3_chatline_autocompletion = TRUE,
-  .gui_gtk3_citydlg_xsize = GUI_GTK3_CITYDLG_DEFAULT_XSIZE,
-  .gui_gtk3_citydlg_ysize = GUI_GTK3_CITYDLG_DEFAULT_YSIZE,
-  .gui_gtk3_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET,
-  .gui_gtk3_governor_range_min = -20,
-  .gui_gtk3_governor_range_max = 20,
-  .gui_gtk3_font_city_label = "Monospace 8",
-  .gui_gtk3_font_notify_label = "Monospace Bold 9",
-  .gui_gtk3_font_spaceship_label = "Monospace 8",
-  .gui_gtk3_font_help_label = "Sans Bold 10",
-  .gui_gtk3_font_help_link = "Sans 9",
-  .gui_gtk3_font_help_text = "Monospace 8",
-  .gui_gtk3_font_chatline = "Monospace 8",
-  .gui_gtk3_font_beta_label = "Sans Italic 10",
-  .gui_gtk3_font_small = "Sans 9",
-  .gui_gtk3_font_comment_label = "Sans Italic 9",
-  .gui_gtk3_font_city_names = "Sans Bold 10",
-  .gui_gtk3_font_city_productions = "Serif 10",
-  .gui_gtk3_font_reqtree_text = "Serif 10",
-
-/* gui-gtk-3.x client specific options. */
-  .gui_gtk4_default_theme_name = FC_GTK4_DEFAULT_THEME_NAME,
-  .gui_gtk4_fullscreen = FALSE,
-  .gui_gtk4_map_scrollbars = FALSE,
-  .gui_gtk4_dialogs_on_top = TRUE,
-  .gui_gtk4_show_task_icons = TRUE,
-  .gui_gtk4_enable_tabs = TRUE,
-  .gui_gtk4_show_chat_message_time = FALSE,
-  .gui_gtk4_new_messages_go_to_top = FALSE,
-  .gui_gtk4_show_message_window_buttons = TRUE,
-  .gui_gtk4_metaserver_tab_first = FALSE,
-  .gui_gtk4_allied_chat_only = FALSE,
-  .gui_gtk4_message_chat_location = GUI_GTK_MSGCHAT_MERGED,
-  .gui_gtk4_small_display_layout = TRUE,
-  .gui_gtk4_mouse_over_map_focus = FALSE,
-  .gui_gtk4_chatline_autocompletion = TRUE,
-  .gui_gtk4_citydlg_xsize = GUI_GTK4_CITYDLG_DEFAULT_XSIZE,
-  .gui_gtk4_citydlg_ysize = GUI_GTK4_CITYDLG_DEFAULT_YSIZE,
-  .gui_gtk4_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET,
-  .gui_gtk4_governor_range_min = -20,
-  .gui_gtk4_governor_range_max = 20,
-  .gui_gtk4_font_city_label = "Monospace 8",
-  .gui_gtk4_font_notify_label = "Monospace Bold 9",
-  .gui_gtk4_font_spaceship_label = "Monospace 8",
-  .gui_gtk4_font_help_label = "Sans Bold 10",
-  .gui_gtk4_font_help_link = "Sans 9",
-  .gui_gtk4_font_help_text = "Monospace 8",
-  .gui_gtk4_font_chatline = "Monospace 8",
-  .gui_gtk4_font_beta_label = "Sans Italic 10",
-  .gui_gtk4_font_small = "Sans 9",
-  .gui_gtk4_font_comment_label = "Sans Italic 9",
-  .gui_gtk4_font_city_names = "Sans Bold 10",
-  .gui_gtk4_font_city_productions = "Serif 10",
-  .gui_gtk4_font_reqtree_text = "Serif 10",
+char gui_gtk3_default_theme_name[512] = FC_GTK3_DEFAULT_THEME_NAME;
+bool gui_gtk3_map_scrollbars = FALSE;
+bool gui_gtk3_dialogs_on_top = TRUE;
+bool gui_gtk3_show_task_icons = TRUE;
+bool gui_gtk3_enable_tabs = TRUE;
+bool gui_gtk3_show_chat_message_time = FALSE;
+bool gui_gtk3_new_messages_go_to_top = FALSE;
+bool gui_gtk3_show_message_window_buttons = TRUE;
+bool gui_gtk3_metaserver_tab_first = FALSE;
+bool gui_gtk3_allied_chat_only = FALSE;
+int gui_gtk3_message_chat_location = GUI_GTK_MSGCHAT_MERGED;
+bool gui_gtk3_small_display_layout = TRUE;
+bool gui_gtk3_mouse_over_map_focus = FALSE;
+bool gui_gtk3_chatline_autocompletion = TRUE;
+int gui_gtk3_citydlg_xsize = GUI_GTK3_CITYDLG_DEFAULT_XSIZE;
+int gui_gtk3_citydlg_ysize = GUI_GTK3_CITYDLG_DEFAULT_YSIZE;
+int  gui_gtk3_popup_tech_help = GUI_POPUP_TECH_HELP_RULESET;
+char gui_gtk3_font_city_label[512] = "Monospace 8";
+char gui_gtk3_font_notify_label[512] = "Monospace Bold 9";
+char gui_gtk3_font_spaceship_label[512] = "Monospace 8";
+char gui_gtk3_font_help_label[512] = "Sans Bold 10";
+char gui_gtk3_font_help_link[512] = "Sans 9";
+char gui_gtk3_font_help_text[512] = "Monospace 8";
+char gui_gtk3_font_chatline[512] = "Monospace 8";
+char gui_gtk3_font_beta_label[512] = "Sans Italic 10";
+char gui_gtk3_font_small[512] = "Sans 9";
+char gui_gtk3_font_comment_label[512] = "Sans Italic 9";
+char gui_gtk3_font_city_names[512] = "Sans Bold 10";
+char gui_gtk3_font_city_productions[512] = "Serif 10";
+char gui_gtk3_font_reqtree_text[512] = "Serif 10";
 
 /* gui-sdl client specific options. */
-  .gui_sdl_fullscreen = FALSE,
-  .gui_sdl_screen = VIDEO_MODE(640, 480),
-  .gui_sdl_do_cursor_animation = TRUE,
-  .gui_sdl_use_color_cursors = TRUE,
-
-/* gui-sdl2 client specific options. */
-  .gui_sdl2_default_theme_name = FC_SDL2_DEFAULT_THEME_NAME,
-  .gui_sdl2_fullscreen = FALSE,
-  .gui_sdl2_screen = VIDEO_MODE(640, 480),
-  .gui_sdl2_swrenderer = FALSE,
-  .gui_sdl2_do_cursor_animation = TRUE,
-  .gui_sdl2_use_color_cursors = TRUE,
+char gui_sdl_default_theme_name[512] = FC_SDL_DEFAULT_THEME_NAME;
+bool gui_sdl_fullscreen = FALSE;
+struct video_mode gui_sdl_screen = VIDEO_MODE(640, 480);
+bool gui_sdl_do_cursor_animation = TRUE;
+bool gui_sdl_use_color_cursors = TRUE;
 
 /* gui-qt client specific options. */
-  .gui_qt_fullscreen = FALSE,
-  .gui_qt_default_theme_name = "Fusion",
-  .gui_qt_font_city_label = "Monospace,8,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_default = "Sans Serif,10,-1,5,75,0,0,0,0,0",
-  .gui_qt_font_notify_label = "Monospace,8,-1,5,75,0,0,0,0,0",
-  .gui_qt_font_spaceship_label = "Monospace,8,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_help_label = "Sans Serif,9,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_help_link = "Sans Serif,9,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_help_text = "Monospace,8,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_help_title = "Sans Serif,10,-1,5,75,0,0,0,0,0",
-  .gui_qt_font_chatline = "Monospace,8,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_beta_label = "Sans Serif,10,-1,5,50,1,0,0,0,0",
-  .gui_qt_font_small = "Sans Serif,9,-1,5,50,0,0,0,0,0",
-  .gui_qt_font_comment_label = "Sans Serif,9,-1,5,50,1,0,0,0,0",
-  .gui_qt_font_city_names = "Sans Serif,10,-1,5,75,0,0,0,0,0",
-  .gui_qt_font_city_productions = "Sans Serif,10,-1,5,50,1,0,0,0,0",
-  .gui_qt_font_reqtree_text = "Sans Serif,10,-1,5,50,1,0,0,0,0",
-  .gui_qt_show_titlebar = TRUE,
-  .gui_qt_wakeup_text = "Wake up %1"
-};
+
+char gui_qt_default_theme_name[512] = "Fusion";
+char gui_qt_font_city_label[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
+char gui_qt_font_notify_label[512] = "Monospace,8,-1,5,75,0,0,0,0,0";
+char gui_qt_font_spaceship_label[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
+char gui_qt_font_help_label[512] = "Sans Serif,9,-1,5,50,0,0,0,0,0";
+char gui_qt_font_help_link[512] = "Sans Serif,9,-1,5,50,0,0,0,0,0";
+char gui_qt_font_help_text[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
+char gui_qt_font_help_title[512] = "Sans Serif,10,-1,5,75,0,0,0,0,0";
+char gui_qt_font_chatline[512] = "Monospace,8,-1,5,50,0,0,0,0,0";
+char gui_qt_font_beta_label[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
+char gui_qt_font_small[512] = "Sans Serif,9,-1,5,50,0,0,0,0,0";
+char gui_qt_font_comment_label[512] = "Sans Serif,9,-1,5,50,1,0,0,0,0";
+char gui_qt_font_city_names[512] = "Sans Serif,10,-1,5,75,0,0,0,0,0";
+char gui_qt_font_city_productions[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
+char gui_qt_font_reqtree_text[512] = "Sans Serif,10,-1,5,50,1,0,0,0,0";
 
 /* Set to TRUE after the first call to options_init(), to avoid the usage
  * of non-initialized datas when calling the changed callback. */
 static bool options_fully_initialized = FALSE;
 
-static const struct strvec *get_mapimg_format_list(const struct option *poption);
 
 /****************************************************************************
   Option set structure.
@@ -488,8 +408,6 @@ struct option {
   /* Called after the value changed. */
   void (*changed_callback) (struct option *option);
 
-  int callback_data;
-
   /* Volatile. */
   void *gui_data;
 };
@@ -497,7 +415,7 @@ struct option {
 #define OPTION(poption) ((struct option *) (poption))
 
 #define OPTION_INIT(optset, spec_type, spec_table_var, common_table,        \
-                    spec_table, changed_cb, cb_data) {                      \
+                    spec_table, changed_cb) {                               \
   .poptset = optset,                                                        \
   .type = spec_type,                                                        \
   .common_vtable = &common_table,                                           \
@@ -505,35 +423,34 @@ struct option {
     .spec_table_var = &spec_table                                           \
   },                                                                        \
   .changed_callback = changed_cb,                                           \
-  .callback_data = cb_data,                                                 \
   .gui_data = NULL                                                          \
 }
 #define OPTION_BOOL_INIT(optset, common_table, bool_table, changed_cb)      \
   OPTION_INIT(optset, OT_BOOLEAN, bool_vtable, common_table, bool_table,    \
-              changed_cb, 0)
+              changed_cb)
 #define OPTION_INT_INIT(optset, common_table, int_table, changed_cb)        \
   OPTION_INIT(optset, OT_INTEGER, int_vtable, common_table, int_table,      \
-              changed_cb, 0)
-#define OPTION_STR_INIT(optset, common_table, str_table, changed_cb, cb_data) \
+              changed_cb)
+#define OPTION_STR_INIT(optset, common_table, str_table, changed_cb)        \
   OPTION_INIT(optset, OT_STRING, str_vtable, common_table, str_table,       \
-              changed_cb, cb_data)
+              changed_cb)
 #define OPTION_ENUM_INIT(optset, common_table, enum_table, changed_cb)      \
   OPTION_INIT(optset, OT_ENUM, enum_vtable, common_table, enum_table,       \
-              changed_cb, 0)
+              changed_cb)
 #define OPTION_BITWISE_INIT(optset, common_table, bitwise_table,            \
                             changed_cb)                                     \
   OPTION_INIT(optset, OT_BITWISE, bitwise_vtable, common_table,             \
-              bitwise_table, changed_cb, 0)
+              bitwise_table, changed_cb)
 #define OPTION_FONT_INIT(optset, common_table, font_table, changed_cb)      \
   OPTION_INIT(optset, OT_FONT, font_vtable, common_table, font_table,       \
-              changed_cb, 0)
+              changed_cb)
 #define OPTION_COLOR_INIT(optset, common_table, color_table, changed_cb)    \
   OPTION_INIT(optset, OT_COLOR, color_vtable, common_table, color_table,    \
-              changed_cb, 0)
+              changed_cb)
 #define OPTION_VIDEO_MODE_INIT(optset, common_table, video_mode_table,      \
                                changed_cb)                                  \
   OPTION_INIT(optset, OT_VIDEO_MODE, video_mode_vtable, common_table,       \
-              video_mode_table, changed_cb, 0)
+              video_mode_table, changed_cb)
 
 
 /****************************************************************************
@@ -713,16 +630,6 @@ void *option_get_gui_data(const struct option *poption)
   fc_assert_ret_val(NULL != poption, NULL);
 
   return poption->gui_data;
-}
-
-/****************************************************************************
-  Returns the callback data of this option.
-****************************************************************************/
-int option_get_cb_data(const struct option *poption)
-{
-  fc_assert_ret_val(NULL != poption, 0);
-
-  return poption->callback_data;
 }
 
 /****************************************************************************
@@ -1123,8 +1030,8 @@ bool option_font_set(struct option *poption, const char *font)
 ****************************************************************************/
 struct ft_color option_color_get(const struct option *poption)
 {
-  fc_assert_ret_val(NULL != poption, ft_color_construct(NULL, NULL));
-  fc_assert_ret_val(OT_COLOR == poption->type, ft_color_construct(NULL, NULL));
+  fc_assert_ret_val(NULL != poption, ft_color(NULL, NULL));
+  fc_assert_ret_val(OT_COLOR == poption->type, ft_color(NULL, NULL));
 
   return poption->color_vtable->get(poption);
 }
@@ -1134,8 +1041,8 @@ struct ft_color option_color_get(const struct option *poption)
 ****************************************************************************/
 struct ft_color option_color_def(const struct option *poption)
 {
-  fc_assert_ret_val(NULL != poption, ft_color_construct(NULL, NULL));
-  fc_assert_ret_val(OT_COLOR == poption->type, ft_color_construct(NULL, NULL));
+  fc_assert_ret_val(NULL != poption, ft_color(NULL, NULL));
+  fc_assert_ret_val(OT_COLOR == poption->type, ft_color(NULL, NULL));
 
   return poption->color_vtable->def(poption);
 }
@@ -1161,9 +1068,8 @@ bool option_color_set(struct option *poption, struct ft_color color)
 ****************************************************************************/
 struct video_mode option_video_mode_get(const struct option *poption)
 {
-  fc_assert_ret_val(NULL != poption, video_mode_construct(-1, -1));
-  fc_assert_ret_val(OT_VIDEO_MODE == poption->type,
-                    video_mode_construct(-1, -1));
+  fc_assert_ret_val(NULL != poption, video_mode(-1, -1));
+  fc_assert_ret_val(OT_VIDEO_MODE == poption->type, video_mode(-1, -1));
 
   return poption->video_mode_vtable->get(poption);
 }
@@ -1173,9 +1079,8 @@ struct video_mode option_video_mode_get(const struct option *poption)
 ****************************************************************************/
 struct video_mode option_video_mode_def(const struct option *poption)
 {
-  fc_assert_ret_val(NULL != poption, video_mode_construct(-1, -1));
-  fc_assert_ret_val(OT_VIDEO_MODE == poption->type,
-                    video_mode_construct(-1, -1));
+  fc_assert_ret_val(NULL != poption, video_mode(-1, -1));
+  fc_assert_ret_val(OT_VIDEO_MODE == poption->type, video_mode(-1, -1));
 
   return poption->video_mode_vtable->def(poption);
 }
@@ -1230,7 +1135,6 @@ static const char *client_option_help_text(const struct option *poption);
 static int client_option_category(const struct option *poption);
 static bool client_option_is_changeable(const struct option *poption);
 static struct option *client_option_next(const struct option *poption);
-static void client_option_adjust_defaults(void);
 
 static const struct option_common_vtable client_option_common_vtable = {
   .number = client_option_number,
@@ -1387,7 +1291,7 @@ struct client_option {
        * A function to return a string vector of possible string values,
        * or NULL for none. 
        */
-      const struct strvec *(*const val_accessor) (const struct option *);
+      const struct strvec *(*const val_accessor) (void);
     } string;
     /* OT_ENUM type option. */
     struct {
@@ -1453,7 +1357,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .boolean = {                                                            \
-      .pvalue = &gui_options.oname,                                         \
+      .pvalue = &oname,                                                     \
       .def = odef,                                                          \
     }                                                                       \
   },                                                                        \
@@ -1489,7 +1393,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .integer = {                                                            \
-      .pvalue = &gui_options.oname,                                         \
+      .pvalue = &oname,                                                     \
       .def = odef,                                                          \
       .min = omin,                                                          \
       .max = omax                                                           \
@@ -1515,11 +1419,11 @@ struct client_option {
  * ocb:   A callback function of type void (*)(struct option *) called when
  *        the option changed.
  */
-#define GEN_STR_OPTION(oname, odesc, ohelp, ocat, ospec, odef, ocb, cbd)    \
+#define GEN_STR_OPTION(oname, odesc, ohelp, ocat, ospec, odef, ocb)         \
 {                                                                           \
   .base_option = OPTION_STR_INIT(&client_optset_static,                     \
                                  client_option_common_vtable,               \
-                                 client_option_str_vtable, ocb, cbd),       \
+                                 client_option_str_vtable, ocb),            \
   .name = #oname,                                                           \
   .description = odesc,                                                     \
   .help_text = ohelp,                                                       \
@@ -1527,8 +1431,8 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .string = {                                                             \
-      .pvalue = gui_options.oname,                                          \
-      .size = sizeof(gui_options.oname),                                    \
+      .pvalue = oname,                                                      \
+      .size = sizeof(oname),                                                \
       .def = odef,                                                          \
       .val_accessor = NULL                                                  \
     }                                                                       \
@@ -1556,11 +1460,11 @@ struct client_option {
  * ocb:   A callback function of type void (*)(struct option *) called when
  *        the option changed.
  */
-#define GEN_STR_LIST_OPTION(oname, odesc, ohelp, ocat, ospec, odef, oacc, ocb, cbd) \
+#define GEN_STR_LIST_OPTION(oname, odesc, ohelp, ocat, ospec, odef, oacc, ocb) \
 {                                                                           \
   .base_option = OPTION_STR_INIT(&client_optset_static,                     \
                                  client_option_common_vtable,               \
-                                 client_option_str_vtable, ocb, cbd),       \
+                                 client_option_str_vtable, ocb),            \
   .name = #oname,                                                           \
   .description = odesc,                                                     \
   .help_text = ohelp,                                                       \
@@ -1568,8 +1472,8 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .string = {                                                             \
-      .pvalue = gui_options.oname,                                          \
-      .size = sizeof(gui_options.oname),                                    \
+      .pvalue = oname,                                                      \
+      .size = sizeof(oname),                                                \
       .def = odef,                                                          \
       .val_accessor = oacc                                                  \
     }                                                                       \
@@ -1605,7 +1509,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .enumerator = {                                                         \
-      .pvalue = (int *) &gui_options.oname,                                 \
+      .pvalue = (int *) &oname,                                             \
       .def = odef,                                                          \
       .support_names = NULL, /* Set in options_init(). */                   \
       .pretty_names  = NULL,                                                \
@@ -1644,7 +1548,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .bitwise = {                                                            \
-      .pvalue = &gui_options.oname,                                         \
+      .pvalue = &oname,                                                     \
       .def = odef,                                                          \
       .support_names = NULL, /* Set in options_init(). */                   \
       .pretty_names  = NULL,                                                \
@@ -1684,8 +1588,8 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .font = {                                                               \
-      .pvalue = gui_options.oname,                                          \
-      .size = sizeof(gui_options.oname),                                    \
+      .pvalue = oname,                                                      \
+      .size = sizeof(oname),                                                \
       .def = odef,                                                          \
       .target = otgt,                                                       \
     }                                                                       \
@@ -1721,7 +1625,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .color = {                                                              \
-      .pvalue = &gui_options.oname,                                         \
+      .pvalue = &oname,                                                     \
       .def = FT_COLOR(odef_fg, odef_bg)                                     \
     }                                                                       \
   },                                                                        \
@@ -1757,7 +1661,7 @@ struct client_option {
   .specific = ospec,                                                        \
   {                                                                         \
     .video_mode = {                                                         \
-      .pvalue = &gui_options.oname,                                         \
+      .pvalue = &oname,                                                     \
       .def = VIDEO_MODE(odef_width, odef_height)                            \
     }                                                                       \
   },                                                                        \
@@ -1775,11 +1679,11 @@ static const struct copt_val_name
 {
   /* Order must match enum GUI_GTK_MSGCHAT_* */
   static const struct copt_val_name names[] = {
-    /* TRANS: enum value for 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
+    /* TRANS: enum value for 'gui_gtk2/gtk3_message_chat_location' */
     { "SPLIT",    N_("Split") },
-    /* TRANS: enum value for 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
+    /* TRANS: enum value for 'gui_gtk2/gtk3_message_chat_location' */
     { "SEPARATE", N_("Separate") },
-    /* TRANS: enum value for 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
+    /* TRANS: enum value for 'gui_gtk2/gtk3_message_chat_location' */
     { "MERGED",   N_("Merged") }
   };
 
@@ -1813,8 +1717,6 @@ static void view_option_changed_callback(struct option *poption);
 static void voteinfo_bar_callback(struct option *poption);
 static void font_changed_callback(struct option *poption);
 static void mapimg_changed_callback(struct option *poption);
-static void game_music_enable_callback(struct option *poption);
-static void menu_music_enable_callback(struct option *poption);
 
 static struct client_option client_options[] = {
   GEN_STR_OPTION(default_user_name,
@@ -1822,21 +1724,13 @@ static struct client_option client_options[] = {
                  N_("This is the default login username that will be used "
                     "in the connection dialogs or with the -a command-line "
                     "parameter."),
-                 COC_NETWORK, GUI_STUB, NULL, NULL, 0),
-  GEN_BOOL_OPTION(use_prev_server, N_("Default to previously used server"),
-                  N_("Automatically update \"Server\" and \"Server port\" "
-                     "options to match your latest connection, so by "
-                     "default you connect to the same server you used "
-                     "on the previous run. You should enable "
-                     "saving options on exit too, so that the automatic "
-                     "updates to the options get saved too."),
-                  COC_NETWORK, GUI_STUB, NULL, NULL),
+                 COC_NETWORK, GUI_STUB, NULL, NULL),
   GEN_STR_OPTION(default_server_host,
                  N_("Server"),
                  N_("This is the default server hostname that will be used "
                     "in the connection dialogs or with the -a command-line "
                     "parameter."),
-                 COC_NETWORK, GUI_STUB, "localhost", NULL, 0),
+                 COC_NETWORK, GUI_STUB, "localhost", NULL),
   GEN_INT_OPTION(default_server_port,
                  N_("Server port"),
                  N_("This is the default server port that will be used "
@@ -1849,102 +1743,59 @@ static struct client_option client_options[] = {
                     "find out about games on the internet.  Don't change "
                     "this from its default value unless you know what "
                     "you're doing."),
-                 COC_NETWORK, GUI_STUB, DEFAULT_METASERVER_OPTION, NULL, 0),
-  GEN_BOOL_OPTION(heartbeat_enabled, N_("Send heartbeat messages to server"),
-                  N_("Regularly send empty heartbeat message to the server "
-                     "to make sure that the connection is still up. This "
-                     "can be useful if the client otherwise may sit for a "
-                     "long time with no data being sent or received at all."),
-                  COC_NETWORK, GUI_STUB, NULL, NULL),
+                 COC_NETWORK, GUI_STUB, DEFAULT_METASERVER_OPTION, NULL),
   GEN_STR_LIST_OPTION(default_sound_set_name,
                       N_("Soundset"),
                       N_("This is the soundset that will be used.  Changing "
                          "this is the same as using the -S command-line "
                          "parameter."),
-                      COC_SOUND, GUI_STUB, "stdsounds", get_soundset_list, NULL, 0),
-  GEN_STR_LIST_OPTION(default_music_set_name,
-                      N_("Musicset"),
-                      N_("This is the musicset that will be used.  Changing "
-                         "this is the same as using the -m command-line "
-                         "parameter."),
-                      COC_SOUND, GUI_STUB, "stdmusic", get_musicset_list, musicspec_reread_callback, 0),
+                      COC_SOUND, GUI_STUB, "stdsounds", get_soundset_list, NULL),
   GEN_STR_LIST_OPTION(default_sound_plugin_name,
                       N_("Sound plugin"),
                       N_("If you have a problem with sound, try changing "
                          "the sound plugin.  The new plugin won't take "
                          "effect until you restart Freeciv.  Changing this "
                          "is the same as using the -P command-line option."),
-                      COC_SOUND, GUI_STUB, NULL, get_soundplugin_list, NULL, 0),
+                      COC_SOUND, GUI_STUB, NULL, get_soundplugin_list, NULL),
   GEN_STR_OPTION(default_chat_logfile,
                  N_("The chat log file"),
                  N_("The name of the chat log file."),
-                 COC_INTERFACE, GUI_STUB, GUI_DEFAULT_CHAT_LOGFILE, NULL, 0),
-  /* gui_gtk2/3/4_default_theme_name and gui_sdl/2_default_theme_name are
+                 COC_INTERFACE, GUI_STUB, GUI_DEFAULT_CHAT_LOGFILE, NULL),
+  /* gui_gtk2/3_default_theme_name and gui_sdl_default_theme_name are
    * different settings to avoid client crash after loading the
-   * style for the other gui.  Keeps 5 different options! */
+   * style for the other gui.  Keeps 3 different options! */
   GEN_STR_LIST_OPTION(gui_gtk2_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
                       COC_GRAPHICS, GUI_GTK2, FC_GTK2_DEFAULT_THEME_NAME,
-                      get_themes_list, theme_reread_callback, 0),
+                      get_themes_list, theme_reread_callback),
   GEN_STR_LIST_OPTION(gui_gtk3_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
                       COC_GRAPHICS, GUI_GTK3, FC_GTK3_DEFAULT_THEME_NAME,
-                      get_themes_list, theme_reread_callback, 0),
-  GEN_STR_LIST_OPTION(gui_gtk4_default_theme_name, N_("Theme"),
+                      get_themes_list, theme_reread_callback),
+  GEN_STR_LIST_OPTION(gui_sdl_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
-                      COC_GRAPHICS, GUI_GTK3x, FC_GTK4_DEFAULT_THEME_NAME,
-                      get_themes_list, theme_reread_callback, 0),
-  GEN_STR_LIST_OPTION(gui_sdl2_default_theme_name, N_("Theme"),
-                      N_("By changing this option you change the "
-                         "active theme."),
-                      COC_GRAPHICS, GUI_SDL2, FC_SDL2_DEFAULT_THEME_NAME,
-                      get_themes_list, theme_reread_callback, 0),
+                      COC_GRAPHICS, GUI_SDL, FC_SDL_DEFAULT_THEME_NAME,
+                      get_themes_list, theme_reread_callback),
   GEN_STR_LIST_OPTION(gui_qt_default_theme_name, N_("Theme"),
                       N_("By changing this option you change the "
                          "active theme."),
                       COC_GRAPHICS, GUI_QT, NULL,
-                      get_themes_list, theme_reread_callback, 0),
+                      get_themes_list, theme_reread_callback),
 
   /* It's important to give empty string instead of NULL as as default
    * value. For NULL value it would default to assigning first value
    * from the tileset list returned by get_tileset_list() as default
    * tileset. We don't want default tileset assigned at all here, but
    * leave it to tilespec code that can handle tileset priority. */
-  GEN_STR_LIST_OPTION(default_tileset_overhead_name, N_("Tileset (Overhead)"),
-                      N_("Select the tileset used with Overhead maps. "
-                         "This may change currently active tileset, if "
-                         "you are playing on such a map, in which "
-                         "case this is the same as using the -t "
+  GEN_STR_LIST_OPTION(default_tileset_name, N_("Tileset"),
+                      N_("By changing this option you change the active "
+                         "tileset.  This is the same as using the -t "
                          "command-line parameter."),
                       COC_GRAPHICS, GUI_STUB, "",
-                      get_tileset_list, tilespec_reread_callback, 0),
-  GEN_STR_LIST_OPTION(default_tileset_iso_name, N_("Tileset (Isometric)"),
-                      N_("Select the tileset used with Isometric maps. "
-                         "This may change currently active tileset, if "
-                         "you are playing on such a map, in which "
-                         "case this is the same as using the -t "
-                         "command-line parameter."),
-                      COC_GRAPHICS, GUI_STUB, "",
-                      get_tileset_list, tilespec_reread_callback, TF_ISO),
-  GEN_STR_LIST_OPTION(default_tileset_hex_name, N_("Tileset (Hex)"),
-                      N_("Select the tileset used with Hex maps. "
-                         "This may change currently active tileset, if "
-                         "you are playing on such a map, in which "
-                         "case this is the same as using the -t "
-                         "command-line parameter."),
-                      COC_GRAPHICS, GUI_STUB, "",
-                      get_tileset_list, tilespec_reread_callback, TF_HEX),
-  GEN_STR_LIST_OPTION(default_tileset_isohex_name, N_("Tileset (Isometric Hex)"),
-                      N_("Select the tileset used with Isometric Hex maps. "
-                         "This may change currently active tileset, if "
-                         "you are playing on such a map, in which "
-                         "case this is the same as using the -t "
-                         "command-line parameter."),
-                      COC_GRAPHICS, GUI_STUB, "",
-                      get_tileset_list, tilespec_reread_callback, TF_ISO | TF_HEX),
+                      get_tileset_list, tilespec_reread_callback),
 
   GEN_BOOL_OPTION(draw_city_outlines, N_("Draw city outlines"),
                   N_("Setting this option will draw a line at the city "
@@ -2019,13 +1870,8 @@ static struct client_option client_options[] = {
                   N_("Setting this option will draw the bases on the map."),
                   COC_GRAPHICS, GUI_STUB, TRUE,
                   view_option_changed_callback),
-  GEN_BOOL_OPTION(draw_specials, N_("Draw the resources"),
-                  N_("Setting this option will draw the resources on the "
-                     "map."),
-                  COC_GRAPHICS, GUI_STUB, TRUE,
-                  view_option_changed_callback),
-  GEN_BOOL_OPTION(draw_huts, N_("Draw the huts"),
-                  N_("Setting this option will draw the huts on the "
+  GEN_BOOL_OPTION(draw_specials, N_("Draw the specials"),
+                  N_("Setting this option will draw the specials on the "
                      "map."),
                   COC_GRAPHICS, GUI_STUB, TRUE,
                   view_option_changed_callback),
@@ -2139,10 +1985,6 @@ static struct client_option client_options[] = {
                   N_("Set this option to have the active unit centered "
                      "automatically when the unit focus changes."),
                   COC_INTERFACE, GUI_STUB, TRUE, NULL),
-  GEN_BOOL_OPTION(auto_center_on_automated, N_("Show automated units"),
-                  N_("Disable this option if you do not want to see "
-                     "automated units autocentered and animated"),
-                  COC_INTERFACE, GUI_STUB, TRUE, NULL),
   GEN_BOOL_OPTION(auto_center_on_combat, N_("Auto center on combat"),
                   N_("Set this option to have any combat be centered "
                      "automatically.  Disabling this will speed up the time "
@@ -2173,11 +2015,6 @@ static struct client_option client_options[] = {
                   N_("Setting this option makes the mapview center on a "
                      "city when its city dialog is popped up."),
                   COC_INTERFACE, GUI_STUB, TRUE, NULL),
-  GEN_BOOL_OPTION(show_previous_turn_messages, N_("Show messages from previous turn"),
-                  N_("Message Window shows messages also from previous turn. "
-                     "This makes sure you don't miss messages received in the end of "
-                     "the turn, just before the window gets cleared."),
-                  COC_INTERFACE, GUI_STUB, TRUE, NULL),
   GEN_BOOL_OPTION(concise_city_production, N_("Concise city production"),
                   N_("Set this option to make the city production (as shown "
                      "in the city dialog) to be more compact."),
@@ -2194,24 +2031,15 @@ static struct client_option client_options[] = {
                   N_("Setting this option will pop up a newly-founded "
                      "city's city dialog automatically."),
                   COC_INTERFACE, GUI_STUB, TRUE, NULL),
-  GEN_BOOL_OPTION(popup_actor_arrival, N_("Pop up caravan and spy actions"),
-                  N_("If this option is enabled, when a unit arrives at "
-                     "a city where it can perform an action like "
-                     "establishing a trade route, helping build a wonder, or "
-                     "establishing an embassy, a window will pop up asking "
-                     "which action should be performed. "
+  GEN_BOOL_OPTION(popup_caravan_arrival, N_("Pop up caravan actions"),
+                  N_("If this option is enabled, when caravans or similar "
+                     "units arrive at a city where they can establish a "
+                     "trade route or help build a wonder, a window will "
+                     "pop up asking which action should be performed. "
                      "Disabling this option means you will have to do the "
                      "action manually by pressing either 'r' (for a trade "
-                     "route), 'b' (for building a wonder) or 'd' (for a "
-                     "spy action) when the unit is in the city."),
-                  COC_INTERFACE, GUI_STUB, TRUE, NULL),
-  GEN_BOOL_OPTION(popup_attack_actions, N_("Pop up attack questions"),
-                  N_("If this option is enabled, when a unit arrives at a "
-                     "target it can attack, a window will pop up asking "
-                     "which action should be performed even if an attack "
-                     "action is legal and no other interesting action are. "
-                     "This allows you to change you mind or to select an "
-                     "uninteresting action."),
+                     "route) or 'b' (for building a wonder) when the unit "
+                     "is in the city."),
                   COC_INTERFACE, GUI_STUB, TRUE, NULL),
   GEN_BOOL_OPTION(enable_cursor_changes, N_("Enable cursor changing"),
                   N_("This option controls whether the client should "
@@ -2259,31 +2087,9 @@ static struct client_option client_options[] = {
                      "the ruleset is automatically used; otherwise you "
                      "are prompted to change tileset."),
                   COC_GRAPHICS, GUI_STUB, FALSE, NULL),
-
-  GEN_BOOL_OPTION(sound_enable_effects,
-                  N_("Enable sound effects"),
-                  N_("Play sound effects, assuming there's suitable "
-                     "sound plugin and soundset with the sounds."),
-                  COC_SOUND, GUI_STUB, TRUE, NULL),
-  GEN_BOOL_OPTION(sound_enable_game_music,
-                  N_("Enable in-game music"),
-                  N_("Play music during the game, assuming there's suitable "
-                     "sound plugin and musicset with in-game tracks."),
-                  COC_SOUND, GUI_STUB, TRUE, game_music_enable_callback),
- GEN_BOOL_OPTION(sound_enable_menu_music,
-                  N_("Enable menu music"),
-                  N_("Play music while not in actual game, "
-                     "assuming there's suitable "
-                     "sound plugin and musicset with menu music tracks."),
-                  COC_SOUND, GUI_STUB, TRUE, menu_music_enable_callback),
-  GEN_BOOL_OPTION(autoaccept_soundset_suggestion,
+ GEN_BOOL_OPTION(autoaccept_soundset_suggestion,
                   N_("Autoaccept soundset suggestions"),
                   N_("If this option is enabled, any soundset suggested by "
-                     "the ruleset is automatically used."),
-                  COC_SOUND, GUI_STUB, FALSE, NULL),
-  GEN_BOOL_OPTION(autoaccept_musicset_suggestion,
-                  N_("Autoaccept musicset suggestions"),
-                  N_("If this option is enabled, any musicset suggested by "
                      "the ruleset is automatically used."),
                   COC_SOUND, GUI_STUB, FALSE, NULL),
 
@@ -2327,8 +2133,8 @@ static struct client_option client_options[] = {
                       N_("Image format"),
                       N_("The image toolkit and file format used for "
                          "map images."),
-                      COC_MAPIMG, GUI_STUB, NULL, get_mapimg_format_list,
-                      NULL, 0),
+                      COC_MAPIMG, GUI_STUB, NULL, mapimg_get_format_list,
+                      NULL),
   GEN_INT_OPTION(mapimg_zoom,
                  N_("Zoom factor for map images"),
                  N_("The magnification used for map images."),
@@ -2367,13 +2173,9 @@ static struct client_option client_options[] = {
                  N_("The base part of the filename for saved map images. "
                     "A string identifying the game turn and map options will "
                     "be appended."),
-                 COC_MAPIMG, GUI_STUB, GUI_DEFAULT_MAPIMG_FILENAME, NULL, 0),
+                 COC_MAPIMG, GUI_STUB, GUI_DEFAULT_MAPIMG_FILENAME, NULL),
 
   /* gui-gtk-2.0 client specific options. */
-  GEN_BOOL_OPTION(gui_gtk2_fullscreen, N_("Fullscreen"),
-                  N_("If this option is set the client will use the "
-                     "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_GTK2, FALSE, NULL),
   GEN_BOOL_OPTION(gui_gtk2_map_scrollbars, N_("Show map scrollbars"),
                   N_("Disable this option to hide the scrollbars on the "
                      "map view."),
@@ -2445,7 +2247,7 @@ static struct client_option client_options[] = {
   GEN_ENUM_OPTION(gui_gtk2_message_chat_location,
                   N_("Messages and Chat reports location"),
                   /* TRANS: The strings used in the UI for 'Split' etc are
-                   * tagged 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
+                   * tagged 'gui_gtk2/gtk3_message_chat_location' */
                   N_("Controls where the Messages and Chat reports "
                      "appear relative to the main view containing the map.\n"
                      "'Split' allows all three to be seen simultaneously, "
@@ -2584,10 +2386,6 @@ static struct client_option client_options[] = {
                   "Serif 10", NULL),
 
   /* gui-gtk-3.0 client specific options. */
-  GEN_BOOL_OPTION(gui_gtk3_fullscreen, N_("Fullscreen"),
-                  N_("If this option is set the client will use the "
-                     "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_GTK3, FALSE, NULL),
   GEN_BOOL_OPTION(gui_gtk3_map_scrollbars, N_("Show map scrollbars"),
                   N_("Disable this option to hide the scrollbars on the "
                      "map view."),
@@ -2652,7 +2450,7 @@ static struct client_option client_options[] = {
   GEN_ENUM_OPTION(gui_gtk3_message_chat_location,
                   N_("Messages and Chat reports location"),
                   /* TRANS: The strings used in the UI for 'Split' etc are
-                   * tagged 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
+                   * tagged 'gui_gtk2/gtk3_message_chat_location' */
                   N_("Controls where the Messages and Chat reports "
                      "appear relative to the main view containing the map.\n"
                      "'Split' allows all three to be seen simultaneously, "
@@ -2711,20 +2509,6 @@ static struct client_option client_options[] = {
                      "current ruleset is used."), COC_INTERFACE, GUI_GTK3,
                   GUI_POPUP_TECH_HELP_RULESET,
                   gui_popup_tech_help_name, NULL),
-  GEN_INT_OPTION(gui_gtk3_governor_range_min,
-                 N_("Minimum surplus for a governor"),
-                 N_("The lower limit of the range for requesting surpluses "
-                    "from the governor."),
-                 COC_INTERFACE, GUI_GTK3, GUI_GTK3_GOV_RANGE_MIN_DEFAULT,
-                 GUI_GTK3_GOV_RANGE_MIN_MIN, GUI_GTK3_GOV_RANGE_MIN_MAX,
-                 NULL),
-  GEN_INT_OPTION(gui_gtk3_governor_range_max,
-                 N_("Maximum surplus for a governor"),
-                 N_("The higher limit of the range for requesting surpluses "
-                    "from the governor."),
-                 COC_INTERFACE, GUI_GTK3, GUI_GTK3_GOV_RANGE_MAX_DEFAULT,
-                 GUI_GTK3_GOV_RANGE_MAX_MIN, GUI_GTK3_GOV_RANGE_MAX_MAX,
-                 NULL),
   GEN_FONT_OPTION(gui_gtk3_font_city_label, "city_label",
                   N_("City Label"),
                   N_("This font is used to display the city labels on city "
@@ -2804,282 +2588,31 @@ static struct client_option client_options[] = {
                   COC_FONT, GUI_GTK3,
                   "Serif 10", NULL),
 
-  /* gui-gtk-3.x client specific options. */
-  GEN_BOOL_OPTION(gui_gtk4_fullscreen, N_("Fullscreen"),
+  /* gui-sdl client specific options. */
+  GEN_BOOL_OPTION(gui_sdl_fullscreen, N_("Fullscreen"),
                   N_("If this option is set the client will use the "
                      "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_map_scrollbars, N_("Show map scrollbars"),
-                  N_("Disable this option to hide the scrollbars on the "
-                     "map view."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_dialogs_on_top, N_("Keep dialogs on top"),
-                  N_("If this option is set then dialog windows will always "
-                     "remain in front of the main Freeciv window. "
-                     "Disabling this has no effect in fullscreen mode."),
-                  COC_INTERFACE, GUI_GTK3x, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_show_task_icons, N_("Show worklist task icons"),
-                  N_("Disabling this will turn off the unit and building "
-                     "icons in the worklist dialog and the production "
-                     "tab of the city dialog."),
-                  COC_GRAPHICS, GUI_GTK3x, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_enable_tabs, N_("Enable status report tabs"),
-                  N_("If this option is enabled then report dialogs will "
-                     "be shown as separate tabs rather than in popup "
-                     "dialogs."),
-                  COC_INTERFACE, GUI_GTK3x, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_show_chat_message_time,
-                  N_("Show time for each chat message"),
-                  N_("If this option is enabled then all chat messages "
-                     "will be prefixed by a time string of the form "
-                     "[hour:minute:second]."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_new_messages_go_to_top,
-                  N_("New message events go to top of list"),
-                  N_("If this option is enabled, new events in the "
-                     "message window will appear at the top of the list, "
-                     "rather than being appended at the bottom."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_show_message_window_buttons,
-                  N_("Show extra message window buttons"),
-                  N_("If this option is enabled, there will be two "
-                     "buttons displayed in the message window for "
-                     "inspecting a city and going to a location. If this "
-                     "option is disabled, these buttons will not appear "
-                     "(you can still double-click with the left mouse "
-                     "button or right-click on a row to inspect or goto "
-                     "respectively). This option will only take effect "
-                     "once the message window is closed and reopened."),
-                  COC_INTERFACE, GUI_GTK3x, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_metaserver_tab_first,
-                  N_("Metaserver tab first in network page"),
-                  N_("If this option is enabled, the metaserver tab will "
-                     "be the first notebook tab in the network page. This "
-                     "option requires a restart in order to take effect."),
-                  COC_NETWORK, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_allied_chat_only,
-                  N_("Plain chat messages are sent to allies only"),
-                  N_("If this option is enabled, then plain messages "
-                     "typed into the chat entry while the game is "
-                     "running will only be sent to your allies. "
-                     "Otherwise plain messages will be sent as "
-                     "public chat messages. To send a public chat "
-                     "message with this option enabled, prefix the "
-                     "message with a single colon ':'. This option "
-                     "can also be set using a toggle button beside "
-                     "the chat entry (only visible in multiplayer "
-                     "games)."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_ENUM_OPTION(gui_gtk4_message_chat_location,
-                  N_("Messages and Chat reports location"),
-                  /* TRANS: The strings used in the UI for 'Split' etc are
-                   * tagged 'gui_gtk2/gtk3/gtk3x_message_chat_location' */
-                  N_("Controls where the Messages and Chat reports "
-                     "appear relative to the main view containing the map.\n"
-                     "'Split' allows all three to be seen simultaneously, "
-                     "which is best for multiplayer, but requires a large "
-                     "window to be usable.\n"
-                     "'Separate' puts Messages and Chat in a notebook "
-                     "separate from the main view, so that one of them "
-                     "can always be seen alongside the main view.\n"
-                     "'Merged' makes the Messages and Chat reports into "
-                     "tabs alongside the map and other reports; this "
-                     "allows a larger map view on small screens.\n"
-                     "This option requires a restart in order to take "
-                     "effect."), COC_INTERFACE, GUI_GTK3x,
-                  GUI_GTK_MSGCHAT_MERGED /* Ignored! See options_load(). */,
-                  gui_gtk_message_chat_location_name, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_small_display_layout,
-                  N_("Arrange widgets for small displays"),
-                  N_("If this option is enabled, widgets in the main "
-                     "window will be arranged so that they take up the "
-                     "least amount of total screen space. Specifically, "
-                     "the left panel containing the overview, player "
-                     "status, and the unit information box will be "
-                     "extended over the entire left side of the window. "
-                     "This option requires a restart in order to take "
-                     "effect."), COC_INTERFACE, GUI_GTK3x, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_mouse_over_map_focus,
-                  N_("Mouse over the map widget selects it automatically"),
-                  N_("If this option is enabled, then the map will be "
-                     "focused when the mouse hovers over it."),
-                  COC_INTERFACE, GUI_GTK3x, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_gtk4_chatline_autocompletion,
-                  N_("Player or user name autocompletion"),
-                  N_("If this option is turned on, the tabulation key "
-                     "will be used in the chatline to complete the word you "
-                     "are typing with the name of a player or a user."),
-                  COC_INTERFACE, GUI_GTK3x, TRUE, NULL),
-  GEN_INT_OPTION(gui_gtk4_citydlg_xsize,
-                 N_("Width of the city dialog"),
-                 N_("This value is only used if the width of the city "
-                    "dialog is saved."),
-                 COC_INTERFACE, GUI_GTK3x, GUI_GTK4_CITYDLG_DEFAULT_XSIZE,
-                 GUI_GTK4_CITYDLG_MIN_XSIZE, GUI_GTK4_CITYDLG_MAX_XSIZE,
-                 NULL),
-  GEN_INT_OPTION(gui_gtk4_citydlg_ysize,
-                 N_("Height of the city dialog"),
-                 N_("This value is only used if the height of the city "
-                    "dialog is saved."),
-                 COC_INTERFACE, GUI_GTK3x, GUI_GTK4_CITYDLG_DEFAULT_YSIZE,
-                 GUI_GTK4_CITYDLG_MIN_YSIZE, GUI_GTK4_CITYDLG_MAX_YSIZE,
-                 NULL),
-  GEN_ENUM_OPTION(gui_gtk4_popup_tech_help,
-                  N_("Popup tech help when gained"),
-                  N_("Controls if tech help should be opened when "
-                     "new tech has been gained.\n"
-                     "'Ruleset' means that behavior suggested by "
-                     "current ruleset is used."), COC_INTERFACE, GUI_GTK3x,
-                  GUI_POPUP_TECH_HELP_RULESET,
-                  gui_popup_tech_help_name, NULL),
-  GEN_INT_OPTION(gui_gtk4_governor_range_min,
-                 N_("Minimum surplus for a governor"),
-                 N_("The lower limit of the range for requesting surpluses "
-                    "from the governor."),
-                 COC_INTERFACE, GUI_GTK3x, GUI_GTK4_GOV_RANGE_MIN_DEFAULT,
-                 GUI_GTK4_GOV_RANGE_MIN_MIN, GUI_GTK4_GOV_RANGE_MIN_MAX,
-                 NULL),
-  GEN_INT_OPTION(gui_gtk4_governor_range_max,
-                 N_("Maximum surplus for a governor"),
-                 N_("The higher limit of the range for requesting surpluses "
-                    "from the governor."),
-                 COC_INTERFACE, GUI_GTK3x, GUI_GTK4_GOV_RANGE_MAX_DEFAULT,
-                 GUI_GTK4_GOV_RANGE_MAX_MIN, GUI_GTK4_GOV_RANGE_MAX_MAX,
-                 NULL),
-  GEN_FONT_OPTION(gui_gtk4_font_city_label, "city_label",
-                  N_("City Label"),
-                  N_("This font is used to display the city labels on city "
-                     "dialogs."),
-                  COC_FONT, GUI_GTK3x,
-                  "Monospace 8", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_notify_label, "notify_label",
-                  N_("Notify Label"),
-                  N_("This font is used to display server reports such "
-                     "as the demographic report or historian publications."),
-                  COC_FONT, GUI_GTK3x,
-                  "Monospace Bold 9", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_spaceship_label, "spaceship_label",
-                  N_("Spaceship Label"),
-                  N_("This font is used to display the spaceship widgets."),
-                  COC_FONT, GUI_GTK3x,
-                  "Monospace 8", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_help_label, "help_label",
-                  N_("Help Label"),
-                  N_("This font is used to display the help headers in the "
-                     "help window."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans Bold 10", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_help_link, "help_link",
-                  N_("Help Link"),
-                  N_("This font is used to display the help links in the "
-                     "help window."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans 9", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_help_text, "help_text",
-                  N_("Help Text"),
-                  N_("This font is used to display the help body text in "
-                     "the help window."),
-                  COC_FONT, GUI_GTK3x,
-                  "Monospace 8", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_chatline, "chatline",
-                  N_("Chatline Area"),
-                  N_("This font is used to display the text in the "
-                     "chatline area."),
-                  COC_FONT, GUI_GTK3x,
-                  "Monospace 8", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_beta_label, "beta_label",
-                  N_("Beta Label"),
-                  N_("This font is used to display the beta label."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans Italic 10", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_small, "small_font",
-                  N_("Small Font"),
-                  N_("This font is used for any small font request.  For "
-                     "example, it is used for display the building lists "
-                     "in the city dialog, the Economy report or the Units "
-                     "report."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans 9", NULL),
-  GEN_FONT_OPTION(gui_gtk4_font_comment_label, "comment_label",
-                  N_("Comment Label"),
-                  N_("This font is used to display comment labels, such as "
-                     "in the governor page of the city dialogs."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans Italic 9", font_changed_callback),
-  GEN_FONT_OPTION(gui_gtk4_font_city_names, "city_names",
-                  N_("City Names"),
-                  N_("This font is used to the display the city names "
-                     "on the map."),
-                  COC_FONT, GUI_GTK3x,
-                  "Sans Bold 10", NULL),
-  GEN_FONT_OPTION(gui_gtk4_font_city_productions, "city_productions",
-                  N_("City Productions"),
-                  N_("This font is used to the display the city production "
-                     "names on the map."),
-                  COC_FONT, GUI_GTK3x,
-                  "Serif 10", NULL),
-  GEN_FONT_OPTION(gui_gtk4_font_reqtree_text, "reqtree_text",
-                  N_("Requirement Tree"),
-                  N_("This font is used to the display the requirement tree "
-                     "in the Research report."),
-                  COC_FONT, GUI_GTK3x,
-                  "Serif 10", NULL),
-
-  /* gui-sdl client specific options.
-   * These are still kept just so users can migrate them to sdl2-client */
-  GEN_BOOL_OPTION(gui_sdl_fullscreen, NULL, NULL,
                   COC_INTERFACE, GUI_SDL, FALSE, NULL),
-  GEN_VIDEO_OPTION(gui_sdl_screen, NULL, NULL,
-                   COC_INTERFACE, GUI_SDL, 640, 480, NULL),
-  GEN_BOOL_OPTION(gui_sdl_do_cursor_animation, NULL, NULL,
-                  COC_INTERFACE, GUI_SDL, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_sdl_use_color_cursors, NULL, NULL,
-                  COC_INTERFACE, GUI_SDL, TRUE, NULL),
-
-  /* gui-sdl2 client specific options. */
-  GEN_BOOL_OPTION(gui_sdl2_fullscreen, N_("Fullscreen"),
-                  N_("If this option is set the client will use the "
-                     "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_SDL2, FALSE, NULL),
-  GEN_VIDEO_OPTION(gui_sdl2_screen, N_("Screen resolution"),
+  GEN_VIDEO_OPTION(gui_sdl_screen, N_("Screen resolution"),
                    N_("This option controls the resolution of the "
                       "selected screen."),
-                   COC_INTERFACE, GUI_SDL2, 640, 480, NULL),
-  GEN_BOOL_OPTION(gui_sdl2_swrenderer, N_("Use software rendering"),
-                  N_("Usually hardware rendering is used when possible. "
-                     "With this option set, software rendering is always used."),
-                  COC_GRAPHICS, GUI_SDL2, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_sdl2_do_cursor_animation, N_("Do cursor animation"),
+                   COC_INTERFACE, GUI_SDL, 640, 480, NULL),
+  GEN_BOOL_OPTION(gui_sdl_do_cursor_animation, N_("Do cursor animation"),
                   N_("If this option is disabled, the cursor will "
                      "always be displayed as static."),
-                  COC_INTERFACE, GUI_SDL2, TRUE, NULL),
-  GEN_BOOL_OPTION(gui_sdl2_use_color_cursors, N_("Use color cursors"),
+                  COC_INTERFACE, GUI_SDL, TRUE, NULL),
+  GEN_BOOL_OPTION(gui_sdl_use_color_cursors, N_("Use color cursors"),
                   N_("If this option is disabled, the cursor will "
                      "always be displayed in black and white."),
-                  COC_INTERFACE, GUI_SDL2, TRUE, NULL),
+                  COC_INTERFACE, GUI_SDL, TRUE, NULL),
 
   /* gui-qt client specific options. */
-  GEN_BOOL_OPTION(gui_qt_fullscreen, N_("Fullscreen"),
-                  N_("If this option is set the client will use the "
-                     "whole screen area for drawing."),
-                  COC_INTERFACE, GUI_QT, FALSE, NULL),
-  GEN_BOOL_OPTION(gui_qt_show_titlebar, N_("Show titlebar"),
-                  N_("If this option is set the client will show a titlebar. "
-                     "If disabled, then no titlebar will be shown, and "
-                     "minimize/maximize/etc buttons will be placed on the "
-                     "menu bar."),
-                  COC_INTERFACE, GUI_QT, TRUE, NULL),
   GEN_FONT_OPTION(gui_qt_font_city_label, "city_label",
                   N_("City Label"),
                   N_("This font is used to display the city labels on city "
                      "dialogs."),
                   COC_FONT, GUI_QT,
                   "Monospace,8,-1,5,50,0,0,0,0,0", font_changed_callback),
-  GEN_FONT_OPTION(gui_qt_font_default, "default_font",
-                  N_("Default font"),
-                  N_("This is default font"),
-                  COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,75,0,0,0,0,0", font_changed_callback),
   GEN_FONT_OPTION(gui_qt_font_notify_label, "notify_label",
                   N_("Notify Label"),
                   N_("This font is used to display server reports such "
@@ -3157,12 +2690,7 @@ static struct client_option client_options[] = {
                   N_("This font is used to the display the requirement tree "
                      "in the Research report."),
                   COC_FONT, GUI_QT,
-                  "Sans Serif,10,-1,5,50,1,0,0,0,0", NULL),
-  GEN_STR_OPTION(gui_qt_wakeup_text,
-                 N_("Wake up sequence"),
-                 N_("String which will trigger sound in pregame page, "
-                    "%1 stands for nick"),
-                 COC_INTERFACE, GUI_QT, "Wake up %1", NULL, 0)
+                  "Sans Serif,10,-1,5,50,1,0,0,0,0", NULL)
 
 };
 static const int client_options_num = ARRAY_SIZE(client_options);
@@ -3420,7 +2948,7 @@ static const struct strvec *
     client_option_str_values(const struct option *poption)
 {
   return (CLIENT_OPTION(poption)->string.val_accessor
-          ? CLIENT_OPTION(poption)->string.val_accessor(poption) : NULL);
+          ? CLIENT_OPTION(poption)->string.val_accessor() : NULL);
 }
 
 /****************************************************************************
@@ -4892,7 +4420,7 @@ static void message_options_init(void)
     E_LOG_ERROR, E_SETTING, E_VOTE_NEW, E_VOTE_RESOLVED, E_VOTE_ABORTED
   };
   int all[] = {
-    E_LOG_FATAL, E_SCRIPT, E_DEPRECATION_WARNING
+    E_LOG_FATAL, E_SCRIPT
   };
   int i;
 
@@ -5083,36 +4611,28 @@ static void save_cma_presets(struct section_file *file)
   }
 }
 
+
 /* Old rc file name. */
 #define OLD_OPTION_FILE_NAME ".civclientrc"
 /* New rc file name. */
-#define MID_OPTION_FILE_NAME ".freeciv-client-rc-%d.%d"
-#define NEW_OPTION_FILE_NAME "freeciv-client-rc-%d.%d"
-#if MINOR_VERSION >= 90
-#define MAJOR_NEW_OPTION_FILE_NAME (MAJOR_VERSION + 1)
-#define MINOR_NEW_OPTION_FILE_NAME 0
-#else /* MINOR_VERSION < 90 */
+#define NEW_OPTION_FILE_NAME ".freeciv-client-rc-%d.%d"
 #define MAJOR_NEW_OPTION_FILE_NAME MAJOR_VERSION
 #if IS_DEVEL_VERSION && ! IS_FREEZE_VERSION
 #define MINOR_NEW_OPTION_FILE_NAME (MINOR_VERSION + 1)
 #else
 #define MINOR_NEW_OPTION_FILE_NAME MINOR_VERSION
 #endif /* IS_DEVEL_VERSION */
-#endif /* MINOR_VERSION >= 90 */
-/* The first version the new option name appeared (2.6). */
+/* The first version the new option name appeared (2.2). */
 #define FIRST_MAJOR_NEW_OPTION_FILE_NAME 2
-#define FIRST_MINOR_NEW_OPTION_FILE_NAME 6
-/* The first version the mid option name appeared (2.2). */
-#define FIRST_MAJOR_MID_OPTION_FILE_NAME 2
-#define FIRST_MINOR_MID_OPTION_FILE_NAME 2
+#define FIRST_MINOR_NEW_OPTION_FILE_NAME 2
 /* The first version the new boolean values appeared (2.3). */
 #define FIRST_MAJOR_NEW_BOOLEAN 2
 #define FIRST_MINOR_NEW_BOOLEAN 3
 /****************************************************************
   Returns pointer to static memory containing name of the current
   option file.  Usually used for saving.
-  Ie, based on FREECIV_OPT env var, and freeciv storage root dir.
-  (or a OPTION_FILE_NAME define defined in fc_config.h)
+  Ie, based on FREECIV_OPT env var, and home dir. (or a
+  OPTION_FILE_NAME define defined in fc_config.h)
   Or NULL if problem.
 *****************************************************************/
 static const char *get_current_option_file_name(void)
@@ -5128,13 +4648,13 @@ static const char *get_current_option_file_name(void)
 #ifdef OPTION_FILE_NAME
     fc_strlcpy(name_buffer, OPTION_FILE_NAME, sizeof(name_buffer));
 #else
-    name = freeciv_storage_dir();
+    name = user_home_dir();
     if (!name) {
-      log_error(_("Cannot find freeciv storage directory"));
+      log_error(_("Cannot find your home directory"));
       return NULL;
     }
     fc_snprintf(name_buffer, sizeof(name_buffer),
-                "%s" DIR_SEPARATOR NEW_OPTION_FILE_NAME, name,
+                "%s/" NEW_OPTION_FILE_NAME, name,
                 MAJOR_NEW_OPTION_FILE_NAME, MINOR_NEW_OPTION_FILE_NAME);
 #endif /* OPTION_FILE_NAME */
   }
@@ -5154,17 +4674,6 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
 {
   static char name_buffer[256];
   const char *name;
-  static int last_minors[] = {
-    0,  /* There was no 0.x releases */
-    14, /* 1.14 */
-    7   /* 2.7 */
-  };
-
-#if MINOR_VERSION >= 90
-  FC_STATIC_ASSERT(MAJOR_VERSION < sizeof(last_minors) / sizeof(int), missing_last_minor);
-#else
-  FC_STATIC_ASSERT(MAJOR_VERSION <= sizeof(last_minors) / sizeof(int), missing_last_minor);
-#endif
 
   *allow_digital_boolean = FALSE;
   name = getenv("FREECIV_OPT");
@@ -5177,13 +4686,11 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
     int major, minor;
     struct stat buf;
 
-    name = freeciv_storage_dir();
-    if (name == NULL) {
-      log_error(_("Cannot find freeciv storage directory"));
-
+    name = user_home_dir();
+    if (!name) {
+      log_error(_("Cannot find your home directory"));
       return NULL;
     }
-
     for (major = MAJOR_NEW_OPTION_FILE_NAME,
          minor = MINOR_NEW_OPTION_FILE_NAME;
          major >= FIRST_MAJOR_NEW_OPTION_FILE_NAME; major--) {
@@ -5191,7 +4698,7 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
               ? minor >= FIRST_MINOR_NEW_OPTION_FILE_NAME 
               : minor >= 0); minor--) {
         fc_snprintf(name_buffer, sizeof(name_buffer),
-                    "%s" DIR_SEPARATOR NEW_OPTION_FILE_NAME, name, major, minor);
+                    "%s/" NEW_OPTION_FILE_NAME, name, major, minor);
         if (0 == fc_stat(name_buffer, &buf)) {
           if (MAJOR_NEW_OPTION_FILE_NAME != major
               || MINOR_NEW_OPTION_FILE_NAME != minor) {
@@ -5200,46 +4707,19 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
                        get_current_option_file_name() + strlen(name) + 1,
                        name_buffer + strlen(name) + 1);
           }
-
+          if (FIRST_MAJOR_NEW_BOOLEAN > major
+              || (FIRST_MAJOR_NEW_BOOLEAN == major
+                  && FIRST_MINOR_NEW_BOOLEAN > minor)) {
+            *allow_digital_boolean = TRUE;
+          }
           return name_buffer;
         }
       }
-      minor = last_minors[major - 1];
+      minor = 99;       /* Looks enough big. */
     }
-
-    /* Older versions had options file in user home directory */
-    name = user_home_dir();
-    if (name == NULL) {
-      log_error(_("Cannot find your home directory"));
-
-      return NULL;
-    }
-
-    /* minor having max value of FIRST_MINOR_NEW_OPTION_FILE_NAME
-     * works since MID versioning scheme was used within major version 2
-     * only (2.2 - 2.6) so the last minor is bigger than any earlier minor. */
-    for (major = FIRST_MAJOR_MID_OPTION_FILE_NAME,
-         minor = FIRST_MINOR_NEW_OPTION_FILE_NAME ;
-         minor >= FIRST_MINOR_MID_OPTION_FILE_NAME ;
-         minor--) {
-      fc_snprintf(name_buffer, sizeof(name_buffer),
-                  "%s" DIR_SEPARATOR MID_OPTION_FILE_NAME, name, major, minor);
-      if (0 == fc_stat(name_buffer, &buf)) {
-        log_normal(_("Didn't find '%s' option file, "
-                     "loading from '%s' instead."),
-                   get_current_option_file_name() + strlen(name) + 1,
-                   name_buffer + strlen(name) + 1);
-
-        if (FIRST_MINOR_NEW_BOOLEAN > minor) {
-          *allow_digital_boolean = TRUE;
-        }
-        return name_buffer;
-      }
-    }
-
     /* Try with the old one. */
     fc_snprintf(name_buffer, sizeof(name_buffer),
-                "%s" DIR_SEPARATOR OLD_OPTION_FILE_NAME, name);
+                "%s/" OLD_OPTION_FILE_NAME, name);
     if (0 == fc_stat(name_buffer, &buf)) {
       log_normal(_("Didn't find '%s' option file, "
                    "loading from '%s' instead."),
@@ -5256,12 +4736,10 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
   return name_buffer;
 }
 #undef OLD_OPTION_FILE_NAME
-#undef MID_OPTION_FILE_NAME
 #undef NEW_OPTION_FILE_NAME
 #undef FIRST_MAJOR_NEW_OPTION_FILE_NAME
 #undef FIRST_MINOR_NEW_OPTION_FILE_NAME
-#undef FIRST_MAJOR_MID_OPTION_FILE_NAME
-#undef FIRST_MINOR_MID_OPTION_FILE_NAME
+#undef FIRST_MAJOR_NEW_BOOLEAN
 #undef FIRST_MINOR_NEW_BOOLEAN
 
 
@@ -5269,8 +4747,14 @@ static const char *get_last_option_file_name(bool *allow_digital_boolean)
   Desired settable options.
 ****************************************************************************/
 #define SPECHASH_TAG settable_options
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_ASTR_DATA_TYPE
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE char *
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
+#define SPECHASH_DATA_COPY genhash_str_copy_func
+#define SPECHASH_DATA_FREE genhash_str_free_func
 #include "spechash.h"
 #define settable_options_hash_iterate(hash, name, value)                    \
   TYPED_HASH_ITERATE(const char *, const char *, hash, name, value)
@@ -5320,11 +4804,6 @@ static void settable_options_load(struct section_file *sf)
 
     case ENTRY_STR:
       (void) entry_str_get(pentry, &string);
-      break;
-
-    case ENTRY_FLOAT:
-    case ENTRY_FILEREFERENCE:
-      /* Not supported yet */
       break;
     }
 
@@ -5570,10 +5049,14 @@ static void desired_settable_option_send(struct option *poption)
   City and player report dialog options.
 ****************************************************************************/
 #define SPECHASH_TAG dialog_options
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE bool
-#define SPECHASH_UDATA_TO_IDATA FC_INT_TO_PTR
-#define SPECHASH_IDATA_TO_UDATA FC_PTR_TO_INT
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE bool
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
+#define SPECHASH_DATA_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_DATA FC_PTR_TO_INT
 #include "spechash.h"
 #define dialog_options_hash_iterate(hash, column, visible)                  \
   TYPED_HASH_ITERATE(const char *, intptr_t, hash, column, visible)
@@ -5696,16 +5179,13 @@ void options_load(void)
   bool allow_digital_boolean;
   int i, num;
   const char *name;
-  const char *const prefix = "client";
-  const char *str;
+  const char * const prefix = "client";
 
   name = get_last_option_file_name(&allow_digital_boolean);
   if (!name) {
     log_normal(_("Didn't find the option file. Creating a new one."));
-    client_option_adjust_defaults();
     options_fully_initialized = TRUE;
     create_default_cma_presets();
-    gui_options.first_boot = TRUE;
     return;
   }
   if (!(sf = secfile_load(name, TRUE))) {
@@ -5733,45 +5213,17 @@ void options_load(void)
   sz_strlcpy(password,
              secfile_lookup_str_default(sf, "", "%s.password", prefix));
 
-  gui_options.save_options_on_exit =
-    secfile_lookup_bool_default(sf, gui_options.save_options_on_exit,
+  save_options_on_exit =
+    secfile_lookup_bool_default(sf, save_options_on_exit,
                                 "%s.save_options_on_exit", prefix);
-  gui_options.migrate_fullscreen =
-    secfile_lookup_bool_default(sf, gui_options.migrate_fullscreen,
+  fullscreen_mode =
+    secfile_lookup_bool_default(sf, fullscreen_mode,
                                 "%s.fullscreen_mode", prefix);
 
   /* Settings migrations */
-  gui_options.gui_gtk3_migrated_from_gtk2 =
-    secfile_lookup_bool_default(sf, gui_options.gui_gtk3_migrated_from_gtk2,
+  gui_gtk3_migrated_from_gtk2 =
+    secfile_lookup_bool_default(sf, gui_gtk3_migrated_from_gtk2,
                                 "%s.migration_gtk3_from_gtk2", prefix);
-  gui_options.gui_gtk4_migrated_from_gtk3 =
-    secfile_lookup_bool_default(sf, gui_options.gui_gtk4_migrated_from_gtk3,
-                                "%s.migration_gtk4_from_gtk3", prefix);
-  gui_options.gui_sdl2_migrated_from_sdl =
-    secfile_lookup_bool_default(sf, gui_options.gui_sdl2_migrated_from_sdl,
-                                "%s.migration_sdl2_from_sdl", prefix);
-  gui_options.gui_gtk2_migrated_from_2_5 =
-    secfile_lookup_bool_default(sf, gui_options.gui_gtk3_migrated_from_2_5,
-                                "%s.migration_gtk2_from_2_5", prefix);
-  gui_options.gui_gtk3_migrated_from_2_5 =
-    secfile_lookup_bool_default(sf, gui_options.gui_gtk2_migrated_from_2_5,
-                                "%s.migration_gtk3_from_2_5", prefix);
-  gui_options.gui_qt_migrated_from_2_5 =
-    secfile_lookup_bool_default(sf, gui_options.gui_qt_migrated_from_2_5,
-                                "%s.migration_qt_from_2_5", prefix);
-
-  /* These are not gui-enabled yet */
-  gui_options.zoom_set =
-    secfile_lookup_bool_default(sf, FALSE, "%s.zoom_set", prefix);
-  gui_options.zoom_default_level =
-    secfile_lookup_float_default(sf, 1.0,
-                                 "%s.zoom_default_level", prefix);
-
-  str = secfile_lookup_str_default(sf, NULL, "client.default_tileset_name");
-  if (str != NULL) {
-    strncpy(gui_options.default_tileset_name, str,
-            sizeof(gui_options.default_tileset_name));
-  }
 
   /* Backwards compatibility for removed options replaced by entirely "new"
    * options. The equivalent "new" option will override these, if set. */
@@ -5784,18 +5236,14 @@ void options_load(void)
    * migrate_options_from_gtk2() if necessary. */
   if (secfile_lookup_bool_default(sf, FALSE,
                                   "%s.gui_gtk2_merge_notebooks", prefix)) {
-    gui_options.gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_MERGED;
+    gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_MERGED;
   } else if (secfile_lookup_bool_default(sf, FALSE,
                                          "%s.gui_gtk2_split_bottom_notebook",
                                          prefix)) {
-    gui_options.gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_SPLIT;
+    gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_SPLIT;
   } else {
-    gui_options.gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_SEPARATE;
+    gui_gtk2_message_chat_location = GUI_GTK_MSGCHAT_SEPARATE;
   }
-
-  /* Renamed in 2.6 */
-  gui_options.popup_actor_arrival = secfile_lookup_bool_default(sf, TRUE,
-      "%s.popup_caravan_arrival", prefix);
 
   /* Load all the regular options */
   client_options_iterate_all(poption) {
@@ -5809,7 +5257,7 @@ void options_load(void)
   /* Removed in 2.4 */
   if (!secfile_lookup_bool_default(sf, TRUE,
                                    "%s.do_combat_animation", prefix)) {
-    gui_options.smooth_combat_step_msec = 0;
+    smooth_combat_step_msec = 0;
   }
 
   message_options_load(sf, prefix);
@@ -5852,8 +5300,6 @@ void options_save(option_save_log_callback log_cb)
 {
   struct section_file *sf;
   const char *name = get_current_option_file_name();
-  char dir_name[2048];
-  int i;
 
   if (log_cb == NULL) {
     /* Default callback */
@@ -5868,43 +5314,16 @@ void options_save(option_save_log_callback log_cb)
   sf = secfile_new(TRUE);
   secfile_insert_str(sf, VERSION_STRING, "client.version");
 
-  secfile_insert_bool(sf, gui_options.save_options_on_exit,
-                      "client.save_options_on_exit");
-  secfile_insert_bool_comment(sf, gui_options.migrate_fullscreen,
-                              "deprecated", "client.fullscreen_mode");
+  secfile_insert_bool(sf, save_options_on_exit, "client.save_options_on_exit");
+  secfile_insert_bool(sf, fullscreen_mode, "client.fullscreen_mode");
 
   /* Migrations */
-  secfile_insert_bool(sf, gui_options.gui_gtk3_migrated_from_gtk2,
+  secfile_insert_bool(sf, gui_gtk3_migrated_from_gtk2,
                       "client.migration_gtk3_from_gtk2");
-  secfile_insert_bool(sf, gui_options.gui_gtk4_migrated_from_gtk3,
-                      "client.migration_gtk4_from_gtk3");
-  secfile_insert_bool(sf, gui_options.gui_sdl2_migrated_from_sdl,
-                      "client.migration_sdl2_from_sdl");
-  secfile_insert_bool(sf, gui_options.gui_gtk2_migrated_from_2_5,
-                      "client.migration_gtk2_from_2_5");
-  secfile_insert_bool(sf, gui_options.gui_gtk3_migrated_from_2_5,
-                      "client.migration_gtk3_from_2_5");
-  secfile_insert_bool(sf, gui_options.gui_qt_migrated_from_2_5,
-                      "client.migration_qt_from_2_5");
 
-  /* gui-enabled options */
   client_options_iterate_all(poption) {
-    if (client_poption->specific != GUI_SDL || !gui_options.gui_sdl2_migrated_from_sdl) {
-      /* Once sdl-client options have been migrated to sdl2-client, there's no
-       * use for them any more, so no point in saving them. */
-      client_option_save(poption, sf);
-    }
+    client_option_save(poption, sf);
   } client_options_iterate_all_end;
-
-  /* These are not gui-enabled yet. */
-  secfile_insert_bool(sf, gui_options.zoom_set, "client.zoom_set");
-  secfile_insert_float(sf, gui_options.zoom_default_level,
-                       "client.zoom_default_level");
-
-  if (gui_options.default_tileset_name[0] != '\0') {
-    secfile_insert_str(sf, gui_options.default_tileset_name,
-                       "client.default_tileset_name");
-  }
 
   message_options_save(sf, "client");
   options_dialogs_save(sf);
@@ -5915,16 +5334,6 @@ void options_save(option_save_log_callback log_cb)
 
   /* insert global worklists */
   global_worklists_save(sf);
-
-  /* Directory name */
-  strncpy(dir_name, name, sizeof(dir_name));
-  for (i = strlen(dir_name) - 1 ; dir_name[i] != DIR_SEPARATOR_CHAR && i >= 0; i--) {
-    /* Nothing */
-  }
-  if (i > 0) {
-    dir_name[i] = '\0';
-    make_dir(dir_name);
-  }
 
   /* save to disk */
   if (!secfile_save(sf, name, 0, FZ_PLAIN)) {
@@ -5959,7 +5368,7 @@ static void options_init_names(const struct copt_val_name *(*acc)(int),
 void options_init(void)
 {
   message_options_init();
-  options_extra_init();
+  gui_options_extra_init();
   global_worklists_init();
 
   settable_options_hash = settable_options_hash_new();
@@ -5986,10 +5395,10 @@ void options_init(void)
       break;
 
     case OT_STRING:
-      if (gui_options.default_user_name == option_str_get(poption)) {
+      if (default_user_name == option_str_get(poption)) {
         /* Hack to get a default value. */
         *((const char **) &(pcoption->string.def)) =
-            fc_strdup(gui_options.default_user_name);
+            fc_strdup(default_user_name);
       }
 
       if (NULL == option_str_def(poption)) {
@@ -6141,148 +5550,11 @@ static void font_changed_callback(struct option *poption)
 static void mapimg_changed_callback(struct option *poption)
 {
   if (!mapimg_client_define()) {
-    bool success;
-
     log_normal("Error setting the value for %s (%s). Restoring the default "
                "value.", option_name(poption), mapimg_error());
 
     /* Reset the value to the default value. */
-    success = option_reset(poption);
-    fc_assert_msg(success == TRUE,
-                  "Failed to reset the option \"%s\".",
-                  option_name(poption));
-    success = mapimg_client_define();
-    fc_assert_msg(success == TRUE,
-                  "Failed to restore mapimg definition for option \"%s\".",
-                  option_name(poption));
+    fc_assert_ret(TRUE == option_reset(poption));
+    fc_assert_ret(TRUE == mapimg_client_define());
   }
-}
-
-/****************************************************************************
-  Callback for music enabling option.
-****************************************************************************/
-static void game_music_enable_callback(struct option *poption)
-{
-  if (client_state() == C_S_RUNNING) {
-    if (gui_options.sound_enable_game_music) {
-      start_style_music();
-    } else {
-      stop_style_music();
-    }
-  }
-}
-
-/****************************************************************************
-  Callback for music enabling option.
-****************************************************************************/
-static void menu_music_enable_callback(struct option *poption)
-{
-  if (client_state() != C_S_RUNNING) {
-    if (gui_options.sound_enable_menu_music) {
-      start_menu_music("music_start", NULL);
-    } else {
-      stop_menu_music();
-    }
-  }
-}
-
-/****************************************************************************
-  Make dynamic adjustments to first-launch default options.
-****************************************************************************/
-static void client_option_adjust_defaults(void)
-{
-  adjust_default_options();
-}
-
-/****************************************************************************
-  Convert a video mode to string. Returns TRUE on success.
-****************************************************************************/
-bool video_mode_to_string(char *buf, size_t buf_len, struct video_mode *mode)
-{
-  return (2 < fc_snprintf(buf, buf_len, "%dx%d", mode->width, mode->height));
-}
-
-/****************************************************************************
-  Convert a string to video mode. Returns TRUE on success.
-****************************************************************************/
-bool string_to_video_mode(const char *buf, struct video_mode *mode)
-{
-  return (2 == sscanf(buf, "%dx%d", &mode->width, &mode->height));
-}
-
-/****************************************************************************
-  Option framework wrapper for mapimg_get_format_list()
-****************************************************************************/
-static const struct strvec *get_mapimg_format_list(const struct option *poption)
-{
-  return mapimg_get_format_list();
-}
-
-/****************************************************************************
-  What is the user defined tileset for the given topology
-****************************************************************************/
-const char *tileset_name_for_topology(int topology_id)
-{
-  const char *tsn = NULL;
-  
-  switch (topology_id & (TF_ISO | TF_HEX)) {
-  case 0:
-    tsn = gui_options.default_tileset_overhead_name;
-    break;
-  case TF_ISO:
-    tsn = gui_options.default_tileset_iso_name;
-    break;
-  case TF_HEX:
-    tsn = gui_options.default_tileset_hex_name;
-    break;
-  case TF_ISO | TF_HEX:
-    tsn = gui_options.default_tileset_isohex_name;
-    break;
-  }
-
-  if (tsn == NULL) {
-    tsn = gui_options.default_tileset_name;
-  }
-
-  return tsn;
-}
-
-/****************************************************************************
-  Set given tileset as the default for suitable topology
-****************************************************************************/
-void option_set_default_ts(struct tileset *t)
-{
-  const char *optname = "<not set>";
-  struct option *opt;
-
-  switch (tileset_topo_index(t)) {
-  case TS_TOPO_OVERHEAD:
-    /* Overhead */
-    optname = "default_tileset_overhead_name";
-    break;
-  case TS_TOPO_ISO:
-    /* Iso */
-    optname = "default_tileset_iso_name";
-    break;
-  case TS_TOPO_HEX:
-    /* Hex */
-    optname = "default_tileset_hex_name";
-    break;
-  case TS_TOPO_ISOHEX:
-    /* Isohex */
-    optname = "default_tileset_isohex_name";
-    break;
-  }
-
-  opt = optset_option_by_name(client_optset, optname);
-
-  if (opt == NULL) {
-    log_error("Unknown option name \"%s\" in option_set_default_ts()", optname);
-    return;
-  }
-
-  /* Do not call option_str_set() since we don't want option changed callback
-   * to reload this tileset. */
-  opt->str_vtable->set(opt, tileset_basename(t));
-  option_gui_update(opt);
 }

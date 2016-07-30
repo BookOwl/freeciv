@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ void caravan_parameter_init_default(struct caravan_parameter *parameter)
   parameter->consider_trade = TRUE;
   parameter->consider_wonders = TRUE; /* see also init_from_unit */
   parameter->account_for_broken_routes = TRUE;
-  parameter->allow_foreign_trade = FTL_NATIONAL_ONLY;
+  parameter->allow_foreign_trade = FALSE;
   parameter->ignore_transit_time = FALSE;
   parameter->convert_trade = FALSE;
   parameter->callback = NULL;
@@ -54,14 +54,11 @@ void caravan_parameter_init_from_unit(struct caravan_parameter *parameter,
                                       const struct unit *caravan)
 {
   caravan_parameter_init_default(parameter);
-  if (!unit_can_do_action(caravan, ACTION_TRADE_ROUTE)) {
+  if (!unit_has_type_flag(caravan, UTYF_TRADE_ROUTE)) {
+    parameter->consider_windfall = FALSE;
     parameter->consider_trade = FALSE;
   }
-  if (!unit_can_do_action(caravan, ACTION_MARKETPLACE)
-      && !unit_can_do_action(caravan, ACTION_TRADE_ROUTE)) {
-    parameter->consider_windfall = FALSE;
-  }
-  if (!unit_can_do_action(caravan, ACTION_HELP_WONDER)) {
+  if (!unit_has_type_flag(caravan, UTYF_HELP_WONDER)) {
     parameter->consider_wonders = FALSE;
   }
 }
@@ -95,23 +92,6 @@ void caravan_parameter_log_real(const struct caravan_parameter *parameter,
                                 enum log_level level, const char *file,
                                 const char *function, int line)
 {
-  const char *foreign = "<illegal>";
-
-  switch (parameter->allow_foreign_trade) {
-  case FTL_NATIONAL_ONLY:
-    foreign = "no";
-    break;
-  case FTL_ALLIED:
-    foreign = "allied";
-    break;
-  case FTL_PEACEFUL:
-    foreign = "peaceful";
-    break;
-  case FTL_NONWAR:
-    foreign = "anything but enemies";
-    break;
-  }
-
   do_log(file, function, line, FALSE, level,
          "parameter {\n"
          "  horizon   = %d\n"
@@ -128,7 +108,7 @@ void caravan_parameter_log_real(const struct caravan_parameter *parameter,
          parameter->consider_trade ? "trade" : "-",
          parameter->consider_wonders ? "wonders" : "-",
          parameter->account_for_broken_routes ? "yes" : "no",
-         foreign,
+         parameter->allow_foreign_trade ? "yes" : "no",
          parameter->ignore_transit_time ? "yes" : "no",
          parameter->convert_trade ? "yes" : "no");
 }
@@ -203,7 +183,6 @@ static void caravan_search_from(const struct unit *caravan,
                                 const struct caravan_parameter *param,
                                 struct tile *start_tile,
                                 int turns_before, int moves_left_before,
-                                bool omniscient,
                                 search_callback callback,
                                 void *callback_data) {
   struct pf_map *pfm;
@@ -216,7 +195,6 @@ static void caravan_search_from(const struct unit *caravan,
   pft_fill_unit_parameter(&pfparam, (struct unit *) caravan);
   pfparam.start_tile = start_tile;
   pfparam.moves_left_initially = moves_left_before;
-  pfparam.omniscience = omniscient;
   pfm = pf_map_new(&pfparam);
 
   /* For every tile in distance order:
@@ -249,18 +227,22 @@ static void caravan_search_from(const struct unit *caravan,
   When the caravan arrives, compute the benefit from the immediate windfall,
   taking into account the parameter's objective.
  ***************************************************************************/
-static double windfall_benefit(const struct unit *caravan,
-                               const struct city *src,
+static double windfall_benefit(const struct city *src,
                                const struct city *dest,
                                const struct caravan_parameter *param) {
   if (!param->consider_windfall || !can_cities_trade(src, dest)) {
     return 0;
   }
   else {
-    bool can_establish = (unit_can_do_action(caravan, ACTION_TRADE_ROUTE)
-                          && can_establish_trade_route(src, dest));
-    int bonus = get_caravan_enter_city_trade_bonus(src, dest,
-                                                   can_establish);
+    int bonus = get_caravan_enter_city_trade_bonus(src, dest);
+    bool can_establish = can_establish_trade_route(src, dest);
+
+    /* we get the full bonus only if this is a new trade route.
+     * Really, g_c_e_c_t_b should compute this.  I copy from unithand.c */
+    if (!can_establish) {
+      bonus += 2;
+      bonus /= 3;
+    }
 
     /* bonus goes to both sci and gold. */
     bonus *= 2;
@@ -292,7 +274,7 @@ static int one_city_trade_benefit(const struct city *pcity,
     /* if the city can handle this route, we don't break any old routes */
     losttrade = 0;
   } else {
-    struct trade_route_list *would_remove = (countloser ? trade_route_list_new() : NULL);
+    struct city_list *would_remove = (countloser ? city_list_new() : NULL);
     int oldtrade = city_trade_removable(pcity, would_remove);
 
     /* if we own the city, the trade benefit is only by how much
@@ -304,18 +286,18 @@ static int one_city_trade_benefit(const struct city *pcity,
     /* if the cities that lost a trade route is one of ours, and if we
        care about accounting for the lost trade, count it. */
     if (countloser) {
-      trade_route_list_iterate(would_remove, plost) {
-        struct city *losercity = game_city_by_number(plost->partner);
-
+      city_list_iterate(would_remove, losercity) {
         if (city_owner(losercity) == pplayer) {
-          trade_routes_iterate(losercity, pback) {
-            if (pback->partner == pcity->id) {
-              losttrade += pback->value;
+          int i;
+
+          for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+            if (losercity->trade[i] == pcity->id) {
+              losttrade += losercity->trade_value[i];
             }
-          } trade_routes_iterate_end;
+          }
         }
-      } trade_route_list_iterate_end;
-      trade_route_list_destroy(would_remove);
+      } city_list_iterate_end;
+      city_list_destroy(would_remove);
     }
   }
 
@@ -371,19 +353,13 @@ static double trade_benefit(const struct player *caravan_owner,
  ***************************************************************************/
 static double wonder_benefit(const struct unit *caravan, int arrival_time,
                              const struct city *dest,
-                             const struct caravan_parameter *param)
-{
+                             const struct caravan_parameter *param) {
   int costwithout, costwith;
   int shields_at_arrival;
 
   if (!param->consider_wonders
-      /* TODO: Should helping an ally to build be considered when legal? */
       || unit_owner(caravan) != city_owner(dest)
-      || !city_production_gets_caravan_shields(&dest->production)
-      /* TODO: Should helping to build a unit be considered when legal? */
       || VUT_UTYPE == dest->production.kind
-      /* TODO: Should helping to build an improvement be considered when
-       * legal? */
       || !is_wonder(dest->production.value.building)) {
     return 0;
   }
@@ -428,36 +404,12 @@ static double annuity(double payment, int term, double rate)
 }
 
 /***************************************************************************
-  Are the two players allowed to trade by the parameter settings?
-***************************************************************************/
-static bool does_foreign_trade_param_allow(const struct caravan_parameter *param,
-                                           struct player *src, struct player *dest)
-{
-  switch (param->allow_foreign_trade) {
-    case FTL_NATIONAL_ONLY:
-      return (src == dest);
-      break;
-    case FTL_ALLIED:
-      return pplayers_allied(src, dest);
-      break;
-    case FTL_PEACEFUL:
-      return pplayers_in_peace(src, dest);
-      break;
-    case FTL_NONWAR:
-      return !pplayers_at_war(src, dest);
-  }
-
-  fc_assert(FALSE);
-  return FALSE;
-}
-
-/***************************************************************************
   Compute the discounted reward from the trade route that is indicated
   by the src, dest, and arrival_time fields of the result:  Fills in
   the value and help_wonder fields.
   Assumes the owner of src is the owner of the caravan.
  ***************************************************************************/
-static bool get_discounted_reward(const struct unit *caravan,
+static void get_discounted_reward(const struct unit *caravan,
                                   const struct caravan_parameter *parameter,
                                   struct caravan_result *result)
 {
@@ -470,35 +422,23 @@ static bool get_discounted_reward(const struct unit *caravan,
   double discount = parameter->discount;
   struct player *pplayer_src = city_owner(src);
   struct player *pplayer_dest = city_owner(dest);
-
+  
   /* if no foreign trade is allowed, just quit. */
-  if (!does_foreign_trade_param_allow(parameter, pplayer_src, pplayer_dest)) {
+  if (!parameter->allow_foreign_trade && pplayer_src != pplayer_dest) {
     caravan_result_init_zero(result);
-    return FALSE;
-  }
-
-  /* Make sure that the caravan gets a new target in cases were the old
-   * target turned out to be of no use because of action enablers. */
-  if (real_map_distance(dest->tile, unit_tile(caravan)) <= 1) {
-    /* The caravan is close enought to its target to do a full check.
-     * A caravan can be close enough to max 9 cities in the worst
-     * theoretically possible case. (More than one city is rare.) The
-     * computations are therefore worth it. */
-
-    if (!(is_action_enabled_unit_on_city(ACTION_HELP_WONDER,
-                                         caravan, dest)
-          || is_action_enabled_unit_on_city(ACTION_TRADE_ROUTE,
-                                            caravan, dest)
-          || is_action_enabled_unit_on_city(ACTION_MARKETPLACE,
-                                            caravan, dest))) {
-      /* No caravan action is possible against this target. */
+    return;
+  } else {
+    /* foreign trade allowed, we only do business with allies */
+    if (pplayers_allied(pplayer_src, pplayer_dest)) {
+      /* do some business */
+    } else {
       caravan_result_init_zero(result);
-      return FALSE;
+      return;
     }
   }
-
+  
   trade = trade_benefit(pplayer_src, src, dest, parameter);
-  windfall = windfall_benefit(caravan, src, dest, parameter);
+  windfall = windfall_benefit(src, dest, parameter);
   wonder = wonder_benefit(caravan, arrival_time, dest, parameter);
   /* we want to aid for wonder building */
   wonder *= 2;
@@ -512,7 +452,7 @@ static bool get_discounted_reward(const struct unit *caravan,
   windfall = presentvalue(windfall, arrival_time, discount);
   wonder = presentvalue(wonder, arrival_time, discount);
 
-  if (trade + windfall >= wonder) {
+  if(trade + windfall >= wonder) {
     result->value = trade + windfall;
     result->help_wonder = FALSE;
   } else {
@@ -523,8 +463,6 @@ static bool get_discounted_reward(const struct unit *caravan,
   if (parameter->callback) {
     parameter->callback(result, parameter->callback_data);
   }
-
-  return TRUE;
 }
 
 /***************************************************************************
@@ -546,6 +484,7 @@ static void caravan_evaluate_notransit(const struct unit *caravan,
   get_discounted_reward(caravan, param, result);
 }
 
+
 /***************************************************************************
   Structure and callback for the caravan_search invocation in
   caravan_evaluate_withtransit.
@@ -557,15 +496,15 @@ struct cewt_data {
 };
 
 static bool cewt_callback(void *vdata, const struct city *dest,
-                          int arrival_time, int moves_left)
-{
+                          int arrival_time, int moves_left) {
   struct cewt_data *data = vdata;
 
-  if (dest == data->result->dest) {
+  if(dest == data->result->dest) {
     data->result->arrival_time = arrival_time;
     get_discounted_reward(data->caravan, data->param, data->result);
     return TRUE;
-  } else {
+  }
+  else {
     return FALSE;
   }
 }
@@ -577,8 +516,7 @@ static bool cewt_callback(void *vdata, const struct city *dest,
 static void caravan_evaluate_withtransit(const struct unit *caravan,
                                          const struct city *dest,
                                          const struct caravan_parameter *param,
-                                         struct caravan_result *result,
-                                         bool omniscient)
+                                         struct caravan_result *result)
 {
   struct cewt_data data;
 
@@ -587,7 +525,7 @@ static void caravan_evaluate_withtransit(const struct unit *caravan,
   caravan_result_init(result, game_city_by_number(caravan->homecity),
                       dest, 0);
   caravan_search_from(caravan, param, unit_tile(caravan), 0,
-                      caravan->moves_left, omniscient, cewt_callback, &data);
+                      caravan->moves_left, cewt_callback, &data);
 }
 
 
@@ -597,12 +535,12 @@ static void caravan_evaluate_withtransit(const struct unit *caravan,
 void caravan_evaluate(const struct unit *caravan,
                       const struct city *dest,
                       const struct caravan_parameter *param,
-                      struct caravan_result *result, bool omniscient)
+                      struct caravan_result *result)
 {
   if (param->ignore_transit_time) {
     caravan_evaluate_notransit(caravan, dest, param, result);
   } else {
-    caravan_evaluate_withtransit(caravan, dest, param, result, omniscient);
+    caravan_evaluate_withtransit(caravan, dest, param, result);
   }
 }
 
@@ -616,23 +554,18 @@ static void caravan_find_best_destination_notransit(const struct unit *caravan,
 {
   struct caravan_result current;
   struct city *pcity = game_city_by_number(caravan->homecity);
-  struct player *src_owner = city_owner(pcity);
-
+  
   caravan_result_init(best, pcity, NULL, 0);
   current = *best;
-
-  players_iterate(dest_owner) {
-    if (does_foreign_trade_param_allow(param, src_owner, dest_owner)) {
-      city_list_iterate(dest_owner->cities, dest) {
-        caravan_result_init(&current, pcity, dest, 0);
-        get_discounted_reward(caravan, param, &current);
-
-        if (caravan_result_compare(&current, best) > 0) {
-          *best = current;
-        }
-      } city_list_iterate_end;
+  
+  cities_iterate(dest) {
+    caravan_result_init(&current, pcity, dest, 0);
+    get_discounted_reward(caravan, param, &current);
+    
+    if (caravan_result_compare(&current, best) > 0) {
+      *best = current;
     }
-  } players_iterate_end;
+  } cities_iterate_end;
 }
 
 /***************************************************************************
@@ -669,7 +602,6 @@ static void caravan_find_best_destination_withtransit(
     const struct city *src,
     int turns_before,
     int moves_left,
-    bool omniscient,
     struct caravan_result *result) 
 {
   struct tile *start_tile;
@@ -687,7 +619,7 @@ static void caravan_find_best_destination_withtransit(
   }
 
   caravan_search_from(caravan, param, start_tile, turns_before,
-                      caravan->moves_left, omniscient, cfbdw_callback, &data);
+                      caravan->moves_left, cfbdw_callback, &data);
 }
 
 
@@ -698,7 +630,7 @@ static void caravan_find_best_destination_withtransit(
  ***************************************************************************/
 void caravan_find_best_destination(const struct unit *caravan,
                                    const struct caravan_parameter *parameter,
-                                   struct caravan_result *result, bool omniscient)
+                                   struct caravan_result *result)
 {
   if (parameter->ignore_transit_time) {
     caravan_find_best_destination_notransit(caravan, parameter, result);
@@ -708,9 +640,11 @@ void caravan_find_best_destination(const struct unit *caravan,
     fc_assert(src != NULL);
 
     caravan_find_best_destination_withtransit(caravan, parameter, src, 0, 
-                                              caravan->moves_left, omniscient, result);
+                                              caravan->moves_left, result);
   }
 }
+
+
 
 /***************************************************************************
   Find the best pair-wise trade route, ignoring transit time.
@@ -719,25 +653,21 @@ static void caravan_optimize_notransit(const struct unit *caravan,
                                        const struct caravan_parameter *param,
                                        struct caravan_result *best)
 {
-  struct player *pplayer = unit_owner(caravan);
+  struct player *player = unit_owner(caravan);
 
   /* Iterate over all cities we own (since the caravan could change its
    * home city); iterate over all cities we know about (places the caravan
    * can go to); pick out the best trade route. */
-  city_list_iterate(pplayer->cities, src) {
-    players_iterate(dest_owner) {
-      if (does_foreign_trade_param_allow(param, pplayer, dest_owner)) {
-        city_list_iterate(dest_owner->cities, dest) {
-          struct caravan_result current;
+  city_list_iterate(player->cities, src) {
+    cities_iterate(dest) {
+      struct caravan_result current;
 
-          caravan_result_init(&current, src, dest, 0);
-          get_discounted_reward(caravan, param, &current);
-          if (caravan_result_compare(&current, best) > 0) {
-            *best = current;
-          }
-        } city_list_iterate_end;
+      caravan_result_init(&current, src, dest, 0);
+      get_discounted_reward(caravan, param, &current);
+      if (caravan_result_compare(&current, best) > 0) {
+        *best = current;
       }
-    } players_iterate_end;
+    } cities_iterate_end;
   } city_list_iterate_end;
 }
 
@@ -753,7 +683,6 @@ struct cowt_data {
   const struct caravan_parameter *param;
   const struct unit *caravan;
   struct caravan_result *best;
-  bool omniscient;
 };
 
 static bool cowt_callback(void *vdata, const struct city *pcity,
@@ -774,8 +703,7 @@ static bool cowt_callback(void *vdata, const struct city *pcity,
   /* next, try changing home city (if we're allowed to) */
   if (city_owner(pcity) == unit_owner(caravan)) {
     caravan_find_best_destination_withtransit(
-                caravan, data->param, pcity, arrival_time, moves_left, data->omniscient,
-                &current);
+        caravan, data->param, pcity, arrival_time, moves_left, &current);
     if (caravan_result_compare(&current, data->best) > 0) {
       *data->best = current;
     }
@@ -790,17 +718,16 @@ static bool cowt_callback(void *vdata, const struct city *pcity,
  ***************************************************************************/
 static void caravan_optimize_withtransit(const struct unit *caravan,
                                         const struct caravan_parameter *param,
-                                         struct caravan_result *result, bool omniscient)
+                                        struct caravan_result *result)
 {
   struct cowt_data data;
 
   data.param = param;
   data.caravan = caravan;
   data.best = result;
-  data.omniscient = omniscient;
   caravan_result_init_zero(data.best);
   caravan_search_from(caravan, param, unit_tile(caravan), 0,
-                      caravan->moves_left, omniscient, cowt_callback, &data);
+                      caravan->moves_left, cowt_callback, &data);
 }
 
 
@@ -811,11 +738,11 @@ static void caravan_optimize_withtransit(const struct unit *caravan,
  ***************************************************************************/
 void caravan_optimize_allpairs(const struct unit *caravan,
                                const struct caravan_parameter *param,
-                               struct caravan_result *result, bool omniscient)
+                               struct caravan_result *result)
 {
   if (param->ignore_transit_time) {
     caravan_optimize_notransit(caravan, param, result);
   } else {
-    caravan_optimize_withtransit(caravan, param, result, omniscient);
+    caravan_optimize_withtransit(caravan, param, result);
   }
 }

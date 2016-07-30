@@ -6,7 +6,7 @@
 #
 #  #define PRINTF(msg, ...) (printf(msg, __VA_ARGS__)
 #
-AC_DEFUN([FC_C99_VARIADIC_MACROS],
+AC_DEFUN([AC_C99_VARIADIC_MACROS],
 [
   dnl Check for variadic macros
   AC_CACHE_CHECK([for C99 variadic macros],
@@ -21,6 +21,26 @@ AC_DEFUN([FC_C99_VARIADIC_MACROS],
   fi
 ])
 
+# Check C99-style variable-sized arrays (required):
+#
+#   char concat_str[strlen(s1) + strlen(s2) + 1];
+#
+AC_DEFUN([AC_C99_VARIABLE_ARRAYS],
+[
+  dnl Check for variable arrays
+  AC_CACHE_CHECK([for C99 variable arrays],
+    [ac_cv_c99_variable_arrays],
+    [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <string.h>
+#include <stdio.h>
+]], [[char *s1 = "foo", *s2 = "bar";
+         char s3[strlen(s1) + strlen(s2) + 1];
+         sprintf(s3, "%s%s", s1, s2);]])],[ac_cv_c99_variable_arrays=yes],[ac_cv_c99_variable_arrays=no])])
+  if test "x${ac_cv_c99_variable_arrays}" != "xyes"; then
+    AC_MSG_ERROR([A compiler supporting C99 variable arrays is required])
+  fi
+])
+
 # Check C99-style initializers (required):
 #
 # Examples:
@@ -31,7 +51,7 @@ AC_DEFUN([FC_C99_VARIADIC_MACROS],
 # which are not supported by many compilers.  It is best to avoid this
 # problem by writing these using nesting.  The above case becomes
 #   struct { struct { int b; } a; } = {.a = {.b = 5}}
-AC_DEFUN([FC_C99_INITIALIZERS],
+AC_DEFUN([AC_C99_INITIALIZERS],
 [
   dnl Check for C99 initializers
   AC_CACHE_CHECK([for C99 initializers],
@@ -52,7 +72,7 @@ AC_DEFUN([FC_C99_INITIALIZERS],
 ])
 
 # Check C99-style stdint.h (required)
-AC_DEFUN([FC_C99_STDINT_H],
+AC_DEFUN([AC_C99_STDINT_H],
 [
   AC_CHECK_HEADERS([stdint.h])
   dnl Check for C99 stdint.h

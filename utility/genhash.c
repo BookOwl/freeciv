@@ -106,13 +106,14 @@ struct genhash_iter {
   A supplied genhash function appropriate to nul-terminated strings.
   Prefers table sizes that are prime numbers.
 ****************************************************************************/
-genhash_val_t genhash_str_val_func(const char *vkey)
+genhash_val_t genhash_str_val_func(const void *vkey)
 {
+  const char *key = (const char *) vkey;
   unsigned long result = 0;
 
-  for (; *vkey != '\0'; vkey++) {
+  for (; *key != '\0'; key++) {
     result *= 5; 
-    result += *vkey;
+    result += *key;
   }
   result &= 0xFFFFFFFF; /* To make results independent of sizeof(long) */
   return result;
@@ -121,23 +122,23 @@ genhash_val_t genhash_str_val_func(const char *vkey)
 /****************************************************************************
   A supplied function for comparison of nul-terminated strings:
 ****************************************************************************/
-bool genhash_str_comp_func(const char *vkey1, const char *vkey2)
+bool genhash_str_comp_func(const void *vkey1, const void *vkey2)
 {
-  return 0 == strcmp(vkey1, vkey2);
+  return 0 == strcmp((const char *) vkey1, (const char *) vkey2);
 }
 
 /****************************************************************************
   Copy function for string allocation.
 ****************************************************************************/
-char *genhash_str_copy_func(const char *vkey)
+void *genhash_str_copy_func(const void *vkey)
 {
-  return fc_strdup(NULL != vkey ? vkey : "");
+  return fc_strdup(NULL != vkey ? (const char *) vkey : "");
 }
 
 /****************************************************************************
   Free function for string allocation.
 ****************************************************************************/
-void genhash_str_free_func(char *vkey)
+void genhash_str_free_func(void *vkey)
 {
 #ifdef DEBUG
   fc_assert_ret(NULL != vkey);

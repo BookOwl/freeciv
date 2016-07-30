@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2004 - Marcelo J. Burda
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -248,7 +248,7 @@ static int *ocean_sizes = NULL;
 **************************************************************************/
 static void recalculate_lake_surrounders(void)
 {
-  const size_t size = (game.map.num_oceans + 1) * sizeof(*lake_surrounders);
+  const size_t size = (map.num_oceans + 1) * sizeof(*lake_surrounders);
 
   lake_surrounders = fc_realloc(lake_surrounders, size);
   memset(lake_surrounders, 0, size);
@@ -337,76 +337,52 @@ static void assign_continent_flood(struct tile *ptile, bool is_land, int nr)
 }
 
 /**************************************************************************
-  Regenerate all oceanic tiles for small water bodies as lakes.
+  Regenerate all oceanic tiles with coasts, lakes, and deeper oceans.
   Assumes assign_continent_numbers() and recalculate_lake_surrounders()
   have already been done!
   FIXME: insufficiently generalized, use terrain property.
+  FIXME: Results differ from initially generated waters, but this is not
+         used at all in normal map generation.
 **************************************************************************/
-void regenerate_lakes(void)
+void regenerate_lakes(tile_knowledge_cb knowledge_cb)
 {
-  struct terrain *lake_for_ocean[2][game.map.num_oceans];
+#define MAX_ALT_TER_TYPES 5
+#define DEFAULT_NEAR_COAST (6)
+  struct terrain *lakes[MAX_ALT_TER_TYPES];
+  int num_laketypes;
 
-  {
-    struct terrain *lakes[2][5];
-    int num_laketypes[2] = { 0, 0 };
-    int i;
-
-    terrain_type_iterate(pterr) {
-      if (terrain_has_flag(pterr, TER_FRESHWATER)
-          && !terrain_has_flag(pterr, TER_NOT_GENERATED)) {
-        int frozen = terrain_has_flag(pterr, TER_FROZEN);
-
-        if (num_laketypes[frozen] < ARRAY_SIZE(lakes[frozen])) {
-          lakes[frozen][num_laketypes[frozen]++] = pterr;
-        } else {
-          log_verbose("Ruleset has more than %d %s lake types, ignoring %s",
-                      (int) ARRAY_SIZE(lakes[frozen]),
-                      frozen ? "frozen" : "unfrozen",
-                      terrain_rule_name(pterr));
-        }
-      }
-    } terrain_type_iterate_end;
-
-    /* We don't want to generate any boundaries between fresh and
-     * non-fresh water.
-     * If there are no unfrozen lake types, just give up.
-     * Else if there are no frozen lake types, use unfrozen lake instead.
-     * If both are available, preserve frozenness of previous terrain. */
-    if (num_laketypes[0] == 0) {
-      return;
-    } else if (num_laketypes[1] == 0) {
-      for (i = 0; i < game.map.num_oceans; i++) {
-        lake_for_ocean[0][i] = lake_for_ocean[1][i]
-          = lakes[0][fc_rand(num_laketypes[0])];
-      }
-    } else {
-      for (i = 0; i < game.map.num_oceans; i++) {
-        int frozen;
-        for (frozen = 0; frozen < 2; frozen++) {
-          lake_for_ocean[frozen][i]
-            = lakes[frozen][fc_rand(num_laketypes[frozen])];
-        }
-      }
-    }
+  num_laketypes = terrains_by_flag(TER_FRESHWATER, lakes, sizeof(lakes));
+  if (num_laketypes > MAX_ALT_TER_TYPES) {
+    log_verbose("Number of lake types in ruleset %d, considering "
+                "only %d ones.", num_laketypes, MAX_ALT_TER_TYPES);
+    num_laketypes = MAX_ALT_TER_TYPES;
   }
 
-  whole_map_iterate(ptile) {
-    struct terrain *pterrain = tile_terrain(ptile);
-    Continent_id here = tile_continent(ptile);
+#undef MAX_ALT_TER_TYPES
 
-    if (T_UNKNOWN == pterrain) {
-      continue;
-    }
-    if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
-      continue;
-    }
-    if (0 < lake_surrounders[-here]) {
-      if (terrain_control.lake_max_size >= ocean_sizes[-here]) {
-        int frozen = terrain_has_flag(pterrain, TER_FROZEN);
-        tile_change_terrain(ptile, lake_for_ocean[frozen][-here-1]);
+  if (num_laketypes > 0) {
+    /* Lakes */
+    whole_map_iterate(ptile) {
+      struct terrain *pterrain = tile_terrain(ptile);
+      Continent_id here = tile_continent(ptile);
+
+      if (T_UNKNOWN == pterrain) {
+        continue;
       }
-    }
-  } whole_map_iterate_end;
+      if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
+        continue;
+      }
+      if (0 < lake_surrounders[-here]) {
+        if (terrain_control.lake_max_size >= ocean_sizes[-here]) {
+          tile_change_terrain(ptile, lakes[fc_rand(num_laketypes)]);
+        }
+        if (knowledge_cb) {
+          knowledge_cb(ptile);
+        }
+        continue;
+      }
+    } whole_map_iterate_end;
+  }
 }
 
 /**************************************************************************
@@ -447,8 +423,8 @@ int get_ocean_size(Continent_id id)
 void assign_continent_numbers(void)
 {
   /* Initialize */
-  game.map.num_continents = 0;
-  game.map.num_oceans = 0;
+  map.num_continents = 0;
+  map.num_oceans = 0;
 
   whole_map_iterate(ptile) {
     tile_set_continent(ptile, 0);
@@ -468,63 +444,44 @@ void assign_continent_numbers(void)
     }
 
     if (terrain_type_terrain_class(pterrain) != TC_OCEAN) {
-      game.map.num_continents++;
+      map.num_continents++;
       continent_sizes = fc_realloc(continent_sizes,
-                           (game.map.num_continents + 1) * sizeof(*continent_sizes));
-      continent_sizes[game.map.num_continents] = 0;
-      assign_continent_flood(ptile, TRUE, game.map.num_continents);
+		       (map.num_continents + 1) * sizeof(*continent_sizes));
+      continent_sizes[map.num_continents] = 0;
+      assign_continent_flood(ptile, TRUE, map.num_continents);
     } else {
-      game.map.num_oceans++;
+      map.num_oceans++;
       ocean_sizes = fc_realloc(ocean_sizes,
-                       (game.map.num_oceans + 1) * sizeof(*ocean_sizes));
-      ocean_sizes[game.map.num_oceans] = 0;
-      assign_continent_flood(ptile, FALSE, -game.map.num_oceans);
+		       (map.num_oceans + 1) * sizeof(*ocean_sizes));
+      ocean_sizes[map.num_oceans] = 0;
+      assign_continent_flood(ptile, FALSE, -map.num_oceans);
     }
   } whole_map_iterate_end;
 
   recalculate_lake_surrounders();
 
   log_verbose("Map has %d continents and %d oceans", 
-              game.map.num_continents, game.map.num_oceans);
+              map.num_continents, map.num_oceans);
 }
 
 /**************************************************************************
-  Return most shallow ocean terrain type. Prefers not to return freshwater
-  terrain, and will ignore 'frozen' rather than do so.
+  Return most shallow ocean terrain type. Freshwater lakes are not
+  considered, if there is any salt water terrain types.
 **************************************************************************/
-struct terrain *most_shallow_ocean(bool frozen)
+struct terrain *most_shallow_ocean(void)
 {
-  bool oceans = FALSE, frozenmatch = FALSE;
+  bool oceans = FALSE;
   struct terrain *shallow = NULL;
 
   terrain_type_iterate(pterr) {
-    if (is_ocean(pterr) && !terrain_has_flag(pterr, TER_NOT_GENERATED)) {
-      bool nonfresh = !terrain_has_flag(pterr, TER_FRESHWATER);
-      bool frozen_ok = terrain_has_flag(pterr, TER_FROZEN) == frozen;
-
-      if (!oceans && nonfresh) {
-        /* First ocean type seen, reset even if frozenness doesn't match */
+    if (is_ocean(pterr)) {
+      if (!oceans && !terrain_has_flag(pterr, TER_FRESHWATER)) {
+        /* First ocean type */
         oceans = TRUE;
         shallow = pterr;
-        frozenmatch = frozen_ok;
-        continue;
-      } else if (oceans && !nonfresh) {
-        /* Dismiss any step backward on freshness */
-        continue;
-      }
-      if (!frozenmatch && frozen_ok) {
-        /* Prefer terrain that matches frozenness (as long as we don't go
-         * backwards on freshness) */
-        frozenmatch = TRUE;
-        shallow = pterr;
-        continue;
-      } else if (frozenmatch && !frozen_ok) {
-        /* Dismiss any step backward on frozenness */
-        continue;
-      }
-      if (!shallow
-          || pterr->property[MG_OCEAN_DEPTH] <
-          shallow->property[MG_OCEAN_DEPTH]) {
+      } else if (!shallow
+                 || pterr->property[MG_OCEAN_DEPTH] <
+                    shallow->property[MG_OCEAN_DEPTH]) {
         shallow = pterr;
       }
     }
@@ -535,10 +492,9 @@ struct terrain *most_shallow_ocean(bool frozen)
 
 /**************************************************************************
   Picks an ocean terrain to match the given depth.
-  Only considers terrains with/without Frozen flag depending on 'frozen'.
   Return NULL when there is no available ocean.
 **************************************************************************/
-struct terrain *pick_ocean(int depth, bool frozen)
+struct terrain *pick_ocean(int depth)
 {
   struct terrain *best_terrain = NULL;
   int best_match = TERRAIN_OCEAN_DEPTH_MAXIMUM;
@@ -546,7 +502,6 @@ struct terrain *pick_ocean(int depth, bool frozen)
   terrain_type_iterate(pterrain) {
     if (terrain_type_terrain_class(pterrain) == TC_OCEAN
         && TERRAIN_OCEAN_DEPTH_MINIMUM <= pterrain->property[MG_OCEAN_DEPTH]
-        && !!frozen == terrain_has_flag(pterrain, TER_FROZEN)
         && !terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
       int match = abs(depth - pterrain->property[MG_OCEAN_DEPTH]);
 
@@ -579,7 +534,7 @@ static int real_distance_to_land(const struct tile *ptile, int max)
 **************************************************************************/
 static struct terrain *most_adjacent_ocean_type(const struct tile *ptile)
 {
-  const int need = 2 * game.map.num_valid_dirs / 3;
+  const int need = 2 * map.num_valid_dirs / 3;
   int count;
 
   terrain_type_iterate(pterrain) {
@@ -618,10 +573,9 @@ void smooth_water_depth(void)
 
     dist = real_distance_to_land(ptile, OCEAN_DIST_MAX);
     if (dist <= OCEAN_DIST_MAX) {
-      /* Overwrite the terrain (but preserve frozenness). */
+      /* Overwrite the terrain. */
       ocean = pick_ocean(dist * OCEAN_DEPTH_STEP
-                         + fc_rand(OCEAN_DEPTH_RAND),
-                         terrain_has_flag(tile_terrain(ptile), TER_FROZEN));
+                         + fc_rand(OCEAN_DEPTH_RAND));
       if (NULL != ocean && ocean != tile_terrain(ptile)) {
         log_debug("Replacing %s by %s at (%d, %d) "
                   "to have shallow ocean on coast.",
@@ -665,126 +619,5 @@ void generator_free(void)
   if (ocean_sizes != NULL) {
     free(ocean_sizes);
     ocean_sizes = NULL;
-  }
-}
-
-/****************************************************************************
-  Return a random terrain that has the specified flag.
-  Returns T_UNKNOWN when there is no matching terrain.
-****************************************************************************/
-struct terrain *pick_terrain_by_flag(enum terrain_flag_id flag)
-{
-  bool has_flag[terrain_count()];
-  int count = 0;
-
-  terrain_type_iterate(pterrain) {
-    if ((has_flag[terrain_index(pterrain)]
-         = (terrain_has_flag(pterrain, flag)
-            && !terrain_has_flag(pterrain, TER_NOT_GENERATED)))) {
-      count++;
-    }
-  } terrain_type_iterate_end;
-
-  count = fc_rand(count);
-  terrain_type_iterate(pterrain) {
-    if (has_flag[terrain_index(pterrain)]) {
-      if (count == 0) {
-	return pterrain;
-      }
-      count--;
-    }
-  } terrain_type_iterate_end;
-
-  return T_UNKNOWN;
-}
-
-
-/****************************************************************************
-  Pick a terrain based on the target property and a property to avoid.
-
-  If the target property is given, then all terrains with that property
-  will be considered and one will be picked at random based on the amount
-  of the property each terrain has.  If no target property is given all
-  terrains will be assigned equal likelihood.
-
-  If the preferred property is given, only terrains with (some of) that
-  property will be chosen.
-
-  If the avoid property is given, then any terrain with (any of) that
-  property will be avoided.
-
-  This function must always return a valid terrain.
-****************************************************************************/
-struct terrain *pick_terrain(enum mapgen_terrain_property target,
-                             enum mapgen_terrain_property prefer,
-                             enum mapgen_terrain_property avoid)
-{
-  int sum = 0;
-
-  /* Find the total weight. */
-  terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
-
-      if (target != MG_UNUSED) {
-        sum += pterrain->property[target];
-      } else {
-        sum++;
-      }
-    }
-  } terrain_type_iterate_end;
-
-  /* Now pick. */
-  sum = fc_rand(sum);
-
-  /* Finally figure out which one we picked. */
-  terrain_type_iterate(pterrain) {
-    if (!terrain_has_flag(pterrain, TER_NOT_GENERATED)) {
-      int property;
-
-      if (avoid != MG_UNUSED && pterrain->property[avoid] > 0) {
-        continue;
-      }
-      if (prefer != MG_UNUSED && pterrain->property[prefer] == 0) {
-        continue;
-      }
-
-      if (target != MG_UNUSED) {
-        property = pterrain->property[target];
-      } else {
-        property = 1;
-      }
-      if (sum < property) {
-        return pterrain;
-      }
-      sum -= property;
-    }
-  } terrain_type_iterate_end;
-
-  /* This can happen with sufficient quantities of preferred and avoided
-   * characteristics.  Drop a requirement and try again. */
-  if (prefer != MG_UNUSED) {
-    log_debug("pick_terrain(target: %s, [dropping prefer: %s], avoid: %s)",
-              mapgen_terrain_property_name(target),
-              mapgen_terrain_property_name(prefer),
-              mapgen_terrain_property_name(avoid));
-    return pick_terrain(target, MG_UNUSED, avoid);
-  } else if (avoid != MG_UNUSED) {
-    log_debug("pick_terrain(target: %s, prefer: %s, [dropping avoid: %s])",
-              mapgen_terrain_property_name(target),
-              mapgen_terrain_property_name(prefer),
-              mapgen_terrain_property_name(avoid));
-    return pick_terrain(target, prefer, MG_UNUSED);
-  } else {
-    log_debug("pick_terrain([dropping target: %s], prefer: %s, avoid: %s)",
-              mapgen_terrain_property_name(target),
-              mapgen_terrain_property_name(prefer),
-              mapgen_terrain_property_name(avoid));
-    return pick_terrain(MG_UNUSED, prefer, avoid);
   }
 }

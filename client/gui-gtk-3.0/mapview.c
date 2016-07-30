@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -48,7 +48,6 @@
 #include "overview_common.h"
 #include "tilespec.h"
 #include "text.h"
-#include "zoom.h"
 
 /* client/gui-gtk-3.0 */
 #include "citydlg.h" /* For reset_city_dialogs() */
@@ -102,16 +101,10 @@ void update_timeout_label(void)
 {
   gtk_label_set_text(GTK_LABEL(timeout_label), get_timeout_label_text());
 
-  if (current_turn_timeout() > 0) {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Time to forced turn change,\n"
-                                  "or estimated time to finish turn change "
-                                  "processing."));
+  if (client_current_turn_timeout() > 0) {
+    gtk_widget_set_tooltip_text(timeout_label, _("Time to forced turn change"));
   } else {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Turn timeout disabled.\n"
-                                  "Between turns this shows estimated time "
-                                  "to finish turn change processing."));
+    gtk_widget_set_tooltip_text(timeout_label, _("Turn timeout disabled"));
   }
 }
 
@@ -152,42 +145,42 @@ void update_info_label(void)
   }
 
   gtk_label_set_text(GTK_LABEL(main_label_info),
-                     get_info_label_text(!GUI_GTK_OPTION(small_display_layout)));
+                     get_info_label_text(!gui_gtk3_small_display_layout));
 
   set_indicator_icons(client_research_sprite(),
-                      client_warming_sprite(),
-                      client_cooling_sprite(),
-                      client_government_sprite());
+		      client_warming_sprite(),
+		      client_cooling_sprite(),
+		      client_government_sprite());
 
   if (NULL != client.conn.playing) {
     int d = 0;
 
     for (; d < client.conn.playing->economic.luxury /10; d++) {
-      struct sprite *spr = get_tax_sprite(tileset, O_LUXURY);
+      struct sprite *sprite = get_tax_sprite(tileset, O_LUXURY);
 
-      gtk_image_set_from_surface(GTK_IMAGE(econ_label[d]), spr->surface);
+      gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(econ_label[d]), sprite);
     }
-
+ 
     for (; d < (client.conn.playing->economic.science
 		+ client.conn.playing->economic.luxury) / 10; d++) {
-      struct sprite *spr = get_tax_sprite(tileset, O_SCIENCE);
+      struct sprite *sprite = get_tax_sprite(tileset, O_SCIENCE);
 
-      gtk_image_set_from_surface(GTK_IMAGE(econ_label[d]), spr->surface);
+      gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(econ_label[d]), sprite);
     }
-
+ 
     for (; d < 10; d++) {
-      struct sprite *spr = get_tax_sprite(tileset, O_GOLD);
+      struct sprite *sprite = get_tax_sprite(tileset, O_GOLD);
 
-      gtk_image_set_from_surface(GTK_IMAGE(econ_label[d]), spr->surface);
+      gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(econ_label[d]), sprite);
     }
   }
-
+ 
   update_timeout_label();
 
   /* update tooltips. */
   gtk_widget_set_tooltip_text(econ_ebox,
-                              _("Shows your current luxury/science/tax rates; "
-                                "click to toggle them."));
+		       _("Shows your current luxury/science/tax rates; "
+			 "click to toggle them."));
 
   gtk_widget_set_tooltip_text(bulb_ebox, get_bulb_tooltip());
   gtk_widget_set_tooltip_text(sun_ebox, get_global_warming_tooltip());
@@ -256,6 +249,7 @@ void update_unit_info_label(struct unit_list *punits)
   update_unit_pix_label(punits);
 }
 
+
 /**************************************************************************
   Get sprite for treaty acceptance or rejection.
 **************************************************************************/
@@ -270,12 +264,12 @@ GdkPixbuf *get_thumb_pixbuf(int onoff)
   indicator.
 ****************************************************************************/
 void set_indicator_icons(struct sprite *bulb, struct sprite *sol,
-                         struct sprite *flake, struct sprite *gov)
+			 struct sprite *flake, struct sprite *gov)
 {
-  gtk_image_set_from_surface(GTK_IMAGE(bulb_label), bulb->surface);
-  gtk_image_set_from_surface(GTK_IMAGE(sun_label), sol->surface);
-  gtk_image_set_from_surface(GTK_IMAGE(flake_label), flake->surface);
-  gtk_image_set_from_surface(GTK_IMAGE(government_label), gov->surface);
+  gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(bulb_label), bulb);
+  gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(sun_label), sol);
+  gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(flake_label), flake);
+  gtk_pixcomm_set_from_sprite(GTK_PIXCOMM(government_label), gov);
 }
 
 /****************************************************************************
@@ -296,8 +290,7 @@ void get_overview_area_dimensions(int *width, int *height)
 void overview_size_changed(void)
 {
   gtk_widget_set_size_request(overview_canvas,
-                              gui_options.overview.width,
-                              gui_options.overview.height);
+			      overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 }
 
@@ -324,11 +317,11 @@ struct canvas *get_overview_window(void)
 gboolean overview_canvas_draw(GtkWidget *w, cairo_t *cr, gpointer data)
 {
   gpointer source = (can_client_change_view()) ?
-                     (gpointer)gui_options.overview.window : (gpointer)radar_gfx_sprite;
+                     (gpointer)overview.window : (gpointer)radar_gfx_sprite;
 
   if (source) {
     cairo_surface_t *surface = (can_client_change_view()) ?
-                                gui_options.overview.window->surface :
+                                overview.window->surface :
                                 radar_gfx_sprite->surface;
 
     cairo_set_source_surface(cr, surface, 0, 0);
@@ -374,7 +367,6 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
                               gpointer data)
 {
   map_canvas_resized(ev->width, ev->height);
-
   return TRUE;
 }
 
@@ -383,7 +375,7 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
 **************************************************************************/
 gboolean map_canvas_draw(GtkWidget *w, cairo_t *cr, gpointer data)
 {
-  if (can_client_change_view() && !map_is_empty() && !mapview_is_frozen()) {
+  if (can_client_change_view() && map_exists() && !mapview_is_frozen()) {
     /* First we mark the area to be updated as dirty.  Then we unqueue
      * any pending updates, to make sure only the most up-to-date data
      * is written (otherwise drawing bugs happen when old data is copied
@@ -462,19 +454,19 @@ void update_city_descriptions(void)
 }
 
 /**************************************************************************
-  Fill image with unit gfx
+  Fill pixcomm with unit gfx
 **************************************************************************/
-void put_unit_image(struct unit *punit, GtkImage *p)
+void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
 {
-  GdkPixbuf *pixbuf;
-  struct sprite *spr;
+  struct canvas canvas_store = FC_STATIC_CANVAS_INIT;
 
-  spr = get_unittype_sprite(tileset, unit_type_get(punit), punit->facing);
-  pixbuf = sprite_get_pixbuf(spr);
+  canvas_store.surface = gtk_pixcomm_get_surface(p);
 
-  gtk_image_set_from_pixbuf(p, pixbuf);
-  g_object_unref(pixbuf);
+  gtk_pixcomm_clear(p);
+
+  put_unit(punit, &canvas_store, 0, 0);
 }
+
 
 /**************************************************************************
   FIXME:
@@ -482,29 +474,21 @@ void put_unit_image(struct unit *punit, GtkImage *p)
   unit, the proper way to do this is probably something like what Civ II does.
   (One food/shield/mask drawn N times, possibly one top of itself. -- SKi 
 **************************************************************************/
-void put_unit_image_city_overlays(struct unit *punit, GtkImage *p,
-                                  int height,
-                                  int *upkeep_cost, int happy_cost)
+void put_unit_gpixmap_city_overlays(struct unit *punit, GtkPixcomm *p,
+                                    int *upkeep_cost, int happy_cost)
 {
   struct canvas store = FC_STATIC_CANVAS_INIT;
-  int width = tileset_full_tile_width(tileset);
-
-  store.surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                             width, height);
-
-  put_unit(punit, &store, 1.0, 0, 0);
+ 
+  store.surface = gtk_pixcomm_get_surface(p);
 
   put_unit_city_overlays(punit, &store, 0, tileset_unit_layout_offset_y(tileset),
                          upkeep_cost, happy_cost);
-
-  gtk_image_set_from_surface(p, store.surface);
-  cairo_surface_destroy(store.surface);
 }
 
 /**************************************************************************
   Put overlay tile to pixmap
 **************************************************************************/
-void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
+void pixmap_put_overlay_tile(GdkWindow *pixmap,
 			     int canvas_x, int canvas_y,
 			     struct sprite *ssprite)
 {
@@ -515,7 +499,6 @@ void pixmap_put_overlay_tile(GdkWindow *pixmap, float zoom,
   }
 
   cr = gdk_cairo_create(pixmap);
-  cairo_scale(cr, zoom, zoom);
   cairo_set_source_surface(cr, ssprite->surface, canvas_x, canvas_y);
   cairo_paint(cr);
   cairo_destroy(cr);
@@ -558,13 +541,11 @@ void pixmap_put_overlay_tile_draw(struct canvas *pcanvas,
 
     for (i = 0; i < sswidth; i++) {
       for (j = 0; j < ssheight; j++) {
-        if (!is_bigendian()) {
-          mask_out[(j * sswidth + i) * 4 + 3]
-            = 0.65 * mask_in[(j * sswidth + i) * 4 + 3];
-        } else {
-          mask_out[(j * sswidth + i) * 4 + 0]
-            = 0.65 * mask_in[(j * sswidth + i) * 4 + 0];
-        }
+#ifndef WORDS_BIGENDIAN
+        mask_out[(j * sswidth + i) * 4 + 3] = 0.65 * mask_in[(j * sswidth + i) * 4 + 3];
+#else  /* WORDS_BIGENDIAN */
+        mask_out[(j * sswidth + i) * 4 + 0] = 0.65 * mask_in[(j * sswidth + i) * 4 + 0];
+#endif /* WORDS_BIGENDIAN */
       }
     }
 
@@ -599,11 +580,11 @@ void pixmap_put_overlay_tile_draw(struct canvas *pcanvas,
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
-    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas), map_zoom,
-			    canvas_x / map_zoom, canvas_y / map_zoom,
+    pixmap_put_overlay_tile(gtk_widget_get_window(map_canvas),
+			    canvas_x, canvas_y,
 			    get_attention_crosshair_sprite(tileset));
   }
 }
@@ -652,8 +633,7 @@ void update_map_canvas_scrollbars(void)
 **************************************************************************/
 void update_map_canvas_scrollbars_size(void)
 {
-  float xmin, ymin, xmax, ymax;
-  int xsize, ysize, xstep, ystep;
+  int xmin, ymin, xmax, ymax, xsize, ysize, xstep, ystep;
 
   get_mapview_scroll_window(&xmin, &ymin, &xmax, &ymax, &xsize, &ysize);
   get_mapview_scroll_step(&xstep, &ystep);
@@ -740,7 +720,7 @@ void tileset_changed(void)
   editgui_tileset_changed();
 
   /* keep the icon of the executable on Windows (see PR#36491) */
-#ifndef FREECIV_MSWINDOWS
+#ifndef WIN32_NATIVE
   {
     GdkPixbuf *pixbuf = sprite_get_pixbuf(get_icon_sprite(tileset, ICON_FREECIV));
 
@@ -748,5 +728,5 @@ void tileset_changed(void)
     gtk_window_set_icon(GTK_WINDOW(toplevel), pixbuf);
     g_object_unref(pixbuf);
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 }

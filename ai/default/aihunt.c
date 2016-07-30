@@ -44,11 +44,7 @@
 #include "autosettlers.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "aicity.h"
-#include "ailog.h"
 #include "aiplayer.h"
 #include "aitools.h"
 #include "aiunit.h"
@@ -81,26 +77,17 @@ static struct unit *dai_hunter_find(struct player *pplayer,
   Guess best hunter unit type.
 **************************************************************************/
 static struct unit_type *dai_hunter_guess_best(struct city *pcity,
-                                               enum terrain_class tc,
-                                               struct ai_type *ait)
+                                               enum unit_move_type umt)
 {
   struct unit_type *bestid = NULL;
   int best = 0;
 
   unit_type_iterate(ut) {
-    struct unit_type_ai *utai = utype_ai_data(ut, ait);
     int desire;
 
-    /* Temporary hack because pathfinding can't handle Fighters. */
-    if (!uclass_has_flag(utype_class(ut), UCF_MISSILE)
-        && 1 == utype_fuel(ut)) {
-      continue;
-    }
-
-    if (!can_city_build_unit_now(pcity, ut)
-        || ut->attack_strength < ut->transport_capacity
-        || (tc == TC_OCEAN && utype_class(ut)->adv.sea_move == MOVE_NONE)
-        || (tc == TC_LAND && utype_class(ut)->adv.land_move == MOVE_NONE)) {
+    if (utype_move_type(ut) != umt
+     || !can_city_build_unit_now(pcity, ut)
+     || ut->attack_strength < ut->transport_capacity) {
       continue;
     }
 
@@ -110,9 +97,13 @@ static struct unit_type *dai_hunter_guess_best(struct city *pcity,
               * ut->move_rate
               + ut->defense_strength) / MAX(UNITTYPE_COSTS(ut), 1);
 
-    if (utai->missile_platform) {
-      desire += desire / 6;
-    }
+    unit_class_iterate(uclass) {
+      if (can_unit_type_transport(ut, uclass)
+          && uclass_has_flag(uclass, UCF_MISSILE)) {
+        desire += desire / 6;
+        break;
+      }
+    } unit_class_iterate_end;
 
     if (utype_has_flag(ut, UTYF_IGTER)) {
       desire += desire / 2;
@@ -148,14 +139,14 @@ static void dai_hunter_missile_want(struct player *pplayer,
                                     struct city *pcity,
                                     struct adv_choice *choice)
 {
-  adv_want best = -1;
+  int best = -1;
   struct unit_type *best_unit_type = NULL;
   struct unit *hunter = NULL;
 
   unit_list_iterate(pcity->tile->units, punit) {
     if (dai_hunter_qualify(pplayer, punit)) {
       unit_class_iterate(uclass) {
-        if (can_unit_type_transport(unit_type_get(punit), uclass)
+        if (can_unit_type_transport(unit_type(punit), uclass)
             && uclass_has_flag(uclass, UCF_MISSILE)) {
           hunter = punit;
           break;
@@ -179,7 +170,7 @@ static void dai_hunter_missile_want(struct player *pplayer,
       continue;
     }
 
-    if (!can_unit_type_transport(unit_type_get(hunter), utype_class(ut))) {
+    if (!can_unit_type_transport(unit_type(hunter), utype_class(ut))) {
       continue;
     }
 
@@ -201,22 +192,20 @@ static void dai_hunter_missile_want(struct player *pplayer,
 		       / MAX(pcity->surplus[O_SHIELD], 1)));
 
     if (desire > best) {
-      best = desire;
-      best_unit_type = ut;
+        best = desire;
+        best_unit_type = ut;
     }
   } unit_type_iterate_end;
 
   if (best > choice->want) {
-    CITY_LOG(LOGLEVEL_HUNT, pcity,
-             "pri missile w/ want " ADV_WANT_PRINTF, best);
+    CITY_LOG(LOGLEVEL_HUNT, pcity, "pri missile w/ want %d", best);
     choice->value.utype = best_unit_type;
     choice->want = best;
     choice->type = CT_ATTACKER;
     choice->need_boat = FALSE;
-    adv_choice_set_use(choice, "missile");
-  } else if (best >= 0) {
-    CITY_LOG(LOGLEVEL_HUNT, pcity, "not pri missile w/ want " ADV_WANT_PRINTF
-             "(old want " ADV_WANT_PRINTF ")", best, choice->want);
+  } else if (best != -1) {
+    CITY_LOG(LOGLEVEL_HUNT, pcity, "not pri missile w/ want %d"
+             "(old want %d)", best, choice->want);
   }
 }
 
@@ -241,7 +230,6 @@ static void eval_hunter_want(struct ai_type *ait, struct player *pplayer,
     choice->want = want;
     choice->type = CT_ATTACKER;
     choice->need_boat = FALSE;
-    adv_choice_set_use(choice, "hunter");
   }
 }
 
@@ -252,14 +240,14 @@ void dai_hunter_choice(struct ai_type *ait, struct player *pplayer,
                        struct city *pcity, struct adv_choice *choice)
 {
   struct unit_type *best_land_hunter
-    = dai_hunter_guess_best(pcity, TC_LAND, ait);
+    = dai_hunter_guess_best(pcity, UMT_LAND);
   struct unit_type *best_sea_hunter
-    = dai_hunter_guess_best(pcity, TC_OCEAN, ait);
+    = dai_hunter_guess_best(pcity, UMT_SEA);
   struct unit *hunter = dai_hunter_find(pplayer, pcity);
 
   if ((!best_land_hunter && !best_sea_hunter)
       || is_barbarian(pplayer) || !pplayer->is_alive
-      || has_handicap(pplayer, H_TARGETS)) {
+      || ai_handicap(pplayer, H_TARGETS)) {
     return; /* None available */
   }
   if (hunter) {
@@ -310,10 +298,9 @@ static void dai_hunter_try_launch(struct ai_type *ait,
     struct unit *sucker = NULL;
 
     if (unit_owner(missile) == pplayer
-        && uclass_has_flag(unit_class_get(missile), UCF_MISSILE)) {
+        && uclass_has_flag(unit_class(missile), UCF_MISSILE)) {
       UNIT_LOG(LOGLEVEL_HUNT, missile, "checking for hunt targets");
       pft_fill_unit_parameter(&parameter, punit);
-      parameter.omniscience = !has_handicap(pplayer, H_MAP);
       pfm = pf_map_new(&parameter);
 
       pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
@@ -325,10 +312,9 @@ static void dai_hunter_try_launch(struct ai_type *ait,
           continue;
         }
         unit_list_iterate(ptile->units, victim) {
+          struct unit_type *ut = unit_type(victim);
           enum diplstate_type ds =
 	    player_diplstate_get(pplayer, unit_owner(victim))->type;
-          struct unit_type *ptype;
-          struct unit_type *victim_type;
 
           if (ds != DS_WAR) {
             continue;
@@ -340,12 +326,11 @@ static void dai_hunter_try_launch(struct ai_type *ait,
                      move_cost);
             break; /* Our target! Get him!!! */
           }
-
-          victim_type = unit_type_get(victim);
-          ptype = unit_type_get(punit);
-
-          if (ATTACK_POWER(victim_type) > DEFENSE_POWER(ptype)
-              && dai_unit_can_strike_my_unit(victim, punit)) {
+          if (ut->move_rate + victim->moves_left > move_cost
+              && ATTACK_POWER(victim) > DEFENCE_POWER(punit)
+              && (utype_move_type(ut) == UMT_SEA
+                  || utype_move_type(ut) == UMT_BOTH)) {
+            /* Threat to our carrier. Kill it. */
             sucker = victim;
             UNIT_LOG(LOGLEVEL_HUNT, missile, "found aux target %d(%d, %d)",
                      victim->id, TILE_XY(unit_tile(victim)));
@@ -388,14 +373,12 @@ static void dai_hunter_juiciness(struct player *pplayer, struct unit *punit,
   *stackcost = 0;
 
   unit_list_iterate(unit_tile(target)->units, sucker) {
-    struct unit_type *suck_type = unit_type_get(sucker);
-
-    *stackthreat += ATTACK_POWER(suck_type);
+    *stackthreat += ATTACK_POWER(sucker);
     if (unit_has_type_flag(sucker, UTYF_GAMELOSS)) {
       *stackcost += 1000;
       *stackthreat += 5000;
     }
-    if (utype_acts_hostile(unit_type_get(sucker))) {
+    if (unit_has_type_flag(sucker, UTYF_DIPLOMAT)) {
       *stackthreat += 500; /* extra threatening */
     }
     *stackcost += unit_build_shield_cost(sucker);
@@ -413,7 +396,7 @@ static void dai_hunter_juiciness(struct player *pplayer, struct unit *punit,
   also used for construction want).
 
   We try to keep track of our original target, but also opportunistically
-  snatch up closer targets if they are better.
+  snatch up closer targts if they are better.
 
   We set punit->server.ai->target to target's id.
 **************************************************************************/
@@ -432,7 +415,6 @@ int dai_hunter_manage(struct ai_type *ait, struct player *pplayer,
   fc_assert_ret_val(pplayer->is_alive, 0);
 
   pft_fill_unit_parameter(&parameter, punit);
-  parameter.omniscience = !has_handicap(pplayer, H_MAP);
   pfm = pf_map_new(&parameter);
 
   if (original_target) {
@@ -471,7 +453,7 @@ int dai_hunter_manage(struct ai_type *ait, struct player *pplayer,
          * of each turn. */
         continue;
       }
-      if (!utype_acts_hostile(unit_type_get(target))
+      if (!unit_has_type_flag(target, UTYF_DIPLOMAT)
           && get_transporter_capacity(target) == 0
           && !unit_has_type_flag(target, UTYF_GAMELOSS)) {
         /* Won't hunt this one. */
@@ -491,7 +473,7 @@ int dai_hunter_manage(struct ai_type *ait, struct player *pplayer,
                dist1, dist2);
 
       /* We can't chase if we aren't faster or on intercept vector */
-      if (unit_type_get(punit)->move_rate < unit_type_get(target)->move_rate
+      if (unit_type(punit)->move_rate < unit_type(target)->move_rate
           && dist1 >= dist2) {
         UNIT_LOG(LOGLEVEL_HUNT, punit,
                  "giving up racing %s (%d, %d)->(%d, %d)",

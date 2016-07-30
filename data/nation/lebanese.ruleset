@@ -31,7 +31,7 @@ ruler_titles = {
 
 flag = "lebanon"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

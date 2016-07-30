@@ -24,6 +24,9 @@
 #include "autosettlers.h"
 
 /* ai/default */
+#include "advdiplomacy.h"
+#include "advdomestic.h"
+#include "advmilitary.h"
 #include "aicity.h"
 #include "aidata.h"
 #include "aiferry.h"
@@ -33,9 +36,6 @@
 #include "aisettler.h"
 #include "aitools.h"
 #include "aiunit.h"
-#include "daidiplomacy.h"
-#include "daidomestic.h"
-#include "daimilitary.h"
 
 #include "classicai.h"
 
@@ -91,61 +91,34 @@ static void cai_player_free(struct player *pplayer)
 
 /**************************************************************************
   Call default ai with classic ai type as parameter.
-  Classicai stores information to "ai" like the default ai common code.
 **************************************************************************/
-static void cai_player_save_relations(struct player *pplayer,
-                                      struct player *other,
-                                      struct section_file *file,
-                                      int plrno)
+static void cai_player_save(struct player *pplayer, struct section_file *file,
+                     int plrno)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
-  dai_player_save_relations(deftype, "ai", pplayer, other, file, plrno);
+  dai_player_save(deftype, "ai", pplayer, file, plrno);
 }
 
 /**************************************************************************
   Call default ai with classic ai type as parameter.
 **************************************************************************/
-static void cai_player_load_relations(struct player *pplayer,
-                                      struct player *other,
-                                      const struct section_file *file,
-                                      int plrno)
+static void cai_player_load(struct player *pplayer,
+                            const struct section_file *file, int plrno)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
-  dai_player_load_relations(deftype, "ai", pplayer, other, file, plrno);
+  dai_player_load(deftype, "ai", pplayer, file, plrno);
 }
 
 /**************************************************************************
   Call default ai with classic ai type as parameter.
 **************************************************************************/
-static void cai_gained_control(struct player *pplayer)
+static void cai_assess_danger_player(struct player *pplayer)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
-  dai_gained_control(deftype, pplayer);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
-static void cai_split_by_civil_war(struct player *original,
-                                   struct player *created)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_assess_danger_player(deftype, original);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
-static void cai_created_by_civil_war(struct player *original,
-                                     struct player *created)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_player_copy(deftype, original, created);
+  dai_assess_danger_player(deftype, pplayer);
 }
 
 /**************************************************************************
@@ -248,17 +221,6 @@ static void cai_build_adv_adjust(struct player *pplayer, struct city *wonder_cit
   struct ai_type *deftype = classic_ai_get_self();
 
   dai_build_adv_adjust(deftype, pplayer, wonder_city);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
-static void cai_gov_value(struct player *pplayer, struct government *gov,
-                          adv_want *val, bool *override)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_gov_value(deftype, pplayer, gov, val, override);
 }
 
 /**************************************************************************
@@ -420,32 +382,11 @@ static void cai_auto_settler_cont(struct player *pplayer, struct unit *punit,
 /**************************************************************************
   Call default ai with classic ai type as parameter.
 **************************************************************************/
-static void cai_switch_to_explore(struct unit *punit, struct tile *target,
-                                  enum override_bool *allow)
-{
-  struct ai_type *deftype = classic_ai_get_self();
-
-  dai_switch_to_explore(deftype, punit, target, allow);
-}
-
-/**************************************************************************
-  Call default ai with classic ai type as parameter.
-**************************************************************************/
 static void cai_do_first_activities(struct player *pplayer)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
   dai_do_first_activities(deftype, pplayer);
-
-  pplayer->ai_phase_done = TRUE;
-}
-
-/**************************************************************************
-  Mark turn done as we have already done everything before game was saved.
-**************************************************************************/
-static void cai_restart_phase(struct player *pplayer)
-{
-  pplayer->ai_phase_done = TRUE;
 }
 
 /**************************************************************************
@@ -536,7 +477,7 @@ static void cai_unit_log(char *buffer, int buflength, const struct unit *punit)
   Call default ai with classic ai type as parameter.
 **************************************************************************/
 static void cai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
-                                       enum override_bool *result)
+                                       enum danger_consideration *result)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
@@ -547,7 +488,7 @@ static void cai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
   Call default ai with classic ai type as parameter.
 **************************************************************************/
 static void cai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
-                                        enum override_bool *result)
+                                        enum danger_consideration *result)
 {
   struct ai_type *deftype = classic_ai_get_self();
 
@@ -573,19 +514,15 @@ bool fc_ai_classic_setup(struct ai_type *ai)
 
   strncpy(ai->name, "classic", sizeof(ai->name));
 
-  /* ai->funcs.game_start = NULL; */
   /* ai->funcs.game_free = NULL; */
 
   ai->funcs.player_alloc = cai_player_alloc;
   ai->funcs.player_free = cai_player_free;
-  /* ai->funcs.player_save = NULL; */
-  /* ai->funcs.player_load = NULL; */
-  ai->funcs.player_save_relations = cai_player_save_relations;
-  ai->funcs.player_load_relations = cai_player_load_relations;
-  ai->funcs.gained_control = cai_gained_control;
+  ai->funcs.player_save = cai_player_save;
+  ai->funcs.player_load = cai_player_load;
+  ai->funcs.gained_control = cai_assess_danger_player;
   /* ai->funcs.lost_control = NULL; */
-  ai->funcs.split_by_civil_war = cai_split_by_civil_war;
-  ai->funcs.created_by_civil_war = cai_created_by_civil_war;
+  ai->funcs.split_by_civil_war = cai_assess_danger_player;
 
   ai->funcs.phase_begin = cai_data_phase_begin;
   ai->funcs.phase_finished = cai_data_phase_finished;
@@ -602,8 +539,6 @@ bool fc_ai_classic_setup(struct ai_type *ai)
   ai->funcs.build_adv_prepare = cai_wonder_city_distance;
   ai->funcs.build_adv_init = cai_build_adv_init;
   ai->funcs.build_adv_adjust_want = cai_build_adv_adjust;
-
-  ai->funcs.gov_value = cai_gov_value;
 
   ai->funcs.units_ruleset_init = cai_units_ruleset_init;
   ai->funcs.units_ruleset_close = cai_units_ruleset_close;
@@ -636,10 +571,7 @@ bool fc_ai_classic_setup(struct ai_type *ai)
   ai->funcs.settler_run = cai_auto_settler_run;
   ai->funcs.settler_cont = cai_auto_settler_cont;
 
-  ai->funcs.want_to_explore = cai_switch_to_explore;
-
   ai->funcs.first_activities = cai_do_first_activities;
-  ai->funcs.restart_phase = cai_restart_phase;
   ai->funcs.diplomacy_actions = cai_diplomacy_actions;
   ai->funcs.last_activities = cai_do_last_activities;
   ai->funcs.treaty_evaluate = cai_treaty_evaluate;

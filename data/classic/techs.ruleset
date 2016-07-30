@@ -9,8 +9,7 @@
 
 [datafile]
 description="Classic technology data for Freeciv (as Civ2, minus a few)"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -24,29 +23,11 @@ format_version=10
 
 ; /* <-- avoid gettext warnings
 ;
-; Tech classes:
-;
-; First one is the default one.
-; If there is none, tech classes feature is disabled
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for rulesets etc; if not
-;                           present, 'name' is used.
-; cost_pct                = how much techs of the class cost compared
-;                           to normal. Default is 100%.
-;
-; */ <-- avoid gettext warnings
-
-;[techclass_default]
-;name =
-
-; /* <-- avoid gettext warnings
-;
 ; Below: The individual advances, one per section.
 ; The number can be variable, up to 196.
 ;
-; The actual tag used (the * in [advance_*]) does not matter, except
-; it must be unique within this file, and it may be used in debug
+; The actual tag used (the * in [advance_*]) does not matter, except 
+; it must be unique within this file, and it may be used in debug 
 ; output when reading this file.
 ;
 ; Notes:
@@ -56,50 +37,36 @@ format_version=10
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a tech after a
 ;                 ruleset has been released.
-; class         = tech class this tech belongs to, if they have been defined.
-;                 Default is first one defined above.
-; req1, req2    = advances required before researching this one
+; req1, req2	= advances required before researching this one
 ; root_req      = tech required before acquiring this tech, by any
-;                 means, inherited by all techs that require this tech in turn
-;                 unless "None" is given here explicitly; and you can make
-;                 a tech available only through the init_tech of a nation by
-;                 making it root_req itself.
-; research_reqs = requirements before researching this one. Can have non
-;                 tech requirements because it is a requirement vector.
-;                 See doc/README.effects to learn more about requirement
-;                 vectors.
-;                 Requireing a tech here in stead of in req1, req2 or
-;                 root_req is not supported yet.
-;                 Requirements that may become fulfilled during the game
-;                 when they weren't at the start of the game is not
-;                 supported yet.
+;     means, inherited by all techs that require this tech in turn unless
+;     "None" is given here explicitly; and you can make a tech available
+;     only through the init_tech of a nation by making it root_req itself.
 ; flags         = special flag strings
 ; graphic       = icon for technology
 ; graphic_alt   = alternate icon
-; helptext      = optional help text string (set units ruleset for examples)
-; bonus_message = text seen when a player is the first to discover
-;                 an bonus tech. Must contain '%s' to mark place of the tech
-;                 gained.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; helptext	= optional help text string (set units ruleset for examples)
+; bonus_message = text seen when a player is the first to 
+;                 discover an bonus tech.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
-; Special values for req1 and req2 are "None" (first section below)
-; and "Never" (never available).  If only one tech is required,
+; Special values for req1 and req2 are "None" (first section below) 
+; and "Never" (never available).  If only one tech is required, 
 ; it should be listed as req1.
 ;
 ; As well as custom flags defined above, the following flag strings are
 ; possible:
 ;
-; "Bonus_Tech"          = player gets extra tech if reached first
-; "Bridge"              = "Settler" unit types can build roads with
-;                         "RequiresBridge" flag over roads with
-;                         "PreventsOtherRoads" flag (rivers)
-; "Build_Airborne"      = from now on can build air units (for use by AI)
-; "Claim_Ocean"         = Player claims ocean tiles even if they are not
-;                         adjacent to border source
-; "Claim_Ocean_Limited" = Oceanic border sources claim ocean tiles even if
-;                         they are not adjacent to border source
+; "Bonus_Tech" = player gets extra tech if reached first
+; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
+;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
+; "Build_Airborne" = from now on can build air units (for use by AI)
+; "Claim_Ocean"    = Player claims ocean tiles even if they are not
+;                    adjacent to border source
 ;
 ; */ <-- avoid gettext warnings
 
@@ -147,9 +114,9 @@ graphic_alt = "-"
 name     = _("Automobile")
 req1     = "Combustion"
 req2     = "Steel"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.automobile"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_banking]
 name     = _("Banking")
@@ -392,9 +359,9 @@ graphic_alt = "-"
 name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
-helptext = _("Population will start contributing to pollution.")
 
 [advance_invention]
 name     = _("Invention")
@@ -482,9 +449,9 @@ graphic_alt = "-"
 name     = _("Mass Production")
 req1     = "Automobile"
 req2     = "The Corporation"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.mass_production"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_mathematics]
 name     = _("Mathematics")
@@ -582,7 +549,7 @@ req1     = "Mysticism"
 req2     = "Literacy"
 flags    = "Bonus_Tech"
 bonus_message = _("Great philosophers from all the world join \
-your civilization: you learn %s immediately.")
+your civilization: you get an immediate advance.")
 graphic     = "a.philosophy"
 graphic_alt = "-"
 
@@ -598,9 +565,9 @@ graphic_alt = "-"
 name     = _("Plastics")
 req1     = "Refining"
 req2     = "Space Flight"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.plastics"
 graphic_alt = "-"
-helptext = _("Increases the population's contribution to pollution.")
 
 [advance_polytheism]
 name     = _("Polytheism")
@@ -660,13 +627,9 @@ graphic_alt = "-"
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Workers and Engineers to upgrade irrigation systems \
-to farmland.\
-")
 
 [advance_robotics]
 name     = _("Robotics")

@@ -144,11 +144,9 @@ static void inputline_return(GtkEntry *w, gpointer data)
   theinput = gtk_entry_get_text(w);
   
   if (*theinput) {
-    if (client_state() == C_S_RUNNING
-        && GUI_GTK_OPTION(allied_chat_only)
+    if (client_state() == C_S_RUNNING && gui_gtk3_allied_chat_only
         && is_plain_public_message(theinput)) {
       char buf[MAX_LEN_MSG];
-
       fc_snprintf(buf, sizeof(buf), ". %s", theinput);
       send_chat(buf);
     } else {
@@ -156,11 +154,11 @@ static void inputline_return(GtkEntry *w, gpointer data)
     }
 
     if (genlist_size(history_list) >= MAX_CHATLINE_HISTORY) {
-      void *history_data;
+      void *data;
 
-      history_data = genlist_get(history_list, -1);
-      genlist_remove(history_list, history_data);
-      free(history_data);
+      data = genlist_get(history_list, -1);
+      genlist_remove(history_list, data);
+      free(data);
     }
 
     genlist_prepend(history_list, fc_strdup(theinput));
@@ -399,7 +397,7 @@ static gboolean inputline_handler(GtkWidget *w, GdkEventKey *ev)
       return TRUE;
 
     case GDK_KEY_Tab:
-      if (GUI_GTK_OPTION(chatline_autocompletion)) {
+      if (gui_gtk3_chatline_autocompletion) {
         return chatline_autocomplete(GTK_EDITABLE(w));
       }
 
@@ -447,8 +445,8 @@ void inputline_make_tag(GtkEntry *entry, enum text_tag_type type)
 
     if (0 == featured_text_apply_tag(selection, buf, sizeof(buf),
                                      TTT_COLOR, 0, FT_OFFSET_UNSET,
-                                     ft_color_construct(fg_color_text,
-                                                        bg_color_text))) {
+                                     ft_color(fg_color_text,
+                                              bg_color_text))) {
       goto CLEAN_UP;
     }
   } else if (0 == featured_text_apply_tag(selection, buf, sizeof(buf),
@@ -895,7 +893,7 @@ void real_output_window_append(const char *astring,
   gtk_text_buffer_insert(buf, &iter, "\n", -1);
   mark = gtk_text_buffer_create_mark(buf, NULL, &iter, TRUE);
 
-  if (GUI_GTK_OPTION(show_chat_message_time)) {
+  if (gui_gtk3_show_chat_message_time) {
     char timebuf[64];
     time_t now;
     struct tm *now_tm;

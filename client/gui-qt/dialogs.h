@@ -93,7 +93,7 @@ class races_dialog:public QDialog
   QComboBox *qnation_set;
   QRadioButton *is_male;
   QRadioButton *is_female;
-  QTableWidget *styles;
+  QTableWidget *city_styles;
   QTextEdit *description;
   QPushButton *ok_button;
   QPushButton *random_button;
@@ -191,16 +191,19 @@ private:
 };
 
 /**************************************************************************
-  A QPushButton that includes data like function to call and parmeters
+  Store data about a choice dialog button
 **************************************************************************/
-class Choice_dialog_button: public QPushButton
+class choice_dialog_button_data: public QObject
 {
   Q_OBJECT
+  QPushButton *button;
   pfcn_void func;
   QVariant data1, data2;
 public:
-  Choice_dialog_button(const QString title, pfcn_void func_in,
-                       QVariant data1_in, QVariant data2_in);
+  choice_dialog_button_data(QPushButton *button, pfcn_void func,
+                            QVariant data1, QVariant data2);
+  ~choice_dialog_button_data();
+  QPushButton *getButton();
   pfcn_void getFunc();
   QVariant getData1();
   QVariant getData2();
@@ -213,26 +216,23 @@ class choice_dialog: public QWidget
 {
   Q_OBJECT
   QVBoxLayout *layout;
+  QList<QVariant> data1_list;
+  QList<QVariant> data2_list;
   QSignalMapper *signal_mapper;
-  QList<Choice_dialog_button *> buttons_list;
-  QList<Choice_dialog_button *> last_buttons_stack;
-  QList<Choice_dialog_button *> action_button_map;
-  void (*run_on_close)(int);
+  QList<choice_dialog_button_data *> last_buttons_stack;
 public:
   choice_dialog(const QString title, const QString text,
-                QWidget *parent = NULL,
-                void (*run_on_close_in)(int) = NULL);
+                QWidget *parent = NULL);
   ~choice_dialog();
   void set_layout();
-  void add_item(QString title, pfcn_void func, QVariant data1,
-                QVariant data2, QString tool_tip, const int button_id);
+  void add_item(QString title, pfcn_void func, QVariant data1, 
+                QVariant data2);
   void show_me();
-  void stack_button(Choice_dialog_button *button);
+  void stack_button(const int button_number);
   void unstack_all_buttons();
   QVBoxLayout *get_layout();
-  Choice_dialog_button *get_identified_button(const int id);
+  QList<pfcn_void> func_list;
   int unit_id;
-  int target_id[ATK_COUNT];
 public slots:
   void execute_action(const int action);
 };

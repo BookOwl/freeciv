@@ -15,13 +15,6 @@
 #include <fc_config.h>
 #endif
 
-/* libxml2 */
-#ifdef FREECIV_HAVE_XML_REGISTRY
-#include <libxml/parser.h>
-#endif /* FREECIV_HAVE_XML_REGISTRY */
-
-#include "registry_xml.h"
-
 #include "registry.h"
 
 /*************************************************************************
@@ -29,9 +22,6 @@
 *************************************************************************/
 void registry_module_init(void)
 {
-#ifdef FREECIV_HAVE_XML_REGISTRY
-  LIBXML_TEST_VERSION;
-#endif /* FREECIV_HAVE_XML_REGISTRY */
 }
 
 /*************************************************************************
@@ -39,9 +29,6 @@ void registry_module_init(void)
 *************************************************************************/
 void registry_module_close(void)
 {
-#ifdef FREECIV_HAVE_XML_REGISTRY
-  xmlCleanupParser();
-#endif /* FREECIV_HAVE_XML_REGISTRY */
 }
 
 /**************************************************************************
@@ -50,14 +37,5 @@ void registry_module_close(void)
 struct section_file *secfile_load(const char *filename,
                                   bool allow_duplicates)
 {
-#ifdef FREECIV_HAVE_XML_REGISTRY
-  xmlDoc *sec_doc;
-
-  sec_doc = xmlReadFile(filename, NULL, XML_PARSE_NOERROR);
-  if (sec_doc != NULL) {
-    return xmlfile_load(sec_doc, filename);
-  }
-#endif /* FREECIV_HAVE_XML_REGISTRY */
-
   return secfile_load_section(filename, NULL, allow_duplicates);
 }

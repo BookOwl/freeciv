@@ -14,20 +14,7 @@
 
 [datafile]
 description="Civ2-equivalent nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-;nationlist = ""
-
-; List of nations to embed to main nations.ruleset despite separate nationlist
-; being used for other nations.
-;embedded_nations = ""
+options="+Freeciv-2.5-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
@@ -38,27 +25,16 @@ default_government = "Despotism"
 ; Default values for the AI traits. These are used if nation specific
 ; value for some trait has not been used. If these default too are
 ; not defined, the ultimate default is 50.
-; <trait>_min and <trait>_max give the range from which the trait value
-; is randomly chosen for a given AI player unless 'traitdistribution'
-; server setting is 'FIXED'
-; <trait>_default is the exaxt trait value used when 'traitdistribution'
-; is 'FIXED'. If <trait>_default has not been given, it`s set to the
-; midpoint between <trait>_min and <trait>_max.
 
 ; Value of trait "expansionist" defines how much AI wants to settle new territory.
-;expansionist_min = 50
-;expansionist_max = 50
-;expansionist_default = 50
+;expansionist = 50
 
 ; Value of trait "trader" defines how much AI wants to establish trade routes.
-;trader_min = 50
-;trader_max = 50
-;trader_default = 50
+;trader = 50
 
 ; Value of trait "aggressive" defines how easily AI declares war.
-;aggressive_min = 50
-;aggressive_max = 50
-;aggressive_default = 50
+;aggressive = 50
+
 
 ; Descriptions of nation sets
 ; These are self-contained subsets of the available nations; one of these
@@ -67,7 +43,7 @@ default_government = "Despotism"
 ; The first set defined is the one that is used by default. It is mandatory
 ; to have at least one, but if there is only one, it will be kept out of
 ; the user`s way.
-; name          = Translatable name of the set presented in the UI.
+; name 		= Translatable name of the set presented in the UI.
 ; rule_name     = Unique persistent name; this is also visible to users as
 ;                 the value of the "nationset" server option, and presented
 ;                 in "/list nationsets". It should thus be short, in lower
@@ -86,13 +62,10 @@ rule_name="all"
 
 ; Descriptions of nation groups
 ; These are more cosmetic than sets; they affect the "pick nation" dialog,
-; random nation selection, and possibly ruleset behaviour.
+; and also affect random nation selection.
 ; It`s OK to not define any nation groups at all.
-; name          =  name of the group (used adjectivally)
-; hidden        = TRUE to not include this group in the "pick nation" dialog
-;                 (for instance if it`s for use in a NationGroup requirement).
-;                 Default FALSE.
-; match         = How much the AI will try to select a nation in the same
+; name 		= name of the group
+; match		= How much the AI will try to select a nation in the same
 ;                 group
 
 [ngroup_ancient]
@@ -101,10 +74,6 @@ match=0
 [ngroup_modern]
 name=_("?nationgroup:Modern")
 match=0
-[ngroup_barbarian]
-name=_("?nationgroup:Barbarian")
-match=0
-hidden=true
 
 [nation_american]
 
@@ -130,7 +99,7 @@ ruler_titles = {
 
 flag="usa"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -244,7 +213,7 @@ ruler_titles = {
 
 flag="aztec"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
@@ -342,7 +311,7 @@ ruler_titles =
 
 flag="babylon"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -399,7 +368,7 @@ leaders = {
 
 flag="cartago"
 flag_alt="-"
-style = "Classical"
+city_style="Classical"
 
 init_techs=""
 init_buildings=""
@@ -444,7 +413,7 @@ ruler_titles = {
 
 flag="celtic"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -529,7 +498,7 @@ ruler_titles = {
 
 flag="han"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -670,7 +639,7 @@ ruler_titles = {
 
 flag="egypt_ancient"
 flag_alt="-"
-style = "Babylonian"
+city_style="Babylonian"
 
 init_techs=""
 init_buildings=""
@@ -749,7 +718,7 @@ ruler_titles = {
 
 flag="england"
 flag_alt="-"
-style = "European"
+city_style="European"
 
 init_techs=""
 init_buildings=""
@@ -861,7 +830,7 @@ ruler_titles = {
 
 flag="france_old"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -986,7 +955,7 @@ ruler_titles = {
 
 flag         = "hre"
 flag_alt     = "-"
-style        = "European"
+city_style   = "European"
 
 init_techs = ""
 init_buildings=""
@@ -1135,7 +1104,7 @@ ruler_titles = {
 
 flag="greece_ancient"
 flag_alt="-"
-style = "Classical"
+city_style="Classical"
 
 init_techs=""
 init_buildings=""
@@ -1287,7 +1256,7 @@ ruler_titles = {
 
 flag="india"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1381,7 +1350,7 @@ ruler_titles = {
 
 flag="japan"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1495,7 +1464,7 @@ ruler_titles = {
 
 flag="mongolia"
 flag_alt="-"
-style = "Asian"
+city_style="Asian"
 
 init_techs=""
 init_buildings=""
@@ -1557,7 +1526,7 @@ ruler_titles = {
 
 flag="iran_ancient"
 flag_alt="-"
-style = "Classical"
+city_style="Classical"
 
 init_techs=""
 init_buildings=""
@@ -1631,7 +1600,7 @@ ruler_titles = {
 
 flag="rome"
 flag_alt="-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""
@@ -1689,7 +1658,7 @@ ruler_titles = {
 
 flag="kiev"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -1777,7 +1746,7 @@ ruler_titles = {
 
 flag="cheyenne"
 flag_alt="-"
-style = "Celtic"
+city_style="Celtic"
 
 init_techs=""
 init_buildings=""
@@ -1869,7 +1838,7 @@ ruler_titles = {
 
 flag="spain"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""
@@ -1939,7 +1908,7 @@ ruler_titles = {
 
 flag="viking"
 flag_alt="-"
-style = "European"
+city_style="European"
 
 init_techs=""
 init_buildings=""
@@ -2019,7 +1988,7 @@ ruler_titles = {
 
 flag="zulu"
 flag_alt="-"
-style = "Tropical"
+city_style="Tropical"
 
 init_techs=""
 init_buildings=""
@@ -2068,7 +2037,6 @@ translation_domain="freeciv"
 
 name=_("Barbarian")
 plural=_("?plural:Barbarians")
-groups="Barbarian"
 legend=_("Since the dawn of civilization, barbarians have been a threat to\
  cultured peoples everywhere.")
 
@@ -2084,7 +2052,7 @@ leaders = {
 
 flag="barbarian"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""
@@ -2093,19 +2061,16 @@ init_units=""
 cities = "Barbaricum"
 
 is_playable = FALSE
-barbarian_type = "LandAndSea"
+barbarian_type = "Land"
 
 ; nothing more needed for barbarians
 
-; Pirate nation exist for backward compatibility with old savegames, where it might be present, only.
-; Freeciv should always pick the one "LandAndSea" barbarian in new games.
 [nation_pirate]
 
 translation_domain="freeciv"
 
 name=_("Pirate")
 plural=_("?plural:Pirates")
-groups="Barbarian"
 legend=_("As long as honest men have sailed the seas, pirates have been a\
  scourge of them and of all coastal dwelling peoples.")
 
@@ -2122,7 +2087,7 @@ leaders = {
 
 flag="pirate"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

@@ -2,45 +2,34 @@
 
 SUBDIRS = advisors generator scripting
 
-if FREECIV_WEB
-srvbin = freeciv-web
-else
 srvbin = freeciv-server
-endif
 
-if SERVER
 bin_PROGRAMS = $(srvbin)
-endif
-
 lib_LTLIBRARIES = libfreeciv-srv.la
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/ai \
 	-I$(top_srcdir)/ai/classic \
 	-I$(top_srcdir)/common \
 	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/common/networking \
 	-I$(top_srcdir)/common/scriptcore \
 	-I$(top_srcdir)/utility \
 	-I$(srcdir)/advisors \
 	-I$(srcdir)/generator \
 	-I$(srcdir)/scripting \
-	-I$(top_srcdir)/dependencies/tinycthread \
+	$(LIBGGZ_INCLUDES) $(GGZDMOD_INCLUDES) \
 	$(FCDB_MYSQL_CFLAGS) $(FCDB_POSTGRES_CFLAGS) $(FCDB_SQLITE3_CFLAGS)
 
-if MINGW
+if MINGW32
 SERVERICON=../win32/servericon.o
 endif
 
 exe_sources = \
-		civserver.c
+		civserver.c	\
+		civserver.h
 
 libfreeciv_srv_la_SOURCES = \
-		actiontools.c	\
-		actiontools.h	\
 		aiiface.c	\
 		aiiface.h	\
-		animals.c	\
-		animals.h	\
 		auth.c		\
 		auth.h		\
 		barbarian.c	\
@@ -69,40 +58,32 @@ libfreeciv_srv_la_SOURCES = \
 		fcdb.h		\
 		gamehand.c	\
 		gamehand.h	\
+		ggzserver.c	\
+		ggzserver.h	\
 		handchat.c	\
 		handchat.h	\
-		hand_gen.c	\
 		hand_gen.h	\
-		legacysave.c	\
-		legacysave.h	\
+		hand_gen.c	\
 		maphand.c	\
 		maphand.h	\
 		meta.c		\
 		meta.h		\
-		mood.c		\
-		mood.h		\
 		notify.c	\
 		notify.h	\
 		plrhand.c	\
 		plrhand.h	\
 		report.c	\
 		report.h	\
-		rscompat.c	\
-		rscompat.h	\
 		rssanity.c	\
 		rssanity.h	\
 		ruleset.c	\
 		ruleset.h	\
 		sanitycheck.c	\
 		sanitycheck.h	\
-		savecompat.c	\
-		savecompat.h	\
 		savegame.c	\
 		savegame.h	\
 		savegame2.c	\
 		savegame2.h	\
-		savegame3.c	\
-		savegame3.h	\
 		score.c		\
 		score.h		\
 		sernet.c	\
@@ -142,12 +123,6 @@ endif
 if AI_MOD_STATIC_THREADED
 da_libs += $(top_builddir)/ai/threaded/libthreadedai.la
 endif
-if AI_MOD_STATIC_THREXPR
-da_libs += $(top_builddir)/ai/threxpr/libthrexprai.la
-endif
-if AI_MOD_STATIC_STUB
-da_libs += $(top_builddir)/ai/stub/libstubai.la
-endif
 
 # These files are not generated to builddir, but to srcdir */
 MAINTAINERCLEANFILES = \
@@ -166,25 +141,18 @@ libfreeciv_srv_la_LIBADD = \
  $(srvlibs) $(SRV_LIB_LIBS) \
  $(LUA_LIBS) $(TOLUA_LIBS) $(LUASQL_LIBS)
 
-exe_ldflags =
+exe_ldflags = $(GGZDMOD_LDFLAGS)
 
 exe_ldadd = \
  ./libfreeciv-srv.la \
  $(top_builddir)/common/libfreeciv.la \
  $(INTLLIBS) \
  $(MAPIMG_WAND_LIBS) \
- $(TINYCTHR_LIBS) \
- $(SERVER_LIBS) $(SERVERICON)
+ $(SERVER_LIBS) $(LIB_GGZDMOD) $(SERVERICON)
 
-if FREECIV_WEB
-freeciv_web_SOURCES = $(exe_sources)
-freeciv_web_LDFLAGS = $(exe_ldflags)
-freeciv_web_LDADD = $(exe_ldadd)
-else
 freeciv_server_SOURCES = $(exe_sources)
 freeciv_server_LDFLAGS = $(exe_ldflags)
 freeciv_server_LDADD = $(exe_ldadd)
-endif
 
 desktopfiledir = @DESKTOPDIR@
 desktopfile_DATA = \

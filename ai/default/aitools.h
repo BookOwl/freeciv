@@ -55,7 +55,8 @@ bool dai_unit_goto_constrained(struct ai_type *ait, struct unit *punit,
                                struct tile *ptile,
                                struct pf_parameter *parameter);
 bool dai_unit_goto(struct ai_type *ait, struct unit *punit, struct tile *ptile);
-bool goto_is_sane(struct unit *punit, struct tile *ptile);
+bool goto_is_sane(struct ai_type *ait, struct unit *punit,
+                  struct tile *ptile, bool omni);
 
 void dai_unit_new_task(struct ai_type *ait, struct unit *punit,
                        enum ai_unit_task task, struct tile *ptile);
@@ -69,18 +70,21 @@ bool dai_unit_move(struct ai_type *ait, struct unit *punit, struct tile *ptile);
 void dai_government_change(struct player *pplayer, struct government *gov);
 int dai_gold_reserve(struct player *pplayer);
 
+void init_choice(struct adv_choice *choice);
 void adjust_choice(int value, struct adv_choice *choice);
+void copy_if_better_choice(struct adv_choice *cur, struct adv_choice *best);
 
-bool dai_choose_role_unit(struct ai_type *ait, struct player *pplayer,
-                          struct city *pcity, struct adv_choice *choice,
-                          enum choice_type type, int role, int want,
-                          bool need_boat);
+bool is_unit_choice_type(enum choice_type type);
+
+bool dai_choose_role_unit(struct player *pplayer, struct city *pcity,
+                          struct adv_choice *choice, enum choice_type type,
+                          int role, int want, bool need_boat);
 void dai_build_adv_override(struct ai_type *ait, struct city *pcity,
                             struct adv_choice *choice);
 bool dai_assess_military_unhappiness(struct city *pcity);
 
 void dai_consider_plr_dangerous(struct ai_type *ait, struct player *plr1,
                                 struct player *plr2,
-                                enum override_bool *result);
+                                enum danger_consideration *result);
 
 #endif  /* FC__AITOOLS_H */

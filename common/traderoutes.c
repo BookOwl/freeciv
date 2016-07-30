@@ -17,7 +17,6 @@
 
 /* utility */
 #include "log.h"
-#include "rand.h"
 
 /* common */
 #include "city.h"
@@ -29,8 +28,7 @@
 #include "traderoutes.h"
 
 const char *trade_route_type_names[] = {
-  "National", "NationalIC", "IN", "INIC", "Ally", "AllyIC",
-  "Enemy", "EnemyIC", "Team", "TeamIC"
+  "National", "NationalIC", "IN", "INIC"
 };
 
 const char *traderoute_cancelling_type_names[] = {
@@ -38,8 +36,6 @@ const char *traderoute_cancelling_type_names[] = {
 };
 
 struct trade_route_settings trtss[TRT_LAST];
-
-static struct goods_type goods[MAX_GOODS_TYPES];
 
 /*************************************************************************
   Return current maximum number of trade routes city can have.
@@ -57,51 +53,10 @@ int max_trade_routes(const struct city *pcity)
 enum trade_route_type cities_trade_route_type(const struct city *pcity1,
                                               const struct city *pcity2)
 {
-  struct player *plr1 = city_owner(pcity1);
-  struct player *plr2 = city_owner(pcity2);
-
-  if (plr1 != plr2) {
-    struct player_diplstate *ds = player_diplstate_get(plr1, plr2);
-
+  if (city_owner(pcity1) != city_owner(pcity2)) {
     if (city_tile(pcity1)->continent != city_tile(pcity2)->continent) {
-      switch (ds->type) {
-      case DS_ALLIANCE:
-        return TRT_ALLY_IC;
-      case DS_WAR:
-        return TRT_ENEMY_IC;
-      case DS_TEAM:
-        return TRT_TEAM_IC;
-      case DS_ARMISTICE:
-      case DS_CEASEFIRE:
-      case DS_PEACE:
-      case DS_NO_CONTACT:
-        return TRT_IN_IC;
-      case DS_LAST:
-        fc_assert(ds->type != DS_LAST);
-        return TRT_IN_IC;
-      }
-      fc_assert(FALSE);
-
       return TRT_IN_IC;
     } else {
-      switch (ds->type) {
-      case DS_ALLIANCE:
-        return TRT_ALLY;
-      case DS_WAR:
-        return TRT_ENEMY;
-      case DS_TEAM:
-        return TRT_TEAM;
-      case DS_ARMISTICE:
-      case DS_CEASEFIRE:
-      case DS_PEACE:
-      case DS_NO_CONTACT:
-        return TRT_IN;
-      case DS_LAST:
-        fc_assert(ds->type != DS_LAST);
-        return TRT_IN;
-      }
-      fc_assert(FALSE);
-
       return TRT_IN;
     }
   } else {
@@ -224,24 +179,33 @@ bool can_cities_trade(const struct city *pc1, const struct city *pc2)
 
 /****************************************************************************
   Return the minimum value of the sum of trade routes which could be
-  replaced by a new one. The target routes to be removed
-  will be put into 'would_remove', if set.
+  replaced by a new one. The target cities of the concerned trade routes
+  are will be put into 'would_remove', if set.
 ****************************************************************************/
 int city_trade_removable(const struct city *pcity,
-                         struct trade_route_list *would_remove)
+                         struct city_list *would_remove)
 {
-  struct trade_route *sorted[MAX_TRADE_ROUTES];
+  int sorted[MAX_TRADE_ROUTES];
   int num, i, j;
+
+  FC_STATIC_ASSERT(ARRAY_SIZE(sorted) == ARRAY_SIZE(pcity->trade),
+                   incompatible_trade_array_size);
+  FC_STATIC_ASSERT(ARRAY_SIZE(sorted) == ARRAY_SIZE(pcity->trade_value),
+                   incompatible_trade_value_array_size);
 
   /* Sort trade route values. */
   num = 0;
-  trade_routes_iterate(pcity, proute) {
-    for (j = num; j > 0 && (proute->value < sorted[j - 1]->value) ; j--) {
+  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    if (0 == pcity->trade[i]) {
+      continue;
+    }
+    for (j = num; j > 0 && (pcity->trade_value[i]
+                            < pcity->trade_value[sorted[j - 1]]); j--) {
       sorted[j] = sorted[j - 1];
     }
-    sorted[j] = proute;
+    sorted[j] = i;
     num++;
-  } trade_routes_iterate_end;
+  }
 
   /* No trade routes at all. */
   if (0 == num) {
@@ -256,12 +220,14 @@ int city_trade_removable(const struct city *pcity,
 
   /* Return values. */
   for (i = j = 0; i < num; i++) {
-    j += sorted[i]->value;
+    j += pcity->trade_value[sorted[i]];
     if (NULL != would_remove) {
-      trade_route_list_append(would_remove, sorted[i]);
+      struct city *pother = game_city_by_number(pcity->trade[sorted[i]]);
+
+      fc_assert(NULL != pother);
+      city_list_append(would_remove, pother);
     }
   }
-
   return j;
 }
 
@@ -341,7 +307,15 @@ int trade_between_cities(const struct city *pc1, const struct city *pc2)
 **************************************************************************/
 int city_num_trade_routes(const struct city *pcity)
 {
-  return trade_route_list_size(pcity->routes);
+  int i, n = 0;
+
+  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    if (pcity->trade[i] != 0) {
+      n++;
+    }
+  }
+  
+  return n;
 }
 
 /**************************************************************************
@@ -349,38 +323,26 @@ int city_num_trade_routes(const struct city *pcity)
   trade route and also when you simply sell your trade goods at the
   new city.
 
-  If you change this calculation remember to also update its duplication
-  in dai_choose_trade_route()
+  Note if you trade with a city you already have a trade route with,
+  you'll only get 1/3 of this value.
 **************************************************************************/
 int get_caravan_enter_city_trade_bonus(const struct city *pc1, 
-                                       const struct city *pc2,
-                                       const bool establish_trade)
+                                       const struct city *pc2)
 {
   int tb, bonus;
 
   /* Should this be real_map_distance? */
   tb = map_distance(pc1->tile, pc2->tile) + 10;
   tb = (tb * (pc1->surplus[O_TRADE] + pc2->surplus[O_TRADE])) / 24;
+
+  /*  fudge factor to more closely approximate Civ2 behavior (Civ2 is
+   * really very different -- this just fakes it a little better) */
+  tb *= 3;
   
   /* Trade_revenue_bonus increases revenue by power of 2 in milimes */
-  bonus = get_target_bonus_effects(NULL,
-                                   city_owner(pc1), city_owner(pc2),
-                                   pc1, NULL, city_tile(pc1),
-                                   /* TODO: Should unit requirements be
-                                    * allowed so stuff like moves left and
-                                    * unit type can modify the bonus? */
-                                   NULL, NULL,
-                                   NULL, NULL,
-                                   /* Could be used to reduce the one time
-                                    * bonus if no trade route is
-                                    * established. */
-                                   action_by_number(establish_trade ?
-                                                      ACTION_TRADE_ROUTE :
-                                                      ACTION_MARKETPLACE),
-                                   EFT_TRADE_REVENUE_BONUS);
-
-  /* Be mercy full to players with small amounts. Round up. */
-  tb = ceil((float)tb * pow(2.0, (double)bonus / 1000.0));
+  bonus = get_city_bonus(pc1, EFT_TRADE_REVENUE_BONUS);
+  
+  tb = (float)tb * pow(2.0, (double)bonus / 1000.0);
 
   return tb;
 }
@@ -390,158 +352,11 @@ int get_caravan_enter_city_trade_bonus(const struct city *pc1,
 **************************************************************************/
 bool have_cities_trade_route(const struct city *pc1, const struct city *pc2)
 {
-  trade_partners_iterate(pc1, route_to) {
+  trade_routes_iterate(pc1, route_to) {
     if (route_to->id == pc2->id) {
-      return TRUE;
-    }
-  } trade_partners_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Initialize goods structures.
-****************************************************************************/
-void goods_init(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_GOODS_TYPES; i++) {
-    goods[i].id = i;
-
-    requirement_vector_init(&(goods[i].reqs));
-    goods[i].disabled = FALSE;
-  }
-}
-
-/****************************************************************************
-  Free the memory associated with goods
-****************************************************************************/
-void goods_free(void)
-{
-  int i;
-
-  for (i = 0; i < MAX_GOODS_TYPES; i++) {
-    requirement_vector_free(&(goods[i].reqs));
-  }
-}
-
-/**************************************************************************
-  Return the goods id.
-**************************************************************************/
-Goods_type_id goods_number(const struct goods_type *pgood)
-{
-  fc_assert_ret_val(NULL != pgood, -1);
-
-  return pgood->id;
-}
-
-/**************************************************************************
-  Return the goods index.
-
-  Currently same as goods_number(), paired with goods_count()
-  indicates use as an array index.
-**************************************************************************/
-Goods_type_id goods_index(const struct goods_type *pgood)
-{
-  fc_assert_ret_val(NULL != pgood, -1);
-
-  return pgood - goods;
-}
-
-/****************************************************************************
-  Return goods type of given id.
-****************************************************************************/
-struct goods_type *goods_by_number(Goods_type_id id)
-{
-  fc_assert_ret_val(id >= 0 && id < game.control.num_goods_types, NULL);
-
-  return &goods[id];
-}
-
-/****************************************************************************
-  Return translated name of this goods type.
-****************************************************************************/
-const char *goods_name_translation(struct goods_type *pgood)
-{
-  return name_translation_get(&pgood->name);
-}
-
-/****************************************************************************
-  Return untranslated name of this goods type.
-****************************************************************************/
-const char *goods_rule_name(struct goods_type *pgood)
-{
-  return rule_name_get(&pgood->name);
-}
-
-/**************************************************************************
-  Returns goods type matching rule name or NULL if there is no goods type
-  with such name.
-**************************************************************************/
-struct goods_type *goods_by_rule_name(const char *name)
-{
-  const char *qs;
-
-  if (name == NULL) {
-    return NULL;
-  }
-
-  qs = Qn_(name);
-
-  goods_type_iterate(pgood) {
-    if (!fc_strcasecmp(goods_rule_name(pgood), qs)) {
-      return pgood;
-    }
-  } goods_type_iterate_end;
-
-  return NULL;
-}
-
-/****************************************************************************
-  Can the city provide goods.
-****************************************************************************/
-bool goods_can_be_provided(struct city *pcity, struct goods_type *pgood)
-{
-  return are_reqs_active(city_owner(pcity), NULL,
-                         pcity, NULL, city_tile(pcity),
-                         NULL, NULL, NULL, NULL, NULL,
-                         &pgood->reqs, RPT_CERTAIN);
-}
-
-/****************************************************************************
-  Does city receive goods
-****************************************************************************/
-bool city_receives_goods(const struct city *pcity,
-                         const struct goods_type *pgood)
-{
-  trade_routes_iterate(pcity, proute) {
-    if (proute->goods == pgood
-        && (proute->dir == RDIR_TO || proute->dir == RDIR_BIDIRECTIONAL)) {
       return TRUE;
     }
   } trade_routes_iterate_end;
 
   return FALSE;
-}
-
-/****************************************************************************
-  Return goods type for the new traderoute between given cities.
-****************************************************************************/
-struct goods_type *goods_for_new_route(struct city *src, struct city *dest)
-{
-  int i = 0;
-  struct goods_type *potential[MAX_GOODS_TYPES];
-
-  goods_type_iterate(pgood) {
-    if (goods_can_be_provided(src, pgood)) {
-      potential[i++] = pgood;
-    }
-  } goods_type_iterate_end;
-
-  if (i == 0) {
-    return NULL;
-  }
-
-  return potential[fc_rand(i)];
 }

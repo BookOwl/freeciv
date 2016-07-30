@@ -17,7 +17,6 @@
 
 /* common */
 #include "idex.h"
-#include "map.h"
 #include "movement.h"
 
 /* common/scriptcore */
@@ -124,15 +123,15 @@ Tile *api_find_tile(lua_State *L, int nat_x, int nat_y)
 /*****************************************************************************
   Return the tile at the given index.
 *****************************************************************************/
-Tile *api_find_tile_by_index(lua_State *L, int tindex)
+Tile *api_find_tile_by_index(lua_State *L, int index)
 {
   LUASCRIPT_CHECK_STATE(L, NULL);
 
-  return index_to_tile(tindex);
+  return index_to_tile(index);
 }
 
 /*****************************************************************************
-  Return the government with the given Government_type_id index.
+  Return the government with the given government_id index.
 *****************************************************************************/
 Government *api_find_government(lua_State *L, int government_id)
 {

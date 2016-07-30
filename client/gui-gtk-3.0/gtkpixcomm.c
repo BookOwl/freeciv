@@ -43,7 +43,6 @@
 
 /* gui-gtk-3.0 */
 #include "gui_main.h"
-#include "sprite.h"
 
 #include "gtkpixcomm.h"
 

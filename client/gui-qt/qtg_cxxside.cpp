@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,14 +15,15 @@
 #include <fc_config.h>
 #endif
 
+
 // client
 #include "gui_interface.h"
 
 #include "qtg_cxxside.h"
 
-/***********************************************************************
+/**************************************************************************
   Setup the gui callback table.
-***********************************************************************/
+**************************************************************************/
 void setup_gui_funcs()
 {
   struct gui_funcs *funcs = get_gui_funcs();
@@ -32,13 +33,12 @@ void setup_gui_funcs()
   funcs->ui_exit = qtg_ui_exit;
 
   funcs->get_gui_type = qtg_get_gui_type;
-  funcs->insert_client_build_info = qtg_insert_client_build_info;
-  funcs->adjust_default_options = qtg_adjust_default_options;
 
   funcs->version_message = qtg_version_message;
   funcs->real_output_window_append = qtg_real_output_window_append;
 
-  funcs->is_view_supported = qtg_is_view_supported;
+  funcs->isometric_view_supported = qtg_isometric_view_supported;
+  funcs->overhead_view_supported = qtg_overhead_view_supported;
   funcs->free_intro_radar_sprites = qtg_free_intro_radar_sprites;
   funcs->load_gfxfile = qtg_load_gfxfile;
   funcs->create_sprite = qtg_create_sprite;
@@ -51,22 +51,21 @@ void setup_gui_funcs()
 
   funcs->canvas_create = qtg_canvas_create;
   funcs->canvas_free = qtg_canvas_free;
-  funcs->canvas_set_zoom = qtg_canvas_set_zoom;
-  funcs->has_zoom_support = qtg_has_zoom_support;
   funcs->canvas_copy = qtg_canvas_copy;
   funcs->canvas_put_sprite = qtg_canvas_put_sprite;
   funcs->canvas_put_sprite_full = qtg_canvas_put_sprite_full;
   funcs->canvas_put_sprite_fogged = qtg_canvas_put_sprite_fogged;
   funcs->canvas_put_rectangle = qtg_canvas_put_rectangle;
   funcs->canvas_fill_sprite_area = qtg_canvas_fill_sprite_area;
+  funcs->canvas_fog_sprite_area = qtg_canvas_fog_sprite_area;
   funcs->canvas_put_line = qtg_canvas_put_line;
   funcs->canvas_put_curved_line = qtg_canvas_put_curved_line;
   funcs->get_text_size = qtg_get_text_size;
   funcs->canvas_put_text = qtg_canvas_put_text;
 
-  funcs->set_rulesets = qtg_set_rulesets;
-  funcs->options_extra_init = qtg_options_extra_init;
-  funcs->server_connect = qtg_server_connect;
+  funcs->gui_set_rulesets = qtg_gui_set_rulesets;
+  funcs->gui_options_extra_init = qtg_gui_options_extra_init;
+  funcs->gui_server_connect = qtg_gui_server_connect;
   funcs->add_net_input = qtg_add_net_input;
   funcs->remove_net_input = qtg_remove_net_input;
   funcs->real_conn_list_dialog_update = qtg_real_conn_list_dialog_update;
@@ -90,16 +89,18 @@ void setup_gui_funcs()
   funcs->editgui_tileset_changed = qtg_editgui_tileset_changed;
   funcs->editgui_popdown_all = qtg_editgui_popdown_all;
 
+  funcs->gui_ggz_embed_ensure_server = qtg_gui_ggz_embed_ensure_server;
+  funcs->gui_ggz_embed_leave_table = qtg_gui_ggz_embed_leave_table;
+  funcs->add_ggz_input = qtg_add_ggz_input;
+  funcs->remove_ggz_input = qtg_remove_ggz_input;
+
   funcs->update_timeout_label = qtg_update_timeout_label;
   funcs->real_city_dialog_popup = qtg_real_city_dialog_popup;
   funcs->real_city_dialog_refresh = qtg_real_city_dialog_refresh;
   funcs->popdown_city_dialog = qtg_popdown_city_dialog;
   funcs->popdown_all_city_dialogs = qtg_popdown_all_city_dialogs;
-  funcs->handmade_scenario_warning = qtg_handmade_scenario_warning;
   funcs->refresh_unit_city_dialogs = qtg_refresh_unit_city_dialogs;
   funcs->city_dialog_is_open = qtg_city_dialog_is_open;
-
-  funcs->request_transport = qtg_request_transport;
 
   funcs->gui_load_theme = qtg_gui_load_theme;
   funcs->gui_clear_theme = qtg_gui_clear_theme;

@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996-2005 - Freeciv Development Team
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -24,14 +24,12 @@
 #include "client_main.h" /* can_client_change_view() */
 #include "climap.h"
 #include "control.h"
-#include "mapview_g.h"
 #include "options.h"
-#include "zoom.h"
-
 #include "overview_common.h"
 
+#include "mapview_g.h"
+
 int OVERVIEW_TILE_SIZE = 2;
-#if 0
 struct overview overview = {
   /* These are the default values.  All others are zeroed automatically. */
   .fog = TRUE,
@@ -40,7 +38,6 @@ struct overview overview = {
 	     [OLAYER_CITIES] = TRUE,
 	     [OLAYER_BORDERS_ON_OCEAN] = TRUE}
 };
-#endif
 
 /*
  * Set to TRUE if the backing store is more recent than the version
@@ -58,8 +55,7 @@ static void gui_to_natural_pos(const struct tileset *t,
 			       int gui_x, int gui_y)
 {
   const double gui_xd = gui_x, gui_yd = gui_y;
-  const double W = tileset_tile_width(t) * map_zoom;
-  const double H = tileset_tile_height(t) * map_zoom;
+  const double W = tileset_tile_width(t), H = tileset_tile_height(t);
   double map_x, map_y;
 
   /* First convert to map positions.  This ignores hex conversions; we're
@@ -91,8 +87,8 @@ static void gui_to_overview_pos(const struct tileset *t,
   gui_to_natural_pos(t, &ntl_x, &ntl_y, gui_x, gui_y);
 
   /* Now convert straight to overview coordinates. */
-  *ovr_x = floor((ntl_x - (double)gui_options.overview.map_x0) * OVERVIEW_TILE_SIZE);
-  *ovr_y = floor((ntl_y - (double)gui_options.overview.map_y0) * OVERVIEW_TILE_SIZE);
+  *ovr_x = floor((ntl_x - (double)overview.map_x0) * OVERVIEW_TILE_SIZE);
+  *ovr_y = floor((ntl_y - (double)overview.map_y0) * OVERVIEW_TILE_SIZE);
 
   /* Now do additional adjustments.  See map_to_overview_pos(). */
   if (current_topo_has_flag(TF_WRAPX)) {
@@ -117,7 +113,7 @@ static void gui_to_overview_pos(const struct tileset *t,
 ****************************************************************************/
 static struct color *overview_tile_color(struct tile *ptile)
 {
-  if (gui_options.overview.layers[OLAYER_CITIES]) {
+  if (overview.layers[OLAYER_CITIES]) {
     struct city *pcity = tile_city(ptile);
 
     if (pcity) {
@@ -132,7 +128,7 @@ static struct color *overview_tile_color(struct tile *ptile)
       }
     }
   }
-  if (gui_options.overview.layers[OLAYER_UNITS]) {
+  if (overview.layers[OLAYER_UNITS]) {
     struct unit *punit = find_visible_unit(ptile);
 
     if (punit) {
@@ -147,31 +143,25 @@ static struct color *overview_tile_color(struct tile *ptile)
       }
     }
   }
-  if (gui_options.overview.layers[OLAYER_BORDERS]) {
+  if (overview.layers[OLAYER_BORDERS]) {
     struct player *owner = tile_owner(ptile);
 
     if (owner) {
-      if (gui_options.overview.layers[OLAYER_BORDERS_ON_OCEAN]) {
+      if (overview.layers[OLAYER_BORDERS_ON_OCEAN]) {
         return get_player_color(tileset, owner);
       } else if (!is_ocean_tile(ptile)) {
         return get_player_color(tileset, owner);
       }
     }
   }
-  if (gui_options.overview.layers[OLAYER_RELIEF]
-      && tile_terrain(ptile) != T_UNKNOWN) {
+  if (overview.layers[OLAYER_RELIEF] && tile_terrain(ptile) != T_UNKNOWN) {
     return get_terrain_color(tileset, tile_terrain(ptile));
   }
-  if (gui_options.overview.layers[OLAYER_BACKGROUND]
-      && tile_terrain(ptile) != T_UNKNOWN) {
-    if (terrain_has_flag(tile_terrain(ptile), TER_FROZEN)) {
-      return get_color(tileset, COLOR_OVERVIEW_FROZEN);
+  if (overview.layers[OLAYER_BACKGROUND] && tile_terrain(ptile) != T_UNKNOWN) {
+    if (is_ocean_tile(ptile)) {
+      return get_color(tileset, COLOR_OVERVIEW_OCEAN);
     } else {
-      if (is_ocean_tile(ptile)) {
-        return get_color(tileset, COLOR_OVERVIEW_OCEAN);
-      } else {
-        return get_color(tileset, COLOR_OVERVIEW_LAND);
-      }
+      return get_color(tileset, COLOR_OVERVIEW_LAND);
     }
   }
 
@@ -188,9 +178,8 @@ void refresh_overview_from_canvas(void)
   if (!dest) {
     return;
   }
-  canvas_copy(dest, gui_options.overview.window,
-              0, 0, 0, 0,
-              gui_options.overview.width, gui_options.overview.height);
+  canvas_copy(dest, overview.window,
+              0, 0, 0, 0, overview.width, overview.height);
 }
 
 /**************************************************************************
@@ -201,22 +190,21 @@ static void redraw_overview(void)
 {
   int i, x[4], y[4];
 
-  if (!gui_options.overview.map) {
+  if (!overview.map) {
     return;
   }
 
   {
-    struct canvas *src = gui_options.overview.map;
-    struct canvas *dst = gui_options.overview.window;
-    int x_left = gui_options.overview.map_x0 * OVERVIEW_TILE_SIZE;
-    int y_top = gui_options.overview.map_y0 * OVERVIEW_TILE_SIZE;
-    int ix = gui_options.overview.width - x_left;
-    int iy = gui_options.overview.height - y_top;
+    struct canvas *src = overview.map, *dst = overview.window;
+    int x = overview.map_x0 * OVERVIEW_TILE_SIZE;
+    int y = overview.map_y0 * OVERVIEW_TILE_SIZE;
+    int ix = overview.width - x;
+    int iy = overview.height - y;
 
-    canvas_copy(dst, src, 0, 0, ix, iy, x_left, y_top);
-    canvas_copy(dst, src, 0, y_top, ix, 0, x_left, iy);
-    canvas_copy(dst, src, x_left, 0, 0, iy, ix, y_top);
-    canvas_copy(dst, src, x_left, y_top, 0, 0, ix, iy);
+    canvas_copy(dst, src, 0, 0, ix, iy, x, y);
+    canvas_copy(dst, src, 0, y, ix, 0, x, iy);
+    canvas_copy(dst, src, x, 0, 0, iy, ix, y);
+    canvas_copy(dst, src, x, y, 0, 0, ix, iy);
   }
 
   gui_to_overview_pos(tileset, &x[0], &y[0],
@@ -235,10 +223,10 @@ static void redraw_overview(void)
     int dst_x = x[(i + 1) % 4];
     int dst_y = y[(i + 1) % 4];
 
-    canvas_put_line(gui_options.overview.window,
-                    get_color(tileset, COLOR_OVERVIEW_VIEWRECT),
-                    LINE_NORMAL,
-                    src_x, src_y, dst_x - src_x, dst_y - src_y);
+    canvas_put_line(overview.window,
+		    get_color(tileset, COLOR_OVERVIEW_VIEWRECT),
+		    LINE_NORMAL,
+		    src_x, src_y, dst_x - src_x, dst_y - src_y);
   }
 
   refresh_overview_from_canvas();
@@ -296,16 +284,16 @@ void center_tile_overviewcanvas(void)
    * basically necessary for the overview to be efficiently
    * updated. */
   if (current_topo_has_flag(TF_WRAPX)) {
-    gui_options.overview.map_x0 = wrap_double(ntl_x - (double)NATURAL_WIDTH / 2.0,
-                                              NATURAL_WIDTH);
+    overview.map_x0 = wrap_double(ntl_x - (double)NATURAL_WIDTH / 2.0,
+				  NATURAL_WIDTH);
   } else {
-    gui_options.overview.map_x0 = 0;
+    overview.map_x0 = 0;
   }
   if (current_topo_has_flag(TF_WRAPY)) {
-    gui_options.overview.map_y0 = wrap_double(ntl_y - (double)NATURAL_HEIGHT / 2.0,
-                                              NATURAL_HEIGHT);
+    overview.map_y0 = wrap_double(ntl_y - (double)NATURAL_HEIGHT / 2.0,
+				  NATURAL_HEIGHT);
   } else {
-    gui_options.overview.map_y0 = 0;
+    overview.map_y0 = 0;
   }
 
   redraw_overview();
@@ -326,8 +314,7 @@ void map_to_overview_pos(int *overview_x, int *overview_y,
    *
    * NOTE: this embeds the map wrapping in the overview code. */
   do_in_natural_pos(ntl_x, ntl_y, map_x, map_y) {
-    int ovr_x = ntl_x - gui_options.overview.map_x0;
-    int ovr_y = ntl_y - gui_options.overview.map_y0;
+    int ovr_x = ntl_x - overview.map_x0, ovr_y = ntl_y - overview.map_y0;
 
     if (current_topo_has_flag(TF_WRAPX)) {
       ovr_x = FC_WRAP(ovr_x, NATURAL_WIDTH);
@@ -355,8 +342,8 @@ void map_to_overview_pos(int *overview_x, int *overview_y,
 void overview_to_map_pos(int *map_x, int *map_y,
 			 int overview_x, int overview_y)
 {
-  int ntl_x = overview_x / OVERVIEW_TILE_SIZE + gui_options.overview.map_x0;
-  int ntl_y = overview_y / OVERVIEW_TILE_SIZE + gui_options.overview.map_y0;
+  int ntl_x = overview_x / OVERVIEW_TILE_SIZE + overview.map_x0;
+  int ntl_y = overview_y / OVERVIEW_TILE_SIZE + overview.map_y0;
 
   if (MAP_IS_ISOMETRIC && !current_topo_has_flag(TF_WRAPX)) {
     /* Clip half tile left and right.  See comment in map_to_overview_pos. */
@@ -395,7 +382,7 @@ static void put_overview_tile_area(struct canvas *pcanvas,
   canvas_put_rectangle(pcanvas,
 		       overview_tile_color(ptile),
 		       x, y, w, h);
-  if (gui_options.overview.fog
+  if (overview.fog
       && TILE_KNOWN_UNSEEN == client_tile_get_known(ptile)) {
     canvas_put_sprite(pcanvas, x, y, get_basic_fog_sprite(tileset),
 		      0, 0, w, h);
@@ -418,12 +405,11 @@ void overview_update_tile(struct tile *ptile)
 
     if (MAP_IS_ISOMETRIC) {
       if (current_topo_has_flag(TF_WRAPX)) {
-	if (overview_x > gui_options.overview.width - OVERVIEW_TILE_WIDTH) {
+	if (overview_x > overview.width - OVERVIEW_TILE_WIDTH) {
 	  /* This tile is shown half on the left and half on the right
 	   * side of the overview.  So we have to draw it in two parts. */
-	  put_overview_tile_area(gui_options.overview.map, ptile,
-				 overview_x - gui_options.overview.width,
-                                 overview_y,
+	  put_overview_tile_area(overview.map, ptile,
+				 overview_x - overview.width, overview_y,
 				 OVERVIEW_TILE_WIDTH, OVERVIEW_TILE_HEIGHT); 
 	}     
       } else {
@@ -433,7 +419,7 @@ void overview_update_tile(struct tile *ptile)
       }
     } 
 
-    put_overview_tile_area(gui_options.overview.map, ptile,
+    put_overview_tile_area(overview.map, ptile,
 			   overview_x, overview_y,
 			   OVERVIEW_TILE_WIDTH, OVERVIEW_TILE_HEIGHT);
 
@@ -454,7 +440,7 @@ void calculate_overview_dimensions(void)
   /* Clip half tile left and right.  See comment in map_to_overview_pos. */
   int shift = (MAP_IS_ISOMETRIC && !current_topo_has_flag(TF_WRAPX)) ? -1 : 0;
 
-  if (recursion > 0 || game.map.xsize <= 0 || game.map.ysize <= 0) {
+  if (recursion > 0 || map.xsize <= 0 || map.ysize <= 0) {
     return;
   }
   recursion++;
@@ -467,29 +453,26 @@ void calculate_overview_dimensions(void)
    *
    * It rounds up since this gives good results with the default settings.
    * It may need tweaking if the panel resizes itself. */
-  OVERVIEW_TILE_SIZE = MIN((w - 1) / (game.map.xsize * xfact) + 1,
-                           (h - 1) / game.map.ysize + 1);
+  OVERVIEW_TILE_SIZE = MIN((w - 1) / (map.xsize * xfact) + 1,
+                           (h - 1) / map.ysize + 1);
   OVERVIEW_TILE_SIZE = MAX(OVERVIEW_TILE_SIZE, 1);
 
-  log_debug("Map size %d,%d - area size %d,%d - scale: %d", game.map.xsize,
-            game.map.ysize, w, h, OVERVIEW_TILE_SIZE);
+  log_debug("Map size %d,%d - area size %d,%d - scale: %d", map.xsize,
+            map.ysize, w, h, OVERVIEW_TILE_SIZE);
 
-  gui_options.overview.width
-    = OVERVIEW_TILE_WIDTH * game.map.xsize + shift * OVERVIEW_TILE_SIZE; 
-  gui_options.overview.height = OVERVIEW_TILE_HEIGHT * game.map.ysize;
+  overview.width
+    = OVERVIEW_TILE_WIDTH * map.xsize + shift * OVERVIEW_TILE_SIZE; 
+  overview.height = OVERVIEW_TILE_HEIGHT * map.ysize;
 
-  if (gui_options.overview.map) {
-    canvas_free(gui_options.overview.map);
-    canvas_free(gui_options.overview.window);
+  if (overview.map) {
+    canvas_free(overview.map);
+    canvas_free(overview.window);
   }
-  gui_options.overview.map = canvas_create(gui_options.overview.width,
-                                           gui_options.overview.height);
-  gui_options.overview.window = canvas_create(gui_options.overview.width,
-                                              gui_options.overview.height);
-  canvas_put_rectangle(gui_options.overview.map,
+  overview.map = canvas_create(overview.width, overview.height);
+  overview.window = canvas_create(overview.width, overview.height);
+  canvas_put_rectangle(overview.map,
 		       get_color(tileset, COLOR_OVERVIEW_UNKNOWN),
-		       0, 0,
-                       gui_options.overview.width, gui_options.overview.height);
+		       0, 0, overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 
   /* Call gui specific function. */
@@ -507,11 +490,11 @@ void calculate_overview_dimensions(void)
 ****************************************************************************/
 void overview_free(void)
 {
-  if (gui_options.overview.map) {
-    canvas_free(gui_options.overview.map);
-    canvas_free(gui_options.overview.window);
-    gui_options.overview.map = NULL;
-    gui_options.overview.window = NULL;
+  if (overview.map) {
+    canvas_free(overview.map);
+    canvas_free(overview.window);
+    overview.map = NULL;
+    overview.window = NULL;
   }
 }
 

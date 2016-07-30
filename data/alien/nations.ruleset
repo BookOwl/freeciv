@@ -10,21 +10,7 @@
 
 [datafile]
 description="Alien World nations data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
-
-; This section contains meta information for freeciv-ruledit to recreate the ruleset
-; file in a form wanted. These have no in-game effect whatsoever
-[ruledit]
-
-; Nationlist to add include statement for. If this entry is omitted, all the nations
-; will be saved to nations.ruleset itself.
-; There`s no nationlist file for alien ruleset
-;nationlist = ""
-
-; List of nations to embed to main nations.ruleset despite separate nationlist
-; being used for other nations.
-; embedded_nations = ""
+options="+Freeciv-2.5-ruleset"
 
 [compatibility]
 ; Initial government for all the nations that do not
@@ -35,29 +21,16 @@ default_government = "Despotism"
 ; Default values for the AI traits. These are used if nation specific
 ; value for some trait has not been used. If these default too are
 ; not defined, the ultimate default is 50.
-; <trait>_min and <trait>_max give the range from which the trait value
-; is randomly chosen for a given AI player unless 'traitdistribution'
-; server setting is 'FIXED'
-; <trait>_default is the exaxt trait value used when 'traitdistribution'
-; is 'FIXED'. If <trait>_default has not been given, it`s set to the
-; midpoint between <trait>_min and <trait>_max.
-
-; Alien ruleset nations each have their own traits.
 
 ; Value of trait "expansionist" defines how much AI wants to settle new territory.
-;expansionist_min = 50
-;expansionist_max = 50
-;expansionist_default = 50
+;expansionist = 50
 
 ; Value of trait "trader" defines how much AI wants to establish trade routes.
-;trader_min = 50
-;trader_max = 50
-;trader_default = 50
+;trader = 50
 
 ; Value of trait "aggressive" defines how easily AI declares war.
-;aggressive_min = 50
-;aggressive_max = 50
-;aggressive_default = 50
+;aggressive = 50
+
 
 ; Descriptions of nation sets
 ; These are self-contained subsets of the available nations; one of these
@@ -65,8 +38,8 @@ default_government = "Despotism"
 ; outside the selected subset will be used.
 ; The first set defined is the one that is used by default. It is mandatory
 ; to have at least one, but if there is only one, it will be kept out of
-; the user`s way.
-; name          = Translatable name of the set presented in the UI.
+; the user's way.
+; name 		= Translatable name of the set presented in the UI.
 ; rule_name     = Unique persistent name; this is also visible to users as
 ;                 the value of the "nationset" server option, and presented
 ;                 in "/list nationsets". It should thus be short, in lower
@@ -82,22 +55,6 @@ default_government = "Despotism"
 [nset_all]
 name=_("All nations")
 rule_name="all"
-
-; Descriptions of nation groups
-; These are more cosmetic than sets; they affect the "pick nation" dialog,
-; random nation selection, and possibly ruleset behaviour.
-; It`s OK to not define any nation groups at all.
-; name          = name of the group (used adjectivally)
-; hidden        = TRUE to not include this group in the "pick nation" dialog
-;                 (for instance if it`s for use in a NationGroup requirement).
-;                 Default FALSE.
-; match         = How much the AI will try to select a nation in the same
-;                 group
-
-[ngroup_barbarian]
-name=_("?nationgroup:Barbarian")
-match=0
-hidden=true
 
 *include "alien/nation/mathclub.ruleset"
 *include "alien/nation/secretsociety.ruleset"

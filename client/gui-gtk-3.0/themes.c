@@ -71,16 +71,16 @@ void gui_clear_theme(void)
   bool theme_loaded;
 
   /* try to load user defined theme */
-  theme_loaded = load_theme(GUI_GTK_OPTION(default_theme_name));
+  theme_loaded = load_theme(gui_gtk3_default_theme_name);
 
   /* no user defined theme loaded -> try to load Freeciv default theme */
   if (!theme_loaded) {
-    theme_loaded = load_theme(GUI_GTK_DEFAULT_THEME_NAME);
+    theme_loaded = load_theme(FC_GTK3_DEFAULT_THEME_NAME);
     if (theme_loaded) {
-      sz_strlcpy(GUI_GTK_OPTION(default_theme_name), GUI_GTK_DEFAULT_THEME_NAME);
+      sz_strlcpy(gui_gtk3_default_theme_name, FC_GTK3_DEFAULT_THEME_NAME);
     }
   }
-
+    
   /* still no theme loaded -> load system default theme */
   if (!theme_loaded) {
     gtk_style_context_add_provider_for_screen(
@@ -117,13 +117,10 @@ char **get_gui_specific_themes_directories(int *count)
     directories[(*count)++] = fc_strdup(buf);
   } strvec_iterate_end;
 
-  /* standard GTK+ themes directory */
-#ifdef CROSSER
-  standard_dir = "../share/themes";
-#else  /* CROSSER */
-  standard_dir = "/usr/share/themes";
-#endif /* CROSSER */
+  /* standard GTK+ themes directory (e.g. /usr/share/themes) */
+  standard_dir = gtk_rc_get_theme_dir();
   directories[(*count)++] = fc_strdup(standard_dir);
+  g_free(standard_dir);
 
   /* user GTK+ themes directory (~/.themes) */
   home_dir = user_home_dir();

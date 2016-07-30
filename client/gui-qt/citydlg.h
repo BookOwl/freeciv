@@ -34,7 +34,7 @@ class QVBoxLayout;
 class city_dialog;
 class QChecBox;
 
-#define NUM_INFO_FIELDS 13
+#define NUM_INFO_FIELDS 12
 
 //common
 #include "unittype.h"
@@ -177,8 +177,6 @@ private:
   int cutted_height;
   int delta_x;
   int delta_y;
-private slots:
-  void context_menu(QPoint point);
 };
 
 /****************************************************************************
@@ -380,7 +378,6 @@ public:
   ~city_dialog();
   void setup_ui(struct city *qcity);
   void refresh();
-  void update_font();
   struct city *pcity;
 
 private:

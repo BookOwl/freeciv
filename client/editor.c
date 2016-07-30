@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 2005 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -36,8 +36,8 @@
 #include "control.h"
 #include "editor.h"
 #include "mapctrl_common.h"
+#include "mapview_common.h"
 #include "tilespec.h"
-#include "zoom.h"
 
 /* client/include */
 #include "editgui_g.h"
@@ -106,40 +106,8 @@ static void tool_set_init_value(enum editor_tool_type ett)
 {
   struct editor_tool *tool = editor->tools + ett;
 
-  if (ett == ETT_TERRAIN_SPECIAL
-      || ett == ETT_ROAD
-      || ett == ETT_MILITARY_BASE
-      || ett == ETT_TERRAIN_RESOURCE) {
-    struct extra_type *first = NULL;
-
-    extra_type_iterate(pextra) {
-      if (ett == ETT_ROAD) {
-        if (is_extra_caused_by(pextra, EC_ROAD)) {
-          first = pextra;
-          break;
-        }
-      } else if (ett == ETT_MILITARY_BASE) {
-        if (is_extra_caused_by(pextra, EC_BASE)) {
-          first = pextra;
-          break;
-        }
-      } else if (ett == ETT_TERRAIN_RESOURCE) {
-        if (is_extra_caused_by(pextra, EC_RESOURCE)) {
-          first = pextra;
-          break;
-        }
-      } else {
-        /* Considers extras that are neither bases or roads, specials */
-        first = pextra;
-        break;
-      }
-    } extra_type_iterate_end;
-
-    if (first != NULL) {
-      tool->value = extra_index(first);
-    } else {
-      tool->value = 0;
-    }
+  if (ett == ETT_TERRAIN_SPECIAL) {
+    tool->value = S_IRRIGATION;
   } else {
     tool->value = 0;
   }
@@ -368,13 +336,12 @@ bool editor_tool_is_usable(enum editor_tool_type ett)
   case ETT_ROAD:
     return road_count() > 0;
   case ETT_TERRAIN_RESOURCE:
-    return game.control.num_resource_types > 0;
+    return resource_count() > 0;
   case ETT_UNIT:
     return utype_count() > 0;
   default:
     break;
   }
-
   return TRUE;
 }
 
@@ -445,17 +412,17 @@ static void editor_start_selection_rectangle(int canvas_x, int canvas_y)
 ****************************************************************************/
 static inline bool tile_really_has_any_specials(const struct tile *ptile)
 {
+  bv_special specials;
+
   if (!ptile) {
     return FALSE;
   }
 
-  extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      return TRUE;
-    }
-  } extra_type_by_cause_iterate_end;
+  specials = tile_specials(ptile);
 
-  return FALSE;
+  BV_CLR(specials, S_RESOURCE_VALID);
+
+  return BV_ISSET_ANY(specials);
 }
 
 /****************************************************************************
@@ -496,9 +463,8 @@ static void editor_grab_applied_player(const struct tile *ptile)
 static void editor_grab_tool(const struct tile *ptile)
 {
   int ett = -1, value = 0;
-  struct extra_type *first_base = NULL;
-  struct extra_type *first_road = NULL;
-  struct extra_type *first_resource = NULL;
+  struct base_type *first_base = NULL;
+  struct road_type *first_road = NULL;
 
   if (!editor) {
     return;
@@ -508,26 +474,19 @@ static void editor_grab_tool(const struct tile *ptile)
     return;
   }
 
-  extra_type_by_cause_iterate(EC_BASE, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      first_base = pextra;
+  base_type_iterate(pbase) {
+    if (tile_has_base(ptile, pbase)) {
+      first_base = pbase;
       break;
     }
-  } extra_type_by_cause_iterate_end;
+  } base_type_iterate_end;
 
-  extra_type_by_cause_iterate(EC_ROAD, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      first_road = pextra;
+  road_type_iterate(proad) {
+    if (tile_has_road(ptile, proad)) {
+      first_road = proad;
       break;
     }
-  } extra_type_by_cause_iterate_end;
-
-  extra_type_by_cause_iterate(EC_RESOURCE, pextra) {
-    if (tile_has_extra(ptile, pextra)) {
-      first_resource = pextra;
-      break;
-    }
-  } extra_type_by_cause_iterate_end;
+  } road_type_iterate_end;
 
   if (client_has_player()
       && tile_get_known(ptile, client_player()) == TILE_UNKNOWN) {
@@ -539,14 +498,13 @@ static void editor_grab_tool(const struct tile *ptile)
   } else if (unit_list_size(ptile->units) > 0) {
     int max_score = 0, score;
     struct unit *grabbed_punit = NULL;
-
     unit_list_iterate(ptile->units, punit) {
       score = 0;
-      if (uclass_has_flag(unit_class_get(punit), UCF_UNREACHABLE)) {
+      if (uclass_has_flag(unit_class(punit), UCF_UNREACHABLE)) {
         score = 5;
-      } else if (utype_move_type(unit_type_get(punit)) == UMT_LAND) {
+      } else if (is_ground_unit(punit)) {
         score = 4;
-      } else if (utype_move_type(unit_type_get(punit)) == UMT_SEA) {
+      } else if (is_sailing_unit(punit)) {
         score = 3;
       } else {
         score = 2;
@@ -563,41 +521,40 @@ static void editor_grab_tool(const struct tile *ptile)
 
     if (grabbed_punit) {
       ett = ETT_UNIT;
-      value = utype_number(unit_type_get(grabbed_punit));
+      value = utype_number(unit_type(grabbed_punit));
     }
   } else if (first_base != NULL) {
     ett = ETT_MILITARY_BASE;
-    value = extra_index(first_base);
+    value = base_number(first_base);
 
   } else if (first_road != NULL) {
     ett = ETT_ROAD;
-    value = extra_index(first_road);
+    value = road_number(first_road);
 
   } else if (tile_really_has_any_specials(ptile)) {
-    struct extra_type *specials_array[MAX_EXTRA_TYPES];
-    int count = 0, i;
-    struct extra_type *special = NULL;
+    int specials_array[S_LAST];
+    int count = 0, i, special = -1;
 
-    extra_type_by_cause_iterate(EC_SPECIAL, s) {
+    tile_special_type_iterate(s) {
       specials_array[count++] = s;
-    } extra_type_by_cause_iterate_end;
+    } tile_special_type_iterate_end;
 
     /* Grab specials in reverse order of enum tile_special_type. */
 
     for (i = count - 1; i >= 0; i--) {
-      if (tile_has_extra(ptile, specials_array[i])) {
+      if (tile_has_special(ptile, specials_array[i])) {
         special = specials_array[i];
         break;
       }
     }
 
-    if (special != NULL) {
+    if (special >= 0) {
       ett = ETT_TERRAIN_SPECIAL;
-      value = extra_index(special);
+      value = special;
     }
   } else if (tile_resource(ptile) != NULL) {
     ett = ETT_TERRAIN_RESOURCE;
-    value = extra_index(first_resource);
+    value = resource_number(tile_resource(ptile));
 
   } else if (tile_terrain(ptile) != NULL) {
     ett = ETT_TERRAIN;
@@ -752,7 +709,7 @@ static void editor_end_selection_rectangle(int canvas_x, int canvas_y)
   gui_rect_iterate(mapview.gui_x0 + editor->selrect_x,
                    mapview.gui_y0 + editor->selrect_y,
                    editor->selrect_width, editor->selrect_height,
-                   ptile, pedge, pcorner, map_zoom) {
+                   ptile, pedge, pcorner) {
     if (ptile == NULL) {
       continue;
     }
@@ -825,37 +782,37 @@ void editor_mouse_button_release(int canvas_x, int canvas_y,
 ****************************************************************************/
 static void editor_resize_selection_rectangle(int canvas_x, int canvas_y)
 {
-  int xl, yt, xr, yb;
+  int x1, y1, x2, y2;
 
   if (editor->selrect_start_x <= canvas_x) {
-    xl = editor->selrect_start_x;
-    xr = canvas_x;
+    x1 = editor->selrect_start_x;
+    x2 = canvas_x;
   } else {
-    xl = canvas_x;
-    xr = editor->selrect_start_x;
+    x1 = canvas_x;
+    x2 = editor->selrect_start_x;
   }
 
   if (editor->selrect_start_y <= canvas_y) {
-    yt = editor->selrect_start_y;
-    yb = canvas_y;
+    y1 = editor->selrect_start_y;
+    y2 = canvas_y;
   } else {
-    yt = canvas_y;
-    yb = editor->selrect_start_y;
+    y1 = canvas_y;
+    y2 = editor->selrect_start_y;
   }
 
   /* Erase the previously drawn rectangle. */
   editor_draw_selrect();
 
-  if (xl == xr || yt == yb) {
+  if (x1 == x2 || y1 == y2) {
     editor->selrect_width = 0;
     editor->selrect_height = 0;
     return;
   }
 
-  editor->selrect_x = xl;
-  editor->selrect_y = yt;
-  editor->selrect_width = xr - xl;
-  editor->selrect_height = yb - yt;
+  editor->selrect_x = x1;
+  editor->selrect_y = y1;
+  editor->selrect_width = x2 - x1;
+  editor->selrect_height = y2 - y1;
 
   editor_draw_selrect();
 }
@@ -968,10 +925,21 @@ void editor_apply_tool(const struct tile *ptile,
     break;
 
   case ETT_TERRAIN_RESOURCE:
+    dsend_packet_edit_tile_resource(my_conn, tile,
+                                    erase ? resource_count() : value,
+                                    size);
+    break;
+
   case ETT_TERRAIN_SPECIAL:
+    dsend_packet_edit_tile_special(my_conn, tile, value, erase, size);
+    break;
+
   case ETT_ROAD:
+    dsend_packet_edit_tile_road(my_conn, tile, value, erase, size);
+    break;
+
   case ETT_MILITARY_BASE:
-    dsend_packet_edit_tile_extra(my_conn, tile, value, erase, size);
+    dsend_packet_edit_tile_base(my_conn, tile, value, erase, size);
     break;
 
   case ETT_UNIT:
@@ -1172,8 +1140,10 @@ const char *editor_tool_get_name(enum editor_tool_type ett)
 const char *editor_tool_get_value_name(enum editor_tool_type emt, int value)
 {
   struct terrain *pterrain;
+  struct resource *presource;
   struct unit_type *putype;
-  struct extra_type *pextra;
+  struct base_type *pbase;
+  struct road_type *proad;
 
   if (!editor) {
     return "";
@@ -1185,12 +1155,23 @@ const char *editor_tool_get_value_name(enum editor_tool_type emt, int value)
     return pterrain ? terrain_name_translation(pterrain) : "";
     break;
   case ETT_TERRAIN_RESOURCE:
-  case ETT_TERRAIN_SPECIAL:
-  case ETT_ROAD:
-  case ETT_MILITARY_BASE:
-    pextra = extra_by_number(value);
-    return pextra != NULL ? extra_name_translation(pextra) : "";
+    presource = resource_by_number(value);
+    return presource ? resource_name_translation(presource) : "";
     break;
+  case ETT_TERRAIN_SPECIAL:
+    if (!(0 <= value && value < S_LAST)) {
+      return "";
+    }
+    return special_name_translation(value);
+    break;
+  case ETT_ROAD:
+    proad = road_by_number(value);
+
+    return proad != NULL ? road_name_translation(proad) : "";
+  case ETT_MILITARY_BASE:
+    pbase = base_by_number(value);
+
+    return pbase != NULL ? base_name_translation(pbase) : "";
   case ETT_UNIT:
     putype = utype_by_number(value);
     return putype ? utype_name_translation(putype) : "";
@@ -1530,36 +1511,30 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
       }
       break;
     case EBT_SPECIAL:
-      extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-        if (tile_has_extra(ptile, pextra)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_by_cause_iterate_end;
+      if (tile_has_any_specials(ptile)) {
+        tile_set_specials(vtile, tile_specials(ptile));
+        copied = TRUE;
+      }
       break;
     case EBT_BASE:
-     extra_type_iterate(pextra) {
-        if (tile_has_extra(ptile, pextra)
-            && is_extra_caused_by(pextra, EC_BASE)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_iterate_end;
+      if (tile_has_any_bases(ptile)) {
+        tile_set_bases(vtile, *tile_bases(ptile));
+        copied = TRUE;
+      }
+      break;
     case EBT_ROAD:
-     extra_type_iterate(pextra) {
-        if (tile_has_extra(ptile, pextra)
-            && is_extra_caused_by(pextra, EC_ROAD)) {
-          tile_add_extra(vtile, pextra);
-          copied = TRUE;
-        }
-      } extra_type_iterate_end;
+      if (BV_ISSET_ANY(ptile->roads)) {
+        vtile->roads = *tile_roads(ptile);
+        copied = TRUE;
+      }
+      break;
     case EBT_UNIT:
       unit_list_iterate(ptile->units, punit) {
         if (!punit) {
           continue;
         }
         vunit = unit_virtual_create(unit_owner(punit), NULL,
-                                    unit_type_get(punit), punit->veteran);
+                                    unit_type(punit), punit->veteran);
         vunit->homecity = punit->homecity;
         vunit->hp = punit->hp;
         unit_list_append(vtile->units, vunit);
@@ -1573,7 +1548,7 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
 
         pcity = tile_city(ptile);
         fc_snprintf(name, sizeof(name), "Copy of %s",
-                    city_name_get(pcity));
+                    city_name(pcity));
         vcity = create_city_virtual(city_owner(pcity), NULL, name);
         city_size_set(vcity, city_size_get(pcity));
         improvement_iterate(pimprove) {
@@ -1605,19 +1580,21 @@ void edit_buffer_copy(struct edit_buffer *ebuf, const struct tile *ptile)
 static void fill_tile_edit_packet(struct packet_edit_tile *packet,
                                   const struct tile *ptile)
 {
-  const struct extra_type *presource;
+  const struct resource *presource;
   const struct terrain *pterrain;
 
   if (!packet || !ptile) {
     return;
   }
   packet->tile = tile_index(ptile);
-  packet->extras = *tile_extras(ptile);
+  packet->specials = tile_specials(ptile);
+  packet->bases = *tile_bases(ptile);
+  packet->roads = *tile_roads(ptile);
 
   presource = tile_resource(ptile);
   packet->resource = presource
-                     ? extra_number(presource)
-                     : extra_count();
+                     ? resource_number(presource)
+                     : resource_count();
 
   pterrain = tile_terrain(ptile);
   packet->terrain = pterrain
@@ -1663,42 +1640,27 @@ static void paste_tile(struct edit_buffer *ebuf,
       dsend_packet_edit_tile_terrain(my_conn, tile, value, 1);
       break;
     case EBT_RESOURCE:
-      extra_type_by_cause_iterate(EC_RESOURCE, pextra) {
-        if (tile_has_extra(vtile, pextra)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_by_cause_iterate_end;
+      if (!tile_resource(vtile)) {
+        continue;
+      }
+      value = resource_number(tile_resource(vtile));
+      dsend_packet_edit_tile_resource(my_conn, tile, value, 1);
       break;
     case EBT_SPECIAL:
-      extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-        if (tile_has_extra(vtile, pextra)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_by_cause_iterate_end;
+      tile_packet.specials = tile_specials(vtile);
+      send_edit_tile = TRUE;
       break;
     case EBT_BASE:
-      extra_type_iterate(pextra) {
-        if (tile_has_extra(vtile, pextra)
-            && is_extra_caused_by(pextra, EC_BASE)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_iterate_end;
+      tile_packet.bases = *tile_bases(vtile);
+      send_edit_tile = TRUE;
       break;
     case EBT_ROAD:
-      extra_type_iterate(pextra) {
-        if (tile_has_extra(vtile, pextra)
-            && is_extra_caused_by(pextra, EC_ROAD)) {
-          BV_SET(tile_packet.extras, extra_index(pextra));
-          send_edit_tile = TRUE;
-        }
-      } extra_type_iterate_end;
+      tile_packet.roads = *tile_roads(vtile);
+      send_edit_tile = TRUE;
       break;
     case EBT_UNIT:
       unit_list_iterate(vtile->units, vunit) {
-        value = utype_number(unit_type_get(vunit));
+        value = utype_number(unit_type(vunit));
         owner = player_number(unit_owner(vunit));
         dsend_packet_edit_unit_create(my_conn, owner, tile, value, 1, 0);
       } unit_list_iterate_end;

@@ -32,6 +32,7 @@ void cmd_reply(enum command_id cmd, struct connection *caller,
 
 bool handle_stdin_input(struct connection *caller, char *str);
 void set_ai_level_direct(struct player *pplayer, enum ai_level level);
+void set_ai_level_directer(struct player *pplayer, enum ai_level level);
 bool read_init_script(struct connection *caller, char *script_filename,
                       bool from_cmdline, bool check);
 void show_players(struct connection *caller);
@@ -62,7 +63,7 @@ void notify_if_first_access_level_is_available(void);
 
 bool conn_is_kicked(struct connection *pconn, int *time_remaining);
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
 char **freeciv_completion(const char *text, int start, int end);
 #endif
 

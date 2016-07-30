@@ -28,7 +28,7 @@ ruler_titles = {
 }
 flag="phoenicia"
 flag_alt = "-"
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

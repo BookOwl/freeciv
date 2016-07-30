@@ -11,10 +11,8 @@ pkgdata_DATA =			\
 	governments.ruleset	\
 	nations.ruleset		\
 	script.lua		\
-	styles.ruleset		\
 	techs.ruleset		\
 	terrain.ruleset		\
-	units.ruleset		\
-	README.classic
+	units.ruleset
 
 EXTRA_DIST = $(pkgdata_DATA)

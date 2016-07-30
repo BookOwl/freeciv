@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -216,6 +216,8 @@ void goto_dialog::show_me()
 ***************************************************************************/
 void goto_dialog::update_dlg()
 {
+  struct player *pplayer;
+
   goto_tab->clearContents();
   goto_tab->setRowCount(0);
   goto_tab->setSortingEnabled(false);
@@ -224,7 +226,8 @@ void goto_dialog::update_dlg()
       fill_tab(pplayer);
     } players_iterate_end;
   } else {
-    fill_tab(client_player());
+    pplayer = client_player();
+    fill_tab(pplayer);
   }
   goto_tab->setSortingEnabled(true);
   goto_tab->horizontalHeader()->setStretchLastSection(false);
@@ -258,7 +261,7 @@ void goto_dialog::fill_tab(player *pplayer)
       item = new QTableWidgetItem;
       switch (j) {
       case 0:
-        str = city_name_get(pcity);
+        str = city_name(pcity);
         break;
       case 1:
         sprite = get_nation_flag_sprite(tileset, nation_of_player(pplayer));

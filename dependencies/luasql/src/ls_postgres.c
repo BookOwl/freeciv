@@ -320,7 +320,7 @@ static void sql_commit(conn_data *conn) {
 
 
 static void sql_begin(conn_data *conn) {
-	PQclear(PQexec(conn->pg_conn, "BEGIN"));
+	PQclear(PQexec(conn->pg_conn, "BEGIN")); 
 }
 
 
@@ -371,28 +371,14 @@ static int conn_escape (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	size_t len;
 	const char *from = luaL_checklstring (L, 2, &len);
+	char to[len*sizeof(char)*2+1];
 	int error;
-	int ret = 1;
-	luaL_Buffer b;
-#if defined(luaL_buffinitsize)
-	char *to = luaL_buffinitsize (L, &b, 2*len+1);
-#else
-	char *to;
-	luaL_buffinit (L, &b);
-	to = luaL_prepbuffer (&b);
-#endif
 	len = PQescapeStringConn (conn->pg_conn, to, from, len, &error);
 	if (error == 0) { /* success ! */
-#if defined(luaL_pushresultsize)
-		luaL_pushresultsize (&b, len);
-#else
-		luaL_addsize (&b, len);
-		luaL_pushresult (&b);
-#endif
-	} else {
-		ret = luasql_failmsg (L, "cannot escape string. PostgreSQL: ", PQerrorMessage (conn->pg_conn));
-	}
-	return ret;
+		lua_pushlstring (L, to, len);
+		return 1;
+	} else
+		return luasql_failmsg (L, "cannot escape string. PostgreSQL: ", PQerrorMessage (conn->pg_conn));
 }
 
 
@@ -429,7 +415,7 @@ static int conn_commit (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	sql_commit(conn);
 	if (conn->auto_commit == 0) {
-		sql_begin(conn);
+		sql_begin(conn); 
 		lua_pushboolean (L, 1);
 	} else
 		lua_pushboolean (L, 0);
@@ -444,7 +430,7 @@ static int conn_rollback (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	sql_rollback(conn);
 	if (conn->auto_commit == 0) {
-		sql_begin(conn);
+		sql_begin(conn); 
 		lua_pushboolean (L, 1);
 	} else
 		lua_pushboolean (L, 0);

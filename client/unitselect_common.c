@@ -115,14 +115,13 @@ struct usdata_hash *usdlg_data_new(const struct tile *ptile)
      * units (ACTIVITY_IDLE). */
     if (!unit_transported(punit)) {
       struct usdata *data;
-      struct unit_type *ptype = unit_type_get(punit);
 
-      usdata_hash_lookup(ushash, utype_index(ptype), &data);
+      usdata_hash_lookup(ushash, utype_index(unit_type(punit)), &data);
 
       if (!data) {
         data = usdata_new();
-        data->utype = ptype;
-        usdata_hash_insert(ushash, utype_index(ptype), data);
+        data->utype = unit_type(punit);
+        usdata_hash_insert(ushash, utype_index(unit_type(punit)), data);
       }
 
       unit_list_append(data->units[SELLOC_UNITS][ACTIVITY_IDLE], punit);
@@ -152,17 +151,16 @@ static void usdlg_data_add_unit(struct usdata_hash *ushash,
 {
   struct usdata *data;
   enum unit_activity act;
-  struct unit_type *ptype = unit_type_get(punit);
 
   fc_assert_ret(ushash);
   fc_assert_ret(punit);
 
-  usdata_hash_lookup(ushash, utype_index(ptype), &data);
+  usdata_hash_lookup(ushash, utype_index(unit_type(punit)), &data);
 
   if (!data) {
     data = usdata_new();
-    data->utype = ptype;
-    usdata_hash_insert(ushash, utype_index(ptype), data);
+    data->utype = unit_type(punit);
+    usdata_hash_insert(ushash, utype_index(unit_type(punit)), data);
   }
 
   for (act = 0; act < ACTIVITY_LAST; act++) {
@@ -218,7 +216,7 @@ static bool usdlg_check_unit_location(const struct unit *punit,
     break;
   case SELLOC_CONT:
     if (!is_ocean(tile_terrain(utile))
-        && utype_move_type(unit_type_get(punit)) == UMT_LAND
+        && utype_move_type(unit_type(punit)) == UMT_LAND
         && tile_continent(utile) == tile_continent(ptile)) {
       return TRUE;
     }
@@ -227,19 +225,19 @@ static bool usdlg_check_unit_location(const struct unit *punit,
     return TRUE;
     break;
   case SELLOC_LAND:
-    if (utype_move_type(unit_type_get(punit)) == UMT_LAND
+    if (utype_move_type(unit_type(punit)) == UMT_LAND
         && (!is_ocean(tile_terrain(utile)) || tile_city(utile) != NULL)) {
       return TRUE;
     }
     break;
   case SELLOC_SEA:
-    if (utype_move_type(unit_type_get(punit)) == UMT_SEA
+    if (utype_move_type(unit_type(punit)) == UMT_SEA
         && (is_ocean(tile_terrain(utile)) || tile_city(utile) != NULL)) {
       return TRUE;
     }
     break;
   case SELLOC_BOTH:
-    if (utype_move_type(unit_type_get(punit)) == UMT_BOTH) {
+    if (utype_move_type(unit_type(punit)) == UMT_BOTH) {
       return TRUE;
     }
     break;

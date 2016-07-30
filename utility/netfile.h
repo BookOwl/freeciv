@@ -20,12 +20,6 @@ extern "C" {
 
 struct netfile_post;
 
-struct netfile_write_cb_data
-{
-  char *mem;
-  int size;
-};
-
 typedef void (*nf_errmsg)(const char *msg, void *data);
 
 struct section_file *netfile_get_section_file(const char *URL,
@@ -42,8 +36,7 @@ void netfile_add_form_int(struct netfile_post *post,
 void netfile_close_post(struct netfile_post *post);
 
 bool netfile_send_post(const char *URL, struct netfile_post *post,
-                       FILE *reply_fp, struct netfile_write_cb_data *mem_data,
-                       const char *addr);
+                       FILE *reply_fp, const char *addr);
 
 #ifdef __cplusplus
 }

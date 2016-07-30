@@ -76,8 +76,6 @@ struct section_file *secfile_new(bool allow_duplicates)
 
   secfile->name = NULL;
   secfile->num_entries = 0;
-  secfile->num_includes = 0;
-  secfile->num_long_comments = 0;
   secfile->sections = section_list_new_full(section_destroy);
   secfile->allow_duplicates = allow_duplicates;
   secfile->allow_digital_boolean = FALSE; /* Default */
@@ -167,15 +165,6 @@ static void remove_escapes(const char *str, bool full_escapes,
 bool entry_from_token(struct section *psection, const char *name,
                       const char *tok)
 {
-  if ('*' == tok[0]) {
-    char buf[strlen(tok) + 1];
-
-    remove_escapes(tok + 1, FALSE, buf, sizeof(buf));
-    (void) section_entry_str_new(psection, name, buf, FALSE);
-    DEBUG_ENTRIES("entry %s '%s'", name, buf);
-    return TRUE;
-  }
-
   if ('$' == tok[0] || '"' == tok[0]) {
     char buf[strlen(tok) + 1];
     bool escaped = ('"' == tok[0]);
@@ -186,23 +175,13 @@ bool entry_from_token(struct section *psection, const char *name,
     return TRUE;
   }
 
-  if (fc_isdigit(tok[0]) || (('-' == tok[0] || '+' == tok[0]) && fc_isdigit(tok[1]))) {
-    float fvalue;
+  if (fc_isdigit(tok[0]) || ('-' == tok[0] && fc_isdigit(tok[1]))) {
+    int value;
 
-    if (str_to_float(tok, &fvalue)) {
-      (void) section_entry_float_new(psection, name, fvalue);
-      DEBUG_ENTRIES("entry %s %d", name, fvalue);
-
+    if (str_to_int(tok, &value)) {
+      (void) section_entry_int_new(psection, name, value);
+      DEBUG_ENTRIES("entry %s %d", name, value);
       return TRUE;
-    } else {
-      int ivalue;
-
-      if (str_to_int(tok, &ivalue)) {
-        (void) section_entry_int_new(psection, name, ivalue);
-        DEBUG_ENTRIES("entry %s %d", name, ivalue);
-
-        return TRUE;
-      }
     }
   }
 

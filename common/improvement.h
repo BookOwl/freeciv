@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -54,25 +54,34 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 /* when built, gives gold */
 #define SPECENUM_VALUE2 IF_GOLD
 #define SPECENUM_VALUE2NAME "Gold"
-/* Never destroyed by disasters */
-#define SPECENUM_VALUE3 IF_DISASTER_PROOF
-#define SPECENUM_VALUE3NAME "DisasterProof"
 #define SPECENUM_COUNT IF_COUNT
-#define SPECENUM_BITVECTOR bv_impr_flags
+#include "specenum_gen.h"
+
+/* Used in the network protocol. */
+#define SPECENUM_NAME impr_genus_id
+#define SPECENUM_VALUE0 IG_GREAT_WONDER
+#define SPECENUM_VALUE0NAME "GreatWonder"
+#define SPECENUM_VALUE1 IG_SMALL_WONDER
+#define SPECENUM_VALUE1NAME "SmallWonder"
+#define SPECENUM_VALUE2 IG_IMPROVEMENT
+#define SPECENUM_VALUE2NAME "Improvement"
+#define SPECENUM_VALUE3 IG_SPECIAL
+#define SPECENUM_VALUE3NAME "Special"
 #include "specenum_gen.h"
 
 /* Used in the network protocol. */
 BV_DEFINE(bv_imprs, B_LAST);
+BV_DEFINE(bv_impr_flags, IF_COUNT);
 
 /* Type of improvement. (Read from buildings.ruleset file.) */
 struct impr_type {
   Impr_type_id item_number;
   struct name_translation name;
-  bool disabled;                        /* Does not really exist - hole in improvements array */
   char graphic_str[MAX_LEN_NAME];	/* city icon of improv. */
   char graphic_alt[MAX_LEN_NAME];	/* city icon of improv. */
   struct requirement_vector reqs;
-  struct requirement_vector obsolete_by;
+  struct advance *obsolete_by;		/* A_NEVER = never obsolete */
+  struct impr_type *replaced_by;	/* B_NEVER = never replaced */
   int build_cost;			/* Use wrappers to access this. */
   int upkeep;
   int sabotage;		/* Base chance of diplomat sabotage succeeding. */
@@ -82,12 +91,7 @@ struct impr_type {
   char soundtag[MAX_LEN_NAME];
   char soundtag_alt[MAX_LEN_NAME];
 
-  /* Cache */
-  bool allows_units;
-  bool allows_extras;
-  bool prevents_disaster;
-  bool protects_vs_actions;
-  
+  bool allows_units;   /* Cache */
 };
 
 
@@ -133,12 +137,10 @@ enum test_result test_player_sell_building_now(struct player *pplayer,
                                                struct city *pcity,
                                                struct impr_type *pimprove);
 
-struct impr_type *improvement_replacement(const struct impr_type *pimprove);
-
 /* Macros for struct packet_game_info::great_wonder_owners[]. */
-#define WONDER_DESTROYED (MAX_NUM_PLAYER_SLOTS + 1)  /* Used as player id. */
-#define WONDER_NOT_OWNED (MAX_NUM_PLAYER_SLOTS + 2)  /* Used as player id. */
-#define WONDER_OWNED(player_id) ((player_id) < MAX_NUM_PLAYER_SLOTS)
+#define WONDER_DESTROYED (-2)     /* Used as player id. */
+#define WONDER_NOT_OWNED (-1)     /* User as player id. */
+#define WONDER_OWNED(player_id) ((player_id) >= 0)
 
 /* Macros for struct player::wonders[]. */
 #define WONDER_LOST (-1)        /* Used as city id. */
@@ -169,10 +171,9 @@ struct city *city_from_small_wonder(const struct player *pplayer,
 
 /* player related improvement functions */
 bool improvement_obsolete(const struct player *pplayer,
-			  const struct impr_type *pimprove,
-                          const struct city *pcity);
-bool is_improvement_productive(const struct city *pcity,
-                               struct impr_type *pimprove);
+			  const struct impr_type *pimprove);
+bool impr_provides_buildable_units(const struct player *pplayer,
+                                   const struct impr_type *pimprove);
 bool is_improvement_redundant(const struct city *pcity,
                               struct impr_type *pimprove);
 
@@ -187,8 +188,6 @@ bool can_player_build_improvement_now(const struct player *p,
 void improvements_init(void);
 void improvements_free(void);
 
-void improvement_feature_cache_init(void);
-
 struct impr_type *improvement_array_first(void);
 const struct impr_type *improvement_array_last(void);
 
@@ -202,14 +201,6 @@ const struct impr_type *improvement_array_last(void);
     }									\
   }									\
 }
-
-#define improvement_active_iterate(_p)                                  \
-  improvement_iterate(_p) {                                             \
-    if (!_p->disabled) {
-
-#define improvement_active_iterate_end                                  \
-    }                                                                   \
-  } improvement_iterate_end;
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,6 @@
 #include "chat.h"
 
 // client
-#include "audio.h"
 #include "climisc.h"      /* for write_chatline_content */
 #include "climap.h"
 #include "control.h"
@@ -37,13 +36,16 @@
 
 #include "chatline.h"
 
+static bool gui_qt_allied_chat_only = true;
 static bool is_plain_public_message(QString s);
 /***************************************************************************
   Constructor for chatwdg
 ***************************************************************************/
 chatwdg::chatwdg(QWidget *parent)
 {
-  QGridLayout *gl;
+  QVBoxLayout *vb;
+  QHBoxLayout *hl;
+  QSpacerItem *si;
   setStyle(QStyleFactory::create("fusion"));
   setStyleSheet("QTextEdit {background-color: transparent;}"
     "QTextEdit {color: #cdcead;}"
@@ -61,23 +63,22 @@ chatwdg::chatwdg(QWidget *parent)
     "QCheckBox {color: #5d4e4d;}");
 
   setParent(parent);
-  cb = new QCheckBox("");
-  cb->setToolTip(_("Allies only"));
-  cb->setChecked(gui_options.gui_qt_allied_chat_only);
-  gl = new QGridLayout;
+  si = new QSpacerItem(0,0,QSizePolicy::Expanding);
+  cb = new QCheckBox(_("Allies only"));
+  cb->setChecked(gui_qt_allied_chat_only);
+  vb = new QVBoxLayout;
+  hl = new QHBoxLayout;
   chat_line = new QLineEdit;
   chat_output = new QTextBrowser;
-  remove_links = new QPushButton("");
-  remove_links->setIcon(style()->standardPixmap(QStyle::SP_DialogCancelButton));
-  remove_links->setToolTip(_("Clear links"));
+  remove_links = new QPushButton(_("Clear links"));
   remove_links->setStyleSheet("QPushButton {color: #5d4e4d;}");
-  gl->setVerticalSpacing(0);
-  gl->addWidget(chat_output,0 , 0, 1 ,3);
-  gl->addWidget(chat_line,1, 0);
-  gl->addWidget(cb,1,1);
-  gl->addWidget(remove_links,1,2);
-  gl->setContentsMargins(0, 0, 0, 0);
-  setLayout(gl);
+  vb->addWidget(chat_output);
+  hl->addWidget(cb);
+  hl->addItem(si);
+  hl->addWidget(remove_links);
+  vb->addLayout(hl);
+  vb->addWidget(chat_line);
+  setLayout(vb);
   chat_output->setReadOnly(true);
   chat_line->setReadOnly(false);
   chat_line->setVisible(true);
@@ -100,22 +101,11 @@ chatwdg::chatwdg(QWidget *parent)
 void chatwdg::state_changed(int state)
 {
   if (state > 0) {
-    gui_options.gui_qt_allied_chat_only = true;
+    ::gui_qt_allied_chat_only = true;
   } else {
-    gui_options.gui_qt_allied_chat_only = false;
+    ::gui_qt_allied_chat_only = false;
   }
 }
-
-
-/***************************************************************************
-  Scrolls chat to bottom
-***************************************************************************/
-void chatwdg::scroll_to_bottom()
-{
-   chat_output->verticalScrollBar()->setSliderPosition(
-                                 chat_output->verticalScrollBar()->maximum());
-}
-
 
 /***************************************************************************
   User clicked clear links button
@@ -197,7 +187,7 @@ void chatwdg::send()
 {
   gui()->chat_history.prepend(chat_line->text());
   if (chat_line->text() != "") {
-    if (client_state() >= C_S_RUNNING && gui_options.gui_qt_allied_chat_only
+    if (client_state() >= C_S_RUNNING && ::gui_qt_allied_chat_only
         && is_plain_public_message(chat_line->text())) {
       send_chat(QString("%1 %2")
                   .arg(CHAT_ALLIES_PREFIX)
@@ -261,10 +251,6 @@ bool chatwdg::eventFilter(QObject *obj, QEvent *event)
         }
         return true;
       }
-      if (keyEvent->key() == Qt::Key_Escape) {
-        gui()->infotab->restore_chat();
-        gui()->mapview_wdg->setFocus();
-      }
     }
     if (event->type() == QEvent::ShortcutOverride) {
       event->setAccepted(true);
@@ -297,20 +283,6 @@ void chatwdg::update_widgets()
     remove_links->show();
   }
 }
-
-/***************************************************************************
-  Sets chat to show only X(lines) lines
-***************************************************************************/
-int chatwdg::default_size(int lines)
-{
-  int size;
-  QFontMetrics fm(*gui()->fc_fonts.get_font("gui_qt_font_chatline"));
-  size = 2 * chat_output->frameWidth() + lines * fm.lineSpacing()
-         + chat_line->size().height() + 4;
-
-  return size;
-}
-
 
 /***************************************************************************
   Makes link to tile/unit or city
@@ -507,24 +479,11 @@ void qtg_real_output_window_append(const char *astring,
                                    int conn_id)
 {
   QString str;
-  QString wakeup;
 
   str = QString::fromUtf8(astring);
   gui()->set_status_bar(str);
   gui()->update_completer();
 
-  wakeup = gui_options.gui_qt_wakeup_text;
-
-  /* Format wakeup string if needed */
-  if (wakeup.contains("%1")) {
-    wakeup = wakeup.arg(client.conn.username);
-  }
-
-  /* Play sound if we encountered wakeup string */
-  if (str.contains(wakeup) && client_state() < C_S_RUNNING
-      && !wakeup.isEmpty()) {
-    audio_play_sound("e_player_wake", NULL);
-  }
   gui()->append_output_window(apply_tags(str, tags, false));
   if (gui()->infotab != NULL) {
     gui()->infotab->chtwdg->append(apply_tags(str, tags, true));

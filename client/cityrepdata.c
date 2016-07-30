@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -48,13 +48,14 @@
  Note the returned string may not be exactly the right length; that
  is handled later.
 *************************************************************************/
+
 static const char *cr_entry_cityname(const struct city *pcity,
-                                     const void *data)
+				     const void *data)
 {
   /* We used to truncate the name to 14 bytes.  This should not be needed
    * in any modern GUI library and may give an invalid string if a
    * multibyte character is clipped. */
-  return city_name_get(pcity);
+  return city_name(pcity);
 }
 
 /************************************************************************
@@ -71,10 +72,9 @@ static const char *cr_entry_nation(const struct city *pcity,
   allocated and its contents change when this function is called again.
 *************************************************************************/
 static const char *cr_entry_size(const struct city *pcity,
-                                 const void *data)
+				 const void *data)
 {
   static char buf[8];
-
   fc_snprintf(buf, sizeof(buf), "%2d", city_size_get(pcity));
   return buf;
 }
@@ -85,7 +85,7 @@ static const char *cr_entry_size(const struct city *pcity,
   this function is called again.
 *************************************************************************/
 static const char *cr_entry_hstate_concise(const struct city *pcity,
-                                           const void *data)
+					   const void *data)
 {
   static char buf[4];
   fc_snprintf(buf, sizeof(buf), "%s",
@@ -100,10 +100,9 @@ static const char *cr_entry_hstate_concise(const struct city *pcity,
   this function is called again.
 *************************************************************************/
 static const char *cr_entry_hstate_verbose(const struct city *pcity,
-                                           const void *data)
+					   const void *data)
 {
   static char buf[32];
-
   fc_snprintf(buf, sizeof(buf), "%s",
               (city_celebrating(pcity) ? Q_("?city_state:Celebrating")
                : (city_unhappy(pcity) ? Q_("?city_state:Disorder")
@@ -117,10 +116,9 @@ static const char *cr_entry_hstate_verbose(const struct city *pcity,
   this function is called again.
 *************************************************************************/
 static const char *cr_entry_workers(const struct city *pcity,
-                                    const void *data)
+				    const void *data)
 {
   static char buf[32];
-
   fc_snprintf(buf, sizeof(buf), "%d/%d/%d/%d",
               pcity->feel[CITIZEN_HAPPY][FEELING_FINAL],
               pcity->feel[CITIZEN_CONTENT][FEELING_FINAL],
@@ -225,7 +223,7 @@ static const char *cr_entry_attack(const struct city *pcity,
 
   unit_list_iterate(pcity->tile->units, punit) {
     /* What about allied units?  Should we just count them? */
-    attack_best[3] = unit_type_get(punit)->attack_strength;
+    attack_best[3] = unit_type(punit)->attack_strength;
 
     /* Now that the element is appended to the end of the list, we simply
        do an insertion sort. */
@@ -262,13 +260,12 @@ static const char *cr_entry_defense(const struct city *pcity,
 
   unit_list_iterate(pcity->tile->units, punit) {
     /* What about allied units?  Should we just count them? */
-    defense_best[3] = unit_type_get(punit)->defense_strength;
+    defense_best[3] = unit_type(punit)->defense_strength;
 
     /* Now that the element is appended to the end of the list, we simply
        do an insertion sort. */
     for (i = 2; i >= 0 && defense_best[i] < defense_best[i + 1]; i--) {
       int tmp = defense_best[i];
-
       defense_best[i] = defense_best[i + 1];
       defense_best[i + 1] = tmp;
     }
@@ -481,12 +478,14 @@ static const char *cr_entry_trade_routes(const struct city *pcity,
                                          const void *data)
 {
   static char buf[16];
-  int num = 0, value = 0;
+  int num = 0, value = 0, i;
 
-  trade_routes_iterate(pcity, proute) {
-    num++;
-    value += proute->value;
-  } trade_routes_iterate_end;
+  for (i = 0; i < MAX_TRADE_ROUTES; i++) {
+    if (0 != pcity->trade[i]) {
+      num++;
+      value += pcity->trade_value[i];
+    }
+  }
 
   if (0 == num) {
     sz_strlcpy(buf, "0");
@@ -520,7 +519,7 @@ static const char *cr_entry_building(const struct city *pcity,
   static char buf[192];
   const char *from_worklist =
     worklist_is_empty(&pcity->worklist) ? "" :
-    gui_options.concise_city_production ? "+" : _("(worklist)");
+    concise_city_production ? "+" : _("(worklist)");
 
   if (city_production_has_flag(pcity, IF_GOLD)) {
     fc_snprintf(buf, sizeof(buf), "%s (%d)%s",
@@ -617,17 +616,6 @@ static const char *cr_entry_plague_risk(const struct city *pcity,
 }
 
 /************************************************************************
-  Returns number of continent
-*************************************************************************/
-static const char *cr_entry_continent(const struct city *pcity, 
-                                   const void *data)
-{
-  static char buf[8];
-  fc_snprintf(buf, sizeof(buf), "%3d", pcity->tile->continent);
-  return buf;
-}
-
-/************************************************************************
   Returns city cma description.
   Returned string is statically allocated and its contents change when
   this function is called again.
@@ -714,8 +702,6 @@ static const struct city_report_spec base_city_report_specs[] = {
     NULL, FUNC_TAG(luxury) },
   { FALSE, 3, 1, NULL, N_("?Science:S"), N_("Economy: Science"),
     NULL, FUNC_TAG(science) },
-  { FALSE, 3, 1, NULL, N_("?Continent:C"), N_("Continent number"),
-    NULL, FUNC_TAG(continent) },
   { FALSE,  1, 1, N_("?number_trade_routes:n"), N_("?number_trade_routes:R"),
                   N_("Number (and total value) of trade routes"),
     NULL, FUNC_TAG(trade_routes) },
@@ -779,20 +765,19 @@ void init_city_report_game_data(void)
 
   fc_snprintf(sp_explanations, sizeof(sp_explanations),
               "%s", _("Specialists: "));
-  specialist_type_iterate(sp) {
-    struct specialist *s = specialist_by_number(sp);
-
+  specialist_type_iterate(i) {
+    struct specialist *s = specialist_by_number(i);
     p->show = FALSE;
     p->width = 2;
     p->space = 1;
     p->title1 = Q_("?specialist:S");
     p->title2 = specialist_abbreviation_translation(s);
-    fc_snprintf(sp_explanation[sp], sizeof(sp_explanation[sp]),
+    fc_snprintf(sp_explanation[i], sizeof(sp_explanation[i]),
                 _("Specialists: %s"), specialist_plural_translation(s));
     cat_snprintf(sp_explanations, sizeof(sp_explanations),
-                 "%s%s", (sp == 0) ? "" : ", ",
+                 "%s%s", (i == 0) ? "" : ", ",
                  specialist_plural_translation(s));
-    p->explanation = sp_explanation[sp];
+    p->explanation = sp_explanation[i];
     p->data = s;
     p->func = cr_entry_specialist;
     p->tagname = specialist_rule_name(s);
@@ -802,7 +787,6 @@ void init_city_report_game_data(void)
   /* Summary column for all specialists. */
   {
     static char sp_summary[128];
-
     p->show = FALSE;
     p->width = MAX(7, specialist_count()*2-1);
     p->space = 1;

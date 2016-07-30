@@ -27,7 +27,7 @@ ruler_titles = {
 
 flag="bosnia"
 flag_alt = "-"
-style = "European"
+city_style = "European"
 
 init_techs=""
 init_buildings=""

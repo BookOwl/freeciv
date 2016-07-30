@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,36 +13,27 @@
 #ifndef FC__UNITHAND_H
 #define FC__UNITHAND_H
 
+/* common */
 #include "unit.h"
 
+/* server */
 #include "hand_gen.h"
 
 void unit_activity_handling(struct unit *punit,
                             enum unit_activity new_activity);
 void unit_activity_handling_targeted(struct unit *punit,
                                      enum unit_activity new_activity,
-                                     struct extra_type **new_target);
+                                     struct act_tgt *new_target);
 void unit_change_homecity_handling(struct unit *punit, struct city *new_pcity,
                                    bool rehome);
 
 bool unit_move_handling(struct unit *punit, struct tile *pdesttile,
-                        bool igzoc, bool move_diplomat_city,
-                        struct unit *embark_to);
+                        bool igzoc, bool move_diplomat_city);
 
-bool unit_perform_action(struct player *pplayer,
-                         const int actor_id,
-                         const int target_id,
-                         const int value,
-                         const char *name,
-                         const enum gen_action action_type,
-                         const enum action_requester requester);
+bool unit_build_city(struct player *pplayer, struct unit *punit,
+                     const char *name);
 
-void illegal_action_msg(struct player *pplayer,
-                        const enum event_type event,
-                        struct unit *actor,
-                        const int stopped_action,
-                        const struct tile *target_tile,
-                        const struct city *target_city,
-                        const struct unit *target_unit);
+void city_add_or_build_error(struct player *pplayer, struct unit *punit,
+                             enum unit_add_build_city_result res);
 
 #endif  /* FC__UNITHAND_H */

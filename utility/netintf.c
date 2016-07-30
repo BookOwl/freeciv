@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,13 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-/***********************************************************************
+/********************************************************************** 
   Common network interface.
-***********************************************************************/
+**********************************************************************/
 
 #ifdef HAVE_CONFIG_H
 #include <fc_config.h>
 #endif
-
-#include "fc_prehdrs.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -45,7 +43,14 @@
 #ifdef HAVE_SYS_SIGNAL_H
 #include <sys/signal.h>
 #endif
-#ifdef FREECIV_MSWINDOWS
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+#ifdef WIN32_NATIVE
 #include <windows.h>	/* GetTempPath */
 #endif
 
@@ -69,7 +74,7 @@
 #endif /* AI_NUMERICSERV */
 #endif /* HAVE_GETADDRINFO */
 
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
 /***************************************************************
   Set errno variable on Winsock error
 ***************************************************************/
@@ -84,7 +89,6 @@ static void set_socket_errno(void)
     case WSAECONNRESET:
     case WSAECONNREFUSED:
     case WSAETIMEDOUT:
-    case WSAECONNABORTED:
       errno = err;
       return;
     default:
@@ -95,7 +99,7 @@ static void set_socket_errno(void)
       errno = 0;
   }
 }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
 /***************************************************************
   Connect a socket to an address
@@ -106,11 +110,11 @@ int fc_connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
   
   result = connect(sockfd, serv_addr, addrlen);
   
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   if (result == -1) {
     set_socket_errno();
   }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   return result;
 }
@@ -125,11 +129,11 @@ int fc_select(int n, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
   
   result = select(n, readfds, writefds, exceptfds, timeout);
   
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   if (result == -1) {
     set_socket_errno();
   }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   return result;       
 }
@@ -141,14 +145,14 @@ int fc_readsocket(int sock, void *buf, size_t size)
 {
   int result;
   
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   result = recv(sock, buf, size, 0);
   if (result == -1) {
     set_socket_errno();
   }
-#else  /* FREECIV_HAVE_WINSOCK */
+#else  /* HAVE_WINSOCK */
   result = read(sock, buf, size);
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   return result;
 }
@@ -160,18 +164,18 @@ int fc_writesocket(int sock, const void *buf, size_t size)
 {
   int result;
         
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   result = send(sock, buf, size, 0);
   if (result == -1) {
     set_socket_errno();
   }
-#else  /* FREECIV_HAVE_WINSOCK */
+#else  /* HAVE_WINSOCK */
 #  ifdef MSG_NOSIGNAL
   result = send(sock, buf, size, MSG_NOSIGNAL);
 #  else  /* MSG_NOSIGNAL */
   result = write(sock, buf, size);
 #  endif /* MSG_NOSIGNAL */
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   return result;
 }
@@ -181,7 +185,7 @@ int fc_writesocket(int sock, const void *buf, size_t size)
 ***************************************************************/
 void fc_closesocket(int sock)
 {
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   closesocket(sock);
 #else
   close(sock);
@@ -193,13 +197,13 @@ void fc_closesocket(int sock)
 ***************************************************************/
 void fc_init_network(void)
 {
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   WSADATA wsa;
 
   if (WSAStartup(MAKEWORD(1, 1), &wsa) != 0) {
     log_error("no usable WINSOCK.DLL: %s", fc_strerror(fc_get_errno()));
   }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   /* broken pipes are ignored. */
 #ifdef HAVE_SIGPIPE
@@ -212,7 +216,7 @@ void fc_init_network(void)
 ***************************************************************/
 void fc_shutdown_network(void)
 {
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   WSACleanup();
 #endif
 }
@@ -223,10 +227,10 @@ void fc_shutdown_network(void)
 void fc_nonblock(int sockfd)
 {
 #ifdef NONBLOCKING_SOCKETS
-#ifdef FREECIV_HAVE_WINSOCK
+#ifdef HAVE_WINSOCK
   unsigned long b = 1;
   ioctlsocket(sockfd, FIONBIO, &b);
-#else  /* FREECIV_HAVE_WINSOCK */
+#else  /* HAVE_WINSOCK */
 #ifdef HAVE_FCNTL
   int f_set;
 
@@ -248,7 +252,7 @@ void fc_nonblock(int sockfd)
   }
 #endif /* HAVE_IOCTL */
 #endif /* HAVE_FCNTL */
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 #else  /* NONBLOCKING_SOCKETS */
   log_debug("NONBLOCKING_SOCKETS not available");
 #endif /* NONBLOCKING_SOCKETS */
@@ -259,7 +263,7 @@ void fc_nonblock(int sockfd)
 ***************************************************************************/
 void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
 {
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   char buf[INET6_ADDRSTRLEN] = "Unknown";
 
   if (addr->saddr.sa_family == AF_INET6) { 
@@ -295,14 +299,14 @@ void sockaddr_debug(union fc_sockaddr *addr, enum log_level lvl)
 ***************************************************************************/
 int sockaddr_size(union fc_sockaddr *addr)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   return sizeof(*addr);
 #else
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (addr->saddr.sa_family == AF_INET6) {
     return sizeof(addr->saddr_in6);
   } else
-#endif /* FREECIV_IPV6_SUPPORT */
+#endif /* IPV6_SUPPORT */
   if (addr->saddr.sa_family == AF_INET) {
     return sizeof(addr->saddr_in4);
   } else {
@@ -312,7 +316,7 @@ int sockaddr_size(union fc_sockaddr *addr)
 
     return 0;
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 }
 
 /***************************************************************************
@@ -320,7 +324,7 @@ int sockaddr_size(union fc_sockaddr *addr)
 ***************************************************************************/
 bool sockaddr_ipv6(union fc_sockaddr *addr)
 {
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (addr->saddr.sa_family == AF_INET6) {
     return TRUE;
   }
@@ -353,7 +357,7 @@ static struct fc_sockaddr_list *net_lookup_getaddrinfo(const char *name,
       gafam = AF_INET6;
       break;
     case FC_ADDR_ANY:
-#ifndef FREECIV_IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
       gafam = AF_INET;
 #else
       gafam = AF_UNSPEC;
@@ -427,12 +431,19 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
     return addrs;
   }
 
-  if (fc_inet_aton(name, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+  if (inet_aton(name, &sock4->sin_addr) != 0) {
     fc_sockaddr_list_append(addrs, result);
 
     return addrs;
   }
+#else  /* HAVE_INET_ATON */
+  if ((sock4->sin_addr.s_addr = inet_addr(name)) != INADDR_NONE) {
+    fc_sockaddr_list_append(addrs, result);
 
+    return addrs;
+  }
+#endif /* HAVE_INET_ATON */
   hp = gethostbyname(name);
   if (!hp || hp->h_addrtype != AF_INET) {
     FC_FREE(result);
@@ -447,34 +458,6 @@ struct fc_sockaddr_list *net_lookup_service(const char *name, int port,
 
 #endif /* !HAVE_GETADDRINFO */
 
-}
-
-/*************************************************************************
-  Convert internet IPv4 host address to binary form and store it to inp.
-  Return FALSE on failure if possible, i.e., FALSE is guarantee that it
-  failed but TRUE is not guarantee that it succeeded.
-*************************************************************************/
-bool fc_inet_aton(const char *cp, struct in_addr *inp, bool addr_none_ok)
-{
-#ifdef FREECIV_IPV6_SUPPORT
-  /* Use inet_pton() */
-  if (!inet_pton(AF_INET, cp, &inp->s_addr)) {
-    return FALSE;
-  }
-#else  /* IPv6 Support */
-#ifdef HAVE_INET_ATON
-  if (!inet_aton(cp, inp)) {
-    return FALSE;
-  }
-#else  /* HAVE_INET_ATON */
-  inp->s_addr = inet_addr(cp);
-  if (!addr_none_ok && inp->s_addr == INADDR_NONE) {
-    return FALSE;
-  }
-#endif /* HAVE_INET_ATON */
-#endif /* IPv6 Support */
-
-  return TRUE;
 }
 
 /*************************************************************************
@@ -499,7 +482,7 @@ fz_FILE *fc_querysocket(int sock, void *buf, size_t size)
     char tmp[4096];
     int n;
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
     /* tmpfile() in mingw attempts to make a temp file in the root directory
      * of the current drive, which we may not have write access to. */
     {
@@ -510,11 +493,11 @@ fz_FILE *fc_querysocket(int sock, void *buf, size_t size)
 
       fp = fc_fopen(filename, "w+b");
     }
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
 
     fp = tmpfile();
 
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 
     if (fp == NULL) {
       return NULL;
@@ -550,7 +533,7 @@ int find_next_free_port(int starting_port, int highest_port,
   int gafamily;
   bool found = FALSE;
 
-#ifndef FREECIV_IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
   fc_assert(family == FC_ADDR_IPV4 || family == FC_ADDR_ANY);
 #endif
 
@@ -558,11 +541,11 @@ int find_next_free_port(int starting_port, int highest_port,
    case FC_ADDR_IPV4:
      gafamily = AF_INET;
      break;
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
    case FC_ADDR_IPV6:
      gafamily = AF_INET6;
      break;
-#endif /* FREECIV_IPV6_SUPPORT */
+#endif /* IPV6_SUPPORT */
    case FC_ADDR_ANY:
      gafamily = AF_UNSPEC;
      break;
@@ -626,7 +609,12 @@ int find_next_free_port(int starting_port, int highest_port,
     sock4->sin_family = AF_INET;
     sock4->sin_port = htons(port);
     if (net_interface != NULL) {
-      if (!fc_inet_aton(net_interface, &sock4->sin_addr, FALSE)) {
+#if defined(HAVE_INET_ATON)
+      if (inet_aton(net_interface, &sock4->sin_addr) == 0) {
+#else /* HAVE_INET_ATON */
+      sock4->sin_addr.s_addr = inet_addr(net_interface);
+      if (sock4->sin_addr.s_addr == INADDR_NONE) {
+#endif /* HAVE_INET_ATON */
         struct hostent *hp;
 
         hp = gethostbyname(net_interface);

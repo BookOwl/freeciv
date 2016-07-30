@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -31,28 +31,24 @@
 #include "overview_common.h"
 
 /* client */
+#include "chatline.h"
+#include "citydlg.h"
 #include "client_main.h"
 #include "climap.h"
 #include "climisc.h"
-#include "control.h"
-#include "editor.h"
-#include "tilespec.h"
-#include "text.h"
-
-/* client/agents */
-#include "cma_core.h"
-
-/* client/gui-gtk-3.0 */
-#include "chatline.h"
-#include "citydlg.h"
 #include "colors.h"
+#include "control.h"
 #include "dialogs.h"
 #include "editgui.h"
+#include "editor.h"
 #include "graphics.h"
 #include "gui_main.h"
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
+#include "tilespec.h"
+#include "cma_core.h"
+#include "text.h"
 
 #include "mapctrl.h"
 
@@ -80,7 +76,7 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 					   gpointer data)
 {
   struct tmousepos *mousepos = data;
-  float x, y;
+  gint x, y;
   struct tile *ptile;
 
   ptile = canvas_pos_to_tile(mousepos->x, mousepos->y);
@@ -221,7 +217,7 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
   if (ev->button == 1 || ev->button == 3) {
     release_goto_button(ev->x, ev->y);
   }
-  if (ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
+  if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
     release_right_button(ev->x, ev->y,
                          (ev->state & GDK_SHIFT_MASK) != 0);
   }
@@ -408,8 +404,7 @@ void update_rect_at_mouse_pos(void)
 **************************************************************************/
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
-  if (GUI_GTK_OPTION(mouse_over_map_focus)
-      && !gtk_widget_has_focus(map_canvas)) {
+  if (gui_gtk3_mouse_over_map_focus && !gtk_widget_has_focus(map_canvas)) {
     gtk_widget_grab_focus(map_canvas);
   }
 
@@ -447,7 +442,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
   /* Bizarrely, this function can be called even when we don't "leave"
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
-  if (!map_is_empty()
+  if (map_exists()
       && event->x >= 0 && event->y >= 0
       && event->x < mapview.width && event->y < mapview.height) {
     control_mouse_cursor(canvas_pos_to_tile(event->x, event->y));

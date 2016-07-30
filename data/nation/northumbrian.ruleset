@@ -41,7 +41,7 @@ ruler_titles = {
 
 flag = "northumbria"
 flag_alt = "england"
-style = "European"
+city_style = "European"
 init_techs="" 
 init_buildings="" 
 init_units="" 

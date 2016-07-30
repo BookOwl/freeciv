@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 #include <stdio.h>
 
 /* utility */
-#include "fc_cmdline.h"
 #include "fciconv.h"
 #include "log.h"
 
@@ -29,6 +28,7 @@
 #include "gui_cbsetter.h"
 #include "client_main.h"
 #include "editgui_g.h"
+#include "ggz_g.h"
 #include "options.h"
 
 #include "gui_main.h"
@@ -116,7 +116,7 @@ void gui_ui_main(int argc, char *argv[])
 /****************************************************************************
   Extra initializers for client options.
 ****************************************************************************/
-void gui_options_extra_init(void)
+void gui_gui_options_extra_init(void)
 {
   /* Nothing to do. */
 }
@@ -172,6 +172,23 @@ void gui_add_net_input(int sock)
   This function is called if the client disconnects from the server.
 **************************************************************************/
 void gui_remove_net_input(void)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called to monitor a GGZ socket.
+**************************************************************************/
+void gui_add_ggz_input(int sock)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Called on disconnection to remove monitoring on the GGZ socket.  Only
+  call this if we're actually in GGZ mode.
+**************************************************************************/
+void gui_remove_ggz_input(void)
 {
   /* PORTME */
 }
@@ -255,7 +272,7 @@ void gui_editgui_popdown_all(void)
 /****************************************************************************
   Stub for editor function
 ****************************************************************************/
-void gui_editgui_notify_object_changed(int objtype, int object_id, bool removal)
+void gui_editgui_notify_object_changed(int objtype, int object_id, bool remove)
 {}
 
 /****************************************************************************
@@ -264,26 +281,23 @@ void gui_editgui_notify_object_changed(int objtype, int object_id, bool removal)
 void gui_editgui_notify_object_created(int tag, int id)
 {}
 
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_gui_ggz_embed_leave_table(void)
+{}
+
+/****************************************************************************
+  Stub for ggz function
+****************************************************************************/
+void gui_gui_ggz_embed_ensure_server(void)
+{}
+
+
 /**************************************************************************
   Updates a gui font style.
 **************************************************************************/
 void gui_gui_update_font(const char *font_name, const char *font_value)
 {
   /* PORTME */
-}
-
-/**************************************************************************
-  Insert build information to help
-**************************************************************************/
-void gui_insert_client_build_info(char *outbuf, size_t outlen)
-{
-  /* PORTME */
-}
-
-/**************************************************************************
-  Make dynamic adjustments to first-launch default options.
-**************************************************************************/
-void gui_adjust_default_options(void)
-{
-  /* Nothing in case of this gui */
 }

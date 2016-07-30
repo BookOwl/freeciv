@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -54,7 +54,7 @@
 void handle_city_name_suggestion_req(struct player *pplayer, int unit_id)
 {
   struct unit *punit = player_unit_by_number(pplayer, unit_id);
-  enum city_build_result res;
+  enum unit_add_build_city_result res;
 
   if (NULL == punit) {
     /* Probably died or bribed. */
@@ -63,31 +63,36 @@ void handle_city_name_suggestion_req(struct player *pplayer, int unit_id)
     return;
   }
 
-  if (action_prob_possible(action_prob_vs_tile(punit, ACTION_FOUND_CITY,
-                                               unit_tile(punit)))) {
+  res = unit_add_or_build_city_test(punit);
+
+  switch (res) {
+  case UAB_BUILD_OK:
     log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d))",
                 TILE_XY(unit_tile(punit)));
     dlsend_packet_city_name_suggestion_info(pplayer->connections, unit_id,
         city_name_suggestion(pplayer, unit_tile(punit)));
+    break;
 
-    /* The rest of this function is error handling. */
-    return;
-  }
-
-  res = city_build_here_test(unit_tile(punit), punit);
-
-  switch (res) {
-  case CB_OK:
-    /* No action enabler permitted the city to be built. */
-  case CB_BAD_CITY_TERRAIN:
-  case CB_BAD_UNIT_TERRAIN:
-  case CB_BAD_BORDERS:
-  case CB_NO_MIN_DIST:
+  case UAB_BAD_CITY_TERRAIN:
+  case UAB_BAD_UNIT_TERRAIN:
+  case UAB_BAD_BORDERS:
+  case UAB_NO_MIN_DIST:
+  case UAB_NOT_BUILD_UNIT:
+  case UAB_NO_MOVES_BUILD:
     log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d)): "
                 "cannot build there.", TILE_XY(unit_tile(punit)));
+    city_add_or_build_error(pplayer, punit, res);       /* Message. */
+    break;
 
-    illegal_action_msg(pplayer, E_BAD_COMMAND, punit, ACTION_FOUND_CITY,
-                       unit_tile(punit), NULL, NULL);
+  case UAB_ADD_OK:
+  case UAB_NOT_ADDABLE_UNIT:
+  case UAB_NO_MOVES_ADD:
+  case UAB_NOT_OWNER:
+  case UAB_TOO_BIG:
+  case UAB_NO_SPACE:
+    log_verbose("handle_city_name_suggest_req(unit_pos (%d, %d)): "
+                "there is already a city there.", TILE_XY(unit_tile(punit)));
+    /* Ignoring. */
     break;
   }
 }
@@ -144,7 +149,7 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
   city_radius_sq = city_map_radius_sq_get(pcity);
   if (!is_valid_city_coords(city_radius_sq, worker_x, worker_y)) {
     log_error("handle_city_make_specialist() invalid city map {%d,%d} "
-              "\"%s\".", worker_x, worker_y, city_name_get(pcity));
+              "\"%s\".", worker_x, worker_y, city_name(pcity));
     return;
   }
   pcenter = city_tile(pcity);
@@ -152,7 +157,7 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
   if (NULL == (ptile = city_map_to_tile(pcenter, city_radius_sq, worker_x,
                                         worker_y))) {
     log_error("handle_city_make_specialist() unavailable city map {%d,%d} "
-              "\"%s\".", worker_x, worker_y, city_name_get(pcity));
+              "\"%s\".", worker_x, worker_y, city_name(pcity));
     return;
   }
 
@@ -163,7 +168,7 @@ void handle_city_make_specialist(struct player *pplayer, int city_id,
     pcity->specialists[DEFAULT_SPECIALIST]++;
   } else {
     log_verbose("handle_city_make_specialist() not working {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name_get(pcity));
+                worker_x, worker_y, city_name(pcity));
   }
 
   city_refresh(pcity);
@@ -192,7 +197,7 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 
   if (!is_valid_city_coords(city_radius_sq, worker_x, worker_y)) {
     log_error("handle_city_make_worker() invalid city map {%d,%d} "
-              "\"%s\".", worker_x, worker_y, city_name_get(pcity));
+              "\"%s\".", worker_x, worker_y, city_name(pcity));
     return;
   }
   pcenter = city_tile(pcity);
@@ -200,7 +205,7 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
   if (NULL == (ptile = city_map_to_tile(pcenter, city_radius_sq, worker_x,
                                         worker_y))) {
     log_error("handle_city_make_worker() unavailable city map {%d,%d} "
-              "\"%s\".", worker_x, worker_y, city_name_get(pcity));
+              "\"%s\".", worker_x, worker_y, city_name(pcity));
     return;
   }
 
@@ -212,19 +217,19 @@ void handle_city_make_worker(struct player *pplayer, int city_id,
 
   if (tile_worked(ptile) == pcity) {
     log_verbose("handle_city_make_worker() already working {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name_get(pcity));
+                worker_x, worker_y, city_name(pcity));
     return;
   }
 
   if (0 == city_specialists(pcity)) {
     log_verbose("handle_city_make_worker() no specialists {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name_get(pcity));
+                worker_x, worker_y, city_name(pcity));
     return;
   }
 
   if (!city_can_work_tile(pcity, ptile)) {
     log_verbose("handle_city_make_worker() cannot work here {%d,%d} \"%s\".",
-                worker_x, worker_y, city_name_get(pcity));
+                worker_x, worker_y, city_name(pcity));
     return;
   }
 
@@ -371,13 +376,13 @@ void really_handle_city_buy(struct player *pplayer, struct city *pcity)
                   /* TRANS: bought an unit. */
                   Q_("?unit:You bought %s in %s."),
                   utype_name_translation(pcity->production.value.utype),
-                  city_name_get(pcity));
+                  city_name(pcity));
   } else if (VUT_IMPROVEMENT == pcity->production.kind) {
     notify_player(pplayer, pcity->tile, E_IMP_BUY, ftc_server,
                   /* TRANS: bought an improvement .*/
                   Q_("?improvement:You bought %s in %s."),
                   improvement_name_translation(pcity->production.value.building),
-                  city_name_get(pcity));
+                  city_name(pcity));
   }
 
   conn_list_do_buffer(pplayer->connections);
@@ -441,7 +446,7 @@ void handle_city_refresh(struct player *pplayer, int city_id)
   Handle request to change current production.
 **************************************************************************/
 void handle_city_change(struct player *pplayer, int city_id,
-                        int production_kind, int production_value)
+			int production_kind, int production_value)
 {
   struct universal prod;
   struct city *pcity = player_city_by_number(pplayer, city_id);
@@ -470,7 +475,7 @@ void handle_city_change(struct player *pplayer, int city_id,
     return;
   }
 
-  if (!can_city_build_now(pcity, &prod)) {
+  if (!can_city_build_now(pcity, prod)) {
     return;
   }
   if (!city_can_change_build(pcity)) {
@@ -479,7 +484,7 @@ void handle_city_change(struct player *pplayer, int city_id,
     return;
   }
 
-  change_build_target(pplayer, pcity, &prod, E_CITY_PRODUCTION_CHANGED);
+  change_build_target(pplayer, pcity, prod, E_CITY_PRODUCTION_CHANGED);
 
   city_refresh(pcity);
   sanity_check_city(pcity);

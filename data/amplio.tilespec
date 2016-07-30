@@ -2,21 +2,14 @@
 [tilespec]
 
 ; Format and options of this tilespec file:
-options = "+Freeciv-tilespec-Devel-2016-Jun-07"
+options = "+Freeciv-2.5-tilespec"
 
 ; A simple name for the tileset specified by this file:
-name = "Amplio"
+name = "amplio"
 priority = 20
 
-; There`s no separate versioning in tilesets part of main freeciv distribution
-;version = ""
-
-; Summary and full description of the tileset.
-summary = _("Older variant of the current default tileset, Amplio2")
-;description = ""
-
 ; TODO: add more overall information fields on tiles, 
-; eg, authors, colors, etc.
+; eg, description, authors, colors, etc.
 
 ; Basic tile sizes:
 normal_tile_width  = 96
@@ -28,9 +21,9 @@ small_tile_height  = 20
 type = "isometric"
 is_hex = FALSE
 
-; Blended fog
-fog_style      = "Darkness"
-darkness_style = "Corner"
+; Fogstyle 2, darkness_style 4 : blended fog
+fogstyle = 2
+darkness_style = 4
 ; Which terrain layer darkness is drawn top of (0-2)
 darkness_layer = 0
 
@@ -40,21 +33,9 @@ unit_flag_offset_y = 16
 city_flag_offset_x = 2
 city_flag_offset_y = 9
 
-; offset the city occupied sprite by this amount
-occupied_offset_x = 0
-occupied_offset_y = 0
-
-; offset the units by this amount
+; offset the units by this amount when drawing units
 unit_offset_x = 19
 unit_offset_y = 18
-
-; offset of the normal activity icons
-activity_offset_x = 0
-activity_offset_y = 0
-
-; offset the cities by this amount
-city_offset_x = 0
-city_offset_y = 0
 
 ; offset the city bar text by this amount (from the city tile origin)
 citybar_offset_y = 30
@@ -62,31 +43,14 @@ citybar_offset_y = 30
 ; offset the tile label text by this amount
 tilelabel_offset_y = 15
 
-; offset the upkeep icons by this amount from the top of the unit itself.
-; The default is the normal tile height, which means that the upkeep icons
-; appear below the unit icon if the unit icons are equal to tile height
-; (typical in overhead tileset), or overlay lower part of the unit icon,
-; if unit icon is higher than tiles (typical in iso tilesets)
-;unit_upkeep_offset_y = 0
-
-; Like unit_upkeep_offset_y, but to be used in case there`s only small
-; space for the overall icon produced. Defaults to unit_upkeep_offset_y -
-; not having alternative layout.
-;unit_upkeep_small_offset_y = 0
-
 ; Font size (points) to use to draw city names and productions:
 city_names_font_size = 10
 city_productions_font_size = 8
 
-; For tilesets with oriented units, the directional sprite to use to
-; represent a unit type rather than a specific unit from the map
-; (e.g., in worklists, editor, and online help). Does not have to be a
-; valid direction for the tileset.
-;unit_default_orientation = "s"
-
 ; These are special because they get freed and reloaded
 ; as required:
 main_intro_file    = "misc/intro"
+minimap_intro_file = "misc/radar"
 
 ; Below, the graphics spec files; must be somewhere (anywhere) in 
 ; the data path. Order may be important for color allocation on 
@@ -102,7 +66,6 @@ files =
   "amplio/upkeep.spec",
   "amplio/fog.spec",
   "misc/small.spec",
-  "misc/events.spec",
   "misc/governments.spec",
   "misc/specialists.spec",
   "amplio/units.spec",
@@ -144,15 +107,14 @@ match_types = "water", "ice"
 ; Water graphics referenced by terrain.ruleset
 ;
 [tile_lake]
-tag = "lake"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "shallow"
 layer0_match_with = "land"
 layer0_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 [tile_coast]
-tag = "coast"
 blend_layer = 1
 num_layers = 2
 layer0_match_type = "shallow"
@@ -161,9 +123,9 @@ layer0_sprite_type = "corner"
 layer1_match_type = "water"
 layer1_match_with = "ice"
 layer1_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 [tile_floor]
-tag = "floor"
 blend_layer = 0
 num_layers = 2
 layer0_match_type = "deep"
@@ -172,115 +134,84 @@ layer0_sprite_type = "corner"
 layer1_match_type = "water"
 layer1_match_with = "ice"
 layer1_sprite_type = "corner"
+mine_sprite = "tx.oil_mine"
 
 ; Land graphics referenced by terrain.ruleset
 ;
 [tile_arctic]
-tag = "arctic"
 ; treated as water for ice cliffs
 blend_layer = 0
 num_layers = 3
 layer0_match_type = "shallow"
 layer1_match_type = "ice"
 layer2_match_type = "ice"
+mine_sprite = "tx.oil_mine"
 
 [tile_desert]
-tag = "desert"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
 [tile_forest]
-tag = "forest"
 blend_layer = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "forest"
 layer1_match_with = "forest"
+mine_sprite = "tx.mine"
 
 [tile_grassland]
-tag = "grassland"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_hills]
-tag = "hills"
 blend_layer = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "hills"
 layer1_match_with = "hills"
+mine_sprite = "tx.mine"
 
 [tile_jungle]
-tag = "jungle"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_mountains]
-tag = "mountains"
 blend_layer = 1
 num_layers = 2
 layer0_match_type = "land"
 layer1_match_type = "mountains"
 layer1_match_with = "mountains"
+mine_sprite = "tx.mine"
 
 [tile_plains]
-tag = "plains"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_swamp]
-tag = "swamp"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.mine"
 
 [tile_tundra]
-tag = "tundra"
 blend_layer = 1
 num_layers = 1
 layer0_match_type = "land"
+mine_sprite = "tx.oil_mine"
 
-[extras]
+[roads]
 styles =
-    { "name",          "style"
-      "road.road",     "RoadAllSeparate"
-      "road.rail",     "RoadAllSeparate"
-      "road.maglev",   "RoadAllSeparate"
-      "road.river",    "River"
-      "tx.irrigation", "Cardinals"
-      "tx.farmland",   "Cardinals"
-      "tx.mine",       "Single1"
-      "tx.oil_mine",   "Single1"
-      "tx.pollution",  "Single2"
-      "tx.fallout",    "Single2"
-      "tx.village",    "Single1"
-      "base.fortress", "3Layer"
-      "base.airbase",  "3Layer"
-      "extra.ruins",   "3Layer"
-      "ts.gold",       "Single1"
-      "ts.iron",       "Single1"
-      "ts.tundra_game", "Single1"
-      "ts.furs",       "Single1"
-      "ts.coal",       "Single1"
-      "ts.fish",       "Single1"
-      "ts.fruit",      "Single1"
-      "ts.gems",       "Single1"
-      "ts.buffalo",    "Single1"
-      "ts.wheat",      "Single1"
-      "ts.oasis",      "Single1"
-      "ts.peat",       "Single1"
-      "ts.pheasant",   "Single1"
-      "ts.grassland_resources", "Single1"
-      "ts.arctic_ivory", "Single1"
-      "ts.silk",       "Single1"
-      "ts.spice",      "Single1"
-      "ts.whales",     "Single1"
-      "ts.wine",       "Single1"
-      "ts.oil",        "Single1"
-      "ts.horses",     "Single1"
-      "ts.seals",      "Single1"
+    { "name",        "style"
+      "road.road",   "AllSeparate"
+      "road.rail",   "AllSeparate"
+      "road.maglev", "AllSeparate"
+      "road.river",  "River"
     }

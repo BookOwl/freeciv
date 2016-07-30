@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -30,7 +30,6 @@
 #include <QVBoxLayout>
 
 // utility
-#include "fc_cmdline.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
@@ -149,7 +148,6 @@ int main(int argc, char **argv)
   }
 
   fcmp_deinit();
-  cmdline_option_values_free();
 
   return EXIT_SUCCESS;
 }
@@ -181,7 +179,7 @@ static void progress_callback_thr(int downloaded, int max)
 /**************************************************************************
   Setup GUI object
 **************************************************************************/
-void mpgui::setup(QWidget *central, struct fcmp_params *params)
+void mpgui::setup(QWidget *central, struct fcmp_params *fcmp)
 {
 #define URL_LABEL_TEXT N_("Modpack URL")
   QVBoxLayout *main_layout = new QVBoxLayout();
@@ -240,10 +238,10 @@ void mpgui::setup(QWidget *central, struct fcmp_params *params)
   hl->addWidget(URL_label);
 
   URLedit = new QLineEdit(central);
-  if (params->autoinstall == nullptr) {
+  if (fcmp->autoinstall == nullptr) {
     URLedit->setText(DEFAULT_URL_START);
   } else {
-    URLedit->setText(QString::fromUtf8(params->autoinstall));
+    URLedit->setText(QString::fromUtf8(fcmp->autoinstall));
   }
   URLedit->setFocus();
 

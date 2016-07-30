@@ -25,7 +25,7 @@ ruler_titles = {
 }
 flag="saint_lucia"
 flag_alt = "-"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""

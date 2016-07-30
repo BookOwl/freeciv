@@ -32,31 +32,28 @@ struct ruler_title;     /* Opaque type. */
 
 /* 'struct ruler_title_hash' and related functions. */
 #define SPECHASH_TAG ruler_title
-#define SPECHASH_IKEY_TYPE struct nation_type *
-#define SPECHASH_IDATA_TYPE struct ruler_title *
+#define SPECHASH_KEY_TYPE struct nation_type *
+#define SPECHASH_DATA_TYPE struct ruler_title *
 #include "spechash.h"
 #define ruler_titles_iterate(ARG_hash, NAME_rule_title)                     \
   TYPED_HASH_DATA_ITERATE(const struct ruler_title *, ARG_hash,             \
                           NAME_rule_title)
 #define ruler_titles_iterate_end HASH_DATA_ITERATE_END
 
-/* G_LAST is a value guaranteed to be larger than any valid
- * Government_type_id. It defines the maximum number of governments
- * (so can also be used to size static arrays indexed by governments);
- * it is sometimes used as a sentinel value (but not in the network
- * protocol, which generally uses government_count()). */
-#define G_LAST (127)
+#define G_MAGIC (127)		/* magic constant */
+
+/* special values for free_* fields -- SKi */
+#define G_CITY_SIZE_FREE          G_MAGIC
 
 /* This is struct government itself.  All information about a form of
  * government is contained inhere. -- SKi */
 struct government {
-  Government_type_id item_number;
+  int item_number;
   struct name_translation name;
   char graphic_str[MAX_LEN_NAME];
   char graphic_alt[MAX_LEN_NAME];
   struct requirement_vector reqs;
   struct ruler_title_hash *ruler_titles;
-  int changed_to_times;
   struct strvec *helptext;
 
   /* AI cached data for this government. */
@@ -67,11 +64,11 @@ struct government {
 
 
 /* General government accessor functions. */
-Government_type_id government_count(void);
-Government_type_id government_index(const struct government *pgovern);
-Government_type_id government_number(const struct government *pgovern);
+int government_count(void);
+int government_index(const struct government *pgovern);
+int government_number(const struct government *pgovern);
 
-struct government *government_by_number(const Government_type_id gov);
+struct government *government_by_number(const int gov);
 struct government *government_of_player(const struct player *pplayer);
 struct government *government_of_city(const struct city *pcity);
 

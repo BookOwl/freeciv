@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996-2005 - Freeciv Development Team
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ struct sprite
 
 struct sprite *sprite_scale(struct sprite *src, int new_w, int new_h);
 void sprite_get_bounding_box(struct sprite *sprite, int *start_x,
-                             int *start_y, int *end_x, int *end_y);
+			     int *start_y, int *end_x, int *end_y);
 struct sprite *crop_blankspace(struct sprite *s);
 
 /********************************************************************

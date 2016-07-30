@@ -12,8 +12,7 @@
 
 [datafile]
 description="Civ2Civ3 governments data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [governments]
 during_revolution="Anarchy"
@@ -22,33 +21,35 @@ during_revolution="Anarchy"
 ;
 ; Below: The individual government types, one per section.
 ;
-; The actual tag used (the * in [government_*]) does not matter, except
-; it must be unique within this file, and it may be used in debug
+; The actual tag used (the * in [government_*]) does not matter, except 
+; it must be unique within this file, and it may be used in debug 
 ; output when reading this file.
 ;
 ; For the "official" rulesets, the order of these sections should not
-; be changed because that would break backward compatability with
+; be changed because that would break backward compatability with 
 ; savegames.  (In particular, if Fundamentalism is added to default
 ; ruleset, should be added at end.)
 ;
 ; Notes on fields:
-;
-; name         = translatable name as seen by user
-; rule_name    = (optional) name for savegames, rulesets etc; if not
-;                present, 'name' is used. Since the name used in savegames
-;                must not change, use this when renaming a government after a
-;                ruleset has been released.
-; reqs         = requirements for this government (see README.effects)
-; graphic      = tag specifing preferred graphic
-; graphic_alt  = alternate graphics tag if preferred is not found;
-;                should be a standard tag if preferred is not;
-;                otherwise may be "-"
-; ai_better    = AI will not consider this government for use if the
-;                government listed here is available
-; ruler_titles = ruler titles by nation, "-" is default, and non-matched
-;                nations are ignored
-; helptext     = optional help text string; should escape all raw newlines
-;                so that xgettext parsing works
+
+; name        = translatable name as seen by user
+; rule_name   = (optional) name for savegames, rulesets etc; if not
+;               present, 'name' is used. Since the name used in savegames
+;               must not change, use this when renaming a government after a
+;               ruleset has been released.
+; reqs        = requirements for this government (see README.effects)
+; graphic     = tag specifing preferred graphic
+; graphic_alt = alternate graphics tag if preferred is not found;
+;               should be a standard tag if preferred is not;
+;		otherwise may be "-"
+; ai_better   = AI will not consider this government for use if the
+;               government listed here is available
+
+; ruler_titles = ruler titles by nation, "-" is default, and non-matched 
+;	         nations are ignored 
+
+; helptext = optional help text string; should escape all raw newlines 
+;	     so that xgettext parsing works
 ;
 ; */ <-- avoid gettext warnings
 
@@ -76,8 +77,7 @@ _("\
  1 shield per turn.\n\
 * Military units do not cause unhappiness even when deployed aggressively.\n\
 * You have no control over tax rates. Half of the trade income is\
- simply lost to your economy (less if you have luxury-promoting buildings),\
- and the remainder all goes to luxuries.\
+ simply lost to your economy, and the remainder all goes to luxuries.\
  Conventional corruption increases with distance from the capital\
  (half as fast with knowledge of The Corporation).\n\
 * Base production waste is 30%. This increases with distance from the\
@@ -249,9 +249,7 @@ Fundamentalism is a good government for maximizing gold, and its Fanatics\
 "),
 ; /* xgettext:no-c-format */
 _("\
-* Base science production is half that of other governments. (A\
- Fundamentalist city with a Library produces as much science as a\
- city under another government does alone.)\n\
+* Science production is half that of other governments.\n\
 * Each city can support up to 2 units for free; further units each cost\
  2 gold per turn (except for Fanatics).\n\
 * Each city tolerates up to 2 aggressively deployed military units;\
@@ -283,7 +281,6 @@ Federalism is a system in which the power to govern is shared between\
 "),
 ; /* xgettext:no-c-format */
 _("\
-* Each city receives 3 extra luxury points.\n\
 * Celebrating cities produce one extra trade point for every tile which is\
  already producing trade. (Cities below size 3 will not celebrate.)\n\
 * Each city can support up to 2 units for free; further units each cost\
@@ -370,26 +367,3 @@ _("\
 * Base production waste is 25%. This increases with distance from the\
  capital (half as fast with knowledge of Trade).\
 ")
-
-; /* <-- avoid gettext warnings
-;
-; Multipliers (aka policies)
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for savegames, rulesets etc; if not
-;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming
-;                           a multiplier after a ruleset has been released.
-; default                 = default value (as presented in UI)
-; start                   = minimum value (as presented in UI)
-; stop                    = maximum value (as presented in UI)
-; step                    = minimum increase/decrease (as presented in UI)
-; offset                  = offset/factor control how UI values are turned
-; factor                  = into effect values for use in effects.ruleset.
-;                           effect_value = (ui_value + offset) * (factor/100)
-;                           Optional; by default offset=0, factor=100, so
-;                           that UI values are used as-is.
-; helptext                = optional help text string; should escape all raw
-;                           newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings

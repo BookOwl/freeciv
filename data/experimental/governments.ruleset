@@ -1,4 +1,4 @@
-; This is the experimental ruleset. See README.experimental
+; This is the experimental ruleset. See doc/README.ruleset_experimental
 ; for a detailed description.
 
 ; Modifying this file:
@@ -14,8 +14,7 @@
 
 [datafile]
 description="Experimental governments data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [governments]
 during_revolution="Anarchy"
@@ -24,33 +23,35 @@ during_revolution="Anarchy"
 ;
 ; Below: The individual government types, one per section.
 ;
-; The actual tag used (the * in [government_*]) does not matter, except
-; it must be unique within this file, and it may be used in debug
+; The actual tag used (the * in [government_*]) does not matter, except 
+; it must be unique within this file, and it may be used in debug 
 ; output when reading this file.
 ;
 ; For the "official" rulesets, the order of these sections should not
-; be changed because that would break backward compatability with
+; be changed because that would break backward compatability with 
 ; savegames.  (In particular, if Fundamentalism is added to default
 ; ruleset, should be added at end.)
 ;
 ; Notes on fields:
-;
-; name         = translatable name as seen by user
-; rule_name    = (optional) name for savegames, rulesets etc; if not
-;                present, 'name' is used. Since the name used in savegames
-;                must not change, use this when renaming a government after a
-;                ruleset has been released.
-; reqs         = requirements for this government (see README.effects)
-; graphic      = tag specifing preferred graphic
-; graphic_alt  = alternate graphics tag if preferred is not found;
-;                should be a standard tag if preferred is not;
-;                otherwise may be "-"
-; ai_better    = AI will not consider this government for use if the
-;                government listed here is available
-; ruler_titles = ruler titles by nation, "-" is default, and non-matched
-;                nations are ignored
-; helptext     = optional help text string; should escape all raw newlines
-;                so that xgettext parsing works
+
+; name        = translatable name as seen by user
+; rule_name   = (optional) name for savegames, rulesets etc; if not
+;               present, 'name' is used. Since the name used in savegames
+;               must not change, use this when renaming a government after a
+;               ruleset has been released.
+; reqs        = requirements for this government (see README.effects)
+; graphic     = tag specifing preferred graphic
+; graphic_alt = alternate graphics tag if preferred is not found;
+;               should be a standard tag if preferred is not;
+;		otherwise may be "-"
+; ai_better   = AI will not consider this government for use if the
+;               government listed here is available
+
+; ruler_titles = ruler titles by nation, "-" is default, and non-matched 
+;	         nations are ignored 
+
+; helptext = optional help text string; should escape all raw newlines 
+;	     so that xgettext parsing works
 ;
 ; */ <-- avoid gettext warnings
 
@@ -184,40 +185,4 @@ Under Democracy, citizens govern directly by voting on issues.\
  offers the most potential for unhappiness.  There is no corruption\
  during Democracy, but citizens become very upset during\
  wars.\
-")
-
-; /* <-- avoid gettext warnings
-;
-; Multipliers (aka policies)
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for savegames, rulesets etc; if not
-;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming
-;                           a multiplier after a ruleset has been released.
-; default                 = default value (as presented in UI)
-; start                   = minimum value (as presented in UI)
-; stop                    = maximum value (as presented in UI)
-; step                    = minimum increase/decrease (as presented in UI)
-; offset                  = offset/factor control how UI values are turned
-; factor                  = into effect values for use in effects.ruleset.
-;                           effect_value = (ui_value + offset) * (factor/100)
-;                           Optional; by default offset=0, factor=100, so
-;                           that UI values are used as-is.
-; helptext                = optional help text string; should escape all raw
-;                           newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings
-
-[multiplier_personal_freedom]
-name      = _("Personal Freedom")
-start     = 0
-stop      = 5
-step      = 1
-default   = 0
-; /* xgettext:no-c-format */
-helptext  = _("\
-Each step of personal freedom you allow your citizens yields a 10% \
-increase in science output, but makes an additional citizen unhappy \
-for every aggressively deployed military unit.\
 ")

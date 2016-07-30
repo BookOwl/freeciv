@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 2004 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,12 +18,13 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#ifdef HAVE_CONFIG_H
+#include <fc_config.h>
+#endif
+
 /* utility */
 #include "fcintl.h"
 #include "support.h"
-
-/* common */
-#include "fc_types.h" /* MAX_LEN_NAME */
 
 /* Don't allow other modules to access directly to the fields. */
 #define vernacular _private_vernacular_
@@ -109,7 +110,7 @@ static inline const char *
 /****************************************************************************
   Return the rule name of the name translation structure.
 ****************************************************************************/
-static inline const char *rule_name_get(const struct name_translation *ptrans)
+static inline const char *rule_name(const struct name_translation *ptrans)
 {
   return ptrans->rulename;
 }
@@ -118,7 +119,7 @@ static inline const char *rule_name_get(const struct name_translation *ptrans)
   Return the translated name of the name translation structure.
 ****************************************************************************/
 static inline const char *
-    name_translation_get(const struct name_translation *ptrans)
+    name_translation(const struct name_translation *ptrans)
 {
   return ptrans->translated;
 }

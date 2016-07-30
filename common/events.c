@@ -84,11 +84,9 @@ static struct {
    * server to generate messages. They are used in configuring how the client
    * handles the different types of messages. Some of them will be displayed
    * with prefixes, such as "Technology: Learned From Great Library". */
-  GEN_EV(E_TECH_GAIN,		E_S_ADVANCE,	N_("Acquired New Tech")),
+  GEN_EV(E_TECH_GAIN,		E_S_ADVANCE,	N_("Learned From Great Library")),
   GEN_EV(E_TECH_LEARNED,	E_S_ADVANCE,	N_("Learned New Tech")),
   GEN_EV(E_TECH_GOAL,		E_S_ADVANCE,	N_("Selected New Goal")),
-  GEN_EV(E_TECH_LOST,		E_S_ADVANCE,	N_("Lost a Tech")),
-  GEN_EV(E_TECH_EMBASSY,	E_S_ADVANCE,	N_("Other Player Gained/Lost a Tech")),
   GEN_EV(E_IMP_BUY,		E_S_BUILD,	N_("Bought")),
   GEN_EV(E_IMP_BUILD,		E_S_BUILD,	N_("Built")),
   GEN_EV(E_IMP_AUCTIONED,	E_S_BUILD,	N_("Forced to Sell")),
@@ -124,9 +122,6 @@ static struct {
   GEN_EV(E_MY_DIPLOMAT_POISON,		E_S_D_ME,	N_("Poison")),
   GEN_EV(E_MY_DIPLOMAT_SABOTAGE,	E_S_D_ME,	N_("Sabotage")),
   GEN_EV(E_MY_DIPLOMAT_THEFT,		E_S_D_ME,	N_("Theft")),
-  GEN_EV(E_MY_SPY_STEAL_GOLD,		E_S_D_ME,	N_("Gold Theft")),
-  GEN_EV(E_MY_SPY_STEAL_MAP,		E_S_D_ME,	N_("Map Theft")),
-  GEN_EV(E_MY_SPY_NUKE,			E_S_D_ME,	N_("Suitcase Nuke")),
   GEN_EV(E_ENEMY_DIPLOMAT_BRIBE,	E_S_D_THEM,	N_("Bribe")),
   GEN_EV(E_ENEMY_DIPLOMAT_EMBASSY,	E_S_D_THEM,	N_("Embassy")),
   GEN_EV(E_ENEMY_DIPLOMAT_FAILED,	E_S_D_THEM,	N_("Failed")),
@@ -134,9 +129,6 @@ static struct {
   GEN_EV(E_ENEMY_DIPLOMAT_POISON,	E_S_D_THEM,	N_("Poison")),
   GEN_EV(E_ENEMY_DIPLOMAT_SABOTAGE,	E_S_D_THEM,	N_("Sabotage")),
   GEN_EV(E_ENEMY_DIPLOMAT_THEFT,	E_S_D_THEM,	N_("Theft")),
-  GEN_EV(E_ENEMY_SPY_STEAL_GOLD,	E_S_D_THEM,	N_("Gold Theft")),
-  GEN_EV(E_ENEMY_SPY_STEAL_MAP,		E_S_D_THEM,	N_("Map Theft")),
-  GEN_EV(E_ENEMY_SPY_NUKE,		E_S_D_THEM,	N_("Suitcase Nuke")),
   GEN_EV(E_GLOBAL_ECO,		E_S_GLOBAL,	N_("Eco-Disaster")),
   GEN_EV(E_NUKE,		E_S_GLOBAL,	N_("Nuke Detonated")),
   GEN_EV(E_HUT_BARB,		E_S_HUT,	N_("Barbarians in a Hut Roused")),
@@ -147,7 +139,6 @@ static struct {
   GEN_EV(E_HUT_SETTLER,		E_S_HUT,	N_("Settler Found in Hut")),
   GEN_EV(E_HUT_TECH,		E_S_HUT,	N_("Tech Found in Hut")),
   GEN_EV(E_HUT_BARB_CITY_NEAR,	E_S_HUT,	N_("Unit Spared by Barbarians")),
-  GEN_EV(E_ACHIEVEMENT,         E_S_NATION,     N_("Achievements")),
   GEN_EV(E_UPRISING,		E_S_NATION,	N_("Barbarian Uprising")),
   GEN_EV(E_CIVIL_WAR,		E_S_NATION,	N_("Civil War")),
   GEN_EV(E_ANARCHY,		E_S_NATION,	N_("Collapse to Anarchy")),
@@ -176,9 +167,6 @@ static struct {
   GEN_EV(E_UNIT_RELOCATED,	E_S_UNIT,	N_("Relocated")),
   GEN_EV(E_UNIT_ORDERS,         E_S_UNIT,       N_("Orders / goto events")),
   GEN_EV(E_UNIT_BUILT_POP_COST, E_S_UNIT,       N_("Built unit with population cost")),
-  GEN_EV(E_UNIT_WAS_EXPELLED,	E_S_UNIT,	N_("Was Expelled")),
-  GEN_EV(E_UNIT_DID_EXPEL,	E_S_UNIT,	N_("Did Expel")),
-  GEN_EV(E_UNIT_ACTION_FAILED,	E_S_UNIT,	N_("Action failed")),
   /* TRANS: "vote" as a process */
   GEN_EV(E_VOTE_NEW,		E_S_VOTE,	N_("New vote")),
   /* TRANS: "Vote" as a process */
@@ -211,10 +199,6 @@ static struct {
   GEN_EV(E_SCRIPT,		E_S_XYZZY,	N_("Scenario/ruleset script message")),
   /* TRANS: Event name for when the game year changes. */
   GEN_EV(E_NEXT_YEAR,		E_S_XYZZY,	N_("Year Advance")),
-  GEN_EV(E_DEPRECATION_WARNING, E_S_XYZZY,	N_("Deprecated Modpack syntax warnings")),
-  GEN_EV(E_SPONTANEOUS_EXTRA,   E_S_XYZZY,      N_("Extra Appears or Disappears")),
-  GEN_EV(E_UNIT_ILLEGAL_ACTION, E_S_UNIT,       N_("Unit Illegal Action")),
-  GEN_EV(E_UNIT_ESCAPED, E_S_UNIT,       N_("Unit escaped"))
   /* The sound system also generates "e_game_quit", although there's no
    * corresponding identifier E_GAME_QUIT. */
 };
@@ -261,7 +245,7 @@ static int compar_event_message_texts(const void *i1, const void *i2)
 /****************************************************************************
   Returns a string for the sound to be used for this message type.
 ****************************************************************************/
-const char *get_event_tag(enum event_type event)
+const char *get_event_sound_tag(enum event_type event)
 {
   fc_assert_ret_val(event_type_is_valid(event), NULL);
 
@@ -304,7 +288,6 @@ bool is_city_event(enum event_type event)
   case E_UNIT_WIN_ATT:
   case E_UPRISING:
   case E_UNIT_RELOCATED:
-  case E_UNIT_ILLEGAL_ACTION:
     return FALSE;
 
   default:

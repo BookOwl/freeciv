@@ -34,7 +34,7 @@ extern "C" {
 struct canvas_store;		/* opaque type, real type is gui-dep */
 
 struct view {
-  float gui_x0, gui_y0;
+  int gui_x0, gui_y0;
   int width, height;		/* Size in pixels. */
   int tile_width, tile_height;	/* Size in tiles. Rounded up. */
   int store_width, store_height;
@@ -93,7 +93,7 @@ extern bool can_slide;
  * (formerly newgrid.png in PR#12085).
  */
 #define gui_rect_iterate(GRI_x0, GRI_y0, GRI_width, GRI_height,         \
-			 _t, _e, _c, _zoom)                             \
+			 _t, _e, _c)                                    \
 {									\
   int _x_##_0 = (GRI_x0), _y_##_0 = (GRI_y0);				\
   int _x_##_w = (GRI_width), _y_##_h = (GRI_height);			\
@@ -112,8 +112,8 @@ extern bool can_slide;
     int _t##_xi, _t##_yi, _t##_si, _t##_di;				\
     const int _t##_r1 = (tileset_is_isometric(tileset) ? 2 : 1);	\
     const int _t##_r2 = _t##_r1 * 2; /* double the ratio */		\
-    const int _t##_w = tileset_tile_width(tileset) * _zoom;             \
-    const int _t##_h = tileset_tile_height(tileset) * _zoom;	        \
+    const int _t##_w = tileset_tile_width(tileset);			\
+    const int _t##_h = tileset_tile_height(tileset);			\
     /* Don't divide by _r2 yet, to avoid integer rounding errors. */	\
     const int _t##_x0 = DIVIDE(_x_##_0 * _t##_r2, _t##_w) - _t##_r1 / 2;\
     const int _t##_y0 = DIVIDE(_y_##_0 * _t##_r2, _t##_h) - _t##_r1 / 2;\
@@ -226,9 +226,9 @@ extern bool can_slide;
 }
 
 #define gui_rect_iterate_coord(GRI_x0, GRI_y0, GRI_width, GRI_height,	\
-			       _t, _e, _c, _x, _y, _zoom)               \
+			       _t, _e, _c, _x, _y)                      \
   gui_rect_iterate(GRI_x0, GRI_y0, GRI_width, GRI_height,               \
-                   _t, _e, _c, _zoom) {                                 \
+                   _t, _e, _c) {                                        \
     int _x, _y;                                                         \
                                                                         \
     _x = _t##_xi * _t##_w / _t##_r2 - _t##_w / 2;                       \
@@ -246,34 +246,34 @@ void refresh_city_mapcanvas(struct city *pcity, struct tile *ptile,
 
 void unqueue_mapview_updates(bool write_to_screen);
 
-void map_to_gui_vector(const struct tileset *t, float zoom,
-		       float *gui_dx, float *gui_dy, int map_dx, int map_dy);
-bool tile_to_canvas_pos(float *canvas_x, float *canvas_y, struct tile *ptile);
-struct tile *canvas_pos_to_tile(float canvas_x, float canvas_y);
-struct tile *canvas_pos_to_nearest_tile(float canvas_x, float canvas_y);
+void map_to_gui_vector(const struct tileset *t,
+		       int *gui_dx, int *gui_dy, int map_dx, int map_dy);
+bool tile_to_canvas_pos(int *canvas_x, int *canvas_y, struct tile *ptile);
+struct tile *canvas_pos_to_tile(int canvas_x, int canvas_y);
+struct tile *canvas_pos_to_nearest_tile(int canvas_x, int canvas_y);
 
-void get_mapview_scroll_window(float *xmin, float *ymin,
-                               float *xmax, float *ymax,
-                               int *xsize, int *ysize);
+void get_mapview_scroll_window(int *xmin, int *ymin,
+			       int *xmax, int *ymax,
+			       int *xsize, int *ysize);
 void get_mapview_scroll_step(int *xstep, int *ystep);
 void get_mapview_scroll_pos(int *scroll_x, int *scroll_y);
 void set_mapview_scroll_pos(int scroll_x, int scroll_y);
 
-void set_mapview_origin(float gui_x0, float gui_y0);
+void set_mapview_origin(int gui_x0, int gui_y0);
 struct tile *get_center_tile_mapcanvas(void);
 void center_tile_mapcanvas(struct tile *ptile);
 
 bool tile_visible_mapcanvas(struct tile *ptile);
 bool tile_visible_and_not_on_border_mapcanvas(struct tile *ptile);
 
-void put_unit(const struct unit *punit, struct canvas *pcanvas, float zoom,
-              int canvas_x, int canvas_y);
-void put_unittype(const struct unit_type *putype, struct canvas *pcanvas, float zoom,
+void put_unit(const struct unit *punit, struct canvas *pcanvas, int canvas_x,
+              int canvas_y);
+void put_unittype(const struct unit_type *putype, struct canvas *pcanvas,
                   int canvas_x, int canvas_y);
-void put_city(struct city *pcity, struct canvas *pcanvas, float zoom,
-              int canvas_x, int canvas_y);
-void put_terrain(struct tile *ptile, struct canvas *pcanvas, float zoom,
-                 int canvas_x, int canvas_y);
+void put_city(struct city *pcity,
+	      struct canvas *pcanvas, int canvas_x, int canvas_y);
+void put_terrain(struct tile *ptile,
+		 struct canvas *pcanvas, int canvas_x, int canvas_y);
 
 void put_unit_city_overlays(struct unit *punit,
                             struct canvas *pcanvas,
@@ -284,8 +284,7 @@ void toggle_unit_color(struct unit *punit);
 
 void put_nuke_mushroom_pixmaps(struct tile *ptile);
 
-void put_one_element(struct canvas *pcanvas, float zoom,
-                     enum mapview_layer layer,
+void put_one_element(struct canvas *pcanvas, enum mapview_layer layer,
                      const struct tile *ptile,
                      const struct tile_edge *pedge,
                      const struct tile_corner *pcorner,
@@ -294,7 +293,7 @@ void put_one_element(struct canvas *pcanvas, float zoom,
                      const struct city *citymode,
                      const struct unit_type *putype);
 
-void put_drawn_sprites(struct canvas *pcanvas, float zoom,
+void put_drawn_sprites(struct canvas *pcanvas,
                        int canvas_x, int canvas_y,
                        int count, struct drawn_sprite *pdrawn,
                        bool fog);
@@ -304,10 +303,10 @@ void update_map_canvas_visible(void);
 void update_city_description(struct city *pcity);
 void update_tile_label(struct tile *ptile);
 
-void show_city_descriptions(int canvas_base_x, int canvas_base_y,
-                            int width_base, int height_base);
-void show_tile_labels(int canvas_base_x, int canvas_base_y,
-                      int width_base, int height_base);
+void show_city_descriptions(int canvas_x, int canvas_y,
+			    int width, int height);
+void show_tile_labels(int canvas_x, int canvas_y,
+                      int width, int height);
 bool show_unit_orders(struct unit *punit);
 
 void draw_segment(struct tile *ptile, enum direction8 dir);
@@ -352,8 +351,6 @@ void link_marks_decrease_turn_counters(void);
 
 void link_mark_add_new(enum text_link_type type, int id);
 void link_mark_restore(enum text_link_type type, int id);
-
-bool tileset_map_topo_compatible(int topology_id, struct tileset *tset);
 
 #ifdef __cplusplus
 }

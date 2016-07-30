@@ -136,37 +136,38 @@ void research_diagram::create_tooltip_help()
   for (i = 0; i < tree->num_layers; i++) {
     for (j = 0; j < tree->layer_size[i]; j++) {
       struct tree_node *node = tree->layers[i][j];
-      int startx, starty, nwidth, nheight;
+      int startx, starty, width, height;
 
       startx = node->node_x;
       starty = node->node_y;
-      nwidth = node->node_width;
-      nheight = node->node_height;
+      width = node->node_width;
+      height = node->node_height;
 
       if (!node->is_dummy) {
-        const char *text = research_advance_name_translation(
-                                  research_get(client_player()), node->tech);
+        const char *text = advance_name_for_player(client.conn.playing,
+                                                   node->tech);
         int text_w, text_h;
         int icon_startx;
 
         get_text_size(&text_w, &text_h, FONT_REQTREE_TEXT, text);
         rttp = new req_tooltip_help();
-        rttp->rect = QRect(startx + (nwidth - text_w) / 2, starty + 4,
+        rttp->rect = QRect(startx + (width - text_w) / 2, starty + 4,
                            text_w, text_h);
         rttp->tech_id = node->tech;
         tt_help.append(rttp);
         icon_startx = startx + 5;
 
-        if (gui_options.reqtree_show_icons) {
+        if (reqtree_show_icons) {
           unit_type_iterate(unit) {
             if (advance_number(unit->require_advance) != node->tech) {
               continue;
             }
-            sprite = get_unittype_sprite(tileset, unit, direction8_invalid());
+            sprite = get_unittype_sprite(tileset, unit,
+                                         direction8_invalid(), TRUE);
             get_sprite_dimensions(sprite, &swidth, &sheight);
             rttp = new req_tooltip_help();
             rttp->rect = QRect(icon_startx, starty + text_h + 4
-                               + (nheight - text_h - 4 - sheight) / 2,
+                               + (height - text_h - 4 - sheight) / 2,
                                swidth, sheight);
             rttp->tunit = unit;
             tt_help.append(rttp);
@@ -182,7 +183,7 @@ void research_diagram::create_tooltip_help()
                   get_sprite_dimensions(sprite, &swidth, &sheight);
                   rttp = new req_tooltip_help();
                   rttp->rect = QRect(icon_startx, starty + text_h + 4
-                                     + (nheight - text_h - 4 - sheight) / 2,
+                                     + (height - text_h - 4 - sheight) / 2,
                                      swidth, sheight);
                   rttp->timpr = pimprove;
                   tt_help.append(rttp);
@@ -200,7 +201,7 @@ void research_diagram::create_tooltip_help()
                 get_sprite_dimensions(sprite, &swidth, &sheight);
                 rttp = new req_tooltip_help();
                 rttp->rect = QRect(icon_startx, starty + text_h + 4
-                                   + (nheight - text_h - 4 - sheight) / 2,
+                                   + (height - text_h - 4 - sheight) / 2,
                                    swidth, sheight);
                 rttp->tgov = gov;
                 tt_help.append(rttp);
@@ -254,7 +255,7 @@ void research_diagram::mousePressEvent(QMouseEvent *event)
   int i;
 
   if (event->button() == Qt::LeftButton && can_client_issue_orders()) {
-    switch (research_invention_state(research_get(client_player()), tech)) {
+    switch (player_invention_state(client_player(), tech)) {
     case TECH_PREREQS_KNOWN:
       dsend_packet_player_research(&client.conn, tech);
       break;
@@ -269,8 +270,7 @@ void research_diagram::mousePressEvent(QMouseEvent *event)
       rttp = tt_help.at(i);
       if (rttp->rect.contains(event->pos())) {
         if (rttp->tech_id != -1) {
-          popup_help_dialog_typed(research_advance_name_translation(
-                                  research_get(client_player()),
+          popup_help_dialog_typed(advance_name_for_player(client_player(),
                                   rttp->tech_id), HELP_TECH);
         } else if (rttp->timpr != nullptr) {
           popup_help_dialog_typed(improvement_name_translation(rttp->timpr),
@@ -471,7 +471,7 @@ void science_report::reset_tree()
 void science_report::update_report()
 {
 
-  struct research *research = research_get(client_player());
+  struct player_research *research = player_research_get(client_player());
   const char *text;
   int total;
   int done = research->bulbs_researched;
@@ -529,7 +529,7 @@ void science_report::update_report()
 
   /** Collect all techs which are reachable in next 10 steps. */
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(research, i)
+    if (player_invention_reachable(client_player(), i, true)
         && TECH_KNOWN != research->inventions[i].state
         && (i == research->tech_goal
             || 10 >= research->inventions[i].num_required_techs)) {
@@ -563,9 +563,8 @@ void science_report::update_report()
   /** set current tech and goal */
   qres = research->researching;
   if (qres == A_UNSET || is_future_tech(research->researching)) {
-    researching_combo->insertItem(0, research_advance_name_translation(
-                                  research, research->researching ), 
-                                  A_UNSET);
+    researching_combo->insertItem(0, advance_name_researching(
+                                  client.conn.playing), A_UNSET);
     researching_combo->setCurrentIndex(0);
   } else {
     for (int i = 0; i < researching_combo->count(); i++) {
@@ -616,11 +615,10 @@ void science_report::update_reqtree()
 /****************************************************************************
   Slot used when combo box with current tech changes
 ****************************************************************************/
-void science_report::current_tech_changed(int changed_index)
+void science_report::current_tech_changed(int index)
 {
   QVariant qvar;
-
-  qvar = researching_combo->itemData(changed_index);
+  qvar = researching_combo->itemData(index);
 
   if (researching_combo->hasFocus()) {
     if (can_client_issue_orders()) {
@@ -632,11 +630,10 @@ void science_report::current_tech_changed(int changed_index)
 /****************************************************************************
   Slot used when combo box with goal have been changed
 ****************************************************************************/
-void science_report::goal_tech_changed(int changed_index)
+void science_report::goal_tech_changed(int index)
 {
   QVariant qvar;
-
-  qvar = goal_combo->itemData(changed_index);
+  qvar = goal_combo->itemData(index);
 
   if (goal_combo->hasFocus()) {
     if (can_client_issue_orders()) {
@@ -780,7 +777,7 @@ void units_report::update_report()
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      info = unit_array + utype_index(unit_type_get(punit));
+      info = unit_array + utype_index(unit_type(punit));
 
       if (0 != punit->homecity) {
         for (output = 0; output < O_LAST; output++) {
@@ -820,7 +817,8 @@ void units_report::update_report()
         unit_item->setText(utype_name_translation(utype));
         qvar = utype_id;
         unit_item->setData(Qt::UserRole, qvar);
-        sprite = get_unittype_sprite(tileset, utype, direction8_invalid());
+        sprite = get_unittype_sprite(tileset, utype, direction8_invalid(),
+                                     true);
         if (sprite != NULL) {
           pix = sprite->pm;
           pix_scaled = pix->scaledToHeight(h);
@@ -921,7 +919,7 @@ struct unit *units_report::find_nearest_unit(const struct unit_type *utype,
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      if (utype == unit_type_get(punit)
+      if (utype == unit_type(punit)
           && FOCUS_AVAIL == punit->client.focus_status
           && 0 < punit->moves_left
           && !punit->done_moving && !punit->ai_controlled) {
@@ -1145,7 +1143,7 @@ void eco_report::update_report()
     } else {
       pix_scaled.fill();
     }
-    cid id = cid_encode_building(pimprove);
+    cid cid = cid_encode_building(pimprove);
 
     eco_widget->insertRow(i);
     for (j = 0; j < 6; j++) {
@@ -1153,7 +1151,7 @@ void eco_report::update_report()
       switch (j) {
       case 0:
         item->setData(Qt::DecorationRole, pix_scaled);
-        item->setData(Qt::UserRole, id);
+        item->setData(Qt::UserRole, cid);
         break;
       case 1:
         item->setTextAlignment(Qt::AlignLeft);
@@ -1181,14 +1179,14 @@ void eco_report::update_report()
   for (i = 0; i < entries_used; i++) {
     struct unit_entry *pentry = unit_entries + i;
     struct unit_type *putype = pentry->type;
-    cid id;
 
     pix = NULL;
-    sprite = get_unittype_sprite(tileset, putype, direction8_invalid());
+    sprite = get_unittype_sprite(tileset, putype,
+                                       direction8_invalid(), true);
     if (sprite != NULL){
       pix = sprite->pm;
     }
-    id = cid_encode_unit(putype);
+    cid cid = cid_encode_unit(putype);
 
     eco_widget->insertRow(i + max_row);
     for (j = 0; j < 6; j++) {
@@ -1200,7 +1198,7 @@ void eco_report::update_report()
           pix_scaled = pix->scaledToHeight(h);
           item->setData(Qt::DecorationRole, pix_scaled);
         }
-        item->setData(Qt::UserRole, id);
+        item->setData(Qt::UserRole, cid);
         break;
       case 1:
         item->setTextAlignment(Qt::AlignLeft);
@@ -1288,10 +1286,8 @@ void eco_report::disband_units()
   QString s;
   QMessageBox ask(this);
   int ret;
-  struct unit_type *putype;
-
   selected = cid_decode(uid);
-  putype = selected.value.utype;
+  struct unit_type *putype = selected.value.utype;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to disband "
                 "every %s (%d total)?"),
@@ -1327,11 +1323,8 @@ void eco_report::sell_buildings()
   QString s;
   QMessageBox ask(this);
   int ret;
-  struct impr_type *pimprove;
-
   selected = cid_decode(uid);
-  pimprove = selected.value.building;
-
+  struct impr_type *pimprove = selected.value.building;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to sell "
                 "every %s (%d total)?"),
@@ -1367,11 +1360,8 @@ void eco_report::sell_redundant()
   QString s;
   QMessageBox ask(this);
   int ret;
-  struct impr_type *pimprove;
-
   selected = cid_decode(uid);
-  pimprove = selected.value.building;
-
+  struct impr_type *pimprove = selected.value.building;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to sell "
                 "every redundant %s (%d total)?"),

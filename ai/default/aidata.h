@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2002 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,10 +18,6 @@
 
 /* common */
 #include "fc_types.h"
-#include "tech.h"
-
-/* server/advisors */
-#include "advtools.h"
 
 struct player;
 
@@ -32,20 +28,14 @@ enum winning_strategy {
   WIN_CAPITAL   /* we cannot win unless we take war_target's capital */
 };
 
-#define SPECENUM_NAME war_reason
-#define SPECENUM_VALUE0 DAI_WR_BEHAVIOUR
-#define SPECENUM_VALUE0NAME "Behaviour"
-#define SPECENUM_VALUE1 DAI_WR_SPACE
-#define SPECENUM_VALUE1NAME "Space"
-#define SPECENUM_VALUE2 DAI_WR_EXCUSE
-#define SPECENUM_VALUE2NAME "Excuse"
-#define SPECENUM_VALUE3 DAI_WR_HATRED
-#define SPECENUM_VALUE3NAME "Hatred"
-#define SPECENUM_VALUE4 DAI_WR_ALLIANCE
-#define SPECENUM_VALUE4NAME "Alliance"
-#define SPECENUM_VALUE5 DAI_WR_NONE
-#define SPECENUM_VALUE5NAME "None"
-#include "specenum_gen.h"
+enum war_reason {
+  WAR_REASON_BEHAVIOUR,
+  WAR_REASON_SPACE,
+  WAR_REASON_EXCUSE,
+  WAR_REASON_HATRED,
+  WAR_REASON_ALLIANCE,
+  WAR_REASON_NONE
+};
 
 struct ai_dip_intel {
   /* Remember one example of each for text spam purposes. */
@@ -76,12 +66,13 @@ struct ai_plr
   int last_num_continents;
   int last_num_oceans;
 
+  /* Keep track of available ocean channels */
+  bool *channels;
+
   struct {
     int passengers;   /* number of passengers waiting for boats */
     int boats;
     int available_boats;
-
-    int *workers;     /* cities to workers on continent */
 
     bv_id diplomat_reservations;
   } stats;
@@ -99,9 +90,6 @@ struct ai_plr
 
   /* Cache map for AI settlers; defined in aisettler.c. */
   struct ai_settler *settler;
-
-  /* The units of tech_want seem to be shields */
-  adv_want tech_want[A_LAST+1];
 };
 
 void dai_data_init(struct ai_type *ait, struct player *pplayer);
@@ -112,14 +100,13 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
 void dai_data_phase_finished(struct ai_type *ait, struct player *pplayer);
 bool is_ai_data_phase_open(struct ai_type *ait, struct player *pplayer);
 
-struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer,
-                                bool *caller_closes);
+struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer, bool *close);
+
+bool dai_channel(struct ai_type *ait, struct player *pplayer,
+                 Continent_id c1, Continent_id c2);
 
 struct ai_dip_intel *dai_diplomacy_get(struct ai_type *ait,
                                        const struct player *plr1,
                                        const struct player *plr2);
-
-void dai_gov_value(struct ai_type *ait, struct player *pplayer, struct government *gov,
-                   adv_want *val, bool *override);
 
 #endif /* FC__AIDATA_H */

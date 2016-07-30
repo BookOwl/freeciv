@@ -109,15 +109,12 @@ static struct {
 
   /* This array provides a full list of the effects of this type
    * (It's not really a cache, it's the real data.) */
-  struct effect_list *effects[EFT_COUNT];
+  struct effect_list *effects[EFT_LAST];
 
   struct {
     /* This cache shows for each building, which effects it provides. */
     struct effect_list *buildings[B_LAST];
-    /* Same for governments */
-    struct effect_list *govs[G_LAST];
-    /* ...advances... */
-    struct effect_list *advances[A_LAST];
+    struct effect_list *govs[G_MAGIC];
   } reqs;
 } ruleset_cache;
 
@@ -154,12 +151,6 @@ struct effect_list *get_req_source_effects(struct universal *psource)
     } else {
       return NULL;
     }
-  case VUT_ADVANCE:
-    if (value >= 0 && value < advance_count()) {
-      return ruleset_cache.reqs.advances[value];
-    } else {
-      return NULL;
-    }
   default:
     return NULL;
   }
@@ -168,8 +159,7 @@ struct effect_list *get_req_source_effects(struct universal *psource)
 /**************************************************************************
   Add effect to ruleset cache.
 **************************************************************************/
-struct effect *effect_new(enum effect_type type, int value,
-                          struct multiplier *pmul)
+struct effect *effect_new(enum effect_type type, int value)
 {
   struct effect *peffect;
 
@@ -177,43 +167,58 @@ struct effect *effect_new(enum effect_type type, int value,
   peffect = fc_malloc(sizeof(*peffect));
   peffect->type = type;
   peffect->value = value;
-  peffect->multiplier = pmul;
 
-  requirement_vector_init(&peffect->reqs);
+  peffect->reqs = requirement_list_new();
+  peffect->nreqs = requirement_list_new();
 
   /* Now add the effect to the ruleset cache. */
   effect_list_append(ruleset_cache.tracker, peffect);
   effect_list_append(get_effects(type), peffect);
-
   return peffect;
 }
 
 /**************************************************************************
-  Return new copy of the effect
+  Free effect.
 **************************************************************************/
-struct effect *effect_copy(struct effect *old)
+static void effect_free(struct effect *peffect)
 {
-  struct effect *new_eff = effect_new(old->type, old->value,
-                                      old->multiplier);
+  requirement_list_iterate(peffect->reqs, preq) {
+    free(preq);
+  } requirement_list_iterate_end;
+  requirement_list_destroy(peffect->reqs);
 
-  requirement_vector_iterate(&old->reqs, preq) {
-    effect_req_append(new_eff, *preq);
-  } requirement_vector_iterate_end;
+  requirement_list_iterate(peffect->nreqs, preq) {
+    free(preq);
+  } requirement_list_iterate_end;
+  requirement_list_destroy(peffect->nreqs);
 
-  return new_eff;
+  free(peffect);
 }
 
 /**************************************************************************
   Append requirement to effect.
 **************************************************************************/
-void effect_req_append(struct effect *peffect, struct requirement req)
+void effect_req_append(struct effect *peffect, bool neg,
+		       struct requirement *preq)
 {
-  struct effect_list *eff_list = get_req_source_effects(&req.source);
+  struct requirement_list *req_list;
 
-  requirement_vector_append(&peffect->reqs, req);
+  if (neg) {
+    req_list = peffect->nreqs;
+  } else {
+    req_list = peffect->reqs;
+  }
 
-  if (eff_list) {
-    effect_list_append(eff_list, peffect);
+  /* Append requirement to the effect. */
+  requirement_list_append(req_list, preq);
+
+  /* Add effect to the source's effect list. */
+  if (!neg) {
+    struct effect_list *eff_list = get_req_source_effects(&preq->source);
+
+    if (eff_list) {
+      effect_list_append(eff_list, peffect);
+    }
   }
 }
 
@@ -239,9 +244,6 @@ void ruleset_cache_init(void)
   for (i = 0; i < ARRAY_SIZE(ruleset_cache.reqs.govs); i++) {
     ruleset_cache.reqs.govs[i] = effect_list_new();
   }
-  for (i = 0; i < ARRAY_SIZE(ruleset_cache.reqs.advances); i++) {
-    ruleset_cache.reqs.advances[i] = effect_list_new();
-  }
 }
 
 /**************************************************************************
@@ -255,8 +257,7 @@ void ruleset_cache_free(void)
 
   if (tracker_list) {
     effect_list_iterate(tracker_list, peffect) {
-      requirement_vector_free(&peffect->reqs);
-      free(peffect);
+      effect_free(peffect);
     } effect_list_iterate_end;
     effect_list_destroy(tracker_list);
     ruleset_cache.tracker = NULL;
@@ -289,36 +290,93 @@ void ruleset_cache_free(void)
     }
   }
 
-  for (i = 0; i < ARRAY_SIZE(ruleset_cache.reqs.advances); i++) {
-    struct effect_list *plist = ruleset_cache.reqs.advances[i];
-
-    if (plist) {
-      effect_list_destroy(plist);
-      ruleset_cache.reqs.advances[i] = NULL;
-    }
-  }
-
   initialized = FALSE;
 }
 
 /****************************************************************************
-  Get the maximum effect value in this ruleset for the universal
+  Get the maximum effect value in this ruleset for the unit type for_unit
   (that is, the sum of all positive effects clauses that apply specifically
-  to this universal -- this can be an overestimate in the case of
+  to this type of unit -- this can be an overestimate in the case of
   mutually exclusive effects).
-  for_uni can be NULL to get max effect value ignoring requirements.
+  for_unit can be NULL to get max effect value ignoring requirements.
 ****************************************************************************/
-int effect_cumulative_max(enum effect_type type, struct universal *for_uni)
+int effect_cumulative_max(enum effect_type type, struct unit_type *for_unit)
 {
   struct effect_list *plist = ruleset_cache.tracker;
   int value = 0;
 
   if (plist) {
+    struct unit_class *pclass = NULL;
+
+    if (for_unit != NULL) {
+      pclass = utype_class(for_unit);
+    }
+
     effect_list_iterate(plist, peffect) {
       if (peffect->type == type && peffect->value > 0) {
-        if (for_uni == NULL
-            || universal_fulfills_requirement(FALSE, &(peffect->reqs), for_uni)) {
+        if (for_unit == NULL) {
           value += peffect->value;
+        } else {
+          bool failed = FALSE;
+
+          requirement_list_iterate(peffect->reqs, preq) {
+            if (preq->source.kind == VUT_UTYPE) {
+              if (preq->source.value.utype == for_unit) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UTFLAG) {
+              if (utype_has_flag(for_unit, preq->source.value.unitflag)) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UCLASS) {
+              if (preq->source.value.uclass == pclass) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UCFLAG) {
+              if (uclass_has_flag(pclass, preq->source.value.unitclassflag)) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            }
+          } requirement_list_iterate_end;
+          requirement_list_iterate(peffect->nreqs, preq) {
+            if (preq->source.kind == VUT_UTYPE) {
+              if (preq->source.value.utype == for_unit) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UTFLAG) {
+              if (utype_has_flag(for_unit, preq->source.value.unitflag)) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UCLASS) {
+              if (preq->source.value.uclass == pclass) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UCFLAG) {
+              if (uclass_has_flag(pclass, preq->source.value.unitclassflag)) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            }
+          } requirement_list_iterate_end;
+
+          if (!failed) {
+            value += peffect->value;
+          }
         }
       }
     } effect_list_iterate_end;
@@ -328,23 +386,89 @@ int effect_cumulative_max(enum effect_type type, struct universal *for_uni)
 }
 
 /****************************************************************************
-  Get the minimum effect value in this ruleset for the universal
+  Get the minimum effect value in this ruleset for the unit type for_unit
   (that is, the sum of all negative effects clauses that apply specifically
-  to this universal -- this can be an overestimate in the case of
+  to this type of unit -- this can be an overestimate in the case of
   mutually exclusive effects).
-  for_uni can be NULL to get min effect value ignoring requirements.
+  for_unit can be NULL to get min effect value ignoring requirements.
 ****************************************************************************/
-int effect_cumulative_min(enum effect_type type, struct universal *for_uni)
+int effect_cumulative_min(enum effect_type type, struct unit_type *for_unit)
 {
   struct effect_list *plist = ruleset_cache.tracker;
   int value = 0;
 
   if (plist) {
+    struct unit_class *pclass = NULL;
+
+    if (for_unit != NULL) {
+      pclass = utype_class(for_unit);
+    }
+
     effect_list_iterate(plist, peffect) {
       if (peffect->type == type && peffect->value < 0) {
-        if (for_uni == NULL
-            || universal_fulfills_requirement(FALSE, &(peffect->reqs), for_uni)) {
+        if (for_unit == NULL) {
           value += peffect->value;
+        } else {
+          bool failed = FALSE;
+
+          requirement_list_iterate(peffect->reqs, preq) {
+            if (preq->source.kind == VUT_UTYPE) {
+              if (preq->source.value.utype == for_unit) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UTFLAG) {
+              if (utype_has_flag(for_unit, preq->source.value.unitflag)) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UCLASS) {
+              if (preq->source.value.uclass == pclass) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            } else if (preq->source.kind == VUT_UCFLAG) {
+              if (uclass_has_flag(pclass, preq->source.value.unitclassflag)) {
+                failed |= preq->negated;
+              } else {
+                failed |= (!preq->negated);
+              }
+            }
+          } requirement_list_iterate_end;
+          requirement_list_iterate(peffect->nreqs, preq) {
+            if (preq->source.kind == VUT_UTYPE) {
+              if (preq->source.value.utype == for_unit) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UTFLAG) {
+              if (utype_has_flag(for_unit, preq->source.value.unitflag)) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UCLASS) {
+              if (preq->source.value.uclass == pclass) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            } else if (preq->source.kind == VUT_UCFLAG) {
+              if (uclass_has_flag(pclass, preq->source.value.unitclassflag)) {
+                failed |= (!preq->negated);
+              } else {
+                failed |= preq->negated;
+              }
+            }
+          } requirement_list_iterate_end;
+
+          if (!failed) {
+            value += peffect->value;
+          }
         }
       }
     } effect_list_iterate_end;
@@ -359,18 +483,29 @@ int effect_cumulative_min(enum effect_type type, struct universal *for_uni)
 ****************************************************************************/
 void recv_ruleset_effect(const struct packet_ruleset_effect *packet)
 {
-  struct effect *peffect;
-  struct multiplier *pmul;
-  int i;
+  effect_new(packet->effect_type, packet->effect_value);
+}
 
-  pmul = packet->has_multiplier ? multiplier_by_number(packet->multiplier)
-                                : NULL;
-  peffect = effect_new(packet->effect_type, packet->effect_value, pmul);
+/****************************************************************************
+  Receives a new effect *requirement*.  This is called by the client when
+  the packet arrives.
+****************************************************************************/
+void recv_ruleset_effect_req(const struct packet_ruleset_effect_req *packet)
+{
+  if (packet->effect_id != effect_list_size(ruleset_cache.tracker) - 1) {
+    log_error("Bug in recv_ruleset_effect_req.");
+  } else {
+    struct effect *peffect = effect_list_get(ruleset_cache.tracker, -1);
+    struct requirement req, *preq;
 
-  for (i = 0; i < packet->reqs_count; i++) {
-    effect_req_append(peffect, packet->reqs[i]);
+    req = req_from_values(packet->source_type, packet->range, packet->survives,
+	packet->negated, packet->source_value);
+
+    preq = fc_malloc(sizeof(*preq));
+    *preq = req;
+
+    effect_req_append(peffect, packet->neg, preq);
   }
-  fc_assert(peffect->reqs.size == packet->reqs_count);
 }
 
 /**************************************************************************
@@ -378,27 +513,51 @@ void recv_ruleset_effect(const struct packet_ruleset_effect *packet)
 **************************************************************************/
 void send_ruleset_cache(struct conn_list *dest)
 {
+  unsigned id = 0;
+
   effect_list_iterate(ruleset_cache.tracker, peffect) {
     struct packet_ruleset_effect effect_packet;
-    int counter;
 
     effect_packet.effect_type = peffect->type;
     effect_packet.effect_value = peffect->value;
-    if (peffect->multiplier) {
-      effect_packet.has_multiplier = TRUE;
-      effect_packet.multiplier = multiplier_number(peffect->multiplier);
-    } else {
-      effect_packet.has_multiplier = FALSE;
-      effect_packet.multiplier = 0; /* arbitrary */
-    }
-
-    counter = 0;
-    requirement_vector_iterate(&(peffect->reqs), req) {
-      effect_packet.reqs[counter++] = *req;
-    } requirement_vector_iterate_end;
-    effect_packet.reqs_count = counter;
 
     lsend_packet_ruleset_effect(dest, &effect_packet);
+
+    requirement_list_iterate(peffect->reqs, preq) {
+      struct packet_ruleset_effect_req packet;
+      int type, range, value;
+      bool survives, negated;
+
+      req_get_values(preq, &type, &range, &survives, &negated, &value);
+      packet.effect_id = id;
+      packet.neg = FALSE;
+      packet.source_type = type;
+      packet.source_value = value;
+      packet.range = range;
+      packet.survives = survives;
+      packet.negated = negated;
+
+      lsend_packet_ruleset_effect_req(dest, &packet);
+    } requirement_list_iterate_end;
+
+    requirement_list_iterate(peffect->nreqs, preq) {
+      struct packet_ruleset_effect_req packet;
+      int type, range, value;
+      bool survives, negated;
+
+      req_get_values(preq, &type, &range, &survives, &negated, &value);
+      packet.effect_id = id;
+      packet.neg = TRUE;
+      packet.source_type = type;
+      packet.source_value = value;
+      packet.range = range;
+      packet.survives = survives;
+      packet.negated = negated;
+
+      lsend_packet_ruleset_effect_req(dest, &packet);
+    } requirement_list_iterate_end;
+
+    id++;
   } effect_list_iterate_end;
 }
 
@@ -434,35 +593,129 @@ bool building_has_effect(const struct impr_type *pimprove,
 
 /**************************************************************************
   Return TRUE iff any of the disabling requirements for this effect are
-  active, which would prevent it from taking effect.
-  (Assumes that any requirement specified in the ruleset with a negative
-  sense is an impediment.)
+  active (an effect is active if all of its enabling requirements and
+  none of its disabling ones are active).
 **************************************************************************/
-static bool is_effect_prevented(const struct player *target_player,
-                                const struct player *other_player,
-                                const struct city *target_city,
-                                const struct impr_type *target_building,
-                                const struct tile *target_tile,
-                                const struct unit *target_unit,
-                                const struct unit_type *target_unittype,
-                                const struct output_type *target_output,
-                                const struct specialist *target_specialist,
-                                const struct effect *peffect,
-                                const enum   req_problem_type prob_type)
+bool is_effect_disabled(const struct player *target_player,
+		        const struct city *target_city,
+		        const struct impr_type *target_building,
+		        const struct tile *target_tile,
+			const struct unit_type *target_unittype,
+			const struct output_type *target_output,
+			const struct specialist *target_specialist,
+		        const struct effect *peffect,
+                        const enum   req_problem_type prob_type)
 {
-  requirement_vector_iterate(&peffect->reqs, preq) {
-    /* Only check present=FALSE requirements; these will return _FALSE_
-     * from is_req_active() if met, and need reversed prob_type */
-    if (!preq->present
-        && !is_req_active(target_player, other_player, target_city,
-                          target_building, target_tile,
-                          target_unit, target_unittype,
-                          target_output, target_specialist, NULL,
-                          preq, REVERSED_RPT(prob_type))) {
+  requirement_list_iterate(peffect->nreqs, preq) {
+    if (is_req_active(target_player, target_city, target_building,
+		      target_tile, target_unittype, target_output,
+		      target_specialist,
+		      preq, prob_type)) {
       return TRUE;
     }
-  } requirement_vector_iterate_end;
+  } requirement_list_iterate_end;
   return FALSE;
+}
+
+/**************************************************************************
+  Return TRUE iff all of the enabling requirements for this effect are
+  active (an effect is active if all of its enabling requirements and
+  none of its disabling ones are active).
+**************************************************************************/
+static bool is_effect_enabled(const struct player *target_player,
+			      const struct city *target_city,
+			      const struct impr_type *target_building,
+			      const struct tile *target_tile,
+			      const struct unit_type *target_unittype,
+			      const struct output_type *target_output,
+			      const struct specialist *target_specialist,
+			      const struct effect *peffect,
+                              const enum   req_problem_type prob_type)
+{
+  requirement_list_iterate(peffect->reqs, preq) {
+    if (!is_req_active(target_player, target_city, target_building,
+		       target_tile, target_unittype, target_output,
+		       target_specialist,
+		       preq, prob_type)) {
+      return FALSE;
+    }
+  } requirement_list_iterate_end;
+  return TRUE;
+}
+
+/**************************************************************************
+  Is the effect active at a certain target (player, city or building)?
+
+  This checks whether an effect's requirements are met.
+
+  target gives the type of the target
+  (player,city,building,tile) give the exact target
+  peffect gives the exact effect value
+**************************************************************************/
+static bool is_effect_active(const struct player *target_player,
+			     const struct city *target_city,
+			     const struct impr_type *target_building,
+			     const struct tile *target_tile,
+			     const struct unit_type *target_unittype,
+			     const struct output_type *target_output,
+			     const struct specialist *target_specialist,
+			     const struct effect *peffect,
+                             const enum   req_problem_type prob_type)
+{
+  /* Reversed prob_type when checking disabling effects */
+  return is_effect_enabled(target_player, target_city, target_building,
+			   target_tile, target_unittype, target_output,
+			   target_specialist,
+			   peffect, prob_type)
+    && !is_effect_disabled(target_player, target_city, target_building,
+			   target_tile, target_unittype, target_output,
+			   target_specialist,
+			   peffect, REVERSED_RPT(prob_type));
+}
+
+/**************************************************************************
+  Can the effect from the source building be active at a certain target
+  (player, city or building)?  This doesn't check if the source exists,
+  but tells whether the effect from it would be active if the source did
+  exist.  It is thus useful to the AI in figuring out what sources to
+  try to obtain.
+
+  target gives the type of the target
+  (player,city,building,tile) give the exact target
+  source gives the source type of the effect
+  peffect gives the exact effect value
+**************************************************************************/
+bool is_effect_useful(const struct player *target_player,
+		      const struct city *target_city,
+		      const struct impr_type *target_building,
+		      const struct tile *target_tile,
+		      const struct unit_type *target_unittype,
+		      const struct output_type *target_output,
+		      const struct specialist *target_specialist,
+		      const struct impr_type *source,
+		      const struct effect *peffect,
+		      const enum   req_problem_type prob_type)
+{
+  /* Reversed prob_type when checking disabling effects */
+  if (is_effect_disabled(target_player, target_city, target_building,
+			 target_tile, target_unittype, target_output,
+			 target_specialist,
+			 peffect, REVERSED_RPT(prob_type))) {
+    return FALSE;
+  }
+  requirement_list_iterate(peffect->reqs, preq) {
+    if (VUT_IMPROVEMENT == preq->source.kind
+	&& preq->source.value.building == source) {
+      continue;
+    }
+    if (!is_req_active(target_player, target_city, target_building,
+		       target_tile, target_unittype, target_output,
+		       target_specialist,
+		       preq, prob_type)) {
+      return FALSE;
+    }
+  } requirement_list_iterate_end;
+  return TRUE;
 }
 
 /**************************************************************************
@@ -493,10 +746,10 @@ bool is_building_replaced(const struct city *pcity,
      * checked depends on the range of the effect. */
     /* Prob_type is not reversed here. disabled is equal to replaced, not
      * reverse */
-    if (!is_effect_prevented(city_owner(pcity), NULL, pcity,
-                             pimprove,
-                             NULL, NULL, NULL, NULL, NULL,
-                             peffect, prob_type)) {
+    if (!is_effect_disabled(city_owner(pcity), pcity,
+			    pimprove,
+			    NULL, NULL, NULL, NULL,
+			    peffect, prob_type)) {
       return FALSE;
     }
   } effect_list_iterate_end;
@@ -517,15 +770,12 @@ bool is_building_replaced(const struct city *pcity,
 **************************************************************************/
 int get_target_bonus_effects(struct effect_list *plist,
                              const struct player *target_player,
-                             const struct player *other_player,
                              const struct city *target_city,
                              const struct impr_type *target_building,
                              const struct tile *target_tile,
-                             const struct unit *target_unit,
                              const struct unit_type *target_unittype,
                              const struct output_type *target_output,
                              const struct specialist *target_specialist,
-                             const struct action *target_action,
                              enum effect_type effect_type)
 {
   int bonus = 0;
@@ -533,23 +783,12 @@ int get_target_bonus_effects(struct effect_list *plist,
   /* Loop over all effects of this type. */
   effect_list_iterate(get_effects(effect_type), peffect) {
     /* For each effect, see if it is active. */
-    if (are_reqs_active(target_player, other_player, target_city,
-                        target_building, target_tile,
-                        target_unit, target_unittype,
-                        target_output, target_specialist, target_action,
-			&peffect->reqs, RPT_CERTAIN)) {
-      /* This code will add value of effect. If there's multiplier for 
-       * effect and target_player aren't null, then value is multiplied
-       * by player's multiplier factor. */
-      if (peffect->multiplier) {
-        if (target_player) {
-          bonus += (peffect->value
-            * player_multiplier_effect_value(target_player,
-                                             peffect->multiplier)) / 100;
-        }
-      } else {
-        bonus += peffect->value;
-      }
+    if (is_effect_active(target_player, target_city, target_building,
+			 target_tile, target_unittype, target_output,
+			 target_specialist,
+			 peffect, RPT_CERTAIN)) {
+      /* And if so add on the value. */
+      bonus += peffect->value;
 
       if (plist) {
 	effect_list_append(plist, peffect);
@@ -570,8 +809,7 @@ int get_world_bonus(enum effect_type effect_type)
   }
 
   return get_target_bonus_effects(NULL,
-                                  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                                  NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 				  effect_type);
 }
 
@@ -586,9 +824,9 @@ int get_player_bonus(const struct player *pplayer,
   }
 
   return get_target_bonus_effects(NULL,
-                                  pplayer, NULL, NULL, NULL,
-                                  NULL, NULL, NULL, NULL, NULL,
-                                  NULL, effect_type);
+				  pplayer, NULL, NULL,
+				  NULL, NULL, NULL, NULL,
+				  effect_type);
 }
 
 /**************************************************************************
@@ -601,9 +839,9 @@ int get_city_bonus(const struct city *pcity, enum effect_type effect_type)
   }
 
   return get_target_bonus_effects(NULL,
-                                  city_owner(pcity), NULL, pcity, NULL,
-                                  city_tile(pcity), NULL, NULL, NULL, NULL,
-                                  NULL, effect_type);
+				  city_owner(pcity), pcity, NULL,
+				  city_tile(pcity), NULL, NULL, NULL,
+				  effect_type);
 }
 
 /**************************************************************************
@@ -618,9 +856,8 @@ int get_city_specialist_output_bonus(const struct city *pcity,
   fc_assert_ret_val(pspecialist != NULL, 0);
   fc_assert_ret_val(poutput != NULL, 0);
   return get_target_bonus_effects(NULL,
-                                  city_owner(pcity), NULL, pcity, NULL,
-                                  NULL, NULL, NULL, poutput, pspecialist,
-                                  NULL,
+				  city_owner(pcity), pcity, NULL,
+				  NULL, NULL, poutput, pspecialist,
 				  effect_type);
 }
 
@@ -640,8 +877,8 @@ int get_city_tile_output_bonus(const struct city *pcity,
 {
   fc_assert_ret_val(pcity != NULL, 0);
   return get_target_bonus_effects(NULL,
-                                  city_owner(pcity), NULL, pcity, NULL,
-                                  ptile, NULL, NULL, poutput, NULL, NULL,
+			 	  city_owner(pcity), pcity, NULL,
+				  ptile, NULL, poutput, NULL,
 				  effect_type);
 }
 
@@ -658,10 +895,9 @@ int get_player_output_bonus(const struct player *pplayer,
 
   fc_assert_ret_val(pplayer != NULL, 0);
   fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_COUNT, 0);
-  return get_target_bonus_effects(NULL, pplayer, NULL, NULL, NULL, NULL,
-                                  NULL, NULL, poutput, NULL, NULL,
-                                  effect_type);
+  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  return get_target_bonus_effects(NULL, pplayer, NULL, NULL, NULL,
+                                  NULL, poutput, NULL, effect_type);
 }
 
 /**************************************************************************
@@ -677,11 +913,9 @@ int get_city_output_bonus(const struct city *pcity,
 
   fc_assert_ret_val(pcity != NULL, 0);
   fc_assert_ret_val(poutput != NULL, 0);
-  fc_assert_ret_val(effect_type != EFT_COUNT, 0);
-  return get_target_bonus_effects(NULL, city_owner(pcity), NULL, pcity,
-                                  NULL, NULL, NULL, NULL, poutput, NULL,
-                                  NULL,
-                                  effect_type);
+  fc_assert_ret_val(effect_type != EFT_LAST, 0);
+  return get_target_bonus_effects(NULL, city_owner(pcity), pcity, NULL,
+                                  NULL, NULL, poutput, NULL, effect_type);
 }
 
 /**************************************************************************
@@ -697,10 +931,10 @@ int get_building_bonus(const struct city *pcity,
 
   fc_assert_ret_val(NULL != pcity && NULL != building, 0);
   return get_target_bonus_effects(NULL,
-                                  city_owner(pcity), NULL, pcity,
+			 	  city_owner(pcity), pcity,
 				  building,
 				  NULL, NULL, NULL, NULL,
-                                  NULL, NULL, effect_type);
+				  effect_type);
 }
 
 /**************************************************************************
@@ -731,9 +965,8 @@ int get_unittype_bonus(const struct player *pplayer,
   }
 
   return get_target_bonus_effects(NULL,
-                                  pplayer, NULL, pcity, NULL, ptile,
-                                  NULL, punittype, NULL,
-                                  NULL, NULL, effect_type);
+                                  pplayer, pcity, NULL, ptile,
+                                  punittype, NULL, NULL, effect_type);
 }
 
 /**************************************************************************
@@ -748,12 +981,10 @@ int get_unit_bonus(const struct unit *punit, enum effect_type effect_type)
   fc_assert_ret_val(punit != NULL, 0);
   return get_target_bonus_effects(NULL,
                                   unit_owner(punit),
-                                  NULL,
                                   unit_tile(punit)
                                     ? tile_city(unit_tile(punit)) : NULL,
                                   NULL, unit_tile(punit),
-                                  punit, unit_type_get(punit), NULL, NULL,
-                                  NULL,
+                                  unit_type(punit), NULL, NULL,
                                   effect_type);
 }
 
@@ -774,18 +1005,16 @@ int get_tile_bonus(const struct tile *ptile, const struct unit *punit,
 
   if (punit != NULL) {
     pplayer = unit_owner(punit);
-    utype = unit_type_get(punit);
+    utype = unit_type(punit);
   }
 
   return get_target_bonus_effects(NULL,
                                   pplayer,
-                                  NULL,
                                   tile_city(ptile),
                                   NULL,
                                   ptile,
-                                  punit,
                                   utype,
-                                  NULL, NULL, NULL,
+                                  NULL, NULL,
                                   etype);
 }
 
@@ -805,8 +1034,8 @@ int get_player_bonus_effects(struct effect_list *plist,
 
   fc_assert_ret_val(pplayer != NULL, 0);
   return get_target_bonus_effects(plist,
-                                  pplayer, NULL, NULL, NULL,
-                                  NULL, NULL, NULL, NULL, NULL, NULL,
+			  	  pplayer, NULL, NULL,
+				  NULL, NULL, NULL, NULL,
 				  effect_type);
 }
 
@@ -827,8 +1056,8 @@ int get_city_bonus_effects(struct effect_list *plist,
 
   fc_assert_ret_val(pcity != NULL, 0);
   return get_target_bonus_effects(plist,
-                                  city_owner(pcity), NULL, pcity, NULL,
-                                  NULL, NULL, NULL, poutput, NULL, NULL,
+			 	  city_owner(pcity), pcity, NULL,
+				  NULL, NULL, poutput, NULL,
 				  effect_type);
 }
 
@@ -850,64 +1079,29 @@ int get_current_construction_bonus(const struct city *pcity,
   }
 
   if (VUT_IMPROVEMENT == pcity->production.kind) {
-    return get_potential_improvement_bonus(pcity->production.value.building,
-                                           pcity, effect_type, prob_type);
-  }
-  return 0;
-}
-
-/**************************************************************************
-  Returns the effect bonus the improvement would or does provide if present.
-
-  Problem type tells if we need to be CERTAIN about bonus before counting
-  it or is POSSIBLE bonus enough.
-**************************************************************************/
-int get_potential_improvement_bonus(struct impr_type *pimprove,
-                                    const struct city *pcity,
-                                    enum effect_type effect_type,
-                                    const enum req_problem_type prob_type)
-{
-  struct universal source = { .kind = VUT_IMPROVEMENT,
-                                .value = {.building = pimprove}};
-  struct effect_list *plist = get_req_source_effects(&source);
-
-
-  if (plist) {
+    struct impr_type *building = pcity->production.value.building;
+    struct universal source = {
+      .kind = VUT_IMPROVEMENT,
+      .value = {.building = building}
+    };
+    struct effect_list *plist = get_req_source_effects(&source);
     int power = 0;
 
-    effect_list_iterate(plist, peffect) {
-      bool present = TRUE;
-      bool useful = TRUE;
+    if (plist) {
 
-      if (peffect->type != effect_type) {
-        continue;
-      }
+      effect_list_iterate(plist, peffect) {
+	if (peffect->type != effect_type) {
+	  continue;
+	}
+	if (is_effect_useful(city_owner(pcity), pcity, building,
+			     NULL, NULL, NULL, NULL,
+			     building, peffect, prob_type)) {
+	  power += peffect->value;
+	}
+      } effect_list_iterate_end;
 
-      requirement_vector_iterate(&peffect->reqs, preq) {
-        if (VUT_IMPROVEMENT == preq->source.kind
-            && preq->source.value.building == pimprove) {
-          present = preq->present;
-          continue;
-        }
-
-        if (!is_req_active(city_owner(pcity), NULL, pcity, pimprove,
-                           NULL, NULL, NULL, NULL, NULL, NULL,
-                           preq, prob_type)) {
-          useful = FALSE;
-          break;
-        } 
-      } requirement_vector_iterate_end;
-
-      if (useful) {
-        if (present) {
-          power += peffect->value;
-        } else {
-          power -= peffect->value;
-        }
-      }
-    } effect_list_iterate_end;
-
-    return power;
+      return power;
+    }
   }
   return 0;
 }
@@ -921,14 +1115,10 @@ void get_effect_req_text(const struct effect *peffect,
 {
   buf[0] = '\0';
 
-  if (peffect->multiplier) {
-    fc_strlcat(buf, multiplier_name_translation(peffect->multiplier), buf_len);
-  }
-
-  /* FIXME: should we do something for present==FALSE reqs?
+  /* FIXME: should we do something for nreqs and negated reqs?
    * Currently we just ignore them. */
-  requirement_vector_iterate(&peffect->reqs, preq) {
-    if (!preq->present) {
+  requirement_list_iterate(peffect->reqs, preq) {
+    if (preq->negated) {
       continue;
     }
     if (buf[0] != '\0') {
@@ -937,7 +1127,7 @@ void get_effect_req_text(const struct effect *peffect,
 
     universal_name_translation(&preq->source,
 			buf + strlen(buf), buf_len - strlen(buf));
-  } requirement_vector_iterate_end;
+  } requirement_list_iterate_end;
 }
 
 /****************************************************************************
@@ -965,12 +1155,12 @@ void get_effect_list_req_text(const struct effect_list *plist,
   ruleset sanity checking. If any callback returns FALSE, there is no
   further checking and this will return FALSE.
 **************************************************************************/
-bool iterate_effect_cache(iec_cb cb, void *data)
+bool iterate_effect_cache(iec_cb cb)
 {
   fc_assert_ret_val(cb != NULL, FALSE);
 
   effect_list_iterate(ruleset_cache.tracker, peffect) {
-    if (!cb(peffect, data)) {
+    if (!cb(peffect)) {
       return FALSE;
     }
   } effect_list_iterate_end;

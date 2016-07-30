@@ -48,10 +48,6 @@ struct unit_ai {
 struct unit_type_ai
 {
   bool firepower1;
-  bool ferry;
-  bool missile_platform;
-  bool carries_occupiers;
-  struct unit_type_list *potential_charges;
 };
 
 /* Simple military macros */
@@ -62,12 +58,15 @@ struct unit_type_ai
   (player_diplstate_get(plr1, plr2)->type == DS_WAR)
 #define NEVER_MET(plr1, plr2) \
   (player_diplstate_get(plr1, plr2)->type == DS_NO_CONTACT)
-#define DEFENSE_POWER(ptype) \
- (ptype->defense_strength * ptype->hp * ptype->firepower)
-#define ATTACK_POWER(ptype) \
- (ptype->attack_strength * ptype->hp * ptype->firepower)
-#define IS_ATTACKER(ptype) \
-  (ptype->attack_strength > ptype->transport_capacity)
+#define DEFENCE_POWER(punit) \
+ (unit_type(punit)->defense_strength * unit_type(punit)->hp \
+  * unit_type(punit)->firepower)
+#define ATTACK_POWER(punit) \
+ (unit_type(punit)->attack_strength * unit_type(punit)->hp \
+  * unit_type(punit)->firepower)
+#define IS_ATTACKER(punit) \
+  (unit_type(punit)->attack_strength \
+        > unit_type(punit)->transport_capacity)
 #define POTENTIALLY_HOSTILE_PLAYER(ait, pplayer, aplayer)               \
   (WAR(pplayer, aplayer) || NEVER_MET(pplayer, aplayer)                 \
    || dai_diplomacy_get(ait, pplayer, aplayer)->countdown >= 0)
@@ -96,9 +95,6 @@ struct city *find_nearest_safe_city(struct unit *punit);
 int look_for_charge(struct ai_type *ait, struct player *pplayer,
                     struct unit *punit,
                     struct unit **aunit, struct city **acity);
-bool dai_can_unit_type_follow_unit_type(struct unit_type *follower,
-                                        struct unit_type *followee,
-                                        struct ai_type *ait);
 
 bool find_beachhead(const struct player *pplayer, struct pf_map *ferry_map,
                     struct tile *dest_tile,
@@ -113,10 +109,10 @@ int find_something_to_kill(struct ai_type *ait, struct player *pplayer,
                            int *pmove_time);
 
 int build_cost_balanced(const struct unit_type *punittype);
-int unittype_def_rating_squared(const struct unit_type *att_type,
-                                const struct unit_type *def_type,
-                                const struct player *def_player,
-                                struct tile *ptile, bool fortified, int veteran);
+int unittype_def_rating_sq(const struct unit_type *att_type,
+			   const struct unit_type *def_type,
+			   const struct player *def_player,
+                           struct tile *ptile, bool fortified, int veteran);
 int kill_desire(int benefit, int attack, int loss, int vuln, int attack_count);
 
 bool is_on_unit_upgrade_path(const struct unit_type *test,
@@ -124,7 +120,9 @@ bool is_on_unit_upgrade_path(const struct unit_type *test,
 
 void dai_consider_tile_dangerous(struct ai_type *ait, struct tile *ptile,
                                  struct unit *punit,
-				 enum override_bool *result);
+				 enum danger_consideration *result);
+
+enum unit_move_type dai_uclass_move_type(const struct unit_class *pclass);
 
 void dai_units_ruleset_init(struct ai_type *ait);
 void dai_units_ruleset_close(struct ai_type *ait);
@@ -150,13 +148,7 @@ void dai_unit_load(struct ai_type *ait, const char *aitstr,
                    const struct section_file *file,
                    struct unit *punit, const char *unitstr);
 
-struct unit_type *dai_role_utype_for_terrain_class(struct city *pcity, int role,
-                                                   enum terrain_class tc);
-
-bool dai_unit_can_strike_my_unit(const struct unit *attacker,
-                                 const struct unit *defender);
-
-void dai_switch_to_explore(struct ai_type *ait, struct unit *punit,
-                           struct tile *target, enum override_bool *allow);
+struct unit_type *dai_role_utype_for_move_type(struct city *pcity, int role,
+                                               enum unit_move_type mt);
 
 #endif  /* FC__AIUNIT_H */

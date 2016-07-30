@@ -23,7 +23,6 @@
 #include "shared.h"
 
 /* common */
-#include "calendar.h"
 #include "events.h"
 #include "game.h"
 #include "packets.h"
@@ -206,19 +205,19 @@ void handle_spaceship_launch(struct player *pplayer)
 void handle_spaceship_place(struct player *pplayer,
                             enum spaceship_place_type type, int num)
 {
-  (void) do_spaceship_place(pplayer, ACT_REQ_PLAYER, type, num);
+  (void) do_spaceship_place(pplayer, TRUE, type, num);
 }
 
 /**************************************************************************
   Place a spaceship part
 **************************************************************************/
-bool do_spaceship_place(struct player *pplayer, enum action_requester from,
+bool do_spaceship_place(struct player *pplayer, bool user_initiated,
                         enum spaceship_place_type type, int num)
 {
   struct player_spaceship *ship = &pplayer->spaceship;
   
   if (ship->state == SSHIP_NONE) {
-    if (from == ACT_REQ_PLAYER) {
+    if (user_initiated) {
       notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                     _("Spaceship action received,"
                       " but you don't have a spaceship!"));
@@ -228,7 +227,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
   }
 
   if (ship->state >= SSHIP_LAUNCHED) {
-    if (from == ACT_REQ_PLAYER) {
+    if (user_initiated) {
       notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                     _("You can't modify your spaceship after launch!"));
     }
@@ -242,7 +241,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num_spaceship_structurals_placed(ship) >= ship->structurals) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced Space Structurals!"));
       }
@@ -251,7 +250,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
     }
     if (num != 0
         && !BV_ISSET(ship->structure, structurals_info[num].required)) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("That Space Structural would not be connected!"));
       }
@@ -270,7 +269,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (ship->fuel + ship->propulsion >= ship->components) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced Space Components!"));
       }
@@ -278,7 +277,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num > NUM_SS_COMPONENTS/2) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("Your spaceship already has"
                         " the maximum number of Fuel Components!"));
@@ -298,7 +297,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (ship->fuel + ship->propulsion >= ship->components) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced"
                         " Space Components!"));
@@ -307,7 +306,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num > NUM_SS_COMPONENTS/2) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("Your spaceship already has the"
                         " maximum number of Propulsion Components!"));
@@ -328,7 +327,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
         >= ship->modules) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced Space Modules!"));
       }
@@ -336,7 +335,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num > NUM_SS_MODULES / 3) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("Your spaceship already has the"
                         " maximum number of Habitation Modules!"));
@@ -357,7 +356,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
         >= ship->modules) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced Space Modules!"));
       }
@@ -365,7 +364,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num > NUM_SS_MODULES / 3) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("Your spaceship already has the"
                         " maximum number of Life Support Modules!"));
@@ -386,7 +385,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
     }
     if (ship->habitation + ship->life_support + ship->solar_panels
         >= ship->modules) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("You don't have any unplaced Space Modules!"));
       }
@@ -394,7 +393,7 @@ bool do_spaceship_place(struct player *pplayer, enum action_requester from,
       return FALSE;
     }
     if (num > NUM_SS_MODULES / 3) {
-      if (from == ACT_REQ_PLAYER) {
+      if (user_initiated) {
         notify_player(pplayer, NULL, E_SPACESHIP, ftc_server,
                       _("Your spaceship already has the"
                         " maximum number of Solar Panel Modules!"));

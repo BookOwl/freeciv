@@ -15,17 +15,12 @@ AC_DEFUN([AM_PATH_SDL2],
 [dnl 
 dnl Get the cflags and libraries from the sdl2-config script
 dnl
-AC_ARG_WITH([sdl2-prefix],
-  AS_HELP_STRING([--with-sdl2-prefix=PFX], [Prefix where SDL2 is installed (optional)]),
-[sdl2_prefix="$withval"], [sdl2_prefix=""])
-
-AC_ARG_WITH([sdl2-exec-prefix],
-  AS_HELP_STRING([--with-sdl2-exec-prefix=PFX], [Exec prefix where SDL2 is installed (optional)]),
-[sdl2_exec_prefix="$withval"], [sdl2_exec_prefix=""])
-
-AC_ARG_ENABLE([sdl2test],
-  AS_HELP_STRING([--disable-sdl2test], [Do not try to compile and run a test SDL2 program]),
-[], [enable_sdl2test=yes])
+AC_ARG_WITH(sdl2-prefix,[  --with-sdl2-prefix=PFX   Prefix where SDL2 is installed (optional)],
+            sdl2_prefix="$withval", sdl2_prefix="")
+AC_ARG_WITH(sdl2-exec-prefix,[  --with-sdl2-exec-prefix=PFX Exec prefix where SDL2 is installed (optional)],
+            sdl2_exec_prefix="$withval", sdl2_exec_prefix="")
+AC_ARG_ENABLE(sdl2test, [  --disable-sdl2test       Do not try to compile and run a test SDL2 program],
+		    , enable_sdl2test=yes)
 
   min_sdl2_version=ifelse([$1], ,2.0.0,$1)
 
@@ -86,7 +81,7 @@ dnl Now check if the installed SDL2 is sufficiently new. (Also sanity
 dnl checks the results of sdl2-config to some extent
 dnl
       rm -f conf.sdl2test
-      AC_RUN_IFELSE([AC_LANG_SOURCE([[
+      AC_TRY_RUN([
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,7 +113,7 @@ int main (int argc, char *argv[])
   */
   { FILE *fp = fopen("conf.sdl2test", "a"); if ( fp ) fclose(fp); }
 
-  /* HP/UX 9 writes to sscanf strings */
+  /* HP/UX 9 (%@#!) writes to sscanf strings */
   tmp_version = my_strdup("$min_sdl2_version");
   if (sscanf(tmp_version, "%d.%d.%d", &major, &minor, &micro) != 3) {
      printf("%s, bad version string\n", "$min_sdl2_version");
@@ -143,7 +138,7 @@ int main (int argc, char *argv[])
     }
 }
 
-]])], [], [no_sdl2=yes], [echo $ac_n "cross compiling; assumed OK... $ac_c"])
+],, no_sdl2=yes,[echo $ac_n "cross compiling; assumed OK... $ac_c"])
         CFLAGS="$ac_save_CFLAGS"
         CXXFLAGS="$ac_save_CXXFLAGS"
         LIBS="$ac_save_LIBS"
@@ -171,7 +166,7 @@ int main (int argc, char *argv[])
           CFLAGS="$CFLAGS $SDL2_CFLAGS"
           CXXFLAGS="$CXXFLAGS $SDL2_CFLAGS"
           LIBS="$LIBS $SDL2_LIBS"
-          AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+          AC_TRY_LINK([
 #include <stdio.h>
 #include "SDL.h"
 
@@ -179,7 +174,7 @@ int main(int argc, char *argv[])
 { return 0; }
 #undef  main
 #define main K_and_R_C_main
-]], [[ return 0; ]])],
+],      [ return 0; ],
         [ echo "*** The test program compiled, but did not run. This usually means"
           echo "*** that the run-time linker is not finding SDL2 or finding the wrong"
           echo "*** version of SDL2. If it is not finding SDL2, you'll need to set your"

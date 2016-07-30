@@ -31,7 +31,7 @@ struct help_item {
 void helpdata_init(void);
 void helpdata_done(void);
 
-void boot_help_texts(void);
+void boot_help_texts(struct player *pplayer);
 void free_help_texts(void);
 
 int num_help_items(void);
@@ -50,8 +50,10 @@ void helptext_advance(char *buf, size_t bufsz, struct player *pplayer,
 		      const char *user_text, int i);
 void helptext_terrain(char *buf, size_t bufsz, struct player *pplayer,
 		      const char *user_text, struct terrain *pterrain);
-void helptext_extra(char *buf, size_t bufsz, struct player *pplayer,
-                    const char *user_text, struct extra_type *pextra);
+void helptext_base(char *buf, size_t bufsz, struct player *pplayer,
+                   const char *user_text, struct base_type *pbase);
+void helptext_road(char *buf, size_t bufsz, struct player *pplayer,
+                   const char *user_text, struct road_type *proad);
 void helptext_specialist(char *buf, size_t bufsz, struct player *pplayer,
                          const char *user_text, struct specialist *pspec);
 void helptext_government(char *buf, size_t bufsz, struct player *pplayer,

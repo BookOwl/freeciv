@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -11,7 +11,6 @@ artists = "
     Daniel Speyer
     Yautja
     CapTVK
-    GriffonSpade
 "
 
 [file]
@@ -119,7 +118,6 @@ tiles = { "row", "column", "tag"
  4,  6, "tx.pollution"
  5,  6, "tx.village"
  6,  6, "tx.fallout"
- 7,  6, "tx.oil_rig"
 
  15,  0, "t.dither_tile"
  15,  0, "tx.darkness"
@@ -130,10 +128,4 @@ tiles = { "row", "column", "tag"
  15,  3, "t.blend.lake"
  15,  4, "user.attention"
  15,  5, "tx.fog"
-
-;goto path sprites
- 14,  7, "path.step"            ; turn boundary within path
- 14,  8, "path.exhausted_mp"    ; tip of path, no MP left
- 15,  7, "path.normal"          ; tip of path with MP remaining
- 15,  8, "path.waypoint"
 }

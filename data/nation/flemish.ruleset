@@ -34,7 +34,7 @@ ruler_titles = {
 
 flag="flanders"
 flag_alt = "belgium"
-style = "european"
+city_style = "european"
 
 init_techs=""
 init_buildings=""

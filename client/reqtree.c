@@ -163,27 +163,27 @@ static void node_rectangle_minimum_size(struct tree_node *node,
   int icons_width_sum; /* sum of icons width plus space between them */
   struct sprite* sprite;
   int swidth, sheight;
-
+  
   if (node->is_dummy) {
     /* Dummy node is a straight line */
     *width = *height = 1;
   } else {
     get_text_size(width, height, FONT_REQTREE_TEXT,
-                  research_advance_name_translation
-                      (research_get(client_player()), node->tech));
+		  advance_name_for_player(client.conn.playing, node->tech));
     *width += 2;
     *height += 8;
     
     max_icon_height = 0;
     icons_width_sum = 5;
     
-    if (gui_options.reqtree_show_icons) {
+    if (reqtree_show_icons) {
       /* units */
       unit_type_iterate(unit) {
         if (advance_number(unit->require_advance) != node->tech) {
           continue;
         }
-        sprite = get_unittype_sprite(tileset, unit, direction8_invalid());
+        sprite = get_unittype_sprite(tileset, unit, direction8_invalid(),
+                                     TRUE);
         get_sprite_dimensions(sprite, &swidth, &sheight);
         max_icon_height = MAX(max_icon_height, sheight);
         icons_width_sum += swidth + 2;
@@ -387,9 +387,8 @@ static void calculate_diagram_layout(struct reqtree *tree)
   If pplayer is given, add only techs reachable by that player to tree.
 *************************************************************************/
 static struct reqtree *create_dummy_reqtree(struct player *pplayer,
-                                            bool show_all)
+                                            bool reachable)
 {
-  const struct research *presearch = research_get(pplayer);
   struct reqtree *tree = fc_malloc(sizeof(*tree));
   int j;
   struct tree_node *nodes[advance_count()];
@@ -400,8 +399,7 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer,
       nodes[tech] = NULL;
       continue;
     }
-    if (pplayer && !show_all
-        && !research_invention_reachable(presearch, tech)) {
+    if (pplayer && reachable && !player_invention_reachable(pplayer, tech, TRUE)) {
       /* Reqtree requested for particular player and this tech is
        * unreachable to him/her. */
       nodes[tech] = NULL;
@@ -426,7 +424,7 @@ static struct reqtree *create_dummy_reqtree(struct player *pplayer,
     tech_one = advance_required(tech, AR_ONE);
     tech_two = advance_required(tech, AR_TWO);
 
-    if (!show_all && A_NONE != tech_one
+    if (reachable && A_NONE != tech_one
         && A_LAST != tech_two && A_NONE != tech_two
         && (nodes[tech_one] == NULL || nodes[tech_two] == NULL)) {
       /* Print only reachable techs. */
@@ -828,12 +826,12 @@ static void improve(struct reqtree *tree)
 
   If pplayer is not NULL, techs unreachable to that player are not shown.
 *************************************************************************/
-struct reqtree *create_reqtree(struct player *pplayer, bool show_all)
+struct reqtree *create_reqtree(struct player *pplayer, bool reachable)
 {
   struct reqtree *tree1, *tree2;
   int i, j;
 
-  tree1 = create_dummy_reqtree(pplayer, show_all);
+  tree1 = create_dummy_reqtree(pplayer, reachable);
   longest_path_layering(tree1);
   tree2 = add_dummy_nodes(tree1);
   destroy_reqtree(tree1);
@@ -876,18 +874,19 @@ void get_reqtree_dimensions(struct reqtree *reqtree,
 static enum color_std node_color(struct tree_node *node)
 {
   if (!node->is_dummy) {
-    struct research *research = research_get(client_player());
+    struct player_research* research = player_research_get(client.conn.playing);
 
     if (!research) {
       return COLOR_REQTREE_KNOWN;
     }
 
-    if (!research_invention_reachable(research, node->tech)) {
+    if (!player_invention_reachable(client.conn.playing, node->tech, TRUE)) {
       return COLOR_REQTREE_UNREACHABLE;
     }
 
-    if (!research_invention_gettable(research, node->tech, TRUE)) {
-      if (research_goal_tech_req(research, research->tech_goal, node->tech)
+    if (!player_invention_reachable(client.conn.playing, node->tech, FALSE)) {
+      if (is_tech_a_req_for_goal(client.conn.playing, node->tech,
+                                 research->tech_goal)
           || node->tech == research->tech_goal) {
         return COLOR_REQTREE_GOAL_NOT_GETTABLE;
       } else {
@@ -899,22 +898,23 @@ static enum color_std node_color(struct tree_node *node)
       return COLOR_REQTREE_RESEARCHING;
     }
 
-    if (TECH_KNOWN == research_invention_state(research, node->tech)) {
+    if (TECH_KNOWN == player_invention_state(client.conn.playing, node->tech)) {
       return COLOR_REQTREE_KNOWN;
     }
 
-    if (research_goal_tech_req(research, research->tech_goal, node->tech)
+    if (is_tech_a_req_for_goal(client.conn.playing, node->tech,
+                               research->tech_goal)
 	|| node->tech == research->tech_goal) {
-      if (TECH_PREREQS_KNOWN == research_invention_state(research,
-                                                         node->tech)) {
+      if (TECH_PREREQS_KNOWN ==
+            player_invention_state(client.conn.playing, node->tech)) {
 	return COLOR_REQTREE_GOAL_PREREQS_KNOWN;
       } else {
 	return COLOR_REQTREE_GOAL_UNKNOWN;
       }
     }
 
-    if (TECH_PREREQS_KNOWN == research_invention_state(research,
-                                                       node->tech)) {
+    if (TECH_PREREQS_KNOWN ==
+          player_invention_state(client.conn.playing, node->tech)) {
       return COLOR_REQTREE_PREREQS_KNOWN;
     }
 
@@ -933,7 +933,7 @@ static enum color_std node_color(struct tree_node *node)
 static enum reqtree_edge_type get_edge_type(struct tree_node *node, 
                                             struct tree_node *dest_node)
 {
-  struct research *research = research_get(client_player());
+  struct player_research *research = player_research_get(client.conn.playing);
 
   if (dest_node == NULL) {
     /* assume node is a dummy */
@@ -980,13 +980,14 @@ static enum reqtree_edge_type get_edge_type(struct tree_node *node,
     return REQTREE_ACTIVE_EDGE;
   }
 
-  if (research_goal_tech_req(research, research->tech_goal, dest_node->tech)
+  if (is_tech_a_req_for_goal(client.conn.playing, dest_node->tech,
+                             research->tech_goal)
       || dest_node->tech == research->tech_goal) {
     return REQTREE_GOAL_EDGE;
   }
 
-  if (TECH_KNOWN == research_invention_state(research, node->tech)) {
-    if (TECH_KNOWN == research_invention_state(research, dest_node->tech)) {
+  if (TECH_KNOWN == player_invention_state(client.conn.playing, node->tech)) {
+    if (TECH_KNOWN == player_invention_state(client.conn.playing, dest_node->tech)) {
       return REQTREE_KNOWN_EDGE;
     } else {
       return REQTREE_READY_EDGE;
@@ -1052,11 +1053,10 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
 		        LINE_GOTO,
 		        startx, starty, width, 0);
       } else {
-        const char *text = research_advance_name_translation
-                               (research_get(client_player()), node->tech);
+	const char *text = advance_name_for_player(client.conn.playing, node->tech);
 	int text_w, text_h;
 	int icon_startx;
-
+	
         canvas_put_rectangle(pcanvas,
                              get_color(tileset, COLOR_REQTREE_BACKGROUND),
                              startx, starty, width, height);
@@ -1080,12 +1080,13 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
 			text);
  	icon_startx = startx + 5;
 	
-	if (gui_options.reqtree_show_icons) {
+	if (reqtree_show_icons) {
  	  unit_type_iterate(unit) {
             if (advance_number(unit->require_advance) != node->tech) {
 	      continue;
 	    }
- 	    sprite = get_unittype_sprite(tileset, unit, direction8_invalid());
+            sprite = get_unittype_sprite(tileset, unit,
+                                         direction8_invalid(), TRUE);
  	    get_sprite_dimensions(sprite, &swidth, &sheight);
  	    canvas_put_sprite_full(pcanvas,
  	                           icon_startx,
@@ -1142,7 +1143,7 @@ void draw_reqtree(struct reqtree *tree, struct canvas *pcanvas,
 	endx = dest_node->node_x;
 	endy = dest_node->node_y + dest_node->node_height / 2;
 	
-        if (gui_options.reqtree_curved_lines) {
+        if (reqtree_curved_lines) {
           canvas_put_curved_line(pcanvas, color, LINE_GOTO,
                                  startx, starty, endx - startx,
                                  endy - starty);

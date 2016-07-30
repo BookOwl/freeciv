@@ -37,7 +37,7 @@ function classFunction:decltype ()
  self.type = typevar(self.type)
  if strfind(self.mod,'const') then
 	 self.type = 'const '..self.type
-	 self.mod = gsub(self.mod,'const%s*','')
+		self.mod = gsub(self.mod,'const%s*','')
 	end
  local i=1
  while self.args[i] do
@@ -62,9 +62,6 @@ function classFunction:supcode ()
  end
  output("static int",self.cname,"(lua_State* tolua_S)")
  output("{")
-  if self.type == 'tolua_multret' then
-   output('  int tolua_ret;')
-  end
 
  -- check types
 	if overload < 0 then
@@ -175,11 +172,7 @@ function classFunction:supcode ()
    if ctype == 'value' or ctype == 'function' then
     ctype = 'int'
    end
-   if self.type == 'tolua_multret' then
-     output('  tolua_ret = ')
-   else
-     output('  ',self.mod,ctype,self.ptr,'tolua_ret = ')
-   end
+   output('  ',self.mod,ctype,self.ptr,'tolua_ret = ')
    if isbasic(self.type) or self.ptr ~= '' then
     output('(',self.mod,ctype,self.ptr,') ')
    end
@@ -213,7 +206,7 @@ function classFunction:supcode ()
 		end
 
   -- return values
-  if self.type ~= '' and self.type ~= 'void' and self.type ~= 'tolua_multret' then
+  if self.type ~= '' and self.type ~= 'void' then
    nret = nret + 1
    local t,ct = isbasic(self.type)
    if t then
@@ -225,7 +218,7 @@ function classFunction:supcode ()
       output('   tolua_push'..t..'(tolua_S,(',ct,')tolua_ret);')
      end
    else
-		t = self.type
+			 t = self.type
     if self.ptr == '' then
      output('   {')
      output('#ifdef __cplusplus\n')
@@ -279,11 +272,7 @@ function classFunction:supcode ()
  end
 
  output(' }')
- if self.type == "tolua_multret" then
-   output(' return '..nret..' + tolua_ret;')
- else
-   output(' return '..nret..';')
- end
+ output(' return '..nret..';')
 
  -- call overloaded function or generate error
 	if overload < 0 then
@@ -363,17 +352,12 @@ function _Function (t)
   if t.name == t.parent.name then
    t.name = 'new'
    t.lname = 'new'
-   if string.find(t.type,"tolua_own") then
-     t.mod = "tolua_own"
-   end
    t.type = t.parent.name
    t.ptr = '*'
   elseif t.name == '~'..t.parent.name then
    t.name = 'delete'
    t.lname = 'delete'
    t.parent._delete = true
-  elseif t.type == 'tolua_len' then
-   t.lname = ".len"
   end
  end
  t.cname = t:cfuncname("tolua")..t:overload(t)

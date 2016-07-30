@@ -17,7 +17,6 @@
 
 // Qt
 #include <QApplication>
-#include <QFormLayout>
 #include <QCompleter>
 #include <QMainWindow>
 #include <QLineEdit>
@@ -38,13 +37,17 @@
 #include "optiondlg.h"
 #include "sprite.h"
 
-fc_icons* fc_icons::m_instance = 0;
 
+extern QApplication *qapp;
+fc_icons* fc_icons::m_instance = 0;
 /****************************************************************************
   Constructor
 ****************************************************************************/
 fc_client::fc_client() : QMainWindow()
 {
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
+#endif
   QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
   /**
    * Somehow freeciv-client-common asks to switch to page when all widgets
@@ -74,6 +77,7 @@ fc_client::fc_client() : QMainWindow()
   info_widget = NULL;
   saves_load = NULL;
   scenarios_load = NULL;
+  start_players = NULL;
   meta_scan_timer = NULL;
   lan_scan_timer = NULL;
   status_bar = NULL;
@@ -90,6 +94,8 @@ fc_client::fc_client() : QMainWindow()
   unit_sel = NULL;
   info_tile_wdg = NULL;
   opened_dialog = NULL;
+  current_unit_id = -1;
+  current_unit_target_id = -1;
   current_file = "";
   status_bar_queue.clear();
   quitting = false;
@@ -97,7 +103,7 @@ fc_client::fc_client() : QMainWindow()
   x_vote = NULL;
   gtd = NULL;
   update_info_timer = nullptr;
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i <= PAGE_GGZ; i++) {
     pages_layout[i] = NULL;
     pages[i] = NULL;
   }
@@ -116,13 +122,10 @@ void fc_client::init()
   central_layout->setContentsMargins(2, 2, 2, 2);
 
   // General part not related to any single page
-  fc_fonts.init_fonts();
   history_pos = -1;
+  fc_fonts.init_fonts();
   menu_bar = new mr_menu();
-  corner_wid = new fc_corner(this);
-  if (gui_options.gui_qt_show_titlebar == false) {
-    menu_bar->setCornerWidget(corner_wid);
-  }
+  menu_bar->setup_menus();
   setMenuBar(menu_bar);
   status_bar = statusBar();
   status_bar_label = new QLabel;
@@ -154,7 +157,6 @@ void fc_client::init()
   pages[PAGE_NETWORK]->setVisible(false);
 
   // PAGE_GAME
-  gui_options.gui_qt_allied_chat_only = true;
   path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
   if (path.isEmpty() == false) {
     QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, path);
@@ -165,6 +167,8 @@ void fc_client::init()
   create_game_page();
   pages[PAGE_GAME]->setVisible(false);
 
+  // PAGE_GGZ
+  pages[PAGE_GGZ] = NULL;
   central_layout->addLayout(pages_layout[PAGE_MAIN], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_NETWORK], 1, 1);
   central_layout->addLayout(pages_layout[PAGE_LOAD], 1, 1);
@@ -177,7 +181,6 @@ void fc_client::init()
   connect(switch_page_mapper, SIGNAL(mapped( int)),
                 this, SLOT(switch_page(int)));
   setVisible(true);
-
 }
 
 /****************************************************************************
@@ -283,7 +286,7 @@ void fc_client::switch_page(int new_pg)
     status_bar->setVisible(true);
   }
 
-  for (int i = 0; i <= PAGE_GAME; i++) {
+  for (int i = 0; i < PAGE_GGZ + 1; i++) {
     if (i == new_page) {
       show_children(pages_layout[i], true);
     } else {
@@ -302,14 +305,10 @@ void fc_client::switch_page(int new_pg)
     update_load_page();
     break;
   case PAGE_GAME:
-    if (gui_options.gui_qt_show_titlebar == false) {
-      setWindowFlags(Qt::Window | Qt::CustomizeWindowHint);
-      showMaximized();
-    }
     gui()->infotab->chtwdg->update_widgets();
     status_bar->setVisible(false);
     gui()->infotab->chtwdg->update_font();
-    if (gui_options.gui_qt_fullscreen){
+    if (fullscreen_mode){
       gui()->showFullScreen();
       gui()->mapview_wdg->showFullScreen();
     } else {
@@ -338,6 +337,7 @@ void fc_client::switch_page(int new_pg)
     connect_password_edit->setDisabled(true);
     connect_confirm_password_edit->setDisabled(true);
     break;
+  case PAGE_GGZ:
   default:
     if (client.conn.used) {
       disconnect_from_server();
@@ -452,11 +452,7 @@ void fc_client::timerEvent(QTimerEvent *event)
 ****************************************************************************/
 void fc_client::quit()
 {
-  QApplication *qapp = current_app();
-
-  if (qapp != nullptr) {
-    qapp->quit();
-  }
+  qapp->quit();
 }
 
 /****************************************************************************
@@ -582,15 +578,15 @@ void fc_client::read_settings()
 {
   QSettings s(QSettings::IniFormat, QSettings::UserScope, 
               "freeciv-qt-client");
-  if (s.contains("Chat-xsize")) {
-    qt_settings.chat_width = s.value("Chat-xsize").toInt();
+  if (s.contains("InfoTab-xsize")) {
+    qt_settings.infotab_width = s.value("InfoTab-xsize").toInt();
   } else {
-    qt_settings.chat_width = 33;
+    qt_settings.infotab_width = 95;
   }
-  if (s.contains("Chat-ysize")) {
-    qt_settings.chat_height = s.value("Chat-ysize").toInt();
+  if (s.contains("InfoTab-ysize")) {
+    qt_settings.infotab_height = s.value("InfoTab-ysize").toInt();
   } else {
-    qt_settings.chat_height = 33;
+    qt_settings.infotab_height = 29;
   }
   qt_settings.player_repo_sort_col = -1;
   qt_settings.city_repo_sort_col = -1;
@@ -604,8 +600,8 @@ void fc_client::write_settings()
 {
   QSettings s(QSettings::IniFormat, QSettings::UserScope,
               "freeciv-qt-client");
-  s.setValue("Chat-xsize", qt_settings.chat_width);
-  s.setValue("Chat-ysize", qt_settings.chat_height);
+  s.setValue("InfoTab-xsize", qt_settings.infotab_width);
+  s.setValue("InfoTab-ysize", qt_settings.infotab_height);
 }
 
 /****************************************************************************
@@ -719,58 +715,6 @@ void fc_client::create_cursors(void)
 }
 
 /****************************************************************************
-  Contructor for corner widget (used for menubar)
-****************************************************************************/
-fc_corner::fc_corner(QMainWindow *qmw): QWidget()
-{
-  QHBoxLayout *hb;
-  QPushButton *qpb;
-  mw = qmw;
-  hb = new QHBoxLayout();
-  qpb = new QPushButton(style()->standardIcon(
-                                 QStyle::SP_TitleBarMinButton), "");
-  connect(qpb, SIGNAL(clicked()), SLOT(minimize()));
-  hb->addWidget(qpb);
-  qpb = new QPushButton(style()->standardIcon(
-                                 QStyle::SP_TitleBarMaxButton), "");
-  connect(qpb, SIGNAL(clicked()), SLOT(maximize()));
-  hb->addWidget(qpb);
-  qpb = new QPushButton(style()->standardIcon(
-                                 QStyle::SP_TitleBarCloseButton), "");
-  connect(qpb, SIGNAL(clicked()), SLOT(close_fc()));
-  hb->addWidget(qpb);
-  setLayout(hb);
-}
-
-/****************************************************************************
-  Slot for closing freeciv via corner widget
-****************************************************************************/
-void fc_corner::close_fc()
-{
-  mw->close();
-}
-
-/****************************************************************************
-  Slot for maximizing freeciv window via corner widget
-****************************************************************************/
-void fc_corner::maximize()
-{
-  if (mw->isMaximized() == false) {
-    mw->showMaximized();
-  } else {
-    mw->showNormal();
-  }
-}
-
-/****************************************************************************
-  Slot for minimizing freeciv window via corner widget
-****************************************************************************/
-void fc_corner::minimize()
-{
-  mw->showMinimized();
-}
-
-/****************************************************************************
   Returns desired font
 ****************************************************************************/
 QFont *fc_font::get_font(QString name)
@@ -822,16 +766,13 @@ void fc_font::release_fonts()
   }
 }
 
+
 /****************************************************************************
   Adds new font or overwrite old one
 ****************************************************************************/
-void fc_font::set_font(QString name, QFont *qf)
+void fc_font::set_font(QString name, QFont * qf)
 {
-  font_map.insert(name, qf);
-  /* Automatically set default font */
-  if (name == "gui_qt_font_default") {
-    QApplication::setFont(*qf);
-  }
+  font_map.insert(name,qf);
 }
 
 /****************************************************************************
@@ -913,26 +854,23 @@ void fc_game_tab_widget::change_color(int index, QColor col)
 ****************************************************************************/
 void pregame_options::init()
 {
-  QFormLayout *layout;
-  QHBoxLayout *hbox = nullptr;
+  QGridLayout *layout;
+  QLabel *l1, *l2, *l3;
   QPushButton *but;
   int level;
 
-  layout = new QFormLayout(this);
-  nation = new QPushButton(this);
+  l1 = new QLabel(_("Number of Players\n(including AI):"));
+  l2 = new QLabel(_("AI Skill Level:"));
+  l3 = new QLabel(_("Ruleset:"));
+  layout = new QGridLayout(this);
   max_players = new QSpinBox(this);
   ailevel = new QComboBox(this);
   cruleset = new QComboBox(this);
   max_players->setRange(1, MAX_NUM_PLAYERS);
 
-  // Text and icon set by update_buttons()
-  connect(nation, &QPushButton::clicked,
-          this, &pregame_options::pick_nation);
-
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = AI_LEVEL_AWAY; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(static_cast<ai_level>(level))) {
-      const char *level_name = ai_level_translated_name(
-                                        static_cast<ai_level>(level));
+      const char *level_name = ai_level_name(static_cast<ai_level>(level));
       ailevel->addItem(level_name, level);
     }
   }
@@ -950,76 +888,14 @@ void pregame_options::init()
   but->setIcon(fc_icons::instance()->get_icon("preferences-other"));
   QObject::connect(but, SIGNAL(clicked()), this,
                    SLOT(popup_server_options()));
-
-  layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-  layout->addRow(_("Nation:"), nation);
-  layout->addRow(_("Rules:"), cruleset);
-
-  hbox = new QHBoxLayout();
-  hbox->addWidget(max_players);
-  hbox->addWidget(ailevel);
-  layout->addRow(_("Players:"), hbox);
-  layout->addWidget(but);
+  layout->addWidget(l1, 0, 1);
+  layout->addWidget(l2, 1, 1);
+  layout->addWidget(l3, 2, 1);
+  layout->addWidget(max_players, 0, 2);
+  layout->addWidget(ailevel, 1, 2);
+  layout->addWidget(cruleset, 2, 2);
+  layout->addWidget(but, 3, 1);
   setLayout(layout);
-
-  update_buttons();
-}
-
-/****************************************************************************
-  Update the ruleset list
-****************************************************************************/
-void pregame_options::set_rulesets(int num_rulesets, char **rulesets)
-{
-  int i;
-  int def_idx = -1;
-
-  cruleset->clear();
-  cruleset->blockSignals(true);
-  for (i = 0; i < num_rulesets; i++){
-    cruleset->addItem(rulesets[i], i);
-    if (!strcmp("default", rulesets[i])) {
-      def_idx = i;
-    }
-  }
-
-  /* HACK: server should tell us the current ruleset. */
-  cruleset->setCurrentIndex(def_idx);
-  cruleset->blockSignals(false);
-}
-
-/****************************************************************************
-  Sets the value of the "aifill" option. Doesn't send the new value to the
-  server
-****************************************************************************/
-void pregame_options::set_aifill(int aifill)
-{
-  max_players->blockSignals(true);
-  max_players->setValue(aifill);
-  max_players->blockSignals(false);
-}
-
-/****************************************************************************
-  Updates the buttons whenever the game state has changed
-****************************************************************************/
-void pregame_options::update_buttons()
-{
-  struct sprite *psprite = nullptr;
-  QPixmap *pixmap = nullptr;
-  const struct player *pplayer = client_player();
-
-  // Update the "Select Nation" button
-  if (pplayer != nullptr) {
-    if (pplayer->nation != nullptr) {
-      nation->setText(nation_adjective_for_player(pplayer));
-      psprite = get_nation_shield_sprite(tileset, pplayer->nation);
-      pixmap = psprite->pm;
-      nation->setIconSize(pixmap->size());
-      nation->setIcon(QIcon(*pixmap));
-    } else {
-      nation->setText(_("Random"));
-      nation->setIcon(fc_icons::instance()->get_icon("flush-random"));
-    }
-  }
 }
 
 /****************************************************************************
@@ -1041,6 +917,7 @@ void pregame_options::ailevel_change(int i)
   k = ailevel->currentData().toInt();
   name = ai_level_cmd(static_cast<ai_level>(k));
   send_chat_printf("/%s", name);
+
 }
 
 /****************************************************************************
@@ -1051,14 +928,6 @@ void pregame_options::ruleset_change(int i)
   if (!cruleset->currentText().isEmpty()) {
     set_ruleset(cruleset->currentText().toLocal8Bit().data());
   }
-}
-
-/****************************************************************************
-  Slot for picking a nation
-****************************************************************************/
-void pregame_options::pick_nation()
-{
-  popup_races_dialog(client_player());
 }
 
 /****************************************************************************

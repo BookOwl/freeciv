@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -27,7 +27,6 @@
 #include "support.h"
 
 // common
-#include "calendar.h"
 #include "game.h"
 #include "map.h"
 #include "research.h"
@@ -41,8 +40,7 @@
 #include "repodlgs.h"
 #include "text.h"
 
-// gui-qt
-#include "colors.h"
+// qui-qt
 #include "qtg_cxxside.h"
 #include "mapview.h"
 
@@ -55,7 +53,6 @@ extern QApplication *qapp;
 #define MAX_DIRTY_RECTS 20
 static int num_dirty_rects = 0;
 static QRect dirty_rects[MAX_DIRTY_RECTS];
-static int last_turn = 0;
 
 /**************************************************************************
   Check if point x, y is in area (px -> pxe, py - pye)
@@ -68,117 +65,6 @@ bool is_point_in_area(int x, int y, int px, int py, int pxe, int pye)
   return false;
 }
 
-/**************************************************************************
-  Draws calculated trade routes
-**************************************************************************/
-void draw_calculated_trade_routes(QPainter *painter)
-{
-  int dx, dy;
-  float w, h;
-  float x1, y1, x2, y2;
-  bool ret;
-  qtiles qgilles;
-  struct city *pcity;
-  struct color *pcolor;
-  trade_city *tc;
-  QPen pen;
-
-  if (!gui_options.draw_city_trade_routes || !can_client_control()
-      || gui()->trade_gen.cities.empty()) {
-    return;
-  }
-  pcolor = get_color(tileset, COLOR_MAPVIEW_TRADE_ROUTES_NO_BUILT);
-  /* Draw calculated trade routes */
-  foreach (qgilles, gui()->trade_gen.lines) {
-    base_map_distance_vector(&dx, &dy, TILE_XY(qgilles.t1),
-                             TILE_XY(qgilles.t2));
-    map_to_gui_vector(tileset, 1.0, &w, &h, dx, dy);
-
-    tile_to_canvas_pos(&x1, &y1, qgilles.t1);
-    tile_to_canvas_pos(&x2, &y2, qgilles.t2);
-
-    /* Dont draw if route was already established */
-    if (tile_city(qgilles.t1) && tile_city(qgilles.t2)
-        && have_cities_trade_route(tile_city(qgilles.t1),
-                                   tile_city(qgilles.t2))) {
-        continue;
-    }
-
-    pen.setColor(pcolor->qcolor);
-    pen.setStyle(Qt::DashLine);
-    pen.setDashOffset(4);
-    pen.setWidth(1);
-    painter->setPen(pen);
-    if (x2 - x1 == w && y2 - y1 == h) {
-      painter->drawLine(x1 + tileset_tile_width(tileset) / 2,
-                        y1 + tileset_tile_height(tileset) / 2,
-                        x1 + tileset_tile_width(tileset) / 2 + w,
-                        y1 + tileset_tile_height(tileset) / 2 + h);
-      continue;
-    }
-    painter->drawLine(x2 + tileset_tile_width(tileset) / 2,
-                      y2 + tileset_tile_height(tileset) / 2,
-                      x2 + tileset_tile_width(tileset) / 2 - w,
-                      y2 + tileset_tile_height(tileset) / 2 - h);
-  }
-  /* Draw virtual cities */
-  foreach (pcity, gui()->trade_gen.virtual_cities) {
-    float canvas_x, canvas_y;
-    if (pcity->tile != nullptr
-        && tile_to_canvas_pos(&canvas_x, &canvas_y, pcity->tile)) {
-      painter->drawPixmap(static_cast<int>(canvas_x),
-                          static_cast<int>(canvas_y),
-                          *get_attention_crosshair_sprite(tileset)->pm);
-    }
-  }
-  /* Find units which might be going to establish trade */
-  pcolor = get_color(tileset, COLOR_MAPVIEW_TRADE_ROUTES_SOME_BUILT);
-  unit_list_iterate(client_player()->units, punit) {
-    struct tile *stile;
-    struct tile *ttile;
-    if (unit_can_do_action(punit, ACTION_TRADE_ROUTE)) {
-      if (!unit_has_orders(punit)) {
-        continue;
-      }
-      pcity = game_city_by_number(punit->homecity);
-      stile = pcity->tile;
-      ttile = punit->goto_tile;
-      if (tile_city(ttile) == nullptr) {
-        continue;
-      }
-      ret = true;
-      foreach (tc, gui()->trade_gen.cities) {
-        if ((tc->city == pcity && tc->new_tr_cities.contains(tile_city(ttile)))) {
-          ret = false;
-        }
-      }
-      if (ret == true) {
-        continue;
-      }
-      base_map_distance_vector(&dx, &dy, TILE_XY(stile), TILE_XY(ttile));
-      map_to_gui_vector(tileset, 1.0, &w, &h, dx, dy);
-      tile_to_canvas_pos(&x1, &y1, stile);
-      tile_to_canvas_pos(&x2, &y2, ttile);
-
-      pen.setColor(pcolor->qcolor);
-      pen.setStyle(Qt::DashLine);
-      pen.setDashOffset(4);
-      pen.setWidth(1);
-      painter->setPen(pen);
-      if (x2 - x1 == w && y2 - y1 == h) {
-        painter->drawLine(x1 + tileset_tile_width(tileset) / 2,
-                          y1 + tileset_tile_height(tileset) / 2,
-                          x1 + tileset_tile_width(tileset) / 2 + w,
-                          y1 + tileset_tile_height(tileset) / 2 + h);
-        continue;
-      }
-      painter->drawLine(x2 + tileset_tile_width(tileset) / 2,
-                        y2 + tileset_tile_height(tileset) / 2,
-                        x2 + tileset_tile_width(tileset) / 2 - w,
-                        y2 + tileset_tile_height(tileset) / 2 - h);
-    }
-  } unit_list_iterate_end;
-}
 
 /**************************************************************************
   Constructor for idle callbacks
@@ -300,7 +186,6 @@ void map_view::paint(QPainter *painter, QPaintEvent *event)
 {
   painter->drawPixmap(event->rect(), mapview.store->map_pixmap,
                       event->rect());
-  draw_calculated_trade_routes(painter);
 }
 
 /**************************************************************************
@@ -402,11 +287,10 @@ void map_view::resizeEvent(QResizeEvent *event)
     map_canvas_resized(size.width(), size.height());
     gui()->infotab->resize(((size.width()
                              - gui()->end_turn_rect->sizeHint().width())
-                             * gui()->qt_settings.chat_width) / 100,
+                             * gui()->qt_settings.infotab_width) / 100,
                              (size.height()
-                             * gui()->qt_settings.chat_height) / 100);
+                             * gui()->qt_settings.infotab_height) / 100);
     gui()->infotab->move(0 , size.height() - gui()->infotab->height());
-    gui()->infotab->restore_chat();
     gui()->unitinfo_wdg->move(width() - gui()->unitinfo_wdg->width(), 0);
     gui()->end_turn_rect->end_turn_update();
     delta = size - gui()->end_turn_rect->size();
@@ -447,6 +331,10 @@ void resize_widget::put_to_corner()
 void resize_widget::mouseMoveEvent(QMouseEvent * event)
 {
   QPoint qp, np;
+
+  if (gui()->infotab->locked) {
+    return;
+  }
 
   qp = event->globalPos();
   np.setX(qp.x() - point.x());
@@ -527,6 +415,7 @@ minimap_view::minimap_view(QWidget *parent) : fcwidget()
   cw->put_to_corner();
   pix = new QPixmap;
   scale_factor = 1.0;
+  locked = false;
 }
 
 /**************************************************************************
@@ -583,17 +472,15 @@ static void gui_to_overview(int *ovr_x, int *ovr_y, int gui_x, int gui_y)
   }
 
   if (MAP_IS_ISOMETRIC) {
-    ntl_y = map_x + map_y - game.map.xsize;
+    ntl_y = map_x + map_y - map.xsize;
     ntl_x = 2 * map_x - ntl_y;
   } else {
     ntl_x = map_x;
     ntl_y = map_y;
   }
 
-  *ovr_x = floor((ntl_x - (double)gui_options.overview.map_x0)
-           * OVERVIEW_TILE_SIZE);
-  *ovr_y = floor((ntl_y - (double)gui_options.overview.map_y0)
-           * OVERVIEW_TILE_SIZE);
+  *ovr_x = floor((ntl_x - (double)overview.map_x0) * OVERVIEW_TILE_SIZE);
+  *ovr_y = floor((ntl_y - (double)overview.map_y0) * OVERVIEW_TILE_SIZE);
 
   if (current_topo_has_flag(TF_WRAPX)) {
     *ovr_x = FC_WRAP(*ovr_x, NATURAL_WIDTH * OVERVIEW_TILE_SIZE);
@@ -640,10 +527,9 @@ void minimap_view::draw_viewport(QPainter *painter)
   int i, x[4], y[4];
   int src_x, src_y, dst_x, dst_y;
 
-  if (!gui_options.overview.map) {
+  if (!overview.map) {
     return;
   }
-
   gui_to_overview(&x[0], &y[0], mapview.gui_x0, mapview.gui_y0);
   gui_to_overview(&x[1], &y[1], mapview.gui_x0 + mapview.width,
                   mapview.gui_y0);
@@ -680,8 +566,8 @@ void minimap_view::scale_point(int &x, int &y)
                   mapview.gui_y0 + mapview.height / 2);
   x = qRound(x * scale_factor);
   y = qRound(y * scale_factor);
-  dx = qRound(ax * scale_factor - gui_options.overview.width / 2);
-  dy = qRound(bx * scale_factor - gui_options.overview.height / 2);
+  dx = qRound(ax * scale_factor - overview.width / 2);
+  dy = qRound(bx * scale_factor - overview.height / 2);
   x = x - dx;
   y = y - dy;
 
@@ -697,8 +583,8 @@ void minimap_view::unscale_point(int &x, int &y)
 
   gui_to_overview(&ax, &bx, mapview.gui_x0 + mapview.width / 2,
                   mapview.gui_y0 + mapview.height / 2);
-  dx = qRound(ax * scale_factor - gui_options.overview.width / 2);
-  dy = qRound(bx * scale_factor - gui_options.overview.height / 2);
+  dx = qRound(ax * scale_factor - overview.width / 2);
+  dy = qRound(bx * scale_factor - overview.height / 2);
   x = x + dx;
   y = y + dy;
   x = qRound(x / scale_factor);
@@ -721,8 +607,7 @@ void minimap_view::update_image()
 {
   QPixmap *tpix;
   QPixmap gpix;
-  QPixmap bigger_pix(gui_options.overview.width * 2,
-                     gui_options.overview.height * 2);
+  QPixmap bigger_pix(overview.width * 2, overview.height * 2);
   int delta_x, delta_y;
   int x, y, ix, iy;
   float wf, hf;
@@ -731,38 +616,38 @@ void minimap_view::update_image()
   if (isHidden() == true ){
     return; 
   }
-  if (gui_options.overview.map != NULL) {
+  if (overview.map != NULL) {
     if (scale_factor > 1) {
       /* move minimap now, 
          scale later and draw without looking for origin */
-      src = &gui_options.overview.map->map_pixmap;
-      dst = &gui_options.overview.window->map_pixmap;
-      x = gui_options.overview.map_x0;
-      y = gui_options.overview.map_y0;
-      ix = gui_options.overview.width - x;
-      iy = gui_options.overview.height - y;
+      src = &overview.map->map_pixmap;
+      dst = &overview.window->map_pixmap;
+      x = overview.map_x0;
+      y = overview.map_y0;
+      ix = overview.width - x;
+      iy = overview.height - y;
       pixmap_copy(dst, src, 0, 0, ix, iy, x, y);
       pixmap_copy(dst, src, 0, y, ix, 0, x, iy);
       pixmap_copy(dst, src, x, 0, 0, iy, ix, y);
       pixmap_copy(dst, src, x, y, 0, 0, ix, iy);
-      tpix = &gui_options.overview.window->map_pixmap;
-      wf = static_cast <float>(gui_options.overview.width) / scale_factor;
-      hf = static_cast <float>(gui_options.overview.height) / scale_factor;
+      tpix = &overview.window->map_pixmap;
+      wf = static_cast <float>(overview.width) / scale_factor;
+      hf = static_cast <float>(overview.height) / scale_factor;
       x = 0;
       y = 0;
       unscale_point(x, y);
       /* qt 4.8 is going to copy pixmap badly if coords x+size, y+size 
          will go over image so we create extra black bigger image */
       bigger_pix.fill(Qt::black);
-      delta_x = gui_options.overview.width / 2;
-      delta_y = gui_options.overview.height / 2;
-      pixmap_copy(&bigger_pix, tpix, 0, 0, delta_x, delta_y,
-                  gui_options.overview.width, gui_options.overview.height);
+      delta_x = overview.width / 2;
+      delta_y = overview.height / 2;
+      pixmap_copy(&bigger_pix, tpix, 0, 0, delta_x, delta_y, overview.width,
+                  overview.height);
       gpix = bigger_pix.copy(delta_x + x, delta_y + y, wf, hf);
       *pix = gpix.scaled(width(), height(),
                          Qt::IgnoreAspectRatio, Qt::FastTransformation);
     } else {
-      tpix = &gui_options.overview.map->map_pixmap;
+      tpix = &overview.map->map_pixmap;
       *pix = tpix->scaled(width(), height(),
                           Qt::IgnoreAspectRatio, Qt::FastTransformation);
     }
@@ -777,8 +662,8 @@ void minimap_view::paint(QPainter * painter, QPaintEvent * event)
 {
   int x, y, ix, iy;
 
-  x = gui_options.overview.map_x0 * w_ratio;
-  y = gui_options.overview.map_y0 * h_ratio;
+  x = overview.map_x0 * w_ratio;
+  y = overview.map_y0 * h_ratio;
   ix = pix->width() - x;
   iy = pix->height() - y;
 
@@ -807,8 +692,8 @@ void minimap_view::resizeEvent(QResizeEvent* event)
   size = event->size();
 
   if (C_S_RUNNING <= client_state()) {
-    w_ratio = static_cast<float>(width()) / gui_options.overview.width;
-    h_ratio = static_cast<float>(height()) / gui_options.overview.height;
+    w_ratio = static_cast<float>(width()) / overview.width;
+    h_ratio = static_cast<float>(height()) / overview.height;
   }
   update_image();
 }
@@ -831,7 +716,7 @@ void minimap_view::wheelEvent(QWheelEvent * event)
 ****************************************************************************/
 void minimap_view::zoom_in()
 {
-  if (scale_factor < gui_options.overview.width / 8) {
+  if (scale_factor < overview.width / 8) {
     scale(1.2);
   }
 }
@@ -869,8 +754,8 @@ void minimap_view::mousePressEvent(QMouseEvent * event)
     }
     fx = qMax(fx, 1);
     fy = qMax(fy, 1);
-    fx = qMin(fx, gui_options.overview.width - 1);
-    fy = qMin(fy, gui_options.overview.height - 1);
+    fx = qMin(fx, overview.width - 1);
+    fy = qMin(fy, overview.height - 1);
     overview_to_map_pos(&x, &y, fx, fy);
     center_tile_mapcanvas(map_pos_to_tile(x, y));
     update_image();
@@ -883,6 +768,9 @@ void minimap_view::mousePressEvent(QMouseEvent * event)
 **************************************************************************/
 void minimap_view::mouseMoveEvent(QMouseEvent* event)
 {
+  if (locked) {
+    return;
+  }
   if (event->buttons() & Qt::LeftButton) {
     move(event->globalPos() - cursor);
     setCursor(Qt::SizeAllCursor);
@@ -1367,7 +1255,7 @@ void info_label::info_update()
   set_res_info(str);
 
   if (nullptr != client.conn.playing) {
-    struct research *research = research_get(client_player());
+    struct player_research *research = player_research_get(client_player());
 
     if (research->researching == A_UNSET && research->tech_goal == A_UNSET
         && !timer_active) {
@@ -1398,7 +1286,7 @@ void info_label::blink()
   }
 
   if (nullptr != client.conn.playing) {
-    struct research *research = research_get(client_player());
+    struct player_research *research = player_research_get(client_player());
     if (timer_active && ( research->researching != A_UNSET
         || research->tech_goal != A_UNSET)) {
       res_timer->stop();
@@ -1445,8 +1333,8 @@ void fc_client::update_info_label(void)
     return;
   }
 
-  s = QString(_("%1 (Turn:%2)")).arg(calendar_text(),
-                                            QString::number(game.info.turn));
+  s = QString(_("%1 (Turn:%2)")).arg(textyear(game.info.year),
+                                     QString::number(game.info.turn));
   game_info_label->set_turn_info(s);
   set_indicator_icons(client_research_sprite(),
                       client_warming_sprite(),
@@ -1502,12 +1390,9 @@ void update_mouse_cursor(enum cursor_type new_cursor_type)
 ****************************************************************************/
 void qtg_update_timeout_label(void)
 {
-  gui()->game_info_label->set_time_info(get_timeout_label_text());
+  gui()->game_info_label->set_time_info (
+    QString(get_timeout_label_text()));
   gui()->game_info_label->resize(gui()->game_info_label->sizeHint());
-  if (last_turn != game.info.turn) {
-    qt_start_turn();
-  }
-  last_turn = game.info.turn;
 }
 
 /****************************************************************************
@@ -1674,7 +1559,7 @@ void pixmap_put_overlay_tile(int canvas_x, int  canvas_y,
 ****************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
     pixmap_put_overlay_tile(canvas_x, canvas_y,
@@ -1739,8 +1624,8 @@ void overview_size_changed(void)
   gui()->minimapview_wdg->resize(0, 0);
   gui()->minimapview_wdg->resize(gui()->end_turn_rect->width(),
                                  gui()->end_turn_rect->width()
-                                 * (static_cast<float>(game.map.xsize)
-                                 / game.map.ysize));
+                                 * (static_cast<float>(map.xsize)
+                                 / map.ysize));
 }
 
 /**************************************************************************
@@ -1803,31 +1688,41 @@ void unit_label::uupdate(unit_list *punits)
   if (pcity != NULL && unit_list_size(punits) == 1) {
     /* TRANS: unitX from cityZ */
     unit_label1 = QString(_("%1 from %2"))
-                  .arg(get_unit_info_label_text1(punits), city_name_get(pcity));
+                   .arg(get_unit_info_label_text1(punits), city_name(pcity));
   }
   /* TRANS: HP - hit points */
   unit_label2 = QString(_("%1 HP:%2/%3")).arg(unit_activity_text(
                    unit_list_get(punits, 0)),
                    QString::number(punit->hp),
-                   QString::number(unit_type_get(punit)->hp));
+                   QString::number(unit_type(punit)->hp));
 
   punit = head_of_units_in_focus();
   if (punit) {
-    unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
-                                    tileset_tile_height(tileset) * 3 / 2);
+    if (tileset_is_isometric(tileset)){
+      unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
+                                      tileset_tile_height(tileset) * 3 / 2);
+    } else {
+      unit_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
+                                      tileset_tile_height(tileset));
+    }
     unit_pixmap->map_pixmap.fill(Qt::transparent);
-    put_unit(punit, unit_pixmap, 1.0, 0, 0);
+    put_unit(punit, unit_pixmap, 0, 0);
     *pix = (&unit_pixmap->map_pixmap)->scaledToHeight(height());
     w_width = pix->width() + 1;
 
-    tile_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
-                                    tileset_tile_height(tileset) * 2);
+    if (tileset_is_isometric(tileset)){
+      tile_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
+                                      tileset_tile_height(tileset) * 2);
+    } else {
+      tile_pixmap = qtg_canvas_create(tileset_full_tile_width(tileset),
+                                      tileset_tile_height(tileset));
+    }
     tile_pixmap->map_pixmap.fill(QColor(0 , 0 , 0 , 85));
-    put_terrain(punit->tile, tile_pixmap, 1.0, 0, 0);
+    put_terrain(punit->tile, tile_pixmap, 0, 0);
     *tile_pix = (&tile_pixmap->map_pixmap)->scaledToHeight(height());
-    w_width = w_width + tile_pix->width() + 1;
-    qtg_canvas_free(tile_pixmap);
-    qtg_canvas_free(unit_pixmap);
+     w_width = w_width + tile_pix->width() + 1;
+     qtg_canvas_free(tile_pixmap);
+     qtg_canvas_free(unit_pixmap);
   }
 
   QFontMetrics fm(*ufont);
@@ -2018,7 +1913,7 @@ void info_tile::calc_size()
   int hh = tileset_tile_height(tileset);
   int fin_x;
   int fin_y;
-  float x, y;
+  int x, y;
   int w = 0;
 
   str = popup_info_text(itile);

@@ -13,12 +13,9 @@
 #ifndef FC__ADVTOOLS_H
 #define FC__ADVTOOLS_H
 
-/* common */
-#include "fc_types.h"
-
 #define MORT 24
 
-adv_want amortize(adv_want benefit, int delay);
+int amortize(int benefit, int delay);
 
 /*
  * To prevent integer overflows the product "power * hp * firepower"

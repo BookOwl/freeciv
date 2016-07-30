@@ -25,3 +25,4 @@ void citizens_dialog_refresh(const struct city *pcity);
 void citizens_dialog_close(const struct city *pcity);
 
 #endif  /* FC__CITIZENSINFO_H */
+

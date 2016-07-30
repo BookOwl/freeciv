@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2004 - Marcelo J. Burda
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -34,21 +34,21 @@ static int *temperature_map;
 /**************************************************************************
   Returns one line (given by the y coordinate) of the temperature map.
 **************************************************************************/
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 static char *tmap_y2str(int ycoor)
 {
   static char buf[MAP_MAX_LINEAR_SIZE + 1];
   char *p = buf;
-  int i, idx;
+  int i, index;
 
-  for (i = 0; i < game.map.xsize; i++) {
-    idx = ycoor * game.map.xsize + i;
+  for (i = 0; i < map.xsize; i++) {
+    index = ycoor * map.xsize + i;
 
-    if (idx > game.map.xsize * game.map.ysize) {
+    if (index > map.xsize * map.ysize) {
       break;
     }
 
-    switch (temperature_map[idx]) {
+    switch (temperature_map[index]) {
     case TT_TROPICAL:
       *p++ = 't'; /* tropical */
       break;
@@ -68,7 +68,7 @@ static char *tmap_y2str(int ycoor)
 
   return buf;
 }
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
 /**************************************************************
   Return TRUE if temperateure_map is initialized
@@ -130,11 +130,11 @@ void create_tmap(bool real)
     if (!real) {
       tmap(ptile) = t;
     } else {
-      /* high land can be 30% cooler */
+      /* hight land can be 30% cooler */
       float height = - 0.3 * MAX(0, hmap(ptile) - hmap_shore_level) 
 	  / (hmap_max_level - hmap_shore_level); 
       /* near ocean temperature can be 15% more "temperate" */
-      float temperate = (0.15 * (game.map.server.temperature / 100 - t
+      float temperate = (0.15 * (map.server.temperature / 100 - t
                                  / MAX_COLATITUDE)
                          * 2 * MIN(50, count_terrain_class_near_tile(ptile,
                                                                      FALSE,
@@ -149,7 +149,7 @@ void create_tmap(bool real)
   /* Notice: if colatitude is loaded from a scenario never call adjust.
              Scenario may have an odd colatitude distribution and adjust will
 	     break it */
-  if (!game.map.server.alltemperate) {
+  if (!map.server.alltemperate) {
     adjust_int_map(temperature_map, MAX_COLATITUDE);
   }
   /* now simplify to 4 base values */ 
@@ -169,7 +169,7 @@ void create_tmap(bool real)
 
   log_debug("%stemperature map ({f}rozen, {c}old, {m}edium, {t}ropical):",
             real ? "real " : "");
-  for (i = 0; i < game.map.ysize; i++) {
+  for (i = 0; i < map.ysize; i++) {
     log_debug("%5d: %s", i, tmap_y2str(i));
   }
 }

@@ -9,7 +9,7 @@ To use different graphics with Freeciv, use the '--tiles' argument to
 the Freeciv client. Eg, to use the 'engels' graphics, start the
 client as:
   
-    freeciv-gtk3 --tiles engels
+    freeciv-gtk2 --tiles engels
 
 What Freeciv actually does in this case is look for a file called
 'engels.tilespec' somewhere in your Freeciv data path. (See the file
@@ -69,17 +69,15 @@ options include:
 
   Strings (enclosed in "")
   ------------------------
-  options               : A capability string, this should be "+Freeciv-a.b-tilespec", where
-                          "a.b" it the current freeciv version.
+  options               : A capability string, currently "+Freeciv-2.5-tilespec"
   name                  : the name of the tileset
   type                  : general type of tileset, different types have
                           quite different format. Supported types are
-                          "overhead" and "isometric"
+                          "overview" and "isometric"
   city_names_font       : an X font string
   city_productions_font : an X font string
   main_intro_file       : GFX file for the intro graphics
-  unit_default_orientation : Specifies a direction to use for unit types in
-                          worklists etc. See "Unit Sprites" below.
+  minimap_intro_file    : GFX file for the radar screen intro graphics
 
   String vectors
   --------------
@@ -99,51 +97,30 @@ options include:
                           height in isometric tileset
   small_tile_width      : the width of icon sprites
   small_tile_height     : the height of icon sprites
-  fog_style             : Specifies how fog is drawn.
-                          "Auto" :     Code automatically adds fog.
-                          "Sprite :    A single fog sprite is drawn on top of all
-                                       other sprites for fogged tiles. The
-                                       tx.fog sprite is used for this.
-                          "Darkness" : No fog, or fog from darkness_style = 4.
+  fogstyle              : Specifies how fog is drawn.
+                          0 : Code automatically adds fog.
+                          1 : A single fog sprite is drawn on top of all
+                              other sprites for fogged tiles. The
+                              tx.fog sprite is used for this.
+                          2 : No fog, or fog from darkness_style = 4.
   darkness_style        : Specifies how "encroaching darkness" is drawn.
-                          "None"           : No darkness.
-                          "IsoRect"        : A single sprite can be split into 4
-                                             parts, each containing the darkness
-                                             for that particular cardinal direction.
-                                             (Iso-view only.)
-                          "CardinalSingle" : Four different sprites exist, each
-                                             holding the darkness for a particular
-                                             direction. Any or all of the sprites
-                                             may be drawn.
-                          "CardinalFull"   : The sprite is chosen based on the vector
-                                             sum of the darkness in all 4 cardinal
-                                             directions. 15 different sprites are
-                                             needed.
-                          "Corner"         : Corner darkness & fog, 81 sprites needed.
+                          0 : No darkness.
+                          1 : A single sprite can be split into 4 parts, each
+                              containing the darkness for that particular
+                              cardinal direction. (Iso-view only.)
+                          2 : Four different sprites exist, each holding the
+                              darkness for a particular direction. Any or all
+                              of the sprites may be drawn.
+                          3 : The sprite is chosen based on the vector sum of
+                              the darkness in all 4 cardinal directions. 15
+                              different sprites are needed.
+                          4 : Corner darkness & fog, 81 sprites needed.
   unit_flag_offset_x   : Gives an offset from the tile origin at which to
   unit_flag_offset_y     draw flags behind units or cities. With isometric
   city_flag_offset_x     tilesets this should be non-zero so that the flag
   city_flag_offset_y     is placed correctly behind the unit/city.
-  occupied_offset_x    : Gives an offset form the tile origin at which to
-  occupied_offset_y      draw city occupied icon (in many tilesets placed above the flag)
   unit_offset_x        : Gives an offset from the tile origin at which to
   unit_offset_y          draw units.
-  activity_offset_x    : Gives an offset from the tile origin at which to
-  activity_offset_y      draw normal unit activity icons. "Auto" icons are not
-                         affected by this as they are usually wanted in different
-                         offset than real activity icons for both to appear simultaneously
-  unit_upkeep_offset_y : Gives an offset from the unit origin at which to draw
-                         the upkeep icons when they are shown along the unit. The upkeep
-                         icons can safely extend below the unit icon itself.
-                         If this value is omitted, normal tile height is used instead;
-                         - Upkeep icons appear below the unit icon if the unit icons are
-                           equal to tile height (typical in overhead tileset)
-                         - Upkeep icons overlay lower part of the unit icon, if unit icon
-                           is higher than tile height (typical in iso tilesets)
-  unit_upkeep_small_offset_y:
-                         Like unit_upkeep_offset_y, but to be used in case there's only small
-                         space for the overall icon produced. Defaults to unit_upkeep_offset_y -
-                         not having alternative layout.
   citybar_offset_y     : Gives an offset from city tile origin at which to
                          draw city bar text.
   hex_side             : When is_hex is specified (see is_hex, below), this
@@ -183,15 +160,13 @@ Terrain options:
 ----------------
 
 The top-level tilespec file also contains information on how to draw each
-terrain type.  For each terrain type include a section "[tile_xxx]".
-This section contains information on how to draw this terrain type.
-(The terrain types are specified in the server ruleset file.)
+terrain type.  For each terrain type include a section "tile_<terrain>"
+(e.g., "tile_plains"). This section contains information on how to draw
+this terrain type. (The terrain types are specified in the server ruleset
+file under the graphic and graphic_alt flags.)
 
   [tile_XXX] options
   ----------------
-  tag                   : Tag of the terrain this drawing information refers
-                          to. That must match the "graphic" or "graphic_alt"
-                          field given in the ruleset file.x
   blend_layer           : If non-zero, given layer of this terrain will be
                           blended with adjacent terrains. Blending is done
                           civ2-style with a dither mask. Only iso-view
@@ -199,6 +174,7 @@ This section contains information on how to draw this terrain type.
                           will be blended.
                           The blending mask has sprite t.dither_tile.
   is_reversed           : Draw layers in reverse order.
+  mine_sprite           : Mine sprite for this terrain.
   num_layers            : The number of layers in the terrain. This value
                           must be 1, 2 or 3. Each layer is drawn
                           separately. The layerN options below control the
@@ -240,33 +216,26 @@ more than 3 layers (either in this section or in the [tile_XXX] sections).
                            First letter of the match_type must be unique
                            within layer.
 
-  Extra options
+  Road options
   ------------
 
-  Tilespec should define style of extra graphics for each extra type in
-  section [extras] like:
+  Tilespec should define style of road graphics for each road type in
+  section [roads] like:
 
-  [extras]
+  [roads]
   styles =
-      { "name",          "style"
-        "road",          "RoadAllSeparate"
-        "rail",          "RoadAllSeparate"
-        "river",         "River"
-        "tx.irrigation", "Cardinals"
+      { "name", "style"
+        "road", "AllSeparate"
+        "rail", "AllSeparate"
       }
 
-  RoadAllSeparate    : A single sprite is drawn for every connection the tile has;
-                       only 8 sprites are needed.
-  RoadParityCombined : A single sprite is drawn for all cardinal connections and
-                       a second sprite is drawn for all diagonal connections;
-                       32 sprites are needed.
-  RoadAllCombined    : One sprite is drawn to show roads in all directions.
-                       There are thus 256 sprites (64 for a hex tileset).
-  River              : Cardinal connections are drawn, as well as delta at the coast
-  Single1            : Single sprite at layer Special1
-  Single2            : Single sprite at layer Special2
-  3Layer             : 3 Sprites, tagged <name>_bg, <name>_mg, and <name>_fg
-  Cardinals          : Sprite for each cardinal connection
+  AllSeparate    : A single sprite is drawn for every connection the tile has;
+                   only 8 sprites are needed.
+  ParityCombined : A single sprite is drawn for all cardinal connections and
+                   a second sprite is drawn for all diagonal connections;
+                   32 sprites are needed.
+  AllCombined    : One sprite is drawn to show roads in all directions.
+                   There are thus 256 sprites (64 for a hex tileset).
 
 ----------------------------------------------------------------------
 Individual spec files:
@@ -292,9 +261,7 @@ x_top_left     : x-coordinate of the leftmost pixel of the leftomost cell
 y_top_left     : y-coordinate of the topmost pixel of the topmost cell
 dx             : cell width
 dy             : cell height
-pixel_border   : Number of pixels between cells, unless overridden by axis specific value
-pixel_border_x : Number of pixels between cells in x-direction, overrides pixel_border
-pixel_border_y : Number of pixels between cells in y-direction, overrides pixel_border
+pixel_border   : Number of pixels between cells
 tiles          : Table of tags, each line having "row", "column", and "tag"
 
 [grid_example]
@@ -501,35 +468,8 @@ sprites.
     and irrigation. Additionally, there is support for drawing continuous
     farmland and irrigation (as is used in Civ3). Here there are 16
     irrigation sprites (and the same for farmland), starting with
-    tx.irrigation_n0s0e0w0 and running through tx.irrigation_n1s1e1w1.
+    tx.s_irrigation_n0s0e0w0 and running through tx.s_irrigation_n1s1e1w1.
     An appropriate sprite will be chosen depending on which adjacent tiles
     also have farmland/irrigation. If any of these sprites are not present,
     the default sprite will be used as a fallback.
 
-  Unit Sprites
-  ------------
-
-    Units sprites can be either unoriented or oriented, in which case the
-    sprite that is displayed depends on the direction the unit is facing (it
-    turns when it moves or fights).
-
-    Unoriented sprites are specified as 'u.phalanx'. Oriented sprites have
-    a direction suffix: 'u.phalanx_s', 'u.phalanx_nw' and so on.
-    For each unit type, either an unoriented sprite or a full set of
-    the oriented sprites needed for the tileset topology must be provided
-    (you can also provide both, see below).
-
-    The game sometimes needs to draw a sprite for a unit type that doesn't
-    correspond to a specific unit, so is not facing a particular direction.
-    There are several options for oriented tilesets:
-
-     - If the unit_default_orientation is specified for the tileset, the
-       game will by default use that directional sprite. (The direction
-       doesn't have to be a valid one for the tileset.)
-
-     - Specific unit types may override this by providing an unoriented
-       sprite as well as the oriented ones; this doesn't have to be
-       distinct, so it can point to one of the oriented sprites, allowing
-       choice of the best orientation for each individual unit type.
-       If unit_default_orientation is not specified, an unoriented sprite
-       must be specified for *every* unit.

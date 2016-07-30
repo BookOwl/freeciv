@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -125,7 +125,7 @@ tiles = { "row", "column","tag"
  12, 8, "road.rail_nw"
 
 ;add-ons
- 2, 7, "tx.oil_mine", "tx.oil_rig"
+ 2, 7, "tx.oil_mine" 
  4, 7, "tx.farmland"
  3, 7, "tx.irrigation"
  5, 7, "tx.mine"
@@ -152,11 +152,6 @@ tiles = { "row", "column","tag"
   0, 3, "t.blend.ocean"
   0, 4, "user.attention"
   0, 5, "tx.fog"
-
-  1, 0, "path.step"            ; turn boundary within path
-  1, 1, "path.exhausted_mp"    ; tip of path, no MP left
-  1, 2, "path.normal"          ; tip of path with MP remaining
-  1, 3, "path.waypoint"
 }
 
 

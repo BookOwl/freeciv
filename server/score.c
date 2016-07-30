@@ -25,7 +25,6 @@
 #include "shared.h"
 
 /* common */
-#include "culture.h"
 #include "game.h"
 #include "improvement.h"
 #include "map.h"
@@ -249,8 +248,7 @@ static void get_player_landarea(struct claim_map *pcmap,
 **************************************************************************/
 void calc_civ_score(struct player *pplayer)
 {
-  const struct research *presearch;
-  struct city *wonder_city;
+  struct city *pcity;
   int landarea = 0, settledarea = 0;
   static struct claim_map cmap;
 
@@ -274,7 +272,6 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.mfg = 0;
   pplayer->score.literacy = 0;
   pplayer->score.spaceship = 0;
-  pplayer->score.culture = player_culture(pplayer);
 
   if (is_barbarian(pplayer)) {
     return;
@@ -308,13 +305,12 @@ void calc_civ_score(struct player *pplayer)
   pplayer->score.landarea = landarea;
   pplayer->score.settledarea = settledarea;
 
-  presearch = research_get(pplayer);
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_state(presearch, i) == TECH_KNOWN) {
+    if (player_invention_state(pplayer, i) == TECH_KNOWN) {
       pplayer->score.techs++;
     }
   } advance_index_iterate_end;
-  pplayer->score.techs += research_get(pplayer)->future_tech * 5 / 2;
+  pplayer->score.techs += player_research_get(pplayer)->future_tech * 5 / 2;
   
   unit_list_iterate(pplayer->units, punit) {
     if (is_military_unit(punit)) {
@@ -324,8 +320,8 @@ void calc_civ_score(struct player *pplayer)
 
   improvement_iterate(i) {
     if (is_great_wonder(i)
-        && (wonder_city = city_from_great_wonder(i))
-        && player_owns_city(pplayer, wonder_city)) {
+        && (pcity = city_from_great_wonder(i))
+        && player_owns_city(pplayer, pcity)) {
       pplayer->score.wonders++;
     }
   } improvement_iterate_end;
@@ -355,8 +351,7 @@ int get_civ_score(const struct player *pplayer)
           + pplayer->score.techs * 2
           + pplayer->score.wonders * 5
           + get_spaceship_score(pplayer)
-          + get_units_score(pplayer)
-          + pplayer->score.culture / 50);
+          + get_units_score(pplayer));
 }
 
 /**************************************************************************

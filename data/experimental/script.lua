@@ -14,13 +14,13 @@
 -- file called 'default.lua'. The one loaded if your ruleset
 -- does not provide an override is default/default.lua.
 
--- This is the experimental ruleset. See README.experimental
+-- This is the experimental ruleset. See doc/README.ruleset_experimental
 -- for a detailed description.
 
 
 -- Place Ruins at the location of the destroyed city.
 function city_destroyed_callback(city, loser, destroyer)
-  city.tile:create_extra("Ruins", NIL)
+  city.tile:create_base("Ruins", NIL)
   -- continue processing
   return false
 end

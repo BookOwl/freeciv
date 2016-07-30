@@ -1,14 +1,13 @@
 [soundspec]
 ; Format and options of this spec file:
-options = "+Freeciv-2.6-soundset"
+options = "+soundspec"
 
 [info]
 artists = "\
  FreeCol - [fcol]\
  OpenQuartz - Ali Jackson (alister667@hotmail.com) [ali]\
  OpenQuartz - Frank Condello (pox@planetquake.com) [pox]\
- Warzone - Eidos Entertainment (GPL release) [warzone]\
- Eskapada - eskapada@o2.pl (Public Domain) [jt]"
+ Warzone - Eidos Entertainment (GPL release) [warzone]"
 
 ; For a list of tags used see README.sound, buildings.ruleset and
 ; units.ruleset.
@@ -194,7 +193,7 @@ m_trireme = "stdsounds/inh2o.ogg" ; [pox]
 ;w_womens_suffrage = ""
 
 
-; This list contains all events up to E_DEPRECATION_WARNING
+; This list contains all events up to E_DISASTER
 ; (as numbered in common/events.h), in the sorted order.
 ; Alphabetical sorting is based on these tag names,
 ; as the message names and contents change. {was}
@@ -227,7 +226,6 @@ e_bad_command = "stdsounds/illegal.ogg" ; [fcol]
 ;e_city_plague = ""
 ;e_civil_war = ""
 ;e_connection = ""
-;e_deprecation_warning = ""
 ;e_destroyed = ""
 ;e_diplomacy = ""
 ;e_diplomatic_incident = ""
@@ -238,9 +236,6 @@ e_bad_command = "stdsounds/illegal.ogg" ; [fcol]
 ;e_enemy_diplomat_poison = ""
 ;e_enemy_diplomat_sabotage = ""
 ;e_enemy_diplomat_theft = ""
-;e_enemy_spy_steal_gold = ""
-;e_enemy_spy_steal_map = ""
-;e_enemy_spy_nuke = ""
 ;e_first_contact = ""
 ;e_game_end = ""
 ;e_game_start = ""
@@ -270,9 +265,6 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_my_diplomat_poison = ""
 ;e_my_diplomat_sabotage = ""
 ;e_my_diplomat_theft = ""
-;e_my_spy_steal_gold = ""
-;e_my_spy_steal_map = ""
-;e_my_spy_nuke = ""
 ;e_nation_selected = ""
 ;e_new_government = ""
 ;e_next_year = ""
@@ -283,11 +275,9 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_revolt_start = ""
 ;e_setting = ""
 ;e_spaceship = ""
-;e_tech_embassy = ""
 ;e_tech_gain = ""
 ;e_tech_goal = ""
 ;e_tech_learned = ""
-;e_tech_lost = ""
 ;e_treaty_alliance = ""
 ;e_treaty_broken = ""
 ;e_treaty_ceasefire = ""
@@ -300,7 +290,6 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_unit_built = ""
 ;e_unit_built_pop_cost = ""
 ;e_unit_buy = ""
-;e_unit_action_failed
 ;e_unit_lost_def = ""
 ;e_unit_lost_att = ""
 ;e_unit_lost_misc = ""
@@ -309,11 +298,8 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_unit_upgraded = ""
 ;e_unit_win = ""
 ;e_unit_win_att = ""
-;e_unit_did_expel = ""
-;e_unit_was_expelled = ""
 ;e_uprising = ""
 ;e_disaster = ""
-;e_achievement = ""
 ;e_vote_new = ""
 ;e_vote_resolved = ""
 ;e_vote_aborted = ""
@@ -323,10 +309,8 @@ e_log_fatal = "stdsounds/LrgExpl.ogg" ; [warzone]
 ;e_wonder_stopped = ""
 ;e_wonder_will_be_built = ""
 ;e_worklist = ""
-;e_unit_illegal_action = ""
-;e_spontaneous_extra = ""
-;e_unit_escaped = ""
 
-; Those pseudo-events are only used in the sound system.
+; This pseudo-event is only used in the sound system.
 ;e_game_quit = ""
-e_player_wake = "stdsounds/wakeup.ogg" ; [jt]
+
+;music_start = ""

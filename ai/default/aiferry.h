@@ -20,8 +20,7 @@
 struct pf_path;
 struct pft_amphibious;
 
-bool dai_is_ferry_type(struct unit_type *pferry, struct ai_type *ait);
-bool dai_is_ferry(struct unit *pferry, struct ai_type *ait);
+bool dai_is_ferry(struct unit *pferry);
 
 /* 
  * Initialize ferrybaot-related statistics in the ai data.

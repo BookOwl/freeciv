@@ -23,7 +23,7 @@ ruler_titles = {
 
 flag="grenada"
 flag_alt = "united_kingdom"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -304,7 +304,6 @@ void update_intel_dialog(struct player *p)
   struct intel_dialog *pdialog = get_intel_dialog(p);
 
   if (pdialog) {
-    const struct research *mresearch, *presearch;
     GtkTreeIter diplstates[DS_LAST];
     int i;
 
@@ -323,7 +322,7 @@ void update_intel_dialog(struct player *p)
 
       gtk_tree_store_append(pdialog->diplstates, &it, NULL);
       g_value_init(&v, G_TYPE_STRING);
-      g_value_set_static_string(&v, diplstate_type_translated_name(i));
+      g_value_set_static_string(&v, diplstate_text(i));
       gtk_tree_store_set_value(pdialog->diplstates, &it, 0, &v);
       g_value_unset(&v);
       diplstates[i] = it;
@@ -349,20 +348,16 @@ void update_intel_dialog(struct player *p)
     /* techs tab. */
     gtk_list_store_clear(pdialog->techs);
 
-    mresearch = research_get(client_player());
-    presearch = research_get(p);
-    advance_index_iterate(A_FIRST, advi) {
-      if (research_invention_state(presearch, advi) == TECH_KNOWN) {
-        GtkTreeIter it;
+    advance_index_iterate(A_FIRST, i) {
+      if(player_invention_state(p, i)==TECH_KNOWN) {
+	GtkTreeIter it;
 
-        gtk_list_store_append(pdialog->techs, &it);
+	gtk_list_store_append(pdialog->techs, &it);
 
-        gtk_list_store_set(pdialog->techs, &it,
-                           0, research_invention_state(mresearch, advi)
-                           != TECH_KNOWN,
-                           1, research_advance_name_translation(presearch,
-                                                                advi),
-                           -1);
+	gtk_list_store_set(pdialog->techs, &it,
+			   0, (TECH_KNOWN != player_invention_state(client.conn.playing, i)),
+			   1, advance_name_for_player(p, i),
+			   -1);
       }
     } advance_index_iterate_end;
 
@@ -384,7 +379,7 @@ void update_intel_dialog(struct player *p)
         case LABEL_CAPITAL:
           pcity = player_capital(p);
           /* TRANS: "unknown" location */
-          buf = g_strdup((!pcity) ? _("(unknown)") : city_name_get(pcity));
+          buf = g_strdup((!pcity) ? _("(unknown)") : city_name(pcity));
           break;
         case LABEL_GOLD:
           buf = g_strdup_printf("%d", p->economic.gold);
@@ -400,7 +395,7 @@ void update_intel_dialog(struct player *p)
           break;
         case LABEL_RESEARCHING:
           {
-            struct research *research = research_get(p);
+            struct player_research *research = player_research_get(p);
 
             switch (research->researching) {
             case A_UNKNOWN:
@@ -413,9 +408,8 @@ void update_intel_dialog(struct player *p)
               break;
             default:
               buf = g_strdup_printf("%s(%d/%d)",
-                                    research_advance_name_translation
-                                        (research, research->researching),
-                                    research->bulbs_researched,
+				    advance_name_researching(p),
+				    research->bulbs_researched,
                                     research->client.researching_cost);
               break;
             }

@@ -107,14 +107,6 @@ cat <<EOF
   CreateShortCut "\$SMPROGRAMS\\\$STARTMENU_FOLDER\Freeciv.lnk" "\$INSTDIR\freeciv-\${GUI_ID}.cmd" "\$DefaultLanguageCode" "\$INSTDIR\freeciv-\${GUI_ID}.exe" 0 SW_SHOWMINIMIZED
   CreateShortCut "\$SMPROGRAMS\\\$STARTMENU_FOLDER\Freeciv Server.lnk" "\$INSTDIR\freeciv-server.cmd" "\$DefaultLanguageCode" "\$INSTDIR\freeciv-server.exe" 0 SW_SHOWMINIMIZED
   CreateShortCut "\$SMPROGRAMS\\\$STARTMENU_FOLDER\Freeciv Modpack Installer.lnk" "\$INSTDIR\freeciv-mp-\${GUI_ID}.cmd" "\$DefaultLanguageCode" "\$INSTDIR\freeciv-mp-\${GUI_ID}.exe" 0 SW_SHOWMINIMIZED
-EOF
-
-if test "x$3" = "xqt" ; then
-    echo "CreateShortCut \"\$SMPROGRAMS\\\$STARTMENU_FOLDER\Freeciv Ruleset Editor.lnk\" \"\$INSTDIR\freeciv-ruledit.cmd\" \"\$DefaultLanguageCode\" \"\$INSTDIR\freeciv-ruledit.exe\" 0 SW_SHOWMINIMIZED"
-fi
-
-cat <<EOF
-
   CreateShortCut "\$SMPROGRAMS\\\$STARTMENU_FOLDER\Uninstall.lnk" "\$INSTDIR\uninstall.exe"
   CreateShortCut "\$SMPROGRAMS\\\$STARTMENU_FOLDER\Website.lnk" "\$INSTDIR\Freeciv.url"
   !insertmacro MUI_STARTMENU_WRITE_END
@@ -163,16 +155,16 @@ EOF
 ### additional languages ###
 
 cat <<EOF
-SectionGroup "Additional languages (translation %)"
+SectionGroup "Additional languages"
 
 EOF
 
-cat ../../bootstrap/langstat_core.txt |
+cat ../../bootstrap/langnames.txt |
 sort -k 2 |
-while read -r code prct name
+while read -r code name
 do
 if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-echo "  Section \"$name ($code) $prct\""
+echo "  Section \"$name ($code)\""
 echo "  SetOutPath \$INSTDIR\\share\\locale\\$code"
 echo "  File /r $1\\share\\locale\\$code\*.*"
 echo "  SetOutPath \$INSTDIR"
@@ -227,12 +219,12 @@ Start Menu shortcut properties."
   \${NSD_CB_AddString} \$DefaultLanguageDropList "US English (en_US)"
 EOF
 
-  cat ../../bootstrap/langstat_core.txt |
+  cat ../../bootstrap/langnames.txt |
   sort -k 2 |
-  while read -r code prct name
+  while read -r code name
   do
   if test -e $1/share/locale/$code/LC_MESSAGES/freeciv.mo; then
-  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$name ($code) $prct\""
+  echo "  \${NSD_CB_AddString} \$DefaultLanguageDropList \"$name ($code)\""
   fi
   done
 
@@ -251,10 +243,10 @@ EOF
   echo "    StrCpy \$DefaultLanguageCode \"en_US\""
   echo "  \${EndIf}"
 
-  cat ../../bootstrap/langstat_core.txt |
-  while read -r code prct name
+  cat ../../bootstrap/langnames.txt |
+  while read -r code name
   do
-    echo "  \${If} \$LangName == \"$name ($code) $prct\""
+    echo "  \${If} \$LangName == \"$name ($code)\""
     echo "    StrCpy \$DefaultLanguageCode \"$code\""
     echo "  \${EndIf}"
   done

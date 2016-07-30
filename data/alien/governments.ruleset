@@ -13,8 +13,7 @@
 
 [datafile]
 description="Alien World governments data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [governments]
 during_revolution = "Anarchy"
@@ -23,33 +22,35 @@ during_revolution = "Anarchy"
 ;
 ; Below: The individual government types, one per section.
 ;
-; The actual tag used (the * in [government_*]) does not matter, except
-; it must be unique within this file, and it may be used in debug
+; The actual tag used (the * in [government_*]) does not matter, except 
+; it must be unique within this file, and it may be used in debug 
 ; output when reading this file.
 ;
 ; For the "official" rulesets, the order of these sections should not
-; be changed because that would break backward compatability with
+; be changed because that would break backward compatability with 
 ; savegames.  (In particular, if Fundamentalism is added to default
 ; ruleset, should be added at end.)
 ;
 ; Notes on fields:
-;
-; name         = translatable name as seen by user
-; rule_name    = (optional) name for savegames, rulesets etc; if not
-;                present, 'name' is used. Since the name used in savegames
-;                must not change, use this when renaming a government after a
-;                ruleset has been released.
-; reqs         = requirements for this government (see README.effects)
-; graphic      = tag specifing preferred graphic
-; graphic_alt  = alternate graphics tag if preferred is not found;
-;                should be a standard tag if preferred is not;
-;                otherwise may be "-"
-; ai_better    = AI will not consider this government for use if the
-;                government listed here is available
-; ruler_titles = ruler titles by nation, "-" is default, and non-matched
-;                nations are ignored
-; helptext     = optional help text string; should escape all raw newlines
-;                so that xgettext parsing works
+
+; name        = translatable name as seen by user
+; rule_name   = (optional) name for savegames, rulesets etc; if not
+;               present, 'name' is used. Since the name used in savegames
+;               must not change, use this when renaming a government after a
+;               ruleset has been released.
+; reqs        = requirements for this government (see README.effects)
+; graphic     = tag specifing preferred graphic
+; graphic_alt = alternate graphics tag if preferred is not found;
+;               should be a standard tag if preferred is not;
+;		otherwise may be "-"
+; ai_better   = AI will not consider this government for use if the
+;               government listed here is available
+
+; ruler_titles = ruler titles by nation, "-" is default, and non-matched 
+;	         nations are ignored 
+
+; helptext = optional help text string; should escape all raw newlines 
+;	     so that xgettext parsing works
 ;
 ; */ <-- avoid gettext warnings
 
@@ -82,7 +83,6 @@ graphic_alt = "-"
 ruler_male_title = _("Leader %s")
 ruler_female_title = _("?female:Leader %s")
 
-; /* xgettext:no-c-format */
 helptext = _("\
 This is the only available form of government in the beginning.\n\n\
 Max tax/science/lux rate is 40%.\
@@ -102,7 +102,6 @@ graphic_alt = "-"
 ruler_male_title = _("Comrade %s")
 ruler_female_title = _("?female:Comrade %s")
 
-; /* xgettext:no-c-format */
 helptext = _("\
 Government type for military might.\n\n\
 Max tax/science/lux rate is 60%.\n\n\
@@ -123,7 +122,6 @@ graphic_alt = "-"
 ruler_male_title = _("President %s")
 ruler_female_title = _("?female:President %s")
 
-; /* xgettext:no-c-format */
 helptext = _("\
 Government type of freedom.\n\n\
 Max tax/science/lux rate is 70%.\n\n\
@@ -144,7 +142,6 @@ graphic_alt = "gov.monarchy"
 ruler_male_title = _("Comrade %s")
 ruler_female_title = _("?female:Comrade %s")
 
-; /* xgettext:no-c-format */
 helptext = _("\
 Government type for military might for both humans and aliens alike.\n\n\
 Max tax/science/lux rate is 80%.\n\n\
@@ -165,32 +162,8 @@ graphic_alt = "gov.republic"
 ruler_male_title = _("President %s")
 ruler_female_title = _("?female:President %s")
 
-; /* xgettext:no-c-format */
 helptext = _("\
 Government type of freedom for both humans and aliens alike.\n\n\
 Max tax/science/lux rate is 90%.\n\n\
 Dual Democracy gains 40% trade bonus, and 20% production bonus.\
 ")
-
-; /* <-- avoid gettext warnings
-;
-; Multipliers (aka policies)
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for savegames, rulesets etc; if not
-;                           present, 'name' is used. Since the name used in
-;                           savegames must not change, use this when renaming
-;                           a multiplier after a ruleset has been released.
-; default                 = default value (as presented in UI)
-; start                   = minimum value (as presented in UI)
-; stop                    = maximum value (as presented in UI)
-; step                    = minimum increase/decrease (as presented in UI)
-; offset                  = offset/factor control how UI values are turned
-; factor                  = into effect values for use in effects.ruleset.
-;                           effect_value = (ui_value + offset) * (factor/100)
-;                           Optional; by default offset=0, factor=100, so
-;                           that UI values are used as-is.
-; helptext                = optional help text string; should escape all raw
-;                           newlines so that xgettext parsing works
-;
-; */ <-- avoid gettext warnings

@@ -19,12 +19,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>
 #endif
 
 /* utility */
-#include "deprecations.h"
 #include "fcbacktrace.h"
 #include "fciconv.h"
 #include "fcintl.h"
@@ -43,7 +42,7 @@
 static bool console_show_prompt = FALSE;
 static bool console_prompt_is_showing = FALSE;
 static bool console_rfcstyle = FALSE;
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
 static bool readline_received_enter = TRUE;
 #else
 static int con_dump(enum rfc_status rfc_status, const char *message, ...);
@@ -88,20 +87,19 @@ Print the prompt if it is not the last thing printed.
 ************************************************************************/
 static void con_update_prompt(void)
 {
-  if (console_prompt_is_showing || !console_show_prompt) {
+  if (console_prompt_is_showing || !console_show_prompt)
     return;
-  }
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
   if (readline_received_enter) {
     readline_received_enter = FALSE;
   } else {
     rl_forced_update_display();
   }
-#else  /* FREECIV_HAVE_LIBREADLINE */
+#else  /* HAVE_LIBREADLINE */
   con_dump(C_READY,"> ");
   con_flush();
-#endif /* FREECIV_HAVE_LIBREADLINE */
+#endif /* HAVE_LIBREADLINE */
 
   console_prompt_is_showing = TRUE;
 }
@@ -134,14 +132,6 @@ static const char *log_prefix(void)
 #endif /* DEBUG */
 
 /************************************************************************
-  Deprecation warning callback to send event to clients.
-************************************************************************/
-static void depr_warn_callback(const char *msg)
-{
-  notify_conn(NULL, NULL, E_DEPRECATION_WARNING, ftc_warning, "%s", msg);
-}
-
-/************************************************************************
   Initialize logging via console.
 ************************************************************************/
 void con_log_init(const char *log_filename, enum log_level level,
@@ -155,7 +145,6 @@ void con_log_init(const char *log_filename, enum log_level level,
            fatal_assertions);
 #endif /* DEBUG */
   backtrace_init();
-  deprecation_warn_cb_set(depr_warn_callback);
 }
 
 /************************************************************************
@@ -168,7 +157,7 @@ void con_log_close(void)
   log_close();
 }
 
-#ifndef FREECIV_HAVE_LIBREADLINE
+#ifndef HAVE_LIBREADLINE
 /************************************************************************
 Write to console without line-break, don't print prompt.
 ************************************************************************/
@@ -192,7 +181,7 @@ static int con_dump(enum rfc_status rfc_status, const char *message, ...)
   console_prompt_is_showing = FALSE;
   return (int) strlen(buf);
 }
-#endif /* FREECIV_HAVE_LIBREADLINE */
+#endif /* HAVE_LIBREADLINE */
 
 /************************************************************************
 Write to console and add line-break, and show prompt if required.
@@ -299,7 +288,7 @@ User pressed enter: will need a new prompt
 void con_prompt_enter(void)
 {
   console_prompt_is_showing = FALSE;
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
   readline_received_enter = TRUE;
 #endif
 }
@@ -310,7 +299,7 @@ Clear "user pressed enter" state (used in special cases).
 void con_prompt_enter_clear(void)
 {
   console_prompt_is_showing = TRUE;
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
   readline_received_enter = FALSE;
 #endif
 }

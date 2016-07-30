@@ -6,7 +6,7 @@
 ; The first set defined is the one that is used by default. It is mandatory
 ; to have at least one, but if there is only one, it will be kept out of
 ; the user`s way.
-; name          = Translatable name of the set presented in the UI.
+; name 		= Translatable name of the set presented in the UI.
 ; rule_name     = Unique persistent name; this is also visible to users as
 ;                 the value of the "nationset" server option, and presented
 ;                 in "/list nationsets". It should thus be short, in lower
@@ -47,13 +47,10 @@ than English.\
 
 ; Descriptions of nation groups
 ; These are more cosmetic than sets; they affect the "pick nation" dialog,
-; random nation selection, and possibly ruleset behaviour.
+; and also affect random nation selection.
 ; It`s OK to not define any nation groups at all.
-; name          = name of the group (used adjectivally)
-; hidden        = TRUE to not include this group in the "pick nation" dialog
-;                 (for instance if it`s for use in a NationGroup requirement).
-;                 Default FALSE.
-; match         = How much the AI will try to select a nation in the same
+; name 		= name of the group
+; match		= How much the AI will try to select a nation in the same
 ;                 group
 
 [ngroup_ancient]
@@ -86,10 +83,6 @@ match=0
 [ngroup_imaginary]
 name=_("?nationgroup:Imaginary")
 match=2
-[ngroup_barbarian]
-name=_("?nationgroup:Barbarian")
-match=0
-hidden=true
 
 [compatibility]
 
@@ -99,16 +92,13 @@ hidden=true
 ; do not have some of them (if a referenced game identifier is not on these
 ; lists, it will cause an error, to allow typos to be spotted)
 
-; Nations can specify terrain types and river for "natural" city names.
-
 allowed_govs =
   "Anarchy", "Despotism", "Monarchy", "Communism", "Fundamentalism",
   "Republic", "Democracy"
 allowed_terrains =
   "Lake", "Ocean", "Desert", "Forest", "Grassland", "Hills", "Jungle",
-  "Mountains", "Plains", "Swamp", "Tundra", "Glacier", "Deep Ocean",
-  "River"
-allowed_styles =
+  "Mountains", "Plains", "Swamp", "Tundra", "Glacier", "River"
+allowed_city_styles =
   "European", "Classical", "Tropical", "Asian", "Babylonian", "Celtic"
 
 ; Every nation is a member of the "extended" set (no need to specify in
@@ -117,8 +107,7 @@ default_nationset = "all"
 
 ; Below: nations data loaded from ruleset files for
 ; all nations available. If you want to have more
-; nations, just add the path to your ruleset to this list or
-; add them to local override/nation.ruleset included in the end.
+; nations, just add the path to your ruleset to this list.
 ;
 ; See doc/README.nations for information on how to
 ; create nation rulesets, including style guidelines.
@@ -172,6 +161,7 @@ default_nationset = "all"
 *include "nation/bahraini.ruleset"
 *include "nation/bangladeshi.ruleset"
 *include "nation/barbadian.ruleset"
+*include "nation/barbarian.ruleset"
 *include "nation/bashkir.ruleset"
 *include "nation/basque.ruleset"
 *include "nation/bavarian.ruleset"
@@ -512,6 +502,7 @@ default_nationset = "all"
 *include "nation/phrygian.ruleset"
 *include "nation/pictish.ruleset"
 *include "nation/piedmontese.ruleset"
+*include "nation/pirate.ruleset"
 *include "nation/polish.ruleset"
 *include "nation/polynesian.ruleset"
 *include "nation/pontic.ruleset"
@@ -678,5 +669,3 @@ default_nationset = "all"
 *include "nation/zhuang.ruleset"
 *include "nation/zimbabwean.ruleset"
 *include "nation/zulu.ruleset"
-
-*include "override/nation.ruleset"

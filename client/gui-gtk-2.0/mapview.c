@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -99,16 +99,10 @@ void update_timeout_label(void)
 {
   gtk_label_set_text(GTK_LABEL(timeout_label), get_timeout_label_text());
 
-  if (current_turn_timeout() > 0) {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Time to forced turn change,\n"
-                                  "or estimated time to finish turn change "
-                                  "processing."));
+  if (client_current_turn_timeout() > 0) {
+    gtk_widget_set_tooltip_text(timeout_label, _("Time to forced turn change"));
   } else {
-    gtk_widget_set_tooltip_text(timeout_label,
-                                _("Turn timeout disabled.\n"
-                                  "Between turns this shows estimated time "
-                                  "to finish turn change processing."));
+    gtk_widget_set_tooltip_text(timeout_label, _("Turn timeout disabled"));
   }
 }
 
@@ -149,7 +143,7 @@ void update_info_label(void)
   }
 
   gtk_label_set_text(GTK_LABEL(main_label_info),
-                     get_info_label_text(!gui_options.gui_gtk2_small_display_layout));
+                     get_info_label_text(!gui_gtk2_small_display_layout));
 
   set_indicator_icons(client_research_sprite(),
 		      client_warming_sprite(),
@@ -301,8 +295,7 @@ void get_overview_area_dimensions(int *width, int *height)
 void overview_size_changed(void)
 {
   gtk_widget_set_size_request(overview_canvas,
-                              gui_options.overview.width,
-                              gui_options.overview.height);
+			      overview.width, overview.height);
   update_map_canvas_scrollbars_size();
 }
 
@@ -382,7 +375,7 @@ gboolean map_canvas_configure(GtkWidget *w, GdkEventConfigure *ev,
 **************************************************************************/
 gboolean map_canvas_expose(GtkWidget *w, GdkEventExpose *ev, gpointer data)
 {
-  if (can_client_change_view() && !map_is_empty() && !mapview_is_frozen()) {
+  if (can_client_change_view() && map_exists() && !mapview_is_frozen()) {
     /* First we mark the area to be updated as dirty.  Then we unqueue
      * any pending updates, to make sure only the most up-to-date data
      * is written (otherwise drawing bugs happen when old data is copied
@@ -526,7 +519,7 @@ void put_unit_gpixmap(struct unit *punit, GtkPixcomm *p)
   gtk_pixcomm_freeze(p);
   gtk_pixcomm_clear(p);
 
-  put_unit(punit, &canvas_store, 1.0, 0, 0);
+  put_unit(punit, &canvas_store, 0, 0);
 
   gtk_pixcomm_thaw(p);
 }
@@ -685,18 +678,18 @@ void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
     return;
   }
 
-  if (fog && gui_options.gui_gtk2_better_fog
+  if (fog && gui_gtk2_better_fog
       && ((ssprite->pixmap && !ssprite->pixmap_fogged)
 	  || (!ssprite->pixmap && !ssprite->pixbuf_fogged))) {
     fog_sprite(ssprite);
     if ((ssprite->pixmap && !ssprite->pixmap_fogged)
         || (!ssprite->pixmap && !ssprite->pixbuf_fogged)) {
       log_normal(_("Better fog will only work in truecolor. Disabling it"));
-      gui_options.gui_gtk2_better_fog = FALSE;
+      gui_gtk2_better_fog = FALSE;
     }
   }
 
-  if (fog && gui_options.gui_gtk2_better_fog) {
+  if (fog && gui_gtk2_better_fog) {
     if (ssprite->pixmap) {
       if (ssprite->mask) {
 	gdk_gc_set_clip_origin(civ_gc, canvas_x, canvas_y);
@@ -742,7 +735,7 @@ void pixmap_put_overlay_tile_draw(GdkDrawable *pixmap,
 **************************************************************************/
 void put_cross_overlay_tile(struct tile *ptile)
 {
-  float canvas_x, canvas_y;
+  int canvas_x, canvas_y;
 
   if (tile_to_canvas_pos(&canvas_x, &canvas_y, ptile)) {
     pixmap_put_overlay_tile(map_canvas->window,
@@ -790,8 +783,7 @@ void update_map_canvas_scrollbars(void)
 **************************************************************************/
 void update_map_canvas_scrollbars_size(void)
 {
-  float xmin, ymin, xmax, ymax;
-  int xsize, ysize, xstep, ystep;
+  int xmin, ymin, xmax, ymax, xsize, ysize, xstep, ystep;
 
   get_mapview_scroll_window(&xmin, &ymin, &xmax, &ymax, &xsize, &ysize);
   get_mapview_scroll_step(&xstep, &ystep);
@@ -889,7 +881,7 @@ void tileset_changed(void)
   editgui_tileset_changed();
 
   /* keep the icon of the executable on Windows (see PR#36491) */
-#ifndef FREECIV_MSWINDOWS
+#ifndef WIN32_NATIVE
   gtk_window_set_icon(GTK_WINDOW(toplevel),
 		sprite_get_pixbuf(get_icon_sprite(tileset, ICON_FREECIV)));
 #endif

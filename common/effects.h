@@ -17,15 +17,12 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
 #include "support.h"            /* bool type */
-
-/* common */
-#include "connection.h"
 #include "fc_types.h"
-#include "multipliers.h"
 
-#include "requirements.h"
+#include "connection.h"
+
+struct requirement;
 
 /* Type of effects. Add new values via SPECENUM_VALUE%d and
  * SPECENUM_VALUE%dNAME at the end of the list.
@@ -91,87 +88,87 @@ extern "C" {
 /* TODO: EFT_POLLU_POP_ADJ */
 #define SPECENUM_VALUE24 EFT_POLLU_POP_PCT
 #define SPECENUM_VALUE24NAME "Pollu_Pop_Pct"
-#define SPECENUM_VALUE25 EFT_POLLU_POP_PCT_2
-#define SPECENUM_VALUE25NAME "Pollu_Pop_Pct_2"
 /* TODO: EFT_POLLU_PROD_ADJ */
-#define SPECENUM_VALUE26 EFT_POLLU_PROD_PCT
-#define SPECENUM_VALUE26NAME "Pollu_Prod_Pct"
+#define SPECENUM_VALUE25 EFT_POLLU_PROD_PCT
+#define SPECENUM_VALUE25NAME "Pollu_Prod_Pct"
 /* TODO: EFT_PROD_PCT */
-#define SPECENUM_VALUE27 EFT_REVEAL_CITIES
-#define SPECENUM_VALUE27NAME "Reveal_Cities"
-#define SPECENUM_VALUE28 EFT_REVEAL_MAP
-#define SPECENUM_VALUE28NAME "Reveal_Map"
+#define SPECENUM_VALUE26 EFT_REVEAL_CITIES
+#define SPECENUM_VALUE26NAME "Reveal_Cities"
+#define SPECENUM_VALUE27 EFT_REVEAL_MAP
+#define SPECENUM_VALUE27NAME "Reveal_Map"
 /* TODO: EFT_INCITE_DIST_ADJ */
-#define SPECENUM_VALUE29 EFT_INCITE_COST_PCT
-#define SPECENUM_VALUE29NAME "Incite_Cost_Pct"
-#define SPECENUM_VALUE30 EFT_SIZE_ADJ
-#define SPECENUM_VALUE30NAME "Size_Adj"
-#define SPECENUM_VALUE31 EFT_SIZE_UNLIMIT
-#define SPECENUM_VALUE31NAME "Size_Unlimit"
-#define SPECENUM_VALUE32 EFT_SS_STRUCTURAL
-#define SPECENUM_VALUE32NAME "SS_Structural"
-#define SPECENUM_VALUE33 EFT_SS_COMPONENT
-#define SPECENUM_VALUE33NAME "SS_Component"
-#define SPECENUM_VALUE34 EFT_SS_MODULE
-#define SPECENUM_VALUE34NAME "SS_Module"
-#define SPECENUM_VALUE35 EFT_SPY_RESISTANT
-#define SPECENUM_VALUE35NAME "Spy_Resistant"
-#define SPECENUM_VALUE36 EFT_MOVE_BONUS
-#define SPECENUM_VALUE36NAME "Move_Bonus"
-#define SPECENUM_VALUE37 EFT_UNIT_NO_LOSE_POP
-#define SPECENUM_VALUE37NAME "Unit_No_Lose_Pop"
-#define SPECENUM_VALUE38 EFT_UNIT_RECOVER
-#define SPECENUM_VALUE38NAME "Unit_Recover"
-#define SPECENUM_VALUE39 EFT_UPGRADE_UNIT
-#define SPECENUM_VALUE39NAME "Upgrade_Unit"
-#define SPECENUM_VALUE40 EFT_UPKEEP_FREE
-#define SPECENUM_VALUE40NAME "Upkeep_Free"
-#define SPECENUM_VALUE41 EFT_TECH_UPKEEP_FREE
-#define SPECENUM_VALUE41NAME "Tech_Upkeep_Free"
-#define SPECENUM_VALUE42 EFT_NO_UNHAPPY
-#define SPECENUM_VALUE42NAME "No_Unhappy"
-#define SPECENUM_VALUE43 EFT_VETERAN_BUILD
-#define SPECENUM_VALUE43NAME "Veteran_Build"
-#define SPECENUM_VALUE44 EFT_VETERAN_COMBAT
-#define SPECENUM_VALUE44NAME "Veteran_Combat"
-#define SPECENUM_VALUE45 EFT_HP_REGEN
-#define SPECENUM_VALUE45NAME "HP_Regen"
-#define SPECENUM_VALUE46 EFT_CITY_VISION_RADIUS_SQ
-#define SPECENUM_VALUE46NAME "City_Vision_Radius_Sq"
-#define SPECENUM_VALUE47 EFT_UNIT_VISION_RADIUS_SQ
-#define SPECENUM_VALUE47NAME "Unit_Vision_Radius_Sq"
+#define SPECENUM_VALUE28 EFT_INCITE_COST_PCT
+#define SPECENUM_VALUE28NAME "Incite_Cost_Pct"
+#define SPECENUM_VALUE29 EFT_SIZE_ADJ
+#define SPECENUM_VALUE29NAME "Size_Adj"
+#define SPECENUM_VALUE30 EFT_SIZE_UNLIMIT
+#define SPECENUM_VALUE30NAME "Size_Unlimit"
+#define SPECENUM_VALUE31 EFT_SS_STRUCTURAL
+#define SPECENUM_VALUE31NAME "SS_Structural"
+#define SPECENUM_VALUE32 EFT_SS_COMPONENT
+#define SPECENUM_VALUE32NAME "SS_Component"
+#define SPECENUM_VALUE33 EFT_SS_MODULE
+#define SPECENUM_VALUE33NAME "SS_Module"
+#define SPECENUM_VALUE34 EFT_SPY_RESISTANT
+#define SPECENUM_VALUE34NAME "Spy_Resistant"
+#define SPECENUM_VALUE35 EFT_MOVE_BONUS
+#define SPECENUM_VALUE35NAME "Move_Bonus"
+#define SPECENUM_VALUE36 EFT_UNIT_NO_LOSE_POP
+#define SPECENUM_VALUE36NAME "Unit_No_Lose_Pop"
+#define SPECENUM_VALUE37 EFT_UNIT_RECOVER
+#define SPECENUM_VALUE37NAME "Unit_Recover"
+#define SPECENUM_VALUE38 EFT_UPGRADE_UNIT
+#define SPECENUM_VALUE38NAME "Upgrade_Unit"
+#define SPECENUM_VALUE39 EFT_UPKEEP_FREE
+#define SPECENUM_VALUE39NAME "Upkeep_Free"
+#define SPECENUM_VALUE40 EFT_TECH_UPKEEP_FREE
+#define SPECENUM_VALUE40NAME "Tech_Upkeep_Free"
+#define SPECENUM_VALUE41 EFT_NO_UNHAPPY
+#define SPECENUM_VALUE41NAME "No_Unhappy"
+#define SPECENUM_VALUE42 EFT_VETERAN_BUILD
+#define SPECENUM_VALUE42NAME "Veteran_Build"
+#define SPECENUM_VALUE43 EFT_VETERAN_COMBAT
+#define SPECENUM_VALUE43NAME "Veteran_Combat"
+#define SPECENUM_VALUE44 EFT_HP_REGEN
+#define SPECENUM_VALUE44NAME "HP_Regen"
+#define SPECENUM_VALUE45 EFT_CITY_VISION_RADIUS_SQ
+#define SPECENUM_VALUE45NAME "City_Vision_Radius_Sq"
+#define SPECENUM_VALUE46 EFT_UNIT_VISION_RADIUS_SQ
+#define SPECENUM_VALUE46NAME "Unit_Vision_Radius_Sq"
 /* Interacts with F_BADWALLATTACKER, ignored by F_IGWALL */
-#define SPECENUM_VALUE48 EFT_DEFEND_BONUS
-#define SPECENUM_VALUE48NAME "Defend_Bonus"
-#define SPECENUM_VALUE49 EFT_TRADEROUTE_PCT
-#define SPECENUM_VALUE49NAME "Traderoute_Pct"
-#define SPECENUM_VALUE50 EFT_GAIN_AI_LOVE
-#define SPECENUM_VALUE50NAME "Gain_AI_Love"
-#define SPECENUM_VALUE51 EFT_TURN_YEARS
-#define SPECENUM_VALUE51NAME "Turn_Years"
-#define SPECENUM_VALUE52 EFT_SLOW_DOWN_TIMELINE
-#define SPECENUM_VALUE52NAME "Slow_Down_Timeline"
-#define SPECENUM_VALUE53 EFT_CIVIL_WAR_CHANCE
-#define SPECENUM_VALUE53NAME "Civil_War_Chance"
+#define SPECENUM_VALUE47 EFT_DEFEND_BONUS
+#define SPECENUM_VALUE47NAME "Defend_Bonus"
+#define SPECENUM_VALUE48 EFT_NO_INCITE
+#define SPECENUM_VALUE48NAME "No_Incite"
+#define SPECENUM_VALUE49 EFT_GAIN_AI_LOVE
+#define SPECENUM_VALUE49NAME "Gain_AI_Love"
+#define SPECENUM_VALUE50 EFT_TURN_YEARS
+#define SPECENUM_VALUE50NAME "Turn_Years"
+#define SPECENUM_VALUE51 EFT_SLOW_DOWN_TIMELINE
+#define SPECENUM_VALUE51NAME "Slow_Down_Timeline"
+#define SPECENUM_VALUE52 EFT_CIVIL_WAR_CHANCE
+#define SPECENUM_VALUE52NAME "Civil_War_Chance"
 /* change of the migration score */
-#define SPECENUM_VALUE54 EFT_MIGRATION_PCT
-#define SPECENUM_VALUE54NAME "Migration_Pct"
+#define SPECENUM_VALUE53 EFT_MIGRATION_PCT
+#define SPECENUM_VALUE53NAME "Migration_Pct"
 /* +1 unhappy when more than this cities */
-#define SPECENUM_VALUE55 EFT_EMPIRE_SIZE_BASE
-#define SPECENUM_VALUE55NAME "Empire_Size_Base"
+#define SPECENUM_VALUE54 EFT_EMPIRE_SIZE_BASE
+#define SPECENUM_VALUE54NAME "Empire_Size_Base"
 /* adds additional +1 unhappy steps to above */
-#define SPECENUM_VALUE56 EFT_EMPIRE_SIZE_STEP
-#define SPECENUM_VALUE56NAME "Empire_Size_Step"
-#define SPECENUM_VALUE57 EFT_MAX_RATES
-#define SPECENUM_VALUE57NAME "Max_Rates"
-#define SPECENUM_VALUE58 EFT_MARTIAL_LAW_EACH
-#define SPECENUM_VALUE58NAME "Martial_Law_Each"
-#define SPECENUM_VALUE59 EFT_MARTIAL_LAW_MAX
-#define SPECENUM_VALUE59NAME "Martial_Law_Max"
-#define SPECENUM_VALUE60 EFT_RAPTURE_GROW
-#define SPECENUM_VALUE60NAME "Rapture_Grow"
-#define SPECENUM_VALUE61 EFT_REVOLUTION_UNHAPPINESS
-#define SPECENUM_VALUE61NAME "Revolution_Unhappiness"
+#define SPECENUM_VALUE55 EFT_EMPIRE_SIZE_STEP
+#define SPECENUM_VALUE55NAME "Empire_Size_Step"
+#define SPECENUM_VALUE56 EFT_MAX_RATES
+#define SPECENUM_VALUE56NAME "Max_Rates"
+#define SPECENUM_VALUE57 EFT_MARTIAL_LAW_EACH
+#define SPECENUM_VALUE57NAME "Martial_Law_Each"
+#define SPECENUM_VALUE58 EFT_MARTIAL_LAW_MAX
+#define SPECENUM_VALUE58NAME "Martial_Law_Max"
+#define SPECENUM_VALUE59 EFT_RAPTURE_GROW
+#define SPECENUM_VALUE59NAME "Rapture_Grow"
+#define SPECENUM_VALUE60 EFT_UNBRIBABLE_UNITS
+#define SPECENUM_VALUE60NAME "Unbribable_Units"
+#define SPECENUM_VALUE61 EFT_REVOLUTION_WHEN_UNHAPPY
+#define SPECENUM_VALUE61NAME "Revolution_When_Unhappy"
 #define SPECENUM_VALUE62 EFT_HAS_SENATE
 #define SPECENUM_VALUE62NAME "Has_Senate"
 #define SPECENUM_VALUE63 EFT_INSPIRE_PARTISANS
@@ -245,46 +242,8 @@ extern "C" {
 #define SPECENUM_VALUE91NAME "Not_Tech_Source"
 #define SPECENUM_VALUE92 EFT_ENEMY_CITIZEN_UNHAPPY_PCT
 #define SPECENUM_VALUE92NAME "Enemy_Citizen_Unhappy_Pct"
-#define SPECENUM_VALUE93 EFT_IRRIGATION_PCT
-#define SPECENUM_VALUE93NAME "Irrigation_Pct"
-#define SPECENUM_VALUE94 EFT_MINING_PCT
-#define SPECENUM_VALUE94NAME "Mining_Pct"
-#define SPECENUM_VALUE95 EFT_OUTPUT_TILE_PUNISH_PCT
-#define SPECENUM_VALUE95NAME "Output_Tile_Punish_Pct"
-#define SPECENUM_VALUE96 EFT_UNIT_BRIBE_COST_PCT
-#define SPECENUM_VALUE96NAME "Unit_Bribe_Cost_Pct"
-#define SPECENUM_VALUE97 EFT_VICTORY
-#define SPECENUM_VALUE97NAME "Victory"
-#define SPECENUM_VALUE98 EFT_PERFORMANCE
-#define SPECENUM_VALUE98NAME "Performance"
-#define SPECENUM_VALUE99 EFT_HISTORY
-#define SPECENUM_VALUE99NAME "History"
-#define SPECENUM_VALUE100 EFT_NATION_PERFORMANCE
-#define SPECENUM_VALUE100NAME "National_Performance"
-#define SPECENUM_VALUE101 EFT_NATION_HISTORY
-#define SPECENUM_VALUE101NAME "National_History"
-#define SPECENUM_VALUE102 EFT_TURN_FRAGMENTS
-#define SPECENUM_VALUE102NAME "Turn_Fragments"
-#define SPECENUM_VALUE103 EFT_MAX_STOLEN_GOLD_PM
-#define SPECENUM_VALUE103NAME "Max_Stolen_Gold_Pm"
-#define SPECENUM_VALUE104 EFT_THIEFS_SHARE_PM
-#define SPECENUM_VALUE104NAME "Thiefs_Share_Pm"
-#define SPECENUM_VALUE105 EFT_RETIRE_PCT
-#define SPECENUM_VALUE105NAME "Retire_Pct"
-#define SPECENUM_VALUE106 EFT_ILLEGAL_ACTION_MOVE_COST
-#define SPECENUM_VALUE106NAME "Illegal_Action_Move_Cost"
-#define SPECENUM_VALUE107 EFT_HAVE_CONTACTS
-#define SPECENUM_VALUE107NAME "Have_Contacts"
-#define SPECENUM_VALUE108 EFT_CASUS_BELLI_CAUGHT
-#define SPECENUM_VALUE108NAME "Casus_Belli_Caught"
-#define SPECENUM_VALUE109 EFT_CASUS_BELLI_SUCCESS
-#define SPECENUM_VALUE109NAME "Casus_Belli_Success"
-#define SPECENUM_VALUE110 EFT_ACTION_ODDS_PCT
-#define SPECENUM_VALUE110NAME "Action_Odds_Pct"
-#define SPECENUM_VALUE111 EFT_BORDER_VISION
-#define SPECENUM_VALUE111NAME "Border_Vision"
 /* keep this last */
-#define SPECENUM_COUNT EFT_COUNT
+#define SPECENUM_VALUE93 EFT_LAST
 #include "specenum_gen.h"
 
 /* An effect is provided by a source.  If the source is present, and the
@@ -293,9 +252,6 @@ extern "C" {
 struct effect {
   enum effect_type type;
 
-  /* pointer to multipliers (NULL means that this effect has no multiplier  */
-  struct  multiplier *multiplier;
-
   /* The "value" of the effect.  The meaning of this varies between
    * effects.  When get_xxx_bonus() is called the value of all applicable
    * effects will be summed up. */
@@ -303,7 +259,11 @@ struct effect {
 
   /* An effect can have multiple requirements.  The effect will only be
    * active if all of these requirement are met. */
-  struct requirement_vector reqs;
+  struct requirement_list *reqs;
+
+  /* An effect can have multiple negated requirements.  The effect will
+   * only be active if none of these requirements are met. */
+  struct requirement_list *nreqs;
 };
 
 /* An effect_list is a list of effects. */
@@ -314,10 +274,9 @@ struct effect {
   TYPED_LIST_ITERATE(struct effect, effect_list, peffect)
 #define effect_list_iterate_end LIST_ITERATE_END
 
-struct effect *effect_new(enum effect_type type, int value,
-                          struct multiplier *pmul);
-struct effect *effect_copy(struct effect *old);
-void effect_req_append(struct effect *peffect, struct requirement req);
+struct effect *effect_new(enum effect_type type, int value);
+void effect_req_append(struct effect *peffect, bool neg,
+		       struct requirement *preq);
 
 struct astring;
 void get_effect_req_text(const struct effect *peffect,
@@ -327,14 +286,27 @@ void get_effect_list_req_text(const struct effect_list *plist,
 
 /* ruleset cache creation and communication functions */
 struct packet_ruleset_effect;
+struct packet_ruleset_effect_req;
 
 void ruleset_cache_init(void);
 void ruleset_cache_free(void);
 void recv_ruleset_effect(const struct packet_ruleset_effect *packet);
+void recv_ruleset_effect_req(const struct packet_ruleset_effect_req *packet);
 void send_ruleset_cache(struct conn_list *dest);
 
-int effect_cumulative_max(enum effect_type type, struct universal *for_uni);
-int effect_cumulative_min(enum effect_type type, struct universal *for_uni);
+int effect_cumulative_max(enum effect_type type, struct unit_type *for_unit);
+int effect_cumulative_min(enum effect_type type, struct unit_type *for_unit);
+
+bool is_effect_useful(const struct player *target_player,
+		      const struct city *target_pcity,
+		      const struct impr_type *target_building,
+		      const struct tile *target_tile,
+		      const struct unit_type *target_unittype,
+		      const struct output_type *target_output,
+		      const struct specialist *target_specialist,
+		      const struct impr_type *source,
+		      const struct effect *effect,
+                      const enum   req_problem_type prob_type);
 
 bool is_building_replaced(const struct city *pcity,
 			  struct impr_type *pimprove,
@@ -371,10 +343,18 @@ int get_tile_bonus(const struct tile *ptile, const struct unit *punit,
 
 /* miscellaneous auxiliary effects functions */
 struct effect_list *get_req_source_effects(struct universal *psource);
+bool is_effect_disabled(const struct player *target_player,
+		        const struct city *target_city,
+		        const struct impr_type *target_building,
+		        const struct tile *target_tile,
+			const struct unit_type *target_unittype,
+			const struct output_type *target_output,
+			const struct specialist *target_specialist,
+		        const struct effect *peffect,
+                        const enum   req_problem_type prob_type);
 
 int get_player_bonus_effects(struct effect_list *plist,
-                             const struct player *pplayer,
-                             enum effect_type effect_type);
+    const struct player *pplayer, enum effect_type effect_type);
 int get_city_bonus_effects(struct effect_list *plist,
 			   const struct city *pcity,
 			   const struct output_type *poutput,
@@ -382,31 +362,24 @@ int get_city_bonus_effects(struct effect_list *plist,
 
 int get_target_bonus_effects(struct effect_list *plist,
                              const struct player *target_player,
-                             const struct player *other_player,
                              const struct city *target_city,
                              const struct impr_type *target_building,
                              const struct tile *target_tile,
-                             const struct unit *target_unit,
                              const struct unit_type *target_unittype,
                              const struct output_type *target_output,
                              const struct specialist *target_specialist,
-                             const struct action *target_action,
                              enum effect_type effect_type);
 
 bool building_has_effect(const struct impr_type *pimprove,
 			 enum effect_type effect_type);
 int get_current_construction_bonus(const struct city *pcity,
-                                   enum effect_type effect_type,
+				   enum effect_type effect_type,
                                    const enum req_problem_type prob_type);
-int get_potential_improvement_bonus(struct impr_type *pimprove,
-                                    const struct city *pcity,
-                                    enum effect_type effect_type,
-                                    const enum req_problem_type prob_type);
 
 struct effect_list *get_effects(enum effect_type effect_type);
 
-typedef bool (*iec_cb)(struct effect*, void *data);
-bool iterate_effect_cache(iec_cb cb, void *data);
+typedef bool (*iec_cb)(const struct effect*);
+bool iterate_effect_cache(iec_cb cb);
 
 #ifdef __cplusplus
 }
