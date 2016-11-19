@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 #include "name_translation.h"
-#include "requirements.h"
 
 struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
@@ -43,10 +42,10 @@ typedef int Tech_type_id;
 #define A_NONE 0
 #define A_FIRST 1
 #define A_LAST MAX_NUM_ITEMS /* Used in the network protocol. */
-#define A_FUTURE (A_LAST + 1)
-#define A_ARRAY_SIZE (A_FUTURE + 1)
-#define A_UNSET (A_LAST + 2)
-#define A_UNKNOWN (A_LAST + 3)
+#define A_UNSET (A_LAST-1)
+#define A_FUTURE (A_LAST-2)
+#define A_UNKNOWN (A_LAST-3)
+#define A_LAST_REAL A_UNKNOWN
 
 #define A_NEVER (NULL)
 
@@ -71,7 +70,7 @@ typedef int Tech_type_id;
 */
 
 /* Changing these breaks network compatibility. */
-/* If a new flag is added techtools.c:research_tech_lost() should be checked */
+/* If a new flag is added techtools.c:player_tech_lost() should be checked */
 #define SPECENUM_NAME tech_flag_id
 /* player gets extra tech if rearched first */
 #define SPECENUM_VALUE0 TF_BONUS_TECH
@@ -81,31 +80,45 @@ typedef int Tech_type_id;
 /* "Settler" unit types can build bridges over rivers */
 #define SPECENUM_VALUE1 TF_BRIDGE
 #define SPECENUM_VALUE1NAME N_("Bridge")
+/* Increase the pollution factor created by population by one */
+#define SPECENUM_VALUE2 TF_POPULATION_POLLUTION_INC
+#define SPECENUM_VALUE2NAME N_("Population_Pollution_Inc")
+/* "Settler" unit types can build farmland */
+#define SPECENUM_VALUE3 TF_FARMLAND
+#define SPECENUM_VALUE3NAME N_("Farmland")
 /* Player can build air units */
-#define SPECENUM_VALUE2 TF_BUILD_AIRBORNE
-#define SPECENUM_VALUE2NAME N_("Build_Airborne")
+#define SPECENUM_VALUE4 TF_BUILD_AIRBORNE
+#define SPECENUM_VALUE4NAME N_("Build_Airborne")
 /* Player can claim ocean tiles non-adjacent to border source */ 
-#define SPECENUM_VALUE3 TF_CLAIM_OCEAN
-#define SPECENUM_VALUE3NAME N_("Claim_Ocean")
-/* Player can claim ocean tiles non-adjacent to border source as long
- * as source is ocean tile */
-#define SPECENUM_VALUE4 TF_CLAIM_OCEAN_LIMITED
-#define SPECENUM_VALUE4NAME N_("Claim_Ocean_Limited")
-#define SPECENUM_VALUE5 TECH_USER_1
-#define SPECENUM_VALUE6 TECH_USER_2
-#define SPECENUM_VALUE7 TECH_USER_3
-#define SPECENUM_VALUE8 TECH_USER_4
-#define SPECENUM_VALUE9 TECH_USER_5
-#define SPECENUM_VALUE10 TECH_USER_6
-#define SPECENUM_VALUE11 TECH_USER_7
-#define SPECENUM_VALUE12 TECH_USER_LAST
+#define SPECENUM_VALUE5 TF_CLAIM_OCEAN
+#define SPECENUM_VALUE5NAME N_("Claim_Ocean")
+#define SPECENUM_VALUE6 TECH_USER_1
+#define SPECENUM_VALUE7 TECH_USER_2
+#define SPECENUM_VALUE8 TECH_USER_3
+#define SPECENUM_VALUE9 TECH_USER_4
+#define SPECENUM_VALUE10 TECH_USER_5
+#define SPECENUM_VALUE11 TECH_USER_6
+#define SPECENUM_VALUE12 TECH_USER_7
+#define SPECENUM_VALUE13 TECH_USER_LAST
 /* Keep this last. */
 #define SPECENUM_COUNT TF_COUNT
-#define SPECENUM_BITVECTOR bv_tech_flags
 #define SPECENUM_NAMEOVERRIDE
 #include "specenum_gen.h"
 
 #define MAX_NUM_USER_TECH_FLAGS (TECH_USER_LAST - TECH_USER_1 + 1)
+
+BV_DEFINE(bv_tech_flags, TF_COUNT); /* Used in the network protocol. */
+
+/* TECH_KNOWN is self-explanatory, TECH_PREREQS_KNOWN are those for which all 
+ * requirements are fulfilled; all others (including those which can never 
+ * be reached) are TECH_UNKNOWN */
+#define SPECENUM_NAME tech_state
+/* TECH_UNKNOWN must be 0 as the code does no special initialisation after
+ * memset(0), See player_researches_init(). */
+#define SPECENUM_VALUE0 TECH_UNKNOWN
+#define SPECENUM_VALUE1 TECH_PREREQS_KNOWN
+#define SPECENUM_VALUE2 TECH_KNOWN
+#include "specenum_gen.h"
 
 enum tech_req {
   AR_ONE = 0,
@@ -114,26 +127,13 @@ enum tech_req {
   AR_SIZE
 };
 
-struct tech_class {
-  int idx;
-  struct name_translation name;
-  bool disabled;
-  int cost_pct;
-};
-
 struct advance {
   Tech_type_id item_number;
   struct name_translation name;
   char graphic_str[MAX_LEN_NAME];	/* which named sprite to use */
   char graphic_alt[MAX_LEN_NAME];	/* alternate icon name */
-  struct tech_class *tclass;
 
   struct advance *require[AR_SIZE];
-
-  /* Required to start researching this tech. For shared research it must
-   * be fulfilled for at least one player that shares the research. */
-  struct requirement_vector research_reqs;
-
   bv_tech_flags flags;
   struct strvec *helptext;
 
@@ -142,10 +142,11 @@ struct advance {
    */
   char *bonus_message;
 
-  /* Cost of advance in bulbs. It may be specified in ruleset, or
-   * calculated in tech_precalc_data(). However, this value wouldn't
-   * be right if game.info.tech_cost_style is TECH_COST_CIV1CIV2. */
-  double cost;
+  /* 
+   * Cost of advance in bulbs as specified in ruleset. -1 means that
+   * no value was set in ruleset. Server send this to client.
+   */
+  int preset_cost;
 
   /* 
    * Number of requirements this technology has _including_
@@ -169,33 +170,14 @@ struct advance *valid_advance_by_number(const Tech_type_id atype);
 struct advance *advance_by_rule_name(const char *name);
 struct advance *advance_by_translated_name(const char *name);
 
+const char *advance_name_by_player(const struct player *pplayer,
+				   Tech_type_id tech);
+const char *advance_name_for_player(const struct player *pplayer,
+				    Tech_type_id tech);
+const char *advance_name_researching(const struct player *pplayer);
+
 const char *advance_rule_name(const struct advance *padvance);
 const char *advance_name_translation(const struct advance *padvance);
-
-void tech_classes_init(void);
-struct tech_class *tech_class_by_number(const int idx);
-#define tech_class_index(_ptclass_) (_ptclass_)->idx
-const char *tech_class_name_translation(const struct tech_class *ptclass);
-const char *tech_class_rule_name(const struct tech_class *ptclass);
-struct tech_class *tech_class_by_rule_name(const char *name);
-
-#define tech_class_iterate(_p)                                \
-{                                                             \
-  int _i_##_p;                                                \
-  for (_i_##_p = 0; _i_##_p < game.control.num_tech_classes; _i_##_p++) {  \
-    struct tech_class *_p = tech_class_by_number(_i_##_p);
-
-#define tech_class_iterate_end                    \
-  }                                               \
-}
-
-#define tech_class_active_iterate(_p)                                  \
-  tech_class_iterate(_p) {                                             \
-    if (!_p->disabled) {
-
-#define tech_class_active_iterate_end                                  \
-    }                                                                  \
-  } tech_class_iterate_end;
 
 void user_tech_flags_init(void);
 void user_tech_flags_free(void);
@@ -205,23 +187,48 @@ const char *tech_flag_helptxt(enum tech_flag_id id);
 /* General advance/technology flag accessor routines */
 bool advance_has_flag(Tech_type_id tech, enum tech_flag_id flag);
 
+/* FIXME: oddball function used in one place */
+Tech_type_id advance_by_flag(Tech_type_id index, enum tech_flag_id flag);
+
 /* Ancillary routines */
+enum tech_state player_invention_state(const struct player *pplayer,
+				       Tech_type_id tech);
+enum tech_state player_invention_set(struct player *pplayer,
+				     Tech_type_id tech,
+				     enum tech_state value);
+bool player_invention_reachable(const struct player *pplayer,
+                                const Tech_type_id tech,
+                                bool allow_prereqs);
+
+Tech_type_id player_research_step(const struct player *pplayer,
+				  Tech_type_id goal);
+void player_research_update(struct player *pplayer);
+
 Tech_type_id advance_required(const Tech_type_id tech,
 			      enum tech_req require);
 struct advance *advance_requires(const struct advance *padvance,
 				 enum tech_req require);
 
+int total_bulbs_required(const struct player *pplayer);
+int base_total_bulbs_required(const struct player *pplayer,
+			      Tech_type_id tech, bool loss_value);
+int player_tech_upkeep(const struct player *pplayer);
 bool techs_have_fixed_costs(void);
 
+int num_unknown_techs_for_goal(const struct player *pplayer,
+			       Tech_type_id goal);
+int total_bulbs_required_for_goal(const struct player *pplayer,
+				  Tech_type_id goal);
+bool is_tech_a_req_for_goal(const struct player *pplayer,
+			    Tech_type_id tech,
+			    Tech_type_id goal);
 bool is_future_tech(Tech_type_id tech);
 
-/* Initialization */
+void precalc_tech_data(void);
+
+/* Initialization and iteration */
 void techs_init(void);
 void techs_free(void);
-
-void techs_precalc_data(void);
-
-/* Iteration */
 
 /* This iterates over almost all technologies.  It includes non-existent
  * technologies, but not A_FUTURE. */
@@ -246,28 +253,6 @@ const struct advance *advance_array_last(void);
     }									\
   }									\
 }
-
-#define advance_active_iterate(_p)                                      \
-  advance_iterate(A_FIRST, _p) {                                         \
-    if (_p->require[AR_ONE] != A_NEVER) {
-
-#define advance_active_iterate_end                                      \
-    }                                                                   \
-  } advance_iterate_end;
-
-
-/* Advance requirements iterator. */
-struct advance_req_iter;
-
-size_t advance_req_iter_sizeof(void);
-struct iterator *advance_req_iter_init(struct advance_req_iter *it,
-                                       const struct advance *goal);
-
-#define advance_req_iterate(_goal, _padvance)                               \
-  generic_iterate(struct advance_req_iter, const struct advance *,          \
-                  _padvance, advance_req_iter_sizeof, advance_req_iter_init,\
-                  _goal)
-#define advance_req_iterate_end generic_iterate_end
 
 #ifdef __cplusplus
 }

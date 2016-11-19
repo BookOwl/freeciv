@@ -70,8 +70,8 @@
  *    foo_t *foo_list_get(const struct foo_list *plist, int idx);
  *    foo_t *foo_list_front(const struct foo_list *plist);
  *    foo_t *foo_list_back(const struct foo_list *plist);
- *    struct foo_list_link *foo_list_link_get(const struct foo_list *plist,
- *                                            int idx);
+ *    struct foo_list_link *foo_list_link(const struct foo_list *plist,
+ *                                        int idx);
  *    struct foo_list_link *foo_list_head(const struct foo_list *plist);
  *    struct foo_list_link *foo_list_tail(const struct foo_list *plist);
  *    struct foo_list_link *foo_list_search(const struct foo_list *plist,
@@ -387,10 +387,10 @@ static inline int SPECLIST_FOO(_list_size) (const SPECLIST_LIST *tthis)
   Return the element at position in the speclist.
 ****************************************************************************/
 static inline SPECLIST_TYPE *
-SPECLIST_FOO(_list_get) (const SPECLIST_LIST *tthis, int slindex)
+SPECLIST_FOO(_list_get) (const SPECLIST_LIST *tthis, int index)
 {
   return ((SPECLIST_TYPE *)
-          genlist_get((const struct genlist *) tthis, slindex));
+          genlist_get((const struct genlist *) tthis, index));
 }
 
 /****************************************************************************
@@ -415,10 +415,10 @@ SPECLIST_FOO(_list_back) (const SPECLIST_LIST *tthis)
   Return the element at position in the speclist.
 ****************************************************************************/
 static inline SPECLIST_LINK *
-SPECLIST_FOO(_list_link_get) (const SPECLIST_LIST *tthis, int slindex)
+SPECLIST_FOO(_list_link) (const SPECLIST_LIST *tthis, int index)
 {
   return ((SPECLIST_LINK *)
-          genlist_link_get((const struct genlist *) tthis, slindex));
+          genlist_link((const struct genlist *) tthis, index));
 }
 
 /****************************************************************************
@@ -555,12 +555,12 @@ SPECLIST_FOO(_list_link_next) (const SPECLIST_LINK *plink)
 #ifndef FC__SPECLIST_H  /* Defines this only once, no multiple inclusions. */
 #define FC__SPECLIST_H
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #  define TYPED_LIST_CHECK(ARG_list)                                       \
   fc_assert_action(NULL != ARG_list, break)
 #else
 #  define TYPED_LIST_CHECK(ARG_list) /* Nothing. */
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
 /* Speclist data iterator.
  * 

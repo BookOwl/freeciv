@@ -98,7 +98,7 @@ static enum tai_abort_msg_class tai_check_messages(void)
   enum tai_abort_msg_class ret_abort= TAI_ABORT_NONE;
 
   taimsg_list_allocate_mutex(thrai.msgs_to.msglist);
-  while (taimsg_list_size(thrai.msgs_to.msglist) > 0) {
+  while(taimsg_list_size(thrai.msgs_to.msglist) > 0) {
     struct tai_msg *msg;
     enum tai_abort_msg_class new_abort = TAI_ABORT_NONE;
 
@@ -131,9 +131,6 @@ static enum tai_abort_msg_class tai_check_messages(void)
         }
       } city_list_iterate_safe_end;
       fc_release_mutex(&game.server.mutexes.city_list);
-
-      tai_send_req(TAI_REQ_TURN_DONE, msg->plr, NULL);
-
       break;
     case TAI_MSG_PHASE_FINISHED:
       new_abort = TAI_ABORT_PHASE_END;
@@ -239,7 +236,7 @@ void tai_refresh(struct ai_type *ait, struct player *pplayer)
 {
   if (thrai.thread_running) {
     taireq_list_allocate_mutex(thrai.reqs_from.reqlist);
-    while (taireq_list_size(thrai.reqs_from.reqlist) > 0) {
+    while(taireq_list_size(thrai.reqs_from.reqlist) > 0) {
        struct tai_req *req;
 
        req = taireq_list_get(thrai.reqs_from.reqlist, 0);
@@ -252,9 +249,6 @@ void tai_refresh(struct ai_type *ait, struct player *pplayer)
        switch(req->type) {
        case TAI_REQ_WORKER_TASK:
          tai_req_worker_task_rcv(req);
-         break;
-       case TAI_REQ_TURN_DONE:
-         req->plr->ai_phase_done = TRUE;
          break;
        }
 

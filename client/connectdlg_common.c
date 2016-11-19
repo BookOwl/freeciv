@@ -1,11 +1,11 @@
 /***********************************************************************
- Freeciv - Copyright (C) 2004 - The Freeciv Project
-   This program is free software; you can redistribute it and/or modify
+Freeciv - Copyright (C) 2004 - The Freeciv Project
+   This program is free software; you can redistribute it and / or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 2, or (at your option)
    any later version.
 
-   This program is distributed in the hope that it will be useful, 
+   This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
@@ -14,19 +14,26 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <signal.h>             /* SIGTERM and kill */
 #include <string.h>
 #include <time.h>
 
-#ifdef FREECIV_MSWINDOWS
+/* Must be before <windows.h> */
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+
+#ifdef WIN32_NATIVE
 #include <windows.h>
 #endif
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>		/* fchmod */
 #endif
 
@@ -41,7 +48,6 @@
 /* utility */
 #include "astring.h"
 #include "capability.h"
-#include "deprecations.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "ioz.h"
@@ -67,18 +73,18 @@
 #define WAIT_BETWEEN_TRIES 100000 /* usecs */ 
 #define NUMBER_OF_TRIES 500
 
-#if defined(HAVE_WORKING_FORK) && !defined(FREECIV_MSWINDOWS)
-/* We are yet to see FREECIV_MSWINDOWS setup where even HAVE_WORKING_FORK would
+#if defined(HAVE_WORKING_FORK) && !defined(WIN32_NATIVE)
+/* We are yet to see WIN32_NATIVE setup where even HAVE_WORKING_FORK would
  * mean fork() that actually works for us. */
 #define HAVE_USABLE_FORK
 #endif
 
 #ifdef HAVE_USABLE_FORK
 static pid_t server_pid = -1;
-#elif FREECIV_MSWINDOWS
+#elif WIN32_NATIVE
 HANDLE server_process = INVALID_HANDLE_VALUE;
 HANDLE loghandle = INVALID_HANDLE_VALUE;
-#endif /* HAVE_USABLE_FORK || FREECIV_MSWINDOWS */
+#endif
 bool server_quitting = FALSE;
 
 static char challenge_fullname[MAX_LEN_PATH];
@@ -121,7 +127,7 @@ bool is_server_running(void)
   }
 #ifdef HAVE_USABLE_FORK
   return (server_pid > 0);
-#elif FREECIV_MSWINDOWS
+#elif WIN32_NATIVE
   return (server_process != INVALID_HANDLE_VALUE);
 #else
   return FALSE; /* We've been unable to start one! */
@@ -156,7 +162,7 @@ void client_kill_server(bool force)
     server_pid = -1;
     server_quitting = FALSE;
   }
-#elif FREECIV_MSWINDOWS
+#elif WIN32_NATIVE
   if (server_quitting && server_process != INVALID_HANDLE_VALUE) {
     /* Already asked to /quit.
      * If it didn't do that, kill it. */
@@ -169,7 +175,7 @@ void client_kill_server(bool force)
     loghandle = INVALID_HANDLE_VALUE;
     server_quitting = FALSE;
   }
-#endif /* FREECIV_MSWINDOWS || HAVE_USABLE_FORK */
+#endif /* WIN32_NATIVE || HAVE_USABLE_FORK */
 
   if (is_server_running()) {
     if (client.conn.used && client_has_hack) {
@@ -195,7 +201,7 @@ void client_kill_server(bool force)
       kill(server_pid, SIGTERM);
       waitpid(server_pid, NULL, WUNTRACED);
       server_pid = -1;
-#elif FREECIV_MSWINDOWS
+#elif WIN32_NATIVE
       TerminateProcess(server_process, 0);
       CloseHandle(server_process);
       if (loghandle != INVALID_HANDLE_VALUE) {
@@ -203,7 +209,7 @@ void client_kill_server(bool force)
       }
       server_process = INVALID_HANDLE_VALUE;
       loghandle = INVALID_HANDLE_VALUE;
-#endif /* FREECIV_MSWINDOWS || HAVE_USABLE_FORK */
+#endif /* WIN32_NATIVE || HAVE_USABLE_FORK */
       server_quitting = FALSE;
     }
   }
@@ -216,32 +222,25 @@ void client_kill_server(bool force)
 *****************************************************************/
 bool client_start_server(void)
 {
-#if !defined(HAVE_USABLE_FORK) && !defined(FREECIV_MSWINDOWS)
+#if !defined(HAVE_USABLE_FORK) && !defined(WIN32_NATIVE)
   /* Can't do much without fork */
   return FALSE;
-#else /* HAVE_USABLE_FORK || FREECIV_MSWINDOWS */
+#else /* HAVE_USABLE_FORK || WIN32_NATIVE */
   char buf[512];
   int connect_tries = 0;
-  char savesdir[MAX_LEN_PATH];
-  char scensdir[MAX_LEN_PATH];
-  char *storage;
-  char *ruleset;
-
 #if !defined(HAVE_USABLE_FORK)
-  /* Above also implies that this is FREECIV_MSWINDOWS ->
+  /* Above also implies that this is WIN32_NATIVE ->
    * Win32 that can't use fork() */
   STARTUPINFO si;
   PROCESS_INFORMATION pi;
 
-  char options[1024];
-  char *depr;
-  char rsparam[256];
-#ifdef FREECIV_DEBUG
+  char savesdir[MAX_LEN_PATH];
+  char scensdir[MAX_LEN_PATH];
+  char options[512];
+#ifdef DEBUG
   char cmdline1[512];
-#ifndef FREECIV_WEB
   char cmdline2[512];
-#endif /* FREECIV_WEB */
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   char cmdline3[512];
   char cmdline4[512];
   char logcmdline[512];
@@ -249,13 +248,13 @@ bool client_start_server(void)
   char savefilecmdline[512];
   char savescmdline[512];
   char scenscmdline[512];
-#endif /* !HAVE_USABLE_FORK -> FREECIV_MSWINDOWS */
+#endif /* !HAVE_USABLE_FORK -> WIN32_NATIVE */
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   enum fc_addr_family family = FC_ADDR_ANY;
 #else
   enum fc_addr_family family = FC_ADDR_IPV4;
-#endif /* FREECIV_IPV6_SUPPORT */
+#endif /* IPV6_SUPPORT */
 
   /* only one server (forked from this client) shall be running at a time */
   /* This also resets client_has_hack. */
@@ -278,20 +277,10 @@ bool client_start_server(void)
     return FALSE;
   }
 
-  storage = freeciv_storage_dir();
-  if (storage == NULL) {
-    output_window_append(ftc_client, _("Cannot find freeciv storage directory"));
-    output_window_append(ftc_client,
-                         _("You'll have to start server manually. Sorry..."));
-    return FALSE;
-  }
-
-  ruleset = tileset_what_ruleset(tileset);
-
 #ifdef HAVE_USABLE_FORK
   {
     int argc = 0;
-    const int max_nargs = 25;
+    const int max_nargs = 22;
     char *argv[max_nargs + 1];
     char port_buf[32];
     char dbg_lvl_buf[32]; /* Do not move this inside the block where it gets filled,
@@ -300,13 +289,7 @@ bool client_start_server(void)
 
     /* Set up the command-line parameters. */
     fc_snprintf(port_buf, sizeof(port_buf), "%d", internal_server_port);
-    fc_snprintf(savesdir, sizeof(savesdir), "%s" DIR_SEPARATOR "saves", storage);
-    fc_snprintf(scensdir, sizeof(scensdir), "%s" DIR_SEPARATOR "scenarios", storage);
-#ifdef FREECIV_WEB
-    argv[argc++] = "freeciv-web";
-#else  /* FREECIV_WEB */
     argv[argc++] = "freeciv-server";
-#endif /* FREECIV_WEB */
     argv[argc++] = "-p";
     argv[argc++] = port_buf;
     argv[argc++] = "--bind";
@@ -315,16 +298,17 @@ bool client_start_server(void)
     argv[argc++] = "1";
     argv[argc++] = "-e";
     argv[argc++] = "--saves";
-    argv[argc++] = savesdir;
+    argv[argc++] = "~/.freeciv/saves";
     argv[argc++] = "--scenarios";
-    argv[argc++] = scensdir;
+    argv[argc++] = "~/.freeciv/scenarios";
     argv[argc++] = "-A";
     argv[argc++] = "none";
     if (logfile) {
       enum log_level llvl = log_get_level();
 
       argv[argc++] = "--debug";
-      fc_snprintf(dbg_lvl_buf, sizeof(dbg_lvl_buf), "%d", llvl);
+      /* Use of LOG_DEBUG would require limiting also the logged files. */
+      fc_snprintf(dbg_lvl_buf, sizeof(dbg_lvl_buf), "%d", llvl < LOG_DEBUG ? llvl : LOG_DEBUG - 1);
       argv[argc++] = dbg_lvl_buf;
       argv[argc++] = "--log";
       argv[argc++] = logfile;
@@ -337,26 +321,18 @@ bool client_start_server(void)
       argv[argc++] = "--file";
       argv[argc++] = savefile;
     }
-    if (are_deprecation_warnings_enabled()) {
-      argv[argc++] = "--warnings";
-    }
-    if (ruleset != NULL) {
-      argv[argc++] = "--ruleset";
-      argv[argc++] = ruleset;
-    }
     argv[argc] = NULL;
     fc_assert(argc <= max_nargs);
 
     {
-      struct astring srv_cmdline_opts = ASTRING_INIT;
+      struct astring options = ASTRING_INIT;
       int i;
-
       for (i = 1; i < argc; i++) {
-        astr_add(&srv_cmdline_opts, i == 1 ? "%s" : " %s", argv[i]);
+        astr_add(&options, i == 1 ? "%s" : " %s", argv[i]);
       }
       log_verbose("Arguments to spawned server: %s",
-                  astr_str(&srv_cmdline_opts));
-      astr_free(&srv_cmdline_opts);
+                  astr_str(&options));
+      astr_free(&options);
     }
 
     server_pid = fork();
@@ -393,24 +369,15 @@ bool client_start_server(void)
       }
 
       /* these won't return on success */
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       /* Search under current directory (what ever that happens to be)
        * only in debug builds. This allows running freeciv directly from build
        * tree, but could be considered security risk in release builds. */
-#ifdef FREECIV_WEB
-      execvp("./server/freeciv-web", argv);
-#else  /* FREECIV_WEB */
       execvp("./fcser", argv);
       execvp("./server/freeciv-server", argv);
-#endif /* FREECIV_WEB */
-#endif /* FREECIV_DEBUG */
-#ifdef FREECIV_WEB
-      execvp(BINDIR "/freeciv-web", argv);
-      execvp("freeciv-web", argv);
-#else  /* FREECIV_WEB */
+#endif /* DEBUG */
       execvp(BINDIR "/freeciv-server", argv);
       execvp("freeciv-server", argv);
-#endif /* FREECIV_WEB */
 
       /* This line is only reached if freeciv-server cannot be started, 
        * so we kill the forked process.
@@ -419,7 +386,7 @@ bool client_start_server(void)
     } 
   }
 #else /* HAVE_USABLE_FORK */
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   if (logfile) {
     loghandle = CreateFile(logfile, GENERIC_WRITE,
                            FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -445,7 +412,9 @@ bool client_start_server(void)
         internal_to_local_string_malloc(logfile);
     enum log_level llvl = log_get_level();
 
-    fc_snprintf(logcmdline, sizeof(logcmdline), " --debug %d --log %s", llvl,
+    fc_snprintf(logcmdline, sizeof(logcmdline), " --debug %d --log %s",
+                /* Use of LOG_DEBUG would require limiting also the logged files. */
+                llvl < LOG_DEBUG ? llvl : LOG_DEBUG - 1,
                 logfile_in_local_encoding);
     free(logfile_in_local_encoding);
   }
@@ -466,62 +435,37 @@ bool client_start_server(void)
     free(savefile_in_local_encoding);
   }
 
-  fc_snprintf(savesdir, sizeof(savesdir), "%s" DIR_SEPARATOR "saves", storage);
+  interpret_tilde(savesdir, sizeof(savesdir), "~/.freeciv/saves");
   internal_to_local_string_buffer(savesdir, savescmdline, sizeof(savescmdline));
 
-  fc_snprintf(scensdir, sizeof(scensdir), "%s" DIR_SEPARATOR "scenarios", storage);
+  interpret_tilde(scensdir, sizeof(scensdir), "~/.freeciv/scenarios");
   internal_to_local_string_buffer(scensdir, scenscmdline, sizeof(scenscmdline));
-
-  if (are_deprecation_warnings_enabled()) {
-    depr = " --warnings";
-  } else {
-    depr = "";
-  }
-  if (ruleset != NULL) {
-    fc_snprintf(rsparam, sizeof(rsparam), " --ruleset %s", ruleset);
-  } else {
-    rsparam[0] = '\0';
-  }
 
   fc_snprintf(options, sizeof(options),
               "-p %d --bind localhost -q 1 -e%s%s%s --saves \"%s\" "
-              "--scenarios \"%s\" -A none %s%s",
+              "--scenarios \"%s\" -A none",
               internal_server_port, logcmdline, scriptcmdline, savefilecmdline,
-              savescmdline, scenscmdline, rsparam, depr);
-#ifdef FREECIV_DEBUG
-#ifdef FREECIV_WEB
-  fc_snprintf(cmdline1, sizeof(cmdline1),
-              "./server/freeciv-web %s", options);
-#else  /* FREECIV_WEB */
+              savescmdline, scenscmdline);
+#ifdef DEBUG
   fc_snprintf(cmdline1, sizeof(cmdline1), "./fcser %s", options);
   fc_snprintf(cmdline2, sizeof(cmdline2),
               "./server/freeciv-server %s", options);
-#endif /* FREECIV_WEB */
-#endif /* FREECIV_DEBUG */
-#ifdef FREECIV_WEB
-  fc_snprintf(cmdline3, sizeof(cmdline2),
-              BINDIR "/freeciv-web %s", options);
-  fc_snprintf(cmdline4, sizeof(cmdline3),
-              "freeciv-web %s", options);
-#else  /* FREECIV_WEB */
+#endif /* DEBUG */
   fc_snprintf(cmdline3, sizeof(cmdline3),
               BINDIR "/freeciv-server %s", options);
   fc_snprintf(cmdline4, sizeof(cmdline4),
               "freeciv-server %s", options);
-#endif /* FREECIV_WEB */
 
   if (
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       !CreateProcess(NULL, cmdline1, NULL, NULL, TRUE,
                      DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
                      NULL, NULL, &si, &pi)
-#ifndef FREECIV_WEB
       && !CreateProcess(NULL, cmdline2, NULL, NULL, TRUE,
                         DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
                         NULL, NULL, &si, &pi)
-#endif /* FREECIV_WEB */
       &&
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
       !CreateProcess(NULL, cmdline3, NULL, NULL, TRUE,
                      DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
                      NULL, NULL, &si, &pi)
@@ -529,10 +473,10 @@ bool client_start_server(void)
                         DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
                         NULL, NULL, &si, &pi)) {
     log_error("Failed to start server process.");
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
     log_verbose("Tried with commandline: '%s'", cmdline1);
     log_verbose("Tried with commandline: '%s'", cmdline2);
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
     log_verbose("Tried with commandline: '%s'", cmdline3);
     log_verbose("Tried with commandline: '%s'", cmdline4);
     output_window_append(ftc_client, _("Couldn't start the server."));
@@ -545,7 +489,7 @@ bool client_start_server(void)
 
   server_process = pi.hProcess;
 
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 #endif /* HAVE_USABLE_FORK */
 
   /* a reasonable number of tries */ 
@@ -553,11 +497,11 @@ bool client_start_server(void)
                            buf, sizeof(buf)) == -1) {
     fc_usleep(WAIT_BETWEEN_TRIES);
 #ifdef HAVE_USABLE_FORK
-#ifndef FREECIV_MSWINDOWS
+#ifndef WIN32_NATIVE
     if (waitpid(server_pid, NULL, WNOHANG) != 0) {
       break;
     }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 #endif /* HAVE_USABLE_FORK */
     if (connect_tries++ > NUMBER_OF_TRIES) {
       log_error("Last error from connect attempts: '%s'", buf);
@@ -601,20 +545,20 @@ bool client_start_server(void)
    * Don't send it now, it will be sent to the server when receiving the
    * server setting infos. */
   {
-    char topobuf[16];
+    char buf[16];
 
-    fc_strlcpy(topobuf, "WRAPX", sizeof(topobuf));
+    fc_strlcpy(buf, "WRAPX", sizeof(buf));
     if (tileset_is_isometric(tileset) && 0 == tileset_hex_height(tileset)) {
-      fc_strlcat(topobuf, "|ISO", sizeof(topobuf));
+      fc_strlcat(buf, "|ISO", sizeof(buf));
     }
     if (0 < tileset_hex_width(tileset) || 0 < tileset_hex_height(tileset)) {
-      fc_strlcat(topobuf, "|HEX", sizeof(topobuf));
+      fc_strlcat(buf, "|HEX", sizeof(buf));
     }
-    desired_settable_option_update("topology", topobuf, FALSE);
+    desired_settable_option_update("topology", buf, FALSE);
   }
 
   return TRUE;
-#endif /* HAVE_USABLE_FORK || FREECIV_MSWINDOWS */
+#endif /* HAVE_USABLE_FORK || WIN32_NATIVE */
 }
 
 /*************************************************************************
@@ -645,20 +589,17 @@ void send_client_wants_hack(const char *filename)
   if (filename[0] != '\0') {
     struct packet_single_want_hack_req req;
     struct section_file *file;
-    const char *sdir = freeciv_storage_dir();
-
-    if (sdir == NULL) {
-      return;
-    }
 
     if (!is_safe_filename(filename)) {
       return;
     }
 
-    make_dir(sdir);
+    /* get the full filename path */
+    interpret_tilde(challenge_fullname, sizeof(challenge_fullname),
+		    "~/.freeciv/");
+    make_dir(challenge_fullname);
 
-    fc_snprintf(challenge_fullname, sizeof(challenge_fullname),
-                "%s" DIR_SEPARATOR "%s", sdir, filename);
+    sz_strlcat(challenge_fullname, filename);
 
     /* generate an authentication token */ 
     randomize_string(req.token, sizeof(req.token));
@@ -735,7 +676,7 @@ void handle_ruleset_choices(const struct packet_ruleset_choices *packet)
       rulesets[i][len - suf_len] = '\0';
     }
   }
-  set_rulesets(packet->ruleset_count, rulesets);
+  gui_set_rulesets(packet->ruleset_count, rulesets);
 
   for (i = 0; i < packet->ruleset_count; i++) {
     free(rulesets[i]);
@@ -744,7 +685,7 @@ void handle_ruleset_choices(const struct packet_ruleset_choices *packet)
 
 /**************************************************************************
   Called by the GUI code when the user sets the ruleset.  The ruleset
-  passed in here should match one of the strings given to set_rulesets().
+  passed in here should match one of the strings given to gui_set_rulesets.
 **************************************************************************/
 void set_ruleset(const char *ruleset)
 {

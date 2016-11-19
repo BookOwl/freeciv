@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -53,19 +53,19 @@ void gtk_expose_now(GtkWidget *w)
 }
 
 /**************************************************************************
-  Set window position relative to reference window
+  Set widget position relative to reference widget
 **************************************************************************/
-void set_relative_window_position(GtkWindow *ref, GtkWindow *w, int px, int py)
+void gtk_set_relative_position(GtkWidget *ref, GtkWidget *w, int px, int py)
 {
   gint x, y, width, height;
 
-  gtk_window_get_position(ref, &x, &y);
-  gtk_window_get_size(ref, &width, &height);
+  gtk_window_get_position(GTK_WINDOW(ref), &x, &y);
+  gtk_window_get_size(GTK_WINDOW(ref), &width, &height);
 
-  x += px * width / 100;
-  y += py * height / 100;
+  x += px*width/100;
+  y += py*height/100;
 
-  gtk_window_move(w, x, y);
+  gtk_window_move(GTK_WINDOW(w), x, y);
 }
 
 /**************************************************************************
@@ -107,7 +107,7 @@ void intl_slist(int n, const char **s, bool *done)
   int i;
 
   if (!*done) {
-    for (i = 0; i < n; i++) {
+    for(i=0; i<n; i++) {
       s[i] = Q_(s[i]);
     }
 
@@ -278,7 +278,7 @@ static void close_callback(GtkDialog *dialog, gpointer data)
 ***********************************************************************/
 void setup_dialog(GtkWidget *shell, GtkWidget *parent)
 {
-  if (GUI_GTK_OPTION(dialogs_on_top) || GUI_GTK_OPTION(fullscreen)) {
+  if (gui_gtk3_dialogs_on_top || fullscreen_mode) {
     gtk_window_set_transient_for(GTK_WINDOW(shell),
                                  GTK_WINDOW(parent));
     gtk_window_set_type_hint(GTK_WINDOW(shell),
@@ -293,6 +293,7 @@ void setup_dialog(GtkWidget *shell, GtkWidget *parent)
     g_signal_connect_after(shell, "close", G_CALLBACK(close_callback), shell);
   }
 }
+
 
 /**************************************************************************
   Emit a dialog response.
@@ -492,7 +493,7 @@ static gboolean click_on_tab_callback(GtkWidget* w,
 
 /**************************************************************************
   Creates a new dialog. It will be a tab or a window depending on the
-  current user setting of 'enable_tabs' gtk-gui option.
+  current user setting of 'gui_gtk3_enable_tabs'.
   Sets pdlg to point to the dialog once it is create, Zeroes pdlg on
   dialog destruction.
   user_data will be passed through response function
@@ -516,7 +517,7 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   dlg->default_width = 200;
   dlg->default_height = 300;
 
-  if (GUI_GTK_OPTION(enable_tabs)) {
+  if (gui_gtk3_enable_tabs) {
     dlg->type = GUI_DIALOG_TAB;
   } else {
     dlg->type = GUI_DIALOG_WINDOW;
@@ -531,9 +532,9 @@ void gui_dialog_new(struct gui_dialog **pdlg, GtkNotebook *notebook,
   action_area = gtk_grid_new();
   gtk_grid_set_row_spacing(GTK_GRID(action_area), 4);
   gtk_grid_set_column_spacing(GTK_GRID(action_area), 4);
-  if (GUI_GTK_OPTION(enable_tabs) &&
+  if (gui_gtk3_enable_tabs &&
       (check_top && notebook != GTK_NOTEBOOK(top_notebook))
-      && !GUI_GTK_OPTION(small_display_layout)) {
+      && !gui_gtk3_small_display_layout) {
     /* We expect this to be short (as opposed to tall); maximise usable
      * height by putting buttons down the right hand side */
     gtk_orientable_set_orientation(GTK_ORIENTABLE(action_area),

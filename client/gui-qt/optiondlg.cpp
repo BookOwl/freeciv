@@ -234,7 +234,7 @@ struct ft_color option_dialog::get_color(struct option *poption) {
   pal = but->palette();
   col2 =  pal.color(QPalette::Button);
 
-  return ft_color_construct(col1.name().toUtf8().data(), col2.name().toUtf8().data());
+  return ft_color(col1.name().toUtf8().data(), col2.name().toUtf8().data());
 }
 
 /****************************************************************************
@@ -334,6 +334,8 @@ void option_dialog::set_font(struct option* poption, QString s)
   ql = s.split(",");
   qp->setText(ql[0] + " " + ql[1]);
   qp->setFont(*fp);
+
+  ::gui()->fc_fonts.set_font(QString(option_name(poption)), fp);
 }
 
 
@@ -474,21 +476,21 @@ void option_dialog::set_color(struct option *poption, struct ft_color color)
   QColor col;
   QWidget *w;
   QPushButton *but;
-  QString s1 = "QPushButton { background-color: ";
-  QString s2 = ";}";
 
   w = reinterpret_cast<QPushButton *>(option_get_gui_data(poption));
   but = w->findChild<QPushButton *>("text_color");
   if (NULL != but && NULL != color.foreground 
       && '\0' != color.foreground[0]) {
     col.setNamedColor(color.foreground);
-    but->setStyleSheet(s1 + col.name() + s2);
+    pal.setColor(QPalette::Button, col);
+    but->setPalette(pal);
   }
-  but = w->findChild<QPushButton *>("text_background");
-  if (NULL != but && NULL != color.background
+  but = w->findChild < QPushButton * >("text_background");
+  if (NULL != but && NULL != color.background 
       && '\0' != color.background[0]) {
     col.setNamedColor(color.background);
-    but->setStyleSheet(s1 + col.name() + s2);
+    pal2.setColor(QPalette::Button, col);
+    but->setPalette(pal2);
   }
 }
 
@@ -625,9 +627,7 @@ void option_dialog::add_option(struct option *poption)
 
   if (!categories.contains(category_name)) {
     twidget = new QWidget();
-    twidget->setProperty("doomed", true);
     scroll = new QScrollArea();
-    scroll->setProperty("doomed", true);
     scroll->setWidgetResizable(true);
     twidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     twidget_layout = new QVBoxLayout();
@@ -876,7 +876,7 @@ void option_gui_update(struct option *poption)
       update_nationset_combo();
     }
     if (strcmp(option_name(poption), "aifill") == 0) {
-      gui()->pr_options->set_aifill(option_int_get(poption));
+      gui()->pr_options->max_players->setValue(option_int_get(poption));
     }
   }
 }

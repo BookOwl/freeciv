@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 #include "requirements.h"
+#include "unittype.h"
 
 struct strvec;          /* Actually defined in "utility/string_vector.h". */
 
@@ -40,41 +41,67 @@ struct strvec;          /* Actually defined in "utility/string_vector.h". */
 #define SPECENUM_NAME base_flag_id
 /* Unit inside are not considered aggressive if base is close to city */
 #define SPECENUM_VALUE0 BF_NOT_AGGRESSIVE
-/* TRANS: this and following strings are 'base flags', which may rarely
- * be presented to the player in ruleset help text */
-#define SPECENUM_VALUE0NAME N_("NoAggressive")
-
-/* Flags below this comment are retired in 3.0. */
-
+#define SPECENUM_VALUE0NAME "NoAggressive"
 /* Units inside will not die all at once */
-#define SPECENUM_VALUE1 BF_RETIRED_NO_STACK_DEATH
-#define SPECENUM_VALUE1NAME N_("NoStackDeath")
+#define SPECENUM_VALUE1 BF_NO_STACK_DEATH
+#define SPECENUM_VALUE1NAME "NoStackDeath"
 /* Base provides bonus for defending diplomat */
-#define SPECENUM_VALUE2 BF_RETIRED_DIPLOMAT_DEFENSE
-#define SPECENUM_VALUE2NAME N_("DiplomatDefense")
-/* Paratroopers can use base for paradrop. Now an extra user flag. */
-#define SPECENUM_VALUE3 BF_RETIRED_PARADROP_FROM
-#define SPECENUM_VALUE3NAME N_("ParadropFrom")
-
+#define SPECENUM_VALUE2 BF_DIPLOMAT_DEFENSE
+#define SPECENUM_VALUE2NAME "DiplomatDefense"
+/* Paratroopers can use base for paradrop */
+#define SPECENUM_VALUE3 BF_PARADROP_FROM
+#define SPECENUM_VALUE3NAME "ParadropFrom"
+/* Makes tile native terrain for units */
+#define SPECENUM_VALUE4 BF_NATIVE_TILE
+#define SPECENUM_VALUE4NAME "NativeTile"
+/* Owner's flag is displayed next to base */
+#define SPECENUM_VALUE5 BF_SHOW_FLAG
+#define SPECENUM_VALUE5NAME "ShowFlag"
+/* Base is always present in cities */
+#define SPECENUM_VALUE6 BF_ALWAYS_ON_CITY_CENTER
+#define SPECENUM_VALUE6NAME "AlwaysOnCityCenter"
+/* Base will be built in cities automatically */
+#define SPECENUM_VALUE7 BF_AUTO_ON_CITY_CENTER
+#define SPECENUM_VALUE7NAME "AutoOnCityCenter"
 #define SPECENUM_COUNT BF_COUNT
-#define SPECENUM_BITVECTOR bv_base_flags
 #include "specenum_gen.h"
 
-struct extra_type;
+BV_DEFINE(bv_base_flags, BF_COUNT); /* Used in the network protocol. */
 
 struct base_type {
   Base_type_id item_number;
+  bool buildable;
+  bool pillageable;
+  struct name_translation name;
+  char graphic_str[MAX_LEN_NAME];
+  char graphic_alt[MAX_LEN_NAME];
+  char activity_gfx[MAX_LEN_NAME];
+  char act_gfx_alt[MAX_LEN_NAME];
+  struct requirement_vector reqs;
   enum base_gui_type gui_type;
+  int build_time;
+  int defense_bonus;
   int border_sq;
   int vision_main_sq;
   int vision_invis_sq;
 
+  bv_unit_classes native_to;
   bv_base_flags flags;
+  bv_bases conflicts;
 
-  struct extra_type *self;
+  struct strvec *helptext;
 };
 
 #define BASE_NONE       -1
+
+/* get 'struct base_type_list' and related functions: */
+#define SPECLIST_TAG base_type
+#define SPECLIST_TYPE struct base_type
+#include "speclist.h"
+
+#define base_type_list_iterate(baselist, pbase) \
+    TYPED_LIST_ITERATE(struct base_type, baselist, pbase)
+#define base_type_list_iterate_end LIST_ITERATE_END
 
 /* General base accessor functions. */
 Base_type_id base_count(void);
@@ -83,24 +110,28 @@ Base_type_id base_number(const struct base_type *pbase);
 
 struct base_type *base_by_number(const Base_type_id id);
 
-struct extra_type *base_extra_get(const struct base_type *pbase);
+const char *base_rule_name(const struct base_type *pbase);
+const char *base_name_translation(const struct base_type *pbase);
+
+struct base_type *base_type_by_rule_name(const char *name);
+struct base_type *base_type_by_translated_name(const char *name);
+
+bool is_base_card_near(const struct tile *ptile, const struct base_type *pbase);
+bool is_base_near_tile(const struct tile *ptile, const struct base_type *pbase);
 
 /* Functions to operate on a base flag. */
 bool base_has_flag(const struct base_type *pbase, enum base_flag_id flag);
-bool is_base_flag_card_near(const struct tile *ptile,
-                            enum base_flag_id flag);
-bool is_base_flag_near_tile(const struct tile *ptile,
-                            enum base_flag_id flag);
-bool base_flag_is_retired(enum base_flag_id flag);
 bool base_has_flag_for_utype(const struct base_type *pbase,
                              enum base_flag_id flag,
+                             const struct unit_type *punittype);
+bool is_native_base_to_uclass(const struct base_type *pbase,
+                              const struct unit_class *pclass);
+bool is_native_base_to_utype(const struct base_type *pbase,
                              const struct unit_type *punittype);
 bool is_native_tile_to_base(const struct base_type *pbase,
                             const struct tile *ptile);
 
 /* Ancillary functions */
-bool base_can_be_built(const struct base_type *pbase,
-                       const struct tile *ptile);
 bool can_build_base(const struct unit *punit, const struct base_type *pbase,
                     const struct tile *ptile);
 bool player_can_build_base(const struct base_type *pbase,
@@ -111,19 +142,35 @@ struct base_type *get_base_by_gui_type(enum base_gui_type type,
                                        const struct unit *punit,
                                        const struct tile *ptile);
 
+bool can_bases_coexist(const struct base_type *base1, const struct base_type *base2);
+
 bool territory_claiming_base(const struct base_type *pbase);
+struct player *base_owner(const struct tile *ptile);
 
 /* Initialization and iteration */
-void base_type_init(struct extra_type *pextra, int idx);
+void base_types_init(void);
 void base_types_free(void);
 
-#define base_deps_iterate(_reqs, _dep)                                 \
-{                                                                      \
-  requirement_vector_iterate(_reqs, preq) {                            \
-    if (preq->source.kind == VUT_EXTRA                                 \
-        && preq->present                                               \
-        && is_extra_caused_by(preq->source.value.extra, EC_BASE)) {    \
-      struct base_type *_dep = extra_base_get(preq->source.value.extra);
+struct base_type *base_array_first(void);
+const struct base_type *base_array_last(void);
+
+#define base_type_iterate(_p)						\
+{									\
+  struct base_type *_p = base_array_first();				\
+  if (NULL != _p) {							\
+    for (; _p <= base_array_last(); _p++) {
+
+#define base_type_iterate_end						\
+    }									\
+  }									\
+}
+
+#define base_deps_iterate(_reqs, _dep)                                  \
+{                                                                       \
+  requirement_vector_iterate(_reqs, preq) {                             \
+    if (preq->source.kind == VUT_BASE                                   \
+        && !preq->negated) {                                            \
+      struct base_type *_dep = preq->source.value.base;
 
 #define base_deps_iterate_end                                           \
     }                                                                   \

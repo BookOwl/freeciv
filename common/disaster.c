@@ -96,7 +96,7 @@ struct disaster_type *disaster_by_number(Disaster_type_id id)
 ****************************************************************************/
 const char *disaster_name_translation(struct disaster_type *pdis)
 {
-  return name_translation_get(&pdis->name);
+  return name_translation(&pdis->name);
 }
 
 /****************************************************************************
@@ -104,7 +104,7 @@ const char *disaster_name_translation(struct disaster_type *pdis)
 ****************************************************************************/
 const char *disaster_rule_name(struct disaster_type *pdis)
 {
-  return rule_name_get(&pdis->name);
+  return rule_name(&pdis->name);
 }
 
 /****************************************************************************
@@ -119,10 +119,9 @@ bool disaster_has_effect(const struct disaster_type *pdis,
 /****************************************************************************
   Whether disaster can happen in given city.
 ****************************************************************************/
-bool can_disaster_happen(const struct disaster_type *pdis,
-                         const struct city *pcity)
+bool can_disaster_happen(struct disaster_type *pdis, struct city *pcity)
 {
-  return are_reqs_active(city_owner(pcity), NULL, pcity, NULL,
-                         city_tile(pcity), NULL, NULL, NULL, NULL, NULL,
-                         &pdis->reqs, RPT_POSSIBLE);
+  return are_reqs_active(city_owner(pcity), pcity, NULL, city_tile(pcity),
+                         NULL, NULL, NULL, &pdis->reqs,
+                         RPT_POSSIBLE);
 }

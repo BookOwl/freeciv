@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -31,28 +31,24 @@
 #include "overview_common.h"
 
 /* client */
+#include "chatline.h"
+#include "citydlg.h"
 #include "client_main.h"
 #include "climap.h"
 #include "climisc.h"
-#include "control.h"
-#include "editor.h"
-#include "tilespec.h"
-#include "text.h"
-
-/* client/agents */
-#include "cma_core.h"
-
-/* client/gui-gtk-3.0 */
-#include "chatline.h"
-#include "citydlg.h"
 #include "colors.h"
+#include "control.h"
 #include "dialogs.h"
 #include "editgui.h"
+#include "editor.h"
 #include "graphics.h"
 #include "gui_main.h"
 #include "inputdlg.h"
 #include "mapview.h"
 #include "menu.h"
+#include "tilespec.h"
+#include "cma_core.h"
+#include "text.h"
 
 #include "mapctrl.h"
 
@@ -80,7 +76,7 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 					   gpointer data)
 {
   struct tmousepos *mousepos = data;
-  float x, y;
+  gint x, y;
   struct tile *ptile;
 
   ptile = canvas_pos_to_tile(mousepos->x, mousepos->y);
@@ -221,7 +217,7 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
   if (ev->button == 1 || ev->button == 3) {
     release_goto_button(ev->x, ev->y);
   }
-  if (ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
+  if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
     release_right_button(ev->x, ev->y,
                          (ev->state & GDK_SHIFT_MASK) != 0);
   }
@@ -257,24 +253,29 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     /* <SHIFT> + <CONTROL> + LMB : Adjust workers. */
     if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_CONTROL_MASK)) {
       adjust_workers_button_pressed(ev->x, ev->y);
-    } else if (ev->state & GDK_CONTROL_MASK) {
-      /* <CONTROL> + LMB : Quickselect a sea unit. */
+    }
+    /* <CONTROL> + LMB : Quickselect a sea unit. */
+    else if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_SEA);
-    } else if (ptile && (ev->state & GDK_SHIFT_MASK)) {
-      /* <SHIFT> + LMB: Append focus unit. */
+    }
+    /* <SHIFT> + LMB: Append focus unit. */
+    else if (ptile && (ev->state & GDK_SHIFT_MASK)) {
       action_button_pressed(ev->x, ev->y, SELECT_APPEND);
-    } else if (ptile && (ev->state & GDK_MOD1_MASK)) {
-      /* <ALT> + LMB: popit (same as middle-click) */
-      /* FIXME: we need a general mechanism for letting freeciv work with
-       * 1- or 2-button mice. */
+    }
+    /* <ALT> + LMB: popit (same as middle-click) */
+    /* FIXME: we need a general mechanism for letting freeciv work with
+     * 1- or 2-button mice. */
+    else if (ptile && (ev->state & GDK_MOD1_MASK)) {
       popit(ev, ptile);
-    } else if (tiles_hilited_cities) {
-      /* LMB in Area Selection mode. */
+    }
+    /* LMB in Area Selection mode. */
+    else if(tiles_hilited_cities) {
       if (ptile) {
         toggle_tile_hilite(ptile);
       }
-    } else {
-      /* Plain LMB click. */
+    }
+    /* Plain LMB click. */
+    else {
       action_button_pressed(ev->x, ev->y, SELECT_POPUP);
     }
     break;
@@ -284,8 +285,9 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     /* <CONTROL> + MMB: Wake up sentries. */
     if (ev->state & GDK_CONTROL_MASK) {
       wakeup_button_pressed(ev->x, ev->y);
-    } else if (ptile) {
-      /* Plain Middle click. */
+    }
+    /* Plain Middle click. */
+    else if (ptile) {
       popit(ev, ptile);
     }
     break;
@@ -297,26 +299,29 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
     if (ptile && (ev->state & GDK_MOD1_MASK)
         && (ev->state & GDK_CONTROL_MASK)) {
       inputline_make_chat_link(ptile, (ev->state & GDK_SHIFT_MASK) != 0);
-    } else if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_MOD1_MASK)) {
-      /* <SHIFT> + <ALT> + RMB : Show/hide workers. */
+    }
+    /* <SHIFT> + <ALT> + RMB : Show/hide workers. */
+    else if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_MOD1_MASK)) {
       key_city_overlay(ev->x, ev->y);
-    } else if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_CONTROL_MASK)
-               && pcity != NULL) {
-      /* <SHIFT + CONTROL> + RMB: Paste Production. */
+    }
+    /* <SHIFT + CONTROL> + RMB: Paste Production. */
+    else if ((ev->state & GDK_SHIFT_MASK) && (ev->state & GDK_CONTROL_MASK)
+             && pcity != NULL) {
       clipboard_paste_production(pcity);
       cancel_tile_hiliting();
-    } else if (ev->state & GDK_SHIFT_MASK
-               && clipboard_copy_production(ptile)) {
-      /* <SHIFT> + RMB on city/unit: Copy Production. */
-      /* If nothing to copy, fall through to rectangle selection. */
-
+    }
+    /* <SHIFT> + RMB on city/unit: Copy Production. */
+    /* If nothing to copy, fall through to rectangle selection. */
+    else if (ev->state & GDK_SHIFT_MASK
+             && clipboard_copy_production(ptile)) {
       /* Already done the copy */
-    } else if (ev->state & GDK_CONTROL_MASK) {
-      /* <CONTROL> + RMB : Quickselect a land unit. */
+    }
+    /* <CONTROL> + RMB : Quickselect a land unit. */
+    else if (ev->state & GDK_CONTROL_MASK) {
       action_button_pressed(ev->x, ev->y, SELECT_LAND);
-    } else {
-      /* Plain RMB click. Area selection. */
-
+    }
+    /* Plain RMB click. Area selection. */
+    else {
       /*  A foolproof user will depress button on canvas,
        *  release it on another widget, and return to canvas
        *  to find rectangle still active.
@@ -336,6 +341,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
   default:
     break;
   }
+
 
   return TRUE;
 }
@@ -398,8 +404,7 @@ void update_rect_at_mouse_pos(void)
 **************************************************************************/
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
-  if (GUI_GTK_OPTION(mouse_over_map_focus)
-      && !gtk_widget_has_focus(map_canvas)) {
+  if (gui_gtk3_mouse_over_map_focus && !gtk_widget_has_focus(map_canvas)) {
     gtk_widget_grab_focus(map_canvas);
   }
 
@@ -437,7 +442,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
   /* Bizarrely, this function can be called even when we don't "leave"
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
-  if (!map_is_empty()
+  if (map_exists()
       && event->x >= 0 && event->y >= 0
       && event->x < mapview.width && event->y < mapview.height) {
     control_mouse_cursor(canvas_pos_to_tile(event->x, event->y));

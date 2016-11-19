@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,6 +22,10 @@
 
 #include <gtk/gtk.h>
 
+#ifdef GGZ_GTK
+#  include <ggz-gtk.h>
+#endif
+
 /* utility */
 #include "fcintl.h"
 #include "log.h"
@@ -40,6 +44,7 @@
 #include "climisc.h"
 #include "clinet.h"
 #include "connectdlg_common.h"
+#include "ggzclient.h"
 #include "packhand.h"
 #include "servers.h"
 #include "update_queue.h"
@@ -62,7 +67,6 @@
 
 static GtkWidget *scenario_description;
 static GtkWidget *scenario_filename;
-static GtkWidget *scenario_version;
 
 static GtkListStore *load_store, *scenario_store, *meta_store, *lan_store; 
 
@@ -131,20 +135,12 @@ static void connect_network_game_callback(GtkWidget *w, gpointer data)
   set_client_page(PAGE_NETWORK);
 }
 
-/****************************************************************************
-  Callback to open settings dialog.
-****************************************************************************/
-static void open_settings(void)
-{
-  option_dialog_popup(_("Set local options"), client_optset);
-}
-
 /**************************************************************************
   cancel, by terminating the connection and going back to main page.
 **************************************************************************/
 static void main_callback(GtkWidget *w, gpointer data)
 {
-  enum client_pages page = PAGE_MAIN;
+  enum client_pages page = in_ggz ? PAGE_GGZ : PAGE_MAIN;
 
   if (client.conn.used) {
     disconnect_from_server();
@@ -204,6 +200,17 @@ static gboolean intro_expose(GtkWidget *w, GdkEventExpose *ev)
       layout);
   return TRUE;
 }
+
+#ifdef GGZ_GTK
+/****************************************************************************
+  Callback to raise the login dialog when the gaming zone login button is
+  clicked.
+****************************************************************************/
+static void ggz_login(void)
+{
+  set_client_page(PAGE_GGZ);
+}
+#endif /* GGZ_GTK */
 
 /**************************************************************************
   create the main page.
@@ -275,10 +282,12 @@ GtkWidget *create_main_page(void)
   g_signal_connect(button, "clicked",
                    G_CALLBACK(connect_network_game_callback), NULL);
 
-  button = gtk_button_new_with_mnemonic(_("Client Settings"));
+#ifdef GGZ_GTK
+  button = gtk_button_new_with_mnemonic(_("Connect to Gaming _Zone"));
   gtk_size_group_add_widget(size, button);
   gtk_table_attach_defaults(GTK_TABLE(table), button, 1, 2, 1, 2);
-  g_signal_connect(button, "clicked", open_settings, NULL);
+  g_signal_connect(button, "clicked", ggz_login, NULL);
+#endif /* GGZ_GTK */
 
   button = gtk_button_new_from_stock(GTK_STOCK_QUIT);
   gtk_size_group_add_widget(size, button);
@@ -1197,7 +1206,7 @@ GtkWidget *create_network_page(void)
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
 				 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
   gtk_container_add(GTK_CONTAINER(sw), view);
-  if (gui_options.gui_gtk2_metaserver_tab_first) {
+  if (gui_gtk2_metaserver_tab_first) {
     gtk_notebook_prepend_page(GTK_NOTEBOOK(notebook), sw, label);
   } else {
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw, label);
@@ -1363,16 +1372,17 @@ static GtkTreeView *connection_list_view;
 static GtkWidget *start_aifill_spin = NULL;
 
 
-/* NB: Must match creation arguments in connection_list_store_new(). */
+/* NB: Must match creation arugments in connection_list_store_new(). */
 enum connection_list_columns {
   CL_COL_PLAYER_NUMBER = 0,
   CL_COL_USER_NAME,
   CL_COL_READY_STATE,
   CL_COL_PLAYER_NAME,
   CL_COL_FLAG,
-  CL_COL_COLOR,
   CL_COL_NATION,
   CL_COL_TEAM,
+  CL_COL_GGZ_RECORD,
+  CL_COL_GGZ_RATING,
   CL_COL_CONN_ID,
   CL_COL_STYLE,
   CL_COL_WEIGHT,
@@ -1392,9 +1402,10 @@ static inline GtkTreeStore *connection_list_store_new(void)
                             G_TYPE_BOOLEAN,     /* CL_COL_READY_STATE */
                             G_TYPE_STRING,      /* CL_COL_PLAYER_NAME */
                             GDK_TYPE_PIXBUF,    /* CL_COL_FLAG */
-                            GDK_TYPE_PIXBUF,    /* CL_COL_COLOR */
                             G_TYPE_STRING,      /* CL_COL_NATION */
                             G_TYPE_STRING,      /* CL_COL_TEAM */
+                            G_TYPE_STRING,      /* CL_COL_GGZ_RECORD */
+                            G_TYPE_STRING,      /* CL_COL_GGZ_RATING */
                             G_TYPE_INT,         /* CL_COL_CONN_ID */
                             G_TYPE_INT,         /* CL_COL_STYLE */
                             G_TYPE_INT,         /* CL_COL_WEIGHT */
@@ -1411,7 +1422,7 @@ static void client_aitoggle_player(void *data)
 
   if (NULL != pplayer
       && pplayer == client_player()
-      && !is_human(pplayer)) {
+      && pplayer->ai_controlled) {
     send_chat("/away");
   }
 }
@@ -1573,7 +1584,7 @@ void ai_fill_changed_by_server(int aifill)
     /* HACK: this GUI control doesn't have quite the same semantics as the
      * server 'aifill' option, in that it claims to represent the minimum
      * number of players _including humans_. The GUI control has a minimum
-     * value of 1, so aifill == 0 will not be represented correctly.
+     * value of 1, so aifill==0 will not be represented correctly.
      * But there's generally exactly one human player because the control
      * only shows up for a locally spawned server, so we more or less
      * get away with this. */
@@ -1742,7 +1753,7 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
 
   if (NULL != pplayer) {
     item = gtk_menu_item_new_with_label(_("Toggle player ready"));
-    gtk_widget_set_sensitive(item, is_human(pplayer));
+    gtk_widget_set_sensitive(item, !pplayer->ai_controlled);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     g_signal_connect_swapped(item, "activate",
                              G_CALLBACK(conn_menu_ready_chosen), menu);
@@ -1825,15 +1836,15 @@ static GtkWidget *create_conn_menu(struct player *pplayer,
   }
 
   if (ALLOW_CTRL <= client.conn.access_level
-      && NULL != pplayer && is_ai(pplayer)) {
+      && NULL != pplayer && pplayer->ai_controlled) {
     enum ai_level level;
 
     item = gtk_separator_menu_item_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
 
-    for (level = 0; level < AI_LEVEL_COUNT; level++) {
+    for (level = 0; level < AI_LEVEL_LAST; level++) {
       if (is_settable_ai_level(level)) {
-        const char *level_name = ai_level_translated_name(level);
+        const char *level_name = ai_level_name(level);
         const char *level_cmd = ai_level_cmd(level);
 
         item = gtk_menu_item_new_with_label(level_name);
@@ -2128,7 +2139,7 @@ static void update_start_page_buttons(void)
       int num_unready = 0;
 
       players_iterate(pplayer) {
-        if (is_human(pplayer) && !pplayer->is_ready) {
+        if (!pplayer->ai_controlled && !pplayer->is_ready) {
           num_unready++;
         }
       } players_iterate_end;
@@ -2146,7 +2157,7 @@ static void update_start_page_buttons(void)
     if (can_client_access_hack()) {
       sensitive = TRUE;
       players_iterate(plr) {
-        if (is_human(plr)) {
+        if (!plr->ai_controlled) {
           /* There's human controlled player(s) in game, so it's their
            * job to start the game. */
           sensitive = FALSE;
@@ -2258,6 +2269,24 @@ static bool model_get_conn_iter(GtkTreeModel *model, GtkTreeIter *iter,
 ****************************************************************************/
 void real_conn_list_dialog_update(void)
 {
+  if (connection_list_view != NULL) {
+    GObject *view;
+    GtkTreeViewColumn *col;
+    bool visible;
+
+    view = G_OBJECT(connection_list_view);
+    visible = (with_ggz || in_ggz);
+
+    col = g_object_get_data(view, "record_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+    col = g_object_get_data(view, "rating_col");
+    if (col != NULL) {
+      gtk_tree_view_column_set_visible(col, visible);
+    }
+  }
+
   if (client_state() == C_S_PREPARING
       && get_client_page() == PAGE_START
       && connection_list_store != NULL) {
@@ -2266,13 +2295,14 @@ void real_conn_list_dialog_update(void)
     GtkTreePath *path;
     GtkTreeIter child, prev_child, *pprev_child;
     GtkTreeIter parent, prev_parent, *pprev_parent = NULL;
-    GdkPixbuf *flag, *color;
+    GdkPixbuf *pixbuf;
     gboolean collapsed;
     struct player *pselected_player;
     struct connection *pselected_conn;
     bool is_ready;
     const char *nation, *plr_name, *team;
-    char name[MAX_LEN_NAME + 8];
+    char user_name[MAX_LEN_NAME + 8], rating_text[128], record_text[128];
+    int rating, wins, losses, ties, forfeits;
     enum cmdlevel access_level;
     int conn_id;
 
@@ -2281,127 +2311,146 @@ void real_conn_list_dialog_update(void)
 
     /* Insert players into the connection list. */
     players_iterate(pplayer) {
-      if (!player_has_flag(pplayer, PLRF_SCENARIO_RESERVED)) {
-        conn_id = -1;
-        access_level = ALLOW_NONE;
-        flag = pplayer->nation ? get_flag(pplayer->nation) : NULL;
-        color = create_player_icon(pplayer);
+      conn_id = -1;
+      access_level = ALLOW_NONE;
+      pixbuf = pplayer->nation ? get_flag(pplayer->nation) : NULL;
 
-        conn_list_iterate(pplayer->connections, pconn) {
-          if (pconn->playing == pplayer && !pconn->observer) {
-            conn_id = pconn->id;
-            access_level = pconn->access_level;
-            break;
-          }
-        } conn_list_iterate_end;
-
-        if (is_ai(pplayer) && !pplayer->was_created
-            && !pplayer->is_connected) {
-          /* TRANS: "<Novice AI>" */
-          fc_snprintf(name, sizeof(name), _("<%s AI>"),
-                      ai_level_translated_name(pplayer->ai_common.skill_level));
-        } else {
-          sz_strlcpy(name, pplayer->username);
-          if (access_level > ALLOW_BASIC) {
-            sz_strlcat(name, "*");
-          }
+      conn_list_iterate(pplayer->connections, pconn) {
+        if (pconn->playing == pplayer && !pconn->observer) {
+          conn_id = pconn->id;
+          access_level = pconn->access_level;
+          break;
         }
+      } conn_list_iterate_end;
 
-        is_ready = !is_human(pplayer) ? TRUE : pplayer->is_ready;
+      if (pplayer->ai_controlled && !pplayer->was_created
+          && !pplayer->is_connected) {
+        /* TRANS: "<Novice AI>" */
+        fc_snprintf(user_name, sizeof(user_name), _("<%s AI>"),
+                    ai_level_name(pplayer->ai_common.skill_level));
+      } else {
+        sz_strlcpy(user_name, pplayer->username);
+        if (access_level > ALLOW_BASIC) {
+          sz_strlcat(user_name, "*");
+        }
+      }
 
-        if (pplayer->nation == NO_NATION_SELECTED) {
-          nation = _("Random");
-          if (pplayer->was_created) {
-            plr_name = player_name(pplayer);
-          } else {
-            plr_name = "";
-          }
-        } else {
-          nation = nation_adjective_for_player(pplayer);
+      is_ready = pplayer->ai_controlled ? TRUE : pplayer->is_ready;
+
+      if (pplayer->nation == NO_NATION_SELECTED) {
+        nation = _("Random");
+        if (pplayer->was_created) {
           plr_name = player_name(pplayer);
-        }
-
-        team = pplayer->team ? team_name_translation(pplayer->team) : "";
-
-        if (model_get_player_iter(model, &parent, pprev_parent, pplayer)) {
-          gtk_tree_store_move_after(store, &parent, pprev_parent);
         } else {
-          gtk_tree_store_insert_after(store, &parent, NULL, pprev_parent);
+          plr_name = "";
+        }
+      } else {
+        nation = nation_adjective_for_player(pplayer);
+        plr_name = player_name(pplayer);
+      }
+
+      team = pplayer->team ? team_name_translation(pplayer->team) : "";
+
+      rating_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_controlled
+          && user_get_rating(pplayer->username, &rating)) {
+        fc_snprintf(rating_text, sizeof(rating_text), "%d", rating);
+      }
+
+      record_text[0] = '\0';
+      if ((in_ggz || with_ggz)
+          && !pplayer->ai_controlled
+          && user_get_record(pplayer->username,
+                             &wins, &losses, &ties, &forfeits)) {
+        if (forfeits == 0 && ties == 0) {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d",
+                      wins, losses);
+        } else if (forfeits == 0) {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d",
+                      wins, losses, ties);
+        } else {
+          fc_snprintf(record_text, sizeof(record_text), "%d-%d-%d-%d",
+                      wins, losses, ties, forfeits);
+        }
+      }
+
+      if (model_get_player_iter(model, &parent, pprev_parent, pplayer)) {
+        gtk_tree_store_move_after(store, &parent, pprev_parent);
+      } else {
+        gtk_tree_store_insert_after(store, &parent, NULL, pprev_parent);
+      }
+
+      gtk_tree_store_set(store, &parent,
+                         CL_COL_PLAYER_NUMBER, player_number(pplayer),
+                         CL_COL_USER_NAME, user_name,
+                         CL_COL_READY_STATE, is_ready,
+                         CL_COL_PLAYER_NAME, plr_name,
+                         CL_COL_FLAG, pixbuf,
+                         CL_COL_NATION, nation,
+                         CL_COL_TEAM, team,
+                         CL_COL_GGZ_RECORD, record_text,
+                         CL_COL_GGZ_RATING, rating_text,
+                         CL_COL_CONN_ID, conn_id,
+                         CL_COL_STYLE, PANGO_STYLE_NORMAL,
+                         CL_COL_WEIGHT, PANGO_WEIGHT_BOLD,
+                         -1);
+
+      /* Insert observers of this player as child nodes. */
+      pprev_child = NULL;
+      conn_list_iterate(pplayer->connections, pconn) {
+        if (pconn->id == conn_id) {
+          continue;
+        }
+        if (model_get_conn_iter(model, &child, &parent,
+                                pprev_child, pconn)) {
+          gtk_tree_store_move_after(store, &child, pprev_child);
+        } else {
+          gtk_tree_store_insert_after(store, &child, &parent, pprev_child);
         }
 
-        gtk_tree_store_set(store, &parent,
-                           CL_COL_PLAYER_NUMBER, player_number(pplayer),
-                           CL_COL_USER_NAME, name,
-                           CL_COL_READY_STATE, is_ready,
-                           CL_COL_PLAYER_NAME, plr_name,
-                           CL_COL_FLAG, flag,
-                           CL_COL_COLOR, color,
-                           CL_COL_NATION, nation,
-                           CL_COL_TEAM, team,
-                           CL_COL_CONN_ID, conn_id,
+        gtk_tree_store_set(store, &child,
+                           CL_COL_PLAYER_NUMBER, -1,
+                           CL_COL_USER_NAME, pconn->username,
+                           CL_COL_TEAM, _("Observer"),
+                           CL_COL_CONN_ID, pconn->id,
                            CL_COL_STYLE, PANGO_STYLE_NORMAL,
-                           CL_COL_WEIGHT, PANGO_WEIGHT_BOLD,
+                           CL_COL_WEIGHT, PANGO_WEIGHT_NORMAL,
                            -1);
 
-        /* Insert observers of this player as child nodes. */
-        pprev_child = NULL;
-        conn_list_iterate(pplayer->connections, pconn) {
-          if (pconn->id == conn_id) {
-            continue;
-          }
-          if (model_get_conn_iter(model, &child, &parent,
-                                  pprev_child, pconn)) {
-            gtk_tree_store_move_after(store, &child, pprev_child);
-          } else {
-            gtk_tree_store_insert_after(store, &child, &parent, pprev_child);
-          }
+        prev_child = child;
+        pprev_child = &prev_child;
+      } conn_list_iterate_end;
 
-          gtk_tree_store_set(store, &child,
-                             CL_COL_PLAYER_NUMBER, -1,
-                             CL_COL_USER_NAME, pconn->username,
-                             CL_COL_TEAM, _("Observer"),
-                             CL_COL_CONN_ID, pconn->id,
-                             CL_COL_STYLE, PANGO_STYLE_NORMAL,
-                             CL_COL_WEIGHT, PANGO_WEIGHT_NORMAL,
-                             -1);
-
-          prev_child = child;
-          pprev_child = &prev_child;
-        } conn_list_iterate_end;
-
-        /* Expand node? */
-        if (NULL != pprev_child) {
-          gtk_tree_model_get(model, &parent, CL_COL_COLLAPSED, &collapsed, -1);
-          if (!collapsed) {
-            path = gtk_tree_model_get_path(model, &parent);
-            gtk_tree_view_expand_row(GTK_TREE_VIEW(connection_list_view),
-                                     path, FALSE);
-            gtk_tree_path_free(path);
-          }
+      /* Expand node? */
+      if (NULL != pprev_child) {
+        gtk_tree_model_get(model, &parent, CL_COL_COLLAPSED, &collapsed, -1);
+        if (!collapsed) {
+          path = gtk_tree_model_get_path(model, &parent);
+          gtk_tree_view_expand_row(GTK_TREE_VIEW(connection_list_view),
+                                   path, FALSE);
+          gtk_tree_path_free(path);
         }
+      }
 
-        /* Remove trailing rows. */
-        if (NULL != pprev_child) {
-          child = prev_child;
-          if (gtk_tree_model_iter_next(model, &child)) {
-            while (gtk_tree_store_remove(store, &child)) {
-              /* Do nothing more. */
-            }
-          }
-        } else if (gtk_tree_model_iter_children(model, &child, &parent)) {
+      /* Remove trailing rows. */
+      if (NULL != pprev_child) {
+        child = prev_child;
+        if (gtk_tree_model_iter_next(model, &child)) {
           while (gtk_tree_store_remove(store, &child)) {
             /* Do nothing more. */
           }
         }
+      } else if (gtk_tree_model_iter_children(model, &child, &parent)) {
+        while (gtk_tree_store_remove(store, &child)) {
+          /* Do nothing more. */
+        }
+      }
 
-        prev_parent = parent;
-        pprev_parent = &prev_parent;
-        if (flag) {
-          g_object_unref(flag);
-        }
-        if (color) {
-          g_object_unref(color);
-        }
+      prev_parent = parent;
+      pprev_parent = &prev_parent;
+      if (pixbuf) {
+        g_object_unref(pixbuf);
       }
     } players_iterate_end;
 
@@ -2523,10 +2572,10 @@ GtkWidget *create_start_page(void)
   GtkWidget *rs_entry;
   GtkTreeSelection *selection;
   enum ai_level level;
-  /* There's less than AI_LEVEL_COUNT entries as not all levels have
+  /* There's less than AI_LEVEL_LAST entries as not all levels have
      entries (that's the whole point of this array: index != value),
      but this is set safely to the max */
-  static enum ai_level levels[AI_LEVEL_COUNT];
+  static enum ai_level levels[AI_LEVEL_LAST];
   int i = 0;
 
   box = gtk_vbox_new(FALSE, 8);
@@ -2577,9 +2626,9 @@ GtkWidget *create_start_page(void)
 
   ai_lvl_combobox = gtk_combo_box_new_text();
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_translated_name(level);
+      const char *level_name = ai_level_name(level);
 
       gtk_combo_box_insert_text(GTK_COMBO_BOX(ai_lvl_combobox), i, level_name);
       levels[i] = level;
@@ -2647,14 +2696,16 @@ GtkWidget *create_start_page(void)
 
   add_tree_col(view, G_TYPE_STRING, _("Name"),
                CL_COL_USER_NAME, NULL);
+  add_tree_col(view, G_TYPE_STRING, _("Record"),
+               CL_COL_GGZ_RECORD, "record_col");
+  add_tree_col(view, G_TYPE_STRING, _("Rating"),
+               CL_COL_GGZ_RATING, "rating_col");
   add_tree_col(view, G_TYPE_BOOLEAN, _("Ready"),
                CL_COL_READY_STATE, NULL);
   add_tree_col(view, G_TYPE_STRING, Q_("?player:Leader"),
                CL_COL_PLAYER_NAME, NULL);
   add_tree_col(view, GDK_TYPE_PIXBUF, _("Flag"),
                CL_COL_FLAG, NULL);
-  add_tree_col(view, GDK_TYPE_PIXBUF, _("Border"),
-               CL_COL_COLOR, NULL);
   add_tree_col(view, G_TYPE_STRING, _("Nation"),
                CL_COL_NATION, NULL);
   add_tree_col(view, G_TYPE_STRING, _("Team"),
@@ -2881,39 +2932,21 @@ static void scenario_list_callback(void)
   GtkTextBuffer *buffer;
   char *description;
   char *filename;
-  int ver;
-  char vername[50];
 
   if (gtk_tree_selection_get_selected(scenario_selection, NULL, &it)) {
     gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it,
 		       2, &description, -1);
     gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it,
 		       1, &filename, -1);
-    gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it,
-                       3, &ver, -1);
     filename = skip_to_basename(filename);
-    if (ver > 0) {
-      int maj;
-      int min;
-
-      maj = ver / 1000000;
-      ver %= 1000000;
-      min = ver / 10000;
-      fc_snprintf(vername, sizeof(vername), "%d.%d", maj, min);
-    } else {
-      /* TRANS: Old scenario format version */
-      fc_snprintf(vername, sizeof(vername), _("pre-2.6"));
-    }
   } else {
     description = "";
     filename = "";
-    vername[0] = '\0';
   }
 
   buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(scenario_description));
   gtk_text_buffer_set_text(buffer, description, -1);
   gtk_label_set_text(GTK_LABEL(scenario_filename), filename);
-  gtk_label_set_text(GTK_LABEL(scenario_version), vername);
 }
 
 /**************************************************************************
@@ -2943,7 +2976,7 @@ static void scenario_browse_callback(GtkWidget *w, gpointer data)
 }
 
 /**************************************************************************
-  Update the scenario page.
+  update the scenario page.
 **************************************************************************/
 static void update_scenario_page(void)
 {
@@ -2959,81 +2992,19 @@ static void update_scenario_page(void)
     if ((sf = secfile_load_section(pfile->fullname, "scenario", TRUE))
         && secfile_lookup_bool_default(sf, TRUE, "scenario.is_scenario")) {
       const char *sname, *sdescription;
-      int fcver;
-      int current_ver = MAJOR_VERSION * 1000000 + MINOR_VERSION * 10000;
+      GtkTreeIter it;
 
-      fcver = secfile_lookup_int_default(sf, 0, "scenario.game_version");
-      if (fcver < 30000) {
-        /* Pre-3.0 versions stored version number without emergency version
-         * part in the end. To get comparable version number stored,
-         * multiply by 100. */
-        fcver *= 100;
-      }
-      fcver -= (fcver % 10000); /* Patch level does not affect compatibility */
+      gtk_list_store_append(scenario_store, &it);
+
       sname = secfile_lookup_str_default(sf, NULL, "scenario.name");
       sdescription = secfile_lookup_str_default(sf, NULL,
                                                 "scenario.description");
-      log_debug("scenario file: %s from %s", sname, pfile->fullname);
-
-      /* Ignore scenarios for newer freeciv versions than we are */
-      if (fcver <= current_ver) {
-        bool add_new = TRUE;
-
-        if (sname != NULL) {
-          GtkTreeIter it;
-          bool valid;
-
-          valid = gtk_tree_model_get_iter_first(GTK_TREE_MODEL(scenario_store), &it);
-          while (valid) {
-            char *oname;
-
-            gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it,
-                               0, &oname, -1);
-
-            if (!strcmp(sname, oname)) {
-              /* Already listed scenario has the same name as the one we just found */
-              int existing;
-
-              gtk_tree_model_get(GTK_TREE_MODEL(scenario_store), &it,
-                                 3, &existing, -1);
-              log_debug("Duplicate %s (%d vs %d)", sname, existing, fcver);
-
-              if (existing > fcver) {
-                /* Already listed one has higher version number */
-                add_new = FALSE;
-              } else if (existing < fcver) {
-                /* New one has higher version number */
-                add_new = FALSE;
-
-                gtk_list_store_set(scenario_store, &it,
-                                   0, sname && strlen(sname) ? Q_(sname) : pfile->name,
-                                   1, pfile->fullname,
-                                   2, (NULL != sdescription && '\0' != sdescription[0]
-                                       ? Q_(sdescription) : ""),
-                                   3, fcver,
-                                   -1);
-              } else {
-                /* Same version number -> list both */
-              }
-            }
-            valid = gtk_tree_model_iter_next(GTK_TREE_MODEL(scenario_store), &it);
-          }
-        }
-
-        if (add_new) {
-          GtkTreeIter it;
-
-          gtk_list_store_append(scenario_store, &it);
-          gtk_list_store_set(scenario_store, &it,
-                             0, sname && strlen(sname) ? Q_(sname) : pfile->name,
-                             1, pfile->fullname,
-                             2, (NULL != sdescription && '\0' != sdescription[0]
-                                 ? Q_(sdescription) : ""),
-                             3, fcver,
-                             -1);
-        }
-      }
-
+      gtk_list_store_set(scenario_store, &it,
+                         0, sname && strlen(sname) ? Q_(sname) : pfile->name,
+                         1, pfile->fullname,
+                         2, (NULL != sdescription && '\0' != sdescription[0]
+                             ? Q_(sdescription) : ""),
+                         -1);
       secfile_destroy(sf);
     }
   } fileinfo_list_iterate_end;
@@ -3042,22 +3013,21 @@ static void update_scenario_page(void)
 }
 
 /**************************************************************************
-  Create the scenario page.
+  create the scenario page.
 **************************************************************************/
 GtkWidget *create_scenario_page(void)
 {
   GtkWidget *vbox, *hbox, *sbox, *bbox, *filenamebox, *descbox;
-  GtkWidget *versionbox, *vertext;
+
   GtkWidget *align, *button, *label, *view, *sw, *text;
   GtkCellRenderer *rend;
 
   vbox = gtk_vbox_new(FALSE, 18);
   gtk_container_set_border_width(GTK_CONTAINER(vbox), 4);
 
-  scenario_store = gtk_list_store_new(4, G_TYPE_STRING,
-                                         G_TYPE_STRING,
-                                         G_TYPE_STRING,
-                                         G_TYPE_INT);
+  scenario_store = gtk_list_store_new(3, G_TYPE_STRING,
+					 G_TYPE_STRING,
+					 G_TYPE_STRING);
   view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(scenario_store));
   g_object_unref(scenario_store);
 
@@ -3124,21 +3094,9 @@ GtkWidget *create_scenario_page(void)
   gtk_box_pack_start(GTK_BOX(filenamebox), text, FALSE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(filenamebox), scenario_filename, FALSE, TRUE, 0);
 
-  /* TRANS: Scenario format version */
-  vertext = gtk_label_new(_("Format:"));
-  scenario_version = gtk_label_new("");
-  gtk_misc_set_alignment(GTK_MISC(scenario_version), 0.0, 0.5);
-  gtk_label_set_selectable(GTK_LABEL(scenario_version), TRUE);
-
-  versionbox = gtk_hbox_new(FALSE, 12);
-
-  gtk_box_pack_start(GTK_BOX(versionbox), vertext, FALSE, TRUE, 0);
-  gtk_box_pack_start(GTK_BOX(versionbox), scenario_version, FALSE, TRUE, 0);
-
   descbox = gtk_vbox_new(FALSE, 6);
   gtk_box_pack_start(GTK_BOX(descbox), sw, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(descbox), filenamebox, FALSE, FALSE, 5);
-  gtk_box_pack_start(GTK_BOX(descbox), versionbox, FALSE, FALSE, 5);
   gtk_container_add(GTK_CONTAINER(align), descbox);
 
   bbox = gtk_hbutton_box_new();
@@ -3208,6 +3166,8 @@ void real_set_client_page(enum client_pages new_page)
 
   switch (new_page) {
   case PAGE_MAIN:
+  case PAGE_GGZ:
+    break;
   case PAGE_START:
     if (is_server_running()) {
       if (game.info.is_new_game) {
@@ -3262,6 +3222,8 @@ void real_set_client_page(enum client_pages new_page)
   case PAGE_START:
     chatline_scroll_to_bottom(FALSE);
     inputline_grab_focus();
+    break;
+  case PAGE_GGZ:
     break;
   case PAGE_LOAD:
     gtk_tree_view_focus(gtk_tree_selection_get_tree_view(load_selection));
@@ -3398,7 +3360,7 @@ void mapimg_client_save(const char *filename)
   "default", and if the user changes this then set_ruleset() should be
   called.
 ****************************************************************************/
-void set_rulesets(int num_rulesets, char **rulesets)
+void gui_set_rulesets(int num_rulesets, char **rulesets)
 {
   int i;
   int def_idx = -1;

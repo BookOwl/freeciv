@@ -27,7 +27,17 @@
 #include <QMainWindow>
 #include <QMap>
 #include <QSpinBox>
-#include <QStackedWidget>
+#include <QTabWidget>
+
+// client
+#include "chatline_common.h"
+#include "client_main.h"
+#include "clinet.h"
+#include "mapview_common.h"
+#include "tilespec.h"
+
+// common
+#include "packets.h"
 
 // client
 #include "chatline_common.h"
@@ -38,14 +48,10 @@
 #include "servers.h"
 #include "tilespec.h"
 
-// common
-#include "packets.h"
-
 // gui-qt
 #include "canvas.h"
 #include "chatline.h"
 #include "dialogs.h"
-#include "fonts.h"
 #include "gotodlg.h"
 #include "mapview.h"
 #include "messagewin.h"
@@ -61,30 +67,23 @@ enum connection_state {
   WAITING_TYPE
 };
 
-struct fc_shortcut;
-class fc_sidebar;
-class fc_sidetax;
-class fc_sidewidget;
 class MainWindow;
-class pregame_options;
-class QApplication;
-class QDialog;
+class QCompleter;
 class QLabel;
 class QLineEdit;
-class QMainWindow;
-class QSocketNotifier;
-class QStackedLayout;
-class QStatusBar;
+class QLineEdit;
 class QString;
 class QTableWidget;
 class QTextEdit;
 class QTimer;
+class QSocketNotifier;
+class QDialog;
+class QApplication;
 class QTreeWidget;
+class QStatusBar;
+class QMainWindow;
+class pregame_options;
 
-
-/****************************************************************************
-  Class helping reading icons/pixmaps from themes/gui-qt/icons folder
-****************************************************************************/
 class fc_icons
 {
   Q_DISABLE_COPY(fc_icons);
@@ -92,29 +91,33 @@ class fc_icons
 private:
   explicit fc_icons();
   static fc_icons* m_instance;
-  QPixmapCache pix_cache;
 
 public:
   static fc_icons* instance();
   static void drop();
   QIcon get_icon(const QString& id);
-  QPixmap *get_pixmap(const QString& id);
   QString get_path(const QString& id);
 };
 
-/****************************************************************************
-  Widget holding all game tabs
-****************************************************************************/
-class fc_game_tab_widget: public QStackedWidget
+
+class fc_game_tab_widget: public QTabWidget
 {
   Q_OBJECT
 public:
   fc_game_tab_widget();
-  void init();
-protected:
-  void resizeEvent(QResizeEvent *event);
+  void change_color(int index, QColor col);
 private slots:
-  void current_changed(int index);
+  void restore_label_color(int index);
+};
+
+class fc_font
+{
+  QMap <QString, QFont *> font_map;
+public:
+  void set_font(QString name, QFont *qf);
+  QFont* get_font(QString name);
+  void init_fonts();
+  void release_fonts();
 };
 
 /****************************************************************************
@@ -122,62 +125,29 @@ private slots:
 ****************************************************************************/
 struct fc_settings
 {
-  int chat_width;
-  int chat_height;
-  int chat_x_pos;
-  int chat_y_pos;
+  int infotab_width; /* in percent */
+  int infotab_height; /* in percent */
   int player_repo_sort_col;
   Qt::SortOrder player_report_sort;
   int city_repo_sort_col;
   Qt::SortOrder city_report_sort;
-  QByteArray city_geometry;
-  QByteArray city_splitter1;
-  QByteArray city_splitter2;
-  QByteArray city_splitter3;
-  int unit_info_pos_x;
-  int unit_info_pos_y;
-  float minimap_x;
-  float minimap_y;
-  float minimap_width;
-  float minimap_height;
 };
 
-/****************************************************************************
-  Corner widget for menu
-****************************************************************************/
-class fc_corner : public QWidget
-{
-  Q_OBJECT
-  QMainWindow *mw;
-public:
-  fc_corner(QMainWindow *qmw);
-public slots:
-  void maximize();
-  void minimize();
-  void close_fc();
-};
-
-
-class fc_client : public QMainWindow,
-                  private chat_listener
+class fc_client : public QMainWindow
 {
   Q_OBJECT
   QWidget *main_wdg;
-  QWidget *pages[ (int) PAGE_GAME + 2];
+  QWidget *pages[ (int) PAGE_GGZ + 1];
   QWidget *connect_lan;
   QWidget *connect_metaserver;
   QWidget *game_main_widget;
 
-  QGridLayout *pages_layout[PAGE_GAME + 2];
-  QStackedLayout *central_layout;
-  QGridLayout *game_layout;
+  QGridLayout *central_layout;
+  QGridLayout *pages_layout[PAGE_GGZ + 1];
 
   QTextEdit *output_window;
   QTextEdit *scenarios_view;
   QLabel *scenarios_text;
-  QLabel *load_save_text;
-  QLabel *load_pix;
-  QCheckBox *show_preview;
 
   QLineEdit *connect_host_edit;
   QLineEdit *connect_port_edit;
@@ -187,20 +157,19 @@ class fc_client : public QMainWindow,
 
   QPushButton *button;
   QPushButton *obs_button;
-  QPushButton *start_button;
-  QPushButton *nation_button;
 
   QDialogButtonBox* button_box;
 
   QSocketNotifier *server_notifier;
 
-  chat_input *chat_line;
+  QLineEdit *chat_line;
 
   QTableWidget* lan_widget;
   QTableWidget* wan_widget;
   QTableWidget* info_widget;
   QTableWidget* saves_load;
   QTableWidget* scenarios_load;
+  QTableWidget* start_players;
   QTreeWidget* start_players_tree;
 
   QTimer* meta_scan_timer;
@@ -212,10 +181,8 @@ class fc_client : public QMainWindow,
   QLabel *status_bar_label;
   info_tile *info_tile_wdg;
   choice_dialog *opened_dialog;
-  fc_sidewidget *sw_map;
-  fc_sidewidget *sw_cities;
-  fc_sidewidget *sw_tax;
-  fc_sidewidget *sw_economy;
+  int current_unit_id;
+  int current_unit_target_id;
 
 public:
   fc_client();
@@ -223,16 +190,17 @@ public:
 
   void main(QApplication *);
   map_view *mapview_wdg;
-  fc_sidebar *sidebar_wdg;
   minimap_view *minimapview_wdg;
+  unit_label *unitinfo_wdg;
   void add_server_source(int);
   void remove_server_source();
   bool event(QEvent *event);
 
   enum client_pages current_page();
 
+  void append_output_window(const QString &);
   void set_status_bar(QString str, int timeout = 2000);
-  int add_game_tab(QWidget *widget);
+  int add_game_tab(QWidget *widget, QString title);
   void rm_game_tab(int index); /* doesn't delete widget */
   void update_start_page();
   void toggle_unit_sel_widget(struct tile *ptile);
@@ -240,47 +208,44 @@ public:
   void popdown_unit_sel();
   void popup_tile_info(struct tile *ptile);
   void popdown_tile_info();
+  void set_current_unit(int curr, int target);
+  void get_current_unit(int *curr, int *target);
   void set_diplo_dialog(choice_dialog *widget);
+  void update_completer();
   void handle_authentication_req(enum authentication_type type,
                                  const char *message);
   choice_dialog *get_diplo_dialog();
-  void update_sidebar_position();
 
+  QCompleter *chat_completer;
+  QStringList chat_history;
+  int history_pos;
   mr_idle mr_idler;
+  fc_font fc_fonts;
+  info_label *game_info_label;
+  end_turn_area *end_turn_rect;
   QWidget *central_wdg;
   mr_menu *menu_bar;
-  fc_corner *corner_wid;
   fc_game_tab_widget *game_tab_widget;
   messagewdg *msgwdg;
   info_tab *infotab;
   pregamevote *pre_vote;
-  units_select *unit_sel;
+  unit_select *unit_sel;
   xvote *x_vote;
   goto_dialog *gtd;
   QCursor *fc_cursors[CURSOR_LAST][NUM_CURSOR_FRAMES];
   pregame_options *pr_options;
   fc_settings qt_settings;
-  trade_generator trade_gen;
-  qfc_rally_list rallies;
-  hud_units *unitinfo_wdg;
-  bool interface_locked;
-  fc_sidewidget *sw_cunit;
-  fc_sidewidget *sw_science;
-  fc_sidewidget *sw_endturn;
-  fc_sidewidget *sw_indicators;
-  fc_sidewidget *sw_diplo;
   void gimme_place(QWidget* widget, QString str);
   int gimme_index_of(QString str);
   void remove_repo_dlg(QString str);
   bool is_repo_dlg_open(QString str);
   void write_settings();
   bool is_closing();
-  void update_sidebar_tooltips();
-  void reload_sidebar_icons();
 
 private slots:
-  void send_fake_chat_message(const QString &message);
+
   void server_input(int sock);
+  void chat();
   void closing();
   void slot_lan_scan();
   void slot_meta_scan();
@@ -289,15 +254,16 @@ private slots:
   void slot_pregame_observe();
   void slot_pregame_start();
   void update_network_lists();
+  bool slot_close_widget(int index);
   void start_page_menu(QPoint);
   void slot_pick_nation();
+  void send_command_to_server(const QString &);
   void start_new_game();
   void start_scenario();
   void start_from_save();
   void browse_saves();
   void browse_scenarios();
   void clear_status_bar();
-  void state_preview(int);
 
 public slots:
   void switch_page(int i);
@@ -310,20 +276,19 @@ protected slots:
   void slot_selection_changed(const QItemSelection&, const QItemSelection&);
 
 private:
-  void chat_message_received(const QString &message,
-                             const struct text_tag_list *tags);
+
   void create_main_page();
   void create_network_page();
   void create_load_page();
   void create_scenario_page();
   void create_start_page();
   void create_game_page();
-  void create_loading_page();
   bool chat_active_on_page(enum client_pages);
+  void show_children(const QLayout*, bool);
   void destroy_server_scans (void);
-  void update_server_list(enum server_scan_type sstype,
-                          const struct server_list *list);
-  bool check_server_scan(server_scan *scan_data);
+  void update_server_list(enum server_scan_type,
+                           const struct server_list *);
+  bool check_server_scan (server_scan*);
   void update_load_page(void);
   void create_cursors(void);
   void update_scenarios_page(void);
@@ -341,6 +306,7 @@ private:
 
 protected:
   void timerEvent(QTimerEvent *);
+  bool eventFilter(QObject *obj, QEvent *event);
   void closeEvent(QCloseEvent *event);
 
 signals:
@@ -356,21 +322,15 @@ class pregame_options : public QWidget
 {
   Q_OBJECT
   QComboBox *ailevel;
-  QComboBox *cruleset;
-  QPushButton *nation;
-  QSpinBox *max_players;
 public:
   pregame_options() {};
   void init();
-
-  void set_rulesets(int num_rulesets, char **rulesets);
-  void set_aifill(int aifill);
-  void update_buttons();
+  QComboBox *cruleset;
+  QSpinBox *max_players;
 private slots:
   void max_players_change(int i);
   void ailevel_change(int i);
   void ruleset_change(int i);
-  void pick_nation();
 public slots:
   void popup_server_options();
 };

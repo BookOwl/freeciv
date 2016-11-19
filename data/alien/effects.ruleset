@@ -13,8 +13,7 @@
 
 [datafile]
 description="Alien World effects data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -25,7 +24,6 @@ format_version=10
 ;                           See README.effects for list of possible types
 ; value                   = Value added for the effect type when this effect is active,
 ;                           i.e., all requirements are fulfilled
-; multiplier              = Name of the policy that gives a multiplier for effect's value
 ; reqs                    = Requirements for the effect to be active.
 ;                           See README.effects for help on requirements
 ;
@@ -37,47 +35,36 @@ format_version=10
 ; Effects for nations are in separate file
 *include "alien/nation_effects.ruleset"
 
-[effect_barbarian1]
+[effect_madmen1]
 type    = "No_Diplomacy"
 value   = 1
 reqs    =
     { "type",   "name", "range"
-      "NationGroup", "Barbarian", "Player"
+      "Nation", "Madmen", "Player"
     }
 
-[effect_barbarian2]
+[effect_madmen2]
 type    = "Not_Tech_Source"
 value   = 1
 reqs    =
     { "type",   "name", "range"
-      "NationGroup", "Barbarian", "Player"
+      "Nation", "Madmen", "Player"
     }
 
-; Barbarian disappearance
-
-[effect_barbarian_disappear]
-type    = "Retire_Pct"
-value   = 10
+[effect_lunatic1]
+type    = "No_Diplomacy"
+value   = 1
 reqs    =
-    { "type", "name", "range", "present"
-      "NationGroup", "Barbarian", "Player", TRUE
-      "Age", "5", "Local", TRUE
-      "CityTile", "Center", "Local", FALSE
+    { "type",   "name", "range"
+      "Nation", "Lunatic", "Player"
     }
 
-; Lone Leader might escape on coast (33% chance)
-; Complement of the two effects should be 0.9 * 0.66 = 0.594
-; (100 - 59) - 10 = 31
-[effect_barbarian_cyborg_escape]
-type    = "Retire_Pct"
-value   = 31
+[effect_lunatic2]
+type    = "Not_Tech_Source"
+value   = 1
 reqs    =
-    { "type", "name", "range"
-      "NationGroup", "Barbarian", "Player"
-      "UnitType", "Cyborgs", "Local"
-      "Age", "5", "Local"
-      "TerrainClass", "Oceanic", "Adjacent"
-      "MaxUnitsOnTile", "1", "Local"
+    { "type",   "name", "range"
+      "Nation", "Lunatic", "Player"
     }
 
 ; Base vision range - radius of vision is sqrt(5) = 2.24
@@ -406,15 +393,6 @@ reqs    =
       "Building", "Force Walls", "City"
     }
 
-[effect_strong_force_walls_visible]
-type    = "Visible_Walls"
-value   = 1
-reqs    =
-    { "type", "name", "range"
-      "Building", "Force Walls", "City"
-      "Tech", "Strong Force", "Player"
-    }
-
 [effect_cyber_factory]
 type    = "Output_Bonus"
 value	= 75
@@ -440,15 +418,7 @@ reqs	=
       "Building", "Training Facility", "City"
     }
 
-[effect_communication_contact]
-type    = "Have_Contacts"
-value	= 1
-reqs	=
-    { "type", "name", "range"
-      "Tech", "Communication", "Player"
-    }
-
-[effect_communication_embassy]
+[effect_communication]
 type    = "Have_Embassies"
 value	= 1
 reqs	=
@@ -489,110 +459,63 @@ reqs	=
       "OutputType", "Science", "Local"
     }
 
-[effect_mine]
-type    = "Mining_Pct"
-value   = 100
-reqs    =
-    { "type", "name", "range"
-      "Extra", "Mine", "Local"
-    }
-
-[effect_irrigation]
-type    = "Irrigation_Pct"
-value   = 100
-reqs    =
-    { "type", "name", "range", "present"
-      "Extra", "Irrigation", "Local", TRUE
-      "CityTile", "Center", "Local", FALSE
-    }
-
-[effect_irrigation_2]
-type    = "Irrigation_Pct"
-value	= 100
-reqs	=
-    { "type", "name", "range", "present"
-      "CityTile", "Center", "Local", TRUE
-      "TerrainAlter", "CanIrrigate", "Local", TRUE
-      "Extra", "Mine", "Local", FALSE
-    }
-
 [effect_farmland]
 type    = "Output_Per_Tile"
 value	= 50
 reqs	=
-    { "type", "name", "range", "present"
-      "Extra", "Farmland", "Local", TRUE
-      "OutputType", "Food", "Local", TRUE
-      "CityTile", "Center", "Local", FALSE
+    { "type", "name", "range"
+      "Special", "Farmland", "Local"
+      "OutputType", "Food", "Local"
+    }
+nreqs   =
+    { "type", "name", "range"
+      "CityTile", "Center", "Local"
     }
 
 [effect_farmland_regeneration]
 type    = "Output_Per_Tile"
 value	= 50
 reqs	=
-    { "type", "name", "range", "present"
-      "Extra", "Farmland", "Local", TRUE
-      "OutputType", "Food", "Local", TRUE
-      "Tech", "Food Regeneration", "Player", TRUE
-      "CityTile", "Center", "Local", FALSE
+    { "type", "name", "range"
+      "Special", "Farmland", "Local"
+      "OutputType", "Food", "Local"
+      "Tech", "Food Regeneration", "Player"
+    }
+nreqs   =
+    { "type", "name", "range"
+      "CityTile", "Center", "Local"
     }
 
 [effect_citycenter]
 type    = "Output_Per_Tile"
 value	= 50
 reqs	=
-    { "type", "name", "range", "present"
-      "CityTile", "Center", "Local", TRUE
-      "TerrainAlter", "CanIrrigate", "Local", TRUE
-      "Tech", "Protein Modifications", "Player", TRUE
-      "OutputType", "Food", "Local", TRUE
-     "Extra", "Mine", "Local", FALSE
+    { "type", "name", "range"
+      "CityTile", "Center", "Local"
+      "TerrainAlter", "CanIrrigate", "Local"
+      "Tech", "Protein Modifications", "Player"
+      "OutputType", "Food", "Local"
+    }
+nreqs   =
+    { "type", "name", "range"
+      "Special", "Mine", "Local"
     }
 
 [effect_citycenter_regeneration]
 type    = "Output_Per_Tile"
 value	= 50
 reqs	=
-    { "type", "name", "range", "present"
-      "CityTile", "Center", "Local", TRUE
-      "TerrainAlter", "CanIrrigate", "Local", TRUE
-      "Tech", "Protein Modifications", "Player", TRUE
-      "OutputType", "Food", "Local", TRUE
-      "Tech", "Food Regeneration", "Player", TRUE
-      "Extra", "Mine", "Local", FALSE
-    }
-
-[effect_pollution]
-type	= "Output_Tile_Punish_Pct"
-value	= 50
-reqs	=
-    { "type", "name", "range", "present"
-      "Extra", "Pollution", "Local", TRUE
-      "Extra", "Fallout", "Local", FALSE
-    }
-
-[effect_fallout]
-type	= "Output_Tile_Punish_Pct"
-value	= 50
-reqs	=
-    { "type", "name", "range", "present"
-      "Extra", "Fallout", "Local", TRUE
-      "Extra", "Pollution", "Local", FALSE
-    }
-
-[effect_pollution_fallout]
-type	= "Output_Tile_Punish_Pct"
-value	= 75
-reqs	=
     { "type", "name", "range"
-      "Extra", "Fallout", "Local"
-      "Extra", "Pollution", "Local"
+      "CityTile", "Center", "Local"
+      "TerrainAlter", "CanIrrigate", "Local"
+      "Tech", "Protein Modifications", "Player"
+      "OutputType", "Food", "Local"
+      "Tech", "Food Regeneration", "Player"
     }
-
-; No population-related pollution
-[effect_pop_pollution]
-type	= "Pollu_Pop_Pct"
-value	= -100
+nreqs   =
+    { "type", "name", "range"
+      "Special", "Mine", "Local"
+    }
 
 [effect_hospital]
 type    = "HP_Regen"
@@ -600,6 +523,14 @@ value	= 50
 reqs	=
     { "type", "name", "range"
       "Building", "Hospital", "City"
+    }
+
+[effect_bunker_noincite]
+type    = "No_Incite"
+value	= 1
+reqs	=
+    { "type", "name", "range"
+      "Building", "Bunker", "City"
     }
 
 [effect_headquarters_capital]
@@ -612,6 +543,14 @@ reqs	=
 
 [effect_headquarters_gc]
 type    = "Gov_Center"
+value	= 1
+reqs	=
+    { "type", "name", "range"
+      "Building", "Headquarters", "City"
+    }
+
+[effect_headquarters_2]
+type    = "No_Incite"
 value	= 1
 reqs	=
     { "type", "name", "range"
@@ -699,7 +638,7 @@ reqs	=
     }
 
 [effect_calendar_base]
-type    = "Turn_Fragments"
+type    = "Turn_Years"
 value   = 1
 
 [effect_tech_cost_base]
@@ -718,9 +657,12 @@ reqs	=
 type    = "Make_Content"
 value   = -2
 reqs    =
-    { "type", "name", "range", "present"
-      "Tech", "Soul", "World", TRUE
-      "Tech", "Soul", "Player", FALSE
+    { "type", "name", "range"
+      "Tech", "Soul", "World"
+    }
+nreqs   =
+    { "type", "name", "range"
+      "Tech", "Soul", "Player"
     }
 
 [effect_alien_rights]
@@ -900,7 +842,7 @@ value   = 1
 reqs    =
   { "type", "name", "range"
     "Tech", "Manufacturing", "Player"
-    "Extra", "Green River", "Local"
+    "Road", "Green River", "Local"
   }
 
 [effect_irrigate_src_brown_river]
@@ -909,7 +851,7 @@ value   = 1
 reqs    =
   { "type", "name", "range"
     "Tech", "Manufacturing", "Player"
-    "Extra", "Brown River", "Local"
+    "Road", "Brown River", "Local"
   }
 
 [effect_irrigate_src_green_river_adjacent]
@@ -918,7 +860,7 @@ value   = 1
 reqs    =
   { "type", "name", "range"
     "Tech", "Water Flow", "Player"
-    "Extra", "Green River", "CAdjacent"
+    "Road", "Green River", "CAdjacent"
   }
 
 [effect_irrigate_src_brown_river_adjacent]
@@ -927,7 +869,7 @@ value   = 1
 reqs    =
   { "type", "name", "range"
     "Tech", "Water Flow", "Player"
-    "Extra", "Brown River", "CAdjacent"
+    "Road", "Brown River", "CAdjacent"
   }
 
 [effect_irrigate_src_citycenter]
@@ -950,9 +892,9 @@ reqs    =
 [effect_mining]
 type    = "Mining_Possible"
 value   = 1
-reqs    =
-  { "type", "name", "range", "present"
-    "Terrain", "Thick Mountains", "Local", FALSE
+nreqs    =
+  { "type", "name", "range"
+    "Terrain", "Thick Mountains", "Local"
   }
 
 [effect_mine_mountains]
@@ -981,22 +923,6 @@ reqs    =
     "Tech", "Personal Contact", "Player"
   }
 
-[effect_personal_contact_sabotage]
-type    = "Building_Saboteur_Resistant"
-value   = 40
-reqs    =
-  { "type", "name", "range"
-    "Tech", "Personal Contact", "Player"
-  }
-
-[effect_square_map_city_radius]
-type  = "City_Radius_Sq"
-value = 1
-reqs  =
-    { "type", "name", "range", "present"
-      "Topology", "Hex", "World", FALSE
-    }
-
 [effect_transportation]
 type   = "City_Radius_Sq"
 value  = 1
@@ -1013,90 +939,6 @@ reqs    =
       "Tech", "Thermal Module", "Player"
     }
 
-[effect_enter_marketplace_bonus_reduction]
-type	= "Trade_Revenue_Bonus"
-value	= -1585
-reqs	=
-    { "type", "name", "range"
-      "Action", "Enter Marketplace", "Local"
-    }
-
-; Fudge factor to more closely approximate Civ2 behavior. (Civ2 is
-; really very different -- this just fakes it a little better)
-[effect_bonus_fudge_factor]
-type	= "Trade_Revenue_Bonus"
-value	= 1585
-
 [effect_trade_routes]
 type    = "Max_Trade_Routes"
 value   = 4
-
-[effect_incite_cost_empty]
-type = "Incite_Cost_Pct"
-value = -50
-reqs    =
-    { "type", "name", "range"
-      "MaxUnitsOnTile", "0", "Local"
-    }
-
-[effect_unit_bribe_cost_settlers]
-type	= "Unit_Bribe_Cost_Pct"
-value	= -50
-reqs	=
-    { "type", "name", "range"
-      "UnitFlag", "Cities", "Local"
-    }
-
-[effect_illegal_action_move_cost_base]
-type	= "Illegal_Action_Move_Cost"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Found City", "Local", FALSE
-      "Action", "Join City", "Local", FALSE
-    }
-
-[effect_incident_success_steal_tech]
-type	= "Casus_Belli_Success"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Steal Tech", "Local", TRUE
-      "DiplRel", "War", "Local", FALSE
-    }
-
-[effect_incident_caught_steal_tech]
-type	= "Casus_Belli_Caught"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Steal Tech", "Local", TRUE
-      "DiplRel", "War", "Local", FALSE
-    }
-
-[effect_incident_success_bribe_unit]
-type	= "Casus_Belli_Success"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Bribe Unit", "Local", TRUE
-      "DiplRel", "War", "Local", FALSE
-    }
-
-[effect_incident_success_incite]
-type	= "Casus_Belli_Success"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Incite City", "Local", TRUE
-      "DiplRel", "War", "Local", FALSE
-    }
-
-[effect_incident_success_sabotage_city]
-type	= "Casus_Belli_Success"
-value	= 1
-reqs	=
-    { "type", "name", "range", "present"
-      "Action", "Sabotage City", "Local", TRUE
-      "DiplRel", "War", "Local", FALSE
-    }

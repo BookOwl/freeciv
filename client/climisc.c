@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,9 +11,9 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-/*********************************************************************** 
-  This module contains various general - mostly highlevel - functions
-  used throughout the client.
+/********************************************************************** 
+This module contains various general - mostly highlevel - functions
+used throughout the client.
 ***********************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -111,7 +111,7 @@ void client_remove_unit(struct unit *punit)
     }
 
     log_debug("map city %s, %s, (%d %d)",
-              city_name_get(pcity), nation_rule_name(nation_of_city(pcity)),
+              city_name(pcity), nation_rule_name(nation_of_city(pcity)),
               TILE_XY(city_tile(pcity)));
   }
 
@@ -120,7 +120,7 @@ void client_remove_unit(struct unit *punit)
     if (NULL != pcity) {
       refresh_city_dialog(pcity);
       log_debug("home city %s, %s, (%d %d)",
-                city_name_get(pcity), nation_rule_name(nation_of_city(pcity)),
+                city_name(pcity), nation_rule_name(nation_of_city(pcity)),
                 TILE_XY(city_tile(pcity)));
     }
   }
@@ -137,11 +137,11 @@ void client_remove_city(struct city *pcity)
   struct tile *ptile = city_tile(pcity);
   struct city old_city = *pcity;
 
-  log_debug("client_remove_city() %d, %s", pcity->id, city_name_get(pcity));
+  log_debug("client_remove_city() %d, %s", pcity->id, city_name(pcity));
 
   /* Explicitly remove all improvements, to properly remove any global effects
      and to handle the preservation of "destroyed" effects. */
-  effect_update = FALSE;
+  effect_update=FALSE;
 
   city_built_iterate(pcity, pimprove) {
     effect_update = TRUE;
@@ -159,10 +159,10 @@ void client_remove_city(struct city *pcity)
 }
 
 /**************************************************************************
-  Change all cities building X to building Y, if possible.  X and Y
-  could be improvements or units. X and Y are compound ids.
+Change all cities building X to building Y, if possible.  X and Y
+could be improvements or units. X and Y are compound ids.
 **************************************************************************/
-void client_change_all(struct universal *from, struct universal *to)
+void client_change_all(struct universal from, struct universal to)
 {
   if (!can_client_issue_orders()) {
     return;
@@ -170,16 +170,16 @@ void client_change_all(struct universal *from, struct universal *to)
 
   create_event(NULL, E_CITY_PRODUCTION_CHANGED, ftc_client,
                _("Changing production of every %s into %s."),
-               VUT_UTYPE == from->kind
-               ? utype_name_translation(from->value.utype)
-               : improvement_name_translation(from->value.building),
-               VUT_UTYPE == to->kind
-               ? utype_name_translation(to->value.utype)
-               : improvement_name_translation(to->value.building));
+               VUT_UTYPE == from.kind
+               ? utype_name_translation(from.value.utype)
+               : improvement_name_translation(from.value.building),
+               VUT_UTYPE == to.kind
+               ? utype_name_translation(to.value.utype)
+               : improvement_name_translation(to.value.building));
 
   connection_do_buffer(&client.conn);
   city_list_iterate (client.conn.playing->cities, pcity) {
-    if (are_universals_equal(&pcity->production, from)
+    if (are_universals_equal(&pcity->production, &from)
         && can_city_build_now(pcity, to)) {
       city_change_production(pcity, to);
     }
@@ -236,7 +236,7 @@ const char *get_vision_status(const struct player *me,
 }
 
 /**************************************************************************
-  Copy a string that describes the given clause into the return buffer.
+Copy a string that describes the given clause into the return buffer.
 **************************************************************************/
 void client_diplomacy_clause_string(char *buf, int bufsiz,
 				    struct Clause *pclause)
@@ -247,14 +247,14 @@ void client_diplomacy_clause_string(char *buf, int bufsiz,
   case CLAUSE_ADVANCE:
     fc_snprintf(buf, bufsiz, _("The %s give %s"),
                 nation_plural_for_player(pclause->from),
-                advance_name_translation(advance_by_number(pclause->value)));
+                advance_name_for_player(client.conn.playing, pclause->value));
     break;
   case CLAUSE_CITY:
     pcity = game_city_by_number(pclause->value);
     if (pcity) {
       fc_snprintf(buf, bufsiz, _("The %s give %s"),
                   nation_plural_for_player(pclause->from),
-                  city_name_get(pcity));
+                  city_name(pcity));
     } else {
       fc_snprintf(buf, bufsiz,_("The %s give an unknown city"),
                   nation_plural_for_player(pclause->from));
@@ -348,18 +348,20 @@ void nuclear_winter_scaled(int *chance, int *rate, int max)
 struct sprite *client_research_sprite(void)
 {
   if (NULL != client.conn.playing && can_client_change_view()) {
-    const struct research *presearch = research_get(client_player());
-    int idx = 0;
+    const struct player_research *presearch =
+        player_research_get(client_player());
+    int index = 0;
 
-    if (A_UNSET != presearch->researching) {
-      idx = (NUM_TILES_PROGRESS * presearch->bulbs_researched
-             / (presearch->client.researching_cost + 1));
+    if (is_future_tech(presearch->researching)
+        || NULL != valid_advance_by_number(presearch->researching)) {
+      index = (NUM_TILES_PROGRESS * presearch->bulbs_researched
+               / (presearch->client.researching_cost + 1));
     }
 
     /* This clipping can be necessary since we can end up with excess
      * research */
-    idx = CLIP(0, idx, NUM_TILES_PROGRESS - 1);
-    return get_indicator_sprite(tileset, INDICATOR_BULB, idx);
+    index = CLIP(0, index, NUM_TILES_PROGRESS - 1);
+    return get_indicator_sprite(tileset, INDICATOR_BULB, index);
   } else {
     return get_indicator_sprite(tileset, INDICATOR_BULB, 0);
   }
@@ -370,16 +372,15 @@ struct sprite *client_research_sprite(void)
 **************************************************************************/
 struct sprite *client_warming_sprite(void)
 {
-  int idx;
-
+  int index;
   if (can_client_change_view()) {
     /* Highest sprite kicks in at about 25% risk */
-    global_warming_scaled(&idx, NULL, (NUM_TILES_PROGRESS-1)*4);
-    idx = CLIP(0, idx, NUM_TILES_PROGRESS-1);
+    global_warming_scaled(&index, NULL, (NUM_TILES_PROGRESS-1)*4);
+    index = CLIP(0, index, NUM_TILES_PROGRESS-1);
   } else {
-    idx = 0;
+    index = 0;
   }
-  return get_indicator_sprite(tileset, INDICATOR_WARMING, idx);
+  return get_indicator_sprite(tileset, INDICATOR_WARMING, index);
 }
 
 /**************************************************************************
@@ -387,16 +388,15 @@ struct sprite *client_warming_sprite(void)
 **************************************************************************/
 struct sprite *client_cooling_sprite(void)
 {
-  int idx;
-
+  int index;
   if (can_client_change_view()) {
     /* Highest sprite kicks in at about 25% risk */
-    nuclear_winter_scaled(&idx, NULL, (NUM_TILES_PROGRESS-1)*4);
-    idx = CLIP(0, idx, NUM_TILES_PROGRESS-1);
+    nuclear_winter_scaled(&index, NULL, (NUM_TILES_PROGRESS-1)*4);
+    index = CLIP(0, index, NUM_TILES_PROGRESS-1);
   } else {
-    idx = 0;
+    index = 0;
   }
-  return get_indicator_sprite(tileset, INDICATOR_COOLING, idx);
+  return get_indicator_sprite(tileset, INDICATOR_COOLING, index);
 }
 
 /**************************************************************************
@@ -449,14 +449,14 @@ void center_on_something(void)
     fc_assert_ret(punit != NULL);
     center_tile_mapcanvas(unit_tile(punit));
   } else {
-    struct tile *ctile = native_pos_to_tile(wld.map.xsize / 2, wld.map.ysize / 2);
+    struct tile *ctile = native_pos_to_tile(map.xsize / 2, map.ysize / 2);
 
     /* Just any known tile will do; search near the middle first. */
     /* Iterate outward from the center tile.  We have to give a radius that
      * is guaranteed to be larger than the map will be.  Although this is
      * a misuse of map.xsize and map.ysize (which are native dimensions),
      * it should give a sufficiently large radius. */
-    iterate_outward(ctile, wld.map.xsize + wld.map.ysize, ptile) {
+    iterate_outward(ctile, map.xsize + map.ysize, ptile) {
       if (client_tile_get_known(ptile) != TILE_UNKNOWN) {
 	ctile = ptile;
 	break;
@@ -514,16 +514,16 @@ cid cid_encode_from_city(const struct city *pcity)
 /**************************************************************************
   Decode the CID into a city_production structure.
 **************************************************************************/
-struct universal cid_decode(cid id)
+struct universal cid_decode(cid cid)
 {
   struct universal target;
 
-  if (id >= B_LAST) {
+  if (cid >= B_LAST) {
     target.kind = VUT_UTYPE;
-    target.value.utype = utype_by_number(id - B_LAST);
+    target.value.utype = utype_by_number(cid - B_LAST);
   } else {
     target.kind = VUT_IMPROVEMENT;
-    target.value.building = improvement_by_number(id);
+    target.value.building = improvement_by_number(cid);
   }
 
   return target;
@@ -534,15 +534,14 @@ struct universal cid_decode(cid id)
   production type (returns FALSE if the production is a building).
 ****************************************************************************/
 bool city_unit_supported(const struct city *pcity,
-                         const struct universal *target)
+			 struct universal target)
 {
-  if (VUT_UTYPE == target->kind) {
-    struct unit_type *tvtype = target->value.utype;
+  if (VUT_UTYPE == target.kind) {
+    struct unit_type *tvtype = target.value.utype;
 
     unit_list_iterate(pcity->units_supported, punit) {
-      if (unit_type_get(punit) == tvtype) {
-        return TRUE;
-      }
+      if (unit_type(punit) == tvtype)
+	return TRUE;
     } unit_list_iterate_end;
   }
   return FALSE;
@@ -553,15 +552,14 @@ bool city_unit_supported(const struct city *pcity,
   production type (returns FALSE if the production is a building).
 ****************************************************************************/
 bool city_unit_present(const struct city *pcity,
-                       const struct universal *target)
+		       struct universal target)
 {
-  if (VUT_UTYPE == target->kind) {
-    struct unit_type *tvtype = target->value.utype;
+  if (VUT_UTYPE == target.kind) {
+    struct unit_type *tvtype = target.value.utype;
 
     unit_list_iterate(pcity->tile->units, punit) {
-      if (unit_type_get(punit) == tvtype) {
-        return TRUE;
-      }
+      if (unit_type(punit) == tvtype)
+	return TRUE;
     }
     unit_list_iterate_end;
   }
@@ -572,10 +570,10 @@ bool city_unit_present(const struct city *pcity,
   A TestCityFunc to tell whether the item is a building and is present.
 ****************************************************************************/
 bool city_building_present(const struct city *pcity,
-                           const struct universal *target)
+			   struct universal target)
 {
-  return VUT_IMPROVEMENT == target->kind
-    && city_has_building(pcity, target->value.building);
+  return VUT_IMPROVEMENT == target.kind
+      && city_has_building(pcity, target.value.building);
 }
 
 /**************************************************************************
@@ -605,7 +603,7 @@ static int target_get_section(struct universal target)
 /**************************************************************************
  Helper for name_and_sort_items.
 **************************************************************************/
-static int fc_cmp(const void *p1, const void *p2)
+static int my_cmp(const void *p1, const void *p2)
 {
   const struct item *i1 = p1, *i2 = p2;
   int s1 = target_get_section(i1->item);
@@ -666,7 +664,7 @@ void name_and_sort_items(struct universal *targets, int num_targets,
     }
   }
 
-  qsort(items, num_targets, sizeof(struct item), fc_cmp);
+  qsort(items, num_targets, sizeof(struct item), my_cmp);
 }
 
 /**************************************************************************
@@ -675,21 +673,21 @@ void name_and_sort_items(struct universal *targets, int num_targets,
   FIXME: this should probably take a pplayer argument.
 **************************************************************************/
 int collect_production_targets(struct universal *targets,
-                               struct city **selected_cities,
-                               int num_selected_cities, bool append_units,
-                               bool append_wonders, bool change_prod,
-                               TestCityFunc test_func)
+			       struct city **selected_cities,
+			       int num_selected_cities, bool append_units,
+			       bool append_wonders, bool change_prod,
+			       TestCityFunc test_func)
 {
   cid first = append_units ? B_LAST : 0;
   cid last = (append_units
-              ? utype_count() + B_LAST
-              : improvement_count());
-  cid id;
+	      ? utype_count() + B_LAST
+	      : improvement_count());
+  cid cid;
   int items_used = 0;
 
-  for (id = first; id < last; id++) {
+  for (cid = first; cid < last; cid++) {
     bool append = FALSE;
-    struct universal target = cid_decode(id);
+    struct universal target = cid_decode(cid);
 
     if (!append_units && (append_wonders != is_wonder(target.value.building))) {
       continue;
@@ -698,18 +696,18 @@ int collect_production_targets(struct universal *targets,
     if (!change_prod) {
       if (client_has_player()) {
         city_list_iterate(client_player()->cities, pcity) {
-          append |= test_func(pcity, &target);
+          append |= test_func(pcity, cid_decode(cid));
         } city_list_iterate_end;
       } else {
         cities_iterate(pcity) {
-          append |= test_func(pcity, &target);
+          append |= test_func(pcity, cid_decode(cid));
         } cities_iterate_end;
       }
     } else {
       int i;
 
       for (i = 0; i < num_selected_cities; i++) {
-        append |= test_func(selected_cities[i], &target);
+	append |= test_func(selected_cities[i], cid_decode(cid));
       }
     }
 
@@ -732,7 +730,7 @@ int collect_currently_building_targets(struct universal *targets)
 {
   bool mapping[MAX_NUM_PRODUCTION_TARGETS];
   int cids_used = 0;
-  cid id;
+  cid cid;
 
   if (NULL == client.conn.playing) {
     return 0;
@@ -744,13 +742,12 @@ int collect_currently_building_targets(struct universal *targets)
   }
   city_list_iterate_end;
 
-  for (id = 0; id < ARRAY_SIZE(mapping); id++) {
-    if (mapping[id]) {
-      targets[cids_used] = cid_decode(id);
+  for (cid = 0; cid < ARRAY_SIZE(mapping); cid++) {
+    if (mapping[cid]) {
+      targets[cids_used] = cid_decode(cid);
       cids_used++;
     }
   }
-
   return cids_used;
 }
 
@@ -940,7 +937,7 @@ int num_present_units_in_city(struct city *pcity)
   Handles a chat or event message.
 **************************************************************************/
 void handle_event(const char *featured_text, struct tile *ptile,
-                  enum event_type event, int turn, int phase, int conn_id)
+		  enum event_type event, int conn_id)
 {
   char plain_text[MAX_LEN_MSG];
   struct text_tag_list *tags;
@@ -973,7 +970,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
    * about us. */
   if (-1 != conn_id
       && client.conn.id != conn_id
-      && ft_color_requested(gui_options.highlight_our_names)) {
+      && ft_color_requested(highlight_our_names)) {
     const char *username = client.conn.username;
     size_t userlen = strlen(username);
     const char *playername = ((client_player() && !client_is_observer())
@@ -994,7 +991,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
           && 0 == fc_strncasecmp(p, username, userlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + userlen,
-                                             gui_options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1006,7 +1003,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
                  && 0 == fc_strncasecmp(p, playername, playerlen)) {
         struct text_tag *ptag = text_tag_new(TTT_COLOR, p - plain_text,
                                              p - plain_text + playerlen,
-                                             gui_options.highlight_our_names);
+                                             highlight_our_names);
 
         fc_assert(ptag != NULL);
 
@@ -1023,7 +1020,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
     /* Popups are usually not shown if player is under AI control.
      * Server operator messages are shown always. */
     if (NULL == client.conn.playing
-        || is_human(client.conn.playing)
+        || !client.conn.playing->ai_controlled
         || event == E_MESSAGE_WALL) {
       popup_notify_goto_dialog(_("Popup Request"), plain_text, tags, ptile);
       shown = TRUE;
@@ -1039,7 +1036,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
   if (BOOL_VAL(where & MW_MESSAGES)) {
     /* When the game isn't running, the messages dialog isn't present. */
     if (C_S_RUNNING <= client_state()) {
-      meswin_add(plain_text, tags, ptile, event, turn, phase);
+      meswin_add(plain_text, tags, ptile, event);
       shown = TRUE;
     } else {
       /* Force to chatline instead. */
@@ -1052,9 +1049,7 @@ void handle_event(const char *featured_text, struct tile *ptile,
     output_window_event(plain_text, tags, conn_id);
   }
 
-  if (turn == game.info.turn) {
-    play_sound_for_event(event);
-  }
+  play_sound_for_event(event);
 
   /* Free tags */
   text_tag_list_destroy(tags);
@@ -1079,9 +1074,9 @@ void create_event(struct tile *ptile, enum event_type event,
 
     featured_text_apply_tag(message, colored_text, sizeof(colored_text),
                             TTT_COLOR, 0, FT_OFFSET_UNSET, color);
-    handle_event(colored_text, ptile, event, game.info.turn, game.info.phase, -1);
+    handle_event(colored_text, ptile, event, -1);
   } else {
-    handle_event(message, ptile, event, game.info.turn, game.info.phase, -1);
+    handle_event(message, ptile, event, -1);
   }
 }
 
@@ -1198,7 +1193,7 @@ void common_taxrates_callback(int i)
 ****************************************************************************/
 bool can_units_do_connect(struct unit_list *punits,
 			  enum unit_activity activity,
-                          struct extra_type *tgt)
+                          struct act_tgt *tgt)
 {
   unit_list_iterate(punits, punit) {
     if (can_unit_do_connect(punit, activity, tgt)) {
@@ -1207,19 +1202,6 @@ bool can_units_do_connect(struct unit_list *punits,
   } unit_list_iterate_end;
 
   return FALSE;
-}
-
-/**************************************************************************
-  Initialize the action probability cache. Shouldn't be kept around
-  permanently. Its data is quickly outdated.
-**************************************************************************/
-void client_unit_init_act_prob_cache(struct unit *punit)
-{
-  /* A double init would cause a leak. */
-  fc_assert_ret(punit->client.act_prob_cache == NULL);
-
-  punit->client.act_prob_cache = (struct act_prob*)fc_malloc(
-        ACTION_COUNT * sizeof(*punit->client.act_prob_cache));
 }
 
 /****************************************************************************
@@ -1363,7 +1345,7 @@ void client_player_maps_reset(void)
 bool mapimg_client_define(void)
 {
   char str[MAX_LEN_MAPDEF];
-  char mi_map[MAPIMG_LAYER_COUNT + 1];
+  char map[MAPIMG_LAYER_COUNT + 1];
   enum mapimg_layer layer;
   int map_pos = 0;
 
@@ -1373,37 +1355,37 @@ bool mapimg_client_define(void)
   }
 
   /* Map image definition: zoom, turns */
-  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s",
-              gui_options.mapimg_zoom, gui_options.mapimg_format);
+  fc_snprintf(str, sizeof(str), "zoom=%d:turns=0:format=%s", mapimg_zoom,
+              mapimg_format);
 
   /* Map image definition: show */
   if (client_is_global_observer()) {
     cat_snprintf(str, sizeof(str), ":show=all");
     /* use all available knowledge */
-    gui_options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = FALSE;
   } else {
     cat_snprintf(str, sizeof(str), ":show=plrid:plrid=%d",
                  player_index(client.conn.playing));
     /* use only player knowledge */
-    gui_options.mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
+    mapimg_layer[MAPIMG_LAYER_KNOWLEDGE] = TRUE;
   }
 
   /* Map image definition: map */
   for (layer = mapimg_layer_begin(); layer != mapimg_layer_end();
        layer = mapimg_layer_next(layer)) {
-    if (gui_options.mapimg_layer[layer]) {
-      cat_snprintf(mi_map, sizeof(mi_map), "%s",
+    if (mapimg_layer[layer]) {
+      cat_snprintf(map, sizeof(map), "%s",
                    mapimg_layer_name(layer));
-      mi_map[map_pos++] = mapimg_layer_name(layer)[0];
+      map[map_pos++] = mapimg_layer_name(layer)[0];
     }
   }
-  mi_map[map_pos] = '\0';
+  map[map_pos] = '\0';
 
   if (map_pos == 0) {
     /* no value set - use dummy setting */
-    sz_strlcpy(mi_map, "-");
+    sz_strlcpy(map, "-");
   }
-  cat_snprintf(str, sizeof(str), ":map=%s", mi_map);
+  cat_snprintf(str, sizeof(str), ":map=%s", map);
 
   log_debug("client map image definition: %s", str);
 
@@ -1425,7 +1407,7 @@ bool mapimg_client_createmap(const char *filename)
   char mapimgfile[512];
 
   if (NULL == filename || '\0' == filename[0]) {
-    sz_strlcpy(mapimgfile, gui_options.mapimg_filename);
+    sz_strlcpy(mapimgfile, mapimg_filename);
   } else {
     sz_strlcpy(mapimgfile, filename);
   }

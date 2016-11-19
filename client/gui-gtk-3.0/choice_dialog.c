@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996-2005 - Freeciv Development Team
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -18,10 +18,8 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "support.h"
 
-/* gui-gtk-3.0 */
 #include "gui_main.h"
 #include "gui_stuff.h"
 
@@ -31,14 +29,6 @@
   Choice dialog: A dialog with a label and a list of buttons
   placed vertically
 ****************************************************************/
-
-/***********************************************************************
-  Get the number of buttons in the choice dialog.
-***********************************************************************/
-int choice_dialog_get_number_of_buttons(GtkWidget *cd)
-{
-  return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(cd), "nbuttons"));
-}
 
 /****************************************************************
   Get nth button widget from dialog
@@ -73,28 +63,6 @@ void choice_dialog_button_set_label(GtkWidget *cd, int number,
 {
   GtkWidget* button = choice_dialog_get_nth_button(cd, number);
   gtk_button_set_label(GTK_BUTTON(button), label);
-}
-
-/****************************************************************
-  Set tool tip for choice dialog button.
-*****************************************************************/
-void choice_dialog_button_set_tooltip(GtkWidget *cd, int number,
-                                      const char* tool_tip)
-{
-  GtkWidget* button = choice_dialog_get_nth_button(cd, number);
-  gtk_widget_set_tooltip_text(button, tool_tip);
-}
-
-/****************************************************************
-  Move the specified button to the end.
-*****************************************************************/
-void choice_dialog_button_move_to_the_end(GtkWidget *cd,
-                                          const int number)
-{
-  GtkWidget *button = choice_dialog_get_nth_button(cd, number);
-  GtkWidget *bbox = g_object_get_data(G_OBJECT(cd), "bbox");
-
-  gtk_box_reorder_child(GTK_BOX(bbox), button, -1);
 }
 
 /****************************************************************
@@ -156,15 +124,14 @@ static void choice_dialog_clicked(GtkWidget *w, gpointer data)
   Add button to choice dialog.
 *****************************************************************/
 void choice_dialog_add(GtkWidget *dshell, const gchar *label,
-                       GCallback handler, gpointer data,
-                       bool meta, const gchar *tool_tip)
+			GCallback handler, gpointer data)
 {
   GtkWidget *button, *bbox;
   char name[512];
   int nbuttons;
 
   bbox = g_object_get_data(G_OBJECT(dshell), "bbox");
-  nbuttons = choice_dialog_get_number_of_buttons(dshell);
+  nbuttons = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(dshell), "nbuttons"));
   g_object_set_data(G_OBJECT(dshell), "nbuttons", GINT_TO_POINTER(nbuttons+1));
 
   fc_snprintf(name, sizeof(name), "button%d", nbuttons);
@@ -177,15 +144,8 @@ void choice_dialog_add(GtkWidget *dshell, const gchar *label,
     g_signal_connect(button, "clicked", handler, data);
   }
 
-  if (!meta) {
-    /* This button makes the choice. */
-    g_signal_connect_after(button, "clicked",
-                           G_CALLBACK(choice_dialog_clicked), dshell);
-  }
-
-  if (tool_tip != NULL) {
-    gtk_widget_set_tooltip_text(button, tool_tip);
-  }
+  g_signal_connect_after(button, "clicked",
+			 G_CALLBACK(choice_dialog_clicked), dshell);
 }
 
 /****************************************************************
@@ -230,7 +190,7 @@ GtkWidget *popup_choice_dialog(GtkWindow *parent, const gchar *dialogname,
     handler = va_arg(args, GCallback);
     data = va_arg(args, gpointer);
 
-    choice_dialog_add(dshell, name, handler, data, FALSE, NULL);
+    choice_dialog_add(dshell, name, handler, data);
   }
 
   va_end(args);

@@ -20,6 +20,7 @@
 #include <QComboBox>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QProgressBar>
 #include <QScrollArea>
 #include <QTableWidget>
 #include <QToolTip>
@@ -36,11 +37,8 @@
 #include "text.h"
 
 // gui-qt
-#include "citydlg.h"
 #include "cityrep.h"
-#include "hudwidget.h"
 #include "qtg_cxxside.h"
-#include "sidebar.h"
 
 #include "repodlgs.h"
 
@@ -48,6 +46,7 @@ extern QString split_text(QString text, bool cut);
 extern QString cut_helptext(QString text);
 extern QString get_tooltip_improvement(impr_type *building);
 extern QString get_tooltip_unit(struct unit_type *unit);
+
 
 /****************************************************************************
   From reqtree.c used to get tooltips
@@ -102,8 +101,6 @@ research_diagram::~research_diagram()
 {
   qtg_canvas_free(pcanvas);
   destroy_reqtree(req);
-  qDeleteAll(tt_help);
-  tt_help.clear();
 }
 
 /****************************************************************************
@@ -139,37 +136,38 @@ void research_diagram::create_tooltip_help()
   for (i = 0; i < tree->num_layers; i++) {
     for (j = 0; j < tree->layer_size[i]; j++) {
       struct tree_node *node = tree->layers[i][j];
-      int startx, starty, nwidth, nheight;
+      int startx, starty, width, height;
 
       startx = node->node_x;
       starty = node->node_y;
-      nwidth = node->node_width;
-      nheight = node->node_height;
+      width = node->node_width;
+      height = node->node_height;
 
       if (!node->is_dummy) {
-        const char *text = research_advance_name_translation(
-                                  research_get(client_player()), node->tech);
+        const char *text = advance_name_for_player(client.conn.playing,
+                                                   node->tech);
         int text_w, text_h;
         int icon_startx;
 
         get_text_size(&text_w, &text_h, FONT_REQTREE_TEXT, text);
         rttp = new req_tooltip_help();
-        rttp->rect = QRect(startx + (nwidth - text_w) / 2, starty + 4,
+        rttp->rect = QRect(startx + (width - text_w) / 2, starty + 4,
                            text_w, text_h);
         rttp->tech_id = node->tech;
         tt_help.append(rttp);
         icon_startx = startx + 5;
 
-        if (gui_options.reqtree_show_icons) {
+        if (reqtree_show_icons) {
           unit_type_iterate(unit) {
             if (advance_number(unit->require_advance) != node->tech) {
               continue;
             }
-            sprite = get_unittype_sprite(tileset, unit, direction8_invalid());
+            sprite = get_unittype_sprite(tileset, unit,
+                                         direction8_invalid(), TRUE);
             get_sprite_dimensions(sprite, &swidth, &sheight);
             rttp = new req_tooltip_help();
             rttp->rect = QRect(icon_startx, starty + text_h + 4
-                               + (nheight - text_h - 4 - sheight) / 2,
+                               + (height - text_h - 4 - sheight) / 2,
                                swidth, sheight);
             rttp->tunit = unit;
             tt_help.append(rttp);
@@ -185,7 +183,7 @@ void research_diagram::create_tooltip_help()
                   get_sprite_dimensions(sprite, &swidth, &sheight);
                   rttp = new req_tooltip_help();
                   rttp->rect = QRect(icon_startx, starty + text_h + 4
-                                     + (nheight - text_h - 4 - sheight) / 2,
+                                     + (height - text_h - 4 - sheight) / 2,
                                      swidth, sheight);
                   rttp->timpr = pimprove;
                   tt_help.append(rttp);
@@ -203,7 +201,7 @@ void research_diagram::create_tooltip_help()
                 get_sprite_dimensions(sprite, &swidth, &sheight);
                 rttp = new req_tooltip_help();
                 rttp->rect = QRect(icon_startx, starty + text_h + 4
-                                   + (nheight - text_h - 4 - sheight) / 2,
+                                   + (height - text_h - 4 - sheight) / 2,
                                    swidth, sheight);
                 rttp->tgov = gov;
                 tt_help.append(rttp);
@@ -222,7 +220,8 @@ void research_diagram::create_tooltip_help()
 ****************************************************************************/
 void research_diagram::update_reqtree()
 {
-  reset();
+  destroy_reqtree(req);
+  req = create_reqtree(client_player(), true);
   draw_reqtree(req, pcanvas, 0, 0, 0, 0, width, height);
   create_tooltip_help();
   update();
@@ -243,7 +242,6 @@ void research_diagram::reset()
   get_reqtree_dimensions(req, &width, &height);
   pcanvas = qtg_canvas_create(width, height);
   pcanvas->map_pixmap.fill(Qt::transparent);
-  resize(width, height);
 }
 
 
@@ -257,7 +255,7 @@ void research_diagram::mousePressEvent(QMouseEvent *event)
   int i;
 
   if (event->button() == Qt::LeftButton && can_client_issue_orders()) {
-    switch (research_invention_state(research_get(client_player()), tech)) {
+    switch (player_invention_state(client_player(), tech)) {
     case TECH_PREREQS_KNOWN:
       dsend_packet_player_research(&client.conn, tech);
       break;
@@ -272,8 +270,7 @@ void research_diagram::mousePressEvent(QMouseEvent *event)
       rttp = tt_help.at(i);
       if (rttp->rect.contains(event->pos())) {
         if (rttp->tech_id != -1) {
-          popup_help_dialog_typed(research_advance_name_translation(
-                                  research_get(client_player()),
+          popup_help_dialog_typed(advance_name_for_player(client_player(),
                                   rttp->tech_id), HELP_TECH);
         } else if (rttp->timpr != nullptr) {
           popup_help_dialog_typed(improvement_name_translation(rttp->timpr),
@@ -382,7 +379,7 @@ science_report::science_report(): QWidget()
 
   goal_combo = new QComboBox();
   info_label = new QLabel();
-  progress = new progress_bar(this);
+  progress = new QProgressBar();
   progress_label = new QLabel();
   researching_combo = new QComboBox();
   sci_layout = new QGridLayout();
@@ -439,8 +436,12 @@ science_report::~science_report()
 void science_report::init(bool raise)
 {
   gui()->gimme_place(this, "SCI");
-  index = gui()->add_game_tab(this);
-  gui()->game_tab_widget->setCurrentIndex(index);
+  index = gui()->add_game_tab(this, _("Research"));
+  if (raise == false) {
+    gui()->game_tab_widget->change_color(index, Qt::red);
+  } else {
+    gui()->game_tab_widget->setCurrentIndex(index);
+  }
   update_report();
 }
 
@@ -470,7 +471,7 @@ void science_report::reset_tree()
 void science_report::update_report()
 {
 
-  struct research *research = research_get(client_player());
+  struct player_research *research = player_research_get(client_player());
   const char *text;
   int total;
   int done = research->bulbs_researched;
@@ -528,7 +529,7 @@ void science_report::update_report()
 
   /** Collect all techs which are reachable in next 10 steps. */
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(research, i)
+    if (player_invention_reachable(client_player(), i, true)
         && TECH_KNOWN != research->inventions[i].state
         && (i == research->tech_goal
             || 10 >= research->inventions[i].num_required_techs)) {
@@ -562,9 +563,8 @@ void science_report::update_report()
   /** set current tech and goal */
   qres = research->researching;
   if (qres == A_UNSET || is_future_tech(research->researching)) {
-    researching_combo->insertItem(0, research_advance_name_translation(
-                                  research, research->researching ), 
-                                  A_UNSET);
+    researching_combo->insertItem(0, advance_name_researching(
+                                  client.conn.playing), A_UNSET);
     researching_combo->setCurrentIndex(0);
   } else {
     for (int i = 0; i < researching_combo->count(); i++) {
@@ -615,11 +615,10 @@ void science_report::update_reqtree()
 /****************************************************************************
   Slot used when combo box with current tech changes
 ****************************************************************************/
-void science_report::current_tech_changed(int changed_index)
+void science_report::current_tech_changed(int index)
 {
   QVariant qvar;
-
-  qvar = researching_combo->itemData(changed_index);
+  qvar = researching_combo->itemData(index);
 
   if (researching_combo->hasFocus()) {
     if (can_client_issue_orders()) {
@@ -631,11 +630,10 @@ void science_report::current_tech_changed(int changed_index)
 /****************************************************************************
   Slot used when combo box with goal have been changed
 ****************************************************************************/
-void science_report::goal_tech_changed(int changed_index)
+void science_report::goal_tech_changed(int index)
 {
   QVariant qvar;
-
-  qvar = goal_combo->itemData(changed_index);
+  qvar = goal_combo->itemData(index);
 
   if (goal_combo->hasFocus()) {
     if (can_client_issue_orders()) {
@@ -650,39 +648,8 @@ void science_report::goal_tech_changed(int changed_index)
 void real_science_report_dialog_update(void)
 {
   int i;
-  int percent;
   science_report *sci_rep;
-  bool blk = false;
   QWidget *w;
-  QString str;
-
- if (NULL != client.conn.playing) {
-    struct research *research = research_get(client_player());
-  if (research->researching == A_UNSET) {
-      str = QString(_("none"));
-  } else if (research->client.researching_cost != 0) {
-    str = research_advance_name_translation(research,research->researching);
-    percent = 100 *research->bulbs_researched / research->client.researching_cost;
-    str = str + "\n (" + QString::number(percent) + "%)";
-  }
-  if (research->researching == A_UNSET && research->tech_goal == A_UNSET
-    && research->techs_researched < game.control.num_tech_types) {
-    blk = true;
-  }
- } else {
-   str = " ";
- }
-
-  if (blk == true) {
-    gui()->sw_science->keep_blinking = true;
-    gui()->sw_science->set_custom_labels(str);
-    gui()->sw_science->sblink();
-  } else {
-    gui()->sw_science->keep_blinking = false;
-    gui()->sw_science->set_custom_labels(str);
-    gui()->sw_science->update_final_pixmap();
-  }
-  gui()->update_sidebar_tooltips();
 
   if (gui()->is_repo_dlg_open("SCI")) {
     i = gui()->gimme_index_of("SCI");
@@ -698,8 +665,8 @@ void real_science_report_dialog_update(void)
 **************************************************************************/
 units_report::units_report(): QWidget()
 {
+  QLabel *empty1, *empty2;
   int len;
-  QStringList slist;
 
   QGridLayout *units_layout= new QGridLayout;
   units_widget = new QTableWidget;
@@ -708,7 +675,9 @@ units_report::units_report(): QWidget()
                           _("Find Nearest"));
   upgrade_button = new QPushButton(style()->standardIcon(
                           QStyle::SP_FileDialogToParent),_("Upgrade"));
-
+  empty1 = new QLabel;
+  empty2 = new QLabel;
+  QStringList slist;
   slist << _("Unit Type") << Q_("?Upgradable unit [short]:U") << _("In-Prog") 
         << _("Active") << _("Shield") << _("Food") << _("Gold");
   units_widget->setColumnCount(slist.count());
@@ -724,9 +693,11 @@ units_report::units_report(): QWidget()
   find_button->setEnabled(false);
   upgrade_button->setText(_("Upgrade"));
   upgrade_button->setEnabled(false);
+  units_layout->addWidget(empty1, 0, 0, 1, 1);
   units_layout->addWidget(units_widget, 0, 1, 1, 2);
   units_layout->addWidget(find_button, 1, 2, 1, 1, Qt::AlignRight);
   units_layout->addWidget(upgrade_button, 1, 1, 1, 1);
+  units_layout->addWidget(empty2, 0, 3, 1, 1);
   units_layout->setColumnStretch(0, 1);
   units_layout->setColumnStretch(1, 10);
   units_layout->setColumnStretch(3, 1);
@@ -762,7 +733,7 @@ void units_report::init()
 {
   curr_row = -1;
   gui()->gimme_place(this, "UNI");
-  index = gui()->add_game_tab(this);
+  index = gui()->add_game_tab(this, _("Units"));
   gui()->game_tab_widget->setCurrentIndex(index);
 }
 
@@ -806,7 +777,7 @@ void units_report::update_report()
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      info = unit_array + utype_index(unit_type_get(punit));
+      info = unit_array + utype_index(unit_type(punit));
 
       if (0 != punit->homecity) {
         for (output = 0; output < O_LAST; output++) {
@@ -846,7 +817,8 @@ void units_report::update_report()
         unit_item->setText(utype_name_translation(utype));
         qvar = utype_id;
         unit_item->setData(Qt::UserRole, qvar);
-        sprite = get_unittype_sprite(tileset, utype, direction8_invalid());
+        sprite = get_unittype_sprite(tileset, utype, direction8_invalid(),
+                                     true);
         if (sprite != NULL) {
           pix = sprite->pm;
           pix_scaled = pix->scaledToHeight(h);
@@ -947,7 +919,7 @@ struct unit *units_report::find_nearest_unit(const struct unit_type *utype,
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      if (utype == unit_type_get(punit)
+      if (utype == unit_type(punit)
           && FOCUS_AVAIL == punit->client.focus_status
           && 0 < punit->moves_left
           && !punit->done_moving && !punit->ai_controlled) {
@@ -995,7 +967,7 @@ void units_report::upgrade_units()
   struct unit_type *upgrade;
   utype = utype_by_number(uid);
   int price;
-  hud_message_box ask(gui()->central_wdg);
+  QMessageBox ask(this);
   QString s1, s2;
   int ret;
   char buf[1024];
@@ -1015,9 +987,10 @@ void units_report::upgrade_units()
               utype_name_translation(utype),
               utype_name_translation(upgrade), price, buf);
   s2 = QString(buf2);
-  ask.set_text_title(s2, _("Upgrade Obsolete Units"));
+  ask.setText(s2);
   ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
   ask.setDefaultButton(QMessageBox::Cancel);
+  ask.setWindowTitle(_("Upgrade Obsolete Units"));
   ret = ask.exec();
 
   switch (ret) {
@@ -1130,7 +1103,7 @@ void eco_report::init()
 {
   curr_row = -1;
   gui()->gimme_place(this, "ECO");
-  index = gui()->add_game_tab(this);
+  index = gui()->add_game_tab(this, _("Economy"));
   gui()->game_tab_widget->setCurrentIndex(index);
 }
 
@@ -1170,7 +1143,7 @@ void eco_report::update_report()
     } else {
       pix_scaled.fill();
     }
-    cid id = cid_encode_building(pimprove);
+    cid cid = cid_encode_building(pimprove);
 
     eco_widget->insertRow(i);
     for (j = 0; j < 6; j++) {
@@ -1178,7 +1151,7 @@ void eco_report::update_report()
       switch (j) {
       case 0:
         item->setData(Qt::DecorationRole, pix_scaled);
-        item->setData(Qt::UserRole, id);
+        item->setData(Qt::UserRole, cid);
         break;
       case 1:
         item->setTextAlignment(Qt::AlignLeft);
@@ -1206,14 +1179,14 @@ void eco_report::update_report()
   for (i = 0; i < entries_used; i++) {
     struct unit_entry *pentry = unit_entries + i;
     struct unit_type *putype = pentry->type;
-    cid id;
 
     pix = NULL;
-    sprite = get_unittype_sprite(tileset, putype, direction8_invalid());
+    sprite = get_unittype_sprite(tileset, putype,
+                                       direction8_invalid(), true);
     if (sprite != NULL){
       pix = sprite->pm;
     }
-    id = cid_encode_unit(putype);
+    cid cid = cid_encode_unit(putype);
 
     eco_widget->insertRow(i + max_row);
     for (j = 0; j < 6; j++) {
@@ -1225,7 +1198,7 @@ void eco_report::update_report()
           pix_scaled = pix->scaledToHeight(h);
           item->setData(Qt::DecorationRole, pix_scaled);
         }
-        item->setData(Qt::UserRole, id);
+        item->setData(Qt::UserRole, cid);
         break;
       case 1:
         item->setTextAlignment(Qt::AlignLeft);
@@ -1311,21 +1284,20 @@ void eco_report::disband_units()
 
   char buf[1024];
   QString s;
-  hud_message_box ask(gui()->central_wdg);
+  QMessageBox ask(this);
   int ret;
-  struct unit_type *putype;
-
   selected = cid_decode(uid);
-  putype = selected.value.utype;
+  struct unit_type *putype = selected.value.utype;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to disband "
                 "every %s (%d total)?"),
               utype_name_translation(putype), counter);
 
   s = QString(buf);
-  ask.set_text_title(s, _("Disband Units"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
   ask.setDefaultButton(QMessageBox::Cancel);
+  ask.setWindowTitle(_("Disband Units"));
   ret = ask.exec();
   switch (ret) {
   case QMessageBox::Cancel:
@@ -1333,12 +1305,11 @@ void eco_report::disband_units()
   case QMessageBox::Ok:
     disband_all_units(putype, false, buf, sizeof(buf));
     break;
-  default:
-    return;
   }
   s = QString(buf);
-  ask.set_text_title(s, _("Disband Results"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Ok);
+  ask.setWindowTitle(_("Disband Results"));
   ask.exec();
 }
 
@@ -1350,22 +1321,20 @@ void eco_report::sell_buildings()
   struct universal selected;
   char buf[1024];
   QString s;
-  hud_message_box ask(gui()->central_wdg);
+  QMessageBox ask(this);
   int ret;
-  struct impr_type *pimprove;
-
   selected = cid_decode(uid);
-  pimprove = selected.value.building;
-
+  struct impr_type *pimprove = selected.value.building;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to sell "
                 "every %s (%d total)?"),
               improvement_name_translation(pimprove), counter);
 
   s = QString(buf);
-  ask.set_text_title(s, _("Sell Improvements"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
   ask.setDefaultButton(QMessageBox::Cancel);
+  ask.setWindowTitle(_("Sell Improvements"));
   ret = ask.exec();
   switch (ret) {
   case QMessageBox::Cancel:
@@ -1373,12 +1342,11 @@ void eco_report::sell_buildings()
   case QMessageBox::Ok:
     sell_all_improvements(pimprove, false, buf, sizeof(buf));
     break;
-  default:
-    return;
   }
   s = QString(buf);
-  ask.set_text_title(s, _("Sell-Off: Results"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Ok);
+  ask.setWindowTitle(_("Sell-Off: Results"));
   ask.exec();
 }
 
@@ -1390,22 +1358,20 @@ void eco_report::sell_redundant()
   struct universal selected;
   char buf[1024];
   QString s;
-  hud_message_box ask(gui()->central_wdg);
+  QMessageBox ask(this);
   int ret;
-  struct impr_type *pimprove;
-
   selected = cid_decode(uid);
-  pimprove = selected.value.building;
-
+  struct impr_type *pimprove = selected.value.building;
   fc_snprintf(buf, ARRAY_SIZE(buf),
               _("Do you really wish to sell "
                 "every redundant %s (%d total)?"),
               improvement_name_translation(pimprove), counter);
 
   s = QString(buf);
-  ask.set_text_title(s, _("Sell Improvements"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
   ask.setDefaultButton(QMessageBox::Cancel);
+  ask.setWindowTitle(_("Sell Improvements"));
   ret = ask.exec();
   switch (ret) {
   case QMessageBox::Cancel:
@@ -1413,12 +1379,11 @@ void eco_report::sell_redundant()
   case QMessageBox::Ok:
     sell_all_improvements(pimprove, true, buf, sizeof(buf));
     break;
-  default:
-    return;
   }
   s = QString(buf);
-  ask.set_text_title(s, _("Sell-Off: Results"));
+  ask.setText(s);
   ask.setStandardButtons(QMessageBox::Ok);
+  ask.setWindowTitle(_("Sell-Off: Results"));
   ask.exec();
 }
 
@@ -1466,7 +1431,7 @@ endgame_report::~endgame_report()
 void endgame_report::init()
 {
   gui()->gimme_place(this, "END");
-  index = gui()->add_game_tab(this);
+  index = gui()->add_game_tab(this, _("Score"));
   gui()->game_tab_widget->setCurrentIndex(index);
 }
 
@@ -1527,12 +1492,16 @@ void science_report_dialog_popup(bool raise)
     sci_rep->init(raise);
   } else {
     i = gui()->gimme_index_of("SCI");
+    fc_assert(i != -1);
+    if (gui()->game_tab_widget->currentIndex() == i) {
+      return;
+    }
     w = gui()->game_tab_widget->widget(i);
     sci_rep = reinterpret_cast<science_report*>(w);
-    if (gui()->game_tab_widget->currentIndex() == i) {
-      sci_rep->redraw();
-    } else if (raise) {
-      gui()->game_tab_widget->setCurrentWidget(sci_rep);
+    if (raise == false) {
+      gui()->game_tab_widget->change_color(i, Qt::red);
+    } else {
+    gui()->game_tab_widget->setCurrentWidget(sci_rep);
     }
   }
 }
@@ -1548,13 +1517,11 @@ void real_economy_report_dialog_update(void)
 
   if (gui()->is_repo_dlg_open("ECO")) {
     i = gui()->gimme_index_of("ECO");
-    if (gui()->game_tab_widget->currentIndex() == i) {
-      w = gui()->game_tab_widget->widget(i);
-      eco_rep = reinterpret_cast<eco_report*>(w);
-      eco_rep->update_report();
-    }
+    fc_assert(i != -1);
+    w = gui()->game_tab_widget->widget(i);
+    eco_rep = reinterpret_cast<eco_report*>(w);
+    eco_rep->update_report();
   }
-  gui()->update_sidebar_tooltips();
 }
 
 /**************************************************************************
@@ -1570,12 +1537,12 @@ void economy_report_dialog_popup(bool raise)
     eco_rep = new eco_report;
     eco_rep->init();
     eco_rep->update_report();
-  } else {
+  }
+  else {
     i = gui()->gimme_index_of("ECO");
     fc_assert(i != -1);
     w = gui()->game_tab_widget->widget(i);
-    eco_rep = reinterpret_cast<eco_report *>(w);
-    eco_rep->update_report();
+    eco_rep = reinterpret_cast<eco_report*>(w);
     gui()->game_tab_widget->setCurrentWidget(eco_rep);
   }
 }
@@ -1591,11 +1558,10 @@ void real_units_report_dialog_update(void)
 
   if (gui()->is_repo_dlg_open("UNI")) {
     i = gui()->gimme_index_of("UNI");
-    if (gui()->game_tab_widget->currentIndex() == i) {
-      w = gui()->game_tab_widget->widget(i);
-      units_rep = reinterpret_cast<units_report*>(w);
-      units_rep->update_report();
-    }
+    fc_assert(i != -1);
+    w = gui()->game_tab_widget->widget(i);
+    units_rep = reinterpret_cast<units_report*>(w);
+    units_rep->update_report();
   }
 }
 
@@ -1617,7 +1583,6 @@ void units_report_dialog_popup(bool raise)
     fc_assert(i != -1);
     w = gui()->game_tab_widget->widget(i);
     ur = reinterpret_cast<units_report*>(w);
-    ur->update_report();
     gui()->game_tab_widget->setCurrentWidget(ur);
   }
 }
@@ -1642,18 +1607,6 @@ void popdown_endgame_report()
     i = gui()->gimme_index_of("END");
     fc_assert(i != -1);
     delete gui()->game_tab_widget->widget(i);
-  }
-}
-
-/****************************************************************************
-  Popups endgame report to front if exists
-****************************************************************************/
-void popup_endgame_report()
-{
-  int i;
-  if (gui()->is_repo_dlg_open("END")) {
-    i = gui()->gimme_index_of("END");
-    gui()->game_tab_widget->setCurrentIndex(i);
   }
 }
 
@@ -1686,11 +1639,10 @@ void science_report_dialog_redraw(void)
 
   if (gui()->is_repo_dlg_open("SCI")) {
     i = gui()->gimme_index_of("SCI");
-    if (gui()->game_tab_widget->currentIndex() == i) {
-      w = gui()->game_tab_widget->widget(i);
-      sci_rep = reinterpret_cast<science_report*>(w);
-      sci_rep->redraw();
-    }
+    fc_assert(i != -1);
+    w = gui()->game_tab_widget->widget(i);
+    sci_rep = reinterpret_cast<science_report*>(w);
+    sci_rep->redraw();
   }
 }
 

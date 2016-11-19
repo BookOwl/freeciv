@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -33,7 +33,6 @@ sprites =
 		"f.shield.amazigh", "flags/amazigh-shield"
 		"f.shield.amazon", "flags/amazon-shield"
 		"f.shield.angola", "flags/angola-shield"
-                "f.shield.animals", "flags/animals-shield"
 		"f.shield.anishinaabe", "flags/anishinaabe-shield"
 		"f.shield.antarctica", "flags/antarctica-shield"
 ;		"f.shield.antarctica_alt", "flags/antarctica_alt-shield"
@@ -580,5 +579,3 @@ sprites =
 		"f.shield.zimbabwe", "flags/zimbabwe-shield"
 		"f.shield.zulu", "flags/zulu-shield"
 	}
-
-*include "override/shields.spec"

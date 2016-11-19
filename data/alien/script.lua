@@ -30,19 +30,15 @@ end
 -- Get a tech from entering a hut.
 function alien_hut_get_tech(unit)
   local owner = unit.owner
-  local tech = owner:give_tech(nil, -1, false, "hut")
+  local tech = owner:give_technology(nil, "hut")
 
   if tech then
     notify.event(owner, unit.tile, E.HUT_TECH,
                  _("There was a datapod containing research info about %s."),
                  tech:name_translation())
-    notify.research(owner, false, E.TECH_GAIN,
-                 _("%s found datapod containing research info about %s."),
-                 owner.nation:plural_translation(),
-                 tech:name_translation())
-    notify.research_embassies(owner, E.HUT_TECH,
+    notify.embassies(owner, unit.tile, E.HUT_TECH,
                  _("The %s have acquired %s from Space Capsule they found."),
-                 owner:research_name_translation(),
+                 owner.nation:plural_translation(),
                  tech:name_translation())
     return true
   else
@@ -126,10 +122,23 @@ signal.connect("hut_enter", "alien_hut_enter_callback")
 
 -- Show a pop up telling the beginning of the story when the game starts.
 function turn_callback(turn, year)
-  if turn == 1 then
+  if turn == 0 then
     notify.event(nil, nil, E.SCRIPT,
-_("Deneb 7 was known to have strange force field surrounding it\nthat made it impossible to get near planet with year\n250 Galactic Era Earth technology. However, when you were\nflying past, that field suddenly reverted and sucked you\nto the planet.\n\nYou find yourself in a strange world, probably touched\nby superior technology, where big portion of Earth science\nis invalid. You have to learn new rules,\nrules of this world.\n\nThere's deadly radiation that no known shielding works against.\nThere's alien life, but more surprisingly also some\nedible plants just like on Earth.\n\nRadio doesn't work,\nair doesn't allow flying, some basic Physics does\nnot apply here.\n\nYou struggle to live on this planet, and read\nRoadside Picnic by Strugatsky brothers once more."))
+_("Deneb 7 was known to have strange force field surrounding it\
+that made it impossible to get near planet with year 250 Galactic Era Earth\
+technology. However, when you were flying past, that field suddenly\
+reverted and sucked you to the planet.\n\n\
+You find yourself in a strange world, probably touched by superior\
+technology, where big portion of Earth science is invalid. You\
+have to learn new rules, rules of this world.\n\n\
+There's deadly radiation that no known shielding works against.\
+There's alien life, but more surprisingly also some edible\
+plants just like on Earth.\n\n\
+Radio doesn't work, air doesn't allow flying, some basic Physics\
+does not apply here.\n\n\
+You struggle to live on this planet, and read Roadside Picnic by Strugatsky\
+brothers once more."))
   end
 end
 
-signal.connect('turn_begin', 'turn_callback')
+signal.connect('turn_started', 'turn_callback')

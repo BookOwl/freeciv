@@ -17,7 +17,6 @@
 
 /* common */
 #include "featured_text.h"
-#include "research.h"
 
 /* common/scriptcore */
 #include "luascript.h"
@@ -36,7 +35,7 @@ void api_notify_embassies_msg(lua_State *L, Player *pplayer, Tile *ptile,
 {
   LUASCRIPT_CHECK_STATE(L);
 
-  notify_embassies(pplayer, ptile, event, ftc_any, "%s", message);
+  notify_embassies(pplayer, NULL, ptile, event, ftc_any, "%s", message);
 }
 
 /*****************************************************************************
@@ -50,33 +49,3 @@ void api_notify_event_msg(lua_State *L, Player *pplayer, Tile *ptile,
   notify_player(pplayer, ptile, event, ftc_any, "%s", message);
 }
 
-/*****************************************************************************
-  Notify players sharing research with the player.
-*****************************************************************************/
-void api_notify_research_msg(lua_State *L, Player *pplayer, bool include_plr,
-                             int event, const char *message)
-{
-  struct research *pres;
-
-  LUASCRIPT_CHECK_STATE(L);
-
-  pres = research_get(pplayer);
-
-  notify_research(pres, include_plr ? NULL : pplayer, event,
-                  ftc_any, "%s", message);
-}
-
-/*****************************************************************************
-  Notify players sharing research with the player.
-*****************************************************************************/
-void api_notify_research_embassies_msg(lua_State *L, Player *pplayer,
-                                       int event, const char *message)
-{
-  struct research *pres;
-
-  LUASCRIPT_CHECK_STATE(L);
-
-  pres = research_get(pplayer);
-
-  notify_research_embassies(pres, NULL, event, ftc_any, "%s", message);
-}

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,8 +15,6 @@
 #include <fc_config.h>
 #endif /* HAVE_CONFIG_H */
 
-#include "fc_prehdrs.h"
-
 #ifdef HAVE_EXECINFO_H
 #include <execinfo.h>
 #endif
@@ -27,8 +25,7 @@
 
 #include "fcbacktrace.h"
 
-/* We don't want backtrace-spam to testmatic logs */
-#if defined(FREECIV_DEBUG) && defined(HAVE_BACKTRACE) && !defined(FREECIV_TESTMATIC)
+#if defined(DEBUG) && defined(HAVE_BACKTRACE)
 #define BACKTRACE_ACTIVE 1
 #endif
 
@@ -104,41 +101,31 @@ static void backtrace_log(enum log_level level, bool print_from_where,
   }
 
   if (level <= LOG_ERROR) {
-    backtrace_print(LOG_BACKTRACE);
-  }
-}
+    void *buffer[MAX_NUM_FRAMES];
+    int frames;
+    char **names;
 
-#endif /* BACKTRACE_ACTIVE */
+    frames = backtrace(buffer, ARRAY_SIZE(buffer));
+    names = backtrace_symbols(buffer, frames);
 
-/*****************************************************************************
-  Print backtrace
-*****************************************************************************/
-void backtrace_print(enum log_level level)
-{
-#ifdef BACKTRACE_ACTIVE
-  void *buffer[MAX_NUM_FRAMES];
-  int frames;
-  char **names;
+    if (names == NULL) {
+      write_backtrace_line(LOG_BACKTRACE, FALSE, NULL, "No backtrace");
+    } else {
+      int i;
 
-  frames = backtrace(buffer, ARRAY_SIZE(buffer));
-  names = backtrace_symbols(buffer, frames);
+      write_backtrace_line(LOG_BACKTRACE, FALSE, NULL, "Backtrace:");
 
-  if (names == NULL) {
-    write_backtrace_line(level, FALSE, NULL, "No backtrace");
-  } else {
-    int i;
+      for (i = 0; i < MIN(frames, MAX_NUM_FRAMES); i++) {
+        char linestr[256];
 
-    write_backtrace_line(level, FALSE, NULL, "Backtrace:");
+        fc_snprintf(linestr, sizeof(linestr), "%5d: %s", i, names[i]);
 
-    for (i = 0; i < MIN(frames, MAX_NUM_FRAMES); i++) {
-      char linestr[256];
+        write_backtrace_line(LOG_BACKTRACE, FALSE, NULL, linestr);
+      }
 
-      fc_snprintf(linestr, sizeof(linestr), "%5d: %s", i, names[i]);
-
-      write_backtrace_line(level, FALSE, NULL, linestr);
+      free(names);
     }
-
-    free(names);
   }
-#endif /* BACKTRACE_ACTIVE */
 }
+
+#endif /* BACKTRACE_ACTIVE */

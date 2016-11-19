@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* utility */
 #include "ioz.h"
 #include "support.h"            /* bool type and fc__attribute */
 
@@ -67,8 +66,6 @@ bool secfile_save(const struct section_file *secfile, const char *filename,
                   int compression_level, enum fz_method compression_method);
 void secfile_check_unused(const struct section_file *secfile);
 const char *secfile_name(const struct section_file *secfile);
-
-enum entry_special_type { EST_NORMAL, EST_INCLUDE, EST_COMMENT };
 
 /* Insertion functions. */
 struct entry *secfile_insert_bool_full(struct section_file *secfile,
@@ -145,53 +142,37 @@ size_t secfile_insert_int_vec_full(struct section_file *secfile,
   secfile_insert_int_vec_full(secfile, values, dim, comment, TRUE,          \
                               path, ## __VA_ARGS__)
 
-struct entry *secfile_insert_float_full(struct section_file *secfile,
-                                        float value, const char *comment,
-                                        bool allow_replace,
-                                        const char *path, ...)
-                                        fc__attribute((__format__ (__printf__, 5, 6)));
-#define secfile_insert_float(secfile, value, path, ...)                     \
-  secfile_insert_float_full(secfile, value, NULL, FALSE,                    \
-                            path, ## __VA_ARGS__)
-
-struct section *secfile_insert_include(struct section_file *secfile,
-                                       const char *filename);
-
-struct section *secfile_insert_long_comment(struct section_file *secfile,
-                                            const char *comment);
-
 struct entry *secfile_insert_str_full(struct section_file *secfile,
-                                      const char *str,
+                                      const char *string,
                                       const char *comment,
                                       bool allow_replace, bool no_escape,
-                                      enum entry_special_type stype,
                                       const char *path, ...)
-                                      fc__attribute((__format__(__printf__, 7, 8)));
+                                      fc__attribute((__format__(__printf__, 6, 7)));
 #define secfile_insert_str(secfile, string, path, ...)                      \
-  secfile_insert_str_full(secfile, string, NULL, FALSE, FALSE, FALSE,       \
+  secfile_insert_str_full(secfile, string, NULL, FALSE, FALSE,              \
                           path, ## __VA_ARGS__)
 #define secfile_insert_str_noescape(secfile, string, path, ...)             \
-  secfile_insert_str_full(secfile, string, NULL, FALSE, TRUE, FALSE,        \
+  secfile_insert_str_full(secfile, string, NULL, FALSE, TRUE,               \
                           path, ## __VA_ARGS__)
 #define secfile_insert_str_comment(secfile, string, comment, path, ...)     \
-  secfile_insert_str_full(secfile, string, comment, FALSE, TRUE, FALSE,     \
+  secfile_insert_str_full(secfile, string, comment, FALSE, TRUE,            \
                           path, ## __VA_ARGS__)
 #define secfile_insert_str_noescape_comment(secfile, string,                \
                                             comment, path, ...)             \
-  secfile_insert_str_full(secfile, string, comment, FALSE, TRUE, FALSE,     \
+  secfile_insert_str_full(secfile, string, comment, FALSE, TRUE,            \
                           path, ## __VA_ARGS__)
 #define secfile_replace_str(secfile, string, path, ...)                     \
-  secfile_insert_str_full(secfile, string, NULL, TRUE, FALSE, FALSE,        \
+  secfile_insert_str_full(secfile, string, NULL, TRUE, FALSE,               \
                           path, ## __VA_ARGS__)
 #define secfile_replace_str_noescape(secfile, string, path, ...)            \
-  secfile_insert_str_full(secfile, string, NULL, TRUE, TRUE, FALSE,         \
+  secfile_insert_str_full(secfile, string, NULL, TRUE, TRUE,                \
                           path, ## __VA_ARGS__)
 #define secfile_replace_str_comment(secfile, string, comment, path, ...)    \
-  secfile_insert_str_full(secfile, string, comment, TRUE, TRUE, FALSE,      \
+  secfile_insert_str_full(secfile, string, comment, TRUE, TRUE,             \
                           path, ## __VA_ARGS__)
 #define secfile_replace_str_noescape_comment(secfile, string,               \
                                              comment, path, ...)            \
-  secfile_insert_str_full(secfile, string, comment, TRUE, TRUE, FALSE,      \
+  secfile_insert_str_full(secfile, string, comment, TRUE, TRUE,             \
                           path, ## __VA_ARGS__)
 size_t secfile_insert_str_vec_full(struct section_file *secfile,
                                    const char *const *strings, size_t dim,
@@ -387,10 +368,6 @@ size_t secfile_insert_enum_vec_data_full(struct section_file *secfile,
                                     data, comment, TRUE, path,              \
                                     ## __VA_ARGS__)
 
-struct entry *secfile_insert_filereference(struct section_file *secfile,
-                                           char *filename, char *path, ...)
-                              fc__attribute((__format__ (__printf__, 3, 4)));
-
 /* Deletion function. */
 bool secfile_entry_delete(struct section_file *secfile,
                           const char *path, ...)
@@ -398,7 +375,7 @@ bool secfile_entry_delete(struct section_file *secfile,
 
 /* Lookup functions. */
 struct entry *secfile_entry_by_path(const struct section_file *secfile,
-                                    const char *path);
+                                    const char *entry_path);
 struct entry *secfile_entry_lookup(const struct section_file *secfile,
                                    const char *path, ...)
                                    fc__attribute((__format__ (__printf__, 2, 3)));
@@ -433,13 +410,6 @@ int *secfile_lookup_int_vec(const struct section_file *secfile,
                             size_t *dim, const char *path, ...)
                             fc__warn_unused_result
                             fc__attribute((__format__ (__printf__, 3, 4)));
-
-bool secfile_lookup_float(const struct section_file *secfile, float *fval,
-                          const char *path, ...)
-                          fc__warn_unused_result
-                          fc__attribute((__format__ (__printf__, 3, 4)));
-float secfile_lookup_float_default(const struct section_file *secfile,
-                                   float def, const char *path, ...);
 
 const char *secfile_lookup_str(const struct section_file *secfile,
                                const char *path, ...)
@@ -570,7 +540,7 @@ int *secfile_lookup_enum_vec_data(const struct section_file *secfile,
                                   secfile_data_t data, const char *path, ...)
                                   fc__warn_unused_result
                                   fc__attribute((__format__ (__printf__, 6, 7)));
-  
+
 /* Sections functions. */
 struct section *secfile_section_by_name(const struct section_file *secfile,
                                         const char *section_name);
@@ -605,9 +575,6 @@ struct entry *section_entry_int_new(struct section *psection,
 struct entry *section_entry_bool_new(struct section *psection,
                                      const char *entry_name,
                                      bool value);
-struct entry *section_entry_float_new(struct section *psection,
-                                      const char *entry_name,
-                                      float value);
 struct entry *section_entry_str_new(struct section *psection,
                                     const char *entry_name,
                                     const char *value, bool escaped);
@@ -616,9 +583,7 @@ struct entry *section_entry_str_new(struct section *psection,
 enum entry_type {
   ENTRY_BOOL,
   ENTRY_INT,
-  ENTRY_FLOAT,
-  ENTRY_STR,
-  ENTRY_FILEREFERENCE
+  ENTRY_STR
 };
 
 void entry_destroy(struct entry *pentry);
@@ -639,14 +604,13 @@ bool entry_int_set(struct entry *pentry, int value);
 bool entry_bool_get(const struct entry *pentry, bool *value);
 bool entry_bool_set(struct entry *pentry, bool value);
 
-bool entry_float_get(const struct entry *pentry, float *value);
-bool entry_float_set(struct entry *pentry, float value);
-
 bool entry_str_get(const struct entry *pentry, const char **value);
 bool entry_str_set(struct entry *pentry, const char *value);
 bool entry_str_escaped(const struct entry *pentry);
 bool entry_str_set_escaped(struct entry *pentry, bool escaped);
-bool entry_str_set_gt_marking(struct entry *pentry, bool gt_marking);
+
+/* Validation functions */
+bool is_secfile_entry_name_valid(const char *name);
 
 #ifdef __cplusplus
 }

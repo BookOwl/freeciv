@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,22 +15,18 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 /* Under Mac OS X sys/types.h must be included before dirent.h */
 #include <sys/types.h>
 #endif
 
-#ifdef FREECIV_HAVE_DIRENT_H
 #include <dirent.h>
-#endif
-
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -44,14 +40,24 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#ifdef FREECIV_MSWINDOWS
+
+/* Must be before <windows.h> */
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+
+#ifdef WIN32_NATIVE
 #include <windows.h>
 #include <lmcons.h>	/* UNLEN */
 #include <shlobj.h>
 #ifdef HAVE_DIRECT_H
 #include <direct.h>
 #endif /* HAVE_DIRECT_H */
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 
 /* utility */
 #include "astring.h"
@@ -60,28 +66,44 @@
 #include "mem.h"
 #include "rand.h"
 #include "string_vector.h"
+#include "support.h"
 
 #include "shared.h"
+
+#ifndef PATH_SEPARATOR
+#if defined _WIN32 || defined __WIN32__ || defined __EMX__ || defined __DJGPP__
+  /* Win32, OS/2, DOS */
+# define PATH_SEPARATOR ";"
+#else
+  /* Unix */
+# define PATH_SEPARATOR ":"
+#endif
+#endif
+
+#define PARENT_DIR_OPERATOR ".."
 
 /* If no default data path is defined use the default default one */
 #ifndef DEFAULT_DATA_PATH
 #define DEFAULT_DATA_PATH "." PATH_SEPARATOR \
                           "data" PATH_SEPARATOR \
-                          FREECIV_STORAGE_DIR DIR_SEPARATOR DATASUBDIR
+                          "~/.freeciv/" DATASUBDIR
 #endif
 #ifndef DEFAULT_SAVE_PATH
 #define DEFAULT_SAVE_PATH "." PATH_SEPARATOR \
-                          FREECIV_STORAGE_DIR DIR_SEPARATOR "saves"
+                          "~/.freeciv/saves"
 #endif
 #ifndef DEFAULT_SCENARIO_PATH
 #define DEFAULT_SCENARIO_PATH                          \
   "." PATH_SEPARATOR                                   \
-  "data" DIR_SEPARATOR "scenarios" PATH_SEPARATOR                      \
-  FREECIV_STORAGE_DIR DATASUBDIR DIR_SEPARATOR "scenarios" PATH_SEPARATOR \
-  FREECIV_STORAGE_DIR DIR_SEPARATOR "scenarios"
+  "data/scenarios" PATH_SEPARATOR                      \
+  "~/.freeciv/" DATASUBDIR "/scenarios" PATH_SEPARATOR \
+  "~/.freeciv/scenarios"
 #endif /* DEFAULT_SCENARIO_PATH */
 
 /* environment */
+#ifndef FREECIV_PATH
+#define FREECIV_PATH "FREECIV_PATH"
+#endif
 #ifndef FREECIV_DATA_PATH
 #define FREECIV_DATA_PATH "FREECIV_DATA_PATH"
 #endif
@@ -107,15 +129,237 @@ static struct strvec *save_dir_names = NULL;
 static struct strvec *scenario_dir_names = NULL;
 
 static char *mc_group = NULL;
-static char *home_dir_user = NULL;
-static char *storage_dir_freeciv = NULL;
+static char *home_dir = NULL;
 
 static struct astring realfile = ASTRING_INIT;
 
 static int compare_file_mtime_ptrs(const struct fileinfo *const *ppa,
                                    const struct fileinfo *const *ppb);
 
-static char *expand_dir(char *tok_in, bool ok_to_free);
+
+/***************************************************************
+  Take a string containing multiple lines and create a copy where
+  each line is padded to the length of the longest line and centered.
+  We do not cope with tabs etc.  Note that we're assuming that the
+  last line does _not_ end with a newline.  The caller should
+  free() the result.
+
+  FIXME: This is only used in the Xaw client, and so probably does
+  not belong in common.
+***************************************************************/
+char *create_centered_string(const char *s)
+{
+  /* Points to the part of the source that we're looking at. */
+  const char *cp;
+
+  /* Points to the beginning of the line in the source that we're
+   * looking at. */
+  const char *cp0;
+
+  /* Points to the result. */
+  char *r;
+
+  /* Points to the part of the result that we're filling in right
+     now. */
+  char *rn;
+
+  int i;
+
+  int maxlen = 0;
+  int curlen = 0;
+  int nlines = 1;
+
+  for(cp=s; *cp != '\0'; cp++) {
+    if(*cp!='\n')
+      curlen++;
+    else {
+      if(maxlen<curlen)
+	maxlen=curlen;
+      curlen=0;
+      nlines++;
+    }
+  }
+  if(maxlen<curlen)
+    maxlen=curlen;
+
+  r=rn=fc_malloc(nlines*(maxlen+1));
+
+  curlen=0;
+  for(cp0=cp=s; *cp != '\0'; cp++) {
+    if(*cp!='\n')
+      curlen++;
+    else {
+      for(i=0; i<(maxlen-curlen)/2; i++)
+	*rn++=' ';
+      memcpy(rn, cp0, curlen);
+      rn+=curlen;
+      *rn++='\n';
+      curlen=0;
+      cp0=cp+1;
+    }
+  }
+  for(i=0; i<(maxlen-curlen)/2; i++)
+    *rn++=' ';
+  strcpy(rn, cp0);
+
+  return r;
+}
+
+/**************************************************************************
+  return a char * to the parameter of the option or NULL.
+  *i can be increased to get next string in the array argv[].
+  It is an error for the option to exist but be an empty string.
+  This doesn't use log_*() because it is used before logging is set up.
+
+  The argv strings are assumed to be in the local encoding; the returned
+  string is in the internal encoding.
+**************************************************************************/
+char *get_option_malloc(const char *option_name,
+			char **argv, int *i, int argc)
+{
+  int len = strlen(option_name);
+
+  if (strcmp(option_name, argv[*i]) == 0 ||
+      (strncmp(option_name, argv[*i], len) == 0 && argv[*i][len] == '=') ||
+      strncmp(option_name + 1, argv[*i], 2) == 0) {
+    char *opt = argv[*i] + (argv[*i][1] != '-' ? 0 : len);
+
+    if (*opt == '=') {
+      opt++;
+    } else {
+      if (*i < argc - 1) {
+	(*i)++;
+	opt = argv[*i];
+	if (strlen(opt)==0) {
+	  fc_fprintf(stderr, _("Empty argument for \"%s\".\n"), option_name);
+	  exit(EXIT_FAILURE);
+	}
+      }	else {
+	fc_fprintf(stderr, _("Missing argument for \"%s\".\n"), option_name);
+	exit(EXIT_FAILURE);
+      }
+    }
+
+    return local_to_internal_string_malloc(opt);
+  }
+
+  return NULL;
+}
+
+/***************************************************************
+  Is option some form of option_name. option_name must be
+  full length long version such as "--help"
+***************************************************************/
+bool is_option(const char *option_name,char *option)
+{
+  return (strcmp(option_name, option) == 0 ||
+	  strncmp(option_name + 1, option, 2) == 0);
+}
+
+/***************************************************************
+  Like strcspn but also handles quotes, i.e. *reject chars are
+  ignored if they are inside single or double quotes.
+***************************************************************/
+static size_t my_strcspn(const char *s, const char *reject)
+{
+  bool in_single_quotes = FALSE, in_double_quotes = FALSE;
+  size_t i, len = strlen(s);
+
+  for (i = 0; i < len; i++) {
+    if (s[i] == '"' && !in_single_quotes) {
+      in_double_quotes = !in_double_quotes;
+    } else if (s[i] == '\'' && !in_double_quotes) {
+      in_single_quotes = !in_single_quotes;
+    }
+
+    if (in_single_quotes || in_double_quotes) {
+      continue;
+    }
+
+    if (strchr(reject, s[i])) {
+      break;
+    }
+  }
+
+  return i;
+}
+
+/***************************************************************
+ Splits the string into tokens. The individual tokens are
+ returned. The delimiterset can freely be chosen.
+
+ i.e. "34 abc 54 87" with a delimiterset of " " will yield
+      tokens={"34", "abc", "54", "87"}
+
+ Part of the input string can be quoted (single or double) to embedded
+ delimiter into tokens. For example,
+   command 'a name' hard "1,2,3,4,5" 99
+   create 'Mack "The Knife"'
+ will yield 5 and 2 tokens respectively using the delimiterset " ,".
+
+ Tokens which aren't used aren't modified (and memory is not
+ allocated). If the string would yield more tokens only the first
+ num_tokens are extracted.
+
+ The user has the responsiblity to free the memory allocated by
+ **tokens using free_tokens().
+***************************************************************/
+int get_tokens(const char *str, char **tokens, size_t num_tokens,
+	       const char *delimiterset)
+{
+  int token = 0;
+
+  fc_assert_ret_val(NULL != str, -1);
+
+  for(;;) {
+    size_t len, padlength = 0;
+
+    /* skip leading delimiters */
+    str += strspn(str, delimiterset);
+
+    if (*str == '\0') {
+      break;
+    }
+
+    len = my_strcspn(str, delimiterset);
+
+    if (token >= num_tokens) {
+      break;
+    }
+
+    /* strip start/end quotes if they exist */
+    if (len >= 2) {
+      if ((str[0] == '"' && str[len - 1] == '"')
+	  || (str[0] == '\'' && str[len - 1] == '\'')) {
+	len -= 2;
+	padlength = 1;		/* to set the string past the end quote */
+	str++;
+      }
+    }
+
+    tokens[token] = fc_malloc(len + 1);
+    (void) fc_strlcpy(tokens[token], str, len + 1);     /* adds the '\0' */
+
+    token++;
+
+    str += len + padlength;
+  }
+
+  return token;
+}
+
+/***************************************************************
+  Frees a set of tokens created by get_tokens().
+***************************************************************/
+void free_tokens(char **tokens, size_t ntokens)
+{
+  size_t i;
+  for (i = 0; i < ntokens; i++) {
+    if (tokens[i]) {
+      free(tokens[i]);
+    }
+  }
+}
 
 /***************************************************************
   Returns a statically allocated string containing a nicely-formatted
@@ -354,11 +598,9 @@ int compare_strings_strvec(const char *const *first,
 char *skip_leading_spaces(char *s)
 {
   fc_assert_ret_val(NULL != s, NULL);
-
-  while (*s != '\0' && fc_isspace(*s)) {
+  while(*s != '\0' && fc_isspace(*s)) {
     s++;
   }
-
   return s;
 }
 
@@ -393,7 +635,7 @@ void remove_trailing_spaces(char *s)
   len = strlen(s);
   if (len > 0) {
     t = s + len -1;
-    while (fc_isspace(*t)) {
+    while(fc_isspace(*t)) {
       *t = '\0';
       if (t == s) {
 	break;
@@ -421,9 +663,8 @@ static void remove_trailing_char(char *s, char trailing)
   char *t;
 
   fc_assert_ret(NULL != s);
-
   t = s + strlen(s) -1;
-  while (t>=s && (*t) == trailing) {
+  while(t>=s && (*t) == trailing) {
     *t = '\0';
     t--;
   }
@@ -473,8 +714,8 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
 }
 
 /****************************************************************************
-  Convert 'str' to it's int reprentation if possible. 'pint' can be NULL,
-  then it will only test 'str' only contains an integer number.
+  Convert 'str' to it's string reprentation if possible. 'pint' can be NULL,
+  then it will only test 'str' only contains a number.
 ****************************************************************************/
 bool str_to_int(const char *str, int *pint)
 {
@@ -505,54 +746,6 @@ bool str_to_int(const char *str, int *pint)
   return ('\0' == *str && (NULL == pint || 1 == sscanf(start, "%d", pint)));
 }
 
-/****************************************************************************
-  Convert 'str' to it's float reprentation if possible. 'pfloat' can be NULL,
-  then it will only test 'str' only contains a floating point number.
-****************************************************************************/
-bool str_to_float(const char *str, float *pfloat)
-{
-  bool dot;
-  const char *start;
-
-  fc_assert_ret_val(NULL != str, FALSE);
-
-  while (fc_isspace(*str)) {
-    /* Skip leading spaces. */
-    str++;
-  }
-
-  start = str;
-
-  if ('-' == *str || '+' == *str) {
-    /* Handle sign. */
-    str++;
-  }
-  while (fc_isdigit(*str)) {
-    /* Digits. */
-    str++;
-  }
-
-  if (*str == '.') {
-    dot = TRUE;
-    str++;
-
-    while (fc_isdigit(*str)) {
-      /* Digits. */
-      str++;
-    }
-  } else {
-    dot = FALSE;
-  }
-
-  while (fc_isspace(*str)) {
-    /* Ignore trailing spaces. */
-    str++;
-  }
-
-  return ('\0' == *str && dot
-          && (NULL == pfloat || 1 == sscanf(start, "%f", pfloat)));
-}
-
 /***************************************************************************
   Returns string which gives users home dir, as specified by $HOME.
   Gets value once, and then caches result.
@@ -565,70 +758,64 @@ char *user_home_dir(void)
   return "PROGDIR:";
 #else  /* AMIGA */
 
-  if (home_dir_user == NULL) {
-#ifdef FREECIV_MSWINDOWS
+  if (home_dir == NULL) {
+    char *env = getenv("HOME");
 
-    /* some documentation at:
-     * http://justcheckingonall.wordpress.com/2008/05/16/find-shell-folders-win32/
-     * http://archives.seul.org/or/cvs/Oct-2004/msg00082.html */
-
-    LPITEMIDLIST pidl;
-    LPMALLOC pMalloc;
-
-    if (SUCCEEDED(SHGetSpecialFolderLocation(NULL, CSIDL_APPDATA, &pidl))) {
-      char *home_dir_in_local_encoding = fc_malloc(PATH_MAX);
-
-      if (SUCCEEDED(SHGetPathFromIDList(pidl, home_dir_in_local_encoding))) {
-        /* convert to internal encoding */
-        home_dir_user = local_to_internal_string_malloc(home_dir_in_local_encoding);
-        free(home_dir_in_local_encoding);
-
-#ifdef DIR_SEPARATOR_IS_DEFAULT
-        /* replace backslashes with forward slashes */
-        {
-          char *c;
-
-          for (c = home_dir_user; *c != 0; c++) {
-            if (*c == '\\') {
-              *c = DIR_SEPARATOR_CHAR;
-            }
-          }
-        }
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
-      } else {
-        free(home_dir_in_local_encoding);
-        home_dir_user = NULL;
-        log_error("Could not find home directory "
-                  "(SHGetPathFromIDList() failed).");
-      }
-
-      SHGetMalloc(&pMalloc);
-      if (pMalloc) {
-        pMalloc->lpVtbl->Free(pMalloc, pidl);
-        pMalloc->lpVtbl->Release(pMalloc);
-      }
-
+    if (env) {
+      home_dir = fc_strdup(env);
+      log_verbose("HOME is %s", home_dir);
     } else {
-      log_error("Could not find home directory "
-                "(SHGetSpecialFolderLocation() failed).");
-    }
 
-    if (home_dir_user == NULL)
-#endif /* FREECIV_MSWINDOWS */
-    {
-      char *env = getenv("HOME");
+#ifdef WIN32_NATIVE
 
-      if (env) {
-        home_dir_user = fc_strdup(env);
-        log_verbose("HOME is %s", home_dir_user);
+      /* some documentation at:
+       * http://justcheckingonall.wordpress.com/2008/05/16/find-shell-folders-win32/
+       * http://archives.seul.org/or/cvs/Oct-2004/msg00082.html */
+
+      LPITEMIDLIST pidl;
+      LPMALLOC pMalloc;
+
+      if (SUCCEEDED(SHGetSpecialFolderLocation(NULL, CSIDL_APPDATA, &pidl))) {
+
+        char *home_dir_in_local_encoding = fc_malloc(PATH_MAX);
+
+        if (SUCCEEDED(SHGetPathFromIDList(pidl, home_dir_in_local_encoding))) {
+        	/* convert to internal encoding */
+        	home_dir = local_to_internal_string_malloc(home_dir_in_local_encoding);
+        	free(home_dir_in_local_encoding);
+
+        	/* replace backslashes with forward slashes */
+        	char *c;
+        	for (c = home_dir; *c != 0; c++) {
+        		if (*c == '\\') {
+        			*c = '/';
+        		}
+        	}
+        } else {
+            free(home_dir_in_local_encoding);
+            home_dir = NULL;
+            log_error("Could not find home directory "
+                      "(SHGetPathFromIDList() failed).");
+        }
+
+        SHGetMalloc(&pMalloc);
+        if (pMalloc) {
+          pMalloc->lpVtbl->Free(pMalloc, pidl);
+          pMalloc->lpVtbl->Release(pMalloc);
+        }
+
       } else {
-        log_error("Could not find home directory (HOME is not set).");
-        home_dir_user = NULL;
+        log_error("Could not find home directory "
+                  "(SHGetSpecialFolderLocation() failed).");
       }
+#else  /* WIN32_NATIVE */
+      log_error("Could not find home directory (HOME is not set).");
+      home_dir = NULL;
+#endif /* WIN32_NATIVE */
     }
   }
 
-  return home_dir_user;
+  return home_dir;
 #endif /* AMIGA */
 }
 
@@ -637,40 +824,9 @@ char *user_home_dir(void)
 ***************************************************************************/
 void free_user_home_dir(void)
 {
-  if (home_dir_user != NULL) {
-    free(home_dir_user);
-    home_dir_user = NULL;
-  }
-}
-
-/***************************************************************************
-  Returns string which gives freeciv storage dir.
-  Gets value once, and then caches result.
-  Note the caller should not mess with the returned string.
-***************************************************************************/
-char *freeciv_storage_dir(void)
-{
-  if (storage_dir_freeciv == NULL) {
-    storage_dir_freeciv = fc_malloc(strlen(FREECIV_STORAGE_DIR) + 1);
-
-    strcpy(storage_dir_freeciv, FREECIV_STORAGE_DIR);
-
-    storage_dir_freeciv = expand_dir(storage_dir_freeciv, TRUE);
-
-    log_verbose(_("Storage dir is \"%s\"."), storage_dir_freeciv);
-  }
-
-  return storage_dir_freeciv;
-}
-
-/***************************************************************************
-  Free freeciv storage directory information
-***************************************************************************/
-void free_freeciv_storage_dir(void)
-{
-  if (storage_dir_freeciv != NULL) {
-    free(storage_dir_freeciv);
-    storage_dir_freeciv = NULL;
+  if (home_dir != NULL) {
+    free(home_dir);
+    home_dir = NULL;
   }
 }
 
@@ -718,8 +874,8 @@ char *user_username(char *buf, size_t bufsz)
   }
 #endif /* HAVE_GETPWUID */
 
-#ifdef FREECIV_MSWINDOWS
-  /* On windows the GetUserName function will give us the login name. */
+#ifdef WIN32_NATIVE
+  /* On win32 the GetUserName function will give us the login name. */
   {
     char name[UNLEN + 1];
     DWORD length = sizeof(name);
@@ -732,7 +888,7 @@ char *user_username(char *buf, size_t bufsz)
       }
     }
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 
 #ifdef ALWAYS_ROOT
   fc_strlcpy(buf, "name", bufsz);
@@ -742,65 +898,6 @@ char *user_username(char *buf, size_t bufsz)
   log_verbose("fake username is %s", buf);
   fc_assert(is_ascii_name(buf));
   return buf;
-}
-
-/***************************************************************************
-  Return tok_in directory name with "~/" expanded as user home directory.
-  The function might return tok_in, or a new string. In either case caller
-  should free() the returned string eventually. Also, tok_in should be
-  something expand_dir() can free itself if it decides to return newly
-  created string (so caller can always free() just the returned string, not
-  to care if it's same as tok_in or not). If ok_to_free is FALSE,
-  expand_dir() never frees original but can still return either it or a
-  newly allocated string.
-***************************************************************************/
-static char *expand_dir(char *tok_in, bool ok_to_free)
-{
-  int i; /* strlen(tok), or -1 as flag */
-  char *tok;
-  char **ret = &tok; /* Return tok by default */
-  char *allocated;
-
-  tok = skip_leading_spaces(tok_in);
-  remove_trailing_spaces(tok);
-  if (strcmp(tok, DIR_SEPARATOR) != 0) {
-    remove_trailing_char(tok, DIR_SEPARATOR_CHAR);
-  }
-
-  i = strlen(tok);
-  if (tok[0] == '~') {
-    if (i > 1 && tok[1] != DIR_SEPARATOR_CHAR) {
-      log_error("For \"%s\" in path cannot expand '~'"
-                " except as '~" DIR_SEPARATOR "'; ignoring", tok);
-      i = 0;  /* skip this one */
-    } else {
-      char *home = user_home_dir();
-
-      if (!home) {
-        log_verbose("No HOME, skipping path component %s", tok);
-        i = 0;
-      } else {
-        int len = strlen(home) + i;   /* +1 -1 */
-
-        allocated = fc_malloc(len);
-        ret = &allocated;
-
-        fc_snprintf(allocated, len, "%s%s", home, tok + 1);
-        i = -1;       /* flag to free tok below */
-      }
-    }
-  }
-
-  if (i != 0) {
-    /* We could check whether the directory exists and
-     * is readable etc?  Don't currently. */
-    if (i == -1 && ok_to_free) {
-      free(tok);
-      tok = NULL;
-    }
-  }
-
-  return *ret;
 }
 
 /***************************************************************************
@@ -816,17 +913,49 @@ static struct strvec *base_get_dirs(const char *dir_list)
   path = fc_strdup(dir_list);   /* something we can strtok */
   tok = strtok(path, PATH_SEPARATOR);
   do {
-    char *dir = expand_dir(tok, FALSE);
+    int i;                      /* strlen(tok), or -1 as flag */
 
-    if (dir != NULL) {
-      strvec_append(dirs, dir);
-      if (dir != tok) {
-        free(dir);
+    tok = skip_leading_spaces(tok);
+    remove_trailing_spaces(tok);
+    if (strcmp(tok, "/") != 0) {
+      remove_trailing_char(tok, '/');
+    }
+
+    i = strlen(tok);
+    if (tok[0] == '~') {
+      if (i > 1 && tok[1] != '/') {
+        log_error("For \"%s\" in path cannot expand '~'"
+                  " except as '~/'; ignoring", tok);
+        i = 0;  /* skip this one */
+      } else {
+        char *home = user_home_dir();
+
+        if (!home) {
+          log_verbose("No HOME, skipping path component %s", tok);
+          i = 0;
+        } else {
+          int len = strlen(home) + i;   /* +1 -1 */
+          char *tmp = fc_malloc(len);
+
+          fc_snprintf(tmp, len, "%s%s", home, tok + 1);
+          tok = tmp;
+          i = -1;       /* flag to free tok below */
+        }
+      }
+    }
+
+    if (i != 0) {
+      /* We could check whether the directory exists and
+       * is readable etc?  Don't currently. */
+      strvec_append(dirs, tok);
+      if (i == -1) {
+        free(tok);
+        tok = NULL;
       }
     }
 
     tok = strtok(NULL, PATH_SEPARATOR);
-  } while (tok);
+  } while(tok);
 
   free(path);
   return dirs;
@@ -856,6 +985,7 @@ void free_data_dir_names(void)
   be searched.  These paths are specified internally or may be set as the
   environment variable $FREECIV_DATA PATH (a separated list of directories,
   where the separator itself is specified internally, platform-dependent).
+  FREECIV_PATH may also be consulted for backward compatibility.
   '~' at the start of a component (provided followed by '/' or '\0') is
   expanded as $HOME.
 
@@ -872,9 +1002,15 @@ const struct strvec *get_data_dirs(void)
 
     if ((path = getenv(FREECIV_DATA_PATH)) && '\0' == path[0]) {
       /* TRANS: <FREECIV_DATA_PATH> configuration error */
+      log_error(_("\"%s\" is set but empty; trying \"%s\" instead."),
+                FREECIV_DATA_PATH, FREECIV_PATH);
+      path = NULL;
+    }
+    if (NULL == path && (path = getenv(FREECIV_PATH)) && '\0' == path[0]) {
+      /* TRANS: <FREECIV_PATH> configuration error */
       log_error(_("\"%s\" is set but empty; using default \"%s\" "
                  "data directories instead."),
-                FREECIV_DATA_PATH, DEFAULT_DATA_PATH);
+                FREECIV_PATH, DEFAULT_DATA_PATH);
       path = NULL;
     }
     data_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_DATA_PATH);
@@ -892,6 +1028,7 @@ const struct strvec *get_data_dirs(void)
   be searched.  These paths are specified internally or may be set as the
   environment variable $FREECIV_SAVE_PATH (a separated list of directories,
   where the separator itself is specified internally, platform-dependent).
+  FREECIV_PATH may also be consulted for backward compatibility.
   '~' at the start of a component (provided followed by '/' or '\0') is
   expanded as $HOME.
 
@@ -905,15 +1042,37 @@ const struct strvec *get_save_dirs(void)
    * know the list and can just return it. */
   if (NULL == save_dir_names) {
     const char *path;
+    bool from_freeciv_path = FALSE;
 
     if ((path = getenv(FREECIV_SAVE_PATH)) && '\0' == path[0]) {
       /* TRANS: <FREECIV_SAVE_PATH> configuration error */
-      log_error(_("\"%s\" is set but empty; using default \"%s\" "
-                  "save directories instead."),
-                FREECIV_SAVE_PATH, DEFAULT_SAVE_PATH);
+      log_error(_("\"%s\" is set but empty; trying \"%s\" instead."),
+                FREECIV_SAVE_PATH, FREECIV_PATH);
       path = NULL;
     }
+    if (NULL == path && (path = getenv(FREECIV_PATH))) {
+      if ('\0' == path[0]) {
+        /* TRANS: <FREECIV_PATH> configuration error */
+        log_error(_("\"%s\" is set but empty; using default \"%s\" "
+                    "save directories instead."),
+                  FREECIV_PATH, DEFAULT_SAVE_PATH);
+        path = NULL;
+      } else {
+        from_freeciv_path = TRUE;
+      }
+    }
     save_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SAVE_PATH);
+    if (from_freeciv_path) {
+      /* Then also append a "/saves" suffix to every directory. */
+      char buf[512];
+      size_t i;
+
+      for (i = 0; i < strvec_size(save_dir_names); i++) {
+        path = strvec_get(save_dir_names, i);
+        fc_snprintf(buf, sizeof(buf), "%s/saves", path);
+        strvec_insert(save_dir_names, ++i, buf);
+      }
+    }
     strvec_remove_duplicate(save_dir_names, strcmp); /* Don't set a path both. */
     strvec_iterate(save_dir_names, dirname) {
       log_verbose("Save path component: %s", dirname);
@@ -928,8 +1087,8 @@ const struct strvec *get_save_dirs(void)
   should be searched.  These paths are specified internally or may be set
   as the environment variable $FREECIV_SCENARIO_PATH (a separated list of
   directories, where the separator itself is specified internally,
-  platform-dependent).
-  '~' at the start of a component (provided followed
+  platform-dependent).  FREECIV_PATH may also be consulted for backward
+  compatibility.  '~' at the start of a component (provided followed
   by '/' or '\0') is expanded as $HOME.
 
   The returned pointer is static and shouldn't be modified, nor destroyed
@@ -942,15 +1101,43 @@ const struct strvec *get_scenario_dirs(void)
    * know the list and can just return it. */
   if (NULL == scenario_dir_names) {
     const char *path;
+    bool from_freeciv_path = FALSE;
 
     if ((path = getenv(FREECIV_SCENARIO_PATH)) && '\0' == path[0]) {
       /* TRANS: <FREECIV_SCENARIO_PATH> configuration error */
-      log_error( _("\"%s\" is set but empty; using default \"%s\" "
-                   "scenario directories instead."),
-                 FREECIV_SCENARIO_PATH, DEFAULT_SCENARIO_PATH);
+      log_error(_("\"%s\" is set but empty; trying \"%s\" instead."),
+                FREECIV_SCENARIO_PATH, FREECIV_PATH);
       path = NULL;
     }
+    if (NULL == path && (path = getenv(FREECIV_PATH))) {
+      if ('\0' == path[0]) {
+        /* TRANS: <FREECIV_PATH> configuration error */
+        log_error( _("\"%s\" is set but empty; using default \"%s\" "
+                     "scenario directories instead."),
+                  FREECIV_PATH, DEFAULT_SCENARIO_PATH);
+        path = NULL;
+      } else {
+        from_freeciv_path = TRUE;
+      }
+    }
     scenario_dir_names = base_get_dirs(NULL != path ? path : DEFAULT_SCENARIO_PATH);
+    if (from_freeciv_path) {
+      /* Then also append subdirs every directory. */
+      const char *subdirs[] = {
+        "scenarios", "scenario", NULL
+      };
+      char buf[512];
+      const char **subdir;
+      size_t i;
+
+      for (i = 0; i < strvec_size(scenario_dir_names); i++) {
+        path = strvec_get(scenario_dir_names, i);
+        for (subdir = subdirs; NULL != *subdir; subdir++) {
+          fc_snprintf(buf, sizeof(buf), "%s/%s", path, *subdir);
+          strvec_insert(scenario_dir_names, ++i, buf);
+        }
+      }
+    }
     strvec_remove_duplicate(scenario_dir_names, strcmp);      /* Don't set a path both. */
     strvec_iterate(scenario_dir_names, dirname) {
       log_verbose("Scenario path component: %s", dirname);
@@ -975,7 +1162,7 @@ struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix)
   struct strvec *files = strvec_new();
   size_t suffix_len = strlen(suffix);
 
-  fc_assert_ret_val(!strchr(suffix, DIR_SEPARATOR_CHAR), NULL);
+  fc_assert_ret_val(!strchr(suffix, '/'), NULL);
 
   if (NULL == dirs) {
     return files;
@@ -1046,13 +1233,6 @@ struct strvec *fileinfolist(const struct strvec *dirs, const char *suffix)
 ***************************************************************************/
 const char *fileinfoname(const struct strvec *dirs, const char *filename)
 {
-#ifdef FREECIV_MSWINDOWS
-  char fnbuf[strlen(filename) + 1];
-  int i;
-#else  /* FREECIV_MSWINDOWS */
-  const char *fnbuf = filename;
-#endif /* FREECIV_MSWINDOWS */
-
   if (NULL == dirs) {
     return NULL;
   }
@@ -1073,21 +1253,10 @@ const char *fileinfoname(const struct strvec *dirs, const char *filename)
     return astr_str(&realfile);
   }
 
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-  for (i = 0; filename[i] != '\0'; i++) {
-    if (filename[i] == '/') {
-      fnbuf[i] = DIR_SEPARATOR_CHAR;
-    } else {
-      fnbuf[i] = filename[i];
-    }
-  }
-  fnbuf[i] = '\0';
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
-
   strvec_iterate(dirs, dirname) {
     struct stat buf;    /* see if we can open the file or directory */
 
-    astr_set(&realfile, "%s" DIR_SEPARATOR "%s", dirname, fnbuf);
+    astr_set(&realfile, "%s/%s", dirname, filename);
     if (fc_stat(astr_str(&realfile), &buf) == 0) {
       return astr_str(&realfile);
     }
@@ -1231,182 +1400,90 @@ struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
 /***************************************************************************
   Language environmental variable (with emulation).
 ***************************************************************************/
-char *setup_langname(void)
+char *get_langname(void)
 {
   char *langname = NULL;
 
 #ifdef ENABLE_NLS
+
   langname = getenv("LANG");
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   /* set LANG by hand if it is not set */
   if (!langname) {
     switch (PRIMARYLANGID(GetUserDefaultLangID())) {
       case LANG_ARABIC:
-        langname = "ar";
-        break;
+        return "ar";
       case LANG_CATALAN:
-        langname = "ca";
-        break;
+        return "ca";
       case LANG_CZECH:
-        langname = "cs";
-        break;
+        return "cs";
       case LANG_DANISH:
-        langname = "da";
-        break;
+        return "da";
       case LANG_GERMAN:
-        langname = "de";
-        break;
+        return "de";
       case LANG_GREEK:
-        langname = "el";
-        break;
+        return "el";
       case LANG_ENGLISH:
         switch (SUBLANGID(GetUserDefaultLangID())) {
           case SUBLANG_ENGLISH_UK:
-            langname = "en_GB";
-            break;
+            return "en_GB";
           default:
-            langname = "en";
-            break;
+            return "en";
         }
-        break;
       case LANG_SPANISH:
-        langname = "es";
-        break;
+        return "es";
       case LANG_ESTONIAN:
-        langname = "et";
-        break;
+        return "et";
       case LANG_FARSI:
-        langname = "fa";
-        break;
+        return "fa";
       case LANG_FINNISH:
-        langname = "fi";
-        break;
+        return "fi";
       case LANG_FRENCH:
-        langname = "fr";
-        break;
+        return "fr";
       case LANG_HEBREW:
-        langname = "he";
-        break;
+        return "he";
       case LANG_HUNGARIAN:
-        langname = "hu";
-        break;
+        return "hu";
       case LANG_ITALIAN:
-        langname = "it";
-        break;
+        return "it";
       case LANG_JAPANESE:
-        langname = "ja";
-        break;
+        return "ja";
       case LANG_KOREAN:
-        langname = "ko";
-        break;
+        return "ko";
       case LANG_LITHUANIAN:
-        langname = "lt";
-        break;
+        return "lt";
       case LANG_DUTCH:
-        langname = "nl";
-        break;
+        return "nl";
       case LANG_NORWEGIAN:
-        langname = "nb";
-        break;
+        return "nb";
       case LANG_POLISH:
-        langname = "pl";
-        break;
+        return "pl";
       case LANG_PORTUGUESE:
         switch (SUBLANGID(GetUserDefaultLangID())) {
           case SUBLANG_PORTUGUESE_BRAZILIAN:
-            langname = "pt_BR";
-            break;
+            return "pt_BR";
           default:
-            langname = "pt";
-            break;
+            return "pt";
         }
-        break;
       case LANG_ROMANIAN:
-        langname = "ro";
-        break;
+        return "ro";
       case LANG_RUSSIAN:
-        langname = "ru";
-        break;
+        return "ru";
       case LANG_SWEDISH:
-        langname = "sv";
-        break;
+        return "sv";
       case LANG_TURKISH:
-        langname = "tr";
-        break;
+        return "tr";
       case LANG_UKRAINIAN:
-        langname = "uk";
-        break;
+        return "uk";
       case LANG_CHINESE:
-        langname = "zh_CN";
-        break;
-    }
-
-    if (langname != NULL) {
-      static char envstr[40];
-
-      fc_snprintf(envstr, sizeof(envstr), "LANG=%s", langname);
-      putenv(envstr);
+        return "zh_CN";
     }
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 #endif /* ENABLE_NLS */
 
   return langname;
-}
-
-#ifdef FREECIV_ENABLE_NLS
-/***************************************************************************
-  Update autocap behavior to match current language.
-***************************************************************************/
-static void autocap_update(void)
-{
-  char *autocap_opt_in[] = { "fi", NULL };
-  int i;
-  bool ac_enabled = FALSE;
-
-  char *lang = getenv("LANG");
-
-  if (lang != NULL && lang[0] != '\0' && lang[1] != '\0') {
-    for (i = 0; autocap_opt_in[i] != NULL && !ac_enabled; i++) {
-      if (lang[0] == autocap_opt_in[i][0]
-          && lang[1] == autocap_opt_in[i][1]) {
-        ac_enabled = TRUE;
-        break;
-      }
-    }
-  }
-
-  capitalization_opt_in(ac_enabled);
-}
-#endif /* FREECIV_ENABLE_NLS */
-
-/***************************************************************************
-  Switch to specified LANG
-***************************************************************************/
-void switch_lang(const char *lang)
-{
-#ifdef FREECIV_ENABLE_NLS
-#ifdef HAVE_SETENV
-  setenv("LANG", lang, TRUE);
-#else  /* HAVE_SETENV */
-  if (lang != NULL) {
-    static char envstr[40];
-
-    fc_snprintf(envstr, sizeof(envstr), "LANG=%s", lang);
-    putenv(envstr);
-  }
-#endif /* HAVE_SETENV */
-
-  (void) setlocale(LC_ALL, "");
-  (void) bindtextdomain("freeciv-core", get_locale_dir());
-
-  autocap_update();
-
-  log_normal("LANG set to %s", lang);
-#else  /* FREECIV_ENABLE_NLS */
-  fc_assert(FALSE);
-#endif /* FREECIV_ENABLE_NLS */
 }
 
 /***************************************************************************
@@ -1424,13 +1501,19 @@ void init_nls(void)
 
 #ifdef ENABLE_NLS
 
-#ifdef FREECIV_MSWINDOWS
-  setup_langname(); /* Makes sure LANG env variable has been set */
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+  char *langname = get_langname();
+  if (langname) {
+    static char envstr[40];
+
+    fc_snprintf(envstr, sizeof(envstr), "LANG=%s", langname);
+    putenv(envstr);
+  }
+#endif /* WIN32_NATIVE */
 
   (void) setlocale(LC_ALL, "");
-  (void) bindtextdomain("freeciv-core", get_locale_dir());
-  (void) textdomain("freeciv-core");
+  (void) bindtextdomain(PACKAGE, LOCALEDIR);
+  (void) textdomain(PACKAGE);
 
   /* Don't touch the defaults when LC_NUMERIC == "C".
      This is intended to cater to the common case where:
@@ -1464,7 +1547,23 @@ void init_nls(void)
     grouping_sep = fc_strdup(lc->thousands_sep);
   }
 
-  autocap_update();
+  {
+    char *autocap_opt_in[] = { "fi", NULL };
+    int i;
+    bool ac_enabled = FALSE;
+
+    char *lang = getenv("LANG");
+
+    if (lang != NULL && lang[0] != '\0' && lang[1] != '\0') {
+      for (i = 0; autocap_opt_in[i] != NULL && !ac_enabled; i++) {
+        if (lang[0] == autocap_opt_in[i][0]
+            && lang[1] == autocap_opt_in[i][1]) {
+          ac_enabled = TRUE;
+          capitalization_opt_in();
+        }
+      }
+    }
+  }
 
 #endif /* ENABLE_NLS */
 }
@@ -1494,7 +1593,7 @@ void dont_run_as_root(const char *argv0, const char *fallback)
 #if (defined(ALWAYS_ROOT) || defined(__EMX__) || defined(__BEOS__))
   return;
 #else
-  if (getuid() == 0 || geteuid() == 0) {
+  if (getuid()==0 || geteuid()==0) {
     fc_fprintf(stderr,
 	       _("%s: Fatal error: you're trying to run me as superuser!\n"),
 	       (argv0 ? argv0 : fallback ? fallback : "freeciv"));
@@ -1546,7 +1645,7 @@ enum m_pre_result match_prefix(m_pre_accessor_fn_t accessor_fn,
   according to given comparison function.
   Returns type of match or fail, and for return <= M_PRE_AMBIGUOUS
   sets *ind_result with matching index (or for ambiguous, first match).
-  If max_len_name == 0, treat as no maximum.
+  If max_len_name==0, treat as no maximum.
   If the int array 'matches' is non-NULL, up to 'max_matches' ambiguous
   matching names indices will be inserted into it. If 'pnum_matches' is
   non-NULL, it will be set to the number of indices inserted into 'matches'.
@@ -1577,16 +1676,15 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
   }
 
   nmatches = 0;
-  for (i = 0; i < n_names; i++) {
+  for(i=0; i<n_names; i++) {
     const char *name = accessor_fn(i);
-
-    if (cmp_fn(name, prefix, len) == 0) {
+    if (cmp_fn(name, prefix, len)==0) {
       if (strlen(name) == len) {
-        *ind_result = i;
-        return M_PRE_EXACT;
+	*ind_result = i;
+	return M_PRE_EXACT;
       }
-      if (nmatches == 0) {
-        *ind_result = i;	/* first match */
+      if (nmatches==0) {
+	*ind_result = i;	/* first match */
       }
       if (matches != NULL && nmatches < max_matches) {
         matches[nmatches] = i;
@@ -1612,10 +1710,10 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
   servers on the LAN, as specified by $FREECIV_MULTICAST_GROUP.
   Gets value once, and then caches result.
 ***************************************************************************/
-char *get_multicast_group(bool ipv6_preferred)
+char *get_multicast_group(bool ipv6_prefered)
 {
   static char *default_multicast_group_ipv4 = "225.1.1.1";
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   /* TODO: Get useful group (this is node local) */
   static char *default_multicast_group_ipv6 = "FF31::8000:15B4";
 #endif /* IPv6 support */
@@ -1626,8 +1724,8 @@ char *get_multicast_group(bool ipv6_preferred)
     if (env) {
       mc_group = fc_strdup(env);
     } else {
-#ifdef FREECIV_IPV6_SUPPORT
-      if (ipv6_preferred) {
+#ifdef IPV6_SUPPORT
+      if (ipv6_prefered) {
         mc_group = fc_strdup(default_multicast_group_ipv6);
       } else
 #endif /* IPv6 support */
@@ -1660,8 +1758,8 @@ void free_multicast_group(void)
 ***************************************************************************/
 void interpret_tilde(char* buf, size_t buf_size, const char* filename)
 {
-  if (filename[0] == '~' && filename[1] == DIR_SEPARATOR_CHAR) {
-    fc_snprintf(buf, buf_size, "%s" DIR_SEPARATOR "%s", user_home_dir(), filename + 2);
+  if (filename[0] == '~' && filename[1] == '/') {
+    fc_snprintf(buf, buf_size, "%s/%s", user_home_dir(), filename + 2);
   } else if (filename[0] == '~' && filename[1] == '\0') {
     strncpy(buf, user_home_dir(), buf_size);
   } else  {
@@ -1677,7 +1775,7 @@ void interpret_tilde(char* buf, size_t buf_size, const char* filename)
 ***************************************************************************/
 char *interpret_tilde_alloc(const char* filename)
 {
-  if (filename[0] == '~' && filename[1] == DIR_SEPARATOR_CHAR) {
+  if (filename[0] == '~' && filename[1] == '/') {
     const char *home = user_home_dir();
     size_t sz;
     char *buf;
@@ -1704,7 +1802,7 @@ char *skip_to_basename(char *filepath)
   fc_assert_ret_val(NULL != filepath, NULL);
 
   for (j = strlen(filepath); j >= 0; j--) {
-    if (filepath[j] == DIR_SEPARATOR_CHAR) {
+    if (filepath[j] == '/') {
       return &filepath[j+1];
     }
   }
@@ -1723,33 +1821,22 @@ bool make_dir(const char *pathname)
   path = interpret_tilde_alloc(pathname);
   dir = path;
   do {
-    dir = strchr(dir, DIR_SEPARATOR_CHAR);
+    dir = strchr(dir, '/');
     /* We set the current / with 0, and restore it afterwards */
     if (dir) {
       *dir = 0;
     }
 
-#ifdef FREECIV_MSWINDOWS
-#ifdef HAVE__MKDIR
-    /* Prefer _mkdir() in Windows even if mkdir() would seem to be available -
-     * chances are that it's wrong kind of mkdir().
-     * TODO: Make a configure check for mkdir() that also makes sure that it
-     *       takes two parameters, and prefer such proper mkdir() here. */
-    {
-      char *path_in_local_encoding = internal_to_local_string_malloc(path);
-
-      _mkdir(path_in_local_encoding);
-      free(path_in_local_encoding);
-    }
-#else  /* HAVE__MKDIR */
+#ifdef WIN32_NATIVE
+    char *path_in_local_encoding = internal_to_local_string_malloc(path);
+    _mkdir(path_in_local_encoding);
+    free(path_in_local_encoding);
+#else
     mkdir(path, 0755);
-#endif /* HAVE__MKDIR */
-#else  /* FREECIV_MSWINDOWS */
-    mkdir(path, 0755);
-#endif /* FREECIV_MSWINDOWS */
+#endif
 
     if (dir) {
-      *dir = DIR_SEPARATOR_CHAR;
+      *dir = '/';
       dir++;
     }
   } while (dir);
@@ -1767,15 +1854,15 @@ bool path_is_absolute(const char *filename)
     return FALSE;
   }
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   if (strchr(filename, ':')) {
     return TRUE;
   }
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
   if (filename[0] == '/') {
     return TRUE;
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 
   return FALSE;
 }
@@ -2272,7 +2359,7 @@ static size_t extract_escapes(const char *format, char *escapes,
   };
   bool reordered = FALSE;
   size_t num = 0;
-  int idx = 0;
+  int index = 0;
 
   memset(escapes, 0, max_escapes);
   format = strchr(format, '%');
@@ -2289,7 +2376,7 @@ static size_t extract_escapes(const char *format, char *escapes,
       } while (fc_isdigit(*format));
       if ('$' == *format) {
         /* Strings are reordered. */
-        sscanf(start, "%d", &idx);
+        sscanf(start, "%d", &index);
         reordered = TRUE;
       }
     }
@@ -2298,15 +2385,15 @@ static size_t extract_escapes(const char *format, char *escapes,
            && NULL == strchr(format_escapes, *format)) {
       format++;
     }
-    escapes[idx] = *format;
+    escapes[index] = *format;
 
     /* Increase the read count. */
     if (reordered) {
-      if (idx > num) {
-        num = idx;
+      if (index > num) {
+        num = index;
       }
     } else {
-      idx++;
+      index++;
       num++;
     }
 

@@ -1,15 +1,13 @@
 #/bin/sh
-
 #
 #  Copyright (C) 2004-2008 Freeciv team
 
 # Version definition for Freeciv.
 
 MAJOR_VERSION="2"
-MINOR_VERSION="92"
-PATCH_VERSION="99"
-EMERGENCY_VERSION=""
-VERSION_LABEL="-dev"
+MINOR_VERSION="5"
+PATCH_VERSION="6"
+VERSION_LABEL="+"
 
 # 1) Development until MAJOR and MINOR version numbers are
 #    set to new release series:
@@ -34,17 +32,17 @@ VERSION_LABEL="-dev"
 # (and update DEFAULT_FOLLOW_TAG to "stable", and also
 # win32/installer/Makefile --follow-tag to "win32")
 
-IS_DEVEL_VERSION=1
+IS_DEVEL_VERSION=0
 IS_FREEZE_VERSION=0
 IS_BETA_VERSION=0
 
-NEXT_STABLE_VERSION="3.0.0"
+NEXT_STABLE_VERSION="2.5.4"
 
 # 0 to disable display of release month until we can make better estimate
-RELEASE_MONTH=0
+RELEASE_MONTH=3
 
-DATASUBDIR=dev
-DEFAULT_FOLLOW_TAG=S3_0
+DATASUBDIR=2.5
+DEFAULT_FOLLOW_TAG=stable
 
 # Freeciv network capstring: see documentation in common/capstr.c
 #
@@ -56,8 +54,8 @@ DEFAULT_FOLLOW_TAG=S3_0
 #   - Avoid adding a new mandatory capability to the development branch for
 #     as long as possible.  We want to maintain network compatibility with
 #     the stable branch for as long as possible.
-NETWORK_CAPSTRING_MANDATORY="+Freeciv.Devel-3.0-2016.Nov.13"
-NETWORK_CAPSTRING_OPTIONAL=""
+NETWORK_CAPSTRING_MANDATORY="+Freeciv-2.5-network"
+NETWORK_CAPSTRING_OPTIONAL="nationset_change tech_cost split_reports extended_move_rate illness_ranges nonnatdef"
 
 FREECIV_DISTRIBUTOR=""
 
@@ -76,11 +74,7 @@ if test "x$VERSION_REV" != "x" && test "x$VERSION_LABEL" != "x+" ; then
   VERSION_REV="+${VERSION_REV}"
 fi
 
-if test x$EMERGENCY_VERSION != x ; then
-  EMERG_PART=".${EMERGENCY_VERSION}"
-fi
-
 if test x$VERSION_SCRIPT_SILENT != xyes ; then
-  VERSION=${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}${EMERG_PART}${VERSION_LABEL}${VERSION_REV}
+  VERSION=${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION}${VERSION_LABEL}${VERSION_REV}
   echo ${VERSION}
 fi

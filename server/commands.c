@@ -319,14 +319,12 @@ static struct command commands[] = {
    CMD_ECHO_ADMINS, VCF_NONE, 0
   },
   {"create",	ALLOW_CTRL,
-   /* TRANS: translate text between <> and [] only */
-   N_("create <player name> [ai type]"),
+   /* TRANS: translate text between <> only */
+   N_("create <player-name> [ai type]"),
    N_("Create an AI player with a given name."),
    /* TRANS: don't translate text between single quotes */
    N_("With the 'create' command a new player with the given name is "
       "created.\n"
-      "If 'player name' is empty, random name will be assigned when the game "
-      "begins. Until then player will be known by id derived from its type.\n"
       "The 'ai type' parameter can be used to select which AI module will be "
       "used for the created player. This requires that Freeciv has been "
       "compiled with loadable AI module support and that the respective module "
@@ -343,16 +341,6 @@ static struct command commands[] = {
    N_("Set yourself in away mode. The AI will watch your back."),
    N_("The AI will govern your nation but do minimal changes."), NULL,
    CMD_ECHO_NONE, VCF_NONE, 50
-  },
-  {"handicapped",	ALLOW_CTRL,
-   /* TRANS: translate text between <> only */
-   N_("handicapped\n"
-      "handicapped <player-name>"),
-   N_("Set one or all AI players to 'handicapped'."),
-   N_("With no arguments, sets all AI players to skill level 'handicapped', "
-      "and sets the default level for any new AI players to 'handicapped'. "
-      "With an argument, sets the skill level for that player only."), NULL,
-   CMD_ECHO_ALL, VCF_NONE, 50
   },
   {"novice",	ALLOW_CTRL,
    /* TRANS: translate text between <> only */
@@ -404,7 +392,6 @@ static struct command commands[] = {
       "argument, sets the skill level for that player only."), NULL,
    CMD_ECHO_ALL, VCF_NONE, 50
   },
-#ifdef FREECIV_DEBUG
   {"experimental",	ALLOW_CTRL,
    /* TRANS: translate text between <> only */
    N_("experimental\n"
@@ -417,7 +404,6 @@ static struct command commands[] = {
       "has no effect."), NULL,
    CMD_ECHO_ALL, VCF_NONE, 50
   },
-#endif /* FREECIV_DEBUG */
   {"cmdlevel",	ALLOW_ADMIN,
    /* TRANS: translate text between <> only */
    N_("cmdlevel\n"
@@ -562,6 +548,7 @@ static struct command commands[] = {
       "and use the 'start' command once players have reconnected."), NULL,
    CMD_ECHO_ADMINS, VCF_NONE, 0
   },
+#ifdef DEBUG
   {"scensave",	ALLOW_ADMIN,
    /* TRANS: translate text between <> only */
    N_("scensave\n"
@@ -575,6 +562,7 @@ static struct command commands[] = {
       "and use the 'start' command once players have reconnected."), NULL,
    CMD_ECHO_ADMINS, VCF_NONE, 0
   },
+#endif /* DEBUG */
   {"load",      ALLOW_CTRL,
    /* TRANS: translate text between <> only */
    N_("load\n"
@@ -606,14 +594,6 @@ static struct command commands[] = {
       "  ruleset  - using the values defined in the ruleset\n"
       "  script   - using default values and rereading the start script\n"
       "  default  - using default values\n"), NULL,
-   CMD_ECHO_ALL, VCF_NONE, 50
-  },
-  {"default",	ALLOW_CTRL,
-   /* no translatable parameters */
-   SYN_ORIG_("default <option name>"),
-   N_("Set option to its default value"),
-   N_("Set option to its default value, and track it as 'default' instead\n"
-      "of real value."), NULL,
    CMD_ECHO_ALL, VCF_NONE, 50
   },
   {"lua", ALLOW_ADMIN,
@@ -659,14 +639,6 @@ static struct command commands[] = {
       "cmdlevel 'admin' or above to force the corresponding change of the "
       "delegation status."), NULL,
    CMD_ECHO_NONE, VCF_NONE, 0
-  },
-  {"aicmd", ALLOW_ADMIN,
-   /* TRANS: translate text between <> only */
-   N_("aicmd <player> <command>"),
-   N_("Execute AI command"),
-   N_("Execute a command in the context of the AI for the given player"),
-   NULL,
-   CMD_ECHO_ADMINS, VCF_NONE, 0
   },
   {"fcdb", ALLOW_ADMIN,
    /* TRANS: translate text between <> only */

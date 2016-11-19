@@ -9,8 +9,7 @@
 
 [datafile]
 description="Cities data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 ; /* <-- avoid gettext warnings
 ;
@@ -22,7 +21,7 @@ format_version=10
 ; The tag name (in [specialist_*]) doesn't matter so long as it's unique.
 ; For each specialist the following fields may be set:
 ;
-;
+; 
 ; name          = translatable (plural) name as seen by user
 ; rule_name     = (optional) name for savegames, rulesets etc; if not
 ;                 present, 'name' is used. Since the name used in savegames
@@ -37,8 +36,8 @@ format_version=10
 ;                 The specialist graphic allow different images based on
 ;                 citizen number. The alt tag don't. To use another
 ;                 specialist's tag use specialist.<otherrulename>_<number>.
-; reqs          = requirements to have the specialist pick (see
-;                 effects.ruleset and README.effects for help on requirements)
+; reqs		= requirements to have the specialist pick (see
+;		  effects.ruleset and README.effects for help on requirements)
 ; helptext      = optional help text string; should escape all raw newlines
 ;                 so that xgettext parsing works
 ;
@@ -104,25 +103,120 @@ convert_speed = 50              ; base probability 50/1000 -> once every 20 turn
 partisans_pct = 0               ; percentage of own nationality to inspire partisans
                                 ; if 0, original city owner information is used instead
 
-[missing_unit_upkeep]
-; Get rid of a unit the city is unable to pay the X upkeep of.
-; X_protected  - never get rid of a unit with any of the listed unit type
-;                flags.
-; X_unit_act   - have the unit perform the listed actions until success,
-;                death or the list ends.
-; X_wipe       - wipe the unit if it survived performing the actions listed
-;                above.
+; /* <-- avoid gettext warnings
+;
+; City styles define the way cities are drawn
+;
+; name          = translatable name as seen by user
+; rule_name     = (optional) name for savegames, rulesets etc; if not
+;                 present, 'name' is used. Since the name used in savegames
+;                 must not change, use this when renaming a city style after a
+;                 ruleset has been released.
+; graphic              = group of tiles to use, see cities spec for
+;                        more info on city tiles
+; oceanic_graphic      = group of tiles to use for oceanic cities. If this
+;                        is omitted, same graphics as for land cities is used
+; citizens_graphic     = group of citizens tiles to use, see citizens/small
+;                        spec for more info on citizens tiles
+; reqs        = requirements for this city style (see README.effects)
+; replaced_by = which style replaced this one
+;
+; */ <-- avoid gettext warnings
 
-food_protected    = "EvacuateFirst"
-; food_unit_act   =
-food_wipe         = TRUE
+[citystyle_european]
+name        = _("?citystyle:European")
+graphic     = "city.european"
+graphic_alt = "-"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
 
-; TODO: Should missing gold upkeep really be able to kill units with the
-; EvacuateFirst unit type flag?
-; gold_protected  =
-; gold_unit_act   =
-gold_wipe         = TRUE
+[citystyle_classical]
+name        = _("?citystyle:Classical")
+graphic     = "city.classical"
+graphic_alt = "-"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
 
-shield_protected  = "EvacuateFirst"
-shield_unit_act   = "Help Wonder", "Recycle Unit", "Disband Unit"
-shield_wipe       = FALSE
+[citystyle_tropical]
+name        = _("?citystyle:Tropical")
+graphic     = "city.tropical"
+graphic_alt = "city.european"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
+
+[citystyle_asian]
+name        = _("?citystyle:Asian")
+graphic     = "city.asian"
+graphic_alt = "city.classical"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
+
+[citystyle_babylonian]
+name        = _("?citystyle:Babylonian")
+graphic     = "city.babylonian"
+graphic_alt = "city.classical"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
+
+[citystyle_celtic]
+name        = _("?citystyle:Celtic")
+graphic     = "city.celtic"
+graphic_alt = "city.european"
+citizens_graphic     = "ancient"
+citizens_graphic_alt = "generic"
+; No reqs
+replaced_by = "Renaissance"
+
+[citystyle_renaissance]
+name        = _("?citystyle:Renaissance")
+graphic     = "city.renaissance"
+graphic_alt = "city.industrial"
+citizens_graphic     = "renaissance"
+citizens_graphic_alt = "generic"
+reqs = { "type", "name", "range"
+         "tech", "University", "Player"
+       }
+replaced_by = "Industrial"
+
+[citystyle_industrial]
+name        = _("?citystyle:Industrial")
+graphic     = "city.industrial"
+graphic_alt = "-"
+citizens_graphic     = "industrial"
+citizens_graphic_alt = "generic"
+reqs = { "type", "name", "range"
+         "tech", "Railroad", "Player"
+       }
+replaced_by = "Modern"
+
+[citystyle_modern]
+name        = _("?citystyle:Modern")
+graphic     = "city.modern"
+graphic_alt = "-"
+citizens_graphic     = "modern"
+citizens_graphic_alt = "generic"
+reqs = { "type", "name", "range"
+         "tech", "Automobile", "Player"
+       }
+replaced_by = "PostModern"
+
+[citystyle_postmodern]
+name        = _("?citystyle:PostModern")
+graphic     = "city.postmodern"
+graphic_alt = "-"
+citizens_graphic     = "postmodern"
+citizens_graphic_alt = "generic"
+reqs = { "type", "name", "range"
+         "tech", "Superconductors", "Player"
+       }
+replaced_by = "-"

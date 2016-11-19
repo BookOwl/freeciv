@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -76,7 +76,7 @@ static void popupinfo_positioning_callback(GtkWidget *w, GtkAllocation *alloc,
 					   gpointer data)
 {
   struct tmousepos *mousepos = data;
-  float x, y;
+  gint x, y;
   struct tile *ptile;
 
   ptile = canvas_pos_to_tile(mousepos->x, mousepos->y);
@@ -216,7 +216,7 @@ gboolean butt_release_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
   if (ev->button == 1 || ev->button == 3) {
     release_goto_button(ev->x, ev->y);
   }
-  if (ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
+  if(ev->button == 3 && (rbutton_down || hover_state != HOVER_NONE))  {
     release_right_button(ev->x, ev->y,
                          (ev->state & GDK_SHIFT_MASK) != 0);
   }
@@ -268,7 +268,7 @@ gboolean butt_down_mapcanvas(GtkWidget *w, GdkEventButton *ev, gpointer data)
       popit(ev, ptile);
     }
     /* LMB in Area Selection mode. */
-    else if (tiles_hilited_cities) {
+    else if(tiles_hilited_cities) {
       if (ptile) {
         toggle_tile_hilite(ptile);
       }
@@ -359,8 +359,8 @@ void create_line_at_mouse_pos(void)
   } else {
     gdk_window_get_pointer(overview_canvas->window, &x, &y, 0);
     if (x >= 0 && y >= 0
-        && x < OVERVIEW_TILE_WIDTH * wld.map.xsize
-        && y < OVERVIEW_TILE_HEIGHT * wld.map.ysize) {
+	&& x < OVERVIEW_TILE_WIDTH * map.xsize
+	&& y < OVERVIEW_TILE_HEIGHT * map.ysize) {
       overview_update_line(x, y);
     }
   }
@@ -389,8 +389,7 @@ void update_rect_at_mouse_pos(void)
 **************************************************************************/
 gboolean move_mapcanvas(GtkWidget *w, GdkEventMotion *ev, gpointer data)
 {
-  if (gui_options.gui_gtk2_mouse_over_map_focus
-      && !GTK_WIDGET_HAS_FOCUS(map_canvas)) {
+  if (gui_gtk2_mouse_over_map_focus && !GTK_WIDGET_HAS_FOCUS(map_canvas)) {
     gtk_widget_grab_focus(map_canvas);
   }
 
@@ -428,7 +427,7 @@ gboolean leave_mapcanvas(GtkWidget *widget, GdkEventCrossing *event)
    * the map canvas, for instance, it gets called any time the mouse is
    * clicked. */
   gdk_window_get_pointer(map_canvas->window, &canvas_x, &canvas_y, NULL);
-  if (!map_is_empty()
+  if (map_exists()
       && canvas_x >= 0 && canvas_y >= 0
       && canvas_x < mapview.width && canvas_y < mapview.height) {
     control_mouse_cursor(canvas_pos_to_tile(canvas_x, canvas_y));

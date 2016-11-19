@@ -84,10 +84,7 @@ static const char *col_team(const struct player *player)
 *******************************************************************/
 static bool col_ai(const struct player *plr)
 {
-  /* TODO: Currently is_ai() is a macro so we can't have it
-   *       directly as this callback, but once it's a function,
-   *       do that. */
-  return is_ai(plr);
+  return plr->ai_controlled;
 }
 
 /******************************************************************
@@ -114,11 +111,10 @@ static const char *col_diplstate(const struct player *player)
     pds = player_diplstate_get(client.conn.playing, player);
     if (pds->type == DS_CEASEFIRE || pds->type == DS_ARMISTICE) {
       fc_snprintf(buf, sizeof(buf), "%s (%d)",
-                  diplstate_type_translated_name(pds->type),
-                  pds->turns_left);
+                  diplstate_text(pds->type), pds->turns_left);
       return buf;
     } else {
-      return diplstate_type_translated_name(pds->type);
+      return diplstate_text(pds->type);
     }
   }
 }
@@ -177,7 +173,7 @@ static int cmp_diplstate(const struct player *player1,
 static const char *col_love(const struct player *player)
 {
   if (NULL == client.conn.playing || player == client.conn.playing
-      || is_human(player)) {
+      || !player->ai_controlled) {
     return "-";
   } else {
     return love_text(player->ai_common.love[player_index(client.conn.playing)]);
@@ -196,13 +192,13 @@ static int cmp_love(const struct player *player1,
     return player_number(player1) - player_number(player2);
   }
 
-  if (player1 == client.conn.playing || is_human(player1)) {
+  if (player1 == client.conn.playing || !player1->ai_controlled) {
     love1 = MAX_AI_LOVE + 999;
   } else {
     love1 = player1->ai_common.love[player_index(client.conn.playing)];
   }
 
-  if (player2 == client.conn.playing || is_human(player2)) {
+  if (player2 == client.conn.playing || !player2->ai_controlled) {
     love2 = MAX_AI_LOVE + 999;
   } else {
     love2 = player2->ai_common.love[player_index(client.conn.playing)];
@@ -233,7 +229,7 @@ const char *plrdlg_col_state(const struct player *plr)
     struct option *opt;
     bool consider_tb = FALSE;
 
-    if (is_ai(plr)) {
+    if (plr->ai_controlled) {
       return "";
     }
 

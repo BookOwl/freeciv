@@ -181,13 +181,15 @@ functions like dio_get_uint32().
 
 A packet is constituted by header followed by the serialized structure
 data. The header contains the following fields (the sizes are defined in
-common/packets.c:packet_header_set()):
+common/packets.c:packet_header_set()). Currently this header is
+identical to one used in initial handshake protocol, but this can
+change in future versions.
 
 uint16	:	length		(the length of the entire packet)
-uint16	:	type		(e.g. PACKET_TILE_INFO)
+uint8	:	type		(e.g. PACKET_TILE_INFO)
 
 For backward compatibility reasons, packets used for the initial protocol
-(notably before checking the capabilities) have different header fields
+(notably before checking the capabilities) have unchanging header fields
 sizes (defined in common/packets.c:packet_header_init()):
 
 uint16	:	length		(the length of the entire packet)
@@ -270,8 +272,9 @@ PACKET_THAW_HINT:
  - the data send to a reconnecting player
  - the end turn activities
 
-The GTK+ client uses gdk_input_add() to tell gtk to call the callback
+The Xaw client uses XtAppAddInput() to tell Xt to call the callback
 functions, when something happens on the client socket.
+The GTK+ client uses a similar gdk_input_add() call.
 
 =========================================================================
 Network Improvements
@@ -322,6 +325,12 @@ generated properly, which will certainly not give any good results.
 Each terrain tile is drawn in 16 versions, all the combinations with
 with a green border in one of the main directions. Hills, mountains,
 forests and rivers are treated in special cases.
+
+The Xaw client requires that the graphics be stored in "paletted" PNGs,
+which for graphics with few colors is probably a good idea anyway. It also
+has a limited number of colors available, although it will try to match
+similar-looking colors after the existing supply has been exhausted.  Of
+course, not every tileset has to be usable by the Xaw client.
 
 Isometric tilesets are drawn in a similar way to how civ2 draws (that's
 why civ2 graphics are compatible).  For each base terrain type there
@@ -839,8 +848,53 @@ A patch to convert this to "semi-fogged" behaviour, whereby clients receive
 limited information about non-neighbouring and unseen enemies, is available
 at http://freecivac.sf.net/.
 
+=========================================================================
+Xaw Client GUI- Athena
+=========================================================================
+The old freeciv-xaw client GUI is written using athena-widgets. A few
+comments on this could prove useful for anyone wishing to write new
+dialogs or improve on the current ones.
+
+Widgets:
+--------
+When you create new widgets for a dialog, like:
+
+  players_form = XtVaCreateManagedWidget("playersform", 
+				       formWidgetClass, 
+				       players_dialog_shell, NULL);
+
+then put the widget properties in the app-default file 'Freeciv', instead
+of hardcoding them. For the widget created above, the following entries
+in the app-default file applies:
+
+*playersform.background:          lightblue
+*playersform.resizable:           true
+*playersform.top:                 chainTop
+*playersform.bottom:              chainBottom
+*playersform.left:                chainLeft
+*playersform.right:               chainRight
+
+Pixcomm and Canvas:
+-------------------
+The Pixcomm is a subclassed Command-widget, which can displays a Pixmap
+instead of a string, on top of a button(command). The Pixcomm widget
+should be used all places where this kind of high-level functionality
+is required. 
+
+The Canvas widget is more low-level. One have to write an expose(redraw)
+event-handler for each widget. The widget generates events on resize
+and mousebuttons.
+
+[Reading any Xt documentation, will tell you how powerful widget
+subclassing is. So I went trough great troubles subclassing the
+command widget. It was not before long I got mails from unhappy Xaw3d
+(and derives) users, that the client keeps crashing on them. Turns
+out that subclassing from any widgets but Core, chains the new
+widgets to libXaw. In hindsight I should just subclassed the Canvas
+widget and add more highlevel functionality. -PU]
+
 ===========================================================================
-Misc - The idea trashcan
+Misc - The idea trashcan 
 ===========================================================================
 [Currently all of the major entities - units, cities, players, contains
 an unique id. This id is really only required when a reference to an entity
@@ -1155,10 +1209,10 @@ Debugging has to be activated on compile time by adding the option
 '--enable-debug=no/some/yes/checks' to the configure script. The different
 options have the following meaning:
 
-  no:     no debugging enabled(FREECIV_NDEBUG and NDEBUG are defined)
+  no:     no debugging enabled(NDEBUG is defined)
           additional compiler flags for optimisation (-O3 -fomit-frame-pointer)
-  some:   default build (neither FREECIV_NDEBUG nor FREECIV_DEBUG is defined)
-  yes:    debugging enable (FREECIV_DEBUG is defined)
+  some:   default build (neither NDEBUG nor DEBUG is defined)
+  yes:    debugging enable (DEBUG is defined)
           debugging log level available (4, log_debug())
           additional compiler flags:
             -Werror -Wmissing-prototypes -Wmissing-declarations

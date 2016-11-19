@@ -1,4 +1,4 @@
-/**********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -64,26 +64,25 @@ log_callback_fn log_set_callback(log_callback_fn callback);
 log_prefix_fn log_set_prefix(log_prefix_fn prefix);
 void log_set_level(enum log_level level);
 enum log_level log_get_level(void);
-const char *log_level_name(enum log_level lvl);
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 bool log_do_output_for_level_at_location(enum log_level level,
                                          const char *file, int line);
 #endif
 
 void vdo_log(const char *file, const char *function, int line,
              bool print_from_where, enum log_level level,
-             char *buf, int buflen, const char *message, va_list args);
+             const char *message, va_list args);
 void do_log(const char *file, const char *function, int line,
             bool print_from_where, enum log_level level,
             const char *message, ...)
             fc__attribute((__format__ (__printf__, 6, 7)));
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #define log_do_output_for_level(level) \
   log_do_output_for_level_at_location(level, __FILE__, __FC_LINE__)
 #else
 #define log_do_output_for_level(level) (log_get_level() >= level)
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
 
 /* The log macros */
@@ -102,28 +101,17 @@ void do_log(const char *file, const char *function, int line,
   log_base(LOG_NORMAL, message, ## __VA_ARGS__)
 #define log_verbose(message, ...)                                           \
   log_base(LOG_VERBOSE, message, ## __VA_ARGS__)
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #  define log_debug(message, ...)                                           \
   log_base(LOG_DEBUG, message, ## __VA_ARGS__)
 #else
 #  define log_debug(message, ...) /* Do nothing. */
-#endif /* FREECIV_DEBUG */
-#ifdef FREECIV_TESTMATIC
-#define log_testmatic(message, ...)                                         \
-  log_base(LOG_ERROR, message, ## __VA_ARGS__)
-#define log_testmatic_alt(altlvl, message, ...)                             \
-  log_base(LOG_ERROR, message, ## __VA_ARGS__)
-#else  /* FREECIV_TESTMATIC */
-#define log_testmatic(message, ...) /* Do nothing. */
-#define log_testmatic_alt(altlvl, message, ...)                             \
-  log_base(altlvl, message, ## __VA_ARGS__)
-#endif /* FREECIV_TESTMATIC */
+#endif /* DEBUG */
 
 #define log_va_list(level, msg, args)                                       \
   if (log_do_output_for_level(level)) {                                     \
-    char __buf_[1024];                                                      \
     vdo_log(__FILE__, __FUNCTION__, __FC_LINE__, FALSE,                     \
-            level, __buf_, sizeof(__buf_), msg, args);                      \
+            level, msg, args);                                              \
   }
 
 /* Used by game debug command */
@@ -135,14 +123,14 @@ void do_log(const char *file, const char *function, int line,
 
 /* Assertions. */
 void fc_assert_set_fatal(int fatal_assertions);
-#ifdef FREECIV_NDEBUG
+#ifdef NDEBUG
 /* Disable the assertion failures, but not the tests! */
 #define fc_assert_fail(...) (void) 0
 #else
 void fc_assert_fail(const char *file, const char *function, int line,
                     const char *assertion, const char *message, ...)
                     fc__attribute((__format__ (__printf__, 5, 6)));
-#endif /* FREECIV_NDEBUG */
+#endif /* NDEBUG */
 
 #define fc_assert_full(file, function, line,                                \
                        condition, action, message, ...)                     \
@@ -150,21 +138,12 @@ void fc_assert_fail(const char *file, const char *function, int line,
     fc_assert_fail(file, function, line, #condition,                        \
                    message, ## __VA_ARGS__);                                \
     action;                                                                 \
-  }                                                                         \
-  (void) 0 /* Force the usage of ';' at the end of the call. */
+  }
 
-#ifdef FREECIV_NDEBUG
+#ifdef NDEBUG
 /* Disabled. */
 #define fc_assert(...) (void) 0
 #define fc_assert_msg(...) (void) 0
-#define fc_assert_action(...) (void) 0
-#define fc_assert_ret(...) (void) 0
-#define fc_assert_ret_val(...) (void) 0
-#define fc_assert_exit(...) (void) 0
-#define fc_assert_action_msg(...) (void) 0
-#define fc_assert_ret_msg(...) (void) 0
-#define fc_assert_ret_val_msg(...) (void) 0
-#define fc_assert_exit_msg(...) (void) 0
 #else
 /* Like assert(). */
 #define fc_assert(condition)                                                \
@@ -176,6 +155,7 @@ void fc_assert_fail(const char *file, const char *function, int line,
   ((condition) ? (void) 0                                                   \
    : fc_assert_fail(__FILE__, __FUNCTION__, __FC_LINE__,                    \
                     #condition, message, ## __VA_ARGS__))
+#endif /* NDEBUG */
 
 /* Do action on failure. */
 #define fc_assert_action(condition, action)                                 \
@@ -204,31 +184,13 @@ void fc_assert_fail(const char *file, const char *function, int line,
 /* Exit on failure with extra message. */
 #define fc_assert_exit_msg(condition, message, ...)                         \
   fc_assert_action(condition,                                               \
-                   log_fatal(message, ## __VA_ARGS__); exit(EXIT_FAILURE))
-#endif /* FREECIV_NDEBUG */
+                   log_fatal(message, ## __VA_ARGS__); exit(EXIT_FAILURE));
 
-#ifdef __cplusplus
-#ifdef FREECIV_CXX11_STATIC_ASSERT
-#define FC_STATIC_ASSERT(cond, tag) static_assert(cond, #tag)
-#endif /* FREECIV_CXX11_STATIC_ASSERT */
-#else  /* __cplusplus */
-#ifdef FREECIV_C11_STATIC_ASSERT
-#define FC_STATIC_ASSERT(cond, tag) _Static_assert(cond, #tag)
-#endif /* FREECIV_C11_STATIC_ASSERT */
-#ifdef FREECIV_STATIC_STRLEN
-#define FC_STATIC_STRLEN_ASSERT(cond, tag) FC_STATIC_ASSERT(cond, tag)
-#else  /* FREECIV_STATIC_STRLEN */
-#define FC_STATIC_STRLEN_ASSERT(cond, tag)
-#endif /* FREECIV_STATIC_STRLEN */
-#endif /* __cplusplus */
-
-#ifndef FC_STATIC_ASSERT
 /* Static (compile-time) assertion.
  * "tag" is a semi-meaningful C identifier which will appear in the
  * compiler error message if the assertion fails. */
 #define FC_STATIC_ASSERT(cond, tag) \
                       enum { static_assert_ ## tag = 1 / (!!(cond)) }
-#endif
 
 #ifdef __cplusplus
 }

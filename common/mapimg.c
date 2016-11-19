@@ -24,15 +24,14 @@
 /* utility */
 #include "astring.h"
 #include "bitvector.h"
-#include "fc_cmdline.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
+#include "shared.h"
 #include "string_vector.h"
 #include "timing.h"
 
 /* common */
-#include "calendar.h"
 #include "connection.h"
 #include "fc_types.h"
 #include "game.h"
@@ -388,7 +387,7 @@ struct img {
 
 static struct img *img_new(struct mapdef *mapdef, int topo, int xsize, int ysize);
 static void img_destroy(struct img *pimg);
-static inline void img_set_pixel(struct img *pimg, const int mindex,
+static inline void img_set_pixel(struct img *pimg, const int index,
                                  const struct rgbcolor *pcolor);
 static inline int img_index(const int x, const int y,
                             const struct img *pimg);
@@ -1321,7 +1320,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
   struct img *pimg;
   char mapimgfile[MAX_LEN_PATH];
   bool ret = TRUE;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   struct timer *timer_cpu, *timer_user;
 #endif
 
@@ -1343,17 +1342,17 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
    * - it is the first turn
    * - turns is set to a value not zero and the current turn can be devided
    *   by this number */
-  if (!force && game.info.turn != 1
+  if (!force && game.info.turn != 0
       && !(pmapdef->turns != 0 && game.info.turn % pmapdef->turns == 0)) {
     return TRUE;
   }
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   timer_cpu = timer_new(TIMER_CPU, TIMER_ACTIVE);
   timer_start(timer_cpu);
   timer_user = timer_new(TIMER_USER, TIMER_ACTIVE);
   timer_start(timer_user);
-#endif /* FREECIV_DEBUG */
+#endif
 
   /* create map */
   switch (pmapdef->player.show) {
@@ -1365,7 +1364,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
     generate_save_name(savename, mapimgfile, sizeof(mapimgfile),
                        mapimg_generate_name(pmapdef));
 
-    pimg = img_new(pmapdef, CURRENT_TOPOLOGY, wld.map.xsize, wld.map.ysize);
+    pimg = img_new(pmapdef, CURRENT_TOPOLOGY, map.xsize, map.ysize);
     img_createmap(pimg);
     if (!img_save(pimg, mapimgfile, path)) {
       ret = FALSE;
@@ -1376,7 +1375,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
   case SHOW_HUMAN:   /* one map for each human player */
     players_iterate(pplayer) {
       if (!pplayer->is_alive || (pmapdef->player.show == SHOW_HUMAN
-                                 && !is_human(pplayer))) {
+                                 && pplayer->ai_controlled)) {
         /* no map image for dead players
          * or AI players if only human players should be shown */
         continue;
@@ -1388,7 +1387,7 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
       generate_save_name(savename, mapimgfile, sizeof(mapimgfile),
                          mapimg_generate_name(pmapdef));
 
-      pimg = img_new(pmapdef, CURRENT_TOPOLOGY, wld.map.xsize, wld.map.ysize);
+      pimg = img_new(pmapdef, CURRENT_TOPOLOGY, map.xsize, map.ysize);
       img_createmap(pimg);
       if (!img_save(pimg, mapimgfile, path)) {
         ret = FALSE;
@@ -1402,14 +1401,14 @@ bool mapimg_create(struct mapdef *pmapdef, bool force, const char *savename,
     break;
   }
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   log_debug("Image generation time: %g seconds (%g apparent)",
             timer_read_seconds(timer_cpu),
             timer_read_seconds(timer_user));
 
   timer_destroy(timer_cpu);
   timer_destroy(timer_user);
-#endif /* FREECIV_DEBUG */
+#endif
 
   return ret;
 }
@@ -1692,7 +1691,7 @@ static void mapimg_log(const char *file, const char *function, int line,
   fc_vsnprintf(error_buffer, sizeof(error_buffer), format, args);
   va_end(args);
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   log_debug("In %s() [%s:%d]: %s", function, file, line, error_buffer);
 #endif
 }
@@ -1853,7 +1852,7 @@ static struct img *img_new(struct mapdef *mapdef, int topo, int xsize, int ysize
   pimg->turn = game.info.turn;
   fc_snprintf(pimg->title, sizeof(pimg->title),
               _("Turn: %4d - Year: %10s"), game.info.turn,
-              calendar_text());
+              textyear(game.info.year));
 
   pimg->mapsize.x = xsize; /* x size of the map */
   pimg->mapsize.y = ysize; /* y size of the map */
@@ -1950,16 +1949,16 @@ static void img_destroy(struct img *pimg)
 /****************************************************************************
   Set the color of one pixel.
 ****************************************************************************/
-static inline void img_set_pixel(struct img *pimg, const int mindex,
+static inline void img_set_pixel(struct img *pimg, const int index,
                                  const struct rgbcolor *pcolor)
 {
-  if (mindex < 0 || mindex > pimg->imgsize.x * pimg->imgsize.y) {
-    log_error("invalid index: 0 <= %d < %d", mindex,
+  if (index < 0 || index > pimg->imgsize.x * pimg->imgsize.y) {
+    log_error("invalid index: 0 <= %d < %d", index,
               pimg->imgsize.x * pimg->imgsize.y);
     return;
   }
 
-  pimg->map[mindex] = pcolor;
+  pimg->map[index] = pcolor;
 }
 
 /****************************************************************************
@@ -1980,7 +1979,7 @@ static inline int img_index(const int x, const int y,
 static void img_plot(struct img *pimg, int x, int y,
                      const struct rgbcolor *pcolor, const bv_pixel pixel)
 {
-  int base_x, base_y, i, mindex;
+  int base_x, base_y, i, index;
 
   if (!BV_ISSET_ANY(pixel)) {
     return;
@@ -1990,9 +1989,9 @@ static void img_plot(struct img *pimg, int x, int y,
 
   for (i = 0; i < NUM_PIXEL; i++) {
     if (BV_ISSET(pixel, i)) {
-      mindex = img_index(base_x + pimg->tileshape->x[i],
-                         base_y + pimg->tileshape->y[i], pimg);
-      img_set_pixel(pimg, mindex, pcolor);
+      index = img_index(base_x + pimg->tileshape->x[i],
+                        base_y + pimg->tileshape->y[i], pimg);
+      img_set_pixel(pimg, index, pcolor);
     }
   }
 }
@@ -2079,7 +2078,7 @@ static bool img_save_magickwand(const struct img *pimg,
   char imagefile[MAX_LEN_PATH];
   char str_color[32], comment[2048] = "", title[258];
   magickwand_size_t img_width, img_height, map_width, map_height;
-  int x, y, xxx, yyy, row, i, mindex, plrwidth, plroffset, textoffset;
+  int x, y, xxx, yyy, row, i, index, plrwidth, plroffset, textoffset;
   bool withplr = BV_ISSET_ANY(pimg->def->player.checked_plrbv);
 
   if (!img_filename(mapimgfile, pimg->def->format, imagefile,
@@ -2225,8 +2224,8 @@ static bool img_save_magickwand(const struct img *pimg,
 
       /* x coordinate */
       for (x = 0; x < pimg->imgsize.x; x++) {
-        mindex = img_index(x, y, pimg);
-        pcolor = pimg->map[mindex];
+        index = img_index(x, y, pimg);
+        pcolor = pimg->map[index];
 
         if (pcolor != NULL) {
           SET_COLOR(str_color, pcolor);
@@ -2282,7 +2281,7 @@ static bool img_save_ppm(const struct img *pimg, const char *mapimgfile)
 {
   char ppmname[MAX_LEN_PATH];
   FILE *fp;
-  int x, y, xxx, yyy, mindex;
+  int x, y, xxx, yyy, index;
   const struct rgbcolor *pcolor;
 
   if (pimg->def->format != IMGFORMAT_PPM) {
@@ -2331,8 +2330,8 @@ static bool img_save_ppm(const struct img *pimg, const char *mapimgfile)
     for (yyy = 0; yyy < pimg->def->zoom; yyy++) {
       /* x coordinate */
       for (x = 0; x < pimg->imgsize.x; x++) {
-        mindex = img_index(x, y, pimg);
-        pcolor = pimg->map[mindex];
+        index = img_index(x, y, pimg);
+        pcolor = pimg->map[index];
 
         /* zoom for x */
         for (xxx = 0; xxx < pimg->def->zoom; xxx++) {

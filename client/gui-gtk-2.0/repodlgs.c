@@ -69,7 +69,7 @@ struct science_report {
   struct gui_dialog *shell;
   GtkComboBox *reachable_techs;
   GtkComboBox *reachable_goals;
-  GtkWidget *button_show_all;
+  GtkWidget *button_reachable;
   GtkLabel *main_label;         /* Gets science_dialog_text(). */
   GtkProgressBar *progress_bar;
   GtkLabel *goal_label;
@@ -90,15 +90,15 @@ static gboolean science_diagram_button_release_callback(GtkWidget *widget,
                                                         gpointer data);
 static void science_diagram_update(GtkWidget *widget, gpointer data);
 static GtkWidget *science_diagram_new(void);
-static void science_diagram_data(GtkWidget *widget, bool show_all);
+static void science_diagram_data(GtkWidget *widget, bool reachable);
 static void science_diagram_center(GtkWidget *diagram, Tech_type_id tech);
 static void science_report_redraw(struct science_report *preport);
 static gint cmp_func(gconstpointer a_p, gconstpointer b_p);
 static void science_report_update(struct science_report *preport);
 static void science_report_current_callback(GtkComboBox *combo,
                                             gpointer data);
-static void science_report_show_all_callback(GtkComboBox *combo,
-                                             gpointer data);
+static void science_report_unreachable_callback(GtkComboBox *combo,
+                                                gpointer data);
 static void science_report_goal_callback(GtkComboBox *combo, gpointer data);
 static void science_report_init(struct science_report *preport);
 static void science_report_free(struct science_report *preport);
@@ -135,13 +135,11 @@ static inline void science_report_store_set(GtkListStore *store,
                                             GtkTreeIter *iter,
                                             Tech_type_id tech)
 {
-  const struct research *presearch = research_get(client_player());
-
   gtk_list_store_set(store, iter,
                      SRD_COL_NAME,
-                     research_advance_name_translation(presearch, tech),
+                     advance_name_for_player(client_player(), tech),
                      SRD_COL_STEPS,
-                     research_goal_unknown_techs(presearch, tech),
+                     num_unknown_techs_for_goal(client_player(), tech),
                      SRD_COL_ID, tech,
                      -1);
 }
@@ -195,7 +193,6 @@ static void science_report_combo_set_active(GtkComboBox *combo,
 static gboolean science_diagram_button_release_callback(GtkWidget *widget,
     GdkEventButton *event, gpointer data)
 {
-  const struct research *presearch = research_get(client_player());
   struct reqtree *reqtree = g_object_get_data(G_OBJECT(widget), "reqtree");
   Tech_type_id tech = get_tech_on_reqtree(reqtree, event->x, event->y);
 
@@ -205,13 +202,12 @@ static gboolean science_diagram_button_release_callback(GtkWidget *widget,
 
   if (event->button == 3) {
     /* RMB: get help */
-    popup_help_dialog_typed(research_advance_name_translation(presearch,
-                                                              tech),
+    popup_help_dialog_typed(advance_name_for_player(client_player(), tech),
                             HELP_TECH);
   } else {
     if (event->button == 1 && can_client_issue_orders()) {
       /* LMB: set research or research goal */
-      switch (research_invention_state(presearch, tech)) {
+      switch (player_invention_state(client_player(), tech)) {
        case TECH_PREREQS_KNOWN:
          dsend_packet_player_research(&client.conn, tech);
          break;
@@ -271,17 +267,17 @@ static GtkWidget *science_diagram_new(void)
 /****************************************************************************
   Recreate the req tree.
 ****************************************************************************/
-static void science_diagram_data(GtkWidget *widget, bool show_all)
+static void science_diagram_data(GtkWidget *widget, bool reachable)
 {
   struct reqtree *reqtree;
   int width, height;
 
   if (can_conn_edit(&client.conn)) {
     /* Show all techs in editor mode, not only currently reachable ones */
-    reqtree = create_reqtree(NULL, TRUE);
+    reqtree = create_reqtree(NULL, FALSE);
   } else {
     /* Show only at some point reachable techs */
-    reqtree = create_reqtree(client_player(), show_all);
+    reqtree = create_reqtree(client_player(), reachable);
   }
 
   get_reqtree_dimensions(reqtree, &width, &height);
@@ -331,11 +327,11 @@ static void science_report_redraw(struct science_report *preport)
   fc_assert_ret(NULL != preport);
 
   science_diagram_data(GTK_WIDGET(preport->drawing_area),
-                       gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
-                         preport->button_show_all)));
+                       !gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(
+                         preport->button_reachable)));
 
   if (client_has_player()) {
-    researching = research_get(client_player())->researching;
+    researching = player_research_get(client_player())->researching;
   } else {
     researching = A_UNSET;
   }
@@ -351,10 +347,9 @@ static gint cmp_func(gconstpointer a_p, gconstpointer b_p)
 {
   const gchar *a_str, *b_str;
   gint a = GPOINTER_TO_INT(a_p), b = GPOINTER_TO_INT(b_p);
-  const struct research *presearch = research_get(client_player());
 
-  a_str = research_advance_name_translation(presearch, a);
-  b_str = research_advance_name_translation(presearch, b);
+  a_str = advance_name_for_player(client_player(), a);
+  b_str = advance_name_for_player(client_player(), b);
 
   return fc_strcoll(a_str, b_str);
 }
@@ -367,7 +362,7 @@ static void science_report_update(struct science_report *preport)
   GtkListStore *store;
   GtkTreeIter iter;
   GList *sorting_list, *item;
-  struct research *presearch = research_get(client_player());
+  struct player_research *presearch = player_research_get(client_player());
   const char *text;
   double pct;
   Tech_type_id tech;
@@ -436,7 +431,7 @@ static void science_report_update(struct science_report *preport)
 
   /* Collect all techs which are reachable in next 10 steps. */
   advance_index_iterate(A_FIRST, i) {
-    if (research_invention_reachable(presearch, i)
+    if (player_invention_reachable(client_player(), i, TRUE)
         && TECH_KNOWN != presearch->inventions[i].state
         && (i == presearch->tech_goal
             || 10 >= presearch->inventions[i].num_required_techs)) {
@@ -481,15 +476,15 @@ static void science_report_current_callback(GtkComboBox *combo,
     dsend_packet_player_research(&client.conn, tech);
   }
   /* Revert, or we will be not synchron with the server. */
-  science_report_combo_set_active(combo, research_get
+  science_report_combo_set_active(combo, player_research_get
                                   (client_player())->researching);
 }
 
 /****************************************************************************
   Show or hide unreachable techs.
 ****************************************************************************/
-static void science_report_show_all_callback(GtkComboBox *combo,
-                                             gpointer data)
+static void science_report_unreachable_callback(GtkComboBox *combo,
+                                                gpointer data)
 {
   struct science_report *preport = (struct science_report *) data;
 
@@ -514,7 +509,7 @@ static void science_report_goal_callback(GtkComboBox *combo, gpointer data)
     dsend_packet_player_tech_goal(&client.conn, tech);
   }
   /* Revert, or we will be not synchron with the server. */
-  science_report_combo_set_active(combo, research_get
+  science_report_combo_set_active(combo, player_research_get
                                   (client_player())->tech_goal);
 }
 
@@ -523,7 +518,7 @@ static void science_report_goal_callback(GtkComboBox *combo, gpointer data)
 ****************************************************************************/
 static void science_report_init(struct science_report *preport)
 {
-  GtkWidget *frame, *table, *help_button, *show_all_button, *sw, *w;
+  GtkWidget *frame, *table, *help_button, *reachable_button, *sw, *w;
   GtkBox *vbox;
   GtkListStore *store;
   GtkCellRenderer *renderer;
@@ -603,15 +598,15 @@ static void science_report_init(struct science_report *preport)
   preport->goal_label = GTK_LABEL(w);
 
   /* Toggle unreachable button. */
-  /* TRANS: As in 'Show all (even not reachable) techs'. */
-  show_all_button = gtk_toggle_button_new_with_label(_("Show all"));
-  gtk_table_attach(GTK_TABLE(table), show_all_button, 5, 6, 0, 1, 0, 0, 0,
+  /* TRANS: As in 'Show all (even currently not reachable) techs'. */
+  reachable_button = gtk_toggle_button_new_with_label(_("Show all"));
+  gtk_table_attach(GTK_TABLE(table), reachable_button, 5, 6, 0, 1, 0, 0, 0,
                    0);
-  g_signal_connect(show_all_button, "toggled",
-                   G_CALLBACK(science_report_show_all_callback), preport);
-  gtk_widget_set_sensitive(show_all_button, can_client_issue_orders()
+  g_signal_connect(reachable_button, "toggled",
+                   G_CALLBACK(science_report_unreachable_callback), preport);
+  gtk_widget_set_sensitive(reachable_button, can_client_issue_orders()
                                              && !client_is_global_observer());
-  preport->button_show_all = show_all_button;
+  preport->button_reachable = reachable_button;
 
   /* Science diagram. */
   sw = gtk_scrolled_window_new(NULL, NULL);
@@ -648,7 +643,8 @@ static void science_report_free(struct science_report *preport)
 ****************************************************************************/
 void science_report_dialog_popup(bool raise)
 {
-  struct research *presearch = research_get(client_player());
+  struct player_research *presearch =
+      (client_has_player() ? player_research_get(client_player()) : NULL);
 
   if (NULL == science_report.shell) {
     science_report_init(&science_report);
@@ -816,7 +812,7 @@ static void economy_report_update(struct economy_report *preport)
     struct improvement_entry *pentry = building_entries + i;
     struct impr_type *pimprove = pentry->type;
     struct sprite *sprite = get_building_sprite(tileset, pimprove);
-    cid id = cid_encode_building(pimprove);
+    cid cid = cid_encode_building(pimprove);
 
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
@@ -827,9 +823,9 @@ static void economy_report_update(struct economy_report *preport)
                        ERD_COL_COST, pentry->cost,
                        ERD_COL_TOTAL_COST, pentry->total_cost,
                        ERD_COL_IS_IMPROVEMENT, TRUE,
-                       ERD_COL_CID, id,
+                       ERD_COL_CID, cid,
                        -1);
-    if (selected == id) {
+    if (selected == cid) {
       /* Restore the selection. */
       gtk_tree_selection_select_iter(selection, &iter);
     }
@@ -841,8 +837,8 @@ static void economy_report_update(struct economy_report *preport)
     struct unit_entry *pentry = unit_entries + i;
     struct unit_type *putype = pentry->type;
     struct sprite *sprite = get_unittype_sprite(tileset, putype,
-                                                direction8_invalid());
-    cid id = cid_encode_unit(putype);
+                                                direction8_invalid(), TRUE);
+    cid cid = cid_encode_unit(putype);
 
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
@@ -853,9 +849,9 @@ static void economy_report_update(struct economy_report *preport)
                        ERD_COL_COST, pentry->cost,
                        ERD_COL_TOTAL_COST, pentry->total_cost,
                        ERD_COL_IS_IMPROVEMENT, FALSE,
-                       ERD_COL_CID, id,
+                       ERD_COL_CID, cid,
                        -1);
-    if (selected == id) {
+    if (selected == cid) {
       /* Restore the selection. */
       gtk_tree_selection_select_iter(selection, &iter);
     }
@@ -880,7 +876,7 @@ static void economy_report_command_callback(struct gui_dialog *pdialog,
   GtkTreeIter iter;
   GtkWidget *shell;
   struct universal selected;
-  cid id;
+  cid cid;
   char buf[256] = "";
 
   switch (response) {
@@ -898,8 +894,8 @@ static void economy_report_command_callback(struct gui_dialog *pdialog,
     return;
   }
 
-  gtk_tree_model_get(model, &iter, ERD_COL_CID, &id, -1);
-  selected = cid_decode(id);
+  gtk_tree_model_get(model, &iter, ERD_COL_CID, &cid, -1);
+  selected = cid_decode(cid);
 
   switch (selected.kind) {
   case VUT_IMPROVEMENT:
@@ -995,10 +991,10 @@ static void economy_report_selection_callback(GtkTreeSelection *selection,
   if (can_client_issue_orders()
       && gtk_tree_selection_get_selected(selection, &model, &iter)) {
     struct universal selected;
-    cid id;
+    cid cid;
 
-    gtk_tree_model_get(model, &iter, ERD_COL_CID, &id, -1);
-    selected = cid_decode(id);
+    gtk_tree_model_get(model, &iter, ERD_COL_CID, &cid, -1);
+    selected = cid_decode(cid);
     switch (selected.kind) {
     case VUT_IMPROVEMENT:
       {
@@ -1238,18 +1234,17 @@ static const struct {
     N_("Upgradable"),             TRUE,   URD_COL_UPG_VISIBLE },
   { /* URD_COL_N_UPGRADABLE */ G_TYPE_INT,     "" /* merge with previous col */,
     NULL,                         TRUE,   URD_COL_NUPG_VISIBLE },
-  /* TRANS: "In progress" abbreviation. */
+  /* TRANS: "In progress" abbrevation. */
   { /* URD_COL_IN_PROGRESS */  G_TYPE_INT,     N_("In-Prog"),
     N_("In progress"),            TRUE,   -1 },
   { /* URD_COL_ACTIVE */       G_TYPE_INT,     N_("Active"),
     NULL,                         TRUE,   -1 },
   { /* URD_COL_SHIELD */       G_TYPE_INT,     N_("Shield"),
     N_("Total shield upkeep"),    TRUE,   -1 },
-  { /* URD_COL_FOOD */         G_TYPE_INT,     N_("Food"),
+  { /* URD_COL_SHIELD */       G_TYPE_INT,     N_("Food"),
     N_("Total food upkeep"),      TRUE,   -1 },
-  { /* URD_COL_GOLD */         G_TYPE_INT,     N_("Gold"),
+  { /* URD_COL_SHIELD */       G_TYPE_INT,     N_("Gold"),
     N_("Total gold upkeep"),      TRUE,   -1 },
-  /* Columns in the model but not the view: */
   { /* URD_COL_TEXT_WEIGHT */  G_TYPE_INT,     NULL /* ... */ },
   { /* URD_COL_UPG_VISIBLE */  G_TYPE_BOOLEAN, NULL /* ... */ },
   { /* URD_COL_NUPG_VISIBLE */ G_TYPE_BOOLEAN, NULL /* ... */ },
@@ -1305,7 +1300,7 @@ static void units_report_update(struct units_report *preport)
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      info = unit_array + utype_index(unit_type_get(punit));
+      info = unit_array + utype_index(unit_type(punit));
 
       if (0 != punit->homecity) {
         output_type_iterate(o) {
@@ -1458,7 +1453,7 @@ static struct unit *find_nearest_unit(const struct unit_type *utype,
     }
 
     unit_list_iterate(pplayer->units, punit) {
-      if (utype == unit_type_get(punit)
+      if (utype == unit_type(punit)
           && FOCUS_AVAIL == punit->client.focus_status
           && 0 < punit->moves_left
           && !punit->done_moving

@@ -1,9 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = core nations ruledit
+SUBDIRS = freeciv nations
 
-EXTRA_DIST = \
-	Strings.txt \
-	stats.sh \
-	generate_skips.sh \
-	global.skip
+EXTRA_DIST = Strings.txt stats.sh

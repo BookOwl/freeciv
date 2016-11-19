@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -75,8 +75,9 @@ void conn_set_access(struct connection *pconn, enum cmdlevel new_level,
     pconn->server.granted_access_level = new_level;
   }
 
-  if (old_level != new_level) {
-    send_server_access_level_settings(pconn->self, old_level, new_level);
+  if (old_level != new_level
+      && (ALLOW_HACK == old_level || ALLOW_HACK == new_level)) {
+    send_server_hack_level_settings(pconn->self);
   }
 }
 
@@ -128,7 +129,6 @@ void establish_new_connection(struct connection *pconn)
   struct packet_chat_msg connect_info;
   char hostname[512];
   bool delegation_error = FALSE;
-  struct packet_set_topology topo_packet;
 
   /* zero out the password */
   memset(pconn->server.password, 0, sizeof(pconn->server.password));
@@ -180,10 +180,7 @@ void establish_new_connection(struct connection *pconn)
   send_server_setting_control(pconn);
   send_server_settings(dest);
   send_scenario_info(dest);
-  send_scenario_description(dest);
   send_game_info(dest);
-  topo_packet.topology_id = wld.map.topology_id;
-  send_packet_set_topology(pconn, &topo_packet);
 
   /* Do we have a player that a delegate is currently controlling? */
   if ((pplayer = player_by_user_delegated(pconn->username))) {
@@ -285,7 +282,7 @@ void establish_new_connection(struct connection *pconn)
   /* if need be, tell who we're waiting on to end the game.info.turn */
   if (S_S_RUNNING == server_state() && game.server.turnblock) {
     players_iterate_alive(cplayer) {
-      if (is_human(cplayer)
+      if (!cplayer->ai_controlled
           && !cplayer->phase_done
           && cplayer != pconn->playing) {  /* skip current player */
         notify_conn(dest, NULL, E_CONNECTION, ftc_any,
@@ -303,12 +300,9 @@ void establish_new_connection(struct connection *pconn)
 
   if (NULL != pplayer) {
     /* Else, no need to do anything. */
-    reset_all_start_commands(TRUE);
+    reset_all_start_commands();
     (void) send_server_info_to_metaserver(META_INFO);
   }
-
-  send_current_history_report(pconn->self);
-
   conn_compression_thaw(pconn);
 }
 
@@ -357,8 +351,8 @@ bool handle_login_request(struct connection *pconn,
              req->patch_version, req->version_label);
   log_verbose("Client caps: %s", req->capability);
   log_verbose("Server caps: %s", our_capability);
-  conn_set_capability(pconn, req->capability);
-
+  sz_strlcpy(pconn->capability, req->capability);
+  
   /* Make sure the server has every capability the client needs */
   if (!has_capabilities(our_capability, req->capability)) {
     fc_snprintf(msg, sizeof(msg),
@@ -499,7 +493,7 @@ static void package_conn_info(struct connection *pconn,
   off 'used' if 'remove' is specified.
 **************************************************************************/
 static void send_conn_info_arg(struct conn_list *src,
-                               struct conn_list *dest, bool remove_conn)
+                               struct conn_list *dest, bool remove)
 {
   struct packet_conn_info packet;
 
@@ -509,7 +503,7 @@ static void send_conn_info_arg(struct conn_list *src,
 
   conn_list_iterate(src, psrc) {
     package_conn_info(psrc, &packet);
-    if (remove_conn) {
+    if (remove) {
       packet.used = FALSE;
     }
     lsend_packet_conn_info(dest, &packet);
@@ -588,8 +582,7 @@ static bool connection_attach_real(struct connection *pconn,
         /* Should only be called in such a way as to create a new player
          * in the pregame */
         fc_assert_ret_val(!game_was_started(), FALSE);
-        pplayer = server_create_player(-1, default_ai_type_name(),
-                                       NULL, FALSE);
+        pplayer = server_create_player(-1, default_ai_type_name(), NULL);
         /* Pregame => no need to assign_player_colors() */
         if (!pplayer) {
           return FALSE;
@@ -600,11 +593,10 @@ static bool connection_attach_real(struct connection *pconn,
       server_player_init(pplayer, FALSE, TRUE);
 
       /* Make it human! */
-      set_as_human(pplayer);
+      pplayer->ai_controlled = FALSE;
     }
 
     sz_strlcpy(pplayer->username, pconn->username);
-    pplayer->unassigned_user = FALSE;
     pplayer->user_turns = 0; /* reset for a new user */
     pplayer->is_connected = TRUE;
 
@@ -616,38 +608,18 @@ static bool connection_attach_real(struct connection *pconn,
       (void) aifill(game.info.aifill);
     }
 
-    if (game.server.auto_ai_toggle && !is_human(pplayer)) {
+    if (game.server.auto_ai_toggle && pplayer->ai_controlled) {
       toggle_ai_player_direct(NULL, pplayer);
     }
 
     send_player_info_c(pplayer, game.est_connections);
-
-    /* Remove from global observers list, if was there */
-    conn_list_remove(game.glob_observers, pconn);
-  } else if (pplayer == NULL) {
-    /* Global observer */
-    bool already = FALSE;
-
-    fc_assert(observing);
-
-    conn_list_iterate(game.glob_observers, pconn2) {
-      if (pconn2 == pconn) {
-        already = TRUE;
-        break;
-      }
-    } conn_list_iterate_end;
-
-    if (!already) {
-      conn_list_append(game.glob_observers, pconn);
-    }
   }
 
   /* We don't want the connection's username on another player. */
   players_iterate(aplayer) {
     if (aplayer != pplayer
         && 0 == strncmp(aplayer->username, pconn->username, MAX_LEN_NAME)) {
-      sz_strlcpy(aplayer->username, _(ANON_USER_NAME));
-      aplayer->unassigned_user = TRUE;
+      sz_strlcpy(aplayer->username, ANON_USER_NAME);
       send_player_info_c(aplayer, NULL);
     }
   } players_iterate_end;
@@ -774,10 +746,10 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
         /* Actually do the removal. */
         server_remove_player(pplayer);
         (void) aifill(game.info.aifill);
-        reset_all_start_commands(TRUE);
+        reset_all_start_commands();
       } else {
         /* Aitoggle the player if no longer connected. */
-        if (game.server.auto_ai_toggle && is_human(pplayer)) {
+        if (game.server.auto_ai_toggle && !pplayer->ai_controlled) {
           toggle_ai_player_direct(NULL, pplayer);
           /* send_player_info_c() was formerly updated by
            * toggle_ai_player_direct(), so it must be safe to send here now?
@@ -789,7 +761,7 @@ void connection_detach(struct connection *pconn, bool remove_unused_player)
           log_verbose("connection_detach() calls send_player_info_c()");
           send_player_info_c(pplayer, NULL);
 
-          reset_all_start_commands(TRUE);
+          reset_all_start_commands();
         }
       }
     }
@@ -817,7 +789,6 @@ bool connection_delegate_take(struct connection *pconn,
     /* Setting orig_username in the player we're about to put aside is
      * a flag that no-one should be allowed to mess with it (e.g. /take). */
     struct player *oplayer = conn_get_player(pconn);
-
     fc_assert_ret_val(oplayer != dplayer, FALSE);
     fc_assert_ret_val(strlen(oplayer->server.orig_username) == 0, FALSE);
     sz_strlcpy(oplayer->server.orig_username, oplayer->username);

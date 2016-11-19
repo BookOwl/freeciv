@@ -9,8 +9,7 @@
 
 [datafile]
 description="Civ2Civ3 technology data for Freeciv"
-options="+Freeciv-ruleset-Devel-2015.January.14"
-format_version=10
+options="+Freeciv-2.5-ruleset"
 
 [control]
 ; Names for custom tech flags. There can be up to 8 of these.
@@ -24,29 +23,11 @@ format_version=10
 
 ; /* <-- avoid gettext warnings
 ;
-; Tech classes:
-;
-; First one is the default one.
-; If there is none, tech classes feature is disabled
-;
-; name                    = translatable name as seen by user
-; rule_name               = (optional) name for rulesets etc; if not
-;                           present, 'name' is used.
-; cost_pct                = how much techs of the class cost compared
-;                           to normal. Default is 100%.
-;
-; */ <-- avoid gettext warnings
-
-;[techclass_default]
-;name =
-
-; /* <-- avoid gettext warnings
-;
 ; Below: The individual advances, one per section.
 ; The number can be variable, up to 196.
 ;
-; The actual tag used (the * in [advance_*]) does not matter, except
-; it must be unique within this file, and it may be used in debug
+; The actual tag used (the * in [advance_*]) does not matter, except 
+; it must be unique within this file, and it may be used in debug 
 ; output when reading this file.
 ;
 ; Notes:
@@ -56,50 +37,36 @@ format_version=10
 ;                 present, 'name' is used. Since the name used in savegames
 ;                 must not change, use this when renaming a tech after a
 ;                 ruleset has been released.
-; class         = tech class this tech belongs to, if they have been defined.
-;                 Default is first one defined above.
-; req1, req2    = advances required before researching this one
+; req1, req2	= advances required before researching this one
 ; root_req      = tech required before acquiring this tech, by any
-;                 means, inherited by all techs that require this tech in turn
-;                 unless "None" is given here explicitly; and you can make
-;                 a tech available only through the init_tech of a nation by
-;                 making it root_req itself.
-; research_reqs = requirements before researching this one. Can have non
-;                 tech requirements because it is a requirement vector.
-;                 See doc/README.effects to learn more about requirement
-;                 vectors.
-;                 Requireing a tech here in stead of in req1, req2 or
-;                 root_req is not supported yet.
-;                 Requirements that may become fulfilled during the game
-;                 when they weren't at the start of the game is not
-;                 supported yet.
+;     means, inherited by all techs that require this tech in turn unless
+;     "None" is given here explicitly; and you can make a tech available
+;     only through the init_tech of a nation by making it root_req itself.
 ; flags         = special flag strings
 ; graphic       = icon for technology
 ; graphic_alt   = alternate icon
-; helptext      = optional help text string (set units ruleset for examples)
-; bonus_message = text seen when a player is the first to discover
-;                 an bonus tech. Must contain '%s' to mark place of the tech
-;                 gained.
-; cost          = if tech_cost_style is set to "Classic+" or "Experimental+",
-;                 this field is read for information on how much a tech
-;                 costs.
+; helptext	= optional help text string (set units ruleset for examples)
+; bonus_message = text seen when a player is the first to 
+;                 discover an bonus tech.
+; cost          = if tech_cost_style is set to 2, this field is read for
+;                 information on how much a tech costs
 ;
-; Special values for req1 and req2 are "None" (first section below)
-; and "Never" (never available).  If only one tech is required,
+; Special values for req1 and req2 are "None" (first section below) 
+; and "Never" (never available).  If only one tech is required, 
 ; it should be listed as req1.
 ;
 ; As well as custom flags defined above, the following flag strings are
 ; possible:
 ;
-; "Bonus_Tech"          = player gets extra tech if reached first
-; "Bridge"              = "Settler" unit types can build roads with
-;                         "RequiresBridge" flag over roads with
-;                         "PreventsOtherRoads" flag (rivers)
-; "Build_Airborne"      = from now on can build air units (for use by AI)
-; "Claim_Ocean"         = Player claims ocean tiles even if they are not
-;                         adjacent to border source
-; "Claim_Ocean_Limited" = Oceanic border sources claim ocean tiles even if
-;                         they are not adjacent to border source
+; "Bonus_Tech" = player gets extra tech if reached first
+; "Bridge"   = "Settler" unit types can build roads with "RequiresBridge" flag
+;              over roads with "PreventsOtherRoads" flag (rivers)
+; "Farmland" = "Settler" unit types can build farmland
+; "Population_Pollution_Inc" = Increase the pollution factor created by
+;                              population by one
+; "Build_Airborne" = from now on can build air units (for use by AI)
+; "Claim_Ocean"    = Player claims ocean tiles even if they are not
+;                    adjacent to border source
 ;
 ; */ <-- avoid gettext warnings
 
@@ -175,7 +142,7 @@ req2     = "Construction"
 flags    = "Bridge"
 graphic     = "a.bridge_building"
 graphic_alt = "-"
-cost     = 80
+cost     = 70
 helptext = _("Allows roads to be built on river tiles.")
 
 [advance_bronze_working]
@@ -272,15 +239,14 @@ cost     = 260
 [advance_construction]
 name     = _("Construction")
 req1     = "Masonry"
-req2     = "Iron Working"
+req2     = "Currency"
 flags    = ""
 graphic     = "a.construction"
 graphic_alt = "-"
 helptext = _("\
-Allows Settlers, Migrants, Workers and Engineers to build forts and \
-fortresses.\
+Allows Settlers, Migrants, Workers and Engineers to build fortresses.\
 ")
-cost     = 50
+cost     = 40
 
 [advance_currency]
 name     = _("Currency")
@@ -298,7 +264,7 @@ req2     = "Invention"
 flags    = ""
 graphic     = "a.democracy"
 graphic_alt = "-"
-cost     = 190
+cost     = 170
 
 [advance_economics]
 name     = _("Economics")
@@ -320,7 +286,7 @@ helptext = _("\
 Allows irrigation without an adjacent water source, improves the \
 effect of Amphitheaters, and increases city vision radius.\
 ")
-cost     = 300
+cost     = 310
 
 [advance_electronics]
 name     = _("Electronics")
@@ -419,7 +385,7 @@ req1     = "Invention"
 req2     = "Feudalism"
 graphic     = "a.gunpowder"
 graphic_alt = "-"
-cost     = 170
+cost     = 180
 
 [advance_horseback_riding]
 name     = _("Horseback Riding")
@@ -434,6 +400,7 @@ cost     = 10
 name     = _("Industrialization")
 req1     = "Railroad"
 req2     = "Banking"
+flags    = "Population_Pollution_Inc"
 graphic     = "a.industrialization"
 graphic_alt = "-"
 cost     = 380
@@ -446,7 +413,7 @@ flags    = ""
 graphic     = "a.invention"
 graphic_alt = "-"
 helptext = _("Halves the upgrade cost of your units.")
-cost     = 130
+cost     = 120
 
 [advance_iron_working]
 name     = _("Iron Working")
@@ -482,7 +449,7 @@ req2     = "Gunpowder"
 flags    = ""
 graphic     = "a.leadership"
 graphic_alt = "-"
-cost     = 190
+cost     = 200
 
 [advance_literacy]
 name     = _("Literacy")
@@ -568,7 +535,7 @@ req2     = "Mathematics"
 flags    = ""
 graphic     = "a.metallurgy"
 graphic_alt = "-"
-cost     = 190
+cost     = 200
 
 [advance_miniaturization]
 name     = _("Miniaturization")
@@ -577,11 +544,6 @@ req2     = "Electronics"
 flags    = ""
 graphic     = "a.miniaturization"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Migrants, Workers, Engineers and Transports to build \
-oil platforms on deep ocean, required to get the bonus from \
-Offshore Platforms.\
-")
 cost     = 480
 
 [advance_mobile_warfare]
@@ -628,7 +590,7 @@ req2     = "Physics"
 flags    = ""
 graphic     = "a.navigation"
 graphic_alt = "-"
-cost     = 230
+cost     = 220
 
 [advance_nuclear_fission]
 name     = _("Nuclear Fission")
@@ -655,7 +617,7 @@ req1     = "Mysticism"
 req2     = "Literacy"
 flags    = "Bonus_Tech"
 bonus_message = _("Great philosophers from all the world join \
-your civilization: you learn %s immediately.")
+your civilization: you get an immediate advance.")
 graphic     = "a.philosophy"
 graphic_alt = "-"
 cost     = 70
@@ -703,9 +665,7 @@ req2     = "Electronics"
 flags    = ""
 graphic     = "a.radio"
 graphic_alt = "-"
-helptext = _("\
-Allows Workers and Engineers to build airstrips, airbases and buoys.\
-")
+helptext = _("Allows Workers and Engineers to build airbases and buoys.")
 cost     = 540
 
 [advance_railroad]
@@ -718,6 +678,8 @@ graphic_alt = "-"
 helptext = _("\
 Allows Settlers, Migrants, Workers and Engineers to upgrade roads to \
 railroads.\
+"), _("\
+Halves one-time revenue from new trade routes.\
 "), _("\
 For Despotism or Tribal governments, cancels the penalty to worked \
 tiles with output greater than 2 (as if all your cities were always \
@@ -741,23 +703,15 @@ req2     = "Industrialization"
 flags    = ""
 graphic     = "a.refining"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Migrants, Workers and Engineers to upgrade \
-mines to oil wells on desert and glacier.\
-")
 cost     = 400
 
 [advance_refrigeration]
 name     = _("Refrigeration")
 req1     = "Sanitation"
 req2     = "Electricity"
-flags    = ""
+flags    = "Farmland"
 graphic     = "a.refrigeration"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Migrants, Workers and Engineers to upgrade \
-irrigation systems to farmland.\
-")
 cost     = 350
 
 [advance_robotics]
@@ -786,7 +740,7 @@ req2     = "Medicine"
 flags    = ""
 graphic     = "a.sanitation"
 graphic_alt = "-"
-cost     = 200
+cost     = 180
 
 [advance_seafaring]
 name     = _("Seafaring")
@@ -822,7 +776,7 @@ req2     = "Navigation"
 flags    = ""
 graphic     = "a.steam_engine"
 graphic_alt = "-"
-cost     = 300
+cost     = 280
 
 [advance_steel]
 name     = _("Steel")
@@ -840,10 +794,6 @@ req2     = "Laser"
 flags    = ""
 graphic     = "a.superconductors"
 graphic_alt = "-"
-helptext = _("\
-Allows Settlers, Migrants, Workers and Engineers to upgrade railroads \
-with maglev.\
-")
 cost     = 700
 
 [advance_tactics]

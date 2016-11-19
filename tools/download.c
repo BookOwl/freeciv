@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,9 +15,7 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
@@ -26,25 +24,16 @@
 #include <unistd.h>
 #include <errno.h>
 
-/* dependencies */
-#include "cvercmp.h"
-
 /* utility */
 #include "capability.h"
 #include "fcintl.h"
 #include "log.h"
-#include "mem.h"
+#include "netintf.h"
 #include "netfile.h"
 #include "registry.h"
 
 /* modinst */
 #include "download.h"
-
-static const char *download_modpack_recursive(const char *URL,
-                                              const struct fcmp_params *fcmp,
-                                              dl_msg_callback mcb,
-                                              dl_pb_callback pbcb,
-                                              int recursion);
 
 /**************************************************************************
   Message callback called by netfile module when downloading files.
@@ -66,51 +55,31 @@ const char *download_modpack(const char *URL,
                              dl_msg_callback mcb,
                              dl_pb_callback pbcb)
 {
-  return download_modpack_recursive(URL, fcmp, mcb, pbcb, 0);
-}
-
-/**************************************************************************
-  Download modpack and its recursive dependencies.
-**************************************************************************/
-static const char *download_modpack_recursive(const char *URL,
-                                              const struct fcmp_params *fcmp,
-                                              dl_msg_callback mcb,
-                                              dl_pb_callback pbcb,
-                                              int recursion)
-{
   char local_dir[2048];
   char local_name[2048];
   int start_idx;
   int filenbr, total_files;
   struct section_file *control;
   const char *control_capstr;
-  const char *baseURLpart;
+  const char *baseURL;
   enum modpack_type type;
   const char *typestr;
   const char *mpname;
   const char *mpver;
-  char baseURL[2048];
   char fileURL[2048];
   const char *src_name;
   bool partial_failure = FALSE;
-  int dep;
-  const char *dep_name;
-
-  if (recursion > 5) {
-    return _("Recursive dependencies too deep");
-  }
 
   if (URL == NULL || URL[0] == '\0') {
     return _("No URL given");
   }
 
-  if (strlen(URL) < strlen(MODPACKDL_SUFFIX)
-      || strcmp(URL + strlen(URL) - strlen(MODPACKDL_SUFFIX),
-                MODPACKDL_SUFFIX)) {
+  if (strlen(URL) < strlen(MODPACK_SUFFIX)
+      || strcmp(URL + strlen(URL) - strlen(MODPACK_SUFFIX), MODPACK_SUFFIX)) {
     return _("This does not look like modpack URL");
   }
 
-  for (start_idx = strlen(URL) - strlen(MODPACKDL_SUFFIX);
+  for (start_idx = strlen(URL) - strlen(MODPACK_SUFFIX);
        start_idx > 0 && URL[start_idx - 1] != '/';
        start_idx--) {
     /* Nothing */
@@ -123,11 +92,7 @@ static const char *download_modpack_recursive(const char *URL,
   }
 
   if (mcb != NULL) {
-    char buf[2048];
-
-    /* TRANS: %s is a filename with suffix '.modpack' */
-    fc_snprintf(buf, sizeof(buf), _("Downloading \"%s\" control file."), URL + start_idx);
-    mcb(buf);
+    mcb(_("Downloading modpack control file."));
   }
 
   control = netfile_get_section_file(URL, nf_cb, mcb);
@@ -169,95 +134,13 @@ static const char *download_modpack_recursive(const char *URL,
 
   if (type == MPT_SCENARIO) {
     fc_snprintf(local_dir, sizeof(local_dir),
-                "%s" DIR_SEPARATOR "scenarios", fcmp->inst_prefix);
+                "%s/scenarios", fcmp->inst_prefix);
   } else {
     fc_snprintf(local_dir, sizeof(local_dir),
-                "%s" DIR_SEPARATOR DATASUBDIR, fcmp->inst_prefix);
+                "%s/" DATASUBDIR, fcmp->inst_prefix);
   }
 
-  baseURLpart = secfile_lookup_str(control, "info.baseURL");
-
-  if (baseURLpart[0] == '.') {
-    char URLstart[start_idx];
-
-    strncpy(URLstart, URL, start_idx - 1);
-    URLstart[start_idx - 1] = '\0';
-    fc_snprintf(baseURL, sizeof(baseURL), "%s%s",
-                URLstart, baseURLpart + 1);
-  } else {
-    strncpy(baseURL, baseURLpart, sizeof(baseURL));
-  }
-
-  dep = 0;
-  do {
-    dep_name = secfile_lookup_str_default(control, NULL,
-                                          "dependencies.list%d.modpack", dep);
-    if (dep_name != NULL) {
-      const char *dep_URL;
-      const char *inst_ver;
-      const char *dep_typestr;
-      enum modpack_type dep_type;
-      bool needed = TRUE;
-
-      dep_URL = secfile_lookup_str_default(control, NULL,
-                                           "dependencies.list%d.URL", dep);
-
-      if (dep_URL == NULL) {
-        return _("Dependency has no download URL");
-      }
-
-      dep_typestr = secfile_lookup_str(control, "dependencies.list%d.type", dep);
-      dep_type = modpack_type_by_name(dep_typestr, fc_strcasecmp);
-      if (!modpack_type_is_valid(dep_type)) {
-        return _("Illegal dependency modpack type");
-      }
-
-      inst_ver = get_installed_version(dep_name, type);
-
-      if (inst_ver != NULL) {
-        const char *dep_ver;
-
-        dep_ver = secfile_lookup_str_default(control, NULL,
-                                             "dependencies.list%d.version", dep);
-
-        if (dep_ver != NULL && cvercmp_max(dep_ver, inst_ver)) {
-          needed = FALSE;
-        }
-      }
-
-      if (needed) {
-        const char *msg;
-        char dep_URL_full[2048];
-
-        log_debug("Dependency modpack \"%s\" needed.", dep_name);
-
-        if (mcb != NULL) {
-          mcb(_("Download dependency modpack"));
-        }
-
-        if (dep_URL[0] == '.') {
-          char URLstart[start_idx];
-
-          strncpy(URLstart, URL, start_idx - 1);
-          URLstart[start_idx - 1] = '\0';
-          fc_snprintf(dep_URL_full, sizeof(dep_URL_full), "%s%s",
-                      URLstart, dep_URL + 1);
-        } else {
-          strncpy(dep_URL_full, dep_URL, sizeof(dep_URL_full));
-        }
-
-        msg = download_modpack_recursive(dep_URL_full, fcmp, mcb, pbcb, recursion + 1);
-
-        if (msg != NULL) {
-          return msg;
-        }
-      }
-    }
-
-    dep++;
-    
-  } while (dep_name != NULL);
-
+  baseURL = secfile_lookup_str(control, "info.baseURL");
 
   total_files = 0;
   do {
@@ -277,13 +160,6 @@ static const char *download_modpack_recursive(const char *URL,
   filenbr = 0;
   for (filenbr = 0; filenbr < total_files; filenbr++) {
     const char *dest_name;
-
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-    char *dest_name_copy;
-#else  /* DIR_SEPARATOR_IS_DEFAULT */
-#define dest_name_copy dest_name
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
-
     int i;
     bool illegal_filename = FALSE;
 
@@ -298,10 +174,6 @@ static const char *download_modpack_recursive(const char *URL,
       dest_name = src_name;
     }
 
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-    dest_name_copy = fc_malloc(strlen(dest_name) + 1);
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
-
     for (i = 0; dest_name[i] != '\0'; i++) {
       if (dest_name[i] == '.' && dest_name[i+1] == '.') {
         if (mcb != NULL) {
@@ -314,38 +186,20 @@ static const char *download_modpack_recursive(const char *URL,
         partial_failure = TRUE;
         illegal_filename = TRUE;
       }
-
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-      if (dest_name[i] == '/') {
-        dest_name_copy[i] = DIR_SEPARATOR_CHAR;
-      } else {
-        dest_name_copy[i] = dest_name[i];
-      }
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
     }
-
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-    dest_name_copy[i] = '\0';
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
 
     if (!illegal_filename) {
       fc_snprintf(local_name, sizeof(local_name),
-                  "%s" DIR_SEPARATOR "%s", local_dir, dest_name_copy);
-
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-      free(dest_name_copy);
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
-
-      for (i = strlen(local_name) - 1 ; local_name[i] != DIR_SEPARATOR_CHAR ; i--) {
+                  "%s/%s", local_dir, dest_name);
+      for (i = strlen(local_name) - 1 ; local_name[i] != '/' ; i--) {
         /* Nothing */
       }
       local_name[i] = '\0';
-      log_debug("Create directory \"%s\"", local_name);
       if (!make_dir(local_name)) {
         secfile_destroy(control);
         return _("Cannot create required directories");
       }
-      local_name[i] = DIR_SEPARATOR_CHAR;
+      local_name[i] = '/';
 
       if (mcb != NULL) {
         char buf[2048];
@@ -355,7 +209,6 @@ static const char *download_modpack_recursive(const char *URL,
       }
 
       fc_snprintf(fileURL, sizeof(fileURL), "%s/%s", baseURL, src_name);
-      log_debug("Download \"%s\" as \"%s\".", fileURL, local_name);
       if (!netfile_download_file(fileURL, local_name, nf_cb, mcb)) {
         if (mcb != NULL) {
           char buf[2048];
@@ -366,10 +219,6 @@ static const char *download_modpack_recursive(const char *URL,
         }
         partial_failure = TRUE;
       }
-    } else {
-#ifndef DIR_SEPARATOR_IS_DEFAULT
-      free(dest_name_copy);
-#endif /* DIR_SEPARATOR_IS_DEFAULT */
     }
 
     if (pbcb != NULL) {
@@ -403,18 +252,11 @@ const char *download_modpack_list(const struct fcmp_params *fcmp,
   int modpack_count;
   const char *msg;
   const char *mp_name;
-  int start_idx;
 
   list_file = netfile_get_section_file(fcmp->list_url, nf_cb, mcb);
 
   if (list_file == NULL) {
     return _("Cannot fetch and parse modpack list");
-  }
-
-  for (start_idx = strlen(fcmp->list_url);
-       start_idx > 0 && fcmp->list_url[start_idx - 1] != '/';
-       start_idx--) {
-    /* Nothing */
   }
 
   list_capstr = secfile_lookup_str(list_file, "info.options");
@@ -468,9 +310,7 @@ const char *download_modpack_list(const struct fcmp_params *fcmp,
                                           "modpacks.list%d.notes", modpack_count);
 
     if (mp_name != NULL && mpURL != NULL) {
-      char mpURL_full[2048];
       enum modpack_type type = modpack_type_by_name(mp_type_str, fc_strcasecmp);
-
       if (!modpack_type_is_valid(type)) {
         log_error("Illegal modpack type \"%s\"", mp_type_str ? mp_type_str : "NULL");
       }
@@ -480,19 +320,7 @@ const char *download_modpack_list(const struct fcmp_params *fcmp,
       if (mp_subtype == NULL) {
         mp_subtype = "-";
       }
-
-      if (mpURL[0] == '.') {
-        char URLstart[start_idx];
-
-        strncpy(URLstart, fcmp->list_url, start_idx - 1);
-        URLstart[start_idx - 1] = '\0';
-        fc_snprintf(mpURL_full, sizeof(mpURL_full), "%s%s",
-                    URLstart, mpURL + 1);
-      } else {
-        strncpy(mpURL_full, mpURL, sizeof(mpURL_full));
-      }
-      
-      cb(mp_name, mpURL_full, mpver, mplic, type, _(mp_subtype), mp_notes);
+      cb(mp_name, mpURL, mpver, mplic, type, _(mp_subtype), mp_notes);
     }
     modpack_count++;
   } while (mp_name != NULL);

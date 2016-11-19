@@ -6,10 +6,8 @@ noinst_LTLIBRARIES = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/utility \
 	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/networking \
 	-I$(top_srcdir)/common/scriptcore \
 	-I$(top_srcdir)/client \
-	-I$(top_srcdir)/dependencies/tinycthread \
 	$(LUA_CFLAGS) $(LUASQL_CFLAGS) $(TOLUA_CFLAGS)
 
 # tolua_client_gen.[ch] are now distributed to aid in cross-compiling.

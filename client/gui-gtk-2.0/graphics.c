@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -48,21 +48,24 @@
 #include "graphics.h"
 
 struct sprite *intro_gfx_sprite;
+struct sprite *radar_gfx_sprite;
 
 GdkCursor *fc_cursors[CURSOR_LAST][NUM_CURSOR_FRAMES];
 
 /***************************************************************************
-  Returns TRUE to indicate that gtk2-client supports given view type
+  Returns TRUE to indicate that gtk-client supports isometric view
 ***************************************************************************/
-bool is_view_supported(enum ts_type type)
+bool isometric_view_supported(void)
 {
-  switch (type) {
-  case TS_ISOMETRIC:
-  case TS_OVERHEAD:
-    return TRUE;
-  }
+  return TRUE;
+}
 
-  return FALSE;
+/***************************************************************************
+  Returns TRUE to indicate that gtk-client supports overhead view
+***************************************************************************/
+bool overhead_view_supported(void)
+{
+  return TRUE;
 }
 
 #define COLOR_MOTTO_FACE_R    0x2D
@@ -111,7 +114,9 @@ void create_overlay_unit(struct canvas *pcanvas, struct unit_type *punittype,
 {
   int x1, x2, y1, y2;
   int width, height;
-  struct sprite *sprite = get_unittype_sprite(tileset, punittype, facing);
+  struct sprite *sprite = get_unittype_sprite(tileset, punittype,
+                                              facing,
+                                              TRUE);
 
   sprite_get_bounding_box(sprite, &x1, &y1, &x2, &y2);
   if (pcanvas->type == CANVAS_PIXBUF) {
@@ -143,6 +148,10 @@ void free_intro_radar_sprites(void)
 {
   if (intro_gfx_sprite) {
     free_sprite(intro_gfx_sprite);
-    intro_gfx_sprite = NULL;
+    intro_gfx_sprite=NULL;
+  }
+  if (radar_gfx_sprite) {
+    free_sprite(radar_gfx_sprite);
+    radar_gfx_sprite=NULL;
   }
 }

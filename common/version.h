@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,15 +17,16 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#if !defined(FC__FREECIV_CONFIG_H) && !defined(FC_CONFIG_H)
-#error Files including versions.h should also include freeciv_config.h directly
+#ifdef HAVE_CONFIG_H
+#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
+#error Files including versions.h should also include fc_config.h directly
+#endif
 #endif
 
 /* This is only used in version.c, and only if IS_BETA_VERSION is true.
- * The month[] array is defined in version.c (index: 1 == Jan, 2 == Feb, ...).
- */
+   The month[] array is defined in version.c (index: 1==Jan, 2==Feb, ...). */
 #ifndef NEXT_RELEASE_MONTH
-#define NEXT_RELEASE_MONTH	(month[FREECIV_RELEASE_MONTH])
+#define NEXT_RELEASE_MONTH	(month[RELEASE_MONTH])
 #endif
 
 /* version informational strings */

@@ -34,24 +34,20 @@
 #include "player.h"
 
 /* client */
+#include "chatline.h"
 #include "client_main.h"
 #include "climisc.h"
 #include "connectdlg_common.h"
-#include "tilespec.h"
-#include "colors.h"
-#include "graphics.h"
-#include "options.h"
-#include "text.h"
-
-/* client/gui-gtk-3.0 */
-#include "chatline.h"
 #include "dialogs.h"
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "inteldlg.h"
 #include "spaceshipdlg.h"
+#include "tilespec.h"
 #include "colors.h"
 #include "graphics.h"
+#include "options.h"
+#include "text.h"
 
 #include "plrdlg.h"
 
@@ -105,22 +101,16 @@ void popdown_players_dialog(void)
   }
 }
 
-/***************************************************************************
-  Create a small colored square representing the player color, for use
-  in player lists. 
-  May return NULL if the player has no color yet.
-***************************************************************************/
-GdkPixbuf *create_player_icon(const struct player *plr)
+/**************************************************************************
+  Create pixbuf for player
+**************************************************************************/
+static GdkPixbuf *create_player_icon(const struct player *plr)
 {
   int width, height;
   GdkPixbuf *tmp;
   cairo_surface_t *surface;
   struct color *color;
   cairo_t *cr;
-
-  if (!player_has_color(tileset, plr)) {
-    return NULL;
-  }
 
   gtk_icon_size_lookup_for_settings(
       gtk_settings_get_for_screen(gtk_widget_get_screen(top_notebook)), 
@@ -319,7 +309,7 @@ static void toggle_view(GtkCheckMenuItem* item, gpointer data)
 *************************************************************************/
 static void toggle_dead_players(GtkCheckMenuItem* item, gpointer data)
 {
-  gui_options.player_dlg_show_dead_players = 
+  player_dlg_show_dead_players = 
     gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item));
   real_players_dialog_update();
 }
@@ -405,7 +395,7 @@ static GtkWidget* create_show_menu(void)
   
   item = gtk_check_menu_item_new_with_label(Q_("?show:Dead Players"));
   gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),
-                                 gui_options.player_dlg_show_dead_players);
+                                 player_dlg_show_dead_players);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   g_signal_connect(item, "toggled", G_CALLBACK(toggle_dead_players), NULL);
   
@@ -559,9 +549,9 @@ void create_players_dialog(void)
   sep = gtk_separator_menu_item_new();
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), sep);
 
-  for (level = 0; level < AI_LEVEL_COUNT; level++) {
+  for (level = 0; level < AI_LEVEL_LAST; level++) {
     if (is_settable_ai_level(level)) {
-      const char *level_name = ai_level_translated_name(level);
+      const char *level_name = ai_level_name(level);
 
       item = gtk_menu_item_new_with_label(level_name);
       g_signal_connect(item, "activate",
@@ -705,7 +695,7 @@ static void fill_row(GtkListStore *store, GtkTreeIter *it,
 **************************************************************************/
 static bool player_should_be_shown(const struct player *pplayer)
 {
-  return NULL != pplayer && (gui_options.player_dlg_show_dead_players
+  return NULL != pplayer && (player_dlg_show_dead_players
                              || pplayer->is_alive)
          && (!is_barbarian(pplayer));
 }
@@ -810,7 +800,7 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
     newstate = cancel_pact_result(oldstate);
 
     /* TRANS: %s is a diplomatic state: "Cancel Cease-fire" */
-    astr_set(&title, _("Cancel %s"), diplstate_type_translated_name(oldstate));
+    astr_set(&title, _("Cancel %s"), diplstate_text(oldstate));
 
     if (newstate == DS_WAR) {
       astr_set(&question, _("Really declare war on the %s?"),
@@ -819,8 +809,8 @@ void players_war_callback(GtkMenuItem *item, gpointer data)
       /* TRANS: "Cancel Belgian Alliance? ... will be Armistice." */
       astr_set(&question, _("Cancel %s %s? New diplomatic state will be %s."),
                nation_adjective_for_player(aplayer),
-               diplstate_type_translated_name(oldstate),
-               diplstate_type_translated_name(newstate));
+               diplstate_text(oldstate),
+               diplstate_text(newstate));
     }
 
     /* can be any pact clause */

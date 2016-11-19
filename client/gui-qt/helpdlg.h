@@ -14,9 +14,6 @@
 #ifndef FC__HELPDLG_H
 #define FC__HELPDLG_H
 
-// common
-#include "extras.h"
-
 // Qt
 #include <QDialog>
 #include <QHash>
@@ -27,7 +24,6 @@ extern "C" {
 }
 
 // Forward declarations
-struct canvas;
 struct help_item;
 
 class QFrame;
@@ -51,10 +47,8 @@ class help_dialog : public QDialog
 public:
   help_dialog(QWidget *parent = 0);
   void update_fonts();
-
 public slots:
   void set_topic(const help_item *item);
-
 private slots:
   void item_changed(QTreeWidgetItem *item);
 };
@@ -64,6 +58,8 @@ class help_widget : public QWidget
   Q_OBJECT
   QFrame *box_wdg;
   QLabel *title_label;
+  QList<QLabel *> label_list;
+  QList<QLabel *> title_list;
 
   QWidget *main_widget;
   QTextBrowser *text_browser;
@@ -80,13 +76,11 @@ class help_widget : public QWidget
   void undo_layout();
 
   void show_info_panel();
-  void add_info_pixmap(QPixmap *pm, bool shadow = false);
+  void add_info_canvas(struct canvas *canvas, bool shadow = false);
   void add_info_label(const QString &text);
   void add_info_progress(const QString& label, int progress,
                          int min, int max,
                          const QString& value = QString());
-  void add_extras_of_act_for_terrain(struct terrain *pterr,
-                                     enum unit_activity act, char *label);
   void add_info_separator();
   void add_info_widget(QWidget *widget);
   void info_panel_done();
@@ -110,20 +104,17 @@ class help_widget : public QWidget
   void set_topic_specialist(const help_item *item, const char *title);
   void set_topic_government(const help_item *item, const char *title);
   void set_topic_nation(const help_item *item, const char *title);
-  void set_topic_goods(const help_item *item, const char *title);
+  void set_topic_road(const help_item *item, const char *title);
+  void set_topic_base(const help_item *item, const char *title);
 
 public:
   help_widget(QWidget *parent = 0);
   help_widget(const help_item *item, QWidget *parent = 0);
   ~help_widget();
   void update_fonts();
-private:
-  QString link_me(const char *str, help_page_type hpt);
 
 public slots:
   void set_topic(const help_item *item);
-private slots:
-  void anchor_clicked(const QString &link);
 
 public:
   struct terrain *terrain_max_values();
@@ -131,5 +122,4 @@ public:
 };
 
 void update_help_fonts();
-
 #endif /* FC__HELPDLG_H */

@@ -20,11 +20,11 @@
 
 // qt-client
 #include "canvas.h"
-#include "fonts.h"
 #include "sprite.h"
 #include "colors.h"
 
-static QFont *get_font(enum client_font font);
+QFont *get_font(enum client_font font);
+
 /****************************************************************************
   Create a canvas of the given size.
 ****************************************************************************/
@@ -43,22 +43,6 @@ struct canvas *qtg_canvas_create(int width, int height)
 void qtg_canvas_free(struct canvas *store)
 {
   delete store;
-}
-
-/****************************************************************************
-  Set canvas zoom for future drawing operations.
-****************************************************************************/
-void qtg_canvas_set_zoom(struct canvas *store, float zoom)
-{
-  /* Qt-client has no zoom support */
-}
-
-/****************************************************************************
-  This gui has zoom support.
-****************************************************************************/
-bool qtg_has_zoom_support()
-{
-  return FALSE;
 }
 
 /****************************************************************************
@@ -192,6 +176,20 @@ void qtg_canvas_fill_sprite_area(struct canvas *pcanvas,
 }
 
 /****************************************************************************
+  Fill the area covered by the sprite with fog.
+****************************************************************************/
+void qtg_canvas_fog_sprite_area(struct canvas *pcanvas, struct sprite *psprite,
+                                int canvas_x, int canvas_y)
+{
+  QPainter p;
+
+  p.begin(&pcanvas->map_pixmap);
+  p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+  p.drawPixmap(canvas_x, canvas_y, *psprite->pm);
+  p.end();
+}
+
+/****************************************************************************
   Draw a 1-pixel-width colored line onto the canvas.
 ****************************************************************************/
 void qtg_canvas_put_line(struct canvas *pcanvas, struct color *pcolor,
@@ -274,11 +272,38 @@ void qtg_canvas_put_curved_line(struct canvas *pcanvas, struct color *pcolor,
 }
 
 /****************************************************************************
+  Returns given font
+****************************************************************************/
+QFont *get_font(client_font font)
+{
+  QFont *qf;
+  switch (font) {
+  case FONT_CITY_NAME:
+    qf = gui()->fc_fonts.get_font("gui_qt_font_city_names");
+    break;
+  case FONT_CITY_PROD:
+    qf = gui()->fc_fonts.get_font("gui_qt_font_city_productions");
+    break;
+  case FONT_REQTREE_TEXT:
+    qf = gui()->fc_fonts.get_font("gui_qt_font_reqtree_text");
+    break;
+  case FONT_COUNT:
+    qf = NULL;
+    break;
+  default:
+    qf = NULL;
+    break;
+  }
+  return qf;
+}
+
+
+/****************************************************************************
   Return the size of the given text in the given font.  This size should
   include the ascent and descent of the text.  Either of width or height
   may be NULL in which case those values simply shouldn't be filled out.
 ****************************************************************************/
-void qtg_get_text_size(int *width, int *height,
+void qtg_get_text_size (int *width, int *height,
                         enum client_font font, const char *text)
 {
   QFont *afont;
@@ -322,64 +347,3 @@ void qtg_canvas_put_text(struct canvas *pcanvas, int canvas_x, int canvas_y,
   p.end();
   delete fm;
 }
-
-/****************************************************************************
-  Returns given font
-****************************************************************************/
-QFont *get_font(client_font font)
-{
-  QFont *qf;
-  switch (font) {
-  case FONT_CITY_NAME:
-    qf = fc_font::instance()->get_font(fonts::city_names);
-    break;
-  case FONT_CITY_PROD:
-    qf = fc_font::instance()->get_font(fonts::city_productions);
-    break;
-  case FONT_REQTREE_TEXT:
-    qf = fc_font::instance()->get_font(fonts::reqtree_text);
-    break;
-  case FONT_COUNT:
-    qf = NULL;
-    break;
-  default:
-    qf = NULL;
-    break;
-  }
-  return qf;
-}
-
-/****************************************************************************
-  Return rectangle containing pure image (crops transparency)
-****************************************************************************/
-QRect zealous_crop_rect(QImage &p)
-{
-  int r, t, b, l;
-
-  l = p.width();
-  r = 0;
-  t = p.height();
-  b = 0;
-  for (int y = 0; y < p.height(); ++y) {
-    QRgb *row = (QRgb *)p.scanLine(y);
-    bool row_filled = false;
-    int x;
-
-    for (x = 0; x < p.width(); ++x) {
-      if (qAlpha(row[x])) {
-        row_filled = true;
-        r = qMax(r, x);
-        if (l > x) {
-          l = x;
-          x = r;
-        }
-      }
-    }
-    if (row_filled) {
-      t = qMin(t, y);
-      b = y;
-    }
-  }
-  return QRect(l, t, r - l, b - t);
-}
-

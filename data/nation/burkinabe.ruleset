@@ -1,9 +1,10 @@
 [nation_burkinabe]
 
-name=_("Burkinabé")
-; pre-2.6 had plain ASCII names
-rule_name="Burkinabe"
-plural=_("?plural:Burkinabés")
+; /* TRANS: The last letter in "Burkinabe" should be */
+; /* TRANS: U+00E9 LATIN SMALL LETTER E WITH ACUTE if available in */
+; /* TRANS: your charset. In ISO-8859-1 (ISO Latin 1) this is 00E9. */
+name=_("Burkinabe")
+plural=_("?plural:Burkinabes")
 groups="Modern", "African"
 legend=_("Formerly Upper Volta, Burkina Faso is a country in inland\
  West Africa. It achieved its independence from France in 1960.")
@@ -19,7 +20,7 @@ leaders = {
 
 flag="burkina_faso"
 flag_alt = "-"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""

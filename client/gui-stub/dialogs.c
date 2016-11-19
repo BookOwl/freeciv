@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -112,14 +112,33 @@ void popup_revolution_dialog(void)
 }
 
 /**************************************************************************
-  Popup a dialog that allows the player to select what action a unit
-  should take.
+  Popup a dialog giving a player choices when their caravan arrives at
+  a city (other than its home city).  Example:
+    - Establish trade route.
+    - Help build wonder.
+    - Keep moving.
 **************************************************************************/
-void popup_action_selection(struct unit *actor_unit,
-                                   struct city *target_city,
-                                   struct unit *target_unit,
-                                   struct tile *target_tile,
-                                   const struct act_prob *act_probs)
+void popup_caravan_dialog(struct unit *punit,
+			  struct city *phomecity, struct city *pdestcity)
+{
+  /* PORTME */
+}
+
+/**************************************************************************
+  Is there currently a caravan dialog open?  This is important if there
+  can be only one such dialog at a time; otherwise return FALSE.
+**************************************************************************/
+bool caravan_dialog_is_open(int *unit_id, int *city_id)
+{
+  /* PORTME */
+  return FALSE;
+}
+
+/**************************************************************************
+  Popup a dialog giving a diplomatic unit some options when moving into
+  the target tile.
+**************************************************************************/
+void popup_diplomat_dialog(struct unit *punit, struct tile *ptile)
 {
   /* PORTME */
 }
@@ -155,7 +174,8 @@ void popup_sabotage_dialog(struct unit *actor, struct city *pcity)
   Popup a dialog asking the unit which improvement they would like to
   pillage.
 **************************************************************************/
-void popup_pillage_dialog(struct unit *punit, bv_extras may_pillage)
+void popup_pillage_dialog(struct unit *punit, bv_special may_pillage,
+                          bv_bases bases, bv_roads roads)
 {
   /* PORTME */
 }
@@ -186,15 +206,6 @@ void popup_soundset_suggestion_dialog(void)
   /* PORTME */
 }
 
-/****************************************************************
-  Ruleset (modpack) has suggested loading certain musicset. Confirm from
-  user and load.
-*****************************************************************/
-void popup_musicset_suggestion_dialog(void)
-{
-  /* PORTME */
-}
-
 /**************************************************************************
   Tileset (modpack) has suggested loading certain theme. Confirm from
   user and load.
@@ -214,57 +225,27 @@ void popdown_all_game_dialogs(void)
   /* PORTME */
 }
 
-/**************************************************************************
-  Returns the id of the actor unit currently handled in action selection
-  dialog when the action selection dialog is open.
-  Returns IDENTITY_NUMBER_ZERO if no action selection dialog is open.
-**************************************************************************/
-int action_selection_actor_unit(void)
+/****************************************************************
+  Returns id of a diplomat currently handled in diplomat dialog
+*****************************************************************/
+int diplomat_handled_in_diplomat_dialog(void)
 {
   /* PORTME */    
-  return IDENTITY_NUMBER_ZERO;
-}
-
-/**************************************************************************
-  Returns id of the target city of the actions currently handled in action
-  selection dialog when the action selection dialog is open and it has a
-  city target. Returns IDENTITY_NUMBER_ZERO if no action selection dialog
-  is open or no city target is present in the action selection dialog.
-**************************************************************************/
-int action_selection_target_city(void)
-{
-  /* PORTME */
-  return IDENTITY_NUMBER_ZERO;
-}
-
-/**************************************************************************
-  Returns id of the target unit of the actions currently handled in action
-  selection dialog when the action selection dialog is open and it has a
-  unit target. Returns IDENTITY_NUMBER_ZERO if no action selection dialog
-  is open or no unit target is present in the action selection dialog.
-**************************************************************************/
-int action_selection_target_unit(void)
-{
-  /* PORTME */
-  return IDENTITY_NUMBER_ZERO;
-}
-
-/**************************************************************************
-  Updates the action selection dialog with new information.
-**************************************************************************/
-void action_selection_refresh(struct unit *actor_unit,
-                              struct city *target_city,
-                              struct unit *target_unit,
-                              struct tile *target_tile,
-                              const struct act_prob *act_probs)
-{
-  /* TODO: port me. */
+  return -1;  
 }
 
 /****************************************************************
-  Closes the action selection dialog
+  Closes the diplomat dialog
 ****************************************************************/
-void action_selection_close(void)
+void close_diplomat_dialog(void)
+{
+  /* PORTME */
+}
+
+/****************************************************************
+  Updates caravan dialog
+****************************************************************/
+void caravan_dialog_update(void)
 {
   /* PORTME */
 }
@@ -283,22 +264,4 @@ void show_tech_gained_dialog(Tech_type_id tech)
 void show_tileset_error(const char *msg)
 {
   /* PORTME */
-}
-
-/****************************************************************
-  Give a warning when user is about to edit scenario with manually
-  set properties.
-*****************************************************************/
-bool gui_handmade_scenario_warning(void)
-{
-  /* Just tell the client common code to handle this. */
-  return FALSE;
-}
-
-/****************************************************************
-  Unit wants to get into some transport on given tile.
-*****************************************************************/
-bool gui_request_transport(struct unit *pcargo, struct tile *ptile)
-{
-  return FALSE; /* Unit was not handled here. */
 }

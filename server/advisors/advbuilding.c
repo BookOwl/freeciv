@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@
 #include "rand.h"
 
 /* common */
-#include "ai.h"
 #include "city.h"
 #include "effects.h"
 #include "game.h"
@@ -41,15 +40,12 @@
 #include "advtools.h"
 #include "infracache.h" /* adv_city */
 
-/* ai */
-#include "handicaps.h"
-
 #include "advbuilding.h"
 
 /**************************************************************************
   Calculate walking distance to nearest friendly cities from every city.
 
-  The hidden assumption here is that a ACTION_HELP_WONDER unit is like any
+  The hidden assumption here is that a UTYF_HELP_WONDER unit is like any
   other unit that will use this data.
 
   pcity->server.adv->downtown is set to the number of cities within 4 turns of
@@ -65,21 +61,14 @@ static void calculate_city_clusters(struct player *pplayer)
     pcity->server.adv->downtown = 0;
   } city_list_iterate_end;
 
-  if (num_role_units(action_get_role(ACTION_HELP_WONDER)) == 0) {
+  if (num_role_units(UTYF_HELP_WONDER) == 0) {
     return; /* ruleset has no help wonder unit */
   }
 
-  punittype = best_role_unit_for_player(pplayer,
-      action_get_role(ACTION_HELP_WONDER));
-
+  punittype = best_role_unit_for_player(pplayer, UTYF_HELP_WONDER);
   if (!punittype) {
-    /* simulate future unit */
-    punittype = get_role_unit(action_get_role(ACTION_HELP_WONDER), 0);
+    punittype = get_role_unit(UTYF_HELP_WONDER, 0); /* simulate future unit */
   }
-
-  fc_assert_msg(utype_can_do_action(punittype, ACTION_HELP_WONDER),
-                "Non existence of wonder helper unit not caught");
-
   ghost = unit_virtual_create(pplayer, NULL, punittype, 0);
   range = unit_move_rate(ghost) * 4;
 
@@ -90,7 +79,6 @@ static void calculate_city_clusters(struct player *pplayer)
 
     unit_tile_set(ghost, pcity->tile);
     pft_fill_unit_parameter(&parameter, ghost);
-    parameter.omniscience = !has_handicap(pplayer, H_MAP);
     pfm = pf_map_new(&parameter);
 
     pf_map_move_costs_iterate(pfm, ptile, move_cost, FALSE) {
@@ -140,10 +128,10 @@ static void ba_human_wants(struct player *pplayer, struct city *wonder_city)
         if (pcity != wonder_city && is_wonder(pimprove)) {
           /* Only wonder city should build wonders! */
           pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
-        } else if (!is_coinage
-                    && (!can_city_build_improvement_later(pcity, pimprove)
-                        || (!is_improvement_productive(pcity, pimprove)))) {
-          /* Don't consider impossible or unproductive buildings */
+        } else if ((!is_coinage
+                    && !can_city_build_improvement_later(pcity, pimprove))
+                   || is_improvement_redundant(pcity, pimprove)) {
+          /* Don't consider impossible or redundant buildings */
           pcity->server.adv->building_want[improvement_index(pimprove)] = 0;
         } else if (city_has_building(pcity, pimprove)) {
           /* Never want to build something we already have. */
@@ -159,18 +147,18 @@ static void ba_human_wants(struct player *pplayer, struct city *wonder_city)
     }
   } improvement_iterate_end;
 
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   /* This logging is relatively expensive, so activate only if necessary */
   city_list_iterate(pplayer->cities, pcity) {
     improvement_iterate(pimprove) {
       if (pcity->server.adv->building_want[improvement_index(pimprove)] != 0) {
-        CITY_LOG(LOG_DEBUG, pcity, "want to build %s with " ADV_WANT_PRINTF, 
+        CITY_LOG(LOG_DEBUG, pcity, "want to build %s with %d", 
                  improvement_rule_name(pimprove),
                  pcity->server.adv->building_want[improvement_index(pimprove)]);
       }
     } improvement_iterate_end;
   } city_list_iterate_end;
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 }
 
 /************************************************************************** 
@@ -198,14 +186,14 @@ void building_advisor(struct player *pplayer)
    || !is_wonder(wonder_city->production.value.building)
    || !can_city_build_improvement_now(wonder_city, 
                                       wonder_city->production.value.building)
-   || !is_improvement_productive(wonder_city,
-                                 wonder_city->production.value.building)) {
+   || is_improvement_redundant(wonder_city, 
+                               wonder_city->production.value.building)
+      ) {
     /* Find a new wonder city! */
     int best_candidate_value = 0;
     struct city *best_candidate = NULL;
     /* Whether ruleset has a help wonder unit type */
-    bool has_help =
-        (num_role_units(action_get_role(ACTION_HELP_WONDER)) > 0);
+    bool has_help = (num_role_units(UTYF_HELP_WONDER) > 0);
 
     calculate_city_clusters(pplayer);
 
@@ -214,7 +202,7 @@ void building_advisor(struct player *pplayer)
       Continent_id place = tile_continent(pcity->tile);
       struct adv_city *city_data = pcity->server.adv;
 
-      if (is_ai(pplayer)) {
+      if (pplayer->ai_controlled) {
         bool result = TRUE;
 
         /* AI has opportunity to say that this city cannot be
@@ -231,10 +219,8 @@ void building_advisor(struct player *pplayer)
       /* Downtown is the number of cities within a certain pf range.
        * These may be able to help with caravans. Also look at the whole
        * continent. */
-      if (first_role_unit_for_player(pplayer,
-                                     action_get_role(ACTION_HELP_WONDER))) {
+      if (first_role_unit_for_player(pplayer, UTYF_HELP_WONDER)) {
         value += city_data->downtown;
-
         if (place >= 0) {
           value += adv->stats.cities[place] / 8;
         }
@@ -259,7 +245,7 @@ void building_advisor(struct player *pplayer)
     }
   }
 
-  if (is_ai(pplayer)) {
+  if (pplayer->ai_controlled) {
     CALL_PLR_AI_FUNC(build_adv_prepare, pplayer, pplayer, adv);
     CALL_PLR_AI_FUNC(build_adv_adjust_want, pplayer, pplayer, wonder_city);
   } else {
@@ -320,7 +306,7 @@ void advisor_choose_build(struct player *pplayer, struct city *pcity)
       .value = {.building = choice.value.building}
     };
 
-    change_build_target(pplayer, pcity, &target, E_IMP_AUTO);
+    change_build_target(pplayer, pcity, target, E_IMP_AUTO);
     return;
   }
 
@@ -333,7 +319,7 @@ void advisor_choose_build(struct player *pplayer, struct city *pcity)
         .value = {.building = pimprove}
       };
 
-      change_build_target(pplayer, pcity, &target, E_IMP_AUTO);
+      change_build_target(pplayer, pcity, target, E_IMP_AUTO);
       return;
     }
   } improvement_iterate_end;

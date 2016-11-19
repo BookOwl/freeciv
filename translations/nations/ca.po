@@ -6,21 +6,21 @@
 # David <david.gaya@terra.es>, 2003.
 # Joan Creus <joan.creusandreu at gmail dot com>, 2007, 2008, 2009, 2010, 2011.
 # David <david.gaya@gmail.com>, 2007.
-# Joan Creus <joan.creusandreu at gmail dot com>, 2011, 2012, 2013, 2014.
+# Joan Creus <joan.creusandreu at gmail dot com>, 2011, 2012, 2013, 2014, 2016.
 msgid ""
 msgstr ""
 "Project-Id-Version: ca\n"
-"Report-Msgid-Bugs-To: http://gna.org/projects/freeciv/\n"
-"POT-Creation-Date: 2015-10-23 19:07+0300\n"
-"PO-Revision-Date: 2014-08-21 18:00+0200\n"
-"Last-Translator: Joan Creus <joan.creusandreu at gmail dot com>\n"
-"Language-Team: Catalan <kde-i18n-ca@kde.org>\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2016-11-19 11:39+0000\n"
+"PO-Revision-Date: 2016-07-28 16:26+0200\n"
+"Last-Translator: \n"
+"Language-Team: Catalan <kde-i18n-doc@kde.org>\n"
 "Language: ca\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n>1;\n"
-"X-Generator: Lokalize 1.5\n"
+"X-Generator: Lokalize 1.4\n"
 
 #: data/nation/abkhaz.ruleset:3
 msgid "Abkhaz"
@@ -527,7 +527,7 @@ msgid "African"
 msgstr "Africà"
 
 #: data/nation/african.ruleset:4
-msgid "?plural:African"
+msgid "?plural:Africans"
 msgstr "Africans"
 
 #: data/nation/african.ruleset:6
@@ -971,7 +971,8 @@ msgstr "Prebost %s"
 #: data/nation/bavarian.ruleset:24 data/nation/belgian.ruleset:25
 #: data/nation/belizean.ruleset:26 data/nation/british.ruleset:25
 #: data/nation/burgundian.ruleset:30 data/nation/canadian.ruleset:26
-#: data/nation/chiapanec.ruleset:34 data/nation/congolesebrazzaville.ruleset:28
+#: data/nation/chiapanec.ruleset:34
+#: data/nation/congolesebrazzaville.ruleset:28
 #: data/nation/costarican.ruleset:26 data/nation/croatian.ruleset:33
 #: data/nation/curonian.ruleset:30 data/nation/cuyavian.ruleset:27
 #: data/nation/dominican.ruleset:22 data/nation/easttimorese.ruleset:22
@@ -991,13 +992,13 @@ msgstr "Prebost %s"
 #: data/nation/panamanian.ruleset:30 data/nation/riograndense.ruleset:21
 #: data/nation/romansh.ruleset:29 data/nation/saintlucian.ruleset:24
 #: data/nation/savoyard.ruleset:32 data/nation/saxon.ruleset:22
-#: data/nation/schleswig-holsteinian.ruleset:27 data/nation/silesian.ruleset:23
-#: data/nation/slovenian.ruleset:19 data/nation/thuringian.ruleset:43
-#: data/nation/transylvanian.ruleset:28 data/nation/uruguayan.ruleset:24
-#: data/nation/venezuelan.ruleset:34 data/nation/vincentian.ruleset:25
-#: data/nation/volgagerman.ruleset:38 data/nation/westindian.ruleset:24
-#: data/nation/wuerttembergian.ruleset:24 data/nation/yucatecan.ruleset:31
-#: data/nation/zimbabwean.ruleset:26
+#: data/nation/schleswig-holsteinian.ruleset:27
+#: data/nation/silesian.ruleset:23 data/nation/slovenian.ruleset:19
+#: data/nation/thuringian.ruleset:43 data/nation/transylvanian.ruleset:28
+#: data/nation/uruguayan.ruleset:24 data/nation/venezuelan.ruleset:34
+#: data/nation/vincentian.ruleset:25 data/nation/volgagerman.ruleset:38
+#: data/nation/westindian.ruleset:24 data/nation/wuerttembergian.ruleset:24
+#: data/nation/yucatecan.ruleset:31 data/nation/zimbabwean.ruleset:26
 #, c-format
 msgid "Bishop %s"
 msgstr "Bisbe %s"
@@ -1590,16 +1591,6 @@ msgid "?plural:Asturians"
 msgstr "Asturians"
 
 #: data/nation/asturian.ruleset:6
-#, fuzzy
-#| msgid ""
-#| "The Astures were a Celtic people which occupied most of the northern "
-#| "coast of Spain. They battled against the Roman Empire until their defeat "
-#| "by Caesar Augustus' legions between 29 and 19 BCE. Under the Visigothic "
-#| "kingdom of Toledo, there were uneasy relations between Visigoths and "
-#| "Asturians. In 722 CE, king Pelayo defeated the Umayyad Muslim troops at "
-#| "Cuadonga, establishing the Asturian Kingdom, which lasted until 910 CE, "
-#| "when the capital town was moved from Oviedo to Leon. Nowadays, Asturias "
-#| "is an autonomous community of Spain."
 msgid ""
 "The Astures were a Celtic people which occupied most of the northern coast "
 "of Spain. They battled against the Roman Empire until their defeat by Caesar "
@@ -1616,7 +1607,7 @@ msgstr ""
 "nostra era. Sota el regne visigòtic de Toledo, les relacions entre visigots "
 "i asturians no van ser gaire bones. L'any 722, el rei Pelai va derrotar les "
 "tropes musulmanes Umayyad a Cuadonga, establint el Regne d'Astúries, que va "
-"durar fins l'any 910 quan la capital es va moure d'Oviedo a Lleó. Ara, "
+"durar fins l'any 910 quan la capital es va moure d'Uviéu a Lleó. Ara, "
 "Astúries és una comunitat autònoma d'Espanya."
 
 #: data/nation/atlantean.ruleset:3

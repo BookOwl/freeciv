@@ -1,20 +1,16 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = ruleutil
-
-if RULEDIT
-SUBDIRS += ruledit
-endif
-
 MOCCMD=@MOCCMD@
 
 include $(top_srcdir)/bootstrap/Makerules.mk
 
-bin_PROGRAMS = freeciv-ruleup
+bin_PROGRAMS = 
 
 if SERVER
+if CLIENT
 if FCMANUAL
 bin_PROGRAMS += freeciv-manual
+endif
 endif
 endif
 
@@ -27,9 +23,6 @@ endif
 if MODINST_GTK3
 bin_PROGRAMS += freeciv-mp-gtk3
 endif
-if MODINST_GTK3X
-bin_PROGRAMS += freeciv-mp-gtk3x
-endif
 if MODINST_QT
 bin_PROGRAMS += freeciv-mp-qt
 endif
@@ -39,20 +32,16 @@ noinst_LTLIBRARIES = libfcmp.la
 endif
 
 common_cppflags = \
-	-I$(top_srcdir)/dependencies/cvercmp \
 	-I$(top_srcdir)/utility \
 	-I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/networking \
 	-I$(top_srcdir)/server \
 	-I$(top_srcdir)/client \
-	-I$(top_srcdir)/client/include \
-	-I$(top_srcdir)/tools/ruleutil \
-	-I$(top_srcdir)/dependencies/tinycthread
+	-I$(top_srcdir)/client/include
 
 AM_CPPFLAGS = $(common_cppflags)
 
-if MINGW
-MPICON = $(top_builddir)/windows/mpicon.o
+if MINGW32
+MPICON = $(top_builddir)/win32/mpicon.o
 else
 desktopfiledir = @DESKTOPDIR@
 desktopfile_DATA =
@@ -83,15 +72,6 @@ endif
 
 endif
 
-freeciv_ruleup_SOURCES =	\
-		ruleup.c
-
-freeciv_ruleup_LDADD = \
- $(top_builddir)/server/libfreeciv-srv.la \
- $(top_builddir)/common/libfreeciv.la \
- $(top_builddir)/tools/ruleutil/libfcruleutil.la \
- $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) $(SERVER_LIBS)
-
 if FCMANUAL
 freeciv_manual_SOURCES = \
 		civmanual.c
@@ -104,7 +84,7 @@ freeciv_manual_LDADD = \
  $(top_builddir)/server/libfreeciv-srv.la \
  ../client/helpdata.lo \
  $(top_builddir)/common/libfreeciv.la \
- $(INTLLIBS) $(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+ $(INTLLIBS)  $(MAPIMG_WAND_LIBS) \
  $(SERVER_LIBS) $(LIB_GGZDMOD)
 endif
 
@@ -127,9 +107,8 @@ freeciv_mp_cli_LDFLAGS = $(mp_cli_ldflags)
 
 freeciv_mp_cli_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
-		$(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+		$(MAPIMG_WAND_LIBS) \
 		$(mp_cli_libs)
 endif
 
@@ -142,9 +121,8 @@ freeciv_mp_gtk2_LDFLAGS = $(mp_gtk2_ldflags)
 
 freeciv_mp_gtk2_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
-		$(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+		$(MAPIMG_WAND_LIBS) \
 		$(mp_gtk2_libs) \
 		$(MPICON)
 endif
@@ -158,32 +136,9 @@ freeciv_mp_gtk3_LDFLAGS = $(mp_gtk3_ldflags)
 
 freeciv_mp_gtk3_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
-		$(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+		$(MAPIMG_WAND_LIBS) \
 		$(mp_gtk3_libs) \
-		$(MPICON)
-endif
-
-if MODINST_GTK3X
-freeciv_mp_gtk3x_CPPFLAGS = $(common_cppflags) $(mp_gtk3x_cflags) -DGTK3XMP
-
-# For the time being gtk3 gui sources are ok in respect to gtk3x
-# requirements - there's no deprecated functions used.
-# The only difference is in the name the binary prints out - that's what
-# -DGTK3XMP in the freeciv_mp_gtk3x_CPPFLAGS is for.
-# Instead of maintaining two files, use the same one until there
-# comes real reason to make them differ.
-freeciv_mp_gtk3x_SOURCES = mpgui_gtk3.c
-
-freeciv_mp_gtk3x_LDFLAGS = $(mp_gtk3x_ldflags)
-
-freeciv_mp_gtk3x_LDADD = \
-		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
-		$(top_builddir)/common/libfreeciv.la \
-		$(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
-		$(mp_gtk3x_libs) \
 		$(MPICON)
 endif
 
@@ -208,9 +163,8 @@ CLEANFILES = $(MOC_FILES)
 
 freeciv_mp_qt_LDADD = \
 		libfcmp.la \
-		$(top_builddir)/dependencies/cvercmp/libcvercmp.la \
 		$(top_builddir)/common/libfreeciv.la \
-		$(TINYCTHR_LIBS) $(MAPIMG_WAND_LIBS) \
+		$(MAPIMG_WAND_LIBS) \
 		$(mp_qt_libs) \
 		$(MPICON)
 endif

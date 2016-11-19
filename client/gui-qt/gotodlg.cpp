@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -41,7 +41,29 @@ goto_dialog::goto_dialog(QWidget *parent)
 {
   QStringList headers_lst;
   QHBoxLayout *hb;
-
+  setStyleSheet("QPushButton {background-color: transparent;}"
+                "QPushButton {color: #ffffff;}"
+                "QPushButton:enabled {color: #ffffff;}"
+                "QPushButton:disabled {color: grey;}"
+                "QPushButton:hover:disabled {color: transparent;}"
+                "QPushButton:hover {background-color: blue;}"
+                "QPushButton {min-width: 80px;}"
+                "QPushButton {border: noborder;}"
+                "QScrollBar:vertical "
+                "{border: 1px solid #90A4FF; background: transparent;}"
+                "QScrollBar::sub-line:vertical {width: 0px;height: 0px}"
+                "QScrollBar::sub-page:vertical {width: 0px;height: 0px}"
+                "QScrollBar::add-line:vertical {width: 0px;height: 0px}"
+                "QScrollBar::add-page:vertical {width: 0px;height: 0px}"
+                "QScrollBar::handle:vertical {background: #90A4FF;"
+                "min-height: 20px}"
+                "QTableWidget {background-color: transparent;}"
+                "QTableWidget:item {color: white;}"
+                "QTableCornerButton::section "
+                "{background-color: transparent;}"
+                "QLabel {color: grey;}"
+                "QHeaderView::section { background-color: "
+                "QColor(90,90,90,90);}");
   setParent(parent);
   headers_lst << QString(_("City")) << QString(_("Nation"))
               << QString(_("Airlift"));
@@ -67,9 +89,8 @@ goto_dialog::goto_dialog(QWidget *parent)
   goto_tab->setSelectionMode(QAbstractItemView::SingleSelection);
   goto_tab->setColumnCount(3);
   goto_tab->setHorizontalHeaderLabels(headers_lst);
+  goto_tab->horizontalHeader()->setStretchLastSection(true);
   goto_tab->setSortingEnabled(true);
-  goto_tab->horizontalHeader()->setSectionResizeMode(
-                                             QHeaderView::ResizeToContents);
 
   layout->addWidget(goto_tab, 0, 0, 4, 4);
   layout->addItem(hb, 4, 0, 1, 2);
@@ -195,6 +216,8 @@ void goto_dialog::show_me()
 ***************************************************************************/
 void goto_dialog::update_dlg()
 {
+  struct player *pplayer;
+
   goto_tab->clearContents();
   goto_tab->setRowCount(0);
   goto_tab->setSortingEnabled(false);
@@ -203,7 +226,8 @@ void goto_dialog::update_dlg()
       fill_tab(pplayer);
     } players_iterate_end;
   } else {
-    fill_tab(client_player());
+    pplayer = client_player();
+    fill_tab(pplayer);
   }
   goto_tab->setSortingEnabled(true);
   goto_tab->horizontalHeader()->setStretchLastSection(false);
@@ -237,7 +261,7 @@ void goto_dialog::fill_tab(player *pplayer)
       item = new QTableWidgetItem;
       switch (j) {
       case 0:
-        str = city_name_get(pcity);
+        str = city_name(pcity);
         break;
       case 1:
         sprite = get_nation_flag_sprite(tileset, nation_of_player(pplayer));

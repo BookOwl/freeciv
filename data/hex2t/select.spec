@@ -1,7 +1,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -20,7 +20,7 @@ gfx = "hex2t/select"
 x_top_left = 0
 y_top_left = 0
 dx = 40
-dy = 37
+dy = 58
 pixel_border = 0
 
 tiles = { "row", "column", "tag"

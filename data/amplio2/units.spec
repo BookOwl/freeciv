@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -40,11 +40,10 @@ gfx = "amplio2/units"
 
 [grid_main]
 
-x_top_left = 1
-y_top_left = 1
+x_top_left = 0
+y_top_left = 0
 dx = 64
 dy = 48
-pixel_border = 1
 
 tiles = { "row", "column", "tag"
 				; Scenario League tags in brackets
@@ -103,7 +102,7 @@ tiles = { "row", "column", "tag"
   2, 14, "u.worker"		; [GB]
   2, 15, "u.leader"		; [GB]
   2, 16, "u.barbarian_leader"	; FiftyNine
-  2, 17, "u.migrants"		; Eleazar
-;  2, 19, "u.train"		; Eleazar
+  2, 17, "u.refugee"		; Eleazar
+;  3, 15, "u.train"		; Eleazar
 
 }

@@ -23,7 +23,6 @@ extern "C" {
 
 /* common */
 #include "base.h"
-#include "extras.h"
 #include "fc_types.h"
 #include "player.h"
 #include "road.h"
@@ -49,13 +48,17 @@ struct tile {
               * (index_to_map_pos()) and (nat_x, nat_y) pairs
               * (index_to_native_pos()). */
   Continent_id continent;
-  bv_extras extras;
-  struct extra_type *resource;          /* NULL for no resource */
+  bv_special special;
+  bv_bases bases;
+  /* We're in transition from storing roads in specials to storing roads
+   * in roads vector. Roads vector does not yet always contain correct
+   * information. */
+  bv_roads roads;
+  struct resource *resource;		/* NULL for no resource */
   struct terrain *terrain;		/* NULL for unknown tiles */
   struct unit_list *units;
   struct city *worked;			/* NULL for not worked */
   struct player *owner;			/* NULL for not owned */
-  struct player *extras_owner;
   struct tile *claimer;
   char *label;                          /* NULL for no label */
   char *spec_sprite;
@@ -71,8 +74,8 @@ struct tile {
 
 /* 'struct tile_hash' and related functions. */
 #define SPECHASH_TAG tile
-#define SPECHASH_IKEY_TYPE struct tile *
-#define SPECHASH_IDATA_TYPE void *
+#define SPECHASH_KEY_TYPE struct tile *
+#define SPECHASH_DATA_TYPE void *
 #include "spechash.h"
 #define tile_hash_iterate(hash, ptile)                                      \
   TYPED_HASH_KEYS_ITERATE(struct tile *, hash, ptile)
@@ -95,12 +98,9 @@ void tile_set_owner(struct tile *ptile, struct player *pplayer,
 #define tile_claimer(_tile) ((_tile)->claimer)
 
 #define tile_resource(_tile) ((_tile)->resource)
-static inline bool tile_resource_is_valid(const struct tile *ptile)
-{ return ptile->resource != NULL
-    && BV_ISSET(ptile->extras, ptile->resource->id);
-}
+#define tile_resource_is_valid(_tile) BV_ISSET((_tile)->special, S_RESOURCE_VALID)
 /*const struct resource *tile_resource(const struct tile *ptile);*/
-void tile_set_resource(struct tile *ptile, struct extra_type *presource);
+void tile_set_resource(struct tile *ptile, struct resource *presource);
 
 #define tile_terrain(_tile) ((_tile)->terrain)
 /*struct terrain *tile_terrain(const struct tile *ptile);*/
@@ -110,23 +110,28 @@ void tile_set_terrain(struct tile *ptile, struct terrain *pterrain);
 /* struct city *tile_worked(const struct tile *ptile); */
 void tile_set_worked(struct tile *ptile, struct city *pcity);
 
-const bv_extras *tile_extras_safe(const struct tile *ptile);
-const bv_extras *tile_extras_null(void);
-static inline const bv_extras *tile_extras(const struct tile *ptile)
-{
-  return &(ptile->extras);
-}
+/* Specials are a bit different */
+bv_special tile_specials(const struct tile *ptile);
+void tile_set_specials(struct tile *ptile, bv_special specials);
+bool tile_has_special(const struct tile *ptile,
+		      enum tile_special_type to_test_for);
+bool tile_has_any_specials(const struct tile *ptile);
+void tile_set_special(struct tile *ptile, enum tile_special_type spe);
+void tile_clear_special(struct tile *ptile, enum tile_special_type spe);
+void tile_clear_all_specials(struct tile *ptile);
 
+const bv_bases *tile_bases(const struct tile *ptile);
+const bv_roads *tile_roads(const struct tile *ptile);
 void tile_set_bases(struct tile *ptile, bv_bases bases);
 bool tile_has_base(const struct tile *ptile, const struct base_type *pbase);
+bool tile_has_conflicting_base(const struct tile *ptile, const struct base_type *pbase);
+bool tile_has_any_bases(const struct tile *ptile);
 void tile_add_base(struct tile *ptile, const struct base_type *pbase);
 void tile_remove_base(struct tile *ptile, const struct base_type *pbase);
 bool tile_has_base_flag(const struct tile *ptile, enum base_flag_id flag);
 bool tile_has_base_flag_for_unit(const struct tile *ptile,
                                  const struct unit_type *punittype,
                                  enum base_flag_id flag);
-bool tile_has_refuel_extra(const struct tile *ptile,
-                           const struct unit_type *punittype);
 bool tile_has_native_base(const struct tile *ptile,
                           const struct unit_type *punittype);
 bool tile_has_claimable_base(const struct tile *ptile,
@@ -136,23 +141,20 @@ int tile_extras_defense_bonus(const struct tile *ptile,
 int tile_extras_class_defense_bonus(const struct tile *ptile,
                                     const struct unit_class *pclass);
 
-bool tile_has_road(const struct tile *ptile, const struct road_type *proad);
+/****************************************************************************
+  Returns TRUE if the given tile has a road of given type on it.
+****************************************************************************/
+static inline bool tile_has_road(const struct tile *ptile,
+                                 const struct road_type *proad)
+{
+  return BV_ISSET(ptile->roads, road_index(proad));
+}
+
 void tile_add_road(struct tile *ptile, const struct road_type *proad);
 void tile_remove_road(struct tile *ptile, const struct road_type *proad);
-bool tile_has_road_flag(const struct tile *ptile, enum road_flag_id flag);
 int tile_roads_output_incr(const struct tile *ptile, enum output_type_id o);
 int tile_roads_output_bonus(const struct tile *ptile, enum output_type_id o);
 bool tile_has_river(const struct tile *tile);
-
-bool tile_extra_apply(struct tile *ptile, struct extra_type *tgt);
-bool tile_extra_rm_apply(struct tile *ptile, struct extra_type *tgt);
-#define tile_has_extra(ptile, pextra) BV_ISSET(ptile->extras, extra_index(pextra))
-bool tile_has_conflicting_extra(const struct tile *ptile, const struct extra_type *pextra);
-bool tile_has_visible_extra(const struct tile *ptile, const struct extra_type *pextra);
-bool tile_has_cause_extra(const struct tile *ptile, enum extra_cause cause);
-void tile_add_extra(struct tile *ptile, const struct extra_type *pextra);
-void tile_remove_extra(struct tile *ptile, const struct extra_type *pextra);
-bool tile_has_extra_flag(const struct tile *ptile, enum extra_flag_id flag);;
 
 /* Vision related */
 enum known_type tile_get_known(const struct tile *ptile,
@@ -163,13 +165,17 @@ enum known_type tile_get_known(const struct tile *ptile,
  * help to avoid rounding errors; however it should probably be removed. */
 #define ACTIVITY_FACTOR 10
 int tile_activity_time(enum unit_activity activity,
-		       const struct tile *ptile,
-                       struct extra_type *tgt);
+		       const struct tile *ptile);
+int tile_activity_base_time(const struct tile *ptile,
+                            Base_type_id base);
+int tile_activity_road_time(const struct tile *ptile,
+                            Road_type_id road);
 
 /* These are higher-level functions that handle side effects on the tile. */
 void tile_change_terrain(struct tile *ptile, struct terrain *pterrain);
-bool tile_apply_activity(struct tile *ptile, Activity_type_id act,
-                         struct extra_type *tgt);
+void tile_add_special(struct tile *ptile, enum tile_special_type special);
+void tile_remove_special(struct tile *ptile, enum tile_special_type special);
+bool tile_apply_activity(struct tile *ptile, Activity_type_id act);
 
 #define TILE_LB_TERRAIN_RIVER    (1 << 0)
 #define TILE_LB_RIVER_RESOURCE   (1 << 1)

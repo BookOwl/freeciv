@@ -7,7 +7,7 @@ legend=_("The Xhosa are Bantu people in South Africa, having arrived\
  there from the Great Lakes region by the 17th century. During the\
  apartheid era there were two Xhosa Bantustans, Transkei and Ciskei. Many\
  of the leading anti-apartheid activists, including Nelson Mandela and\
- Desmond Tutu, were Xhosa.")
+ Desmond Tutu, where Xhosa.")
 
 leaders = {
  "name",                "sex"
@@ -30,7 +30,7 @@ ruler_titles = {
 
 flag="xhosa"
 flag_alt = "-"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""

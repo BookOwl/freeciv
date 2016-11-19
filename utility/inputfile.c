@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-/***********************************************************************
+/********************************************************************** 
   A low-level object for reading a registry-format file.
   original author: David Pfitzner <dwp@mso.anu.edu.au>
 
@@ -148,7 +148,7 @@ static bool read_a_line(struct inputfile *inf);
 #define inf_warn(inf, message)                                              \
   inf_log(inf, LOG_NORMAL, "%s", message);
 
-/***********************************************************************
+/********************************************************************** 
   Return true if c is a 'comment' character: '#' or ';'
 ***********************************************************************/
 static bool is_comment(int c)
@@ -156,7 +156,7 @@ static bool is_comment(int c)
   return (c == '#' || c == ';');
 }
 
-/***********************************************************************
+/********************************************************************** 
   Set values to zeros; should have free'd/closed everything before
   this if appropriate.
 ***********************************************************************/
@@ -176,7 +176,7 @@ static void init_zeros(struct inputfile *inf)
   astr_init(&inf->partial);
 }
 
-/***********************************************************************
+/********************************************************************** 
   Check sensible values for an opened inputfile.
 ***********************************************************************/
 static bool inf_sanity_check(struct inputfile *inf)
@@ -190,14 +190,12 @@ static bool inf_sanity_check(struct inputfile *inf)
                     || TRUE == inf->at_eof, FALSE);
   fc_assert_ret_val(FALSE == inf->in_string
                     || TRUE == inf->in_string, FALSE);
-
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   fc_assert_ret_val(0 <= inf->string_start_line, FALSE);
   if (inf->included_from && !inf_sanity_check(inf->included_from)) {
     return FALSE;
   }
-#endif /* FREECIV_DEBUG */
-
+#endif /* DEBUG */
   return TRUE;
 }
 
@@ -214,7 +212,7 @@ static const char *inf_filename(struct inputfile *inf)
   }
 }
 
-/***********************************************************************
+/********************************************************************** 
   Open the file, and return an allocated, initialized structure.
   Returns NULL if the file could not be opened.
 ***********************************************************************/
@@ -236,18 +234,18 @@ struct inputfile *inf_from_file(const char *filename,
   return inf;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Open the stream, and return an allocated, initialized structure.
   Returns NULL if the file could not be opened.
 ***********************************************************************/
-struct inputfile *inf_from_stream(fz_FILE *stream, datafilename_fn_t datafn)
+struct inputfile *inf_from_stream(fz_FILE * stream, datafilename_fn_t datafn)
 {
   struct inputfile *inf;
 
   fc_assert_ret_val(NULL != stream, NULL);
   inf = fc_malloc(sizeof(*inf));
   init_zeros(inf);
-
+  
   inf->filename = NULL;
   inf->fp = stream;
   inf->datafn = datafn;
@@ -257,7 +255,7 @@ struct inputfile *inf_from_stream(fz_FILE *stream, datafilename_fn_t datafn)
 }
 
 
-/***********************************************************************
+/********************************************************************** 
   Close the file and free associated memory, but don't recurse
   included_from files, and don't free the actual memory where
   the inf record is stored (ie, the memory where the users pointer
@@ -293,7 +291,7 @@ static void inf_close_partial(struct inputfile *inf)
   log_debug("inputfile: sub-closed ok");
 }
 
-/***********************************************************************
+/********************************************************************** 
   Close the file and free associated memory, included any partially
   recursed included files, and the memory allocated for 'inf' itself.
   Should only be used on an actually open inputfile.
@@ -312,7 +310,7 @@ void inf_close(struct inputfile *inf)
   log_debug("inputfile: closed ok");
 }
 
-/***********************************************************************
+/********************************************************************** 
   Return TRUE if have data for current line.
 ***********************************************************************/
 static bool have_line(struct inputfile *inf)
@@ -321,7 +319,7 @@ static bool have_line(struct inputfile *inf)
   return !astr_empty(&inf->cur_line);
 }
 
-/***********************************************************************
+/********************************************************************** 
   Return TRUE if current pos is at end of current line.
 ***********************************************************************/
 static bool at_eol(struct inputfile *inf)
@@ -331,7 +329,7 @@ static bool at_eol(struct inputfile *inf)
   return (inf->cur_line_pos >= astr_len(&inf->cur_line));
 }
 
-/***********************************************************************
+/********************************************************************** 
   Return TRUE if current pos is at end of file.
 ***********************************************************************/
 bool inf_at_eof(struct inputfile *inf)
@@ -340,7 +338,7 @@ bool inf_at_eof(struct inputfile *inf)
   return inf->at_eof;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Check for an include command, which is an isolated line with:
      *include "filename"
   If a file is included via this mechanism, returns 1, and sets up
@@ -357,7 +355,7 @@ static bool check_include(struct inputfile *inf)
   const char *c, *bare_name_start, *full_name;
   struct inputfile *new_inf, temp;
 
-  if (len == 0) {
+  if (len==0) {
     len = strlen(include_prefix);
   }
   fc_assert_ret_val(inf_sanity_check(inf), FALSE);
@@ -444,7 +442,7 @@ static bool check_include(struct inputfile *inf)
   return TRUE;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Read a new line into cur_line.
   Increments line_num and cur_line_pos.
   Returns 0 if didn't read or other problem: treat as EOF.
@@ -474,7 +472,7 @@ static bool read_a_line(struct inputfile *inf)
    * At start of this loop, pos is index to trailing null
    * (or first position) in line.
    */
-  for (;;) {
+  for(;;) {
     ret = fz_fgets((char *) astr_str(line) + pos,
                    astr_capacity(line) - pos, inf->fp);
 
@@ -581,7 +579,7 @@ char *inf_log_str(struct inputfile *inf, const char *message, ...)
   return str;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Returns token of given type from given inputfile.
 ***********************************************************************/
 const char *inf_token(struct inputfile *inf, enum inf_token_type type)
@@ -615,22 +613,20 @@ const char *inf_token(struct inputfile *inf, enum inf_token_type type)
   return c;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Read as many tokens of specified type as possible, discarding
   the results; returns number of such tokens read and discarded.
 ***********************************************************************/
 int inf_discard_tokens(struct inputfile *inf, enum inf_token_type type)
 {
   int count = 0;
-
-  while (inf_token(inf, type)) {
+  
+  while(inf_token(inf, type))
     count++;
-  }
-
   return count;
 }
 
-/***********************************************************************
+/********************************************************************** 
   Returns section name in current position of inputfile. Returns NULL
   if there is no section name on that position. Sets inputfile position
   after section name.
@@ -659,7 +655,7 @@ static const char *get_token_section_name(struct inputfile *inf)
   return astr_str(&inf->token);
 }
 
-/***********************************************************************
+/********************************************************************** 
   Returns next entry name from inputfile. Skips white spaces and
   comments. Sets inputfile position after entry name.
 ***********************************************************************/
@@ -699,7 +695,7 @@ static const char *get_token_entry_name(struct inputfile *inf)
   return astr_str(&inf->token);
 }
 
-/***********************************************************************
+/********************************************************************** 
   If inputfile is at end-of-line, frees current line, and returns " ".
   If there is still something on that line, returns NULL. 
 ***********************************************************************/
@@ -727,7 +723,7 @@ static const char *get_token_eol(struct inputfile *inf)
   return astr_str(&inf->token);
 }
 
-/***********************************************************************
+/********************************************************************** 
   Get a flag token of a single character, with optional
   preceeding whitespace.
 ***********************************************************************/
@@ -750,7 +746,7 @@ static const char *get_token_white_char(struct inputfile *inf,
   return astr_str(&inf->token);
 }
 
-/***********************************************************************
+/********************************************************************** 
   Get flag token for table start, or NULL if that is not next token.
 ***********************************************************************/
 static const char *get_token_table_start(struct inputfile *inf)
@@ -758,7 +754,7 @@ static const char *get_token_table_start(struct inputfile *inf)
   return get_token_white_char(inf, '{');
 }
 
-/***********************************************************************
+/********************************************************************** 
   Get flag token for table end, or NULL if that is not next token.
 ***********************************************************************/
 static const char *get_token_table_end(struct inputfile *inf)
@@ -766,7 +762,7 @@ static const char *get_token_table_end(struct inputfile *inf)
   return get_token_white_char(inf, '}');
 }
 
-/***********************************************************************
+/********************************************************************** 
   Get flag token comma, or NULL if that is not next token.
 ***********************************************************************/
 static const char *get_token_comma(struct inputfile *inf)
@@ -774,7 +770,7 @@ static const char *get_token_comma(struct inputfile *inf)
   return get_token_white_char(inf, ',');
 }
 
-/***********************************************************************
+/********************************************************************** 
   This one is more complicated; note that it may read in multiple lines.
 ***********************************************************************/
 static const char *get_token_value(struct inputfile *inf)
@@ -795,18 +791,11 @@ static const char *get_token_value(struct inputfile *inf)
     return NULL;
   }
 
-  if (*c == '-' || *c == '+' || fc_isdigit(*c)) {
+  if (*c == '-' || fc_isdigit(*c)) {
     /* a number: */
     start = c++;
-    while (*c != '\0' && fc_isdigit(*c)) {
+    while(*c != '\0' && fc_isdigit(*c)) {
       c++;
-    }
-    if (*c == '.') {
-      /* Float maybe */
-      c++;
-      while (*c != '\0' && fc_isdigit(*c)) {
-        c++;
-      }
     }
     /* check that the trailing stuff is ok: */
     if (!(*c == '\0' || *c == ',' || fc_isspace(*c) || is_comment(*c))) {
@@ -838,70 +827,7 @@ static const char *get_token_value(struct inputfile *inf)
 
   border_character = *c;
 
-  if (border_character == '*') {
-    const char *rfname;
-    fz_FILE *fp;
-    bool eof;
-    int pos;
-
-    c++;
-
-    start = c;
-    while (*c != '*') {
-      if (*c == '\0' || *c == '\n') {
-        return NULL;
-      }
-      c++;
-    }
-    c++;
-    /* check that the trailing stuff is ok: */
-    if (!(*c == '\0' || *c == ',' || fc_isspace(*c) || is_comment(*c))) {
-      return NULL;
-    }
-    /* We don't want to obliterate ending '*' permanently,
-     * so remember it: */
-    trailing = *(c - 1);
-    *((char *) (c - 1)) = '\0';     /* Tricky. */
-
-    rfname = fileinfoname(get_data_dirs(), start);
-    if (rfname == NULL) {
-      inf_log(inf, LOG_ERROR, 
-              _("Cannot find stringfile \"%s\"."), start);
-      *((char *) c) = trailing; /* Revert. */
-      return NULL;
-    }
-    *((char *) c) = trailing; /* Revert. */
-    fp = fz_from_file(rfname, "r", -1, 0);
-    if (!fp) {
-      inf_log(inf, LOG_ERROR,
-              _("Cannot open stringfile \"%s\"."), rfname);
-      return NULL;
-    }
-    log_debug("Stringfile \"%s\" opened ok", start);
-    *((char *) (c - 1)) = trailing; /* Revert. */
-    astr_set(&inf->token, "*"); /* Mark as a string read from a file */
-
-    eof = FALSE;
-    pos = 1; /* Past 'filestring' marker */
-    while (!eof) {
-      char *ret;
-
-      ret = fz_fgets((char *) astr_str(&inf->token) + pos,
-                     astr_capacity(&inf->token) - pos, fp);
-      if (ret == NULL) {
-        eof = TRUE;
-      } else {
-        pos = astr_len(&inf->token);
-        astr_reserve(&inf->token, pos + 200);
-      }
-    }
-
-    fz_fclose(fp);
-
-    inf->cur_line_pos = c + 1 - astr_str(&inf->cur_line);
-
-    return astr_str(&inf->token);
-  } else if (border_character != '\"'
+  if (border_character != '\"'
       && border_character != '\''
       && border_character != '$') {
     /* A one-word string: maybe FALSE or TRUE. */
@@ -914,7 +840,7 @@ static const char *get_token_value(struct inputfile *inf)
       return NULL;
     }
     /* If its a comma, we don't want to obliterate it permanently,
-     * so remember it: */
+     * so rememeber it: */
     trailing = *c;
     *((char *) c) = '\0';       /* Tricky. */
 

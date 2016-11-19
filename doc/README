@@ -1,5 +1,5 @@
 ===================
-Freeciv Version 3.0
+Freeciv Version 2.5
 ===================
 
 Welcome to Freeciv!
@@ -82,26 +82,25 @@ but the clients do.  The clients come in many flavors:
 
 freeciv-gtk2:  This uses the GTK+ 2 libraries. To install, see section 1a of
   the INSTALL document.
-  This client has been replaced by freeciv-gtk3, but it still exist for benefit
-  of those who cannot to switch to gtk3.
+  This client is better supported and more developed than the others, as such
+  it is considered to be the default interface throughout the rest of this
+  document.
 
 freeciv-gtk3:  This uses the GTK+ 3 libraries. To install, see section 1b of
   the INSTALL document.
-  This client is better supported and more developed than the others,
-  as such it is considered to be the default interface throughout the rest of
-  this document.
-
-freeciv-gtk3.22:  This uses the GTK+ 3 libraries. Version 3.22 is required.
-  To install, see section 1c of the INSTALL document.
+  This client will eventually replace freeciv-gtk2.
 
 freeciv-qt:  This uses the QT library. Development of this client has recently
   reached the state where it's considered generally usable, but it still lacks
   number of features gtk-clients have.
 
-freeciv-sdl2: This uses Simple DirectMedia Layer libraries version 2.
+freeciv-sdl:  This uses Simple DirectMedia Layer libraries version 1.2.
+  This client is currently unmaintained but is usable.
 
-freeciv-gtk3x: This uses GTK+ 3.90+ libraries. This is development version of
-  a client to get turned to use gtk4 once it's released.
+freeciv-xaw:  This uses the X Window System along with its Athena Widget
+  interface.
+  This client, somewhat minimalistic compared to the others, is currently
+  unmaintained.
 
 
 Starting a game:
@@ -109,11 +108,11 @@ Starting a game:
 
   NOTE:
   The following examples assume that Freeciv has been installed on
-  your system, and that the directory containing the "freeciv-gtk3"
+  your system, and that the directory containing the "freeciv-gtk2"
   and "freeciv-server" programs is in your PATH.  If Freeciv is not
   installed, then you may want to use the "fcgui" and "fcser" programs,
   which can be found in the top Freeciv directory.  They are used
-  in exactly the same fashion as "freeciv-gtk3" and "freeciv-server".
+  in exactly the same fashion as "freeciv-gtk2" and "freeciv-server".
 
 Running Freeciv involves starting the server, then the client(s)
 and AI(s), then telling the server to start the game.  Here are the
@@ -183,7 +182,7 @@ Client:
   Now all the human players should join, by running the Freeciv
   client:
 
-  |  % freeciv-gtk3
+  |  % freeciv-gtk2
 
   This assumes the server is running on the same machine.  If not, you
   can either specify it on the command line with the '--server' option,
@@ -192,36 +191,31 @@ Client:
   For example, suppose the server is running on a different machine
   called 'neptune'.  Then players would join with a command like:
 
-  |  % freeciv-gtk3 --server neptune
+  |  % freeciv-gtk2 --server neptune
 
   If you're the only human player, then only one client needs to be
   started.  In standard Unix fashion you can start the client
   "in the background" by appending an ampersand:
 
-  |  % freeciv-gtk3 &
+  |  % freeciv-gtk2 &
 
   Another option for the client you may like to try is the '--tiles'
   option, which can be used to select different "tilesets" (that is,
   different graphics for the map terrain, units, and so on).  The
-  distribution comes with 9 main tilesets:
+  distribution comes with 6 main tilesets:
   - amplio2: An isometric tileset with larger and more detailed tiles.
   - isotrident: An isometric tileset similar in shape to the one in Civ 2.
   - cimpletoon: amplio2 with alternative units that display direction they
                 are facing.
   - trident: a Civ 1-style tileset with 30x30 tiles.
-  - hexemplio: an isometric hexagonal tileset with larger tiles derived
-               from amplio2
-  - toonhex: tileset combining hexemplio tiles with cimpletoon units
   - isophex: an isometric hexagonal tileset
   - hex2t: an overhead hexagonal tileset
-  - alio: an isometric hexagonal tileset with suitable graphics for alien
-          ruleset
 
   In this release the amplio2 tileset is the default tileset.
   To try another one, for instance the trident tileset, start the
   client with:
 
-  |  % freeciv-gtk3 --tiles trident
+  |  % freeciv-gtk2 --tiles trident
 
   Other tilesets are available from http://www.freeciv.org/wiki/Tilesets
 
@@ -272,7 +266,7 @@ Server:
 
 And the game is on!
 
-  NOTE: In this version of Freeciv, the GTK, Qt, and SDL2 clients have the
+  NOTE: In this version of Freeciv, the GTK, Qt, and SDL clients have the
   capability to automagically start a freeciv-server session when the user
   selects "Start New Game" from the main menu. This reduces the steps
   needed to get started playing a game of Freeciv. On the other hand,
@@ -300,7 +294,7 @@ Caveats:
     incompatible with any 2.4.x or earlier versions.
 
  2) If the Metaserver button in the connection dialog doesn't work,
-    check if your ISP uses a mandatory WWW proxy and make freeciv-gtk3
+    check if your ISP uses a mandatory WWW proxy and make freeciv-gtk2
     use it through the $http_proxy environment variable.  For instance,
     if the proxy is proxy.myisp.com port 8888, set $http_proxy
     to http://proxy.myisp.com:8888/ before starting the client.
@@ -415,7 +409,7 @@ or, if the save-file was created by a server that compressed it:
 
 Now the players can rejoin the game:
 
-  |  % freeciv-gtk3 -n Alexander
+  |  % freeciv-gtk2 -n Alexander
 
 Notice how the player-name is specified with the -n option. It's vital
 that the player uses the same name as they had when the game was running,
@@ -433,7 +427,7 @@ You may choose which local language to use by specifying a "locale".
 Each locale has a standard name (e.g., 'de' for German).  If you have
 installed Freeciv, you may choose a locale by setting the environment
 variable LANG to that locale's standard name before running freeciv-server
-and freeciv-gtk3.
+and freeciv-gtk2.
 
 For example, assuming you wish to use the German localization, you
 would do:
@@ -467,8 +461,9 @@ messages to a file instead of the screen with the "--log filename",
 or "-l filename" command line options.
 
 You can change the level of log messages displayed with "--debug
-level" or "-d level", where "level" is 0, 1, 2, or 3.
-0 means show fatal messages only, 1 means show fatal
+level" or "-d level" (or instead "-de level" for the Xaw client, since
+"-d" is ambiguous between "-debug" and "-display"), where "level" is
+0, 1, 2, or 3.  0 means show fatal messages only, 1 means show fatal
 and error messages, 2 means fatal, error and normal messages (the
 default), and 3 means show all fatal, error, normal, and verbose
 messages.
@@ -494,7 +489,7 @@ level messages.
 
 Example:
 
-  |  % freeciv-gtk3 --debug 0
+  |  % freeciv-gtk2 --debug 0
 
 This suppresses all non-fatal client log messages.
 

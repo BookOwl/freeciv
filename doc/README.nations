@@ -14,36 +14,6 @@ http://www.freeciv.org/wiki/Nations
 
 
 ----------------------------------------------------------------------
-Local Nation files:
--------------------
-
-Starting from freeciv-2.6, to most supplied rulesets nations can be
-added locally without need to modify freeciv distribution files.
-This section discuss the way there local override files work. Later
-sections assume that nation is being added to main freeciv distribution,
-even if only to locally modified copy.
-
-Freeciv search data files from several directories in priority order.
-Local nations overrides mechanism uses this to include files from
-user data directory, ~/.freeciv/<freeciv version>/override/,
-e.g., ~/.freeciv/2.6/override/
-Freeciv distribution has empty versions of those files in a lower priority
-directory. Once user adds the file, it gets used instead of the empty
-one.
-
-~/.freeciv/<version>/override/nation.ruleset
-  Ruleset sections for nations that user wants to add. This can of course
-  use *include directives so that individual nations are in separate files.
-  See below sections for the format of the nation rulesets.
-
-~/.freeciv/<version>/override/flags.spec
-~/.freeciv/<version>/override/shields.spec
-~/.freeciv/<version>/override/flags-large.spec
-~/.freeciv/<version>/override/shields-large.spec
-  Spec files for flag graphics to add. See below sections for the format
-  of spec files and graphics files.
-
-
 How to add a Nation:
 --------------------
 
@@ -66,12 +36,12 @@ data/default/nations.ruleset
   This lists all nation files. Add your nation
   (data/nation/<nationname>.ruleset) to this list.
 
-data/flags/*
+data/flags/* 
 
   This is the flags directory. You will have to add a flag-file
   (see below) for your nation to work (see below).
 
-data/scenario/*
+data/scenario/* 
 
   You can add starting position for your nation on a scenario map.
 
@@ -79,16 +49,16 @@ Before a nation can be included in the main distribution, the following
 files will also have to be edited. Unless you know what you're doing you
 shouldn't need to worry about this.
 
-data/nation/Makefile.am
+data/nation/Makefile.am 
 
   Another list of nation files - add your nation (<nationname>.ruleset)
   to this list.
 
-data/flags/Makefile.am
+data/flags/Makefile.am 
 
   Another list of flag files - add your flag to this list.
 
-translations/nations/POTFILES.in
+translations/nations/POTFILES.in 
 
   Here is yet another list of nations files; again add your nation
   (data/nation/<nationname>.ruleset) to it.
@@ -226,7 +196,7 @@ The default name of the nation should be the name of the people,
 country, or empire in English adjective form. For example, the nation 
 of ancient Babylon is called "Babylonian" in Freeciv. The plural form 
 should be standard English as well. For example, plural for the Polish 
-nation is "Poles" in Freeciv. UTF-8 is permitted in nation names.
+nation is "Poles" in Freeciv. Use only English ascii for nation names.
 
 
 Conflicting nations
@@ -264,7 +234,7 @@ Legend
 
 A legend is required in a nation ruleset. The legend can be a 
 summarized history of the nation, or just a piece of trivia. 
-UTF-8 is permitted in legends.
+Only English ascii can be used in legends.
 
 
 Leaders
@@ -275,6 +245,9 @@ nation. Two living persons per nation are permitted - one of each sex.
 
 An ideal leader list should contain between five and ten names.
 
+Leaders should be written in native orthography, e.g.
+"Karl XII" instead of "Charles XII" for the Swedish king.
+
 Use the person's full name to avoid ambiguity.
 
 Monarchs should be marked with the appropriate succession
@@ -284,13 +257,9 @@ etc.)
 
 Freeciv support any Unicode character, but please keep to 
 Latin letters. When transcribing from a non-Latin writing system, 
-be consistent about the system of transcription you are using.
+be consistent about the system of transcribation you are using.
 Also, try to avoid unnecessarily technical and/or heavily accented
 systems of transcription.
-
-Subject to the above, leaders should be written in native
-orthography, e.g. "Karl XII" instead of "Charles XII" for the
-Swedish king.
 
 For consistency and readability, put only one leader per line. 
 Feel free to provide a hint of the leader's identity or a brief 
@@ -298,11 +267,11 @@ background in a comment beside any leader: This information might
 be used in-game at a later stage.
 
 Leader titles for each government type (including Despotism and
-Anarchy) may be specified in a separate tag. UTF-8 is permitted in
-leader titles.  If the male and female titles are identical in
-English, give the latter the ?female: qualifier. Use a unique title
-for each government. Ruler titles should be in English, though
-exceptions are made for non English titles as long as they are
+Anarchy) may be specified in a separate tag. Only ASCII letters
+may be used in leader titles. If the male and female titles are
+identical in English, give the latter the ?female: qualifier. Use
+a unique title for each government. Ruler titles should be in English,
+though exceptions are made for non English titles as long as they are
 understood outside of their own language regions and commonly used in
 non-academic contexts. Titles from the default ruleset may not be used.
 
@@ -316,18 +285,16 @@ is already used by another nation in the game is not acceptable.
 An alternative flag does not have to be specified.
 
 
-Style
-=====
+City style
+==========
 
-A nation must specify a default style. With the supplied rulesets
-each national style has direct relation to equivalent city style.
-The available city styles depends on the tileset used.
-Practically every tileset has four city styles: "European",
-"Classical" (Graeco-Roman style), "Asian" (Pagoda style) and
-"Tropical" (African or Polynesian style). In Amplio tileset,
-"Babylonian" and "Celtic" are also available. If the tileset used by
-a client does not support a particular city style, a fallback style is
-used. Selecting a style for your nation is not that strict. Just try
+A nation must specify a default city style. The available city styles 
+depends on the tileset used. Practically every tileset have four city 
+styles: "European", "Classical" (Graeco-Roman style), "Asian" (Pagoda
+style) and "Tropical" (African or Polynesian style). In Amplio tileset, 
+"Babylonian" and "Celtic" are also available. If the tileset used by 
+a client does not support a particular city style, a fallback style is 
+used. Selecting a style for your nation is not that strict. Just try 
 to keep it somewhat "realistic."
 
 
@@ -337,7 +304,7 @@ Cities
 As for the list of city names, you should make a clear decision about 
 the type of the nation you add. An _ancient_ or _medieval_ nation may
 list any city that it at some point controlled. However if your
-nation is listed as _modern_, its city list must be restricted to
+nation is listed as _modern_, it's city list must be restricted to
 cities within the country's current borders.
 
 The reason for this is, we don't want Freeciv to be used as a political 
@@ -377,7 +344,7 @@ entry is
 where the cityname is just the name for the city (note that it
 may not contain quotes or parenthesis), and each "label" matches
 (case-insensitive) a terrain type for the city (or "river"), with a
-preceding ! to negate it. The terrain list is optional, of course,
+preceeding ! to negate it. The terrain list is optional, of course,
 so the entry can just contain the cityname if desired. A city name
 labeled as matching a terrain type will match a particular map
 location if that map location is on or adjacent to a tile of the named

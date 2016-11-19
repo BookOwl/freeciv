@@ -23,7 +23,6 @@
 #include "qtg_cxxside.h"
 #include "colors.h"
 #include "diplodlg.h"
-#include "sidebar.h"
 
 typedef advance *p_advance;
 typedef city *p_city;
@@ -54,7 +53,7 @@ diplo_wdg::diplo_wdg(int counterpart, int initiated_from): QWidget()
   QHeaderView *header;
   struct color *textcolors[2] = {
     get_color(tileset, COLOR_MAPVIEW_CITYTEXT),
-    get_color(tileset, COLOR_MAPVIEW_CITYTEXT_DARK)
+    get_color(tileset, COLOR_MAPVIEW_UNKNOWN)
   };
   if (counterpart == initiated_from) {
     initiated_from = client_player_number();
@@ -75,7 +74,7 @@ diplo_wdg::diplo_wdg(int counterpart, int initiated_from): QWidget()
   text = "<style>h3{background-color: "
          + colr->qcolor.name() + ";}</style>" + text;
   palette.setColor(QPalette::WindowText, color_best_contrast(colr,
-                   textcolors, ARRAY_SIZE(textcolors))->qcolor);
+                             textcolors, ARRAY_SIZE(textcolors))->qcolor);
   label3->setPalette(palette);
   label3->setText(text);
   label3->setMinimumWidth(300);
@@ -87,10 +86,11 @@ diplo_wdg::diplo_wdg(int counterpart, int initiated_from): QWidget()
   text = "<style>h3{background-color: "
          + colr->qcolor.name() + ";}</style>" + text;
   palette.setColor(QPalette::WindowText, color_best_contrast(colr,
-                   textcolors, ARRAY_SIZE(textcolors))->qcolor);
+                             textcolors, ARRAY_SIZE(textcolors))->qcolor);
   label4->setPalette(palette);
-  label4->setMinimumWidth(300);
+
   label4->setText(text);
+  label4->setMinimumWidth(300);
   layout->addWidget(label3, 0, 5);
   layout->addWidget(label4, 5, 5);
   plr1_label = new QLabel;
@@ -289,18 +289,13 @@ void diplo_wdg::show_menu(int player)
 
   /* Trading: advances */
   if (game.info.trading_tech) {
-    const struct research *gresearch = research_get(pgiver);
-    const struct research *oresearch = research_get(pother);
     adv_menu = menu.addMenu(_("Advances"));
     advance_iterate(A_FIRST, padvance) {
       Tech_type_id i = advance_number(padvance);
-
-      if (research_invention_state(gresearch, i) == TECH_KNOWN
-          && research_invention_gettable(oresearch, i,
-                                         game.info.tech_trade_allow_holes)
-          && (research_invention_state(oresearch, i) == TECH_UNKNOWN
-              || research_invention_state(oresearch, i)
-                 == TECH_PREREQS_KNOWN)) {
+      if (player_invention_state(pgiver, i) == TECH_KNOWN
+          && player_invention_reachable(pother, i, FALSE)
+          && (player_invention_state(pother, i) == TECH_UNKNOWN
+              || player_invention_state(pother, i) == TECH_PREREQS_KNOWN)) {
         adv_list.insert(advance_name_translation(padvance), padvance);
       }
     } advance_iterate_end;
@@ -530,7 +525,6 @@ void diplo_wdg::give_advance(int tech)
 void diplo_wdg::all_advances()
 {
   int giver, dest, other;
-  const struct research *dresearch, *gresearch;
 
   giver = curr_player;
   if (curr_player == player1) {
@@ -552,22 +546,17 @@ void diplo_wdg::all_advances()
   fc_assert_ret(NULL != pgiver);
   fc_assert_ret(NULL != pdest);
 
-   dresearch = research_get(pdest);
-   gresearch = research_get(pgiver);
+  advance_iterate(A_FIRST, padvance) {
+    Tech_type_id i = advance_number(padvance);
 
-   advance_iterate(A_FIRST, padvance) {
-     Tech_type_id i = advance_number(padvance);
-
-     if (research_invention_state(gresearch, i) == TECH_KNOWN
-         && research_invention_gettable(dresearch, i,
-                                        game.info.tech_trade_allow_holes)
-         && (research_invention_state(dresearch, i) == TECH_UNKNOWN
-             || research_invention_state(dresearch, i)
-                == TECH_PREREQS_KNOWN)) {
-       dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
-                                                CLAUSE_ADVANCE, i);
-     }
-   } advance_iterate_end;
+    if (player_invention_state(pgiver, i) == TECH_KNOWN
+        && player_invention_reachable(pdest, i, FALSE)
+        && (player_invention_state(pdest, i) == TECH_UNKNOWN
+            || player_invention_state(pdest, i) == TECH_PREREQS_KNOWN)) {
+      dsend_packet_diplomacy_create_clause_req(&client.conn, other, giver,
+                                               CLAUSE_ADVANCE, i);
+    }
+  } advance_iterate_end;
 }
 
 /****************************************************************************
@@ -656,23 +645,10 @@ void diplo_wdg::update_wdg()
 }
 
 /****************************************************************************
-  Restores original nations pixmap
-****************************************************************************/
-void diplo_wdg::restore_pixmap()
-{
-  gui()->sw_diplo->set_pixmap(fc_icons::instance()->get_pixmap("nations"));
-  gui()->sw_diplo->resize_pixmap(gui()->sw_diplo->width(),
-                                 gui()->sw_diplo->height());
-  gui()->sw_diplo->set_custom_labels(QString());
-  gui()->sw_diplo->update_final_pixmap();
-}
-
-/****************************************************************************
   Button 'Accept treaty' has been clicked
 ****************************************************************************/
 void diplo_wdg::response_accept()
 {
-  restore_pixmap();
   dsend_packet_diplomacy_accept_treaty_req(&client.conn,
                                            player_number(treaty.plr0));
 }
@@ -682,7 +658,6 @@ void diplo_wdg::response_accept()
 ****************************************************************************/
 void diplo_wdg::response_cancel()
 {
-  restore_pixmap();
   dsend_packet_diplomacy_cancel_meeting_req(&client.conn,
                                             player_number(treaty.plr0));
 }
@@ -744,13 +719,18 @@ bool diplo_dlg::init(bool raise)
   if (!can_client_issue_orders()) {
     return false;
   }
-  if (!is_human(client.conn.playing)) {
+  if (client.conn.playing->ai_controlled) {
     return false;
   }
   setAttribute(Qt::WA_DeleteOnClose);
   gui()->gimme_place(this, "DDI");
-  index = gui()->add_game_tab(this);
-  gui()->game_tab_widget->setCurrentIndex(index);
+  index = gui()->add_game_tab(this, _("Diplomacy"));
+
+  if (raise == false) {
+    gui()->game_tab_widget->change_color(index, Qt::red);
+  } else {
+    gui()->game_tab_widget->setCurrentIndex(index);
+  }
 
   return true;
 }
@@ -770,7 +750,6 @@ diplo_dlg::~diplo_dlg()
     dw->deleteLater();
   }
   gui()->remove_repo_dlg("DDI");
-  gui()->game_tab_widget->setCurrentIndex(0);
 }
 
 /****************************************************************************
@@ -846,52 +825,14 @@ void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
 
   int i;
   diplo_dlg *dd;
-  QPainter p;
-  QPixmap *pix, *def_pix, *pix2, *pix3, *def_pix_del;
   QWidget *w;
   QWidget *fw;
 
-  if (client_is_observer()) {
+  if (client_is_observer()){
     return;
   }
-
-  if (gui()->current_page() != PAGE_GAME) {
-    gui()->switch_page(PAGE_GAME);
-  }
-
-  pix2 = new QPixmap();
-  def_pix_del = new QPixmap();
-  pix = get_nation_flag_sprite(tileset,
-                                  nation_of_player(player_by_number
-                                                   (counterpart)))->pm;
-  *pix2 = pix->scaledToWidth(gui()->sw_diplo->width() - 2,
-                             Qt::SmoothTransformation);
-  if (pix2->height() > gui()->sw_diplo->height()) {
-    *pix2 = pix->scaledToHeight(gui()->sw_diplo->height(),
-                             Qt::SmoothTransformation);
-  }
-  pix3 = new QPixmap(gui()->sw_diplo->width(), gui()->sw_diplo->height());
-  pix3->fill(Qt::transparent);
-  def_pix = fc_icons::instance()->get_pixmap("nations");
-  *def_pix_del = def_pix->scaled(gui()->sw_diplo->width(),
-                                 gui()->sw_diplo->height(),
-                                 Qt::IgnoreAspectRatio,
-                                 Qt::SmoothTransformation);
-  p.begin(pix3);
-  p.drawPixmap(1, 1, *pix2);
-  p.drawPixmap(0, 0, *def_pix_del);
-  p.end();
-  gui()->sw_diplo->set_pixmap(pix3);
-  gui()->sw_diplo->resize_pixmap(gui()->sw_diplo->width(),
-                                 gui()->sw_diplo->height());
-  gui()->sw_diplo->set_custom_labels(QString(nation_plural_for_player(
-                                            player_by_number(counterpart))));
-  gui()->sw_diplo->update_final_pixmap();
-  delete pix2;
-  delete def_pix_del;
-
   if (!gui()->is_repo_dlg_open("DDI")) {
-    dd = new diplo_dlg(counterpart, initiated_from);
+    diplo_dlg *dd = new diplo_dlg(counterpart, initiated_from);
 
     if (!dd->init(false)) {
       delete dd;
@@ -907,7 +848,7 @@ void handle_diplomacy_init_meeting(int counterpart, int initiated_from)
   fw = dd->find_widget(counterpart);
   if (fw == NULL) {
     dd->add_widget(counterpart, initiated_from);
-    gui()->game_tab_widget->setCurrentIndex(i);
+    gui()->game_tab_widget->change_color(i, Qt::red);
   }
   dd->make_active(counterpart);
 

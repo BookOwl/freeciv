@@ -33,7 +33,7 @@ Unit *api_find_unit(lua_State *L, Player *pplayer, int unit_id);
 Unit *api_find_transport_unit(lua_State *L, Player *pplayer, Unit_Type *ptype,
                               Tile *ptile);
 Tile *api_find_tile(lua_State *L, int nat_x, int nat_y);
-Tile *api_find_tile_by_index(lua_State *L, int tindex);
+Tile *api_find_tile_by_index(lua_State *L, int index);
 
 Government *api_find_government(lua_State *L, int government_id);
 Government *api_find_government_by_name(lua_State *L, const char *name_orig);
@@ -41,8 +41,6 @@ Government *api_find_government_by_name(lua_State *L, const char *name_orig);
 Nation_Type *api_find_nation_type(lua_State *L, int nation_type_id);
 Nation_Type *api_find_nation_type_by_name(lua_State *L,
                                           const char *name_orig);
-Action *api_find_action(lua_State *L, int action_id);
-Action *api_find_action_by_name(lua_State *L, const char *name_orig);
 Building_Type *api_find_building_type(lua_State *L, int building_type_id);
 Building_Type *api_find_building_type_by_name(lua_State *L,
                                               const char *name_orig);

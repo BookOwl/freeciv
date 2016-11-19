@@ -13,11 +13,9 @@
 
 /*****************************************************************************
   ADVERTISEMENT: do not attempt to change the name of the API functions.
-  They may be in use in Lua scripts in savefiles, so once released, the
-  name and signature cannot change shape even in new major versions of
-  Freeciv, until the relevant save format version can no longer be loaded.
-  If you really like to change a function name, be sure to keep also the
-  old one running.
+  They *must* be compatible between the minor Freeciv versions within the
+  same major version. If you really like to change a function name, be sure
+  to keep also the old one running.
 *****************************************************************************/
 
 $#ifdef HAVE_CONFIG_H
@@ -81,7 +79,7 @@ $]
 /* Module find. */
 module find {
   const char *api_signal_by_index
-    @ signal (lua_State *L, int sindex);
+    @ signal (lua_State *L, int index);
   const char *api_signal_callback_by_index
-    @ signal_callback(lua_State *L, const char *signal_name, int sindex);
+    @ signal_callback(lua_State *L, const char *signal_name, int index);
 }

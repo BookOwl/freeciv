@@ -27,7 +27,7 @@ ruler_titles = {
 
 flag="cartago"
 flag_alt = "tunisia"	; Used previously
-style = "Classical"
+city_style = "Classical"
 
 init_techs=""
 init_buildings=""

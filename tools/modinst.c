@@ -15,14 +15,12 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
 /* utility */
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
-#include "net_types.h"
+#include "netintf.h"
 #include "rand.h"
 #include "registry.h"
 

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,8 +17,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <freeciv_config.h>
-
 #include <stdlib.h>		/* size_t */
 #include <string.h>		/* memset */
 #include <time.h>		/* time_t */
@@ -26,6 +24,12 @@ extern "C" {
 /* utility */
 #include "log.h"
 #include "support.h" /* bool, fc__attribute */
+
+#ifdef HAVE_CONFIG_H
+#ifndef FC_CONFIG_H  /* this should be defined in fc_config.h */
+#error Files including fcintl.h should also include fc_config.h directly
+#endif
+#endif
 
 /* Changing these will break network compatability! */
 #define MAX_LEN_ADDR     256	/* see also MAXHOSTNAMELEN and RFC 1123 2.1 */
@@ -35,13 +39,9 @@ extern "C" {
    another unreachable condition. */
 #define FC_INFINITY    	(1000 * 1000 * 1000)
 
-#ifndef FREECIV_TESTMATIC
 /* Initialize something for the sole purpose of silencing false compiler warning
  * about variable possibly used uninitialized. */
 #define BAD_HEURISTIC_INIT(_ini_val_) = _ini_val_
-#else  /* FREECIV_TESTMATIC */
-#define BAD_HEURISTIC_INIT(_ini_val_)
-#endif /* FREECIV_TESTMATIC */
 
 enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
 #define BOOL_TO_TRISTATE(tri) ((tri) ? TRI_YES : TRI_NO)
@@ -74,6 +74,7 @@ enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
 #define DIVIDE(n, d) \
     ( (n) / (d) - (( (n) < 0 && (n) % (d) < 0 ) ? 1 : 0) )
 
+/* This is duplicated in rand.h to avoid extra includes: */
 #define MAX_UINT32 0xFFFFFFFF
 #define MAX_UINT16 0xFFFF
 #define MAX_UINT8 0xFF
@@ -107,28 +108,14 @@ enum fc_tristate { TRI_NO, TRI_YES, TRI_MAYBE };
     }									    \
   }
 
-#ifndef PATH_SEPARATOR
-#if defined(FREECIV_MSWINDOWS) || defined(_WIN32) || defined(__WIN32__) || defined(__EMX__) || defined(__DJGPP__)
-  /* Win32, OS/2, DOS */
-# define PATH_SEPARATOR ";"
-#else
-  /* Unix */
-# define PATH_SEPARATOR ":"
-#endif
-#endif /* PATH_SEPARATOR */
+char *create_centered_string(const char *s);
 
-#if defined(FREECIV_MSWINDOWS) || defined(_WIN32) || defined(__WIN32__) || defined(__EMX__) || defined(__DJGPP__)
-  /* Win32, OS/2, DOS */
-# define DIR_SEPARATOR "\\"
-# define DIR_SEPARATOR_CHAR '\\'
-#else
-  /* Unix */
-# define DIR_SEPARATOR_IS_DEFAULT
-# define DIR_SEPARATOR "/"
-# define DIR_SEPARATOR_CHAR '/'
-#endif
-
-#define PARENT_DIR_OPERATOR ".."
+char *get_option_malloc(const char *option_name,
+			char **argv, int *i, int argc);
+bool is_option(const char *option_name,char *option);
+int get_tokens(const char *str, char **tokens, size_t num_tokens,
+	       const char *delimiterset);
+void free_tokens(char **tokens, size_t ntokens);
 
 const char *big_int_to_text(unsigned int mantissa, unsigned int exponent);
 const char *int_to_text(unsigned int number);
@@ -158,7 +145,6 @@ size_t loud_strlcpy(char *buffer, const char *str, size_t len,
 char *end_of_strn(char *str, int *nleft);
 
 bool str_to_int(const char *str, int *pint);
-bool str_to_float(const char *str, float *pfloat);
 
 /**************************************************************************
 ...
@@ -179,8 +165,6 @@ struct fileinfo {
 char *user_home_dir(void);
 void free_user_home_dir(void);
 char *user_username(char *buf, size_t bufsz);
-char *freeciv_storage_dir(void);
-void free_freeciv_storage_dir(void);
 
 const struct strvec *get_data_dirs(void);
 const struct strvec *get_save_dirs(void);
@@ -194,11 +178,9 @@ struct fileinfo_list *fileinfolist_infix(const struct strvec *dirs,
 const char *fileinfoname(const struct strvec *dirs, const char *filename);
 void free_fileinfo_data(void);
 
+char *get_langname(void);
 void init_nls(void);
 void free_nls(void);
-char *setup_langname(void);
-void switch_lang(const char *lang);
-
 void dont_run_as_root(const char *argv0, const char *fallback);
 
 /*** matching prefixes: ***/
@@ -242,7 +224,7 @@ enum m_pre_result match_prefix_full(m_pre_accessor_fn_t accessor_fn,
                                     int max_matches,
                                     int *pnum_matches);
 
-char *get_multicast_group(bool ipv6_preferred);
+char *get_multicast_group(bool ipv6_prefered);
 void free_multicast_group(void);
 void interpret_tilde(char* buf, size_t buf_size, const char* filename);
 char *interpret_tilde_alloc(const char* filename);

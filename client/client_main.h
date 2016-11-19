@@ -71,7 +71,6 @@ extern char *scriptfile;
 extern char *savefile;
 extern char sound_plugin_name[512];
 extern char sound_set_name[512];
-extern char music_set_name[512];
 extern char server_host[512];
 extern char user_name[512];
 extern char password[MAX_LEN_PASSWORD];
@@ -80,10 +79,7 @@ extern int  server_port;
 extern bool auto_connect;
 extern bool auto_spawn;
 extern bool waiting_for_end_turn;
-
-#ifdef FREECIV_DEBUG
-extern bool hackless;
-#endif /* FREECIV_DEBUG */
+extern bool in_ggz;
 
 struct global_worklist_list;    /* Defined in global_worklist.[ch]. */
 
@@ -104,10 +100,6 @@ bool client_has_player(void);
 struct player *client_player(void);
 void set_seconds_to_turndone(double seconds);
 int get_seconds_to_turndone(void);
-bool is_waiting_turn_change(void);
-void start_turn_change_wait(void);
-void stop_turn_change_wait(void);
-int get_seconds_to_new_turn(void);
 double real_timer_callback(void);
 bool can_client_control(void);
 bool can_client_issue_orders(void);
@@ -116,6 +108,8 @@ bool can_meet_with_player(const struct player *pplayer);
 bool can_intel_with_player(const struct player *pplayer);
 
 void client_exit(void);
+
+int client_current_turn_timeout(void);
 
 bool is_client_quitting(void);
 void start_quitting(void);

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -37,7 +37,6 @@
 
 /* utility */
 #include "log.h"
-#include "shared.h"
 #include "support.h"            /* TRUE, FALSE */
 
 #include "rand.h"
@@ -92,9 +91,9 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
   } else {
     /* size == 0 || size == 1 */
 
-    /*
+    /* 
      * These assignments are only here to make the compiler
-     * happy. Since each usage is guarded with a if (size > 1).
+     * happy. Since each usage is guarded with a if(size>1).
      */
     max = MAX_UINT32;
     divisor = 1;
@@ -102,7 +101,7 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
 
   do {
     new_rand = (rand_state.v[rand_state.j]
-                + rand_state.v[rand_state.k]) & MAX_UINT32;
+		+ rand_state.v[rand_state.k]) & MAX_UINT32;
 
     rand_state.x = (rand_state.x +1) % 56;
     rand_state.j = (rand_state.j +1) % 56;
@@ -130,38 +129,38 @@ RANDOM_TYPE fc_rand_debug(RANDOM_TYPE size, const char *called_as,
            (unsigned long) new_rand, file, line);
 
   return new_rand;
-}
+} 
 
 /*************************************************************************
   Initialize the generator; see comment at top of file.
 *************************************************************************/
-void fc_srand(RANDOM_TYPE seed)
-{
-  int  i; 
+void fc_srand(RANDOM_TYPE seed) 
+{ 
+    int  i; 
 
-  rand_state.v[0] = (seed & MAX_UINT32);
+    rand_state.v[0]=(seed & MAX_UINT32);
 
-  for (i = 1; i < 56; i++) {
-    rand_state.v[i] = (3 * rand_state.v[i-1] + 257) & MAX_UINT32;
-  }
+    for(i=1; i<56; i++) {
+       rand_state.v[i] = (3 * rand_state.v[i-1] + 257) & MAX_UINT32;
+    }
 
-  rand_state.j = (55-55);
-  rand_state.k = (55-24);
-  rand_state.x = (55-0);
+    rand_state.j = (55-55);
+    rand_state.k = (55-24);
+    rand_state.x = (55-0);
 
-  rand_state.is_init = TRUE;
+    rand_state.is_init = TRUE;
 
-  /* Heat it up a bit:
-   * Using modulus in fc_rand() this was important to pass
-   * test_random1().  Now using divisor in fc_rand() that particular
-   * test no longer indicates problems, but this seems a good idea
-   * anyway -- eg, other tests could well reveal other initial
-   * problems even using divisor.
-   */
-  for (i = 0; i < 10000; i++) {
-    (void) fc_rand(MAX_UINT32);
-  }
-}
+    /* Heat it up a bit:
+     * Using modulus in fc_rand() this was important to pass
+     * test_random1().  Now using divisor in fc_rand() that particular
+     * test no longer indicates problems, but this seems a good idea
+     * anyway -- eg, other tests could well reveal other initial
+     * problems even using divisor.
+     */
+    for (i=0; i<10000; i++) {
+      (void) fc_rand(MAX_UINT32);
+    }
+} 
 
 /*************************************************************************
   Return whether the current state has been initialized.

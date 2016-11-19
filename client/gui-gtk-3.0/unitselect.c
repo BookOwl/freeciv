@@ -76,7 +76,7 @@ enum usdlg_row_types {
   #define USDLG_COLUMNS_SHOW    USDLG_COLUMNS_DEBUG
 #else
   #define USDLG_COLUMNS_SHOW    USDLG_COLUMNS_DEFAULT
-#endif /* DEBUG_USDLG */
+#endif /* DEBUG */
 
 enum usdlg_column_types usdlg_col_types[USDLG_COLUMNS_ALL] = {
   COL_PIXBUF, /* Unit */
@@ -176,7 +176,7 @@ static void usdlg_cmd_ready(GObject *object, gpointer data);
 static void usdlg_cmd_sentry(GObject *object, gpointer data);
 static void usdlg_cmd_select(GObject *object, gpointer data);
 static void usdlg_cmd_deselect(GObject *object, gpointer data);
-static void usdlg_cmd_exec(GObject *object, gpointer mode_data,
+static void usdlg_cmd_exec(GObject *object, gpointer data,
                            enum usdlg_cmd cmd);
 static void usdlg_cmd_exec_unit(struct unit *punit, enum usdlg_cmd cmd);
 static void usdlg_cmd_center(GObject *object, gpointer data);
@@ -700,7 +700,7 @@ static void usdlg_tab_append_utype(GtkTreeStore *store,
     canvas_store.surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
         tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
 
-    put_unittype(putype, &canvas_store, 1.0, 0, 0);
+    put_unittype(putype, &canvas_store, 0, 0);
     pix = surface_get_pixbuf(canvas_store.surface, tileset_full_tile_width(tileset),
         tileset_full_tile_height(tileset));
     cairo_surface_destroy(canvas_store.surface);
@@ -761,71 +761,6 @@ static void usdlg_tab_append_activity(GtkTreeStore *store,
                      -1);
 }
 
-/**************************************************************************
-  Get an unit selection list item suitable image of the specified unit.
-
-  Caller is responsible for getting rid of the returned image after use.
-**************************************************************************/
-GdkPixbuf *usdlg_get_unit_image(const struct unit *punit)
-{
-  GdkPixbuf *out;
-  struct canvas canvas_store = FC_STATIC_CANVAS_INIT;
-
-  canvas_store.surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-      tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
-
-  put_unit(punit, &canvas_store, 1.0, 0, 0);
-  out = surface_get_pixbuf(canvas_store.surface,
-                           tileset_full_tile_width(tileset),
-                           tileset_full_tile_height(tileset));
-  cairo_surface_destroy(canvas_store.surface);
-
-  return out;
-}
-
-/**************************************************************************
-  Get an unit selection list item suitable description of the specified
-  unit.
-**************************************************************************/
-const char *usdlg_get_unit_descr(const struct unit *punit)
-{
-  static char buf[248] = "";
-  char buf2[248] = "";
-  struct city *phome;
-
-  phome = game_city_by_number(punit->homecity);
-  if (phome) {
-    fc_snprintf(buf2, sizeof(buf2), "%s", city_name_get(phome));
-  } else if (unit_owner(punit) == client_player()
-             || client_is_global_observer()) {
-    /* TRANS: used in place of unit home city name */
-    sz_strlcpy(buf2, _("no home city"));
-  } else {
-    /* TRANS: used in place of unit home city name */
-    sz_strlcpy(buf2, _("unknown"));
-  }
-#ifdef FREECIV_DEBUG
-  /* Strings only used in debug builds, don't bother with i18n */
-  fc_snprintf(buf, sizeof(buf), "%s [Unit ID %d]\n(%s)\nCoordinates: (%d,%d)",
-              unit_name_translation(punit), punit->id, buf2,
-              TILE_XY(unit_tile(punit)));
-  {
-    struct unit *ptrans = unit_transport_get(punit);
-
-    if (ptrans) {
-      cat_snprintf(buf, sizeof(buf), "\nTransported by unit ID %d",
-                   ptrans->id);
-    }
-  }
-#else /* FREECIV_DEBUG */
-  /* TRANS: unit type and home city, e.g. "Transport\n(New Orleans)" */
-  fc_snprintf(buf, sizeof(buf), _("%s\n(%s)"), unit_name_translation(punit),
-              buf2);
-#endif /* FREECIV_DEBUG */
-
-  return buf;
-}
-
 /*****************************************************************************
   Append units (recursively).
 *****************************************************************************/
@@ -836,8 +771,9 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
                                    bool transported, GtkTreeIter *it,
                                    GtkTreeIter *parent)
 {
-  const char *text;
+  char buf[248] = "", buf2[248] = "";
   GdkPixbuf *pix;
+  struct city *phome;
   enum usdlg_row_types row = ROW_UNIT;
   int style = PANGO_STYLE_NORMAL;
   int weight = PANGO_WEIGHT_NORMAL;
@@ -853,9 +789,47 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
   gtk_tree_store_append(GTK_TREE_STORE(store), it, parent);
 
   /* Unit gfx */
-  pix = usdlg_get_unit_image(punit);
+  {
+    struct canvas canvas_store = FC_STATIC_CANVAS_INIT;
 
-  text = usdlg_get_unit_descr(punit);
+    canvas_store.surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+        tileset_full_tile_width(tileset), tileset_full_tile_height(tileset));
+
+    put_unit(punit, &canvas_store, 0, 0);
+    pix = surface_get_pixbuf(canvas_store.surface, tileset_full_tile_width(tileset),
+        tileset_full_tile_height(tileset));
+    cairo_surface_destroy(canvas_store.surface);
+  }
+
+  phome = game_city_by_number(punit->homecity);
+  if (phome) {
+    fc_snprintf(buf2, sizeof(buf2), "%s", city_name(phome));
+  } else if (unit_owner(punit) == client_player()
+             || client_is_global_observer()) {
+    /* TRANS: used in place of unit home city name */
+    sz_strlcpy(buf2, _("no home city"));
+  } else {
+    /* TRANS: used in place of unit home city name */
+    sz_strlcpy(buf2, _("unknown"));
+  }
+#ifdef DEBUG
+  /* Strings only used in debug builds, don't bother with i18n */
+  fc_snprintf(buf, sizeof(buf), "%s [Unit ID %d]\n(%s)\nCoordinates: (%d,%d)",
+              unit_name_translation(punit), punit->id, buf2,
+              TILE_XY(unit_tile(punit)));
+  {
+    struct unit *ptrans = unit_transport_get(punit);
+
+    if (ptrans) {
+      cat_snprintf(buf, sizeof(buf), "\nTransported by unit ID %d",
+                   ptrans->id);
+    }
+  }
+#else /* DEBUG */
+  /* TRANS: unit type and home city, e.g. "Transport\n(New Orleans)" */
+  fc_snprintf(buf, sizeof(buf), _("%s\n(%s)"), unit_name_translation(punit),
+              buf2);
+#endif /* DEBUG */
 
   if (transported) {
     weight = PANGO_WEIGHT_NORMAL;
@@ -866,9 +840,9 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
   /* Add it to the tree. */
   gtk_tree_store_set(GTK_TREE_STORE(store), it,
                      0, pix,                            /* Unit pixmap */
-                     1, text,                           /* Text */
+                     1, buf,                            /* Text */
                      2, 1,                              /* Number of units */
-                     3, utype_index(unit_type_get(punit)), /* Unit type ID */
+                     3, utype_index(unit_type(punit)),  /* Unit type ID */
                      4, punit->id,                      /* Unit ID */
                      5, loc,                            /* Unit location */
                      6, act,                            /* Unit activity */
@@ -927,10 +901,10 @@ static void usdlg_cmd_deselect(GObject *object, gpointer data)
 /*****************************************************************************
   Main function for the callbacks.
 *****************************************************************************/
-static void usdlg_cmd_exec(GObject *object, gpointer mode_data,
+static void usdlg_cmd_exec(GObject *object, gpointer data,
                            enum usdlg_cmd cmd)
 {
-  enum unit_select_location_mode loc_mode = (enum unit_select_location_mode) mode_data;
+  enum unit_select_location_mode loc = (enum unit_select_location_mode) data;
   GtkTreeView *view;
   GtkTreeSelection *selection;
   GtkTreeModel *model;
@@ -939,13 +913,13 @@ static void usdlg_cmd_exec(GObject *object, gpointer mode_data,
   struct unit_select_dialog *pdialog = usdlg_get(FALSE);
 
   fc_assert_ret(pdialog != NULL);
-  fc_assert_ret(unit_select_location_mode_is_valid(loc_mode));
+  fc_assert_ret(unit_select_location_mode_is_valid(loc));
 
   if (!can_client_change_view() || !can_client_control()) {
     return;
   }
 
-  view = GTK_TREE_VIEW(pdialog->tabs[loc_mode].view);
+  view = GTK_TREE_VIEW(pdialog->tabs[loc].view);
   selection = gtk_tree_view_get_selection(view);
 
   if (!gtk_tree_selection_get_selected(selection, &model, &it)) {

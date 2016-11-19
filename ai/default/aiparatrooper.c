@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 2005 The Freeciv Team
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@
 #include "city.h"
 #include "game.h"
 #include "player.h"
-#include "research.h"
 #include "unit.h"
 #include "unitlist.h"
 
@@ -33,22 +32,16 @@
 #include "citytools.h"
 #include "maphand.h"
 #include "srv_log.h"
-#include "unithand.h"
 #include "unittools.h"
 
 /* server/advisors */
 #include "advdata.h"
 
 /* server/generator */
-#include "mapgen_utils.h"
+#include "utilities.h"
 
 /* ai */
-#include "handicaps.h"
-
-/* ai/default */
 #include "aicity.h"
-#include "aidata.h"
-#include "ailog.h"
 #include "aiplayer.h"
 #include "aiunit.h"
 #include "aitools.h"
@@ -67,7 +60,7 @@ static struct tile *find_best_tile_to_paradrop_to(struct ai_type *ait,
   int best = 0;
   int val;
   struct tile* best_tile = NULL;
-  int range = unit_type_get(punit)->paratroopers_range;
+  int range = unit_type(punit)->paratroopers_range;
   struct city* acity;
   struct player* pplayer = unit_owner(punit);
 
@@ -92,8 +85,8 @@ static struct tile *find_best_tile_to_paradrop_to(struct ai_type *ait,
     acity = tile_city(best_tile);
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, 
              "Choose to jump in order to protect allied city %s (%d %d). "
-             "Benefit: %d",
-             city_name_get(acity), TILE_XY(best_tile), best);
+	     "Benefit: %d",
+	     city_name(acity), TILE_XY(best_tile), best);
     return best_tile;
   }
 
@@ -103,7 +96,7 @@ static struct tile *find_best_tile_to_paradrop_to(struct ai_type *ait,
     if (acity && pplayers_at_war(unit_owner(punit), city_owner(acity)) &&
         (unit_list_size(ptile->units) == 0)) {
       if (!map_is_known_and_seen(ptile, pplayer, V_MAIN)
-          && has_handicap(pplayer, H_FOG)) {
+          && ai_handicap(pplayer, H_FOG)) {
         continue;
       }
       /* Prefer big cities on other continents */
@@ -120,7 +113,7 @@ static struct tile *find_best_tile_to_paradrop_to(struct ai_type *ait,
     acity = tile_city(best_tile);
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, 
              "Choose to jump into enemy city %s (%d %d). Benefit: %d",
-             city_name_get(acity), TILE_XY(best_tile), best);
+	     city_name(acity), TILE_XY(best_tile), best);
     return best_tile;
   }
 
@@ -145,14 +138,14 @@ static struct tile *find_best_tile_to_paradrop_to(struct ai_type *ait,
       if (unit_list_size(target->units) == 0
           || !can_unit_attack_tile(punit, target)
           || is_ocean_tile(target)
-          || (has_handicap(pplayer, H_FOG)
+          || (ai_handicap(pplayer, H_FOG)
               && !map_is_known_and_seen(target, pplayer, V_MAIN))) {
         continue;
       }
       val = 0;
       if (is_stack_vulnerable(target)) {
         unit_list_iterate(target->units, victim) {
-          if ((!has_handicap(pplayer, H_FOG)
+          if ((!ai_handicap(pplayer, H_FOG)
                || can_player_see_unit(pplayer, victim))
               && (unit_attack_unit_at_tile_result(punit, victim, target) == ATT_OK)) {
             val += victim->hp * 100;
@@ -200,7 +193,7 @@ void dai_manage_paratrooper(struct ai_type *ait, struct player *pplayer,
   }
 
   /* check to recover hit points */
-  if ((punit->hp < unit_type_get(punit)->hp / 2) && pcity) {
+  if ((punit->hp < unit_type(punit)->hp / 2) && pcity) {
     UNIT_LOG(LOGLEVEL_PARATROOPER, punit, "Recovering hit points.");
     return;
   }
@@ -219,9 +212,7 @@ void dai_manage_paratrooper(struct ai_type *ait, struct player *pplayer,
     ptile_dest = find_best_tile_to_paradrop_to(ait, punit);
 
     if (ptile_dest) {
-      if (unit_perform_action(unit_owner(punit),
-                              punit->id, tile_index(ptile_dest), 0, "",
-                              ACTION_PARADROP, ACT_REQ_PLAYER)) {
+      if (do_paradrop(punit, ptile_dest)) {
 	/* successfull! */
         if (NULL == game_unit_by_number(sanity)) {
 	  /* the unit did not survive the move */
@@ -247,10 +238,10 @@ void dai_manage_paratrooper(struct ai_type *ait, struct player *pplayer,
     acity = find_nearest_safe_city(punit);
 
     if (acity) {
-      UNIT_LOG(LOGLEVEL_PARATROOPER, punit, "Going to %s", city_name_get(acity));
+      UNIT_LOG(LOGLEVEL_PARATROOPER, punit, "Going to %s", city_name(acity));
       if (!dai_unit_goto(ait, punit, acity->tile)) {
-        /* die or unsuccessfull move */
-        return;
+	/* die or unsuccessfull move */
+	return;
       }
     } else {
       UNIT_LOG(LOGLEVEL_PARATROOPER, punit,
@@ -267,7 +258,7 @@ void dai_manage_paratrooper(struct ai_type *ait, struct player *pplayer,
 static int calculate_want_for_paratrooper(struct unit *punit,
 				          struct tile *ptile_city)
 {
-  struct unit_type* u_type = unit_type_get(punit);
+  struct unit_type* u_type = unit_type(punit);
   int range = u_type->paratroopers_range;
   int profit = 0;
   struct player* pplayer = unit_owner(punit);
@@ -334,17 +325,14 @@ static int calculate_want_for_paratrooper(struct unit *punit,
 /*******************************************************************
   Chooses to build a paratroopers if necessary
 *******************************************************************/
-void dai_choose_paratrooper(struct ai_type *ait,
-                            struct player *pplayer, struct city *pcity,
+void dai_choose_paratrooper(struct player *pplayer, struct city *pcity,
                             struct adv_choice *choice)
 {
-  const struct research *presearch;
   int profit;
   Tech_type_id tech_req;
   Tech_type_id requirements[A_LAST];
   int num_requirements = 0;
   int i;
-  struct ai_plr *plr_data = def_ai_player_data(pplayer, ait);
 
   /* military_advisor_choose_build does something idiotic,
    * this function should not be called if there is danger... */
@@ -355,16 +343,10 @@ void dai_choose_paratrooper(struct ai_type *ait,
   unit_type_iterate(u_type) {
     struct unit *virtual_unit;
 
-    if (!utype_can_do_action(u_type, ACTION_PARADROP)) {
+    if (!utype_has_flag(u_type, UTYF_PARATROOPERS)) {
       continue;
     }
     if (A_NEVER == u_type->require_advance) {
-      continue;
-    }
-
-    /* Temporary hack because pathfinding can't handle Fighters. */
-    if (!uclass_has_flag(utype_class(u_type), UCF_MISSILE)
-        && 1 == utype_fuel(u_type)) {
       continue;
     }
 
@@ -399,29 +381,27 @@ void dai_choose_paratrooper(struct ai_type *ait,
       choice->value.utype = u_type;
       choice->type = CT_ATTACKER;
       choice->need_boat = FALSE;
-      adv_choice_set_use(choice, "paratrooper");
       log_base(LOGLEVEL_PARATROOPER, "%s wants to build %s (want=%d)",
-               city_name_get(pcity), utype_rule_name(u_type), profit);
+               city_name(pcity), utype_rule_name(u_type), profit);
     }
   } unit_type_iterate_end;
 
   /* we raise want if the required tech is not known */
-  presearch = research_get(pplayer);
   for (i = 0; i < num_requirements; i++) {
     tech_req = requirements[i];
-    plr_data->tech_want[tech_req] += 2;
+    pplayer->ai_common.tech_want[tech_req] += 2;
     log_base(LOGLEVEL_PARATROOPER, "Raising tech want in city %s for %s "
-             "stimulating %s with %d (" ADV_WANT_PRINTF ") and req",
-             city_name_get(pcity),
+             "stimulating %s with %d (%d) and req",
+             city_name(pcity),
              player_name(pplayer),
-             advance_rule_name(advance_by_number(tech_req)),
+             advance_name_by_player(pplayer, tech_req),
              2,
-             plr_data->tech_want[tech_req]);
+             pplayer->ai_common.tech_want[tech_req]);
 
     /* now, we raise want for prerequisites */
     advance_index_iterate(A_FIRST, k) {
-      if (research_goal_tech_req(presearch, tech_req, k)) {
-        plr_data->tech_want[k] += 1;
+      if (is_tech_a_req_for_goal(pplayer, k, tech_req)) {
+        pplayer->ai_common.tech_want[k] += 1;
       }
     } advance_index_iterate_end;
   }

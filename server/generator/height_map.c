@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996-2007 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -20,75 +20,50 @@
 /* common */
 #include "map.h"
 
-/* server/generator */
-#include "mapgen_topology.h"
-#include "mapgen_utils.h"
-
 #include "height_map.h"
+#include "mapgen_topology.h"
+#include "utilities.h" 
 
 int *height_map = NULL;
 int hmap_shore_level = 0, hmap_mountain_level = 0;
 
 /****************************************************************************
-  Factor by which to lower height map near poles in normalize_hmap_poles
-****************************************************************************/
-static float hmap_pole_factor(struct tile *ptile)
-{
-  float factor = 1.0;
+  Lower the land near the polar region to avoid too much land there.
 
-  if (near_singularity(ptile)) {
-    /* Map edge near pole: clamp to what linear ramp would give us at pole
-     * (maybe greater than 0) */
-    factor = (100 - wld.map.server.flatpoles) / 100.0;
-  } else if (wld.map.server.flatpoles > 0) {
-    /* Linear ramp down from 100% at 2.5*ICE_BASE_LEVEL to (100-flatpoles) %
-     * at the poles */
-    factor = 1 - ((1 - (map_colatitude(ptile) / (2.5 * ICE_BASE_LEVEL)))
-                  * wld.map.server.flatpoles / 100);
-  }
-  if (wld.map.server.separatepoles
-      && map_colatitude(ptile) >= 2 * ICE_BASE_LEVEL) {
-    /* A band of low height to try to separate the pole (this function is
-     * only assumed to be called <= 2.5*ICE_BASE_LEVEL) */
-    factor = MIN(factor, 0.1);
-  }
-  return factor;
-}
-
-/****************************************************************************
-  Lower the land near the map edges and (optionally) the polar region to
-  avoid too much land there.
-
-  See also renormalize_hmap_poles
+  See also renomalize_hmap_poles
 ****************************************************************************/
 void normalize_hmap_poles(void)
 {
   whole_map_iterate(ptile) {
-    if (map_colatitude(ptile) <= 2.5 * ICE_BASE_LEVEL) {
-      hmap(ptile) *= hmap_pole_factor(ptile);
-    } else if (near_singularity(ptile)) {
-      /* Near map edge but not near pole. */
+    if (near_singularity(ptile)) {
       hmap(ptile) = 0;
+    } else if (map_colatitude(ptile) < 2 * ICE_BASE_LEVEL) {
+      hmap(ptile) *= map_colatitude(ptile) / (2.5 * ICE_BASE_LEVEL);
+    } else if (map.server.separatepoles 
+	       && map_colatitude(ptile) <= 2.5 * ICE_BASE_LEVEL) {
+      hmap(ptile) *= 0.1;
+    } else if (map_colatitude(ptile) <= 2.5 * ICE_BASE_LEVEL) {
+      hmap(ptile) *= map_colatitude(ptile) / (2.5 * ICE_BASE_LEVEL);
     }
   } whole_map_iterate_end;
 }
 
 /****************************************************************************
-  Invert (most of) the effects of normalize_hmap_poles so that we have
-  accurate heights for texturing the poles.
+  Invert the effects of normalize_hmap_poles so that we have accurate heights
+  for texturing the poles.
 ****************************************************************************/
 void renormalize_hmap_poles(void)
 {
   whole_map_iterate(ptile) {
-    if (hmap(ptile) == 0) {
-      /* Nothing left to restore. */
+    if (hmap(ptile) == 0 || map_colatitude(ptile) == 0) {
+      /* Nothing. */
+    } else if (map_colatitude(ptile) < 2 * ICE_BASE_LEVEL) {
+      hmap(ptile) *= (2.5 * ICE_BASE_LEVEL) / map_colatitude(ptile);
+    } else if (map.server.separatepoles 
+	       && map_colatitude(ptile) <= 2.5 * ICE_BASE_LEVEL) {
+      hmap(ptile) *= 10;
     } else if (map_colatitude(ptile) <= 2.5 * ICE_BASE_LEVEL) {
-      float factor = hmap_pole_factor(ptile);
-
-      if (factor > 0) {
-        /* Invert the previously applied function */
-        hmap(ptile) /= factor;
-      }
+      hmap(ptile) *= (2.5 * ICE_BASE_LEVEL) /  map_colatitude(ptile);
     }
   } whole_map_iterate_end;
 }
@@ -116,29 +91,27 @@ void make_random_hmap(int smooth)
 
   All (x0,y0) and (x1,y1) are in native coordinates.
 **************************************************************************/
-static void gen5rec(int step, int xl, int yt, int xr, int yb)
+static void gen5rec(int step, int x0, int y0, int x1, int y1)
 {
   int val[2][2];
-  int x1wrap = xr; /* to wrap correctly */ 
-  int y1wrap = yb; 
+  int x1wrap = x1; /* to wrap correctly */ 
+  int y1wrap = y1; 
 
   /* All x and y values are native. */
 
-  if (((yb - yt <= 0) || (xr - xl <= 0)) 
-      || ((yb - yt == 1) && (xr - xl == 1))) {
+  if (((y1 - y0 <= 0) || (x1 - x0 <= 0)) 
+      || ((y1 - y0 == 1) && (x1 - x0 == 1))) {
     return;
   }
 
-  if (xr == wld.map.xsize) {
+  if (x1 == map.xsize)
     x1wrap = 0;
-  }
-  if (yb == wld.map.ysize) {
+  if (y1 == map.ysize)
     y1wrap = 0;
-  }
 
-  val[0][0] = hmap(native_pos_to_tile(xl, yt));
-  val[0][1] = hmap(native_pos_to_tile(xl, y1wrap));
-  val[1][0] = hmap(native_pos_to_tile(x1wrap, yt));
+  val[0][0] = hmap(native_pos_to_tile(x0, y0));
+  val[0][1] = hmap(native_pos_to_tile(x0, y1wrap));
+  val[1][0] = hmap(native_pos_to_tile(x1wrap, y0));
   val[1][1] = hmap(native_pos_to_tile(x1wrap, y1wrap));
 
   /* set midpoints of sides to avg of side's vertices plus a random factor */
@@ -146,38 +119,34 @@ static void gen5rec(int step, int xl, int yt, int xr, int yb)
 #define set_midpoints(X, Y, V)						\
   {									\
     struct tile *ptile = native_pos_to_tile((X), (Y));			\
-    if (map_colatitude(ptile) <= ICE_BASE_LEVEL/2) {			\
-      /* possibly flatten poles, or possibly not (even at map edge) */	\
-      hmap(ptile) = (V) * (100 - wld.map.server.flatpoles) / 100;	\
-    } else if (near_singularity(ptile)					\
-               || hmap(ptile) != 0) {					\
-      /* do nothing */							\
-    } else {								\
+    if (!near_singularity(ptile)					\
+	&& map_colatitude(ptile) >  ICE_BASE_LEVEL/2			\
+	&& hmap(ptile) == 0) {						\
       hmap(ptile) = (V);						\
     }									\
   }
 
-  set_midpoints((xl + xr) / 2, yt,
-                (val[0][0] + val[1][0]) / 2 + (int)fc_rand(step) - step / 2);
-  set_midpoints((xl + xr) / 2,  y1wrap,
-                (val[0][1] + val[1][1]) / 2 + (int)fc_rand(step) - step / 2);
-  set_midpoints(xl, (yt + yb)/2,
-                (val[0][0] + val[0][1]) / 2 + (int)fc_rand(step) - step / 2);
-  set_midpoints(x1wrap,  (yt + yb) / 2,
-                (val[1][0] + val[1][1]) / 2 + (int)fc_rand(step) - step / 2);
+  set_midpoints((x0 + x1) / 2, y0,
+                (val[0][0] + val[1][0]) / 2 + fc_rand(step) - step / 2);
+  set_midpoints((x0 + x1) / 2,  y1wrap,
+                (val[0][1] + val[1][1]) / 2 + fc_rand(step) - step / 2);
+  set_midpoints(x0, (y0 + y1)/2,
+                (val[0][0] + val[0][1]) / 2 + fc_rand(step) - step / 2);
+  set_midpoints(x1wrap,  (y0 + y1) / 2,
+                (val[1][0] + val[1][1]) / 2 + fc_rand(step) - step / 2);
 
   /* set middle to average of midpoints plus a random factor, if not set */
-  set_midpoints((xl + xr) / 2, (yt + yb) / 2,
+  set_midpoints((x0 + x1) / 2, (y0 + y1) / 2,
                 ((val[0][0] + val[0][1] + val[1][0] + val[1][1]) / 4
-                 + (int)fc_rand(step) - step / 2));
+                 + fc_rand(step) - step / 2));
 
 #undef set_midpoints
 
   /* now call recursively on the four subrectangles */
-  gen5rec(2 * step / 3, xl, yt, (xr + xl) / 2, (yb + yt) / 2);
-  gen5rec(2 * step / 3, xl, (yb + yt) / 2, (xr + xl) / 2, yb);
-  gen5rec(2 * step / 3, (xr + xl) / 2, yt, xr, (yb + yt) / 2);
-  gen5rec(2 * step / 3, (xr + xl) / 2, (yb + yt) / 2, xr, yb);
+  gen5rec(2 * step / 3, x0, y0, (x1 + x0) / 2, (y1 + y0) / 2);
+  gen5rec(2 * step / 3, x0, (y1 + y0) / 2, (x1 + x0) / 2, y1);
+  gen5rec(2 * step / 3, (x1 + x0) / 2, y0, x1, (y1 + y0) / 2);
+  gen5rec(2 * step / 3, (x1 + x0) / 2, (y1 + y0) / 2, x1, y1);
 }
 
 /**************************************************************************
@@ -209,23 +178,23 @@ void make_pseudofractal1_hmap(int extra_div)
   int xdiv2 = xdiv + (xnowrap ? 1 : 0);
   int ydiv2 = ydiv + (ynowrap ? 1 : 0);
 
-  int xmax = wld.map.xsize - (xnowrap ? 1 : 0);
-  int ymax = wld.map.ysize - (ynowrap ? 1 : 0);
-  int x_current, y_current;
+  int xmax = map.xsize - (xnowrap ? 1 : 0);
+  int ymax = map.ysize - (ynowrap ? 1 : 0);
+  int xn, yn;
   /* just need something > log(max(xsize, ysize)) for the recursion */
-  int step = wld.map.xsize + wld.map.ysize; 
+  int step = map.xsize + map.ysize; 
   /* edges are avoided more strongly as this increases */
-  int avoidedge = (100 - wld.map.server.landpercent) * step / 100 + step / 3; 
+  int avoidedge = (100 - map.server.landpercent) * step / 100 + step / 3; 
 
   height_map = fc_malloc(sizeof(*height_map) * MAP_INDEX_SIZE);
 
-  /* initialize map */
+ /* initialize map */
   INITIALIZE_ARRAY(height_map, MAP_INDEX_SIZE, 0);
 
   /* set initial points */
-  for (x_current = 0; x_current < xdiv2; x_current++) {
-    for (y_current = 0; y_current < ydiv2; y_current++) {
-      do_in_map_pos(ptile, (x_current * xmax / xdiv), (y_current * ymax / ydiv)) {
+  for (xn = 0; xn < xdiv2; xn++) {
+    for (yn = 0; yn < ydiv2; yn++) {
+      do_in_map_pos(ptile, (xn * xmax / xdiv), (yn * ymax / ydiv)) {
         /* set initial points */
         hmap(ptile) = fc_rand(2 * step) - (2 * step) / 2;
 
@@ -236,17 +205,17 @@ void make_pseudofractal1_hmap(int extra_div)
 
 	if (map_colatitude(ptile) <= ICE_BASE_LEVEL / 2 ) {
 	  /* separate poles and avoid too much land at poles */
-          hmap(ptile) -= fc_rand(avoidedge * wld.map.server.flatpoles / 100);
+          hmap(ptile) -= fc_rand(avoidedge);
 	}
       } do_in_map_pos_end;
     }
   }
 
   /* calculate recursively on each block */
-  for (x_current = 0; x_current < xdiv; x_current++) {
-    for (y_current = 0; y_current < ydiv; y_current++) {
-      gen5rec(step, x_current * xmax / xdiv, y_current * ymax / ydiv, 
-	      (x_current + 1) * xmax / xdiv, (y_current + 1) * ymax / ydiv);
+  for (xn = 0; xn < xdiv; xn++) {
+    for (yn = 0; yn < ydiv; yn++) {
+      gen5rec(step, xn * xmax / xdiv, yn * ymax / ydiv, 
+	      (xn + 1) * xmax / xdiv, (yn + 1) * ymax / ydiv);
     }
   }
 
@@ -256,37 +225,4 @@ void make_pseudofractal1_hmap(int extra_div)
   } whole_map_iterate_end;
 
   adjust_int_map(height_map, hmap_max_level);
-}
-
-/**************************************************************************
-  We don't want huge areas of grass/plains,
-  so we put in a hill here and there, where it gets too 'clean'
-
-  Return TRUE if the terrain around the given map position is "clean".  This
-  means that all the terrain for 2 squares around it is not mountain or hill.
-****************************************************************************/
-bool area_is_too_flat(struct tile *ptile, int thill, int my_height)
-{
-  int higher_than_me = 0;
-
-  square_iterate(ptile, 2, tile1) {
-    if (hmap(tile1) > thill) {
-      return FALSE;
-    }
-    if (hmap(tile1) > my_height) {
-      if (map_distance(ptile, tile1) == 1) {
-        return FALSE;
-      }
-      if (++higher_than_me > 2) {
-        return FALSE;
-      }
-    }
-  } square_iterate_end;
-
-  if ((thill - hmap_shore_level) * higher_than_me
-      > (my_height - hmap_shore_level) * 4) {
-    return FALSE;
-  }
-
-  return TRUE;
 }

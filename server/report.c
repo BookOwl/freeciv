@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 
 /* utility */
 #include "bitvector.h"
+#include "capability.h"
 #include "fciconv.h"
 #include "fcintl.h"
 #include "log.h"
@@ -28,9 +29,6 @@
 #include "support.h"
 
 /* common */
-#include "achievements.h"
-#include "calendar.h"
-#include "connection.h"
 #include "events.h"
 #include "game.h"
 #include "government.h"
@@ -60,10 +58,6 @@ struct logging_civ_score {
   int last_turn;
   struct plrdata_slot *plrdata;
 };
-
-/* Have to be initialized to value less than -1 so it doesn't seem like report was created at
- * the end of previous turn in the beginning to turn 0. */
-struct history_report latest_history_report = { -2 };
 
 static struct logging_civ_score *score_log = NULL;
 
@@ -138,8 +132,8 @@ static int get_literacy(const struct player *pplayer);
 static int get_production(const struct player *pplayer);
 static int get_economics(const struct player *pplayer);
 static int get_pollution(const struct player *pplayer);
-static int get_mil_service(const struct player *pplayer);
-static int get_culture(const struct player *pplayer);
+static int get_mil_service(const 
+                           struct player *pplayer);
 
 static const char *area_to_text(int value);
 static const char *percent_to_text(int value);
@@ -148,7 +142,6 @@ static const char *economics_to_text(int value);
 static const char *science_to_text(int value);
 static const char *mil_service_to_text(int value);
 static const char *pollution_to_text(int value);
-static const char *culture_to_text(int value);
 
 #define GOOD_PLAYER(p) ((p)->is_alive && !is_barbarian(p))
 
@@ -171,8 +164,7 @@ static struct dem_row {
   {'P', N_("Production"),       get_production,  production_to_text,  TRUE },
   {'E', N_("Economics"),        get_economics,   economics_to_text,   TRUE },
   {'M', N_("Military Service"), get_mil_service, mil_service_to_text, FALSE },
-  {'O', N_("Pollution"),        get_pollution,   pollution_to_text,   FALSE },
-  {'C', N_("Culture"),          get_culture,     culture_to_text,     TRUE }
+  {'O', N_("Pollution"),        get_pollution,   pollution_to_text,   FALSE }
 };
 
 /* Demographics columns. */
@@ -231,15 +223,15 @@ static int secompare(const void *a, const void *b)
 }
 
 /**************************************************************************
-  Construct Historian Report
+  Publish historian report.
 **************************************************************************/
-static void historian_generic(struct history_report *report,
-                              enum historian_type which_news)
+static void historian_generic(enum historian_type which_news)
 {
   int i, j = 0, rank = 0;
+  char buffer[128 * MAX_NUM_PLAYER_SLOTS];
+  char title[1024];
   struct player_score_entry size[player_count()];
 
-  report->turn = game.info.turn;
   players_iterate(pplayer) {
     if (GOOD_PLAYER(pplayer)) {
       switch(which_news) {
@@ -248,7 +240,7 @@ static void historian_generic(struct history_report *report,
 	break;
       case HISTORIAN_ADVANCED:
 	size[j].value
-	  = pplayer->score.techs + research_get(pplayer)->future_tech;
+	  = pplayer->score.techs + player_research_get(pplayer)->future_tech;
 	break;
       case HISTORIAN_MILITARY:
 	size[j].value = pplayer->score.units;
@@ -268,7 +260,7 @@ static void historian_generic(struct history_report *report,
   } players_iterate_end;
 
   qsort(size, j, sizeof(size[0]), secompare);
-  report->body[0] = '\0';
+  buffer[0] = '\0';
   for (i = 0; i < j; i++) {
     if (i > 0 && size[i].value < size[i - 1].value) {
       /* since i < j, only top entry reigns Supreme */
@@ -278,28 +270,17 @@ static void historian_generic(struct history_report *report,
       /* clamp to final entry */
       rank = ARRAY_SIZE(ranking) - 1;
     }
-    cat_snprintf(report->body, REPORT_BODYSIZE,
+    cat_snprintf(buffer, sizeof(buffer),
 		 _(ranking[rank]),
 		 i + 1,
 		 nation_plural_for_player(size[i].player));
-    fc_strlcat(report->body, "\n", REPORT_BODYSIZE);
+    fc_strlcat(buffer, "\n", sizeof(buffer));
   }
-  fc_snprintf(report->title, REPORT_TITLESIZE, _(historian_message[which_news]),
-              calendar_text(),
+  fc_snprintf(title, sizeof(title), _(historian_message[which_news]),
+              textyear(game.info.year),
               _(historian_name[fc_rand(ARRAY_SIZE(historian_name))]));
-}
-
-/**************************************************************************
-  Send history report of this turn.
-**************************************************************************/
-void send_current_history_report(struct conn_list *dest)
-{
-  /* History report is actually constructed at the end of previous turn. */
-  if (latest_history_report.turn >= game.info.turn - 1) {
-    page_conn_etype(dest, _("Historian Publishes!"),
-                    latest_history_report.title, latest_history_report.body,
-                    E_BROADCAST_REPORT);
-  }
+  page_conn_etype(game.est_connections, _("Historian Publishes!"),
+		  title, buffer, E_BROADCAST_REPORT);
 }
 
 /**************************************************************************
@@ -370,13 +351,13 @@ void report_top_five_cities(struct conn_list *dest)
                    /* TRANS:"The French City of Lyon (team 3) of size 18". */
                    _("%2d: The %s City of %s (%s) of size %d, "), i + 1,
                    nation_adjective_for_player(city_owner(size[i].city)),
-                   city_name_get(size[i].city), team_name,
+                   city_name(size[i].city), team_name,
                    city_size_get(size[i].city));
     } else {
       cat_snprintf(buffer, sizeof(buffer),
                    _("%2d: The %s City of %s of size %d, "), i + 1,
                    nation_adjective_for_player(city_owner(size[i].city)),
-                   city_name_get(size[i].city), city_size_get(size[i].city));
+                   city_name(size[i].city), city_size_get(size[i].city));
     }
 
     wonders = nr_wonders(size[i].city);
@@ -416,13 +397,13 @@ void report_wonders_of_the_world(struct conn_list *dest)
                        /* TRANS: "Colossus in Rhodes (Greek, team 2)". */
                        _("%s in %s (%s, %s)\n"),
                        city_improvement_name_translation(pcity, i),
-                       city_name_get(pcity),
+                       city_name(pcity),
                        nation_adjective_for_player(city_owner(pcity)),
                        team_name);
         } else {
           cat_snprintf(buffer, sizeof(buffer), _("%s in %s (%s)\n"),
                        city_improvement_name_translation(pcity, i),
-                       city_name_get(pcity),
+                       city_name(pcity),
                        nation_adjective_for_player(city_owner(pcity)));
         }
       } else if (great_wonder_is_destroyed(i)) {
@@ -447,12 +428,12 @@ void report_wonders_of_the_world(struct conn_list *dest)
               cat_snprintf(buffer, sizeof(buffer),
                            /* TRANS: "([...] (Roman, team 4))". */
                            _("(building %s in %s (%s, %s))\n"),
-                           improvement_name_translation(i), city_name_get(pcity),
+                           improvement_name_translation(i), city_name(pcity),
                            nation_adjective_for_player(pplayer), team_name);
             } else {
               cat_snprintf(buffer, sizeof(buffer),
                            _("(building %s in %s (%s))\n"),
-                           improvement_name_translation(i), city_name_get(pcity),
+                           improvement_name_translation(i), city_name(pcity),
                            nation_adjective_for_player(pplayer));
             }
           }
@@ -606,14 +587,12 @@ static int get_settlers(const struct player *pplayer)
 {
   int result = 0;
 
-  if (!game.scenario.prevent_new_cities) {
-    /* count up settlers */
-    unit_list_iterate(pplayer->units, punit) {
-      if (unit_can_do_action(punit, ACTION_FOUND_CITY)) {
-        result++;
-      }
-    } unit_list_iterate_end;
-  }
+  /* count up settlers */
+  unit_list_iterate(pplayer->units, punit) {
+    if (unit_has_type_flag(punit, UTYF_CITIES)) {
+      result++;
+    }
+  } unit_list_iterate_end;
 
   return result;
 }
@@ -766,7 +745,7 @@ static int get_specialists(const struct player *pplayer)
 ****************************************************************************/
 static int get_gov(const struct player *pplayer)
 {
-  return (int) government_number(government_of_player(pplayer));
+  return government_number(government_of_player(pplayer));
 }
 
 /****************************************************************************
@@ -789,14 +768,6 @@ static int get_corruption(const struct player *pplayer)
 static int get_total_score(const struct player *pplayer)
 {
   return pplayer->score.game;
-}
-
-/****************************************************************************
-  Culture score
-****************************************************************************/
-static int get_culture(const struct player *pplayer)
-{
-  return pplayer->score.culture;
 }
 
 /**************************************************************************
@@ -878,16 +849,6 @@ static const char *mil_service_to_text(int value)
 static const char *pollution_to_text(int value)
 {
   return value_units(value, PL_(" ton", " tons", value));
-}
-
-/**************************************************************************
-  Construct string containing value followed by unit suitable for
-  culture stats.
-**************************************************************************/
-static const char *culture_to_text(int value)
-{
-  /* TRANS: Unit(s) of culture */
-  return value_units(value, PL_(" act", " acts", value));
 }
 
 /**************************************************************************
@@ -1044,7 +1005,7 @@ void report_demographics(struct connection *pconn)
     fc_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
                 nation_adjective_for_player(pplayer),
                 government_name_for_player(pplayer),
-                calendar_text());
+                textyear(game.info.year));
   } else {
     civbuf[0] = '\0';
   }
@@ -1063,36 +1024,6 @@ void report_demographics(struct connection *pconn)
   }
 
   page_conn(pconn->self, _("Demographics Report:"), civbuf, buffer);
-}
-
-/*************************************************************************
-  Send achievements list
-*************************************************************************/
-void report_achievements(struct connection *pconn)
-{
-  char civbuf[1024];
-  char buffer[4096];
-  struct player *pplayer = pconn->playing;
-
-  if (pplayer == NULL) {
-    return;
-  }
-
-  fc_snprintf(civbuf, sizeof(civbuf), _("%s %s (%s)"),
-              nation_adjective_for_player(pplayer),
-              government_name_for_player(pplayer),
-              calendar_text());
-
-  buffer[0] = '\0';
-
-  achievements_iterate(pach) {
-    if (achievement_player_has(pach, pplayer)) {
-      cat_snprintf(buffer, sizeof(buffer), "%s\n",
-                   achievement_name_translation(pach));
-    }
-  } achievements_iterate_end;
-
-  page_conn(pconn->self, _("Achievements List:"), civbuf, buffer);
 }
 
 /**************************************************************************
@@ -1298,8 +1229,6 @@ void log_civ_score_init(void)
                                    + player_slot_index(pslot);
     plrdata->name = NULL;
   } player_slots_iterate_end;
-
-  latest_history_report.turn = -2;
 }
 
 /**************************************************************************
@@ -1380,8 +1309,6 @@ void log_civ_score_now(void)
     {"unitsbuilt",      get_units_built}, /* New tags since 2.3.0. */
     {"unitskilled",     get_units_killed},
     {"unitslost",       get_units_lost},
-
-    {"culture",         get_culture}      /* New tag in 2.6.0. */
   };
 
   if (!game.server.scorelog) {
@@ -1446,7 +1373,7 @@ void log_civ_score_now(void)
 
   if (game.info.turn > score_log->last_turn) {
     fprintf(score_log->fp, "turn %d %d %s\n", game.info.turn, game.info.year,
-            calendar_text());
+            textyear(game.info.year));
     score_log->last_turn = game.info.turn;
   }
 
@@ -1468,47 +1395,30 @@ void log_civ_score_now(void)
   players_iterate(pplayer) {
     struct plrdata_slot *plrdata = score_log->plrdata + player_index(pplayer);
     if (plrdata->name == NULL && GOOD_PLAYER(pplayer)) {
-      switch (game.server.scoreloglevel) {
-      case SL_HUMANS:
-        if (is_ai(pplayer)) {
-          break;
-        }
-      case SL_ALL:
-        fprintf(score_log->fp, "addplayer %d %d %s\n", game.info.turn,
+      fprintf(score_log->fp, "addplayer %d %d %s\n", game.info.turn,
               player_number(pplayer), player_name(pplayer));
-        plrdata_slot_init(plrdata, player_name(pplayer));
-      }
+      plrdata_slot_init(plrdata, player_name(pplayer));
     }
   } players_iterate_end;
 
   players_iterate(pplayer) {
     struct plrdata_slot *plrdata = score_log->plrdata + player_index(pplayer);
 
-    if (GOOD_PLAYER(pplayer)) {
-      switch (game.server.scoreloglevel) {
-      case SL_HUMANS:
-        if (is_ai(pplayer) && plrdata->name == NULL) {
-          /* If a human player toggled into AI mode, don't break. */
-          break;
-        }
-      case SL_ALL:
-        if (strcmp(plrdata->name, player_name(pplayer)) != 0) {
-          log_debug("player names does not match '%s' != '%s'", plrdata->name,
-                  player_name(pplayer));
-          fprintf(score_log->fp, "delplayer %d %d\n", game.info.turn - 1,
-                  player_number(pplayer));
-          fprintf(score_log->fp, "addplayer %d %d %s\n", game.info.turn,
-                  player_number(pplayer), player_name(pplayer));
-          plrdata_slot_replace(plrdata, player_name(pplayer));
-        }
-      }
+    if (GOOD_PLAYER(pplayer)
+        && strcmp(plrdata->name, player_name(pplayer)) != 0) {
+      log_debug("player names does not match '%s' != '%s'", plrdata->name,
+                player_name(pplayer));
+      fprintf(score_log->fp, "delplayer %d %d\n", game.info.turn - 1,
+              player_number(pplayer));
+      fprintf(score_log->fp, "addplayer %d %d %s\n", game.info.turn,
+              player_number(pplayer), player_name(pplayer));
+      plrdata_slot_replace(plrdata, player_name(pplayer));
     }
   } players_iterate_end;
 
   for (i = 0; i < ARRAY_SIZE(score_tags); i++) {
     players_iterate(pplayer) {
-      if (!GOOD_PLAYER(pplayer)
-          || (game.server.scoreloglevel == SL_HUMANS && is_ai(pplayer))) {
+      if (!GOOD_PLAYER(pplayer)) {
         continue;
       }
 
@@ -1542,8 +1452,7 @@ void make_history_report(void)
   game.server.scoreturn = (game.info.turn + GAME_DEFAULT_SCORETURN
                            + fc_rand(GAME_DEFAULT_SCORETURN));
 
-  historian_generic(&latest_history_report, game.server.scoreturn % HISTORIAN_LAST);
-  send_current_history_report(game.est_connections);
+  historian_generic(game.server.scoreturn % HISTORIAN_LAST);
 }
 
 /**************************************************************************
@@ -1571,7 +1480,6 @@ void report_final_scores(struct conn_list *dest)
     /* TRANS: "sq. mi." is abbreviation for "square miles" */
     { N_("Settled Area\n(sq. mi.)"),    get_settledarea },
     { N_("Literacy\n(%)"),              get_literacy },
-    { N_("Culture\n"),                  get_culture },
     { N_("Spaceship\n"),                get_spaceship },
     { N_("Built Units\n"),              get_units_built },
     { N_("Killed Units\n"),             get_units_killed },
@@ -1620,8 +1528,6 @@ void report_final_scores(struct conn_list *dest)
       ppacket.category_score[j] = score_categories[j].score(pplayer);
     }
 
-    ppacket.winner = pplayer->is_winner;
-
     lsend_packet_endgame_player(dest, &ppacket);
   }
 }
@@ -1650,7 +1556,8 @@ static void page_conn_etype(struct conn_list *dest, const char *caption,
                             const char *headline, const char *lines,
                             enum event_type event)
 {
-  struct packet_page_msg packet;
+  struct packet_page_msg_new packet;
+  struct packet_page_msg_old packet_old;
   int i;
   int len;
 
@@ -1658,33 +1565,41 @@ static void page_conn_etype(struct conn_list *dest, const char *caption,
   sz_strlcpy(packet.headline, headline);
   packet.event = event;
   len = strlen(lines);
-  if ((len % (MAX_LEN_CONTENT - 1)) == 0) {
-    packet.parts = len / (MAX_LEN_CONTENT - 1);
+  if ((len % (MAX_LEN_MSG / 2 - 1)) == 0) {
+    packet.parts = len / (MAX_LEN_MSG / 2 - 1);
   } else {
-    packet.parts = len / (MAX_LEN_CONTENT - 1) + 1;
+    packet.parts = len / (MAX_LEN_MSG / 2 - 1) + 1;
   }
   packet.len = len;
 
-  lsend_packet_page_msg(dest, &packet);
+  sz_strlcpy(packet_old.caption, caption);
+  sz_strlcpy(packet_old.headline, headline);
+  strncpy(packet_old.lines, lines, MIN(MAX_LEN_MSG, strlen(lines) + 1));
+  packet_old.lines[MAX_LEN_MSG - 1] = '\0';
+  packet_old.event = event;
+
+  conn_list_iterate(dest, pconn) {
+    if (has_capability("split_reports", pconn->capability)) {
+      send_packet_page_msg_new(pconn, &packet);
+    } else {
+      send_packet_page_msg_old(pconn, &packet_old);
+    }
+  } conn_list_iterate_end;
 
   for (i = 0; i < packet.parts; i++) {
     struct packet_page_msg_part part;
     int plen;
 
-    plen = MIN(len, (MAX_LEN_CONTENT - 1));
-    strncpy(part.lines, &(lines[(MAX_LEN_CONTENT - 1) * i]), plen);
+    plen = MIN(len, (MAX_LEN_MSG / 2 - 1));
+    strncpy(part.lines, &(lines[(MAX_LEN_MSG / 2 - 1) * i]), plen);
     part.lines[plen] = '\0';
 
-    lsend_packet_page_msg_part(dest, &part);
+    conn_list_iterate(dest, pconn) {
+      if (has_capability("split_reports", pconn->capability)) {
+        send_packet_page_msg_part(pconn, &part);
+      }
+    } conn_list_iterate_end;
 
     len -= plen;
   }
-}
-
-/**************************************************************************
-  Return current history report
-**************************************************************************/
-struct history_report *history_report_get(void)
-{
-  return &latest_history_report;
 }

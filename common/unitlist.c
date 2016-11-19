@@ -123,14 +123,29 @@ bool can_units_do_activity(const struct unit_list *punits,
 }
 
 /****************************************************************************
-  Returns TRUE if any of the units can do the targeted activity.
+  Returns TRUE if any of the units can build any road.
 ****************************************************************************/
-bool can_units_do_activity_targeted(const struct unit_list *punits,
-                                    enum unit_activity activity,
-                                    struct extra_type *pextra)
+bool can_units_do_any_road(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (can_unit_do_activity_targeted(punit, activity, pextra)) {
+    road_type_iterate(proad) {
+      if (can_build_road(proad, punit, unit_tile(punit))) {
+        return TRUE;
+      }
+    } road_type_iterate_end;
+  } unit_list_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
+  Returns TRUE if any of the units can do the base building activity
+****************************************************************************/
+bool can_units_do_base(const struct unit_list *punits,
+                       Base_type_id base)
+{
+  unit_list_iterate(punits, punit) {
+    if (can_unit_do_activity_base(punit, base)) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -139,18 +154,15 @@ bool can_units_do_activity_targeted(const struct unit_list *punits,
 }
 
 /****************************************************************************
-  Returns TRUE if any of the units can build any road.
+  Returns TRUE if any of the units can do the road building activity
 ****************************************************************************/
-bool can_units_do_any_road(const struct unit_list *punits)
+bool can_units_do_road(const struct unit_list *punits,
+                       Road_type_id road)
 {
   unit_list_iterate(punits, punit) {
-    extra_type_by_cause_iterate(EC_ROAD, pextra) {
-      struct road_type *proad = extra_road_get(pextra);
-
-      if (can_build_road(proad, punit, unit_tile(punit))) {
-        return TRUE;
-      }
-    } extra_type_by_cause_iterate_end;
+    if (can_unit_do_activity_road(punit, road)) {
+      return TRUE;
+    }
   } unit_list_iterate_end;
 
   return FALSE;
@@ -176,6 +188,22 @@ bool can_units_do_base_gui(const struct unit_list *punits,
 }
 
 /****************************************************************************
+  Returns TRUE if any of the units can do the activity.
+****************************************************************************/
+bool can_units_do_diplomat_action(const struct unit_list *punits,
+				  enum diplomat_actions action)
+{
+  unit_list_iterate(punits, punit) {
+    if (is_diplomat_unit(punit)
+	&& diplomat_can_do_action(punit, action, unit_tile(punit))) {
+      return TRUE;
+    }
+  } unit_list_iterate_end;
+
+  return FALSE;
+}
+
+/****************************************************************************
   If has_flag is true, returns true iff any of the units have the flag.
 
   If has_flag is false, returns true iff any of the units don't have the
@@ -186,43 +214,6 @@ bool units_have_type_flag(const struct unit_list *punits,
 {
   unit_list_iterate(punits, punit) {
     if (EQ(has_flag, unit_has_type_flag(punit, flag))) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/****************************************************************************
-  Does the list contain any cityfounder units
-****************************************************************************/
-bool units_contain_cityfounder(const struct unit_list *punits)
-{
-  if (game.scenario.prevent_new_cities) {
-    return FALSE;
-  }
-
-  unit_list_iterate(punits, punit) {
-    if (EQ(TRUE, unit_can_do_action(punit, ACTION_FOUND_CITY))) {
-      return TRUE;
-    }
-  } unit_list_iterate_end;
-
-  return FALSE;
-}
-
-/**************************************************************************
-  If has_flag is true, returns true iff any of the units are able to do
-  the specified action.
-
-  If has_flag is false, returns true iff any of the units are unable do
-  the specified action.
-**************************************************************************/
-bool units_can_do_action(const struct unit_list *punits,
-                         int action_id, bool can_do)
-{
-  unit_list_iterate(punits, punit) {
-    if (EQ(can_do, unit_can_do_action(punit, action_id))) {
       return TRUE;
     }
   } unit_list_iterate_end;
@@ -250,7 +241,7 @@ bool units_are_occupied(const struct unit_list *punits)
 bool units_can_load(const struct unit_list *punits)
 {
   unit_list_iterate(punits, punit) {
-    if (unit_can_load(punit)) {
+    if (transporter_for_unit(punit)) {
       return TRUE;
     }
   } unit_list_iterate_end;

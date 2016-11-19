@@ -129,7 +129,7 @@ const char *fc_comparable_version(void)
 const char *beta_message(void)
 {
 #if IS_BETA_VERSION
-  static char msgbuf[500];
+  static char msgbuf[128];
   static const char *month[] =
   {
     NULL,
@@ -147,7 +147,7 @@ const char *beta_message(void)
     N_("December")
   };
 
-  if (FREECIV_RELEASE_MONTH > 0) {
+  if (RELEASE_MONTH > 0) {
     fc_snprintf(msgbuf, sizeof(msgbuf),
                 /* TRANS: No full stop after the URL, could cause confusion. */
                 _("THIS IS A BETA VERSION\n"
@@ -160,9 +160,9 @@ const char *beta_message(void)
                 NEXT_STABLE_VERSION, WIKI_URL);
   }
   return msgbuf;
-#else  /* IS_BETA_VERSION */
+#else
   return NULL;
-#endif /* IS_BETA_VERSION */
+#endif
 }
 
 /***************************************************************************

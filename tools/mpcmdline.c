@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
 #endif
 
 /* utility */
-#include "fc_cmdline.h"
 #include "fciconv.h"
 #include "fcintl.h"
+#include "shared.h"
 #include "support.h"
 
 /* common */
@@ -93,13 +93,13 @@ int fcmp_parse_cmdline(int argc, char *argv[])
       cmdhelp_destroy(help);
 
       exit(EXIT_SUCCESS);
-    } else if ((option = get_option_malloc("--List", argv, &i, argc, TRUE))) {
+    } else if ((option = get_option_malloc("--List", argv, &i, argc))) {
       fcmp.list_url = option;
-    } else if ((option = get_option_malloc("--prefix", argv, &i, argc, TRUE))) {
+    } else if ((option = get_option_malloc("--prefix", argv, &i, argc))) {
       fcmp.inst_prefix = option;
-    } else if ((option = get_option_malloc("--install", argv, &i, argc, TRUE))) {
+    } else if ((option = get_option_malloc("--install", argv, &i, argc))) {
       fcmp.autoinstall = option;
-    } else if ((option = get_option_malloc("--debug", argv, &i, argc, FALSE))) {
+    } else if ((option = get_option_malloc("--debug", argv, &i, argc))) {
       if (!log_parse_level_str(option, &loglevel)) {
         fc_fprintf(stderr,
                    _("Invalid debug level \"%s\" specified with --debug "
@@ -125,10 +125,15 @@ int fcmp_parse_cmdline(int argc, char *argv[])
   log_init(NULL, loglevel, NULL, NULL, -1);
 
   if (fcmp.inst_prefix == NULL) {
-    fcmp.inst_prefix = freeciv_storage_dir();
+    const char *home = user_home_dir();
 
-    if (fcmp.inst_prefix == NULL) {
-      log_error("Cannot determine freeciv storage directory");
+    if (home == NULL) {
+      log_error("Cannot determine user home directory");
+    } else {
+      static char pfx_buf[500];
+
+      snprintf(pfx_buf, sizeof(pfx_buf), "%s/.freeciv", home);
+      fcmp.inst_prefix = pfx_buf;
     }
   }
 

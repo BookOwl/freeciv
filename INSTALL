@@ -4,7 +4,7 @@ Installing Freeciv:
 
 This file describes how to compile and install Freeciv. Last time we
 made sure this file is up to date was 16-Jul-06.
-Last minor update was 24-Oct-16.
+Last minor update was 21-Apr-15.
 
 There may be a localized version of this file in the ./doc directory,
 named INSTALL.<locale> (e.g., INSTALL.de).
@@ -14,8 +14,8 @@ This document contains sections and subsections as follows:
      1. Prerequisites for the clients:
           1a. Prerequisites for the Gtk2 client:
           1b. Prerequisites for the Gtk3 client:
-          1c. Prerequisites for the Gtk3.22 client:
-          1d. Prerequisites for the SDL2 client:
+          1c. Prerequisites for the SDL client:
+          1d. Prerequisites for the Xaw client:
           1e. Prerequisites for the Qt client:
      2. Generating Makefiles
           2a. Generating the Makefile for svn versions:
@@ -73,34 +73,26 @@ out whether your system is suitable.  If in doubt, just try it.
 
    The output should include "GNU Make" somewhere.
 
- - libtool version 2.2 or better
-
- - libcurl version 7.15.4 or better
+ - libcurl version 7.12.1 or better
 
    Libcurl takes care of http communication with the metaserver, and
    file transfers of modpack installers
 
    http://curl.haxx.se/
 
- - libicu
-
-   Libicu helps handling UTF-8 texts
-
-   http://site.icu-project.org/
-
 The svn version has additional requirements. A release version
 contains the generated files.
 
- - The programs from GNU gettext version 0.15 or better
+ - The programs from GNU gettext version 0.10.36 or better
 
    Especial the xgettext program is required to create the *.gmo
    files which aren't included in the svn tree.
 
- - GNU autoconf version 2.65 or better
+ - GNU autoconf version 2.61 or better
 
    Autoconf is required to create configure from configure.ac.
 
- - GNU automake version 1.11.2 or better
+ - GNU automake version 1.9 or better
 
    Automake is required to create the various Makefile.in from
    Makefile.am.
@@ -111,8 +103,8 @@ contains the generated files.
 The Freeciv client comes in the following forms:
 * Gtk+ 2.0 widget library ("Gtk+ 2.0").
 * Gtk+ 3.0 widget library ("Gtk+ 3.0").
-* Gtk+ 3.0 widget library, version 3.22 ("Gtk+ 3.22")
-* SDL2
+* X Athena Widgets library ("Xaw").
+* SDL
 * Qt
 
 These forms have different prerequisites, explained separately below.
@@ -167,6 +159,9 @@ will need to have the appropriate "development" packages installed.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
+   "Gtk+ 2" is the default client. If you don't specify any client with
+   "--enable-client" to configure, you will get "Gtk+ 2" client.
+
    The "Gtk+" library comes with two companion libraries:
 
      "Gdk":
@@ -177,8 +172,6 @@ will need to have the appropriate "development" packages installed.
        Provides image loading/saving facilities.
 
    Freeciv requires a version of "Gtk+" greater or equal to 2.12.0.
-   At least 2.16.0 is recommended; some minor UI features will be
-   missing with earlier versions.
 
    If the Freeciv configure process tells you that you don't have the
    Gtk+ library installed, then it may be obtained from here:
@@ -205,7 +198,7 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    The "Glib" utility library provides non-graphical functions used by the
    "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
 
-   Freeciv requires a version of "Glib" greater or equal to 2.36
+   Freeciv requires a version of "Glib" greater or equal to 2.32
 
    If the Freeciv configure process tells you that you don't have the
    Glib library installed, then it may be obtained from here:
@@ -239,134 +232,136 @@ following order: pkg-config, Glib, Atk, Pango, Gtk+.
    The "Gtk+" widget library was designed for the GIMP graphics program.
    Since then it has gained popularity as an easy to program, free toolkit.
 
-   "Gtk+ 3" is the default client. If you don't specify any client with
-   "--enable-client" to configure, you will get "Gtk+ 3" client.
-
    The "Gtk+" library comes with one companion libraries:
 
      "Gdk":
        Provides an abstraction layer over X-Windows/LinuxFB/Win32 to implement
        basic drawing functions, windows, clipping, etc.
 
-   Freeciv requires a version of "Gtk+" greater or equal to 3.10.0.
+   Freeciv requires a version of "Gtk+" greater or equal to 3.4.0.
 
    If the Freeciv configure process tells you that you don't have the
    Gtk+ library installed, then it may be obtained from here:
 
-     http://ftp.gnome.org/pub/gnome/sources/gtk+/3.12/gtk+-3.12.2.tar.xz
+     http://ftp.gnome.org/pub/gnome/sources/gtk+/3.8/gtk+-3.8.1.tar.xz
 
    "Gtk+" depends on the "Glib", "Atk", "Gdk-Pixbuf", and "Pango" libraries.
 
 If you are going to make these yourself, build and install them in the
 following order: pkg-config, Glib, Atk, Pango, Gdk-Pixbuf, Gtk+.
 
-1c. Prerequisites for the Gtk+ 3.22 client:
-==========================================
-
- - "pkg-config".
-
-   "pkg-config" is a system for managing library compile/link flags that
-   works with automake and autoconf. You may obtain it at:
-
-      http://pkgconfig.freedesktop.org/releases/pkg-config-0.29.1.tar.gz
-
- - The "Glib" utility library.
-
-   The "Glib" utility library provides non-graphical functions used by the
-   "Gdk" and "Gtk+" libraries, like hash tables, single linked lists, etc.
-
-   Freeciv requires a version of "Glib" greater or equal to 2.46
-
-   If the Freeciv configure process tells you that you don't have the
-   Glib library installed, then it may be obtained from here:
-
-     http://ftp.gnome.org/pub/gnome/sources/glib/2.50/glib-2.50.1.tar.xz
-
- - The "Atk" accessibility library.
-
-   The "Atk" library provides a set of interfaces for accessibility.
-   It allows people with disabilities to utilize all the functionality
-   provided by Gtk+ apps. You may obtain it at:
-
-     http://ftp.gnome.org/pub/gnome/sources/atk/2.22/atk-2.22.0.tar.xz
-
- - The "Pango" text layout and rendering library.
-
-   "Pango" is library for layout and rendering of text, with an emphasis
-   on internationalization. You may obtain it at:
-
-     http://ftp.gnome.org/pub/gnome/sources/pango/1.40/pango-1.40.3.tar.xz
-
- - The "Gdk-Pixbuf" image loading/saving library
-
-   "Gdk-Pixbuf" used to be part of "Gtk+" itself, but is now separate
-   project. It may be obtained from:
-
-     http://ftp.gnome.org/pub/gnome/sources/gdk-pixbuf/2.36/gdk-pixbuf-2.36.0.tar.xz
-
- - The "Gtk+" widget library.
-
-   The "Gtk+" widget library was designed for the GIMP graphics program.
-   Since then it has gained popularity as an easy to program, free toolkit.
-
-   The "Gtk+" library comes with one companion libraries:
-
-     "Gdk":
-       Provides an abstraction layer over X-Windows/LinuxFB/Win32 to implement
-       basic drawing functions, windows, clipping, etc.
-
-   Freeciv requires a version of "Gtk+" greater or equal to 3.18.0.
-
-   If the Freeciv configure process tells you that you don't have the
-   Gtk+ library installed, then it may be obtained from here:
-
-     http://ftp.gnome.org/pub/gnome/sources/gtk+/3.22/gtk+-3.22.1.tar.xz
-
-   "Gtk+" depends on the "Glib", "Atk", "Gdk-Pixbuf", and "Pango" libraries.
-
-If you are going to make these yourself, build and install them in the
-following order: pkg-config, Glib, Atk, Pango, Gdk-Pixbuf, Gtk+.
-
-1d. Prerequisites for the SDL2 client:
+1c. Prerequisites for the SDL client:
 =====================================
 
- - The "SDL2" library.
+ - The "SDL" library.
 
    "Simple DirectMedia Layer is a cross-platform multimedia library designed
     to provide low level access to audio, keyboard, mouse, joystick, 3D hardware
     via OpenGL, and 2D video framebuffer." (http://www.libsdl.org)
-
+    
    These features make it a good choice for portable games. You may obtain it
    at:
+    
+   http://www.libsdl.org/release/SDL-1.2.11.tar.gz
 
-   http://www.libsdl.org/release/SDL2-2.0.3.tar.gz
-
-   To compile the client using the "SDL2" library add "--enable-client=sdl2"
+   To compile the client using the "SDL" library add "--enable-client=sdl"
    to the Freeciv configure script.  See the section below for more 
    information about the configure script.
-
- - The "SDL2_image" library.
+    
+ - The "SDL_image" library.
  
    This library loads the PNG images (with the help of libpng) and converts
    them to "SDL surfaces" that can be handled by the "SDL" library. You may
    obtain it at:
 
-   http://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.0.tar.gz
+   http://www.libsdl.org/projects/SDL_image/release/SDL_image-1.2.12.tar.gz
 
- - The "SDL2_gfx" library.
-
-   http://www.ferzkopp.net/Software/SDL2_gfx/SDL2_gfx-1.0.1.tar.gz
-
- - The "SDL2_ttf" library.
+ - The "SDL_gfx" library.
 
    http://www.ferzkopp.net/Software/SDL_gfx-2.0/SDL_gfx-2.0.25.tar.gz
 
+ - The "SDL_ttf" library.
+
+   http://www.libsdl.org/projects/SDL_ttf/release/SDL_ttf-2.0.11.tar.gz
+
  - The "freetype" library.
 
-   This library helps to render text for the SDL2 client, using an externally
+   This library helps to render text for the SDL client, using an externally
    provided TrueType font. You may obtain it at:
+   
+   http://download.savannah.gnu.org/releases/freetype/freetype-2.3.2.tar.gz
+   
+ 
+1d. Prerequisites for the Xaw client:
+=====================================
 
-   http://download.savannah.gnu.org/releases/freetype/freetype-2.5.4.tar.bz2
+ - X-Windows.
+
+   The Freeciv Xaw client is an X-Windows program, so you'll need 
+   some way of running X-Windows programs.  (Most Unixes can...)
+
+   If the Freeciv configuration program can't find X Windows on
+   your system, you may need to use the --x-includes=DIR
+   and --x-libraries=DIR options.
+
+ - The "Athena" widget library.
+
+   This library (also known as "Xaw") is usually supplied standard
+   with the rest of X Windows, but some platforms (HP-UX 10 for
+   example) only provide it in a limited form.
+
+   To compile the client using the "Xaw" library add "--enable-client=xaw"
+   to the Freeciv configure script.  See the section below for more 
+   information about the configure script.
+
+   Many modern Unix systems (such as Linux) ship with a variant called
+   "Xaw3d", which has a more modern "3D" look.  If you'd like to try
+   compiling with Xaw3d, then add "--with-xaw3d" to the Freeciv
+   configure script.
+
+   There are also other variants of Xaw, such as Nextaw.  Freeciv
+   does not work with these, although it should be possible to modify
+   it in the same fashion as for Xaw3d.  Another tool which may help
+   is called "xaw_wrappers", although how to use it is beyond the
+   scope of this file.
+
+ - The "Xpm" library.
+
+   This library is essential for icon and bitmap handling.  It is in
+   wide use, and is supplied standard on most modern Unix machines,
+   although it may be missing on traditional or older Unixes, eg,
+   Solaris.
+
+   When you run the Freeciv configure script, it may be necessary for
+   you to use the "--with-xpm-prefix=DIR" command-line option, where
+   DIR is the name of the directory containing the "include" and "lib"
+   subdirectories where Xpm may be found.
+
+   If the Freeciv configure process tells you that you don't have the
+   Xpm library installed, then it may be obtained from here:
+
+     ftp://koala.inria.fr/pub/xpm/xpm-3.4k.tar.gz
+     ftp://ftp.x.org/contrib/libraries/xpm-3.4k.tar.gz
+
+   Install it as you would any other package.  If you can't install
+   it in a standard system directory, then use the --with-xpm-prefix
+   option, as described above.
+
+   If you have problems installing libXpm on Solaris, or don't want to
+   install it as root, see Reinier's libXpm Solaris Installation Notes
+   section near the end of this file.
+
+ - A suitable font.
+
+   To run the Xaw client a suitable font is required. The X fonts should do.
+   If the Xaw client complains about not being able to open a font your X
+   installation probably don't have them. X fonts can be obtained from:
+
+     http://xorg.freedesktop.org/releases/individual/font/
+
+   If you use Debian you can install the package named xfonts-base in stead.
+   After installing a suitable font and restarting X the problem should go
+   away.
 
 1e. Prerequisites for the Qt client:
 ====================================
@@ -421,7 +416,7 @@ script, try the --help option, like this:
 
 By default the configure script will choose the Gtk+ client if the 
 required libraries are found. If you prefer to override this default,
-you can give configure the "--enable-client=sdl2" option.
+you can give configure the "--enable-client=xaw" option.
 
 If you want to change the compiler options, set the CFLAGS environment
 variable in your shell before running "configure".  For example:
@@ -446,6 +441,13 @@ If for some reason using "configure" gives you trouble, follow these steps:
 
   - Read the prerequisites section carefully, to determine if your
     system meets all the requirements.
+
+  - If you are compiling the Xaw version of the client: Ensure that
+    you have both the Xpm and Xaw libraries installed on your system.
+    Make sure that the configure script can find them, either by
+    installing them in the standard places on your system, or by
+    instructing the configure script with the appropriate command-line
+    options.  (See ./configure --help).
 
   - If the problem is with "gettext", please read the Native Language
     Support section, below, for possible work-arounds.
@@ -507,19 +509,24 @@ in the following directories, in order, for any data files: the current
 directory; the "data" subdirectory of the current directory; the 
 subdirectory ".freeciv" in the user's home directory; and the directory
 where the files are placed by running "make install".  You can override
-this search patch by setting the FREECIV_DATA_PATH environment variable, to
+this search patch by setting the FREECIV_PATH environment variable, to
 a single directory or a list of directories separated by colons.
 
 For example:
 
-  % setenv FREECIV_DATA_PATH "/usr/games/freeciv/data:./data"
+  % setenv FREECIV_PATH "/usr/games/freeciv/data:./data"
   (for users of csh, tcsh, etc.)
 
-  % FREECIV_DATA_PATH="/usr/games/freeciv/data:./data"; export FREECIV_DATA_PATH
+  % FREECIV_PATH="/usr/games/freeciv/data:./data"; export FREECIV_PATH
   (for users of sh, bash, ksh, zsh, etc.)
 
 Also, note that you generally must install Freeciv if you wish to use
 its Native Language Support.  See the README file for more information.
+
+Finally, if you've chosen to use the Xaw client and you have permission
+to log in as the 'root' user, you should consider copying the resource
+file data/Freeciv into your app-defaults directory. (Usually this is
+/usr/lib/X11/app-defaults).
 
 
 5. Native Language Support:
@@ -539,7 +546,7 @@ Freeciv, there are a few work-arounds you can try:
 2. You can try to install the latest version of GNU gettext.
    It may be obtained from here:
 
-      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.19.2.tar.xz
+      ftp://ftp.gnu.org/pub/gnu/gettext/gettext-0.16.1.tar.gz
 
 
 6. Readline Support:
@@ -581,13 +588,29 @@ a reminder to the folks who distribute readline. :)
 Solaris (2.5 and up) has its own version of X in /usr/openwin, its own
 version of make in /usr/ccs/bin/make, and its own compiler (to be purchased
 separately) which, if you have it, is available in /opt/SUNWspro/bin.
-Solaris does not provide any of the stuff required for imlib, gdk and gtk,
+Solaris does not provide the XPM library, which is required for the Xaw
+client; it doesn't provide any of the stuff required for imlib, gdk and gtk,
 either, which is required to build the GTK+ client.  However, with some
 patience, everything can be compiled without problems.
+
+For information on how to install XPM on Solaris, see the next section.
+
+Many Solaris installations also have MIT X (usually, in /usr/X11), GNU make,
+the gcc compiler, and the XPM library installed somewhere.  The standard
+command "./configure && make" may not be able to find your XPM library and
+it is likely to confuse the different versions.
 
 Make sure your environment variables, especially $PATH and $LD_LIBRARY_PATH,
 and the ./configure options do not point to an inconsistent set of software,
 and compiling will be fine.
+
+A simple recipe to compile with Sun X, Sun make and Sun cc, assuming the xpm
+libraries are on their own in the nonstandard location /path/to/xpm:
+
+  % setenv PATH /opt/SUNWspro/bin:/usr/ccs/bin:/bin
+  % unsetenv LD_LIBRARY_PATH
+  % ./configure --with-xpm-prefix=/path/to/xpm
+  % make
 
 You can set up your $PATH and ./configure to use only GNU
 tools.  Furthermore, Freeciv is known to compile with MIT X, and with
@@ -678,6 +701,15 @@ To compile freeciv on a debian system you need the following packages:
    libreadline4-dev
    zlib1g-dev
    xlib6g-dev
+
+ For the xaw client:
+   xaw3dg-dev
+   libxpm4-dev
+
+If you want to compile the xaw client you should give configure the
+argument --with-xaw3d, ie
+
+  % ./configure --with-xaw3d
 
 If you need to run aclocal (if you don't know what aclocal is then you
 don't need it) you also need to install imlib-dev to get the

@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996-2005 - Freeciv Development Team
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,12 +15,10 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
 #include <errno.h>
 #include <stdlib.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
@@ -49,6 +47,16 @@
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
 #endif
 
 /* dependencies */
@@ -95,7 +103,7 @@ struct server_scan {
     fc_mutex mutex;
 
     const char *urlpath;
-    struct netfile_write_cb_data mem;
+    FILE *fp; /* temp file */
   } meta;
 };
 
@@ -114,7 +122,6 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   struct section_file *file;
   int nservers, i, j;
   const char *latest_ver;
-  const char *comment;
 
   /* This call closes f. */
   if (!(file = secfile_from_stream(f, TRUE))) {
@@ -122,14 +129,13 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
   }
 
   latest_ver = secfile_lookup_str_default(file, NULL, "versions." FOLLOWTAG);
-  comment = secfile_lookup_str_default(file, NULL, "version_comments." FOLLOWTAG);
 
   if (latest_ver != NULL) {
     const char *my_comparable = fc_comparable_version();
     char vertext[2048];
 
-    log_verbose("Metaserver says latest '" FOLLOWTAG "' version is '%s'; we have '%s'",
-                latest_ver, my_comparable);
+    log_verbose("Metaserver says latest '%s' version is '%s'; we have '%s'",
+                FOLLOWTAG, latest_ver, my_comparable);
     if (cvercmp_greater(latest_ver, my_comparable)) {
       const char *const followtag = "?vertag:" FOLLOWTAG;
       fc_snprintf(vertext, sizeof(vertext),
@@ -138,20 +144,13 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
                    * '?vertag:') */
                   _("Latest %s release of Freeciv is %s, this is %s."),
                   Q_(followtag), latest_ver, my_comparable);
-
-      version_message(vertext);
-    } else if (comment == NULL) {
+    } else {
       fc_snprintf(vertext, sizeof(vertext),
                   _("There is no newer %s release of Freeciv available."),
                   FOLLOWTAG);
-
-      version_message(vertext);
     }
-  }
 
-  if (comment != NULL) {
-    log_verbose("Mesaserver comment about '" FOLLOWTAG "': %s", comment);
-    version_message(comment);
+    version_message(vertext);
   }
 
   server_list = server_list_new();
@@ -192,7 +191,7 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
     }
 
     for (j = 0; j < pserver->nplayers ; j++) {
-      const char *name, *nation, *type, *plrhost;
+      const char *name, *nation, *type, *host;
 
       name = secfile_lookup_str_default(file, "", 
                                         "server%d.player%d.name", i, j);
@@ -202,9 +201,9 @@ static struct server_list *parse_metaserver_data(fz_FILE *f)
                                         "server%d.player%d.type", i, j);
       pserver->players[j].type = fc_strdup(type);
 
-      plrhost = secfile_lookup_str_default(file, "", 
-                                           "server%d.player%d.host", i, j);
-      pserver->players[j].host = fc_strdup(plrhost);
+      host = secfile_lookup_str_default(file, "", 
+                                        "server%d.player%d.host", i, j);
+      pserver->players[j].host = fc_strdup(host);
 
       nation = secfile_lookup_str_default(file, "",
                                           "server%d.player%d.nation", i, j);
@@ -228,7 +227,7 @@ static bool meta_read_response(struct server_scan *scan)
   char str[4096];
   struct server_list *srvrs;
 
-  f = fz_from_memory(scan->meta.mem.mem, scan->meta.mem.size, TRUE);
+  f = fz_from_stream(scan->meta.fp);
   if (NULL == f) {
     fc_snprintf(str, sizeof(str),
                 _("Failed to read the metaserver data from %s."),
@@ -244,8 +243,8 @@ static bool meta_read_response(struct server_scan *scan)
   scan->srvrs.servers = srvrs;
   fc_release_mutex(&scan->srvrs.mutex);
 
-  /* 'f' (hence 'meta.mem.mem') was closed in parse_metaserver_data(). */
-  scan->meta.mem.mem = NULL;
+  /* 'f' (hence 'meta.fp') was closed in parse_metaserver_data(). */
+  scan->meta.fp = NULL;
 
   if (NULL == srvrs) {
     fc_snprintf(str, sizeof(str),
@@ -267,22 +266,45 @@ static void metaserver_scan(void *arg)
 {
   struct server_scan *scan = arg;
 
-  if (!begin_metaserver_scan(scan)) {
-    fc_allocate_mutex(&scan->meta.mutex);
-    scan->meta.status = SCAN_STATUS_ERROR;
-  } else {
-    if (!meta_read_response(scan)) {
-      fc_allocate_mutex(&scan->meta.mutex);
-      scan->meta.status = SCAN_STATUS_ERROR;
-    } else {
-      fc_allocate_mutex(&scan->meta.mutex);
-      if (scan->meta.status == SCAN_STATUS_WAITING) {
-        scan->meta.status = SCAN_STATUS_DONE;
-      }
+  if (!scan->meta.fp) {
+#ifdef WIN32_NATIVE
+    char filename[MAX_PATH];
+
+    GetTempPath(sizeof(filename), filename);
+    cat_snprintf(filename, sizeof(filename), "fctmp%d", fc_rand(1000));
+
+    scan->meta.fp = fc_fopen(filename, "w+b");
+#else
+    scan->meta.fp = tmpfile();
+#endif /* WIN32_NATIVE */
+
+    if (!scan->meta.fp) {
+      scan->error_func(scan, _("Could not open temp file."));
     }
   }
 
-  fc_release_mutex(&scan->meta.mutex);
+  if (scan->meta.fp) {
+
+    if (!begin_metaserver_scan(scan)) {
+      fc_allocate_mutex(&scan->meta.mutex);
+      scan->meta.status = SCAN_STATUS_ERROR;
+    } else {
+
+      rewind(scan->meta.fp);
+
+      if (!meta_read_response(scan)) {
+        fc_allocate_mutex(&scan->meta.mutex);
+        scan->meta.status = SCAN_STATUS_ERROR;
+      } else {
+        fc_allocate_mutex(&scan->meta.mutex);
+        if (scan->meta.status == SCAN_STATUS_WAITING) {
+          scan->meta.status = SCAN_STATUS_DONE;
+        }
+      }
+    }
+
+    fc_release_mutex(&scan->meta.mutex);
+  }
 }
 
 /****************************************************************************
@@ -299,7 +321,7 @@ static bool begin_metaserver_scan(struct server_scan *scan)
   post = netfile_start_post();
   netfile_add_form_str(post, "client_cap", our_capability);
 
-  if (!netfile_send_post(metaserver, post, NULL, &scan->meta.mem, NULL)) {
+  if (!netfile_send_post(metaserver, post, scan->meta.fp, NULL)) {
     scan->error_func(scan, _("Error connecting to metaserver"));
     retval = FALSE;
   }
@@ -353,13 +375,13 @@ static void delete_server_list(struct server_list *server_list)
 static bool begin_lanserver_scan(struct server_scan *scan)
 {
   union fc_sockaddr addr;
-  struct raw_data_out dout;
+  struct data_out dout;
   int send_sock, opt = 1;
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   unsigned char buffer[MAX_LEN_PACKET];
-#else  /* FREECIV_HAVE_WINSOCK */
+#else  /* HAVE_WINSOCK */
   char buffer[MAX_LEN_PACKET];
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 #ifdef HAVE_IP_MREQN
   struct ip_mreqn mreq4;
 #else
@@ -369,11 +391,11 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   size_t size;
   int family;
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   struct ipv6_mreq mreq6;
 #endif
 
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   unsigned char ttl;
 #endif
 
@@ -382,7 +404,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     return TRUE;
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (announce == ANNOUNCE_IPV6) {
     family = AF_INET6;
   } else
@@ -415,7 +437,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
   memset(&addr, 0, sizeof(addr));
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (family == AF_INET6) {
     addr.saddr.sa_family = AF_INET6;
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT + 1);
@@ -446,7 +468,14 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     return FALSE;
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
+  {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &mreq4.imr_multiaddr);
+#else  /* HAVE_INET_ATON */
+    mreq4.imr_multiaddr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (family == AF_INET6) {
     inet_pton(AF_INET6, group, &mreq6.ipv6mr_multiaddr.s6_addr);
     mreq6.ipv6mr_interface = 0; /* TODO: Interface selection */
@@ -460,15 +489,14 @@ static bool begin_lanserver_scan(struct server_scan *scan)
                 fc_strerror(fc_get_errno()));
       scan->error_func(scan, errstr);
     }
-  } else
+  } else {
+    inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
 #endif /* IPv6 support */
-  {
-    fc_inet_aton(group, &mreq4.imr_multiaddr, FALSE);
 #ifdef HAVE_IP_MREQN
     mreq4.imr_address.s_addr = htonl(INADDR_ANY);
     mreq4.imr_ifindex = 0;
 #else
-     mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
+    mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
 #endif
 
     if (setsockopt(scan->sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
@@ -491,16 +519,22 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
 
   memset(&addr, 0, sizeof(addr));
-
-#ifdef FREECIV_IPV6_SUPPORT
+  
+#ifndef IPV6_SUPPORT
+  if (family == AF_INET) {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &addr.saddr_in4.sin_addr);
+#else  /* HAVE_INET_ATON */
+    addr.saddr_in4.sin_addr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (family == AF_INET6) {
     addr.saddr.sa_family = AF_INET6;
     inet_pton(AF_INET6, group, &addr.saddr_in6.sin6_addr);
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
-  } else
-#endif /* IPv6 Support */
-  if (family == AF_INET) {
-    fc_inet_aton(group, &addr.saddr_in4.sin_addr, FALSE);
+  } else if (family == AF_INET) {
+    inet_pton(AF_INET, group, &addr.saddr_in4.sin_addr);
+#endif /* IPv6 support */
     addr.saddr.sa_family = AF_INET;
     addr.saddr_in4.sin_port = htons(SERVER_LAN_PORT);
   } else {
@@ -513,7 +547,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
  * value of 1 on Windows, which should be fine in most cases */
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   /* Set the Time-to-Live field for the packet  */
   ttl = SERVER_LAN_TTL;
   if (setsockopt(send_sock, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl, 
@@ -521,7 +555,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
     log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return FALSE;
   }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   if (setsockopt(send_sock, SOL_SOCKET, SO_BROADCAST, (const char*)&opt, 
                  sizeof(opt))) {
@@ -530,7 +564,7 @@ static bool begin_lanserver_scan(struct server_scan *scan)
   }
 
   dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8_raw(&dout, SERVER_LAN_VERSION);
+  dio_put_uint8(&dout, SERVER_LAN_VERSION);
   size = dio_output_used(&dout);
  
 
@@ -590,22 +624,22 @@ get_lan_server_list(struct server_scan *scan)
       break;
     }
 
-    dio_get_uint8_raw(&din, &type);
+    dio_get_uint8(&din, &type);
     if (type != SERVER_LAN_VERSION) {
       continue;
     }
-    dio_get_string_raw(&din, servername, sizeof(servername));
-    dio_get_string_raw(&din, portstr, sizeof(portstr));
+    dio_get_string(&din, servername, sizeof(servername));
+    dio_get_string(&din, portstr, sizeof(portstr));
     port = atoi(portstr);
-    dio_get_string_raw(&din, version, sizeof(version));
-    dio_get_string_raw(&din, status, sizeof(status));
-    dio_get_string_raw(&din, players, sizeof(players));
-    dio_get_string_raw(&din, humans, sizeof(humans));
-    dio_get_string_raw(&din, message, sizeof(message));
+    dio_get_string(&din, version, sizeof(version));
+    dio_get_string(&din, status, sizeof(status));
+    dio_get_string(&din, players, sizeof(players));
+    dio_get_string(&din, humans, sizeof(humans));
+    dio_get_string(&din, message, sizeof(message));
 
     if (!fc_strcasecmp("none", servername)) {
       bool nameinfo = FALSE;
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
       char dst[INET6_ADDRSTRLEN];
       char host[NI_MAXHOST], service[NI_MAXSERV];
 
@@ -817,7 +851,7 @@ void server_scan_finish(struct server_scan *scan)
   }
 
   if (scan->type == SERVER_SCAN_GLOBAL) {
-    /* Signal metaserver scan thread to stop */
+    /* Signal metserver scan thread to stop */
     fc_allocate_mutex(&scan->meta.mutex);
     scan->meta.status = SCAN_STATUS_ABORT;
     fc_release_mutex(&scan->meta.mutex);
@@ -841,9 +875,9 @@ void server_scan_finish(struct server_scan *scan)
       fc_release_mutex(&scan->srvrs.mutex);
     }
 
-    if (scan->meta.mem.mem) {
-      FC_FREE(scan->meta.mem.mem);
-      scan->meta.mem.mem = NULL;
+    if (scan->meta.fp) {
+      fclose(scan->meta.fp);
+      scan->meta.fp = NULL;
     }
   } else {
     if (scan->sock >= 0) {

@@ -14,17 +14,7 @@ if AI_MOD_STATIC_THREADED
 module_dirs += threaded
 endif
 
-if AI_MOD_STATIC_THREXPR
-module_dirs += threxpr
-endif
-
-if AI_MOD_STATIC_STUB
-module_dirs += stub
-endif
-
-AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common \
- -I$(top_srcdir)/common/networking \
- -I$(top_srcdir)/dependencies/tinycthread
+AM_CPPFLAGS = -I$(top_srcdir)/utility -I$(top_srcdir)/common
 
 if AI_MODULES
 if !AI_MOD_STATIC_CLASSIC
@@ -34,12 +24,7 @@ if EXP_AI_MODULES
 if !AI_MOD_STATIC_THREADED
 module_dirs += threaded
 endif
-if !AI_MOD_STATIC_THREXPR
-module_dirs += threxpr
-endif
-if !AI_MOD_STATIC_STUB
 module_dirs += stub
-endif
 else
 # AI module loading supported, but experimental modules not built
 endif
@@ -51,8 +36,5 @@ noinst_LTLIBRARIES = libaicommon.la
 
 libaicommon_la_SOURCES = \
 	aitraits.c	\
-	aitraits.h	\
-	difficulty.c	\
-	difficulty.h	\
-	handicaps.c	\
-	handicaps.h
+	aitraits.h
+

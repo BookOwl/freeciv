@@ -13,11 +13,9 @@
 
 /*****************************************************************************
   ADVERTISEMENT: do not attempt to change the name of the API functions.
-  They may be in use in Lua scripts in savefiles, so once released, the
-  name and signature cannot change shape even in new major versions of
-  Freeciv, until the relevant save format version can no longer be loaded.
-  If you really like to change a function name, be sure to keep also the
-  old one running.
+  They *must* be compatible between the minor Freeciv versions within the
+  same major version. If you really like to change a function name, be sure
+  to keep also the old one running.
 *****************************************************************************/
 
 $#ifdef HAVE_CONFIG_H
@@ -35,7 +33,6 @@ $#include "console.h"
 $#include "api_server_edit.h"
 $#include "api_server_base.h"
 $#include "api_server_notify.h"
-$#include "api_server_game_methods.h"
 $#include "script_server.h"
 
 /* Server module. */
@@ -46,8 +43,6 @@ module server {
     @ started (lua_State *L);
   int api_server_player_civilization_score
     @ civilization_score (lua_State *L, Player *pplayer);
-  bool api_play_music
-    @ play_music (lua_State *L, Player *pplayer, const char *tag);
 
   module setting {
     const char *api_server_setting_get
@@ -60,12 +55,6 @@ module notify {
   void api_notify_embassies_msg
     @ embassies_msg (lua_State *L, Player *pplayer, Tile *ptile, int event,
                      const char *message);
-  void api_notify_research_msg
-    @ research_msg (lua_State *L, Player *pplayer, bool include_plr,
-                    int event, const char *message);
-  void api_notify_research_embassies_msg
-    @ research_embassies_msg (lua_State *L, Player *pplayer, int event,
-                              const char *message);
   void api_notify_event_msg
     @ event_msg (lua_State *L, Player *pplayer, Tile *ptile, int event,
                  const char *message);
@@ -93,16 +82,6 @@ function notify.embassies(player, ptile, event, ...)
   local arg = table.pack(...);
   notify.embassies_msg(player, ptile, event, string.format(table.unpack(arg)))
 end
-
-function notify.research(player, selfmsg, event, ...)
-  local arg = table.pack(...);
-  notify.research_msg(player, selfmsg, event, string.format(table.unpack(arg))) 
-end
-
-function notify.research_embassies(player, event, ...)
-  local arg = table.pack(...);
-  notify.research_embassies_msg(player, event, string.format(table.unpack(arg))) 
-end
 $]
 
 /* Edit module. */
@@ -117,26 +96,14 @@ module edit {
                         int moves_left, int hp_left, Unit *ptransport);
   bool api_edit_unit_teleport
     @ unit_teleport(lua_State *L, Unit *self, Tile *dest);
-  void api_edit_unit_kill
-    @ unit_kill(lua_State *L, Unit *self, const char *reason,
-                Player *killer);
   void api_edit_create_city
     @ create_city (lua_State *L, Player *pplayer, Tile *ptile,
                    const char *name);
-  void api_edit_create_owned_extra
-    @ create_owned_extra (lua_State *L, Tile *ptile,
-                          const char *name, Player *pplayer);
-  void api_edit_create_extra
-    @ create_extra (lua_State *L, Tile *ptile, const char *name);
-  /* Deprecated; use edit.create_owned_extra() */
   void api_edit_create_base
     @ create_base (lua_State *L, Tile *ptile, const char *name,
                    Player *pplayer);
-  /* Deprecated; use edit.create_extra() */
   void api_edit_create_road
     @ create_road (lua_State *L, Tile *ptile, const char *name);
-  void api_edit_remove_extra
-    @ remove_extra (lua_State *L, Tile *ptile, const char *name);
   void api_edit_tile_set_label
     @ tile_set_label (lua_State *L, Tile *ptile, const char *label);
   Player *api_edit_create_player
@@ -144,16 +111,11 @@ module edit {
                     const char *ai);
   void api_edit_change_gold
     @ change_gold (lua_State *L, Player *pplayer, int amount);
-  /* cost:
-   *     0 or above - The exact cost % to apply
-   *    -1          - Apply freecost
-   *    -2          - Apply conquercost
-   *    -3          - Apply diplbulbcost */
   Tech_Type *api_edit_give_technology
-    @ give_tech (lua_State *L, Player *pplayer, Tech_Type *ptech,
-                 int cost, bool notify, const char *reason);
-  bool api_edit_trait_mod_set
-    @ trait_mod (lua_State *L, Player *pplayer, const char *tname,
+    @ give_technology (lua_State *L, Player *pplayer, Tech_Type *ptech,
+                       const char *reason);
+  bool api_edit_trait_mod
+    @ trait_mod (lua_State *L, Player *pplayer, const char *trait_name,
                  const int mod);
   bool api_edit_unleash_barbarians
     @ unleash_barbarians (lua_State *L, Tile *ptile);
@@ -175,88 +137,50 @@ module edit {
     @ player_victory (lua_State *L, Player *self);
   bool api_edit_unit_move
     @ unit_move(lua_State *L, Unit *self, Tile *moveto, int movecost);
-
-  void api_edit_city_add_history
-    @ add_city_history(lua_State *L, City *self, int amount);
-  void api_edit_player_add_history
-    @ add_player_history(lua_State *L, Player *self, int amount);
 }
 
 $[
--- Compatibility functions
--- These top-level functions were exposed prior to Freeciv 2.4. Since then
--- we prefer use of edit.*. Do not add new functions to this section.
+-- Compatibility functions (function names prior to freeciv 2.4)
 function create_unit(player, tile, utype, veteran_level, homecity, moves_left)
-  log.deprecation_warning("create_unit()", "edit.create_unit()",
-                          "2.4");
   return edit.create_unit(player, tile, utype, veteran_level, homecity,
                           moves_left)
 end
 
 function create_unit_full(player, tile, utype, veteran_level, homecity,
                           moves_left, hp_left, transport)
-  log.deprecation_warning("create_unit_full()", "edit.create_unit_full()",
-                          "2.4");
   return edit.create_unit_full(player, tile, utype, veteran_level, homecity,
                                moves_left, hp_left, transport)
 end
 
 function create_city(player, tile, name)
-  log.deprecation_warning("create_city()", "edit.create_city()",
-                          "2.4");
   edit.create_city (player, tile, name)
 end
 
--- Deprecated; use edit.create_owned_extra()
 function create_base(tile, name, player)
-  -- Out-of-namespace since 2.4
-  -- edit.create_base() -> edit.create_owned_extra() since 3.0
-  log.deprecation_warning("create_base()", "edit.create_owned_extra()",
-                          "2.4");
   edit.create_base(tile, name, player)
 end
 
 function create_player(username, nation)
-  log.deprecation_warning("create_player()", "edit.create_player()",
-                          "2.4");
   return edit.create_player(username, nation, nil)
 end
 
 function change_gold(pplayer, amount)
-  log.deprecation_warning("change_gold()", "edit.change_gold()",
-                          "2.4");
   edit.change_gold(pplayer, amount)
 end
 
--- Deprecated; use edit.give_tech()
 function give_technology(player, tech, reason)
-  log.deprecation_warning("give_technology()", "edit.give_tech()",
-                          "2.4");
-  return edit.give_tech(player, tech, -1, false, reason)
-end
-
--- Deprecated; use edit.give_tech()
-function edit.give_technology(player, tech, reason)
-  log.deprecation_warning("edit.give_technology()", "edit.give_tech()",
-                          "2.6");
-  return edit.give_tech(player, tech, -1, false, reason)
+  return edit.give_technology(player, tech, reason)
 end
 
 function trait_mod(player, trait, mod)
-  log.deprecation_warning("trait_mod()", "edit.trait_mod()",
-                          "2.4");
   return edit.trait_mod(player, trait, mod)
 end
 
 function unleash_barbarians(tile)
-  log.deprecation_warning("unleash_barbarians()", "edit.unleash_barbarians()",
-                          "2.4");
   return edit.unleash_barbarians(tile)
 end
 
 function place_partisans(tile, player, count, sq_radius)
-  log.deprecation_warning("place_partisans()", "edit.place_partisans()",
-                          "2.4");
   edit.place_partisans(tile, player, count, sq_radius)
 end
 
@@ -284,15 +208,8 @@ function Player:change_gold(amount)
   edit.change_gold(self, amount)
 end
 
-function Player:give_tech(tech, cost, notify, reason)
-  return edit.give_tech(self, tech, cost, notify, reason)
-end
-
--- Deprecated; use Player:give_tech()
 function Player:give_technology(tech, reason)
-  log.deprecation_warning("Player:give_technology()", "Player:give_tech()",
-                          "2.6");
-  return edit.give_tech(self, tech, -1, false, reason)
+  return edit.give_technology(self, tech, reason)
 end
 
 function Player:trait_mod(trait, mod)
@@ -307,15 +224,6 @@ function Player:victory()
   edit.player_victory(self)
 end
 
-function Player:add_history(amount)
-  edit.add_player_history(self, amount)
-end
-
--- Server functions for City module
-function City:add_history(amount)
-  edit.add_city_history(self, amount)
-end
-
 -- Server functions for Unit module
 function Unit:teleport(dest)
   return edit.unit_teleport(self, dest)
@@ -325,39 +233,17 @@ function Unit:turn(direction)
   edit.unit_turn(self, direction)
 end
 
-function Unit:kill(reason, killer)
-  edit.unit_kill(self, reason, killer)
-end
-
 function Unit:move(moveto, movecost)
   return edit.unit_move(self, moveto, movecost)
 end
 
 -- Server functions for Tile module
-function Tile:create_owned_extra(name, player)
-  edit.create_owned_extra(self, name, player)
-end
-
-function Tile:create_extra(name)
-  edit.create_extra(self, name)
-end
-
--- Deprecated; use Tile:create_extra()
 function Tile:create_base(name, player)
-  log.deprecation_warning("Tile:create_base()", "Tile:create_owned_extra()",
-                          "3.0");
   edit.create_base(self, name, player)
 end
 
--- Deprecated; use Tile:create_extra()
 function Tile:create_road(name)
-  log.deprecation_warning("Tile:create_road()", "Tile:create_extra()",
-                          "2.6");
   edit.create_road(self, name)
-end
-
-function Tile:remove_extra(name)
-  edit.remove_extra(self, name)
 end
 
 function Tile:unleash_barbarians()
@@ -373,24 +259,3 @@ function Tile:set_label(label)
 end
 
 $]
-
-/* Additions to common Player module. */
-module Player {
-  int api_methods_player_trait
-    @ trait (lua_State *L, Player *pplayer, const char *tname);
-  int api_methods_player_trait_base
-    @ trait_base (lua_State *L, Player *pplayer, const char *tname);
-  int api_methods_player_trait_current_mod
-    @ trait_current_mod (lua_State *L, Player *pplayer, const char *tname);
-}
-
-/* Additions to common Nation_Type module. */
-module Nation_Type {
-  int api_methods_nation_trait_min
-    @ trait_min (lua_State *L, Nation_Type *pnation, const char *tname);
-  int api_methods_nation_trait_max
-    @ trait_max (lua_State *L, Nation_Type *pnation, const char *tname);
-  int api_methods_nation_trait_default
-    @ trait_default (lua_State *L, Nation_Type *pnation,
-                     const char *tname);
-}

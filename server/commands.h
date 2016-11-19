@@ -61,15 +61,12 @@ enum command_id {
   CMD_DETACH,
   CMD_CREATE,
   CMD_AWAY,
-  CMD_HANDICAPPED,
   CMD_NOVICE,
   CMD_EASY,
   CMD_NORMAL,
   CMD_HARD,
   CMD_CHEATING,
-#ifdef FREECIV_DEBUG
   CMD_EXPERIMENTAL,
-#endif
   CMD_CMDLEVEL,
   CMD_FIRSTLEVEL,
   CMD_TIMEOUT,
@@ -83,16 +80,16 @@ enum command_id {
   CMD_SURRENDER, /* not really harmful, info level */
   CMD_REMOVE,
   CMD_SAVE,
+#ifdef DEBUG
   CMD_SCENSAVE,
+#endif
   CMD_LOAD,
   CMD_READ_SCRIPT,
   CMD_WRITE_SCRIPT,
   CMD_RESET,
-  CMD_DEFAULT,
   CMD_LUA,
   CMD_KICK,
   CMD_DELEGATE,
-  CMD_AICMD,
   CMD_FCDB,
   CMD_MAPIMG,
 

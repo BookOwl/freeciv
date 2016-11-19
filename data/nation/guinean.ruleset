@@ -3,8 +3,11 @@
 name=_("Guinean")
 plural=_("?plural:Guinean")
 groups="African", "Modern"
+; /* TRANS: The second letter in "Sekou" and last in "Toure" should be */
+; /* TRANS: U+00E9 LATIN SMALL LETTER E WITH ACUTE if available in */
+; /* TRANS: your charset. In ISO-8859-1 (ISO Latin 1) this is 00E9. */
 legend=_("Guinea declared independence from France in 1958. Its first\
- president Ahmed Sékou Touré continued to rule the country until his death\
+ president Ahmed Sekou Toure continued to rule the country until his death\
  in 1984. Guinea is not to be confused with neighboring Guinea-Bissau.")
 leaders = {
  "name",                   "sex"
@@ -19,7 +22,7 @@ ruler_titles = { "government",     "male_title",         "female_title"
 	       }
 flag="guinea"
 flag_alt = "-"
-style = "tropical"
+city_style = "tropical"
 
 init_techs=""
 init_buildings=""

@@ -26,19 +26,22 @@
 #include "graphics.h"
 
 static struct sprite *intro_gfx_sprite = NULL;
+static struct sprite *radar_gfx_sprite = NULL;
 
 /****************************************************************************
-  Return whether the client supports given view type.
+  Return whether the client supports isometric view (isometric tilesets).
 ****************************************************************************/
-bool qtg_is_view_supported(enum ts_type type)
+bool qtg_isometric_view_supported()
 {
-  switch (type) {
-  case TS_ISOMETRIC:
-  case TS_OVERHEAD:
-    return true;
-  }
+  return true;
+}
 
-  return false;
+/****************************************************************************
+  Return whether the client supports "overhead" (non-isometric) view.
+****************************************************************************/
+bool qtg_overhead_view_supported()
+{
+  return true;
 }
 
 /****************************************************************************
@@ -49,5 +52,9 @@ void qtg_free_intro_radar_sprites()
   if (intro_gfx_sprite) {
     free_sprite(intro_gfx_sprite);
     intro_gfx_sprite = NULL;
+  }
+  if (radar_gfx_sprite) {
+    free_sprite(radar_gfx_sprite);
+    radar_gfx_sprite = NULL;
   }
 }

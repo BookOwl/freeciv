@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -77,9 +77,7 @@ struct unit_type *find_a_unit_type(enum unit_role_id role,
 bool maybe_make_veteran(struct unit *punit);
 void notify_unit_experience(struct unit *punit);
 void unit_versus_unit(struct unit *attacker, struct unit *defender,
-                      int *att_hp, int *def_hp);
-void unit_bombs_unit(struct unit *attacker, struct unit *defender,
-                     int *att_hp, int *def_hp);
+                      bool bombard, int *att_hp, int *def_hp);
 void combat_veterans(struct unit *attacker, struct unit *defender);
 
 /* move check related */
@@ -111,10 +109,9 @@ int get_unit_vision_at(struct unit *punit, struct tile *ptile,
 void unit_refresh_vision(struct unit *punit);
 void unit_list_refresh_vision(struct unit_list *punitlist);
 void bounce_unit(struct unit *punit, bool verbose);
-bool unit_activity_needs_target_from_client(enum unit_activity activity);
 void unit_assign_specific_activity_target(struct unit *punit,
                                           enum unit_activity *activity,
-                                          struct extra_type **target);
+                                          struct act_tgt *target);
 void unit_forget_last_activity(struct unit *punit);
 
 /* creation/deletion/upgrading */
@@ -135,15 +132,12 @@ struct unit *unit_change_owner(struct unit *punit, struct player *pplayer,
                                int homecity, enum unit_loss_reason reason)
                                fc__warn_unused_result;
 
-void unit_set_removal_callback(struct unit *punit,
-                               void (*callback)(struct unit *punit));
-void unit_unset_removal_callback(struct unit *punit);
-
 /* sending to client */
 void package_unit(struct unit *punit, struct packet_unit_info *packet);
 void package_short_unit(struct unit *punit,
 			struct packet_unit_short_info *packet,
-                        enum unit_info_use packet_use, int info_city_id);
+			enum unit_info_use packet_use, int info_city_id,
+			bool new_serial_num);
 void send_unit_info(struct conn_list *dest, struct unit *punit);
 void send_all_known_units(struct conn_list *dest);
 void unit_goes_out_of_sight(struct player *pplayer, struct unit *punit);
@@ -155,17 +149,10 @@ void do_explore(struct unit *punit);
 bool do_paradrop(struct unit *punit, struct tile *ptile);
 void unit_transport_load_send(struct unit *punit, struct unit *ptrans);
 void unit_transport_unload_send(struct unit *punit);
-bool unit_move(struct unit *punit, struct tile *ptile, int move_cost,
-               struct unit *embark_to, bool conquer_city_allowed);
-bool execute_orders(struct unit *punit, const bool fresh);
+bool unit_move(struct unit *punit, struct tile *ptile, int move_cost);
+bool execute_orders(struct unit *punit);
 
 bool unit_can_do_action_now(const struct unit *punit);
 void unit_did_action(struct unit *punit);
-
-bool unit_can_be_retired(struct unit *punit);
-
-void unit_activities_cancel_all_illegal(const struct tile *ptile);
-
-void unit_get_goods(struct unit *punit);
 
 #endif  /* FC__UNITTOOLS_H */

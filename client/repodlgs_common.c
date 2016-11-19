@@ -127,7 +127,7 @@ void get_economy_report_units_data(struct unit_entry *entries,
 
     city_list_iterate(client.conn.playing->cities, pcity) {
       unit_list_iterate(pcity->units_supported, punit) {
-	if (unit_type_get(punit) == unittype) {
+	if (unit_type(punit) == unittype) {
 	  count++;
 	  partial_cost += punit->upkeep[O_GOLD];
 	}
@@ -208,7 +208,7 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
     return;
   }
 
-  if (!utype_can_do_action(punittype, ACTION_DISBAND_UNIT)) {
+  if (utype_has_flag(punittype, UTYF_UNDISBANDABLE)) {
     fc_snprintf(message, message_sz, _("%s cannot be disbanded."),
                 utype_name_translation(punittype));
     return;
@@ -220,7 +220,7 @@ void disband_all_units(struct unit_type *punittype, bool in_cities_only,
     unit_list_iterate(pcity->units_supported, punit) {
       struct city *incity = tile_city(unit_tile(punit));
 
-      if (unit_type_get(punit) == punittype
+      if (unit_type(punit) == punittype
 	  && (!in_cities_only
 	      || (incity && city_owner(incity) == client.conn.playing))) {
 	count++;

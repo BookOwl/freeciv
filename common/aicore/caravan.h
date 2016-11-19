@@ -25,14 +25,6 @@ extern "C" {
 /* common */
 #include "fc_types.h"
 
-enum foreign_trade_limit
-{
-  FTL_NATIONAL_ONLY,
-  FTL_ALLIED,
-  FTL_PEACEFUL,
-  FTL_NONWAR
-};
-
 
 /**
  * An advisor for using caravans optimally.
@@ -96,7 +88,7 @@ struct caravan_parameter {
      * Allow trading with allies and peaceful neighbours.
      * BUG: currently we only consider allies.
      */
-    enum foreign_trade_limit allow_foreign_trade;
+    bool allow_foreign_trade;
 
     /*
      * Normally, we'd want to compute the time it takes to establish the
@@ -145,18 +137,18 @@ int caravan_result_compare(const struct caravan_result *a,
 
 void caravan_evaluate(const struct unit *caravan, const struct city *dest,
                       const struct caravan_parameter *parameter,
-                      struct caravan_result *result, bool omniscient);
+                      struct caravan_result *result);
 
 void caravan_find_best_destination(const struct unit *caravan,
                                    const struct caravan_parameter *parameter,
-                                   struct caravan_result *result, bool omniscient);
+                                   struct caravan_result *result);
 
 void caravan_optimize_allpairs(const struct unit *caravan,
                                const struct caravan_parameter *parameter,
-                               struct caravan_result *result, bool omniscient);
+                               struct caravan_result *result);
 
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
-
+  
 #endif /* FC__CARAVAN_H */

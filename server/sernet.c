@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -15,15 +15,13 @@
 #include <fc_config.h>
 #endif
 
-#include "fc_prehdrs.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
@@ -41,7 +39,7 @@
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
 #include <readline/history.h>
 #include <readline/readline.h>
 #endif
@@ -56,6 +54,16 @@
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
 #endif
 
 /* utility */
@@ -75,14 +83,12 @@
 #include "game.h"
 #include "packets.h"
 
-/* server/scripting */
-#include "script_server.h"
-
 /* server */
 #include "aiiface.h"
 #include "auth.h"
 #include "connecthand.h"
 #include "console.h"
+#include "ggzserver.h"
 #include "meta.h"
 #include "plrhand.h"
 #include "srv_main.h"
@@ -124,7 +130,7 @@ static int socklan;
 
 static int server_accept_connection(int sockfd);
 static void start_processing_request(struct connection *pconn,
-                                     int request_id);
+				     int request_id);
 static void finish_processing_request(struct connection *pconn);
 static void connection_ping(struct connection *pconn);
 static void send_ping_times_to_all(void);
@@ -136,28 +142,28 @@ static bool no_input = FALSE;
 
 /* Avoid compiler warning about defined, but unused function
  * by defining it only when needed */
-#if defined(FREECIV_HAVE_LIBREADLINE) || \
-    (!defined(FREECIV_SOCKET_ZERO_NOT_STDIN) && !defined(FREECIV_HAVE_LIBREADLINE))
+#if defined(HAVE_LIBREADLINE) || \
+    (!defined(SOCKET_ZERO_ISNT_STDIN) && !defined(HAVE_LIBREADLINE))  
 /*****************************************************************************
   This happens if you type an EOF character with nothing on the current line.
 *****************************************************************************/
 static void handle_stdin_close(void)
 {
-  /* Note this function may be called even if FREECIV_SOCKET_ZERO_NOT_STDIN, so
+  /* Note this function may be called even if SOCKET_ZERO_ISNT_STDIN, so
    * the preprocessor check has to come inside the function body.  But
-   * perhaps we want to do this even when FREECIV_SOCKET_ZERO_NOT_STDIN? */
-#ifndef FREECIV_SOCKET_ZERO_NOT_STDIN
+   * perhaps we want to do this even when SOCKET_ZERO_ISNT_STDIN? */
+#ifndef SOCKET_ZERO_ISNT_STDIN
   log_normal(_("Server cannot read standard input. Ignoring input."));
   no_input = TRUE;
-#endif /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#endif /* SOCKET_ZERO_ISNT_STDIN */
 }
 
-#endif /* FREECIV_HAVE_LIBREADLINE || (!FREECIV_SOCKET_ZERO_NOT_STDIN && !FREECIV_HAVE_LIBREADLINE) */
+#endif /* HAVE_LIBREADLINE || (!SOCKET_ZERO_ISNT_STDIN && !HAVE_LIBREADLINE) */
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
 /****************************************************************************/
 
-#define HISTORY_FILENAME  "freeciv-server_history"
+#define HISTORY_FILENAME  ".freeciv-server_history"
 #define HISTORY_LENGTH    100
 
 static char *history_file = NULL;
@@ -192,7 +198,7 @@ static void handle_readline_input_callback(char *line)
 
   readline_handled_input = TRUE;
 }
-#endif /* FREECIV_HAVE_LIBREADLINE */
+#endif /* HAVE_LIBREADLINE */
 
 /****************************************************************************
   Close the connection (very low-level). See also
@@ -213,7 +219,6 @@ static void close_connection(struct connection *pconn)
   pconn->server.ignore_list = NULL;
 
   /* safe to do these even if not in lists: */
-  conn_list_remove(game.glob_observers, pconn);
   conn_list_remove(game.all_connections, pconn);
   conn_list_remove(game.est_connections, pconn);
 
@@ -231,18 +236,16 @@ static void close_connection(struct connection *pconn)
 void close_connections_and_socket(void)
 {
   int i;
-
   lsend_packet_server_shutdown(game.all_connections);
 
-  for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
-    if (connections[i].used) {
+  for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
+    if(connections[i].used) {
       close_connection(&connections[i]);
     }
     conn_list_destroy(connections[i].self);
   }
 
   /* Remove the game connection lists and make sure they are empty. */
-  conn_list_destroy(game.glob_observers);
   conn_list_destroy(game.all_connections);
   conn_list_destroy(game.est_connections);
 
@@ -255,7 +258,7 @@ void close_connections_and_socket(void)
     fc_closesocket(socklan);
   }
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
   if (history_file) {
     write_history(history_file);
     history_truncate_file(history_file, HISTORY_LENGTH);
@@ -263,12 +266,11 @@ void close_connections_and_socket(void)
     history_file = NULL;
     clear_history();
   }
-#endif /* FREECIV_HAVE_LIBREADLINE */
+#endif
 
   send_server_info_to_metaserver(META_GOODBYE);
   server_close_meta();
 
-  packets_deinit();
   fc_shutdown_network();
 }
 
@@ -291,7 +293,6 @@ static void really_close_connections(void)
         closing[num++] = pconn;
         /* Remove closing connections from the lists (hard detach)
          * to avoid sending to closing connections. */
-        conn_list_remove(game.glob_observers, pconn);
         conn_list_remove(game.est_connections, pconn);
         conn_list_remove(game.all_connections, pconn);
         if (NULL != conn_get_player(pconn)) {
@@ -358,7 +359,7 @@ void flush_packets(void)
 
   (void) time(&start);
 
-  for (;;) {
+  for(;;) {
     tv.tv_sec = (game.server.netwait - (time(NULL) - start));
     tv.tv_usec = 0;
 
@@ -376,9 +377,9 @@ void flush_packets(void)
       if (pconn->used
           && !pconn->server.is_closing
           && 0 < pconn->send_buffer->ndata) {
-        FD_SET(pconn->sock, &writefs);
-        FD_SET(pconn->sock, &exceptfs);
-        max_desc = MAX(pconn->sock, max_desc);
+	FD_SET(pconn->sock, &writefs);
+	FD_SET(pconn->sock, &exceptfs);
+	max_desc = MAX(pconn->sock, max_desc);
       }
     }
 
@@ -399,13 +400,13 @@ void flush_packets(void)
                       conn_description(pconn));
           connection_close_server(pconn, _("network exception"));
         } else {
-          if (pconn->send_buffer && pconn->send_buffer->ndata > 0) {
-            if (FD_ISSET(pconn->sock, &writefs)) {
-              flush_connection_send_buffer_all(pconn);
-            } else {
-              cut_lagging_connection(pconn);
-            }
-          }
+	  if(pconn->send_buffer && pconn->send_buffer->ndata > 0) {
+	    if(FD_ISSET(pconn->sock, &writefs)) {
+	      flush_connection_send_buffer_all(pconn);
+	    } else {
+	      cut_lagging_connection(pconn);
+	    }
+	  }
         }
       }
     }
@@ -498,37 +499,27 @@ enum server_events server_sniff_all_input(void)
   bool excepting;
   fd_set readfs, writefs, exceptfs;
   fc_timeval tv;
-#ifdef FREECIV_SOCKET_ZERO_NOT_STDIN
-  char *bufptr;
+#ifdef SOCKET_ZERO_ISNT_STDIN
+  char *bufptr;    
 #endif
 
   con_prompt_init();
 
-#ifdef FREECIV_HAVE_LIBREADLINE
+#ifdef HAVE_LIBREADLINE
   {
     if (!no_input && !readline_initialized) {
-      char *storage_dir = freeciv_storage_dir();
+      char *home_dir = user_home_dir();
 
-      if (storage_dir != NULL) {
-        int fcdl = strlen(storage_dir) + 1;
-        char *fc_dir = fc_malloc(fcdl);
-
-        if (fc_dir != NULL) {
-          fc_snprintf(fc_dir, fcdl, "%s", storage_dir);
-
-          if (make_dir(fc_dir)) {
-            history_file
-              = fc_malloc(strlen(fc_dir) + 1 + strlen(HISTORY_FILENAME) + 1);
-            if (history_file) {
-              strcpy(history_file, fc_dir);
-              strcat(history_file, "/");
-              strcat(history_file, HISTORY_FILENAME);
-              using_history();
-              read_history(history_file);
-            }
-          }
-          FC_FREE(fc_dir);
-        }
+      if (home_dir) {
+	history_file
+	  = fc_malloc(strlen(home_dir) + 1 + strlen(HISTORY_FILENAME) + 1);
+	if (history_file) {
+	  strcpy(history_file, home_dir);
+	  strcat(history_file, "/");
+	  strcat(history_file, HISTORY_FILENAME);
+	  using_history();
+	  read_history(history_file);
+	}
       }
 
       rl_initialize();
@@ -540,11 +531,11 @@ enum server_events server_sniff_all_input(void)
       atexit(rl_callback_handler_remove);
     }
   }
-#endif /* FREECIV_HAVE_LIBREADLINE */
+#endif /* HAVE_LIBREADLINE */
 
   while (TRUE) {
     con_prompt_on();		/* accepting new input */
-
+    
     if (force_end_of_sniff) {
       force_end_of_sniff = FALSE;
       con_prompt_off();
@@ -557,12 +548,12 @@ enum server_events server_sniff_all_input(void)
      * but only if at least one player has previously connected. */
     if (srvarg.quitidle != 0) {
       static time_t last_noplayers;
-      static bool conns;
+      static bool connections;
 
       if (conn_list_size(game.est_connections) > 0) {
-	conns = TRUE;
+	connections = TRUE;
       }
-      if (conns && conn_list_size(game.est_connections) == 0) {
+      if (connections && conn_list_size(game.est_connections) == 0) {
 	if (last_noplayers != 0) {
 	  if (time(NULL) > last_noplayers + srvarg.quitidle) {
 	    save_game_auto("Lost all connections", AS_QUITIDLE);
@@ -585,7 +576,7 @@ enum server_events server_sniff_all_input(void)
 	    }
 
             /* Do not restart before someone has connected and left again */
-            conns = FALSE;
+            connections = FALSE;
 	  }
 	} else {
 	  last_noplayers = time(NULL);
@@ -651,7 +642,6 @@ enum server_events server_sniff_all_input(void)
     /* Don't wait if timeout == -1 (i.e. on auto games) */
     if (S_S_RUNNING == server_state() && game.info.timeout == -1) {
       call_ai_refresh();
-      script_server_signal_emit("pulse", 0);
       (void) send_server_info_to_metaserver(META_REFRESH);
       return S_E_END_OF_TURN_TIMEOUT;
     }
@@ -664,13 +654,13 @@ enum server_events server_sniff_all_input(void)
     FC_FD_ZERO(&exceptfs);
 
     if (!no_input) {
-#ifdef FREECIV_SOCKET_ZERO_NOT_STDIN
+#ifdef SOCKET_ZERO_ISNT_STDIN
       fc_init_console();
-#else /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#else /* SOCKET_ZERO_ISNT_STDIN */
 #   if !defined(__VMS)
       FD_SET(0, &readfs);
-#   endif /* VMS */
-#endif /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#   endif /* VMS */	
+#endif /* SOCKET_ZERO_ISNT_STDIN */
     }
 
     max_desc = 0;
@@ -680,9 +670,17 @@ enum server_events server_sniff_all_input(void)
       max_desc = MAX(max_desc, listen_socks[i]);
     }
 
+    if (with_ggz) {
+#ifdef GGZ_SERVER
+      int ggz_sock = get_ggz_socket();
+
+      FD_SET(ggz_sock, &readfs);
+      max_desc = MAX(max_desc, ggz_sock);
+#endif /* GGZ_SERVER */
+    }
+
     for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
       struct connection *pconn = connections + i;
-
       if (pconn->used && !pconn->server.is_closing) {
         FD_SET(pconn->sock, &readfs);
         if (0 < pconn->send_buffer->ndata) {
@@ -697,24 +695,14 @@ enum server_events server_sniff_all_input(void)
     if (fc_select(max_desc + 1, &readfs, &writefs, &exceptfs, &tv) == 0) {
       /* timeout */
       call_ai_refresh();
-      script_server_signal_emit("pulse", 0);
       (void) send_server_info_to_metaserver(META_REFRESH);
       if (current_turn_timeout() > 0
 	  && S_S_RUNNING == server_state()
 	  && game.server.phase_timer
 	  && (timer_read_seconds(game.server.phase_timer)
-	      > game.tinfo.seconds_to_phasedone)) {
+	      > game.info.seconds_to_phasedone)) {
 	con_prompt_off();
 	return S_E_END_OF_TURN_TIMEOUT;
-      }
-      if ((game.server.autosaves & (1 << AS_TIMER))
-          && S_S_RUNNING == server_state()
-          && (timer_read_seconds(game.server.save_timer)
-              >= game.server.save_frequency * 60)) {
-        save_game_auto("Timer", AS_TIMER);
-        game.server.save_timer = timer_renew(game.server.save_timer,
-                                             TIMER_USER, TIMER_ACTIVE);
-        timer_start(game.server.save_timer);
       }
 
       if (!no_input) {
@@ -741,34 +729,36 @@ enum server_events server_sniff_all_input(void)
 	  }
 	}
 #else  /* !__VMS */
-#ifndef FREECIV_SOCKET_ZERO_NOT_STDIN
+#ifndef SOCKET_ZERO_ISNT_STDIN
         really_close_connections();
         continue;
-#endif /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#endif /* SOCKET_ZERO_ISNT_STDIN */
 #endif /* !__VMS */
       }
     }
 
-    excepting = FALSE;
-    for (i = 0; i < listen_count; i++) {
-      if (FD_ISSET(listen_socks[i], &exceptfs)) {
-        excepting = TRUE;
-        break;
+    if (!with_ggz) { /* No listening socket when using GGZ. */
+      excepting = FALSE;
+      for (i = 0; i < listen_count; i++) {
+        if (FD_ISSET(listen_socks[i], &exceptfs)) {
+          excepting = TRUE;
+          break;
+        }
       }
-    }
-    if (excepting) {                  /* handle Ctrl-Z suspend/resume */
-      continue;
-    }
-    for (i = 0; i < listen_count; i++) {
-      s = listen_socks[i];
-      if (FD_ISSET(s, &readfs)) {     /* new players connects */
-        log_verbose("got new connection");
-        if (-1 == server_accept_connection(s)) {
-          /* There will be a log_error() message from
-           * server_accept_connection() if something
-           * goes wrong, so no need to make another
-           * error-level message here. */
-          log_verbose("failed accepting connection");
+      if (excepting) {                  /* handle Ctrl-Z suspend/resume */
+	continue;
+      }
+      for (i = 0; i < listen_count; i++) {
+        s = listen_socks[i];
+        if (FD_ISSET(s, &readfs)) {     /* new players connects */
+          log_verbose("got new connection");
+          if (-1 == server_accept_connection(s)) {
+            /* There will be a log_error() message from
+             * server_accept_connection() if something
+             * goes wrong, so no need to make another
+             * error-level message here. */
+            log_verbose("failed accepting connection");
+          }
         }
       }
     }
@@ -784,7 +774,19 @@ enum server_events server_sniff_all_input(void)
         connection_close_server(pconn, _("network exception"));
       }
     }
-#ifdef FREECIV_SOCKET_ZERO_NOT_STDIN
+#ifdef GGZ_SERVER
+    if (with_ggz) {
+      /* This is intentionally after all the player socket handling because
+       * it may cut a client. */
+      int ggz_sock = get_ggz_socket();
+
+      if (FD_ISSET(ggz_sock, &readfs)) {
+	input_from_ggz(ggz_sock);
+      }
+    }
+#endif /* GGZ_SERVER */
+    
+#ifdef SOCKET_ZERO_ISNT_STDIN
     if (!no_input && (bufptr = fc_read_console())) {
       char *bufptr_internal = local_to_internal_string_malloc(bufptr);
 
@@ -792,16 +794,16 @@ enum server_events server_sniff_all_input(void)
       handle_stdin_input(NULL, bufptr_internal);
       free(bufptr_internal);
     }
-#else  /* !FREECIV_SOCKET_ZERO_NOT_STDIN */
-    if (!no_input && FD_ISSET(0, &readfs)) {    /* input from server operator */
-#ifdef FREECIV_HAVE_LIBREADLINE
+#else  /* !SOCKET_ZERO_ISNT_STDIN */
+    if(!no_input && FD_ISSET(0, &readfs)) {    /* input from server operator */
+#ifdef HAVE_LIBREADLINE
       rl_callback_read_char();
       if (readline_handled_input) {
-        readline_handled_input = FALSE;
-        con_prompt_enter_clear();
+	readline_handled_input = FALSE;
+	con_prompt_enter_clear();
       }
       continue;
-#else  /* !FREECIV_HAVE_LIBREADLINE */
+#else  /* !HAVE_LIBREADLINE */
       ssize_t didget;
       char *buffer = NULL; /* Must be NULL when calling getline() */
       char *buf_internal;
@@ -838,12 +840,12 @@ enum server_events server_sniff_all_input(void)
         free(buf_internal);
       }
       free(buffer);
-#endif /* !FREECIV_HAVE_LIBREADLINE */
+#endif /* !HAVE_LIBREADLINE */
     } else
-#endif /* !FREECIV_SOCKET_ZERO_NOT_STDIN */
-
+#endif /* !SOCKET_ZERO_ISNT_STDIN */
+     
     {                             /* input from a player */
-      for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
+      for(i = 0; i < MAX_NUM_CONNECTIONS; i++) {
         struct connection *pconn = connections + i;
         int nb;
 
@@ -851,7 +853,7 @@ enum server_events server_sniff_all_input(void)
             || pconn->server.is_closing
             || !FD_ISSET(pconn->sock, &readfs)) {
           continue;
-        }
+	}
 
         nb = read_socket_data(pconn->sock, pconn->buffer);
         if (0 <= nb) {
@@ -871,40 +873,29 @@ enum server_events server_sniff_all_input(void)
         if (pconn->used
             && !pconn->server.is_closing
             && pconn->send_buffer
-            && pconn->send_buffer->ndata > 0) {
-          if (FD_ISSET(pconn->sock, &writefs)) {
-            flush_connection_send_buffer_all(pconn);
-          } else {
-            cut_lagging_connection(pconn);
-          }
+	    && pconn->send_buffer->ndata > 0) {
+	  if (FD_ISSET(pconn->sock, &writefs)) {
+	    flush_connection_send_buffer_all(pconn);
+	  } else {
+	    cut_lagging_connection(pconn);
+	  }
         }
       }
-      really_close_connections();
-      break;
     }
+    really_close_connections();
+    break;
   }
   con_prompt_off();
 
   call_ai_refresh();
-  script_server_signal_emit("pulse", 0);
 
   if (current_turn_timeout() > 0
       && S_S_RUNNING == server_state()
       && game.server.phase_timer
       && (timer_read_seconds(game.server.phase_timer)
-          > game.tinfo.seconds_to_phasedone)) {
+          > game.info.seconds_to_phasedone)) {
     return S_E_END_OF_TURN_TIMEOUT;
   }
-  if ((game.server.autosaves & (1 << AS_TIMER))
-      && S_S_RUNNING == server_state()
-      && (timer_read_seconds(game.server.save_timer)
-          >= game.server.save_frequency * 60)) {
-    save_game_auto("Timer", AS_TIMER);
-    game.server.save_timer = timer_renew(game.server.save_timer,
-                                         TIMER_USER, TIMER_ACTIVE);
-    timer_start(game.server.save_timer);
-  }
-
   return S_E_OTHERWISE;
 }
 
@@ -921,11 +912,8 @@ static const char *makeup_connection_name(int *id)
   static unsigned short i = 0;
   static char name[MAX_LEN_NAME];
 
-  for (;;) {
-    if (i == (unsigned short) - 1) {
-      /* don't use 0 */
-      i++;
-    }
+  for(;;) {
+    if (i==(unsigned short)-1) i++;              /* don't use 0 */
     fc_snprintf(name, sizeof(name), "c%u", (unsigned int)++i);
     if (NULL == player_by_name(name)
         && NULL == player_by_user(name)
@@ -936,7 +924,7 @@ static const char *makeup_connection_name(int *id)
     }
   }
 }
-
+  
 /********************************************************************
   Server accepts connection from client:
   Low level socket stuff, and basic-initialize the connection struct.
@@ -952,7 +940,7 @@ static int server_accept_connection(int sockfd)
   int new_sock;
   union fc_sockaddr fromend;
   bool nameinfo = FALSE;
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   char host[NI_MAXHOST], service[NI_MAXSERV];
   char dst[INET6_ADDRSTRLEN];
 #else  /* IPv6 support */
@@ -968,7 +956,7 @@ static int server_accept_connection(int sockfd)
     return -1;
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (fromend.saddr.sa_family == AF_INET6) {
     inet_ntop(AF_INET6, &fromend.saddr_in6.sin6_addr,
               dst, sizeof(dst));
@@ -1005,7 +993,7 @@ static int server_accept_connection(int sockfd)
     } conn_list_iterate_end;
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   nameinfo = (0 == getnameinfo(&fromend.saddr, fromlen, host, NI_MAXHOST,
                                service, NI_MAXSERV, NI_NUMERICSERV)
               && '\0' != host[0]);
@@ -1028,17 +1016,15 @@ static int server_accept_connection(int sockfd)
   Returns 0 on success, -1 on failure (bad accept(), or too many
   connections).
 ********************************************************************/
-int server_make_connection(int new_sock, const char *client_addr,
-                           const char *client_ip)
+int server_make_connection(int new_sock, const char *client_addr, const char *client_ip)
 {
   struct timer *timer;
   int i;
 
   fc_nonblock(new_sock);
 
-  for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
+  for(i=0; i<MAX_NUM_CONNECTIONS; i++) {
     struct connection *pconn = &connections[i];
-
     if (!pconn->used) {
       connection_common_init(pconn);
       pconn->sock = new_sock;
@@ -1085,8 +1071,8 @@ int server_make_connection(int new_sock, const char *client_addr,
 }
 
 /********************************************************************
-  Open server socket to be used to accept client connections
-  and open a server socket for server LAN announcements.
+ open server socket to be used to accept client connections
+ and open a server socket for server LAN announcements.
 ********************************************************************/
 int server_open_socket(void)
 {
@@ -1105,7 +1091,7 @@ int server_open_socket(void)
   fc_errno eno = 0;
   union fc_sockaddr *problematic = NULL;
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   struct ipv6_mreq mreq6;
 #endif
 
@@ -1144,19 +1130,19 @@ int server_open_socket(void)
       continue;
     }
 
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
     /* SO_REUSEADDR considered harmful on Win, necessary otherwise */
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, 
                    (char *)&on, sizeof(on)) == -1) {
       log_error("setsockopt SO_REUSEADDR failed: %s",
                 fc_strerror(fc_get_errno()));
-      sockaddr_debug(paddr, LOG_NORMAL);
+      sockaddr_debug(paddr, LOG_DEBUG);
     }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
     /* AF_INET6 sockets should use IPv6 only,
      * without stealing IPv4 from AF_INET sockets. */
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
     if (paddr->saddr.sa_family == AF_INET6) {
 #ifdef IPV6_V6ONLY
       if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY,
@@ -1212,10 +1198,7 @@ int server_open_socket(void)
       sockaddr_debug(problematic, LOG_NORMAL);
     }
     fc_sockaddr_list_iterate(list, paddr) {
-      /* Do not list already logged 'problematic' again */
-      if (paddr != problematic) {
-        sockaddr_debug(paddr, LOG_DEBUG);
-      }
+      sockaddr_debug(paddr, LOG_DEBUG);
     } fc_sockaddr_list_iterate_end;
     exit(EXIT_FAILURE);
   }
@@ -1228,7 +1211,7 @@ int server_open_socket(void)
     return 0;
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (srvarg.announce == ANNOUNCE_IPV6) {
     lan_family = AF_INET6;
   } else
@@ -1257,7 +1240,7 @@ int server_open_socket(void)
 
   addr.saddr.sa_family = lan_family;
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifdef IPV6_SUPPORT
   if (addr.saddr.sa_family == AF_INET6) {
     addr.saddr_in6.sin6_family = AF_INET6;
     addr.saddr_in6.sin6_port = htons(SERVER_LAN_PORT);
@@ -1278,7 +1261,14 @@ int server_open_socket(void)
     log_error("Announcement socket binding failed: %s", fc_strerror(fc_get_errno()));
   }
 
-#ifdef FREECIV_IPV6_SUPPORT
+#ifndef IPV6_SUPPORT
+  if (addr.saddr.sa_family == AF_INET) {
+#ifdef HAVE_INET_ATON
+    inet_aton(group, &mreq4.imr_multiaddr);
+#else  /* HAVE_INET_ATON */
+    mreq4.imr_multiaddr.s_addr = inet_addr(group);
+#endif /* HAVE_INET_ATON */
+#else  /* IPv6 support */
   if (addr.saddr.sa_family == AF_INET6) {
     inet_pton(AF_INET6, group, &mreq6.ipv6mr_multiaddr.s6_addr);
     mreq6.ipv6mr_interface = 0; /* TODO: Interface selection */
@@ -1287,15 +1277,14 @@ int server_open_socket(void)
       log_error("FC_IPV6_ADD_MEMBERSHIP (%s) failed: %s",
                 group, fc_strerror(fc_get_errno()));
     }
-  } else
-#endif /* IPV6 Support */
-  if (addr.saddr.sa_family == AF_INET) {
-    fc_inet_aton(group, &mreq4.imr_multiaddr, FALSE);
+  } else if (addr.saddr.sa_family == AF_INET) {
+    inet_pton(AF_INET, group, &mreq4.imr_multiaddr.s_addr);
+#endif /* IPv6 support */
 #ifdef HAVE_IP_MREQN
     mreq4.imr_address.s_addr = htonl(INADDR_ANY);
     mreq4.imr_ifindex = 0;
 #else
-     mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
+    mreq4.imr_interface.s_addr = htonl(INADDR_ANY);
 #endif
 
     if (setsockopt(socklan, IPPROTO_IP, IP_ADD_MEMBERSHIP,
@@ -1312,6 +1301,7 @@ int server_open_socket(void)
   return 0;
 }
 
+
 /********************************************************************
   Initialize connection related stuff. Attention: Logging is not
   available within this functions!
@@ -1322,11 +1312,9 @@ void init_connections(void)
 
   game.all_connections = conn_list_new();
   game.est_connections = conn_list_new();
-  game.glob_observers = conn_list_new();
 
-  for (i = 0; i < MAX_NUM_CONNECTIONS; i++) {
+  for(i=0; i<MAX_NUM_CONNECTIONS; i++) { 
     struct connection *pconn = &connections[i];
-
     pconn->used = FALSE;
     pconn->self = conn_list_new();
     conn_list_prepend(pconn->self, pconn);
@@ -1334,12 +1322,9 @@ void init_connections(void)
 #if defined(__VMS)
   {
     unsigned long status;
-
     $DESCRIPTOR (tt_desc, "SYS$INPUT");
-    status = sys$assign(&tt_desc, &tt_chan, 0, 0);
-    if (!$VMS_STATUS_SUCCESS(status)) {
-      lib$stop(status);
-    }
+    status = sys$assign(&tt_desc,&tt_chan,0,0);
+    if (!$VMS_STATUS_SUCCESS(status)) lib$stop(status);
   }
 #endif /* VMS */
 }
@@ -1410,14 +1395,6 @@ void handle_conn_pong(struct connection *pconn)
 }
 
 /**************************************************************************
-  Handle client's regular hearbeat
-**************************************************************************/
-void handle_client_heartbeat(struct connection *pconn)
-{
-  log_debug("Received heartbeat");
-}
-
-/**************************************************************************
   Send ping time info about all connections to all connections.
 **************************************************************************/
 static void send_ping_times_to_all(void)
@@ -1446,11 +1423,15 @@ static void send_ping_times_to_all(void)
 ********************************************************************/
 static void get_lanserver_announcement(void)
 {
-  fd_set readfs, exceptfs;
-  fc_timeval tv;
   char msgbuf[128];
   struct data_in din;
   int type;
+  fd_set readfs, exceptfs;
+  fc_timeval tv;
+
+  if (with_ggz) {
+    return;
+  }
 
   if (srvarg.announce == ANNOUNCE_NONE) {
     return;
@@ -1473,11 +1454,10 @@ static void get_lanserver_announcement(void)
      * Generally we just want to run select again. */
   }
 
-    /* We would need a raw network connection for broadcast messages */
   if (FD_ISSET(socklan, &readfs)) {
     if (0 < recvfrom(socklan, msgbuf, sizeof(msgbuf), 0, NULL, NULL)) {
       dio_input_init(&din, msgbuf, 1);
-      dio_get_uint8_raw(&din, &type);
+      dio_get_uint8(&din, &type);
       if (type == SERVER_LAN_VERSION) {
         log_debug("Received request for server LAN announcement.");
         send_lanserver_response();
@@ -1492,14 +1472,13 @@ static void get_lanserver_announcement(void)
   This function broadcasts an UDP packet to clients with
   that requests information about the server state.
 ********************************************************************/
-  /* We would need a raw network connection for broadcast messages */
 static void send_lanserver_response(void)
 {
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   unsigned char buffer[MAX_LEN_PACKET];
-#else  /* FREECIV_HAVE_WINSOCK */
+#else  /* HAVE_WINSOCK */
   char buffer[MAX_LEN_PACKET];
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
   char hostname[512];
   char port[256];
   char version[256];
@@ -1507,12 +1486,12 @@ static void send_lanserver_response(void)
   int nhumans;
   char humans[256];
   char status[256];
-  struct raw_data_out dout;
+  struct data_out dout;
   union fc_sockaddr addr;
   int socksend, setting = 1;
   const char *group;
   size_t size;
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   unsigned char ttl;
 #endif
 
@@ -1531,7 +1510,7 @@ static void send_lanserver_response(void)
 
 /* this setsockopt call fails on Windows 98, so we stick with the default
  * value of 1 on Windows, which should be fine in most cases */
-#ifndef FREECIV_HAVE_WINSOCK
+#ifndef HAVE_WINSOCK
   /* Set the Time-to-Live field for the packet.  */
   ttl = SERVER_LAN_TTL;
   if (setsockopt(socksend, IPPROTO_IP, IP_MULTICAST_TTL, 
@@ -1539,7 +1518,7 @@ static void send_lanserver_response(void)
     log_error("setsockopt failed: %s", fc_strerror(fc_get_errno()));
     return;
   }
-#endif /* FREECIV_HAVE_WINSOCK */
+#endif /* HAVE_WINSOCK */
 
   if (setsockopt(socksend, SOL_SOCKET, SO_BROADCAST, 
                  (const char*)&setting, sizeof(setting))) {
@@ -1572,29 +1551,29 @@ static void send_lanserver_response(void)
     break;
   }
 
-  fc_snprintf(players, sizeof(players), "%d",
-              normal_player_count());
+   fc_snprintf(players, sizeof(players), "%d",
+               normal_player_count());
 
-  nhumans = 0;
-  players_iterate(pplayer) {
-    if (pplayer->is_alive && is_human(pplayer)) {
-      nhumans++;
-    }
-  } players_iterate_end;
-  fc_snprintf(humans, sizeof(humans), "%d", nhumans);
+   nhumans = 0;
+   players_iterate(pplayer) {
+     if (pplayer->is_alive && !pplayer->ai_controlled) {
+       nhumans++;
+     }
+   } players_iterate_end;
+   fc_snprintf(humans, sizeof(humans), "%d", nhumans);
 
-  fc_snprintf(port, sizeof(port), "%d",
-              srvarg.port);
+   fc_snprintf(port, sizeof(port), "%d",
+              srvarg.port );
 
   dio_output_init(&dout, buffer, sizeof(buffer));
-  dio_put_uint8_raw(&dout, SERVER_LAN_VERSION);
-  dio_put_string_raw(&dout, hostname);
-  dio_put_string_raw(&dout, port);
-  dio_put_string_raw(&dout, version);
-  dio_put_string_raw(&dout, status);
-  dio_put_string_raw(&dout, players);
-  dio_put_string_raw(&dout, humans);
-  dio_put_string_raw(&dout, get_meta_message_string());
+  dio_put_uint8(&dout, SERVER_LAN_VERSION);
+  dio_put_string(&dout, hostname);
+  dio_put_string(&dout, port);
+  dio_put_string(&dout, version);
+  dio_put_string(&dout, status);
+  dio_put_string(&dout, players);
+  dio_put_string(&dout, humans);
+  dio_put_string(&dout, get_meta_message_string());
   size = dio_output_used(&dout);
 
   /* Sending packet to client with the information gathered above. */

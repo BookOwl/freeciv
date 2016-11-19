@@ -73,7 +73,7 @@ message_dlg::message_dlg()
   layout->setColumnStretch(3, 1);
   setLayout(layout);
   gui()->gimme_place(this, "MSD");
-  index = gui()->add_game_tab(this);
+  index = gui()->add_game_tab(this, _("Message Options"));
   gui()->game_tab_widget->setCurrentIndex(index);
 
   fill_data();

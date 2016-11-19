@@ -21,7 +21,4 @@ void unit_select_dialog_popup_main(struct tile *ptile, bool create);
 
 void unit_select_dialog_popdown(void);
 
-GdkPixbuf *usdlg_get_unit_image(const struct unit *punit);
-const char *usdlg_get_unit_descr(const struct unit *punit);
-
 #endif  /* FC__UNITSELECT_H */

@@ -24,7 +24,7 @@
 
 static bool autocap = FALSE;
 
-/***********************************************************************
+/**********************************************************************
 Some strings are ambiguous for translation.  For example, "Game" is
 something you play (like Freeciv!) or animals that can be hunted.
 To distinguish strings for translation, we qualify them with a prefix
@@ -86,9 +86,9 @@ void free_capitalized(char *str)
 /**********************************************************************
   Translation opts in to automatic capitalization features.
 ***********************************************************************/
-void capitalization_opt_in(bool opt_in)
+void capitalization_opt_in(void)
 {
-  autocap = opt_in;
+  autocap = TRUE;
 }
 
 /**********************************************************************
@@ -97,12 +97,4 @@ void capitalization_opt_in(bool opt_in)
 bool is_capitalization_enabled(void)
 {
   return autocap;
-}
-
-/**********************************************************************
-  Return directory containing locales.
-***********************************************************************/
-const char *get_locale_dir(void)
-{
-  return LOCALEDIR;
 }

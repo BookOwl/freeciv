@@ -33,6 +33,20 @@ extern "C" {
 
 
 /***************************************************************************
+  QPushButton receiving right click event
+***************************************************************************/
+class right_click_button : public QPushButton
+{
+  Q_OBJECT
+public:
+  explicit right_click_button(QWidget *parent = 0);
+signals:
+  void right_clicked();
+protected:
+  void mousePressEvent(QMouseEvent *e);
+};
+
+/***************************************************************************
   Class representing message output
 ***************************************************************************/
 class messagewdg : public QWidget
@@ -48,8 +62,6 @@ private:
   QGridLayout *layout;
   QPixmap *pix;
 protected:
-  void enterEvent(QEvent *event);
-  void leaveEvent(QEvent *event);
   void paint(QPainter *painter, QPaintEvent *event);
   void paintEvent(QPaintEvent *event);
   void resizeEvent(QResizeEvent *event);
@@ -65,28 +77,44 @@ class info_tab : public fcwidget
   Q_OBJECT
 public:
   info_tab(QWidget *parent);
-  void max_chat_size();
   QGridLayout *layout;
   messagewdg *msgwdg;
   chatwdg *chtwdg;
-  void maximize_chat();
-  void restore_chat();
-  bool chat_maximized;
+  void hide_chat(bool hyde);
+  void hide_messages(bool hyde);
+  bool hidden_chat;
+  bool locked;
+  bool hidden_mess;
+  int whats_hidden;
 private:
+  void change_layout();
   void update_menu();
   QPoint cursor;
+  right_click_button *chat_button;
+  QPushButton *hide_button;
+  QPushButton *lock_button;
+  right_click_button *msg_button;
   QSize last_size;
-  move_widget *mw;
   bool hidden_state;
+  bool layout_changed;
   bool resize_mode;
-  bool resxy;
   bool resx;
   bool resy;
+  int chat_stretch;
+  int msg_stretch;
+public slots:
+  void hide_me();
+  void lock();
+private slots:
+  void activate_msg();
+  void activate_chat();
+  void on_right_clicked();
 protected:
+  void paint(QPainter *painter, QPaintEvent *event);
+  void paintEvent(QPaintEvent *event);
   void mousePressEvent(QMouseEvent *event);
   void mouseMoveEvent(QMouseEvent *event);
   void mouseReleaseEvent(QMouseEvent *event);
-  int& e_pos();
 };
 
 #endif /* FC__MESSAGEWIN_H */

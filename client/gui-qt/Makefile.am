@@ -5,16 +5,8 @@ MOCCMD=@MOCCMD@
 include $(top_srcdir)/bootstrap/Makerules.mk
 
 noinst_LTLIBRARIES = libgui-qt.la
-AM_CPPFLAGS = \
-	-I. \
-	-I$(srcdir)/.. \
-	-I$(srcdir)/../include \
-	-I$(top_srcdir)/utility \
-        -I$(top_srcdir)/common \
-	-I$(top_srcdir)/common/aicore \
-	-I$(top_srcdir)/common/networking \
-	-I$(srcdir)/../agents \
-	-I$(top_srcdir)/dependencies/tinycthread \
+AM_CPPFLAGS = -I. -I$(srcdir)/.. -I$(srcdir)/../include -I$(top_srcdir)/utility \
+        -I$(top_srcdir)/common -I$(srcdir)/../agents -I$(top_srcdir)/common/aicore \
         $(gui_qt_cppflags) $(SOUND_CFLAGS)
 
 AM_CFLAGS = $(gui_qt_cflags)
@@ -23,6 +15,7 @@ AM_CXXFLAGS = $(gui_qt_cxxflags)
 
 MOC_FILES = \
 	meta_fc_client.cpp	\
+	meta_helpdlg.cpp	\
 	meta_ratesdlg.cpp	\
 	meta_mapview.cpp	\
 	meta_menu.cpp		\
@@ -31,18 +24,14 @@ MOC_FILES = \
 	meta_optiondlg.cpp	\
 	meta_citydlg.cpp	\
 	meta_cityrep.cpp	\
-	meta_helpdlg.cpp	\
 	meta_plrdlg.cpp		\
 	meta_diplodlg.cpp	\
 	meta_spaceshipdlg.cpp	\
 	meta_messagewin.cpp	\
 	meta_chatline.cpp	\
 	meta_messagedlg.cpp	\
-	meta_sidebar.cpp	\
-	meta_shortcuts.cpp	\
 	meta_voteinfo_bar.cpp	\
-	meta_gotodlg.cpp	\
-	meta_hudwidget.cpp
+	meta_gotodlg.cpp
 
 libgui_qt_la_SOURCES = \
 	canvas.cpp	\
@@ -63,8 +52,6 @@ libgui_qt_la_SOURCES = \
 	diplodlg.h	\
 	fc_client.cpp	\
 	fc_client.h	\
-	fonts.cpp	\
-	fonts.h		\
 	finddlg.cpp	\
 	finddlg.h	\
 	gotodlg.cpp	\
@@ -75,11 +62,8 @@ libgui_qt_la_SOURCES = \
 	gui_main.h	\
 	helpdlg.cpp	\
 	helpdlg.h	\
-	hudwidget.cpp	\
-	hudwidget.h	\
 	inteldlg.cpp	\
 	inteldlg.h	\
-	listener.h	\
 	luaconsole.cpp	\
 	luaconsole.h	\
 	mapctrl.cpp	\
@@ -104,10 +88,6 @@ libgui_qt_la_SOURCES = \
 	ratesdlg.h	\
 	repodlgs.cpp	\
 	repodlgs.h	\
-	shortcuts.h	\
-	shortcuts.cpp	\
-	sidebar.cpp	\
-	sidebar.h	\
 	spaceshipdlg.cpp \
 	spaceshipdlg.h	\
 	sprite.cpp	\

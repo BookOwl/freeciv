@@ -2,7 +2,7 @@
 [spec]
 
 ; Format and options of this spec file:
-options = "+Freeciv-spec-Devel-2015-Mar-25"
+options = "+Freeciv-2.5-spec"
 
 [info]
 
@@ -10,6 +10,7 @@ artists = "
     Alexandre Beraud <a_beraud@lemel.fr>
     Jeff Mallatt <jjm@codewell.com> (cooling flakes)
     Davide Pagnin <nightmare@freeciv.it> (angry citizens)
+    Hogne Håskjold <haskjold@gmail.com> (gold coin)
 "
 
 [file]
@@ -78,6 +79,31 @@ tiles = { "row", "column", "tag"
 
   0, 35, "s.right_arrow"
 
-  1,  0, "s.plus"
-  1,  1, "s.minus"
+; Event Message Icons - currently unused
+
+  1, 0,  "ev.hutbarbarians"
+  1, 0,  "ev.hutcowardlybarbs"
+  1, 1,  "ev.diplomated"
+  1, 1,  "ev.diplomatmine"
+  1, 1,  "ev.firstcontact"
+  1, 2,  "ev.aqueduct"
+  1, 2,  "ev.aqueductbuilding"  
+  1, 3,  "ev.growth"
+  1, 3,  "ev.granthrottle"
+  1, 3,  "ev.citymaygrow"
+  1, 3,  "ev.citybuild"
+  1, 3,  "ev.hutcity"
+  1, 3,  "ev.hutnomads"
+  1, 4,  "ev.famine"
+  1, 4,  "ev.faminefeared"
+  1, 5,  "ev.pollution"
+  1, 6,  "ev.nuke"
+  1, 6,  "ev.citynuked"
+  1, 7,  "ev.wonderstart"
+  1, 8,  "ev.wonderstopped"
+  1, 8,  "ev.wonderobsolete"
+  1, 9,  "ev.wonderwillbebuilt"
+  1, 10, "ev.wonderbuilt"
+  1, 11, "s.plus"
+  1, 12, "s.minus"
 }

@@ -17,7 +17,6 @@
 
 /* common */
 #include "game.h"
-#include "victory.h"
 
 // gui-qt
 #include "canvas.h"
@@ -69,7 +68,7 @@ void ss_report::init()
 {
   int index;
   gui()->gimme_place(this, "SPS");
-  index = gui()->add_game_tab(this);
+  index = gui()->add_game_tab(this, _("Spaceship"));
   gui()->game_tab_widget->setCurrentIndex(index);
   update_report();
 }
@@ -84,8 +83,9 @@ void ss_report::update_report()
 
   pship = &(player->spaceship);
 
-  if (victory_enabled(VC_SPACERACE) && player == client.conn.playing
+  if (game.info.spacerace && player == client.conn.playing
       && pship->state == SSHIP_STARTED && pship->success_rate > 0.0) {
+
     launch_button->setEnabled(true);
   } else {
     launch_button->setEnabled(false);

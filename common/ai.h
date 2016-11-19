@@ -21,15 +21,13 @@ extern "C" {
 #include "fc_types.h" /* MAX_LEN_NAME */
 
 /* Update this capability string when ever there is changes to ai_type
- * structure below. When changing mandatory capability part, check that
- * there's enough reserved_xx pointers in the end of the structure for
- * taking to use without need to bump mandatory capability again. */
-#define FC_AI_MOD_CAPSTR "+Freeciv-3.0-ai-module-2016.Sep.23"
+   structure below */
+#define FC_AI_MOD_CAPSTR "+Freeciv-2.5a-ai-module"
 
 /* Timers for all AI activities. Define it to get statistics about the AI. */
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
 #  undef DEBUG_AITIMERS
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
 struct Treaty;
 struct player;
@@ -40,6 +38,7 @@ struct tile;
 struct settlermap;
 struct pf_path;
 struct section_file;
+struct tech_vector;
 struct adv_data;
 
 enum incident_type {
@@ -48,17 +47,13 @@ enum incident_type {
   INCIDENT_NUCLEAR_SELF, INCIDENT_LAST
 };
 
+enum danger_consideration { DANG_UNDECIDED, DANG_NOT, DANG_YES };
+
 struct ai_type
 {
   char name[MAX_LEN_NAME];
 
-  void *private;
-
   struct {
-    /* Called for every AI type when game starts. Game is not necessarily new one,
-       it can also be an old game loaded from a savegame. */
-    void (*game_start)(void);
-
     /* Called for every AI type when game has ended. */
     void (*game_free)(void);
 
@@ -76,23 +71,6 @@ struct ai_type
     void (*player_load)(struct player *pplayer, const struct section_file *file,
                         int plrno);
 
-    /* Called for every AI type for each player in game when game saved,
-     * with each other player as parameter.
-     * In practice it's good to use player_save_relations when you
-     * want to add entries to "player%d.ai%d", but player_iterate() inside
-     * player_save is better otherwise. The difference is in how clean
-     * structure the produced savegame will have. */
-    void (*player_save_relations)(struct player *pplayer, struct player *other,
-                                  struct section_file *file, int plrno);
-
-    /* Called for every AI type for each player in game when game loaded,
-     * with each other player as parameter. */
-    void (*player_load_relations)(struct player *pplayer, struct player *other,
-                                  const struct section_file *file, int plrno);
-
-    /* AI console. */
-    void (*player_console)(struct player *pplayer, const char *cmd);
-
     /* Called for AI type that gains control of player. */
     void (*gained_control)(struct player *pplayer);
 
@@ -100,10 +78,7 @@ struct ai_type
     void (*lost_control)(struct player *pplayer);
 
     /* Called for AI type of the player who gets split to two. */
-    void (*split_by_civil_war)(struct player *original, struct player *created);
-
-   /* Called for AI type of the player who got created from the split. */
-    void (*created_by_civil_war)(struct player *original, struct player *created);
+    void (*split_by_civil_war)(struct player *pplayer);
 
     /* Called for player AI type when player phase begins. This is in the
      * beginning of phase setup. See also first_activities. */
@@ -147,10 +122,6 @@ struct ai_type
      * Without this implemented in AI type building advisor does not adjust wants
      * at all. */
     void (*build_adv_adjust_want)(struct player *pplayer, struct city *wonder_city);
-
-    /* Called for player AI when evaluating governments. */
-    void (*gov_value)(struct player *pplayer, struct government *gov,
-                      adv_want *val, bool *override);
 
     /* Called for every AI type when unit ruleset has been loaded. */
     void (*units_ruleset_init)(void);
@@ -204,16 +175,9 @@ struct ai_type
     void (*settler_cont)(struct player *pplayer, struct unit *punit,
                          struct settlermap *state);
 
-    /* Called for player AI type when unit wants to autoexplore towards a tile. */
-    void (*want_to_explore)(struct unit *punit, struct tile *target,
-                            enum override_bool *allow);
-
     /* Called for player AI type in the beginning of player phase.
      * Unlike with phase_begin, everything is set up for phase already. */
     void (*first_activities)(struct player *pplayer);
-
-    /* Called for player AI when player phase is already active when AI gains control. */
-    void (*restart_phase)(struct player *pplayer);
 
     /* Called for player AI type in the beginning of player phase. Not for barbarian
      * players. */
@@ -252,11 +216,11 @@ struct ai_type
 
     /* Called for player AI type to decide if another player is dangerous. */
     void (*consider_plr_dangerous)(struct player *plr1, struct player *plr2,
-                                   enum override_bool *result);
+                                   enum danger_consideration *result);
 
     /* Called for player AI type to decide if it's dangerous for unit to enter tile. */
     void (*consider_tile_dangerous)(struct tile *ptile, struct unit *punit,
-                                    enum override_bool *result);
+                                    enum danger_consideration *result);
 
     /* Called for player AI to decide if city can be chosen to act as wonder city
      * for building advisor. */
@@ -264,20 +228,6 @@ struct ai_type
 
     /* Called for player AI type with short internval */
     void (*refresh)(struct player *pplayer);
-
-    /* These are here reserving space for future optional callbacks.
-     * This way we don't need to change the mandatory capability of the AI module
-     * interface when adding such callbacks, but existing modules just have these
-     * set to NULL. Optional capability should be set when taking one of these to use,
-     * so that new modules know if the server is going to call these or is it too old
-     * version to do so.
-     * When mandatory capability then changes again, please add new reservations to
-     * replace those taken to use. */
-    void (*reserved_01)(void);
-    void (*reserved_02)(void);
-    void (*reserved_03)(void);
-    void (*reserved_04)(void);
-    void (*reserved_05)(void);
   } funcs;
 };
 
@@ -290,7 +240,6 @@ int ai_type_get_count(void);
 const char *ai_name(const struct ai_type *ai);
 
 struct ai_type *ai_type_by_name(const char *search);
-const char *ai_type_name_or_fallback(const char *orig_name);
 
 #ifdef DEBUG_AITIMERS
 void ai_timer_init(void);

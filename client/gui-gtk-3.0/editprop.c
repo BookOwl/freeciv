@@ -22,7 +22,6 @@
 
 /* utility */
 #include "bitvector.h"
-#include "fc_cmdline.h"
 #include "fcintl.h"
 #include "log.h"
 #include "mem.h"
@@ -30,7 +29,6 @@
 /* common */
 #include "fc_interface.h"
 #include "game.h"
-#include "government.h"
 #include "map.h"
 #include "movement.h"
 #include "research.h"
@@ -48,7 +46,6 @@
 #include "gui_main.h"
 #include "gui_stuff.h"
 #include "plrdlg.h"
-#include "sprite.h"
 
 #include "editprop.h"
 
@@ -66,7 +63,8 @@ struct extviewer;
 static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
                                             const struct unit *punit,
                                             const struct city *pcity,
-                                            enum layer_category category);
+                                            int *layers,
+                                            int num_layers);
 static GdkPixbuf *create_tile_pixbuf(const struct tile *ptile);
 static GdkPixbuf *create_unit_pixbuf(const struct unit *punit);
 static GdkPixbuf *create_city_pixbuf(const struct city *pcity);
@@ -86,26 +84,24 @@ static int get_next_unique_tag(void);
 
 /* 'struct stored_tag_hash' and related functions. */
 #define SPECHASH_TAG stored_tag
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_INT_DATA_TYPE
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE int
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_DATA FC_PTR_TO_INT
 #include "spechash.h"
 
 /* NB: If packet definitions change, be sure to
  * update objbind_pack_current_values!!! */
 union packetdata {
-  struct {
-    gpointer v_pointer1;
-    gpointer v_pointer2;
-  } pointers;
+  gpointer v_pointer;
   struct packet_edit_tile *tile;
   struct packet_edit_startpos_full *startpos;
   struct packet_edit_city *city;
   struct packet_edit_unit *unit;
   struct packet_edit_player *player;
-  struct {
-    struct packet_edit_game *game;
-    struct packet_edit_scenario_desc *desc;
-  } game;
+  struct packet_edit_game *game;
 };
 
 /* Helpers for the OPID_TILE_VISION property. */
@@ -206,7 +202,6 @@ enum value_types {
   VALTYPE_BV_BASES,
   VALTYPE_NATION,
   VALTYPE_NATION_HASH,        /* struct nation_hash */
-  VALTYPE_GOV,
   VALTYPE_TILE_VISION_DATA    /* struct tile_vision_data */
 };
 
@@ -234,7 +229,6 @@ union propval_data {
   bv_bases v_bv_bases;
   struct nation_type *v_nation;
   struct nation_hash *v_nation_hash;
-  struct government *v_gov;
   bool *v_inventions;
   struct tile_vision_data *v_tile_vision;
 };
@@ -264,9 +258,11 @@ static void propstate_set_value(struct propstate *ps,
 static struct propval *propstate_get_value(struct propstate *ps);
 
 #define SPECHASH_TAG propstate
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct propstate *
-#define SPECHASH_IDATA_FREE propstate_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct propstate *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
+#define SPECHASH_DATA_FREE propstate_destroy
 #include "spechash.h"
 
 
@@ -308,9 +304,9 @@ enum object_property_ids {
   OPID_TILE_NAT_X,
   OPID_TILE_NAT_Y,
   OPID_TILE_CONTINENT,
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   OPID_TILE_ADDRESS,
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   OPID_TILE_TERRAIN,
   OPID_TILE_INDEX,
   OPID_TILE_XY,
@@ -327,9 +323,9 @@ enum object_property_ids {
   OPID_STARTPOS_NATIONS,
 
   OPID_UNIT_IMAGE,
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   OPID_UNIT_ADDRESS,
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   OPID_UNIT_TYPE,
   OPID_UNIT_ID,
   OPID_UNIT_XY,
@@ -342,40 +338,31 @@ enum object_property_ids {
 
   OPID_CITY_IMAGE,
   OPID_CITY_NAME,
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   OPID_CITY_ADDRESS,
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   OPID_CITY_ID,
   OPID_CITY_XY,
   OPID_CITY_SIZE,
-  OPID_CITY_HISTORY,
   OPID_CITY_BUILDINGS,
   OPID_CITY_FOOD_STOCK,
   OPID_CITY_SHIELD_STOCK,
 
   OPID_PLAYER_NAME,
   OPID_PLAYER_NATION,
-  OPID_PLAYER_GOV,
-  OPID_PLAYER_AGE,
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   OPID_PLAYER_ADDRESS,
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
   OPID_PLAYER_INVENTIONS,
-  OPID_PLAYER_SCENARIO_RESERVED,
   OPID_PLAYER_SCIENCE,
   OPID_PLAYER_GOLD,
 
   OPID_GAME_YEAR,
   OPID_GAME_SCENARIO,
   OPID_GAME_SCENARIO_NAME,
-  OPID_GAME_SCENARIO_AUTHORS,
   OPID_GAME_SCENARIO_DESC,
-  OPID_GAME_SCENARIO_RANDSTATE,
   OPID_GAME_SCENARIO_PLAYERS,
-  OPID_GAME_STARTPOS_NATIONS,
-  OPID_GAME_PREVENT_CITIES,
-  OPID_GAME_LAKE_FLOODING,
-  OPID_GAME_RULESET_LOCKED
+  OPID_GAME_STARTPOS_NATIONS
 };
 
 enum object_property_flags {
@@ -388,7 +375,6 @@ enum object_property_flags {
 struct objprop {
   int id;
   const char *name;
-  const char *tooltip;
   enum object_property_flags flags;
   enum value_types valtype;
   int column_id;
@@ -400,13 +386,11 @@ struct objprop {
 
 static struct objprop *objprop_new(int id,
                                    const char *name,
-                                   const char *tooltip,
                                    enum object_property_flags flags,
                                    enum value_types valtype,
                                    struct property_page *parent);
 static int objprop_get_id(const struct objprop *op);
 static const char *objprop_get_name(const struct objprop *op);
-static const char *objprop_get_tooltip(const struct objprop *op);
 static enum value_types objprop_get_valtype(const struct objprop *op);
 static struct property_page *
 objprop_get_property_page(const struct objprop *op);
@@ -444,8 +428,10 @@ static void objprop_widget_toggle_button_changed(GtkToggleButton *button,
                                                  gpointer userdata);
 
 #define SPECHASH_TAG objprop
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objprop *
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objprop *
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -498,9 +484,11 @@ static void objbind_set_rowref(struct objbind *ob,
 static GtkTreeRowReference *objbind_get_rowref(struct objbind *ob);
 
 #define SPECHASH_TAG objbind
-#define SPECHASH_INT_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct objbind *
-#define SPECHASH_IDATA_FREE objbind_destroy
+#define SPECHASH_KEY_TYPE int
+#define SPECHASH_DATA_TYPE struct objbind *
+#define SPECHASH_DATA_FREE objbind_destroy
+#define SPECHASH_KEY_TO_PTR FC_INT_TO_PTR
+#define SPECHASH_PTR_TO_KEY FC_PTR_TO_INT
 #include "spechash.h"
 
 
@@ -800,8 +788,6 @@ static const char *valtype_get_name(enum value_types valtype)
     return "nation";
   case VALTYPE_NATION_HASH:
     return "struct nation_hash";
-  case VALTYPE_GOV:
-    return "government";
   case VALTYPE_TILE_VISION_DATA:
     return "struct tile_vision_data";
   }
@@ -875,9 +861,6 @@ static gchar *propval_as_string(struct propval *pv)
   case VALTYPE_NATION:
     return g_strdup_printf("%s", nation_adjective_translation(pv->data.v_nation));
 
-  case VALTYPE_GOV:
-    return g_strdup_printf("%s", government_name_translation(pv->data.v_gov));
-
   case VALTYPE_BUILT_ARRAY:
     {
       int great_wonder_count = 0, small_wonder_count = 0, building_count = 0;
@@ -913,33 +896,29 @@ static gchar *propval_as_string(struct propval *pv)
     return g_strdup_printf(_("%d known"), count);
 
   case VALTYPE_BV_SPECIAL:
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      if (BV_ISSET(pv->data.v_bv_special, spe->data.special_idx)) {
+    tile_special_type_iterate(spe) {
+      if (BV_ISSET(pv->data.v_bv_special, spe)) {
         count++;
       }
-    } extra_type_by_cause_iterate_end;
+    } tile_special_type_iterate_end;
     /* TRANS: "The number of terrain specials (e.g. hut,
      * river, pollution, etc.) present on a tile." */
     return g_strdup_printf(_("%d present"), count);
 
   case VALTYPE_BV_ROADS:
-    extra_type_by_cause_iterate(EC_ROAD, pextra) {
-      struct road_type *proad = extra_road_get(pextra);
-
+    road_type_iterate(proad) {
       if (BV_ISSET(pv->data.v_bv_roads, road_number(proad))) {
         count++;
       }
-    } extra_type_by_cause_iterate_end;
+    } road_type_iterate_end;
     return g_strdup_printf(_("%d present"), count);
 
   case VALTYPE_BV_BASES:
-    extra_type_by_cause_iterate(EC_BASE, pextra) {
-      struct base_type *pbase = extra_base_get(pextra);
-
+    base_type_iterate(pbase) {
       if (BV_ISSET(pv->data.v_bv_bases, base_number(pbase))) {
         count++;
       }
-    } extra_type_by_cause_iterate_end;
+    } base_type_iterate_end;
     return g_strdup_printf(_("%d present"), count);
 
   case VALTYPE_NATION_HASH:
@@ -1083,9 +1062,6 @@ static struct propval *propval_copy(struct propval *pv)
   case VALTYPE_NATION:
     pv_copy->data.v_nation = pv->data.v_nation;
     return pv_copy;
-  case VALTYPE_GOV:
-    pv_copy->data.v_gov = pv->data.v_gov;
-    return pv_copy;
   case VALTYPE_NATION_HASH:
     pv_copy->data.v_nation_hash
       = nation_hash_copy(pv->data.v_nation_hash);
@@ -1148,7 +1124,6 @@ static void propval_free_data(struct propval *pv)
   case VALTYPE_BV_ROADS:
   case VALTYPE_BV_BASES:
   case VALTYPE_NATION:
-  case VALTYPE_GOV:
     return;
   case VALTYPE_PIXBUF:
     g_object_unref(pv->data.v_pixbuf);
@@ -1241,8 +1216,6 @@ static bool propval_equal(struct propval *pva,
   case VALTYPE_NATION_HASH:
     return nation_hashs_are_equal(pva->data.v_nation_hash,
                                   pvb->data.v_nation_hash);
-  case VALTYPE_GOV:
-    return pva->data.v_gov == pvb->data.v_gov;
   case VALTYPE_TILE_VISION_DATA:
     if (!BV_ARE_EQUAL(pva->data.v_tile_vision->tile_known,
                       pvb->data.v_tile_vision->tile_known)) {
@@ -1479,12 +1452,12 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_pixbuf = create_tile_pixbuf(ptile);
         pv->must_free = TRUE;
         break;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       case OPID_TILE_ADDRESS:
         pv->data.v_string = g_strdup_printf("%p", ptile);
         pv->must_free = TRUE;
         break;
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
       case OPID_TILE_TERRAIN:
         {
           const struct terrain *pterrain = tile_terrain(ptile);
@@ -1498,10 +1471,10 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
       case OPID_TILE_RESOURCE:
         {
-          const struct extra_type *presource = tile_resource(ptile);
+          const struct resource *presource = tile_resource(ptile);
 
           if (NULL != presource) {
-            pv->data.v_const_string = extra_name_translation(presource);
+            pv->data.v_const_string = resource_name_translation(presource);
           } else {
             pv->data.v_const_string = "";
           }
@@ -1530,28 +1503,13 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_int = ptile->continent;
         break;
       case OPID_TILE_SPECIALS:
-        BV_CLR_ALL(pv->data.v_bv_special);
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (tile_has_extra(ptile, pextra)) {
-            BV_SET(pv->data.v_bv_special, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
+        pv->data.v_bv_special = tile_specials(ptile);
         break;
       case OPID_TILE_ROADS:
-        BV_CLR_ALL(pv->data.v_bv_roads);
-        extra_type_by_cause_iterate(EC_ROAD, pextra) {
-          if (tile_has_extra(ptile, pextra)) {
-            BV_SET(pv->data.v_bv_roads, road_index(extra_road_get(pextra)));
-          }
-        } extra_type_by_cause_iterate_end;
+        pv->data.v_bv_roads = *tile_roads(ptile);
         break;
       case OPID_TILE_BASES:
-        BV_CLR_ALL(pv->data.v_bv_bases);
-        extra_type_by_cause_iterate(EC_BASE, pextra) {
-          if (tile_has_extra(ptile, pextra)) {
-            BV_SET(pv->data.v_bv_bases, base_index(extra_base_get(pextra)));
-          }
-        } extra_type_by_cause_iterate_end;
+        pv->data.v_bv_bases = *tile_bases(ptile);
         break;
       case OPID_TILE_VISION:
         pv->data.v_tile_vision = fc_malloc(sizeof(struct tile_vision_data));
@@ -1644,12 +1602,12 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_pixbuf = create_unit_pixbuf(punit);
         pv->must_free = TRUE;
         break;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       case OPID_UNIT_ADDRESS:
         pv->data.v_string = g_strdup_printf("%p", punit);
         pv->must_free = TRUE;
         break;
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
       case OPID_UNIT_XY:
         {
           const struct tile *ptile = unit_tile(punit);
@@ -1663,7 +1621,7 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
       case OPID_UNIT_TYPE:
         {
-          const struct unit_type *putype = unit_type_get(punit);
+          const struct unit_type *putype = unit_type(punit);
 
           pv->data.v_const_string = utype_name_translation(putype);
         }
@@ -1708,12 +1666,12 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         pv->data.v_pixbuf = create_city_pixbuf(pcity);
         pv->must_free = TRUE;
         break;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       case OPID_CITY_ADDRESS:
         pv->data.v_string = g_strdup_printf("%p", pcity);
         pv->must_free = TRUE;
         break;
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
       case OPID_CITY_XY:
         {
           const struct tile *ptile = city_tile(pcity);
@@ -1730,9 +1688,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
         break;
       case OPID_CITY_SIZE:
         pv->data.v_int = city_size_get(pcity);
-        break;
-      case OPID_CITY_HISTORY:
-        pv->data.v_int = pcity->history;
         break;
       case OPID_CITY_BUILDINGS:
         pv->data.v_built = fc_malloc(sizeof(pcity->built));
@@ -1757,7 +1712,6 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
   case OBJTYPE_PLAYER:
     {
       const struct player *pplayer = objbind_get_object(ob);
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         goto FAILED;
@@ -1770,33 +1724,22 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       case OPID_PLAYER_NATION:
         pv->data.v_nation = nation_of_player(pplayer);
         break;
-      case OPID_PLAYER_GOV:
-        pv->data.v_gov = pplayer->government;
-        break;
-      case OPID_PLAYER_AGE:
-        pv->data.v_int = pplayer->turns_alive;
-        break;
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
       case OPID_PLAYER_ADDRESS:
         pv->data.v_string = g_strdup_printf("%p", pplayer);
         pv->must_free = TRUE;
         break;
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
       case OPID_PLAYER_INVENTIONS:
-        presearch = research_get(pplayer);
         pv->data.v_inventions = fc_calloc(A_LAST, sizeof(bool));
         advance_index_iterate(A_FIRST, tech) {
           pv->data.v_inventions[tech]
-              = TECH_KNOWN == research_invention_state(presearch, tech);
+              = TECH_KNOWN == player_invention_state(pplayer, tech);
         } advance_index_iterate_end;
         pv->must_free = TRUE;
         break;
-      case OPID_PLAYER_SCENARIO_RESERVED:
-        pv->data.v_bool = player_has_flag(pplayer, PLRF_SCENARIO_RESERVED);
-        break;
       case OPID_PLAYER_SCIENCE:
-        presearch = research_get(pplayer);
-        pv->data.v_int = presearch->bulbs_researched;
+        pv->data.v_int = player_research_get(pplayer)->bulbs_researched;
         break;
       case OPID_PLAYER_GOLD:
         pv->data.v_int = pplayer->economic.gold;
@@ -1828,29 +1771,14 @@ static struct propval *objbind_get_value_from_object(struct objbind *ob,
       case OPID_GAME_SCENARIO_NAME:
         pv->data.v_const_string = pgame->scenario.name;
         break;
-      case OPID_GAME_SCENARIO_AUTHORS:
-        pv->data.v_const_string = pgame->scenario.authors;
-        break;
       case OPID_GAME_SCENARIO_DESC:
-        pv->data.v_const_string = pgame->scenario_desc.description;
-        break;
-      case OPID_GAME_SCENARIO_RANDSTATE:
-        pv->data.v_bool = pgame->scenario.save_random;
+        pv->data.v_const_string = pgame->scenario.description;
         break;
       case OPID_GAME_SCENARIO_PLAYERS:
         pv->data.v_bool = pgame->scenario.players;
         break;
       case OPID_GAME_STARTPOS_NATIONS:
         pv->data.v_bool = pgame->scenario.startpos_nations;
-        break;
-      case OPID_GAME_PREVENT_CITIES:
-        pv->data.v_bool = pgame->scenario.prevent_new_cities;
-        break;
-      case OPID_GAME_LAKE_FLOODING:
-        pv->data.v_bool = pgame->scenario.lake_flooding;
-        break;
-      case OPID_GAME_RULESET_LOCKED:
-        pv->data.v_bool = pgame->scenario.ruleset_locked;
         break;
       default:
         log_error("%s(): Unhandled request for value of property %d "
@@ -1936,7 +1864,7 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         return FALSE;
       }
 
-      putype = unit_type_get(punit);
+      putype = unit_type(punit);
 
       switch (propid) {
       case OPID_UNIT_MOVES_LEFT:
@@ -1986,12 +1914,6 @@ static bool objbind_get_allowed_value_span(struct objbind *ob,
         *pmax = MAX_CITY_SIZE;
         *pstep = 1;
         *pbig_step = 5;
-        return TRUE;
-      case OPID_CITY_HISTORY:
-        *pmin = 0;
-        *pmax = USHRT_MAX;
-        *pstep = 1;
-        *pbig_step = 10;
         return TRUE;
       case OPID_CITY_FOOD_STOCK:
         *pmin = 0;
@@ -2233,7 +2155,7 @@ static void objbind_pack_current_values(struct objbind *ob,
 {
   enum editor_object_type objtype;
 
-  if (!ob || !pd.pointers.v_pointer1) {
+  if (!ob || !pd.v_pointer) {
     return;
   }
 
@@ -2250,7 +2172,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       }
 
       packet->tile = tile_index(ptile);
-      packet->extras = *tile_extras(ptile);
+      packet->specials = tile_specials(ptile);
+      packet->bases = *tile_bases(ptile);
+      packet->roads = *tile_roads(ptile);
       /* TODO: Set more packet fields. */
     }
     return;
@@ -2276,7 +2200,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       }
 
       packet->id = punit->id;
-      packet->moves_left = punit->moves_left;
+      /* packet send code will take account of whether network connection
+       * has "extended_move_rate" capability */
+      packet->moves_left_old = packet->moves_left_new = punit->moves_left;
       packet->fuel = punit->fuel;
       packet->moved = punit->moved;
       packet->done_moving = punit->done_moving;
@@ -2299,7 +2225,6 @@ static void objbind_pack_current_values(struct objbind *ob,
       packet->id = pcity->id;
       sz_strlcpy(packet->name, pcity->name);
       packet->size = city_size_get(pcity);
-      packet->history = pcity->history;
       for (i = 0; i < B_LAST; i++) {
         packet->built[i] = pcity->built[i].turn;
       }
@@ -2314,7 +2239,6 @@ static void objbind_pack_current_values(struct objbind *ob,
       struct packet_edit_player *packet = pd.player;
       const struct player *pplayer = objbind_get_object(ob);
       const struct nation_type *pnation;
-      const struct research *presearch;
 
       if (NULL == pplayer) {
         return;
@@ -2324,20 +2248,18 @@ static void objbind_pack_current_values(struct objbind *ob,
       sz_strlcpy(packet->name, pplayer->name);
       pnation = nation_of_player(pplayer);
       packet->nation = nation_index(pnation);
-      presearch = research_get(pplayer);
       advance_index_iterate(A_FIRST, tech) {
         packet->inventions[tech]
-            = TECH_KNOWN == research_invention_state(presearch, tech);
+            = TECH_KNOWN == player_invention_state(pplayer, tech);
       } advance_index_iterate_end;
       packet->gold = pplayer->economic.gold;
-      packet->government = government_index(pplayer->government);
       /* TODO: Set more packet fields. */
     }
     return;
 
   case OBJTYPE_GAME:
     {
-      struct packet_edit_game *packet = pd.game.game;
+      struct packet_edit_game *packet = pd.game;
       const struct civ_game *pgame = objbind_get_object(ob);
 
       if (NULL == pgame) {
@@ -2347,13 +2269,9 @@ static void objbind_pack_current_values(struct objbind *ob,
       packet->year = pgame->info.year;
       packet->scenario = pgame->scenario.is_scenario;
       sz_strlcpy(packet->scenario_name, pgame->scenario.name);
-      sz_strlcpy(packet->scenario_authors, pgame->scenario.authors);
-      sz_strlcpy(pd.game.desc->scenario_desc, pgame->scenario_desc.description);
-      packet->scenario_random = pgame->scenario.save_random;
+      sz_strlcpy(packet->scenario_desc, pgame->scenario.description);
       packet->scenario_players = pgame->scenario.players;
       packet->startpos_nations = pgame->scenario.startpos_nations;
-      packet->prevent_new_cities = pgame->scenario.prevent_new_cities;
-      packet->lake_flooding = pgame->scenario.lake_flooding;
     }
     return;
 
@@ -2376,7 +2294,7 @@ static void objbind_pack_modified_value(struct objbind *ob,
   enum editor_object_type objtype;
   enum object_property_ids propid;
 
-  if (!op || !ob || !pd.pointers.v_pointer1) {
+  if (!op || !ob || !pd.v_pointer) {
     return;
   }
 
@@ -2403,35 +2321,13 @@ static void objbind_pack_modified_value(struct objbind *ob,
 
       switch (propid) {
       case OPID_TILE_SPECIALS:
-        extra_type_by_cause_iterate(EC_SPECIAL, pextra) {
-          if (BV_ISSET(pv->data.v_bv_special, pextra->data.special_idx)) {
-            BV_SET(packet->extras, pextra->data.special_idx);
-          } else {
-            BV_CLR(packet->extras, pextra->data.special_idx);
-          }
-        } extra_type_by_cause_iterate_end;
+        packet->specials = pv->data.v_bv_special;
         return;
       case OPID_TILE_ROADS:
-        extra_type_by_cause_iterate(EC_ROAD, pextra) {
-          int ridx = road_index(extra_road_get(pextra));
-
-          if (BV_ISSET(pv->data.v_bv_roads, ridx)) {
-            BV_SET(packet->extras, extra_index(pextra));
-          } else {
-            BV_CLR(packet->extras, extra_index(pextra));
-          }
-        } extra_type_by_cause_iterate_end;
+        packet->roads = pv->data.v_bv_roads;
         return;
       case OPID_TILE_BASES:
-        extra_type_by_cause_iterate(EC_BASE, pextra) {
-          int bidx = base_index(extra_base_get(pextra));
-
-          if (BV_ISSET(pv->data.v_bv_bases, bidx)) {
-            BV_SET(packet->extras, extra_index(pextra));
-          } else {
-            BV_CLR(packet->extras, extra_index(pextra));
-          }
-        } extra_type_by_cause_iterate_end;
+        packet->bases = pv->data.v_bv_bases;
         return;
       case OPID_TILE_LABEL:
         sz_strlcpy(packet->label, pv->data.v_string);
@@ -2474,7 +2370,9 @@ static void objbind_pack_modified_value(struct objbind *ob,
 
       switch (propid) {
       case OPID_UNIT_MOVES_LEFT:
-        packet->moves_left = pv->data.v_int;
+        /* packet send code will take account of whether network connection
+         * has "extended_move_rate" capability */
+        packet->moves_left_old = packet->moves_left_new = pv->data.v_int;
         return;
       case OPID_UNIT_FUEL:
         packet->fuel = pv->data.v_int;
@@ -2511,9 +2409,6 @@ static void objbind_pack_modified_value(struct objbind *ob,
       case OPID_CITY_SIZE:
         packet->size = pv->data.v_int;
         return;
-      case OPID_CITY_HISTORY:
-        packet->history = pv->data.v_int;
-        return;
       case OPID_CITY_FOOD_STOCK:
         packet->food_stock = pv->data.v_int;
         return;
@@ -2549,16 +2444,10 @@ static void objbind_pack_modified_value(struct objbind *ob,
       case OPID_PLAYER_NATION:
         packet->nation = nation_index(pv->data.v_nation);
         return;
-      case OPID_PLAYER_GOV:
-        packet->government = government_index(pv->data.v_gov);
-        return;
       case OPID_PLAYER_INVENTIONS:
         advance_index_iterate(A_FIRST, tech) {
           packet->inventions[tech] = pv->data.v_inventions[tech];
         } advance_index_iterate_end;
-        return;
-      case OPID_PLAYER_SCENARIO_RESERVED:
-        packet->scenario_reserved = pv->data.v_bool;
         return;
       case OPID_PLAYER_SCIENCE:
         packet->bulbs_researched = pv->data.v_int;
@@ -2577,7 +2466,7 @@ static void objbind_pack_modified_value(struct objbind *ob,
 
   case OBJTYPE_GAME:
     {
-      struct packet_edit_game *packet = pd.game.game;
+      struct packet_edit_game *packet = pd.game;
 
       switch (propid) {
       case OPID_GAME_YEAR:
@@ -2589,29 +2478,14 @@ static void objbind_pack_modified_value(struct objbind *ob,
       case OPID_GAME_SCENARIO_NAME:
         sz_strlcpy(packet->scenario_name, pv->data.v_const_string);
         return;
-      case OPID_GAME_SCENARIO_AUTHORS:
-        sz_strlcpy(packet->scenario_authors, pv->data.v_const_string);
-        return;
       case OPID_GAME_SCENARIO_DESC:
-        sz_strlcpy(pd.game.desc->scenario_desc, pv->data.v_const_string);
-        return;
-      case OPID_GAME_SCENARIO_RANDSTATE:
-        packet->scenario_random = pv->data.v_bool;
+        sz_strlcpy(packet->scenario_desc, pv->data.v_const_string);
         return;
       case OPID_GAME_SCENARIO_PLAYERS:
         packet->scenario_players = pv->data.v_bool;
         return;
       case OPID_GAME_STARTPOS_NATIONS:
         packet->startpos_nations = pv->data.v_bool;
-        return;
-      case OPID_GAME_PREVENT_CITIES:
-        packet->prevent_new_cities = pv->data.v_bool;
-        return;
-      case OPID_GAME_LAKE_FLOODING:
-        packet->lake_flooding = pv->data.v_bool;
-        return;
-      case OPID_GAME_RULESET_LOCKED:
-        packet->ruleset_locked = pv->data.v_bool;
         return;
       default:
         break;
@@ -2695,7 +2569,6 @@ static GType objprop_get_gtype(const struct objprop *op)
     return G_TYPE_STRING;
   case VALTYPE_PIXBUF:
   case VALTYPE_NATION:
-  case VALTYPE_GOV:
     return GDK_TYPE_PIXBUF;
   }
   log_error("%s(): Unhandled value type %d.", __FUNCTION__, op->valtype);
@@ -2823,17 +2696,6 @@ static const char *objprop_get_name(const struct objprop *op)
 }
 
 /****************************************************************************
-  Return a description (translated) of the property.
-****************************************************************************/
-static const char *objprop_get_tooltip(const struct objprop *op)
-{
-  if (!op) {
-    return NULL;
-  }
-  return op->tooltip;
-}
-
-/****************************************************************************
   Create and return a cell renderer corresponding to this object property,
   suitable to be used with a tree view. May return NULL if this object
   property cannot exist in a list store.
@@ -2936,7 +2798,8 @@ static void objprop_widget_toggle_button_changed(GtkToggleButton *button,
 ****************************************************************************/
 static void objprop_setup_widget(struct objprop *op)
 {
-  GtkWidget *ebox, *hbox, *hbox2, *label, *image, *entry, *spin, *button;
+  GtkWidget *w = NULL;
+  GtkWidget *hbox, *hbox2, *label, *image, *entry, *spin, *button;
   struct extviewer *ev = NULL;
   enum object_property_ids propid;
 
@@ -2948,13 +2811,10 @@ static void objprop_setup_widget(struct objprop *op)
     return;
   }
 
-  ebox = gtk_event_box_new();
-  op->widget = ebox;
-
   hbox = gtk_grid_new();
   gtk_grid_set_column_spacing(GTK_GRID(hbox), 4);
-
-  gtk_container_add(GTK_CONTAINER(ebox), hbox);
+  w = hbox;
+  op->widget = w;
 
   label = gtk_label_new(objprop_get_name(op));
   gtk_widget_set_halign(label, GTK_ALIGN_START);
@@ -2980,13 +2840,12 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_UNIT_TYPE:
   case OPID_CITY_ID:
   case OPID_CITY_XY:
-  case OPID_PLAYER_AGE:
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   case OPID_TILE_ADDRESS:
   case OPID_UNIT_ADDRESS:
   case OPID_CITY_ADDRESS:
   case OPID_PLAYER_ADDRESS:
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
     label = gtk_label_new(NULL);
     gtk_widget_set_hexpand(label, TRUE);
     gtk_widget_set_halign(label, GTK_ALIGN_START);
@@ -3023,7 +2882,6 @@ static void objprop_setup_widget(struct objprop *op)
 
   case OPID_UNIT_MOVES_LEFT:
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
   case OPID_PLAYER_SCIENCE:
   case OPID_PLAYER_GOLD:
@@ -3065,9 +2923,7 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_STARTPOS_NATIONS:
   case OPID_CITY_BUILDINGS:
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
   case OPID_PLAYER_INVENTIONS:
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     ev = extviewer_new(op);
     objprop_set_extviewer(op, ev);
@@ -3081,13 +2937,8 @@ static void objprop_setup_widget(struct objprop *op)
   case OPID_UNIT_MOVED:
   case OPID_UNIT_DONE_MOVING:
   case OPID_GAME_SCENARIO:
-  case OPID_GAME_SCENARIO_RANDSTATE:
   case OPID_GAME_SCENARIO_PLAYERS:
   case OPID_GAME_STARTPOS_NATIONS:
-  case OPID_GAME_PREVENT_CITIES:
-  case OPID_GAME_LAKE_FLOODING:
-  case OPID_GAME_RULESET_LOCKED:
-  case OPID_PLAYER_SCENARIO_RESERVED:
     button = gtk_check_button_new();
     gtk_widget_set_hexpand(button, TRUE);
     gtk_widget_set_halign(button, GTK_ALIGN_END);
@@ -3177,12 +3028,12 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_UNIT_XY:
   case OPID_UNIT_TYPE:
   case OPID_CITY_XY:
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   case OPID_TILE_ADDRESS:
   case OPID_UNIT_ADDRESS:
   case OPID_CITY_ADDRESS:
   case OPID_PLAYER_ADDRESS:
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
     label = objprop_get_child_widget(op, "value-label");
     if (pv) {
       gtk_label_set_text(GTK_LABEL(label), pv->data.v_string);
@@ -3199,13 +3050,11 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_TILE_CONTINENT:
   case OPID_UNIT_ID:
   case OPID_CITY_ID:
-  case OPID_PLAYER_AGE:
     label = objprop_get_child_widget(op, "value-label");
     if (pv) {
-      char agebuf[16];
-
-      fc_snprintf(agebuf, sizeof(agebuf), "%d", pv->data.v_int);
-      gtk_label_set_text(GTK_LABEL(label), agebuf);
+      char buf[16];
+      fc_snprintf(buf, sizeof(buf), "%d", pv->data.v_int);
+      gtk_label_set_text(GTK_LABEL(label), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(label), NULL);
     }
@@ -3226,7 +3075,6 @@ static void objprop_refresh_widget(struct objprop *op,
 
   case OPID_UNIT_MOVES_LEFT:
   case OPID_CITY_SIZE:
-  case OPID_CITY_HISTORY:
   case OPID_CITY_SHIELD_STOCK:
   case OPID_PLAYER_SCIENCE:
   case OPID_PLAYER_GOLD:
@@ -3283,9 +3131,7 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_STARTPOS_NATIONS:
   case OPID_CITY_BUILDINGS:
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
   case OPID_PLAYER_INVENTIONS:
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     ev = objprop_get_extviewer(op);
     if (pv) {
@@ -3299,13 +3145,8 @@ static void objprop_refresh_widget(struct objprop *op,
   case OPID_UNIT_MOVED:
   case OPID_UNIT_DONE_MOVING:
   case OPID_GAME_SCENARIO:
-  case OPID_GAME_SCENARIO_RANDSTATE:
   case OPID_GAME_SCENARIO_PLAYERS:
   case OPID_GAME_STARTPOS_NATIONS:
-  case OPID_GAME_PREVENT_CITIES:
-  case OPID_GAME_LAKE_FLOODING:
-  case OPID_GAME_RULESET_LOCKED:
-  case OPID_PLAYER_SCENARIO_RESERVED:
     button = objprop_get_child_widget(op, "checkbutton");
     disable_gobject_callback(G_OBJECT(button),
         G_CALLBACK(objprop_widget_toggle_button_changed));
@@ -3329,11 +3170,10 @@ static void objprop_refresh_widget(struct objprop *op,
   if (label) {
     const char *name = objprop_get_name(op);
     if (modified) {
-      char namebuf[128];
-
-      fc_snprintf(namebuf, sizeof(namebuf),
+      char buf[128];
+      fc_snprintf(buf, sizeof(buf),
                   "<span foreground=\"red\">%s</span>", name);
-      gtk_label_set_markup(GTK_LABEL(label), namebuf);
+      gtk_label_set_markup(GTK_LABEL(label), buf);
     } else {
       gtk_label_set_text(GTK_LABEL(label), name);
     }
@@ -3455,7 +3295,6 @@ static struct property_page *objprop_get_property_page(const struct objprop *op)
 ****************************************************************************/
 static struct objprop *objprop_new(int id,
                                    const char *name,
-                                   const char *tooltip,
                                    enum object_property_flags flags,
                                    enum value_types valtype,
                                    struct property_page *parent)
@@ -3465,7 +3304,6 @@ static struct objprop *objprop_new(int id,
   op = fc_calloc(1, sizeof(*op));
   op->id = id;
   op->name = name;
-  op->tooltip = tooltip;
   op->flags = flags;
   op->valtype = valtype;
   op->column_id = -1;
@@ -3509,7 +3347,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
   case OPID_STARTPOS_NATIONS:
   case OPID_CITY_BUILDINGS:
   case OPID_PLAYER_INVENTIONS:
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     hbox = gtk_grid_new();
     gtk_grid_set_column_spacing(GTK_GRID(hbox), 4);
@@ -3523,7 +3360,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
     break;
 
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
     vbox = gtk_grid_new();
     gtk_orientable_set_orientation(GTK_ORIENTABLE(vbox),
                                    GTK_ORIENTATION_VERTICAL);
@@ -3603,11 +3439,9 @@ static struct extviewer *extviewer_new(struct objprop *op)
     break;
   case OPID_STARTPOS_NATIONS:
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
     store = gtk_list_store_new(4, G_TYPE_BOOLEAN, G_TYPE_INT,
                                GDK_TYPE_PIXBUF, G_TYPE_STRING);
     break;
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     textbuf = gtk_text_buffer_new(NULL);
     break;
@@ -3717,15 +3551,12 @@ static struct extviewer *extviewer_new(struct objprop *op)
     break;
 
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
     /* TRANS: As in "the player has set this nation". */
     add_column(view, 0, _("Set"), G_TYPE_BOOLEAN, TRUE, TRUE,
                G_CALLBACK(extviewer_view_cell_toggled), ev);
     add_column(view, 1, _("ID"), G_TYPE_INT,
                FALSE, FALSE, NULL, NULL);
-    add_column(view, 2,
-               propid == OPID_PLAYER_GOV ? _("Icon") : _("Flag"),
-               GDK_TYPE_PIXBUF,
+    add_column(view, 2, _("Flag"), GDK_TYPE_PIXBUF,
                FALSE, FALSE, NULL, NULL);
     add_column(view, 3, _("Name"), G_TYPE_STRING,
                FALSE, FALSE, NULL, NULL);
@@ -3741,7 +3572,6 @@ static struct extviewer *extviewer_new(struct objprop *op)
                FALSE, FALSE, NULL, NULL);
     break;
 
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     g_signal_connect(textbuf, "changed",
                      G_CALLBACK(extviewer_textbuf_changed), ev);
@@ -3835,13 +3665,13 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   case OPID_TILE_SPECIALS:
     gtk_list_store_clear(store);
-    extra_type_by_cause_iterate(EC_SPECIAL, spe) {
-      id = spe->data.special_idx;
-      name = extra_name_translation(spe);
-      present = BV_ISSET(pv->data.v_bv_special, id);
+    tile_special_type_iterate(spe) {
+      id = spe;
+      name = special_name_translation(spe);
+      present = BV_ISSET(pv->data.v_bv_special, spe);
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } extra_type_by_cause_iterate_end;
+    } tile_special_type_iterate_end;
     buf = propval_as_string(pv);
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
     g_free(buf);
@@ -3849,15 +3679,13 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   case OPID_TILE_ROADS:
     gtk_list_store_clear(store);
-    extra_type_by_cause_iterate(EC_ROAD, pextra) {
-      struct road_type *proad = extra_road_get(pextra);
-
+    road_type_iterate(proad) {
       id = road_number(proad);
-      name = extra_name_translation(pextra);
+      name = road_name_translation(proad);
       present = BV_ISSET(pv->data.v_bv_roads, id);
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } extra_type_by_cause_iterate_end;
+    } road_type_iterate_end;
     buf = propval_as_string(pv);
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
     g_free(buf);
@@ -3865,15 +3693,13 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
 
   case OPID_TILE_BASES:
     gtk_list_store_clear(store);
-    extra_type_by_cause_iterate(EC_BASE, pextra) {
-      struct base_type *pbase = extra_base_get(pextra);
-
+    base_type_iterate(pbase) {
       id = base_number(pbase);
-      name = extra_name_translation(pextra);
+      name = base_name_translation(pbase);
       present = BV_ISSET(pv->data.v_bv_bases, id);
       gtk_list_store_append(store, &iter);
       gtk_list_store_set(store, &iter, 0, present, 1, id, 2, name, -1);
-    } extra_type_by_cause_iterate_end;
+    } base_type_iterate_end;
     buf = propval_as_string(pv);
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
     g_free(buf);
@@ -3988,31 +3814,6 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
     }
     break;
 
-  case OPID_PLAYER_GOV:
-    {
-      gtk_list_store_clear(store);
-      governments_iterate(pgov) {
-        present = (pgov == pv->data.v_gov);
-        id = government_index(pgov);
-        pixbuf = sprite_get_pixbuf(get_government_sprite(tileset, pgov));
-        name = government_name_translation(pgov);
-        gtk_list_store_append(store, &iter);
-        gtk_list_store_set(store, &iter, 0, present, 1, id,
-                           2, pixbuf, 3, name, -1);
-        if (pixbuf) {
-          g_object_unref(pixbuf);
-        }
-      } governments_iterate_end;
-      gtk_label_set_text(GTK_LABEL(ev->panel_label),
-                         government_name_translation(pv->data.v_gov));
-      pixbuf = sprite_get_pixbuf(get_government_sprite(tileset, pv->data.v_gov));
-      gtk_image_set_from_pixbuf(GTK_IMAGE(ev->panel_image), pixbuf);
-      if (pixbuf) {
-        g_object_unref(pixbuf);
-      }
-    }
-    break;
-
   case OPID_PLAYER_INVENTIONS:
     gtk_list_store_clear(store);
     advance_iterate(A_FIRST, padvance) {
@@ -4027,14 +3828,12 @@ static void extviewer_refresh_widgets(struct extviewer *ev,
     g_free(buf);
     break;
 
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     disable_gobject_callback(G_OBJECT(ev->textbuf),
                              G_CALLBACK(extviewer_textbuf_changed));
     {
       GtkTextIter start, end;
       char *oldtext;
-
       /* Don't re-set content if unchanged, to avoid moving cursor */
       gtk_text_buffer_get_bounds(textbuf, &start, &end);
       oldtext = gtk_text_buffer_get_text(textbuf, &start, &end, TRUE);
@@ -4091,11 +3890,9 @@ static void extviewer_clear_widgets(struct extviewer *ev)
     gtk_list_store_clear(ev->store);
     break;
   case OPID_PLAYER_NATION:
-  case OPID_PLAYER_GOV:
     gtk_list_store_clear(ev->store);
     gtk_image_set_from_pixbuf(GTK_IMAGE(ev->panel_image), NULL);
     break;
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     disable_gobject_callback(G_OBJECT(ev->textbuf),
                              G_CALLBACK(extviewer_textbuf_changed));
@@ -4178,7 +3975,7 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
 
   case OPID_TILE_SPECIALS:
     gtk_tree_model_get(model, &iter, 1, &id, -1);
-    if (id < 0 || id >= extra_type_list_size(extra_type_list_by_cause(EC_SPECIAL))) {
+    if (!(0 <= id && id < S_LAST)) {
       return;
     }
     if (present) {
@@ -4302,25 +4099,6 @@ static void extviewer_view_cell_toggled(GtkCellRendererToggle *cell,
     }
     break;
 
-  case OPID_PLAYER_GOV:
-    gtk_tree_model_get(model, &iter, 1, &id, -1);
-    if (!(0 <= id && id < government_count()) || !present) {
-      return;
-    }
-    old_id = government_index(pv->data.v_gov);
-    pv->data.v_gov = government_by_number(id);
-    gtk_list_store_set(ev->store, &iter, 0, TRUE, -1);
-    gtk_tree_model_iter_nth_child(model, &iter, NULL, old_id);
-    gtk_list_store_set(ev->store, &iter, 0, FALSE, -1);
-    gtk_label_set_text(GTK_LABEL(ev->panel_label),
-                       government_name_translation(pv->data.v_gov));
-    pixbuf = sprite_get_pixbuf(get_government_sprite(tileset, pv->data.v_gov));
-    gtk_image_set_from_pixbuf(GTK_IMAGE(ev->panel_image), pixbuf);
-    if (pixbuf) {
-      g_object_unref(pixbuf);
-    }
-    break;
-
   case OPID_PLAYER_INVENTIONS:
     gtk_tree_model_get(model, &iter, 1, &id, -1);
     if (!(A_FIRST <= id && id < advance_count())) {
@@ -4375,7 +4153,6 @@ static void extviewer_textbuf_changed(GtkTextBuffer *textbuf,
   pv = &value;
 
   switch (propid) {
-  case OPID_GAME_SCENARIO_AUTHORS:
   case OPID_GAME_SCENARIO_DESC:
     buf = propval_as_string(pv);
     gtk_label_set_text(GTK_LABEL(ev->panel_label), buf);
@@ -4398,190 +4175,152 @@ static void extviewer_textbuf_changed(GtkTextBuffer *textbuf,
 ****************************************************************************/
 static void property_page_setup_objprops(struct property_page *pp)
 {
-#define ADDPROP(ARG_id, ARG_name, ARG_tooltip, ARG_flags, ARG_valtype) do { \
-  struct objprop *MY_op = objprop_new(ARG_id, ARG_name, ARG_tooltip, \
-                                      ARG_flags, ARG_valtype, pp); \
-  objprop_hash_insert(pp->objprop_table, MY_op->id, MY_op); \
+#define ADDPROP(ARG_id, ARG_name, ARG_flags, ARG_valtype) do {\
+  struct objprop *MY_op = objprop_new(ARG_id, ARG_name,\
+                                      ARG_flags, ARG_valtype, pp);\
+  objprop_hash_insert(pp->objprop_table, MY_op->id, MY_op);\
 } while (FALSE)
 
   switch (property_page_get_objtype(pp)) {
   case OBJTYPE_TILE:
-    ADDPROP(OPID_TILE_IMAGE, _("Image"), NULL,
+    ADDPROP(OPID_TILE_IMAGE, _("Image"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_PIXBUF);
-    ADDPROP(OPID_TILE_TERRAIN, _("Terrain"), NULL,
+    ADDPROP(OPID_TILE_TERRAIN, _("Terrain"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_TILE_RESOURCE, _("Resource"), NULL,
+    ADDPROP(OPID_TILE_RESOURCE, _("Resource"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_TILE_INDEX, _("Index"), NULL,
+    ADDPROP(OPID_TILE_INDEX, _("Index"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_TILE_X, Q_("?coordinate:X"), NULL,
+    ADDPROP(OPID_TILE_X, Q_("?coordinate:X"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_TILE_Y, Q_("?coordinate:Y"), NULL,
+    ADDPROP(OPID_TILE_Y, Q_("?coordinate:Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
     /* TRANS: The coordinate X in native coordinates.
      * The freeciv coordinate system is described in doc/HACKING. */
-    ADDPROP(OPID_TILE_NAT_X, _("NAT X"), NULL,
+    ADDPROP(OPID_TILE_NAT_X, _("NAT X"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
     /* TRANS: The coordinate Y in native coordinates.
      * The freeciv coordinate system is described in doc/HACKING. */
-    ADDPROP(OPID_TILE_NAT_Y, _("NAT Y"), NULL,
+    ADDPROP(OPID_TILE_NAT_Y, _("NAT Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_TILE_CONTINENT, _("Continent"), NULL,
+    ADDPROP(OPID_TILE_CONTINENT, _("Continent"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_TILE_XY, Q_("?coordinates:X,Y"), NULL,
+    ADDPROP(OPID_TILE_XY, Q_("?coordinates:X,Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_TILE_SPECIALS, _("Specials"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_BV_SPECIAL);
-    ADDPROP(OPID_TILE_ROADS, _("Roads"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_BV_ROADS);
-    ADDPROP(OPID_TILE_BASES, _("Bases"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_BV_BASES);
-#ifdef FREECIV_DEBUG
-    ADDPROP(OPID_TILE_ADDRESS, _("Address"), NULL,
+    ADDPROP(OPID_TILE_SPECIALS, _("Specials"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_SPECIAL);
+    ADDPROP(OPID_TILE_ROADS, _("Roads"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_ROADS);
+    ADDPROP(OPID_TILE_BASES, _("Bases"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BV_BASES);
+#ifdef DEBUG
+    ADDPROP(OPID_TILE_ADDRESS, _("Address"),
             OPF_HAS_WIDGET, VALTYPE_STRING);
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 #if 0
     /* Disabled entirely for now as server is not sending other
      * players' vision information anyway. */
-    ADDPROP(OPID_TILE_VISION, _("Vision"), NULL,
+    ADDPROP(OPID_TILE_VISION, _("Vision"),
             OPF_HAS_WIDGET, VALTYPE_TILE_VISION_DATA);
 #endif
     /* TRANS: Tile property "Label" label in editor */
-    ADDPROP(OPID_TILE_LABEL, Q_("?property:Label"), NULL,
+    ADDPROP(OPID_TILE_LABEL, Q_("?property:Label"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_STRING);
     return;
 
   case OBJTYPE_STARTPOS:
-    ADDPROP(OPID_STARTPOS_IMAGE, _("Image"), NULL,
+    ADDPROP(OPID_STARTPOS_IMAGE, _("Image"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_PIXBUF);
-    ADDPROP(OPID_STARTPOS_XY, Q_("?coordinates:X,Y"), NULL,
+    ADDPROP(OPID_STARTPOS_XY, Q_("?coordinates:X,Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_STARTPOS_EXCLUDE, _("Exclude Nations"), NULL,
+    ADDPROP(OPID_STARTPOS_EXCLUDE, _("Exclude Nations"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_STARTPOS_NATIONS, _("Nations"), NULL,
+    ADDPROP(OPID_STARTPOS_NATIONS, _("Nations"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
             VALTYPE_NATION_HASH);
     return;
 
   case OBJTYPE_UNIT:
-    ADDPROP(OPID_UNIT_IMAGE, _("Image"), NULL,
+    ADDPROP(OPID_UNIT_IMAGE, _("Image"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_PIXBUF);
-#ifdef FREECIV_DEBUG
-    ADDPROP(OPID_UNIT_ADDRESS, _("Address"), NULL,
+#ifdef DEBUG
+    ADDPROP(OPID_UNIT_ADDRESS, _("Address"),
             OPF_HAS_WIDGET, VALTYPE_STRING);
-#endif /* FREECIV_DEBUG */
-    ADDPROP(OPID_UNIT_TYPE, _("Type"), NULL,
+#endif /* DEBUG */
+    ADDPROP(OPID_UNIT_TYPE, _("Type"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_UNIT_ID, _("ID"), NULL,
+    ADDPROP(OPID_UNIT_ID, _("ID"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_UNIT_XY, Q_("?coordinates:X,Y"), NULL,
+    ADDPROP(OPID_UNIT_XY, Q_("?coordinates:X,Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_UNIT_MOVES_LEFT, _("Moves Left"), NULL,
+    ADDPROP(OPID_UNIT_MOVES_LEFT, _("Moves Left"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_UNIT_FUEL, _("Fuel"), NULL,
+    ADDPROP(OPID_UNIT_FUEL, _("Fuel"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_UNIT_MOVED, _("Moved"), NULL,
+    ADDPROP(OPID_UNIT_MOVED, _("Moved"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_UNIT_DONE_MOVING, _("Done Moving"), NULL,
+    ADDPROP(OPID_UNIT_DONE_MOVING, _("Done Moving"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
     /* TRANS: HP = Hit Points of a unit. */
-    ADDPROP(OPID_UNIT_HP, _("HP"), NULL,
+    ADDPROP(OPID_UNIT_HP, _("HP"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_UNIT_VETERAN, _("Veteran"), NULL,
+    ADDPROP(OPID_UNIT_VETERAN, _("Veteran"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     return;
 
   case OBJTYPE_CITY:
-    ADDPROP(OPID_CITY_IMAGE, _("Image"), NULL,
+    ADDPROP(OPID_CITY_IMAGE, _("Image"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_PIXBUF);
-    ADDPROP(OPID_CITY_NAME, _("Name"), NULL,
+    ADDPROP(OPID_CITY_NAME, _("Name"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_STRING);
-#ifdef FREECIV_DEBUG
-    ADDPROP(OPID_CITY_ADDRESS, _("Address"), NULL,
+#ifdef DEBUG
+    ADDPROP(OPID_CITY_ADDRESS, _("Address"),
             OPF_HAS_WIDGET, VALTYPE_STRING);
-#endif /* FREECIV_DEBUG */
-    ADDPROP(OPID_CITY_ID, _("ID"), NULL,
+#endif /* DEBUG */
+    ADDPROP(OPID_CITY_ID, _("ID"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_CITY_XY, Q_("?coordinates:X,Y"), NULL,
+    ADDPROP(OPID_CITY_XY, Q_("?coordinates:X,Y"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET, VALTYPE_STRING);
-    ADDPROP(OPID_CITY_SIZE, _("Size"), NULL,
+    ADDPROP(OPID_CITY_SIZE, _("Size"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_CITY_HISTORY, _("History"), NULL,
+    ADDPROP(OPID_CITY_BUILDINGS, _("Buildings"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BUILT_ARRAY);
+    ADDPROP(OPID_CITY_FOOD_STOCK, _("Food Stock"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_CITY_BUILDINGS, _("Buildings"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_BUILT_ARRAY);
-    ADDPROP(OPID_CITY_FOOD_STOCK, _("Food Stock"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_CITY_SHIELD_STOCK, _("Shield Stock"), NULL,
+    ADDPROP(OPID_CITY_SHIELD_STOCK, _("Shield Stock"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     return;
 
   case OBJTYPE_PLAYER:
-    ADDPROP(OPID_PLAYER_NAME, _("Name"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_STRING);
-#ifdef FREECIV_DEBUG
-    ADDPROP(OPID_PLAYER_ADDRESS, _("Address"), NULL,
+    ADDPROP(OPID_PLAYER_NAME, _("Name"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_STRING);
+#ifdef DEBUG
+    ADDPROP(OPID_PLAYER_ADDRESS, _("Address"),
             OPF_HAS_WIDGET, VALTYPE_STRING);
-#endif /* FREECIV_DEBUG */
-    ADDPROP(OPID_PLAYER_NATION, _("Nation"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_NATION);
-    ADDPROP(OPID_PLAYER_GOV, _("Government"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_GOV);
-    ADDPROP(OPID_PLAYER_AGE, _("Age"), NULL,
-            OPF_HAS_WIDGET, VALTYPE_INT);
-    ADDPROP(OPID_PLAYER_INVENTIONS, _("Inventions"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_INVENTIONS_ARRAY);
-    ADDPROP(OPID_PLAYER_SCENARIO_RESERVED, _("Reserved"), NULL,
-            OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_PLAYER_SCIENCE, _("Science"), NULL,
+#endif /* DEBUG */
+    ADDPROP(OPID_PLAYER_NATION, _("Nation"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_NATION);
+    ADDPROP(OPID_PLAYER_INVENTIONS, _("Inventions"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INVENTIONS_ARRAY);
+    ADDPROP(OPID_PLAYER_SCIENCE, _("Science"),
             OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
-    ADDPROP(OPID_PLAYER_GOLD, _("Gold"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_INT);
+    ADDPROP(OPID_PLAYER_GOLD, _("Gold"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
     return;
 
   case OBJTYPE_GAME:
-    ADDPROP(OPID_GAME_YEAR, _("Year"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_INT);
-    ADDPROP(OPID_GAME_SCENARIO, _("Scenario"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_SCENARIO_NAME, _("Scenario Name"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_STRING);
-    ADDPROP(OPID_GAME_SCENARIO_AUTHORS,
-            _("Scenario Authors"), NULL,
+    ADDPROP(OPID_GAME_YEAR, _("Year"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_INT);
+    ADDPROP(OPID_GAME_SCENARIO, _("Scenario"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
+    ADDPROP(OPID_GAME_SCENARIO_NAME, _("Scenario Name"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_STRING);
+    ADDPROP(OPID_GAME_SCENARIO_DESC, _("Scenario Description"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
             VALTYPE_STRING);
-    ADDPROP(OPID_GAME_SCENARIO_DESC,
-            _("Scenario Description"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE,
-            VALTYPE_STRING);
-    ADDPROP(OPID_GAME_SCENARIO_RANDSTATE,
-            _("Save Random Number State"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_SCENARIO_PLAYERS,
-            _("Save Players"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_STARTPOS_NATIONS,
-            _("Nation Start Positions"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_PREVENT_CITIES,
-            _("Prevent New Cities"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_LAKE_FLOODING,
-            _("Saltwater Flooding Lakes"), NULL,
-            OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
-    ADDPROP(OPID_GAME_RULESET_LOCKED,
-            _("Lock to current Ruleset"), NULL,
+    ADDPROP(OPID_GAME_SCENARIO_PLAYERS, _("Save Players"), OPF_IN_LISTVIEW
+            | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
+    ADDPROP(OPID_GAME_STARTPOS_NATIONS, _("Nation Start Positions"),
             OPF_IN_LISTVIEW | OPF_HAS_WIDGET | OPF_EDITABLE, VALTYPE_BOOL);
     return;
 
@@ -4734,7 +4473,7 @@ property_page_new(enum editor_object_type objtype,
   int num_columns = 0;
   GType *gtype_array;
   int col_id = 1;
-  const char *attr_type_str, *name, *tooltip;
+  const char *attr_type_str, *name;
   gchar *title;
 
   if (!(0 <= objtype && objtype < NUM_OBJTYPES)) {
@@ -4960,7 +4699,8 @@ property_page_new(enum editor_object_type objtype,
                                  GTK_ORIENTATION_VERTICAL);
   gtk_grid_set_row_spacing(GTK_GRID(vbox2), 4);
   gtk_container_set_border_width(GTK_CONTAINER(vbox2), 4);
-  gtk_container_add(GTK_CONTAINER(scrollwin), vbox2);
+  gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrollwin),
+                                        vbox2);
   
   property_page_objprop_iterate(pp, op) {
     if (!objprop_has_widget(op)) {
@@ -4971,10 +4711,6 @@ property_page_new(enum editor_object_type objtype,
       continue;
     }
     gtk_container_add(GTK_CONTAINER(vbox2), w);
-    tooltip = objprop_get_tooltip(op);
-    if (NULL != tooltip) {
-      gtk_widget_set_tooltip_text(w, tooltip);
-    }
   } property_page_objprop_iterate_end;
 
   hbox2 = gtk_grid_new();
@@ -5057,7 +4793,20 @@ property_page_get_objtype(const struct property_page *pp)
 ****************************************************************************/
 static GdkPixbuf *create_tile_pixbuf(const struct tile *ptile)
 {
-  return create_pixbuf_from_layers(ptile, NULL, NULL, LAYER_CATEGORY_TILE);
+  int layers[] = {
+    LAYER_BACKGROUND,
+    LAYER_TERRAIN1,
+    LAYER_TERRAIN2,
+    LAYER_TERRAIN3,
+    LAYER_WATER,
+    LAYER_ROADS,
+    LAYER_SPECIAL1,
+    LAYER_SPECIAL2,
+    LAYER_SPECIAL3
+  };
+  int num_layers = ARRAY_SIZE(layers);
+
+  return create_pixbuf_from_layers(ptile, NULL, NULL, layers, num_layers);
 }
 
 /****************************************************************************
@@ -5069,7 +4818,14 @@ static GdkPixbuf *create_tile_pixbuf(const struct tile *ptile)
 ****************************************************************************/
 static GdkPixbuf *create_unit_pixbuf(const struct unit *punit)
 {
-  return create_pixbuf_from_layers(NULL, punit, NULL, LAYER_CATEGORY_UNIT);
+  int layers[] = {
+    LAYER_UNIT,
+    LAYER_FOCUS_UNIT,
+  };
+  int num_layers = ARRAY_SIZE(layers);
+
+  return create_pixbuf_from_layers(NULL, punit, NULL,
+                                   layers, num_layers);
 }
 
 /****************************************************************************
@@ -5081,13 +4837,28 @@ static GdkPixbuf *create_unit_pixbuf(const struct unit *punit)
 ****************************************************************************/
 static GdkPixbuf *create_city_pixbuf(const struct city *pcity)
 {
+  int layers[] = {
+    LAYER_BACKGROUND,
+    LAYER_TERRAIN1,
+    LAYER_TERRAIN2,
+    LAYER_TERRAIN3,
+    LAYER_WATER,
+    LAYER_ROADS,
+    LAYER_SPECIAL1,
+    LAYER_CITY1,
+    LAYER_SPECIAL2,
+    LAYER_CITY2,
+    LAYER_SPECIAL3
+  };
+  int num_layers = ARRAY_SIZE(layers);
+
   return create_pixbuf_from_layers(city_tile(pcity), NULL, pcity,
-                                   LAYER_CATEGORY_CITY);
+                                   layers, num_layers);
 }
 
 /****************************************************************************
   Create a pixbuf containing an image of the given tile, unit or city
-  restricted to the layer category 'cat'.
+  restricted to the layers listed in 'layers'.
 
   May return NULL on error or bad input.
   NB: You must call g_object_unref on the non-NULL return value when you
@@ -5096,10 +4867,11 @@ static GdkPixbuf *create_city_pixbuf(const struct city *pcity)
 static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
                                             const struct unit *punit,
                                             const struct city *pcity,
-                                            enum layer_category category)
+                                            int *layers,
+                                            int num_layers)
 {
   struct canvas canvas = FC_STATIC_CANVAS_INIT;
-  int h, fh, fw, canvas_x, canvas_y;
+  int h, i, fh, fw, canvas_x, canvas_y;
   GdkPixbuf *pixbuf;
   cairo_t *cr;
 
@@ -5119,13 +4891,11 @@ static GdkPixbuf *create_pixbuf_from_layers(const struct tile *ptile,
 
   canvas_y += (fh - h);
 
-  mapview_layer_iterate(layer) {
-    if (tileset_layer_in_category(layer, category)) {
-      put_one_element(&canvas, 1.0, layer,
-                      ptile, NULL, NULL, punit, pcity,
-                      canvas_x, canvas_y, NULL, NULL);
-    }
-  } mapview_layer_iterate_end
+  for (i = 0; i < num_layers; i++) {
+    put_one_element(&canvas, layers[i],
+                    ptile, NULL, NULL, punit, pcity,
+                    canvas_x, canvas_y, NULL, NULL);
+  }
   pixbuf = surface_get_pixbuf(canvas.surface, fw, fh);
   cairo_surface_destroy(canvas.surface);
 
@@ -5315,13 +5085,6 @@ static bool property_page_set_store_value(struct property_page *pp,
       g_object_unref(pixbuf);
     }
     break;
-  case VALTYPE_GOV:
-    pixbuf = sprite_get_pixbuf(get_government_sprite(tileset, pv->data.v_gov));
-    gtk_list_store_set(store, iter, col_id, pixbuf, -1);
-    if (pixbuf) {
-      g_object_unref(pixbuf);
-    }
-    break;
   case VALTYPE_TILE_VISION_DATA:
     break;
   }
@@ -5337,7 +5100,7 @@ static bool property_page_set_store_value(struct property_page *pp,
 ****************************************************************************/
 static void property_page_fill_widgets(struct property_page *pp)
 {
-  struct objbind *focused;
+  struct objbind *ob;
 
   if (!pp || !pp->objbind_table) {
     return;
@@ -5374,9 +5137,9 @@ static void property_page_fill_widgets(struct property_page *pp)
     }
   }
 
-  focused = property_page_get_focused_objbind(pp);
+  ob = property_page_get_focused_objbind(pp);
   property_page_objprop_iterate(pp, op) {
-    objprop_refresh_widget(op, focused);
+    objprop_refresh_widget(op, ob);
   } property_page_objprop_iterate_end;
 }
 
@@ -5515,7 +5278,7 @@ static void property_page_send_values(struct property_page *pp)
   }
 
   packet = property_page_new_packet(pp);
-  if (!packet.pointers.v_pointer1) {
+  if (!packet.v_pointer) {
     return;
   }
 
@@ -5550,12 +5313,9 @@ static void property_page_send_values(struct property_page *pp)
 ****************************************************************************/
 static union packetdata property_page_new_packet(struct property_page *pp)
 {
-  union packetdata packet;
-
-  packet.pointers.v_pointer2 = NULL;
+  union packetdata packet = {NULL,};
 
   if (!pp) {
-    packet.pointers.v_pointer1 = NULL;
     return packet;
   }
 
@@ -5576,8 +5336,7 @@ static union packetdata property_page_new_packet(struct property_page *pp)
     packet.player = fc_calloc(1, sizeof(*packet.player));
     break;
   case OBJTYPE_GAME:
-    packet.game.game = fc_calloc(1, sizeof(*packet.game.game));
-    packet.game.desc = fc_calloc(1, sizeof(*packet.game.desc));
+    packet.game = fc_calloc(1, sizeof(*packet.game));
     break;
   case NUM_OBJTYPES:
     break;
@@ -5594,7 +5353,7 @@ static void property_page_send_packet(struct property_page *pp,
 {
   struct connection *my_conn = &client.conn;
 
-  if (!pp || !packet.pointers.v_pointer1) {
+  if (!pp || !packet.v_pointer) {
     return;
   }
 
@@ -5615,8 +5374,7 @@ static void property_page_send_packet(struct property_page *pp,
     send_packet_edit_player(my_conn, packet.player);
     return;
   case OBJTYPE_GAME:
-    send_packet_edit_game(my_conn, packet.game.game);
-    send_packet_edit_scenario_desc(my_conn, packet.game.desc);
+    send_packet_edit_game(my_conn, packet.game);
     return;
   case NUM_OBJTYPES:
     break;
@@ -5633,17 +5391,12 @@ static void property_page_send_packet(struct property_page *pp,
 static void property_page_free_packet(struct property_page *pp,
                                       union packetdata packet)
 {
-  if (!packet.pointers.v_pointer1) {
+  if (!packet.v_pointer) {
     return;
   }
 
-  free(packet.pointers.v_pointer1);
-  packet.pointers.v_pointer1 = NULL;
-
-  if (packet.pointers.v_pointer2 != NULL) {
-    free(packet.pointers.v_pointer2);
-    packet.pointers.v_pointer2 = NULL;
-  }
+  free(packet.v_pointer);
+  packet.v_pointer = NULL;
 }
 
 /****************************************************************************

@@ -15,7 +15,7 @@
 
 /* utility */
 #include "log.h"        /* enum log_level */
-#include "net_types.h"  /* announce_type */
+#include "netintf.h"
 
 /* common */
 #include "fc_types.h"
@@ -45,7 +45,6 @@ struct server_arguments {
   char *script_filename;
   char *saves_pathname;
   char *scenarios_pathname;
-  char *ruleset;
   char serverid[256];
   /* quit if there no players after a given time interval */
   int quitidle;
@@ -101,6 +100,8 @@ bool game_was_started(void);
 
 bool server_packet_input(struct connection *pconn, void *packet, int type);
 void start_game(void);
+void save_game(const char *orig_filename, const char *save_reason,
+               bool scenario);
 const char *pick_random_player_name(const struct nation_type *pnation);
 void player_nation_defaults(struct player *pplayer, struct nation_type *pnation,
                             bool set_name);
@@ -118,5 +119,7 @@ extern struct server_arguments srvarg;
 extern bool force_end_of_sniff;
 
 void update_nations_with_startpos(void);
+
+int current_turn_timeout(void);
 
 #endif /* FC__SRV_MAIN_H */

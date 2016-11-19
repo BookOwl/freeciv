@@ -235,24 +235,24 @@ cd "$SRCDIR"
 }
 
 # autoconf and autoheader version numbers must be kept in sync
-real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 65 || DIE=1
+real_package_name "autoconf" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 61 || DIE=1
 AUTOCONF=$REALPKGNAME
-real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 65 || DIE=1
+real_package_name "autoheader" "ftp://ftp.gnu.org/pub/gnu/autoconf/" 2 61 || DIE=1
 AUTOHEADER=$REALPKGNAME
 
 # automake and aclocal version numbers must be kept in sync
-real_package_name "automake" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 11 2 || DIE=1
+real_package_name "automake" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 9 || DIE=1
 AUTOMAKE=$REALPKGNAME
-real_package_name "aclocal" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 11 2 || DIE=1
+real_package_name "aclocal" "ftp://ftp.gnu.org/pub/gnu/automake/" 1 9 || DIE=1
 ACLOCAL=$REALPKGNAME
-real_package_name "libtoolize" "ftp://ftp.gnu.org/pub/gnu/libtool/" 2 2 || DIE=1
+real_package_name "libtoolize" "ftp://ftp.gnu.org/pub/gnu/libtool/" 1 4 3 || DIE=1
 LIBTOOLIZE=$REALPKGNAME
 real_package_name "python" "https://www.python.org/" || DIE=1
 
 if [ "$FC_USE_NLS" = "yes" ]; then
   DIE2=0
-  version_check 1 "xgettext" "xgettext" "ftp://ftp.gnu.org/pub/gnu/gettext/" 0 15 || DIE2=1
-  version_check 1 "msgfmt" "msgfmt" "ftp://ftp.gnu.org/pub/gnu/gettext/" 0 15 || DIE2=1
+  version_check 1 "xgettext" "xgettext" "ftp://ftp.gnu.org/pub/gnu/gettext/" 0 10 36 || DIE2=1
+  version_check 1 "msgfmt" "msgfmt" "ftp://ftp.gnu.org/pub/gnu/gettext/" 0 10 36 || DIE2=1
   if [ "$DIE2" -eq 1 ]; then
     echo 
     echo "You may want to use --disable-nls to disable NLS."
@@ -279,7 +279,7 @@ $AUTOHEADER || {
   exit 1
 }
 echo "+ running $LIBTOOLIZE ... "
-$LIBTOOLIZE -f -c || {
+$LIBTOOLIZE -f || {
   echo
   echo "$LIBTOOLIZE failed"
   exit 1

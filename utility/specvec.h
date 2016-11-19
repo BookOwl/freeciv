@@ -12,12 +12,12 @@
 ***********************************************************************/
 
 /* specvectors: "specific vectors".
-
+   
    This file is used to implement resizable arrays.
-
+   
    Before including this file, you must define the following:
      SPECVEC_TAG - this tag will be used to form names for functions etc.
-   You may also define:
+   You may also define:  
      SPECVEC_TYPE - the typed vector will contain pointers to this type;
    If SPECVEC_TYPE is not defined, then 'struct SPECVEC_TAG' is used.
    At the end of this file, these (and other defines) are undef-ed.
@@ -29,12 +29,11 @@
       void foo_vector_init(struct foo_vector *tthis);
       void foo_vector_reserve(struct foo_vector *tthis, int n);
       int  foo_vector_size(const struct foo_vector *tthis);
-      foo_t *foo_vector_get(struct foo_vector *tthis, int svindex);
-      void foo_vector_copy(struct foo_vector *to,
+      foo_t *foo_vector_get(struct foo_vector *tthis, int index);
+      void foo_vector_copy(struct foo_vector *to, 
                 const struct foo_vector *from);
       void foo_vector_free(struct foo_vector *tthis);
       void foo_vector_append(struct foo_vector *tthis, foo_t pfoo);
-      void foo_vector_remove(struct foo_vector *tthis, int svindex);
 
    Note this is not protected against multiple inclusions; this is
    so that you can have multiple different specvectors.  For each
@@ -46,9 +45,8 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <string.h>             /* for memcpy */
+#include <string.h>		/* for memcpy */
 
-/* utility */
 #include "mem.h"
 
 #ifndef SPECVEC_TAG
@@ -97,13 +95,13 @@ static inline size_t SPECVEC_FOO(_vector_size) (const SPECVEC_VECTOR *tthis)
 }
 
 static inline SPECVEC_TYPE *SPECVEC_FOO(_vector_get) (const SPECVEC_VECTOR
-                                                      *tthis,
-                                                      int svindex)
+						      *tthis,
+						      int index)
 {
-  if (svindex == -1 && tthis->size > 0) {
+  if (index == -1 && tthis->size > 0) {
     return tthis->p + tthis->size - 1;
-  } else if (svindex >= 0 && (size_t)svindex < tthis->size) {
-    return tthis->p + svindex;
+  } else if (index >= 0 && (size_t)index < tthis->size) {
+    return tthis->p + index;
   } else {
     return NULL;
   }
@@ -130,32 +128,6 @@ static inline void SPECVEC_FOO(_vector_append) (SPECVEC_VECTOR *tthis,
 {
   SPECVEC_FOO(_vector_reserve) (tthis, tthis->size + 1);
   tthis->p[tthis->size - 1] = pfoo;
-}
-
-/**************************************************************************
-  Remove element number svindex from the vector.
-**************************************************************************/
-static inline void SPECVEC_FOO(_vector_remove) (SPECVEC_VECTOR *tthis,
-                                                const int svindex)
-{
-  size_t i;
-
-  /* Be consistent with SPECVEC_FOO_vector_get(): Allow negative element
-   * number. */
-  const size_t rmpos = (svindex < 0 ?
-                          SPECVEC_FOO(_vector_size)(tthis) - svindex :
-                          (size_t)svindex);
-
-  fc_assert_ret(0 <= rmpos
-                && rmpos < SPECVEC_FOO(_vector_size)(tthis));
-
-  for (i = rmpos; (i + 1) < SPECVEC_FOO(_vector_size)(tthis); i++) {
-    /* Relocate the elements following the deleted element. */
-    tthis->p[i] = tthis->p[i + 1];
-  }
-
-  SPECVEC_FOO(_vector_reserve)(tthis,
-                               SPECVEC_FOO(_vector_size)(tthis) - 1);
 }
 
 

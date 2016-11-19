@@ -20,12 +20,10 @@
 #include "mem.h"
 #include "shared.h"
 
-/* client/gui-gtk-3.0 */
+/* client/gtk-3.0 */
 #include "colors.h"
 
 #include "sprite.h"
-
-#define MAX_FILE_EXTENSIONS 50
 
 /****************************************************************************
   Create a new sprite by cropping and taking only the given portion of
@@ -52,8 +50,6 @@ struct sprite *crop_sprite(struct sprite *source,
 {
   struct sprite *new = fc_malloc(sizeof(*new));
   cairo_t *cr;
-
-  fc_assert_ret_val(source, NULL);
 
   new->surface = cairo_surface_create_similar(source->surface,
           CAIRO_CONTENT_COLOR_ALPHA, width, height);
@@ -111,47 +107,13 @@ void get_sprite_dimensions(struct sprite *sprite, int *width, int *height)
 ****************************************************************************/
 const char **gfx_fileextensions(void)
 {
-  /* Includes space for termination NULL */
-  static const char *ext[MAX_FILE_EXTENSIONS + 1] =
+  static const char *ext[] =
   {
+    "png",
     NULL
   };
 
-  if (ext[0] == NULL) {
-    int count = 0;
-    GSList *formats = gdk_pixbuf_get_formats();
-    GSList *next = formats;
-
-    while ((next = g_slist_next(next)) != NULL && count < MAX_FILE_EXTENSIONS) {
-      GdkPixbufFormat *format = g_slist_nth_data(next, 0);
-      gchar **mimes = gdk_pixbuf_format_get_mime_types(format);
-      int i;
-
-      for (i = 0; mimes[i] != NULL && count < MAX_FILE_EXTENSIONS; i++) {
-        char *end = strstr(mimes[i], "/");
-
-        if (end != NULL) {
-          ext[count++] = fc_strdup(end + 1);
-        }
-      }
-
-      g_strfreev(mimes);
-    }
-
-    g_slist_free(formats);
-
-    ext[count] = NULL;
-  }
-
   return ext;
-}
-
-/****************************************************************************
-  Called when the cairo surface with freeciv allocated data is destroyed.
-****************************************************************************/
-static void surf_destroy_callback(void *data)
-{
-  free(data);
 }
 
 /****************************************************************************
@@ -161,101 +123,59 @@ static void surf_destroy_callback(void *data)
 ****************************************************************************/
 struct sprite *load_gfxfile(const char *filename)
 {
-  struct sprite *spr;
-  GError *err = NULL;;
-  GdkPixbuf *pb = gdk_pixbuf_new_from_file(filename, &err);
-  int width;
-  int height;
-  unsigned char *pbdata;
-  int rs;
-  unsigned char *cairo_data;
-  unsigned char *data;
-  int i, j;
-  int cairo_stride;
-  bool has_alpha;
-  int channels;
+  struct sprite *new = fc_malloc(sizeof(*new));
 
-  if (pb == NULL) {
-    log_error(_("Can't load %s: %s"), filename, err->message);
-    return NULL;
-  }
+  new->surface = cairo_image_surface_create_from_png(filename);
 
-  spr = fc_malloc(sizeof(*spr));
-  width = gdk_pixbuf_get_width(pb);
-  height = gdk_pixbuf_get_height(pb);
-  pbdata = gdk_pixbuf_get_pixels(pb);
-  rs = gdk_pixbuf_get_rowstride(pb);
-  has_alpha = gdk_pixbuf_get_has_alpha(pb);
-  channels = gdk_pixbuf_get_n_channels(pb);
+  if (cairo_image_surface_get_format(new->surface) == CAIRO_FORMAT_RGB24) {
+    /* Make format right */
+    cairo_surface_t *tmp;
+    int width = cairo_image_surface_get_width(new->surface);
+    int height = cairo_image_surface_get_height(new->surface);
+    unsigned char *old_data;
+    unsigned char *new_data;
+    int i, j;
 
-  cairo_stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
-  if (cairo_stride <= 0) {
-    log_error("Cairo does not give stride for width %d", width);
-    free(spr);
-    return NULL;
-  }
+    /* Surface with correct format */
+    tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
 
-  cairo_data = fc_malloc(height * cairo_stride * 4);
-  data = cairo_data;
+    old_data = cairo_image_surface_get_data(new->surface);
+    new_data = cairo_image_surface_get_data(tmp);
 
-  for (i = 0; i < height; i++) {
-    for (j = 0; j < width; j++) {
-      if (has_alpha) {
-        unsigned char tmp;
-
-#define MULTI_UNc(a,b) ((a * b - (b / 2)) / 0xFF)
-
-        if (is_bigendian()) {
-          tmp = pbdata[j * channels + 3];
-          data[j * 4 + 3] = MULTI_UNc(pbdata[j * channels + 2], tmp);
-          data[j * 4 + 2] = MULTI_UNc(pbdata[j * channels + 1], tmp);
-          data[j * 4 + 1] = MULTI_UNc(pbdata[j * channels + 0], tmp);
-          data[j * 4 + 0] = tmp;
-        } else {
-          tmp = MULTI_UNc(pbdata[j * channels + 2], pbdata[j * channels + 3]);
-          data[j * 4 + 1] = MULTI_UNc(pbdata[j * channels + 1], pbdata[j * channels + 3]);
-          data[j * 4 + 2] = MULTI_UNc(pbdata[j * channels + 0], pbdata[j * channels + 3]);
-          data[j * 4 + 0] = tmp;
-          data[j * 4 + 3] = pbdata[j * channels + 3];
-        }
-
-#undef MULTI_UNc
-
-      } else {
-        data[j * 4 + 3] = 255;
-        data[j * 4 + 0] = pbdata[j * channels + 2];
-        data[j * 4 + 1] = pbdata[j * channels + 1];
-        data[j * 4 + 2] = pbdata[j * channels + 0];
+    for (i = 0; i < width; i++) {
+      for (j = 0; j < height; j++) {
+#ifndef WORDS_BIGENDIAN
+        /* Add alpha channel */
+        new_data[(j * width + i) * 4 + 3] = 0xff;
+        /* Copy RGB */
+        new_data[(j * width + i) * 4 + 1] = old_data[(j * width + i) * 4 + 1];
+        new_data[(j * width + i) * 4 + 2] = old_data[(j * width + i) * 4 + 2];
+        new_data[(j * width + i) * 4 + 0] = old_data[(j * width + i) * 4 + 0];
+#else  /* WORDS_BIGENDIAN */
+        /* Add alpha channel */
+        new_data[(j * width + i) * 4] = 0xff;
+        /* Copy RGB */
+        new_data[(j * width + i) * 4 + 1] = old_data[(j * width + i) * 4 + 1];
+        new_data[(j * width + i) * 4 + 2] = old_data[(j * width + i) * 4 + 2];
+        new_data[(j * width + i) * 4 + 3] = old_data[(j * width + i) * 4 + 3];
+#endif  /* WORDS_BIGENDIAN */
       }
     }
 
-    data += cairo_stride;
-    pbdata += rs;
+    cairo_surface_mark_dirty(tmp);
+    cairo_surface_destroy(new->surface);
+
+    new->surface = tmp;
   }
 
-  g_object_unref(pb);
+  fc_assert(cairo_image_surface_get_format(new->surface) == CAIRO_FORMAT_ARGB32);
 
-  spr->surface = cairo_image_surface_create_for_data(cairo_data, CAIRO_FORMAT_ARGB32,
-                                                     width, height, cairo_stride);
-  if (spr->surface == NULL || cairo_surface_status(spr->surface) != CAIRO_STATUS_SUCCESS) {
-    log_error("Cairo image surface creation error");
-    free(spr);
-    free(cairo_data);
-
-    return NULL;
-  }
-
-  cairo_surface_set_user_data(spr->surface, NULL, cairo_data, surf_destroy_callback);
-
-  fc_assert(cairo_image_surface_get_format(spr->surface) == CAIRO_FORMAT_ARGB32);
-
-  if (cairo_surface_status(spr->surface) != CAIRO_STATUS_SUCCESS) {
+  if (cairo_surface_status(new->surface) != CAIRO_STATUS_SUCCESS) {
     log_fatal("Failed reading graphics file: \"%s\"", filename);
-
     exit(EXIT_FAILURE);
   }
 
-  return spr;
+  return new;
 }
 
 /****************************************************************************
@@ -310,11 +230,11 @@ void sprite_get_bounding_box(struct sprite * sprite, int *start_x,
   int i, j;
   int endian;
 
-  if (is_bigendian()) {
-    endian = 0;
-  } else {
-    endian = 3;
-  }
+#ifdef WORDS_BIGENDIAN
+  endian = 0;
+#else
+  endian = 3;
+#endif
 
   fc_assert(cairo_image_surface_get_format(sprite->surface) == CAIRO_FORMAT_ARGB32);
 
@@ -432,24 +352,24 @@ GdkPixbuf *surface_get_pixbuf(cairo_surface_t *surf, int width, int height)
     while (p < end) {
       tmp = p[0];
 
-      if (is_bigendian()) {
-        if (tmp != 0) {
-          p[0] = DIV_UNc(p[1], tmp);
-          p[1] = DIV_UNc(p[2], tmp);
-          p[2] = DIV_UNc(p[3], tmp);
-          p[3] = tmp;
-        } else {
-          p[1] = p[2] = p[3] = 0;
-        }
+#ifdef WORDS_BIGENDIAN
+      if (tmp != 0) {
+        p[0] = DIV_UNc(p[1], tmp);
+        p[1] = DIV_UNc(p[2], tmp);
+        p[2] = DIV_UNc(p[3], tmp);
+        p[3] = tmp;
       } else {
-        if (p[3] != 0) {
-          p[0] = DIV_UNc(p[2], p[3]);
-          p[1] = DIV_UNc(p[1], p[3]);
-          p[2] = DIV_UNc(tmp, p[3]);
-        } else {
-          p[0] = p[1] = p[2] = 0;
-        }
+        p[1] = p[2] = p[3] = 0;
       }
+#else  /* WORDS_BIGENDIAN */
+      if (p[3] != 0) {
+        p[0] = DIV_UNc(p[2], p[3]);
+        p[1] = DIV_UNc(p[1], p[3]);
+        p[2] = DIV_UNc(tmp, p[3]);
+      } else {
+        p[0] = p[1] = p[2] = 0;
+      }
+#endif /* WORDS_BIGENDIAN */
 
       p += 4;
     }

@@ -59,8 +59,12 @@ struct fcdb_option {
 };
 
 #define SPECHASH_TAG fcdb_option
-#define SPECHASH_ASTR_KEY_TYPE
-#define SPECHASH_IDATA_TYPE struct fcdb_option *
+#define SPECHASH_KEY_TYPE char *
+#define SPECHASH_DATA_TYPE struct fcdb_option *
+#define SPECHASH_KEY_VAL genhash_str_val_func
+#define SPECHASH_KEY_COMP genhash_str_comp_func
+#define SPECHASH_KEY_COPY genhash_str_copy_func
+#define SPECHASH_KEY_FREE genhash_str_free_func
 #include "spechash.h"
 #define fcdb_option_hash_data_iterate(phash, data)                          \
   TYPED_HASH_DATA_ITERATE(struct fcdb_option *, phash, data)
@@ -80,7 +84,7 @@ static bool fcdb_load_config(const char *filename);
 
 
 /****************************************************************************
-  Set one fcdb option (or delete it if value == NULL).
+  Set one fcdb option (or delete it if value==NULL).
   Replaces any previous setting.
 ****************************************************************************/
 static bool fcdb_set_option(const char *key, const char *value,
@@ -91,7 +95,6 @@ static bool fcdb_set_option(const char *key, const char *value,
 
   if (value != NULL) {
     struct fcdb_option *newopt = fc_malloc(sizeof(*newopt));
-
     newopt->value = fc_strdup(value);
     newopt->source = source;
     removed = fcdb_option_hash_replace_full(fcdb_config, key, newopt,
@@ -132,7 +135,7 @@ static bool fcdb_load_config(const char *filename)
                      pentry) {
     if (entry_type(pentry) == ENTRY_STR) {
       const char *value;
-#ifndef FREECIV_NDEBUG
+#ifndef NDEBUG
       bool entry_str_get_success =
 #endif
         entry_str_get(pentry, &value);

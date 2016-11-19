@@ -25,20 +25,17 @@ extern "C" {
 // client
 #include "climisc.h"
 
-// gui-qt
-#include "fonts.h"
-
 // Qt
 #include <QObject>
 #include <QWidget>
 
-class progress_bar;
 class QComboBox;
 class QGridLayout;
 class QGroupBox;
 class QHBoxLayout;
 class QItemSelection;
 class QLabel;
+class QProgressBar;
 class QPushButton;
 class QScrollArea;
 class QTableWidget;
@@ -104,7 +101,7 @@ class science_report: public QWidget
   QComboBox *goal_combo;
   QComboBox *researching_combo;
   QGridLayout *sci_layout;
-  progress_bar *progress;
+  QProgressBar *progress;
   QLabel *info_label;
   QLabel *progress_label;
   QList<qlist_item> *curr_list;
@@ -220,6 +217,5 @@ void popdown_economy_report();
 void popdown_units_report();
 void popdown_science_report();
 void popdown_endgame_report();
-void popup_endgame_report();
 
 #endif /* FC__REPODLGS_H */

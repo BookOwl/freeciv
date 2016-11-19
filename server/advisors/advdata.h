@@ -21,9 +21,6 @@
 #include "fc_types.h"
 #include "improvement.h"
 
-/* server/advisors */
-#include "advtools.h"
-
 /* 
  * This file and advdata.c contains global data structures for the AI
  * and some of the functions that fill them with useful values at the 
@@ -77,13 +74,17 @@ struct adv_data {
     /* Counts of specific types of units. */
     struct {
       /* Unit-flag counts. */
-      int coast_strict, missiles, paratroopers, airliftable;
+      int triremes, missiles;
 
-      int byclass[UCL_LAST];
+      /* Move-type counts */
+      int land, sea, amphibious;
 
       /* Upgradeable units */
       int upgradeable;
+
+      int paratroopers;
     } units;
+    int *workers;     /* cities to workers on continent*/
     int *cities;      /* number of cities we have on continent */
     int average_production;
   } stats;
@@ -110,15 +111,15 @@ struct adv_data {
   int pollution_priority;
 
   /* Government data */
-  adv_want *government_want;
+  int *government_want;
   short govt_reeval;
 
   /* Goals */
   struct {
     struct {
       struct government *gov;        /* The ideal government */
-      adv_want val;                  /* Its value (relative to the current gov) */
-      int req;                       /* The tech requirement for the ideal gov */
+      int val;        /* Its value (relative to the current gov) */
+      int req;        /* The tech requirement for the ideal gov */
     } govt;
     struct government *revolution;   /* The best gov of the now available */
   } goal;
@@ -131,6 +132,22 @@ struct adv_data {
 
   /* AI doesn't like having more than this number of cities */
   int max_num_cities;
+};
+
+enum choice_type {
+  CT_NONE = 0,
+  CT_BUILDING = 1,
+  CT_CIVILIAN,
+  CT_ATTACKER,
+  CT_DEFENDER,
+  CT_LAST
+};
+
+struct adv_choice {
+  enum choice_type type;
+  universals_u value; /* what the advisor wants */
+  int want;              /* how much it wants it (0-100) */
+  bool need_boat;        /* unit being built wants a boat */
 };
 
 void adv_data_init(struct player *pplayer);

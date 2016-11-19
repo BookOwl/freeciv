@@ -21,14 +21,13 @@ extern "C" {
 #include "bitvector.h"
 
 /* common */
+#include "ai.h" /* FC_AI_LAST */
 #include "city.h"
 #include "connection.h"
 #include "fc_types.h"
-#include "multipliers.h"
 #include "nation.h"
 #include "shared.h"
 #include "spaceship.h"
-#include "style.h"
 #include "tech.h"
 #include "traits.h"
 #include "unitlist.h"
@@ -39,11 +38,7 @@ extern "C" {
 #define PLAYER_DEFAULT_LUXURY_RATE 0
 
 #define ANON_PLAYER_NAME "noname"
-
-/* If changing this, be sure to adjust loading of pre-2.6 savegames
- * which depend on saved username to tell if user (or ranked_user) is
- * anonymous. */
-#define ANON_USER_NAME N_("Unassigned")
+#define ANON_USER_NAME "Unassigned"
 
 enum plrcolor_mode {
   PLRCOL_PLR_ORDER,
@@ -53,16 +48,28 @@ enum plrcolor_mode {
   PLRCOL_NATION_ORDER
 };
 
-#define SPECENUM_NAME plr_flag_id
-#define SPECENUM_VALUE0 PLRF_AI
-#define SPECENUM_VALUE0NAME "ai"
-#define SPECENUM_VALUE1 PLRF_SCENARIO_RESERVED
-#define SPECENUM_VALUE1NAME "ScenarioReserved"
-#define SPECENUM_COUNT  PLRF_COUNT
-#define SPECENUM_BITVECTOR bv_plr_flags
-#include "specenum_gen.h"
-
 struct player_slot;
+
+enum handicap_type {
+  H_DIPLOMAT = 0,     /* Can't build offensive diplomats */
+  H_AWAY,             /* Away mode */
+  H_LIMITEDHUTS,      /* Can get only 25 gold and barbs from huts */
+  H_DEFENSIVE,        /* Build defensive buildings without calculating need */
+  H_EXPERIMENTAL,     /* Enable experimental AI features (for testing) */
+  H_RATES,            /* Can't set its rates beyond government limits */
+  H_TARGETS,          /* Can't target anything it doesn't know exists */
+  H_HUTS,             /* Doesn't know which unseen tiles have huts on them */
+  H_FOG,              /* Can't see through fog of war */
+  H_NOPLANES,         /* Doesn't build air units */
+  H_MAP,              /* Only knows map_is_known tiles */
+  H_DIPLOMACY,        /* Not very good at diplomacy */
+  H_REVOLUTION,       /* Cannot skip anarchy */
+  H_EXPANSION,        /* Don't like being much larger than human */
+  H_DANGER,           /* Always thinks its city is in danger */
+  H_LAST
+};
+
+BV_DEFINE(bv_handicap, H_LAST);
 
 struct player_economic {
   int gold;
@@ -109,13 +116,14 @@ struct player_score {
   int units_killed;     /* Number of enemy units killed. */
   int units_lost;       /* Number of own units that died,
                          * by combat or otherwise. */
-  int culture;
   int game;             /* Total score you get in player dialog. */
 };
 
 struct player_ai {
   int maxbuycost;
-  void *handicaps;
+  /* The units of tech_want seem to be shields */
+  int tech_want[A_LAST+1];
+  bv_handicap handicaps;        /* sum of enum handicap_type */
   enum ai_level skill_level;   	/* 0-10 value for save/load/display */
   int fuzzy;			/* chance in 1000 to mis-decide */
   int expand;			/* percentage factor to value new cities */
@@ -133,60 +141,17 @@ struct player_ai {
  * (Some diplomatic states are "pacts" (mutual agreements), others aren't.)
  *
  * Adding to or reordering this array will break many things.
- *
- * Used in the network protocol.
  */
-#define SPECENUM_NAME diplstate_type
-#define SPECENUM_VALUE0 DS_ARMISTICE
-#define SPECENUM_VALUE0NAME N_("?diplomatic_state:Armistice")
-#define SPECENUM_VALUE1 DS_WAR
-#define SPECENUM_VALUE1NAME N_("?diplomatic_state:War")
-#define SPECENUM_VALUE2 DS_CEASEFIRE
-#define SPECENUM_VALUE2NAME N_("?diplomatic_state:Cease-fire")
-#define SPECENUM_VALUE3 DS_PEACE
-#define SPECENUM_VALUE3NAME N_("?diplomatic_state:Peace")
-#define SPECENUM_VALUE4 DS_ALLIANCE
-#define SPECENUM_VALUE4NAME N_("?diplomatic_state:Alliance")
-#define SPECENUM_VALUE5 DS_NO_CONTACT
-#define SPECENUM_VALUE5NAME N_("?diplomatic_state:Never met")
-#define SPECENUM_VALUE6 DS_TEAM
-#define SPECENUM_VALUE6NAME N_("?diplomatic_state:Team")
-  /* When adding or removing entries, note that first value
-   * of diplrel_other should be next to last diplstate_type */
-#define SPECENUM_COUNT DS_LAST	/* leave this last */
-#include "specenum_gen.h"
-
-/* Other diplomatic relation properties.
- *
- * The first element here is numbered DS_LAST
- *
- * Used in the network protocol.
- */
-#define SPECENUM_NAME diplrel_other
-#define SPECENUM_VALUE7 DRO_GIVES_SHARED_VISION
-#define SPECENUM_VALUE7NAME N_("Gives shared vision")
-#define SPECENUM_VALUE8 DRO_RECEIVES_SHARED_VISION
-#define SPECENUM_VALUE8NAME N_("Receives shared vision")
-#define SPECENUM_VALUE9 DRO_HOSTS_EMBASSY
-#define SPECENUM_VALUE9NAME N_("Hosts embassy")
-#define SPECENUM_VALUE10 DRO_HAS_EMBASSY
-#define SPECENUM_VALUE10NAME N_("Has embassy")
-#define SPECENUM_VALUE11 DRO_HOSTS_REAL_EMBASSY
-#define SPECENUM_VALUE11NAME N_("Hosts real embassy")
-#define SPECENUM_VALUE12 DRO_HAS_REAL_EMBASSY
-#define SPECENUM_VALUE12NAME N_("Has real embassy")
-#define SPECENUM_VALUE13 DRO_HAS_CASUS_BELLI
-#define SPECENUM_VALUE13NAME N_("Has Casus Belli")
-#define SPECENUM_VALUE14 DRO_PROVIDED_CASUS_BELLI
-#define SPECENUM_VALUE14NAME N_("Provided Casus Belli")
-#define SPECENUM_VALUE15 DRO_FOREIGN
-#define SPECENUM_VALUE15NAME N_("Is foreign")
-#define SPECENUM_COUNT DRO_LAST
-#include "specenum_gen.h"
-
-BV_DEFINE(bv_diplrel_all_reqs,
-          /* Reserve a location for each possible DiplRel requirement. */
-          ((DRO_LAST - 1) * 2) * REQ_RANGE_COUNT);
+enum diplstate_type {
+  DS_ARMISTICE = 0,
+  DS_WAR,
+  DS_CEASEFIRE,
+  DS_PEACE,
+  DS_ALLIANCE,
+  DS_NO_CONTACT,
+  DS_TEAM,
+  DS_LAST	/* leave this last */
+};
 
 enum dipl_reason {
   DIPL_OK, DIPL_ERROR, DIPL_SENATE_BLOCKING,
@@ -225,20 +190,11 @@ struct attribute_block_s {
 struct ai_type;
 struct ai_data;
 
-bool player_has_flag(const struct player *pplayer, enum plr_flag_id flag);
-
-#define is_human(plr) !player_has_flag((plr), PLRF_AI)
-#define is_ai(plr) player_has_flag((plr), PLRF_AI)
-#define set_as_human(plr) BV_CLR((plr)->flags, PLRF_AI)
-#define set_as_ai(plr) BV_SET((plr)->flags, PLRF_AI)
-
 struct player {
   struct player_slot *slot;
   char name[MAX_LEN_NAME];
   char username[MAX_LEN_NAME];
-  bool unassigned_user;
   char ranked_username[MAX_LEN_NAME]; /* the user who will be ranked */
-  bool unassigned_ranked;
   int user_turns;            /* number of turns this user has played */
   bool is_male;
   struct government *government; /* may be NULL in pregame */
@@ -246,22 +202,16 @@ struct player {
   struct nation_type *nation;
   struct team *team;
   bool is_ready; /* Did the player click "start" yet? */
-  bool phase_done;    /* Has human player finished */
-  bool ai_phase_done; /* Has AI type finished */
+  bool phase_done;
   int nturns_idle;
-  int turns_alive;    /* Number of turns this player has spent alive;
-                       * 0 when created, increment at the end of each turn */
   bool is_alive;
-  bool is_winner;
-  int last_war_action;
 
   /* Turn in which the player's revolution is over; see update_revolution. */
   int revolution_finishes;
 
   bv_player real_embassy;
   const struct player_diplstate **diplstates;
-  struct nation_style *style;
-  int music_style;
+  int city_style;
   struct city_list *cities;
   struct unit_list *units;
   struct player_score score;
@@ -269,14 +219,11 @@ struct player {
 
   struct player_spaceship spaceship;
 
+  bool ai_controlled; /* 0: not automated; 1: automated */
   struct player_ai ai_common;
   const struct ai_type *ai;
-  char *savegame_ai_type_name;
-
-  bv_plr_flags flags;
 
   bool was_created;                    /* if the player was /created */
-  bool random_name;
   bool is_connected;
   struct connection *current_conn;     /* non-null while handling packet */
   struct conn_list *connections;       /* will replace conn */
@@ -291,14 +238,6 @@ struct player {
 
   struct rgbcolor *rgb;
 
-  /* Values currently in force. */
-  int multipliers[MAX_NUM_MULTIPLIERS];
-  /* Values to be used next turn. */
-  int multipliers_target[MAX_NUM_MULTIPLIERS];
-
-  int culture; /* National level culture - does not include culture of individual
-                * cities. */
-
   union {
     struct {
       /* Only used in the server (./ai/ and ./server/). */
@@ -310,9 +249,6 @@ struct player {
 
       struct player_tile *private_map;
 
-      /* Player can see inside his borders. */
-      bool border_vision;
-
       bv_player really_gives_vision; /* takes into account that p3 may see
                                       * what p1 has via p2 */
 
@@ -320,7 +256,7 @@ struct player {
 
       struct adv_data *adv;
 
-      void *ais[FREECIV_AI_MOD_LAST];
+      void *ais[FC_AI_LAST];
 
       /* This user is allowed to take over the player. */
       char delegate_to[MAX_LEN_NAME];
@@ -333,8 +269,6 @@ struct player {
        *    (In this case orig_username == username.) */
       char orig_username[MAX_LEN_NAME];
 
-      int huts; /* How many huts this player has found */
-
       int bulbs_last_turn; /* Number of bulbs researched last turn only. */
     } server;
 
@@ -345,11 +279,8 @@ struct player {
          (player:server:private_map[tile_index]:seen_count[vlayer] != 0). */
       struct dbv tile_vision[V_COUNT];
 
-      enum mood_type mood;
-
       int tech_upkeep;
-
-      bool color_changeable;
+      int bulbs_prod; /* Current number of bulbs production. */
     } client;
   };
 };
@@ -398,10 +329,6 @@ bool player_has_real_embassy(const struct player *pplayer,
 bool player_has_embassy_from_effect(const struct player *pplayer,
                                     const struct player *pplayer2);
 
-int player_age(const struct player *pplayer);
-
-bool can_player_see_hypotetic_units_at(const struct player *pplayer,
-				       const struct tile *ptile);
 bool can_player_see_unit(const struct player *pplayer,
 			 const struct unit *punit);
 bool can_player_see_unit_at(const struct player *pplayer,
@@ -434,6 +361,10 @@ int player_get_expected_income(const struct player *pplayer);
 
 struct city *player_capital(const struct player *pplayer);
 
+bool ai_handicap(const struct player *pplayer, enum handicap_type htype);
+bool ai_fuzzy(const struct player *pplayer, bool normal_decision);
+
+const char *diplstate_text(const enum diplstate_type type);
 const char *love_text(const int love);
 
 enum diplstate_type cancel_pact_result(enum diplstate_type oldstate);
@@ -472,24 +403,6 @@ static inline bool is_barbarian(const struct player *pplayer)
 
 bool gives_shared_vision(const struct player *me, const struct player *them);
 
-void diplrel_mess_close(void);
-bool is_diplrel_between(const struct player *player1,
-                        const struct player *player2,
-                        int diplrel);
-bool is_diplrel_to_other(const struct player *pplayer, int diplrel);
-int diplrel_by_rule_name(const char *value);
-const char *diplrel_rule_name(int value);
-const char *diplrel_name_translation(int value);
-
-bv_diplrel_all_reqs diplrel_req_contradicts(const struct requirement *req);
-
-int player_multiplier_value(const struct player *pplayer,
-                            const struct multiplier *pmul);
-int player_multiplier_effect_value(const struct player *pplayer,
-                                   const struct multiplier *pmul);
-int player_multiplier_target_value(const struct player *pplayer,
-                                   const struct multiplier *pmul);
-
 /* iterate over all player slots */
 #define player_slots_iterate(_pslot)                                        \
   if (player_slots_initialised()) {                                         \
@@ -504,7 +417,6 @@ int player_multiplier_target_value(const struct player *pplayer,
   player_slots_iterate(_pslot##_pplayer) {                                  \
     struct player *_pplayer = player_slot_get_player(_pslot##_pplayer);     \
     if (_pplayer != NULL) {
-
 #define players_iterate_end                                                 \
     }                                                                       \
   } player_slots_iterate_end;
@@ -535,7 +447,9 @@ int player_multiplier_target_value(const struct player *pplayer,
 /* User functions. */
 bool is_valid_username(const char *name);
 
-#define ai_level_cmd(_level_) ai_level_name(_level_)
+enum ai_level ai_level_by_name(const char *name);
+const char *ai_level_name(enum ai_level level);
+const char *ai_level_cmd(enum ai_level level);
 bool is_settable_ai_level(enum ai_level level);
 int number_of_ai_levels(void);
 

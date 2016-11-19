@@ -19,7 +19,6 @@
 #include "rand.h"
 
 /* common */
-#include "movement.h"
 #include "research.h"
 #include "unittype.h"
 
@@ -33,7 +32,7 @@
 #include "citytools.h"
 #include "console.h" /* enum rfc_status */
 #include "maphand.h"
-#include "notify.h"
+#include "movement.h"
 #include "plrhand.h"
 #include "srv_main.h" /* game_was_started() */
 #include "stdinhand.h"
@@ -119,7 +118,7 @@ Unit *api_edit_create_unit_full(lua_State *L, Player *pplayer, Tile *ptile,
     if (!ret) {
       luascript_log(fcl, LOG_ERROR, "create_unit_full: '%s' cannot transport "
                                     "'%s' here",
-                    utype_rule_name(unit_type_get(ptransport)),
+                    utype_rule_name(unit_type(ptransport)),
                     utype_rule_name(ptype));
       return NULL;
     }
@@ -140,26 +139,16 @@ Unit *api_edit_create_unit_full(lua_State *L, Player *pplayer, Tile *ptile,
 bool api_edit_unit_teleport(lua_State *L, Unit *punit, Tile *dest)
 {
   bool alive;
-  struct city *pcity;
 
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, punit, 2, Unit, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, dest, 3, Tile, FALSE);
 
   /* Teleport first so destination is revealed even if unit dies */
-  alive = unit_move(punit, dest, 0, NULL,
-                    /* The old call would result in occupation before the
-                     * checks below. */
-                    ((pcity = tile_city(dest))
-                     && (unit_owner(punit)->ai_common.barbarian_type
-                         != ANIMAL_BARBARIAN)
-                     && uclass_has_flag(unit_class_get(punit),
-                                        UCF_CAN_OCCUPY_CITY)
-                     && !unit_has_type_flag(punit, UTYF_CIVILIAN)
-                     && pplayers_at_war(unit_owner(punit),
-                                        city_owner(pcity))));
+  alive = unit_move(punit, dest, 0);
   if (alive) {
     struct player *owner = unit_owner(punit);
+    struct city *pcity = tile_city(dest);
 
     if (!can_unit_exist_at_tile(punit, dest)) {
       wipe_unit(punit, ULR_NONNATIVE_TERR, NULL);
@@ -190,26 +179,6 @@ void api_edit_unit_turn(lua_State *L, Unit *punit, Direction dir)
   } else {
     log_error("Illegal direction %d for unit from lua script", dir);
   }
-}
-
-/*****************************************************************************
-  Kill the unit.
-*****************************************************************************/
-void api_edit_unit_kill(lua_State *L, Unit *punit, const char *reason,
-                        Player *killer)
-{
-  enum unit_loss_reason loss_reason;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, punit, 2, Unit);
-  LUASCRIPT_CHECK_ARG_NIL(L, reason, 3, string);
-
-  loss_reason = unit_loss_reason_by_name(reason, fc_strcasecmp);
-
-  LUASCRIPT_CHECK_ARG(L, unit_loss_reason_is_valid(loss_reason), 3,
-                      "Invalid unit loss reason");
-
-  wipe_unit(punit, loss_reason, killer);
 }
 
 /*****************************************************************************
@@ -283,73 +252,36 @@ void api_edit_change_gold(lua_State *L, Player *pplayer, int amount)
   sends script signal "tech_researched" with the given reason
 *****************************************************************************/
 Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
-                                    Tech_Type *ptech, int cost, bool notify,
-                                    const char *reason)
+                                    Tech_Type *ptech, const char *reason)
 {
-  struct research *presearch;
+  struct player_research *presearch;
   Tech_type_id id;
   Tech_Type *result;
 
   LUASCRIPT_CHECK_STATE(L, NULL);
   LUASCRIPT_CHECK_ARG_NIL(L, pplayer, 2, Player, NULL);
-  LUASCRIPT_CHECK_ARG(L, cost >= -3, 4, "Unknown give_tech() cost value", NULL);
 
-  presearch = research_get(pplayer);
+  presearch = player_research_get(pplayer);
   if (ptech) {
     id = advance_number(ptech);
   } else {
     /* Can't just call give_immediate_free_tech() here as we want
      * to pass correct reason to emitted signal. */
     if (game.info.free_tech_method == FTM_CHEAPEST) {
-      id = pick_cheapest_tech(presearch);
+      id = pick_cheapest_tech(pplayer);
     } else if (presearch->researching == A_UNSET
                || game.info.free_tech_method == FTM_RANDOM) {
-      id = pick_random_tech(presearch);
+      id = pick_random_tech(pplayer);
     } else {
       id = presearch->researching;
     }
   }
 
-  if (is_future_tech(id)
-      || research_invention_state(presearch, id) != TECH_KNOWN) {
-    if (cost < 0) {
-      if (cost == -1) {
-        cost = game.server.freecost;
-      } else if (cost == -2) {
-        cost = game.server.conquercost;
-      } else if (cost == -3) {
-        cost = game.server.diplbulbcost;
-      } else {
-        
-        cost = 0;
-      }
-    }
-    research_apply_penalty(presearch, id, cost);
-    found_new_tech(presearch, id, FALSE, TRUE);
+  if (id == A_FUTURE || player_invention_state(pplayer, id) != TECH_KNOWN) {
+    do_free_cost(pplayer, id);
+    found_new_tech(pplayer, id, FALSE, TRUE);
     result = advance_by_number(id);
-    script_tech_learned(presearch, pplayer, result, reason);
-
-    if (notify && result != NULL) {
-      const char *adv_name = research_advance_name_translation(presearch, id);
-      char research_name[MAX_LEN_NAME * 2];
-
-      research_pretty_name(presearch, research_name, sizeof(research_name));
-
-      notify_player(pplayer, NULL, E_TECH_GAIN, ftc_server,
-                    Q_("?fromscript:You acquire %s."), adv_name);
-      notify_research(presearch, pplayer, E_TECH_GAIN, ftc_server,
-                      /* TRANS: "The Greeks ..." or "The members of
-                       * team Red ..." */
-                      Q_("?fromscript:The %s acquire %s and share this "
-                         "advance with you."),
-                      nation_plural_for_player(pplayer), adv_name);
-      notify_research_embassies(presearch, NULL, E_TECH_EMBASSY, ftc_server,
-                                /* TRANS: "The Greeks ..." or "The members of
-                                 * team Red ..." */
-                                Q_("?fromscript:The %s acquire %s."),
-                                research_name, adv_name);
-    }
-
+    script_tech_learned(pplayer, result, reason);
     return result;
   } else {
     return NULL;
@@ -359,53 +291,18 @@ Tech_Type *api_edit_give_technology(lua_State *L, Player *pplayer,
 /*****************************************************************************
   Modify player's trait value.
 *****************************************************************************/
-bool api_edit_trait_mod_set(lua_State *L, Player *pplayer,
-                            const char *tname, const int mod)
+bool api_edit_trait_mod(lua_State *L, Player *pplayer, const char *trait_name,
+                        const int mod)
 {
-  enum trait tr;
+  enum trait tr = trait_by_name(trait_name, fc_strcasecmp);
 
-  LUASCRIPT_CHECK_STATE(L, -1);
-  LUASCRIPT_CHECK_ARG_NIL(L, pplayer, 2, Player, FALSE);
-  LUASCRIPT_CHECK_ARG_NIL(L, tname, 3, string, FALSE);
-
-  tr = trait_by_name(tname, fc_strcasecmp);
-
-  LUASCRIPT_CHECK_ARG(L, trait_is_valid(tr), 3, "no such trait", 0);
+  if (!trait_is_valid(tr)) {
+    return FALSE;
+  }
 
   pplayer->ai_common.traits[tr].mod += mod;
 
   return TRUE;
-}
-
-/*****************************************************************************
-  Create a new owned extra.
-*****************************************************************************/
-void api_edit_create_owned_extra(lua_State *L, Tile *ptile, const char *name,
-                                 Player *pplayer)
-{
-  struct extra_type *pextra;
-
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
-
-  if (!name) {
-    return;
-  }
-
-  pextra = extra_type_by_rule_name(name);
-
-  if (pextra) {
-    create_extra(ptile, pextra, pplayer);
-    update_tile_knowledge(ptile);
-  }
-}
-
-/*****************************************************************************
-  Create a new extra.
-*****************************************************************************/
-void api_edit_create_extra(lua_State *L, Tile *ptile, const char *name)
-{
-  api_edit_create_owned_extra(L, ptile, name, NULL);
 }
 
 /*****************************************************************************
@@ -414,23 +311,7 @@ void api_edit_create_extra(lua_State *L, Tile *ptile, const char *name)
 void api_edit_create_base(lua_State *L, Tile *ptile, const char *name,
                           Player *pplayer)
 {
-  api_edit_create_owned_extra(L, ptile, name, pplayer);
-}
-
-/*****************************************************************************
-  Add a new road.
-*****************************************************************************/
-void api_edit_create_road(lua_State *L, Tile *ptile, const char *name)
-{
-  api_edit_create_owned_extra(L, ptile, name, NULL);
-}
-
-/*****************************************************************************
-  Remove extra from tile, if present
-*****************************************************************************/
-void api_edit_remove_extra(lua_State *L, Tile *ptile, const char *name)
-{
-  struct extra_type *pextra;
+  struct base_type *pbase;
 
   LUASCRIPT_CHECK_STATE(L);
   LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
@@ -439,10 +320,32 @@ void api_edit_remove_extra(lua_State *L, Tile *ptile, const char *name)
     return;
   }
 
-  pextra = extra_type_by_rule_name(name);
+  pbase = base_type_by_rule_name(name);
 
-  if (pextra != NULL && tile_has_extra(ptile, pextra)) {
-    tile_extra_rm_apply(ptile, pextra);
+  if (pbase) {
+    create_base(ptile, pbase, pplayer);
+    update_tile_knowledge(ptile);
+  }
+}
+
+/*****************************************************************************
+  Add a new road.
+*****************************************************************************/
+void api_edit_create_road(lua_State *L, Tile *ptile, const char *name)
+{
+  struct road_type *proad;
+
+  LUASCRIPT_CHECK_STATE(L);
+  LUASCRIPT_CHECK_ARG_NIL(L, ptile, 2, Tile);
+
+  if (!name) {
+    return;
+  }
+
+  proad = road_type_by_rule_name(name);
+
+  if (proad) {
+    tile_add_road(ptile, proad);
     update_tile_knowledge(ptile);
   }
 }
@@ -523,44 +426,10 @@ void api_edit_player_victory(lua_State *L, Player *pplayer)
 bool api_edit_unit_move(lua_State *L, Unit *punit, Tile *ptile,
                         int movecost)
 {
-  struct city *pcity;
-
   LUASCRIPT_CHECK_STATE(L, FALSE);
   LUASCRIPT_CHECK_SELF(L, punit, FALSE);
   LUASCRIPT_CHECK_ARG_NIL(L, ptile, 3, Tile, FALSE);
   LUASCRIPT_CHECK_ARG(L, movecost >= 0, 4, "Negative move cost!", FALSE);
 
-  return unit_move(punit, ptile, movecost, NULL,
-                   /* Backwards compatibility for old scripts in rulesets
-                    * and (scenario) savegames. */
-                   ((pcity = tile_city(ptile))
-                    && (unit_owner(punit)->ai_common.barbarian_type
-                        != ANIMAL_BARBARIAN)
-                    && uclass_has_flag(unit_class_get(punit),
-                                       UCF_CAN_OCCUPY_CITY)
-                    && !unit_has_type_flag(punit, UTYF_CIVILIAN)
-                    && pplayers_at_war(unit_owner(punit),
-                                       city_owner(pcity))));
-}
-
-/*****************************************************************************
-  Add history to a city
-*****************************************************************************/
-void api_edit_city_add_history(lua_State *L, City *pcity, int amount)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, pcity);
-
-  pcity->history += amount;
-}
-
-/*****************************************************************************
-  Add history to a player
-*****************************************************************************/
-void api_edit_player_add_history(lua_State *L, Player *pplayer, int amount)
-{
-  LUASCRIPT_CHECK_STATE(L);
-  LUASCRIPT_CHECK_SELF(L, pplayer);
-
-  pplayer->culture += amount;
+  return unit_move(punit, ptile, movecost);
 }

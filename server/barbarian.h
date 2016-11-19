@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -14,16 +14,16 @@
 #ifndef FC__BARBARIAN_H
 #define FC__BARBARIAN_H
 
-/* utility */
 #include "support.h"            /* bool type */
 
-/* common */
 #include "fc_types.h"
 
 #define MIN_UNREST_DIST   5
 #define MAX_UNREST_DIST   8
 
 #define UPRISE_CIV_SIZE  10
+#define UPRISE_CIV_MORE  30
+#define UPRISE_CIV_MOST  50
 
 #define MAP_FACTOR     2000  /* adjust this to get a good uprising frequency */
 

@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,11 +28,12 @@ struct conn_list;
 
 struct player_tile {
   struct vision_site *site;		/* NULL for no vision site */
-  struct extra_type *resource;          /* NULL for no resource */
+  struct resource *resource;		/* NULL for no resource */
   struct terrain *terrain;		/* NULL for unknown tiles */
   struct player *owner; 		/* NULL for unowned */
-  struct player *extras_owner;
-  bv_extras extras;
+  bv_special special;
+  bv_bases bases;
+  bv_roads roads;
 
   /* If you build a city with an unknown square within city radius
      the square stays unknown. However, we still have to keep count
@@ -46,8 +47,10 @@ struct player_tile {
 void global_warming(int effect);
 void nuclear_winter(int effect);
 void climate_change(bool warming, int effect);
-bool upgrade_city_extras(struct city *pcity, struct extra_type **gained);
-void upgrade_all_city_extras(struct player *pplayer, bool discovery);
+bool upgrade_city_roads(struct city *pcity, struct road_type **gained);
+void upgrade_all_city_roads(struct player *pplayer, bool discovery);
+bool upgrade_city_bases(struct city *pcity, struct base_type **gained);
+void upgrade_all_city_bases(struct player *pplayer, bool discovery);
 
 void give_map_from_player_to_player(struct player *pfrom, struct player *pdest);
 void give_seamap_from_player_to_player(struct player *pfrom, struct player *pdest);
@@ -69,8 +72,6 @@ void map_vision_update(struct player *pplayer, struct tile *ptile,
                        const v_radius_t old_radius_sq,
                        const v_radius_t new_radius_sq,
                        bool can_reveal_tiles);
-void map_set_border_vision(struct player *pplayer,
-                           const bool is_enabled);
 void map_show_all(struct player *pplayer);
 
 bool map_is_known_and_seen(const struct tile *ptile,
@@ -109,13 +110,12 @@ void map_calculate_borders(void);
 void map_claim_border(struct tile *ptile, struct player *powner,
                       int radius_sq);
 void map_claim_ownership(struct tile *ptile, struct player *powner,
-                         struct tile *psource, bool claim_bases);
+                         struct tile *psource);
 void map_clear_border(struct tile *ptile);
 void map_update_border(struct tile *ptile, struct player *owner,
                        int old_radius_sq, int new_radius_sq);
 
-void tile_claim_bases(struct tile *ptile, struct player *powner);
-void map_claim_base(struct tile *ptile, struct extra_type *pextra,
+void map_claim_base(struct tile *ptile, struct base_type *pbase,
                     struct player *powner, struct player *ploser);
 
 void terrain_changed(struct tile *ptile);
@@ -134,9 +134,9 @@ void vision_clear_sight(struct vision *vision);
 void change_playertile_site(struct player_tile *ptile,
                             struct vision_site *new_site);
 
-void create_extra(struct tile *ptile, struct extra_type *pextra,
-                  struct player *pplayer);
-void destroy_extra(struct tile *ptile, struct extra_type *pextra);
+void create_base(struct tile *ptile, struct base_type *pbase,
+                 struct player *pplayer);
+void destroy_base(struct tile *ptile, struct base_type *pbase);
 
 void give_distorted_map(struct player *pfrom, struct player *pto, int good,
                         int bad, bool reveal_cities);

@@ -32,12 +32,11 @@
 
 /* client */
 #include "client_main.h"
+#include "messagewin_common.h"
 #include "options.h"
 #include "update_queue.h"
 
-#include "messagewin_common.h"
-
-static struct message **messages = NULL;
+static struct message *messages = NULL;
 static int messages_total = 0;
 static int messages_alloc = 0;
 
@@ -54,7 +53,7 @@ static void meswin_dialog_update(void)
     update_queue_add(UQ_CALLBACK(real_meswin_dialog_update), NULL);
   } else if (0 < messages_total
              && (!client_has_player()
-                 || is_human(client.conn.playing))) {
+                 || !client.conn.playing->ai_controlled)) {
     meswin_dialog_popup(FALSE);
   }
 }
@@ -62,35 +61,18 @@ static void meswin_dialog_update(void)
 /****************************************************************************
   Clear all messages.
 ****************************************************************************/
-void meswin_clear_older(int turn, int phase)
+void meswin_clear(void)
 {
   int i;
-  int j = 0;
 
-  if (!gui_options.show_previous_turn_messages) {
-    turn = MESWIN_CLEAR_ALL;
+  for (i = 0; i < messages_total; i++) {
+    free(messages[i].descr);
+    messages[i].descr = NULL;
+
+    text_tag_list_destroy(messages[i].tags);
+    messages[i].tags = NULL;
   }
-
-  for (i = 0;
-       i < messages_total
-       && (turn < 0
-           || (messages[i]->turn < turn
-               || (messages[i]->turn == turn && messages[i]->phase < phase))) ; i++) {
-    free(messages[i]->descr);
-
-    text_tag_list_destroy(messages[i]->tags);
-    free(messages[i]);
-    messages[i] = NULL;
-  }
-
-  if (i != 0) {
-    for (; i < messages_total; i++, j++) {
-      messages[j] = messages[i];
-      messages[i] = NULL;
-    }
-    messages_total = j;
-  }
-
+  messages_total = 0;
   meswin_dialog_update();
 }
 
@@ -98,21 +80,18 @@ void meswin_clear_older(int turn, int phase)
   Add a message.
 ****************************************************************************/
 void meswin_add(const char *message, const struct text_tag_list *tags,
-                struct tile *ptile, enum event_type event,
-                int turn, int phase)
+                struct tile *ptile, enum event_type event)
 {
   const size_t min_msg_len = 50;
   size_t msg_len = strlen(message);
   char *s = fc_malloc(MAX(msg_len, min_msg_len) + 1);
   int i, nspc;
-  struct message *msg;
 
   if (messages_total + 2 > messages_alloc) {
     messages_alloc = messages_total + 32;
-    messages = fc_realloc(messages, messages_alloc * sizeof(struct message *));
+    messages = fc_realloc(messages, messages_alloc * sizeof(*messages));
   }
 
-  msg = fc_malloc(sizeof(struct message));
   strcpy(s, message);
 
   nspc = min_msg_len - strlen(s);
@@ -120,28 +99,26 @@ void meswin_add(const char *message, const struct text_tag_list *tags,
     strncat(s, "                                                  ", nspc);
   }
 
-  msg->tile = ptile;
-  msg->event = event;
-  msg->descr = s;
-  msg->tags = text_tag_list_copy(tags);
-  msg->location_ok = (ptile != NULL);
-  msg->visited = FALSE;
-  msg->turn = turn;
-  msg->phase = phase;
-  messages[messages_total++] = msg;
+  messages[messages_total].tile = ptile;
+  messages[messages_total].event = event;
+  messages[messages_total].descr = s;
+  messages[messages_total].tags = text_tag_list_copy(tags);
+  messages[messages_total].location_ok = (ptile != NULL);
+  messages[messages_total].visited = FALSE;
+  messages_total++;
 
   /* Update the city_ok fields of all messages since the city may have
    * changed owner. */
   for (i = 0; i < messages_total; i++) {
-    if (messages[i]->location_ok) {
-      struct city *pcity = tile_city(messages[i]->tile);
+    if (messages[i].location_ok) {
+      struct city *pcity = tile_city(messages[i].tile);
 
-      messages[i]->city_ok =
+      messages[i].city_ok =
           (pcity
            && (!client_has_player()
                || can_player_see_city_internals(client_player(), pcity)));
     } else {
-      messages[i]->city_ok = FALSE;
+      messages[i].city_ok = FALSE;
     }
   }
 
@@ -154,7 +131,7 @@ void meswin_add(const char *message, const struct text_tag_list *tags,
 const struct message *meswin_get_message(int message_index)
 {
   if (message_index >= 0 && message_index < messages_total) {
-    return messages[message_index];
+    return &messages[message_index];
   } else {
     /* Can happen in turn change... */
     return NULL;
@@ -176,7 +153,7 @@ void meswin_set_visited_state(int message_index, bool state)
 {
   fc_assert_ret(0 <= message_index && message_index < messages_total);
 
-  messages[message_index]->visited = state;
+  messages[message_index].visited = state;
 }
 
 /****************************************************************************
@@ -186,11 +163,11 @@ void meswin_popup_city(int message_index)
 {
   fc_assert_ret(0 <= message_index && message_index < messages_total);
 
-  if (messages[message_index]->city_ok) {
-    struct tile *ptile = messages[message_index]->tile;
+  if (messages[message_index].city_ok) {
+    struct tile *ptile = messages[message_index].tile;
     struct city *pcity = tile_city(ptile);
 
-    if (gui_options.center_when_popup_city) {
+    if (center_when_popup_city) {
       center_tile_mapcanvas(ptile);
     }
 
@@ -214,8 +191,8 @@ void meswin_goto(int message_index)
 {
   fc_assert_ret(0 <= message_index && message_index < messages_total);
 
-  if (messages[message_index]->location_ok) {
-    center_tile_mapcanvas(messages[message_index]->tile);
+  if (messages[message_index].location_ok) {
+    center_tile_mapcanvas(messages[message_index].tile);
   }
 }
 
@@ -226,10 +203,10 @@ void meswin_double_click(int message_index)
 {
   fc_assert_ret(0 <= message_index && message_index < messages_total);
 
-  if (messages[message_index]->city_ok
-      && is_city_event(messages[message_index]->event)) {
+  if (messages[message_index].city_ok
+      && is_city_event(messages[message_index].event)) {
     meswin_popup_city(message_index);
-  } else if (messages[message_index]->location_ok) {
+  } else if (messages[message_index].location_ok) {
     meswin_goto(message_index);
   }
 }

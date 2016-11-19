@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,14 +19,11 @@
 
 #include <gtk/gtk.h>
 
-/* utility */
 #include "log.h"
 #include "mem.h"
 
-/* common */
 #include "rgbcolor.h"
 
-/* client/gui-gtk-3.0 */
 #include "gui_main.h"
 
 #include "colors.h"
@@ -48,7 +45,7 @@ enum Display_color_type get_visual(void)
     return BW_DISPLAY;
   }
 
-  if (type < GDK_VISUAL_STATIC_COLOR) {
+  if(type < GDK_VISUAL_STATIC_COLOR) {
     /* No color visual available at default depth */
     log_verbose("found grayscale(?) display.");
     return GRAYSCALE_DISPLAY;

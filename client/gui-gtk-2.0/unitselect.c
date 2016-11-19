@@ -76,7 +76,7 @@ enum usdlg_row_types {
   #define USDLG_COLUMNS_SHOW    USDLG_COLUMNS_DEBUG
 #else
   #define USDLG_COLUMNS_SHOW    USDLG_COLUMNS_DEFAULT
-#endif /* DEBUG_USDLG */
+#endif /* DEBUG */
 
 enum usdlg_column_types usdlg_col_types[USDLG_COLUMNS_ALL] = {
   COL_PIXBUF, /* Unit */
@@ -176,7 +176,7 @@ static void usdlg_cmd_ready(GtkObject *object, gpointer data);
 static void usdlg_cmd_sentry(GtkObject *object, gpointer data);
 static void usdlg_cmd_select(GtkObject *object, gpointer data);
 static void usdlg_cmd_deselect(GtkObject *object, gpointer data);
-static void usdlg_cmd_exec(GtkObject *object, gpointer mode_data,
+static void usdlg_cmd_exec(GtkObject *object, gpointer data,
                            enum usdlg_cmd cmd);
 static void usdlg_cmd_exec_unit(struct unit *punit, enum usdlg_cmd cmd);
 static void usdlg_cmd_center(GtkObject *object, gpointer data);
@@ -700,7 +700,7 @@ static void usdlg_tab_append_utype(GtkTreeStore *store,
     canvas_store.v.pixbuf = pix;
 
     gdk_pixbuf_fill(pix, 0x00000000);
-    put_unittype(putype, &canvas_store, 1.0, 0, 0);
+    put_unittype(putype, &canvas_store, 0, 0);
   }
 
   /* The name of the unit. */
@@ -797,12 +797,12 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
     canvas_store.v.pixbuf = pix;
 
     gdk_pixbuf_fill(pix, 0x00000000);
-    put_unit(punit, &canvas_store, 1.0, 0, 0);
+    put_unit(punit, &canvas_store, 0, 0);
   }
 
   phome = game_city_by_number(punit->homecity);
   if (phome) {
-    fc_snprintf(buf2, sizeof(buf2), "%s", city_name_get(phome));
+    fc_snprintf(buf2, sizeof(buf2), "%s", city_name(phome));
   } else if (unit_owner(punit) == client_player()
              || client_is_global_observer()) {
     /* TRANS: used in place of unit home city name */
@@ -811,7 +811,7 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
     /* TRANS: used in place of unit home city name */
     sz_strlcpy(buf2, _("unknown"));
   }
-#ifdef FREECIV_DEBUG
+#ifdef DEBUG
   /* Strings only used in debug builds, don't bother with i18n */
   fc_snprintf(buf, sizeof(buf), "%s [Unit ID %d]\n(%s)\nCoordinates: (%d,%d)",
               unit_name_translation(punit), punit->id, buf2,
@@ -824,11 +824,11 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
                    ptrans->id);
     }
   }
-#else /* FREECIV_DEBUG */
+#else /* DEBUG */
   /* TRANS: unit type and home city, e.g. "Transport\n(New Orleans)" */
   fc_snprintf(buf, sizeof(buf), _("%s\n(%s)"), unit_name_translation(punit),
               buf2);
-#endif /* FREECIV_DEBUG */
+#endif /* DEBUG */
 
   if (transported) {
     weight = PANGO_WEIGHT_NORMAL;
@@ -841,7 +841,7 @@ static void usdlg_tab_append_units(struct unit_select_dialog *pdialog,
                      0, pix,                            /* Unit pixmap */
                      1, buf,                            /* Text */
                      2, 1,                              /* Number of units */
-                     3, utype_index(unit_type_get(punit)), /* Unit type ID */
+                     3, utype_index(unit_type(punit)),  /* Unit type ID */
                      4, punit->id,                      /* Unit ID */
                      5, loc,                            /* Unit location */
                      6, act,                            /* Unit activity */
@@ -900,10 +900,10 @@ static void usdlg_cmd_deselect(GtkObject *object, gpointer data)
 /*****************************************************************************
   Main function for the callbacks.
 *****************************************************************************/
-static void usdlg_cmd_exec(GtkObject *object, gpointer mode_data,
+static void usdlg_cmd_exec(GtkObject *object, gpointer data,
                            enum usdlg_cmd cmd)
 {
-  enum unit_select_location_mode loc_mode = (enum unit_select_location_mode) mode_data;
+  enum unit_select_location_mode loc = (enum unit_select_location_mode) data;
   GtkTreeView *view;
   GtkTreeSelection *selection;
   GtkTreeModel *model;
@@ -912,13 +912,13 @@ static void usdlg_cmd_exec(GtkObject *object, gpointer mode_data,
   struct unit_select_dialog *pdialog = usdlg_get(FALSE);
 
   fc_assert_ret(pdialog != NULL);
-  fc_assert_ret(unit_select_location_mode_is_valid(loc_mode));
+  fc_assert_ret(unit_select_location_mode_is_valid(loc));
 
   if (!can_client_change_view() || !can_client_control()) {
     return;
   }
 
-  view = GTK_TREE_VIEW(pdialog->tabs[loc_mode].view);
+  view = GTK_TREE_VIEW(pdialog->tabs[loc].view);
   selection = gtk_tree_view_get_selection(view);
 
   if (!gtk_tree_selection_get_selected(selection, &model, &it)) {

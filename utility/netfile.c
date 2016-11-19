@@ -17,7 +17,7 @@
 
 #include <curl/curl.h>
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
 #include <windows.h>
 #endif
 
@@ -34,8 +34,6 @@ struct netfile_post {
   struct curl_httppost *first;
   struct curl_httppost *last;
 };
-
-typedef size_t (*netfile_write_cb)(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 static char error_buf_curl[CURL_ERROR_SIZE];
 
@@ -60,27 +58,10 @@ static CURL *netfile_init_handle(void)
 }
 
 /********************************************************************** 
-  curl write callback to store received file to memory.
-***********************************************************************/
-static size_t netfile_memwrite_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
-{
-  struct netfile_write_cb_data *data = (struct netfile_write_cb_data *)userdata;
-
-  if (size > 0) {
-    data->mem = fc_realloc(data->mem, data->size + size * nmemb);
-    memcpy(data->mem + data->size, ptr, size * nmemb);
-    data->size += size * nmemb;
-  }
-
-  return size * nmemb;
-}
-
-/********************************************************************** 
   Fetch file from given URL to given file stream. This is core
   function of netfile module.
 ***********************************************************************/
 static bool netfile_download_file_core(const char *URL, FILE *fp,
-                                       struct netfile_write_cb_data *mem_data,
                                        nf_errmsg cb, void *data)
 {
   CURLcode curlret;
@@ -93,14 +74,7 @@ static bool netfile_download_file_core(const char *URL, FILE *fp,
   headers = curl_slist_append(headers,"User-Agent: Freeciv/" VERSION_STRING);
 
   curl_easy_setopt(handle, CURLOPT_URL, URL);
-  if (mem_data != NULL) {
-    mem_data->mem = NULL;
-    mem_data->size = 0;
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, netfile_memwrite_cb);
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, mem_data);
-  } else {
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, fp);
-  }
+  curl_easy_setopt(handle, CURLOPT_WRITEDATA, fp);
   curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1);
 
@@ -134,15 +108,40 @@ struct section_file *netfile_get_section_file(const char *URL,
 {
   bool success;
   struct section_file *out = NULL;
-  struct netfile_write_cb_data mem_data;
   fz_FILE *file;
+  FILE *fp;
 
-  success = netfile_download_file_core(URL, NULL, &mem_data, cb, data);
+#ifdef WIN32_NATIVE
+  {
+    char filename[MAX_PATH];
+
+    GetTempPath(sizeof(filename), filename);
+    cat_snprintf(filename, sizeof(filename), "fctmp%d", fc_rand(1000));
+
+    fp = fc_fopen(filename, "w+b");
+  }
+#else /* WIN32_NATIVE */
+  fp = tmpfile();
+#endif /* WIN32_NATIVE */
+
+  if (fp == NULL) {
+    if (cb != NULL) {
+      cb(_("Could not open temp file."), data);
+    }
+    return NULL;
+  }
+
+  success = netfile_download_file_core(URL, fp, cb, data);
 
   if (success) {
-    file = fz_from_memory(mem_data.mem, mem_data.size, TRUE);
+    rewind(fp);
+
+    file = fz_from_stream(fp);
 
     out = secfile_from_stream(file, TRUE);
+  } else {
+
+    fclose(fp);
   }
 
   return out;
@@ -170,7 +169,7 @@ bool netfile_download_file(const char *URL, const char *filename,
     return FALSE;
   }
 
-  success = netfile_download_file_core(URL, fp, NULL, cb, data);
+  success = netfile_download_file_core(URL, fp, cb, data);
 
   fclose(fp);
 
@@ -231,8 +230,7 @@ static size_t dummy_write(void *buffer, size_t size, size_t nmemb, void *userp)
   Send HTTP POST
 ***********************************************************************/
 bool netfile_send_post(const char *URL, struct netfile_post *post,
-                       FILE *reply_fp, struct netfile_write_cb_data *mem_data,
-                       const char *addr)
+                       FILE *reply_fp, const char *addr)
 {
   CURLcode curlret;
   long http_resp;
@@ -245,12 +243,7 @@ bool netfile_send_post(const char *URL, struct netfile_post *post,
 
   curl_easy_setopt(handle, CURLOPT_URL, URL);
   curl_easy_setopt(handle, CURLOPT_HTTPPOST, post->first);
-  if (mem_data != NULL) {
-    mem_data->mem = NULL;
-    mem_data->size = 0;
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, netfile_memwrite_cb);
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, mem_data);
-  } else if (reply_fp == NULL) {
+  if (reply_fp == NULL) {
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, dummy_write);
   } else {
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, reply_fp);

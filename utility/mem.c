@@ -43,7 +43,6 @@ static void handle_alloc_failure(size_t size, const char *called_as,
   exit(EXIT_FAILURE);
 }
 
-#ifdef FREECIV_DEBUG
 /****************************************************************************
   Check the size for sanity.  The program will exit rather than allocate a
   dangerously large amount of memory.
@@ -62,7 +61,7 @@ static void sanity_check_size(size_t size, const char *called_as,
                 called_as, (unsigned long) size, line, file);
   }
 }
-#endif /* FREECIV_DEBUG */
+
 
 /*******************************************************************************
   Function used by fc_malloc macro, malloc() replacement
@@ -71,26 +70,21 @@ static void sanity_check_size(size_t size, const char *called_as,
   always return a valid pointer (even for a 0-byte malloc).
 *******************************************************************************/ 
 void *fc_real_malloc(size_t size,
-                     const char *called_as, int line, const char *file)
+		     const char *called_as, int line, const char *file)
 {
   void *ptr;
 
-#ifdef FREECIV_DEBUG
   sanity_check_size(size, called_as, line, file);
-#endif /* FREECIV_DEBUG */
 
   /* Some systems return NULL on malloc(0)
    * According to ANSI C, the return is implementation-specific, 
    * this is a safe guard. Having the extra byte is, of course, harmless. */
-#ifndef MALLOC_ZERO_OK
   size = MAX(size, 1);
-#endif
-
+    
   ptr = malloc(size);
-  if (ptr == NULL) {
+  if (!ptr) {
     handle_alloc_failure(size, called_as, line, file);
   }
-
   return ptr;
 }
 
@@ -107,9 +101,7 @@ void *fc_real_realloc(void *ptr, size_t size,
     return fc_real_malloc(size, called_as, line, file);
   }
 
-#ifdef FREECIV_DEBUG
   sanity_check_size(size, called_as, line, file);
-#endif /* FREECIV_DEBUG */
 
   new_ptr = realloc(ptr, size);
   if (!new_ptr) {

@@ -19,6 +19,9 @@
 #include "ai.h"
 
 /* default ai */
+#include "advdiplomacy.h"
+#include "advdomestic.h"
+#include "advmilitary.h"
 #include "aicity.h"
 #include "aidata.h"
 #include "aiferry.h"
@@ -27,9 +30,6 @@
 #include "aiplayer.h"
 #include "aisettler.h"
 #include "aitools.h"
-#include "daidiplomacy.h"
-#include "daidomestic.h"
-#include "daimilitary.h"
 
 /* threaded ai */
 #include "taimsg.h"
@@ -113,7 +113,7 @@ static void twai_control_gained(struct player *pplayer)
 {
   TAI_AIT;
   TAI_TFUNC(tai_control_gained, pplayer);
-  TAI_DFUNC(dai_gained_control, pplayer);
+  TAI_DFUNC(dai_assess_danger_player, pplayer);
 }
 
 /**************************************************************************
@@ -128,21 +128,10 @@ static void twai_control_lost(struct player *pplayer)
 /**************************************************************************
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
-static void twai_split_by_civil_war(struct player *original,
-                                    struct player *created)
+static void twai_split_by_civil_war(struct player *pplayer)
 {
   TAI_AIT;
-  TAI_DFUNC(dai_assess_danger_player, original);
-}
-
-/**************************************************************************
-  Call default ai with threaded ai type as parameter.
-**************************************************************************/
-static void twai_created_by_civil_war(struct player *original,
-                                      struct player *created)
-{
-  TAI_AIT;
-  TAI_DFUNC(dai_player_copy, original, created);
+  TAI_DFUNC(dai_assess_danger_player, pplayer);
 }
 
 /**************************************************************************
@@ -236,16 +225,6 @@ static void twai_build_adv_adjust(struct player *pplayer, struct city *wonder_ci
 {
   TAI_AIT;
   TAI_DFUNC(dai_build_adv_adjust, pplayer, wonder_city);
-}
-
-/**************************************************************************
-  Call default ai with threaded ai type as parameter.
-**************************************************************************/
-static void twai_gov_value(struct player *pplayer, struct government *gov,
-                           adv_want *val, bool *override)
-{
-  TAI_AIT;
-  TAI_DFUNC(dai_gov_value, pplayer, gov, val, override);
 }
 
 /**************************************************************************
@@ -392,16 +371,6 @@ static void twai_auto_settler_cont(struct player *pplayer, struct unit *punit,
 /**************************************************************************
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
-static void twai_switch_to_explore(struct unit *punit, struct tile *target,
-                                  enum override_bool *allow)
-{
-  TAI_AIT;
-  TAI_DFUNC(dai_switch_to_explore, punit, target, allow);
-}
-
-/**************************************************************************
-  Call default ai with threaded ai type as parameter.
-**************************************************************************/
 static void twai_first_activities(struct player *pplayer)
 {
   TAI_AIT;
@@ -489,7 +458,7 @@ static void twai_unit_log(char *buffer, int buflength, const struct unit *punit)
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
 static void twai_consider_plr_dangerous(struct player *plr1, struct player *plr2,
-                                        enum override_bool *result)
+                                        enum danger_consideration *result)
 {
   TAI_AIT;
   TAI_DFUNC(dai_consider_plr_dangerous, plr1, plr2, result);
@@ -499,7 +468,7 @@ static void twai_consider_plr_dangerous(struct player *plr1, struct player *plr2
   Call default ai with threaded ai type as parameter.
 **************************************************************************/
 static void twai_consider_tile_dangerous(struct tile *ptile, struct unit *punit,
-                                         enum override_bool *result)
+                                         enum danger_consideration *result)
 {
   TAI_AIT;
   TAI_DFUNC(dai_consider_tile_dangerous, ptile, punit, result);
@@ -536,8 +505,6 @@ const char *fc_ai_threaded_capstr(void)
 **************************************************************************/
 bool fc_ai_threaded_setup(struct ai_type *ai)
 {
-  struct dai_private_data *private;
-
   if (!has_thread_cond_impl()) {
     log_error(_("This Freeciv compilation has no full threads "
                 "implementation, threaded ai cannot be used."));
@@ -545,10 +512,6 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   }
 
   strncpy(ai->name, "threaded", sizeof(ai->name));
-
-  private = fc_malloc(sizeof(struct dai_private_data));
-  private->contemplace_workers = TRUE;
-  ai->private = private;
 
   tai_init_self(ai);
 
@@ -559,7 +522,6 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   ai->funcs.gained_control = twai_control_gained;
   ai->funcs.lost_control = twai_control_lost;
   ai->funcs.split_by_civil_war = twai_split_by_civil_war;
-  ai->funcs.created_by_civil_war = twai_created_by_civil_war;
 
   ai->funcs.phase_begin = twai_phase_begin;
   ai->funcs.phase_finished = twai_phase_finished;
@@ -572,8 +534,6 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   ai->funcs.build_adv_prepare = twai_wonder_city_distance;
   ai->funcs.build_adv_init = twai_build_adv_init;
   ai->funcs.build_adv_adjust_want = twai_build_adv_adjust;
-
-  ai->funcs.gov_value = twai_gov_value;
 
   ai->funcs.units_ruleset_init = twai_units_ruleset_init;
   ai->funcs.units_ruleset_close = twai_units_ruleset_close;
@@ -596,12 +556,7 @@ bool fc_ai_threaded_setup(struct ai_type *ai)
   ai->funcs.settler_run = twai_auto_settler_run;
   ai->funcs.settler_cont = twai_auto_settler_cont;
 
-  ai->funcs.want_to_explore = twai_switch_to_explore;
-
   ai->funcs.first_activities = twai_first_activities;
-  /* Do complete run after savegame loaded - we don't know what has been
-     done before. */
-  ai->funcs.restart_phase = twai_first_activities;
   ai->funcs.diplomacy_actions = twai_diplomacy_actions;
   ai->funcs.last_activities = twai_last_activities;
 

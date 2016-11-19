@@ -3,7 +3,10 @@
 name=_("Ivoirian")
 plural=_("?plural:Ivoirian")
 groups="Modern", "African"
-legend=_("Ivory Coast or Côte d'Ivoire achieved independence in 1960. It\
+; /* TRANS: The second letter in "Cote" should be */
+; /* TRANS: U+00F4 LATIN SMALL LETTER O WITH CIRCUMFLEX if available in */
+; /* TRANS: your charset. In ISO-8859-1 (ISO Latin 1) this is 00F4. */
+legend=_("Ivory Coast or Cote d'Ivoire achieved independence in 1960. It\
  has been relatively stable compared to other West African countries, but\
  in the 2000s it lived through a civil war.")
 
@@ -17,7 +20,7 @@ leaders = {
 
 flag = "ivory_coast"
 flag_alt = "-"
-style = "Tropical"
+city_style = "Tropical"
 
 init_techs=""
 init_buildings=""

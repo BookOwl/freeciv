@@ -13,11 +13,9 @@
 
 /*****************************************************************************
   ADVERTISEMENT: do not attempt to change the name of the API functions.
-  They may be in use in Lua scripts in savefiles, so once released, the
-  name and signature cannot change shape even in new major versions of
-  Freeciv, until the relevant save format version can no longer be loaded.
-  If you really like to change a function name, be sure to keep also the
-  old one running.
+  They *must* be compatible between the minor Freeciv versions within the
+  same major version. If you really like to change a function name, be sure
+  to keep also the old one running.
 *****************************************************************************/
 
 $#ifdef HAVE_CONFIG_H
@@ -35,6 +33,7 @@ $#include "luascript_types.h"
 struct Player {
   const char *name;
   Nation_Type *nation;
+  bool ai_controlled;
   bool is_alive;
 };
 
@@ -98,14 +97,6 @@ struct Disaster {
   const int id;
 };
 
-struct Achievement {
-  const int id;
-};
-
-struct Action {
-  const int id;
-};
-
 struct Unit_List_Link {
 };
 
@@ -115,17 +106,7 @@ struct City_List_Link {
 /* Module Game */
 module game {
   int api_methods_game_turn
-    @ current_turn (lua_State *L);
-
-  /* Deprecated. Use current_turn() to get the real turn number */
-  int api_methods_game_turn_deprecated
     @ turn (lua_State *L);
-
-  const char *api_methods_game_rulesetdir
-    @ rulesetdir (lua_State *L);
-
-  const char *api_methods_game_ruleset_name
-    @ ruleset_name (lua_State *L);
 }
 
 /* Module Player. */
@@ -147,15 +128,6 @@ module Player {
     @ knows_tech (lua_State *L, Player *self, Tech_Type *ptech);
   bool api_methods_player_shares_research
     @ shares_research (lua_State *L, Player *self, Player *other);
-  const char *api_methods_research_rule_name
-    @ research_rule_name (lua_State *L, Player *self);
-  const char *api_methods_research_name_translation
-    @ research_name_translation (lua_State *L, Player *self);
-
-  int api_methods_player_culture_get
-    @ culture(lua_State *L, Player *self);
-  bool api_methods_player_has_flag
-    @ has_flag (lua_State *L, Player *self, const char *flag);
 }
 
 module methods_private {
@@ -171,7 +143,7 @@ $[
 
 -- Player methods
 function Player:is_human()
-  return not self.has_flag(self, "AI");
+  return not self.ai_controlled
 end
 
 function Player:exists()
@@ -195,20 +167,6 @@ module City {
     @ map_sq_radius(lua_State *L, City *self);
   int api_methods_city_inspire_partisans
     @ inspire_partisans(lua_State *L, City *self, Player *inspirer);
-
-  int api_methods_city_culture_get
-    @ culture(lua_State *L, City *self);
-
-  bool api_methods_is_city_happy
-    @ is_happy(lua_State *L, City *self);
-  bool api_methods_is_city_unhappy
-    @ is_unhappy(lua_State *L, City *self);
-  bool api_methods_is_city_celebrating
-    @ is_celebrating(lua_State *L, City *self);
-  bool api_methods_is_gov_center
-    @ is_gov_center(lua_State *L, City *self);
-  bool api_methods_is_capital
-    @ is_capital(lua_State *L, City *self);
 }
 
 $[
@@ -227,19 +185,10 @@ module Unit {
       @ tile(lua_State *L, Unit *self);
   }
 
-  Unit *api_methods_unit_transporter
-    @ transporter (lua_State *L, Unit *self);
   bool api_methods_unit_city_can_be_built_here
     @ is_on_possible_city_tile (lua_State *L, Unit *self);
   Direction api_methods_unit_orientation_get
     @ facing(lua_State *L, Unit *self);
-}
-
-module methods_private {
-  module Unit {
-    Unit_List_Link *api_methods_private_unit_cargo_list_head
-      @ cargo_list_head (lua_State *L, Unit *self);
-  }
 }
 
 $[
@@ -252,6 +201,7 @@ end
 function Unit:get_homecity()
   return find.city(self.owner, self.homecity)
 end
+
 $]
 
 /* Module Tile. */
@@ -271,8 +221,6 @@ module Tile {
     @ city (lua_State *L, Tile *self);
   bool api_methods_tile_city_exists_within_max_city_map
     @ city_exists_within_max_city_map (lua_State *L, Tile *self, bool center);
-  bool api_methods_tile_has_extra
-    @ has_extra(lua_State *L, Tile *self, const char *name);
   bool api_methods_tile_has_base
     @ has_base(lua_State *L, Tile *self, const char *name);
   bool api_methods_tile_has_road
@@ -289,8 +237,6 @@ $[
 -- Deprecated. New one is Tile:city_exists_within_max_city_map().
 -- ***************************************************************************
 function Tile:city_exists_within_city_radius(center)
-  log.deprecation_warning("city_exists_within_city_radius()", "city_exists_within_max_city_map()",
-                          "2.3");
   return self:city_exists_within_max_city_map(center)
 end
 
@@ -299,10 +245,10 @@ $]
 module methods_private {
   module Tile {
     int api_methods_private_tile_next_outward_index
-      @ next_outward_index (lua_State *L, Tile *pcenter, int tindex,
+      @ next_outward_index (lua_State *L, Tile *pcenter, int index,
                             int max_dist);
     Tile *api_methods_private_tile_for_outward_index
-      @ tile_for_outward_index (lua_State *L, Tile *pcenter, int tindex);
+      @ tile_for_outward_index (lua_State *L, Tile *pcenter, int index);
     Unit_List_Link *api_methods_private_tile_unit_list_head
       @ unit_list_head (lua_State *L, Tile *self);
   }
@@ -388,8 +334,6 @@ module Terrain {
     @ rule_name (lua_State *L, Terrain *self);
   const char *api_methods_terrain_name_translation
     @ name_translation (lua_State *L, Terrain *self);
-  const char *api_methods_terrain_class_name
-    @ class_name (lua_State *L, Terrain *self);
 }
 
 /* Module Disaster. */
@@ -398,22 +342,6 @@ module Disaster {
     @ rule_name (lua_State *L, Disaster *self);
   const char *api_methods_disaster_name_translation
     @ name_translation (lua_State *L, Disaster *self);
-}
-
-/* Module Achievement. */
-module Achievement {
-  const char *api_methods_achievement_rule_name
-    @ rule_name (lua_State *L, Achievement *self);
-  const char *api_methods_achievement_name_translation
-    @ name_translation (lua_State *L, Achievement *self);
-}
-
-/* Module Action. */
-module Action {
-  const char *api_methods_action_rule_name
-    @ rule_name (lua_State *L, Action *self);
-  const char *api_methods_action_name_translation
-    @ name_translation (lua_State *L, Action *self);
 }
 
 /* Module Unit_List_Link. */
@@ -446,7 +374,7 @@ module find {
   Tile *api_find_tile
     @ tile (lua_State *L, int nat_x, int nat_y);
   Tile *api_find_tile_by_index
-    @ tile (lua_State *L, int tindex);
+    @ tile (lua_State *L, int index);
 
   /* NOTE: For overloading to work correctly, the string function
    * must be before the integer function for each case below. */
@@ -458,10 +386,6 @@ module find {
     @ nation_type (lua_State *L, const char *name_orig);
   Nation_Type *api_find_nation_type
     @ nation_type (lua_State *L, int nation_type_id);
-  Action *api_find_action_by_name
-    @ action (lua_State *L, const char *name_orig);
-  Action *api_find_action
-    @ action (lua_State *L, int building_type_id);
   Building_Type *api_find_building_type_by_name
     @ building_type (lua_State *L, const char *name_orig);
   Building_Type *api_find_building_type
@@ -501,13 +425,7 @@ module effects {
 /* Direction module */
 module direction {
  Direction api_utilities_str2dir
-   @ str2dir(lua_State *L, const char *str);
- Direction api_utilities_dir_ccw
-   @ next_ccw(lua_State *L, Direction self);
- Direction api_utilities_dir_cw
-   @ next_cw(lua_State *L, Direction self);
- Direction api_utilities_opposite_dir
-   @ opposite(lua_State *L, Direction self);
+   @ str2dir (lua_State *L, const char *str);
 }
 
 $[
@@ -561,11 +479,6 @@ do
   -- Safe iteration over the units on Tile
   function Tile:units_iterate()
     return safe_iterate_list(private.Tile.unit_list_head(self))
-  end
-
-  -- Safe iteration over the units transported by Unit
-  function Unit:cargo_iterate()
-    return safe_iterate_list(private.Unit.cargo_list_head(self))
   end
 end
 

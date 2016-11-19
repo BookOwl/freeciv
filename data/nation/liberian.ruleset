@@ -33,7 +33,7 @@ ruler_titles = {
 
 flag="liberia"
 flag_alt = "-"
-style = "tropical"
+city_style = "tropical"
 
 init_techs=""
 init_buildings=""

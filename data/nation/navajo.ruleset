@@ -3,7 +3,10 @@
 name=_("Navajo")
 plural=_("?plural:Navajo")
 groups="American"
-legend=_("The Navajo or Diné are the most populous Native American\
+; /* TRANS: The last letter in "Dine" should be */
+; /* TRANS: U+00E9 LATIN SMALL LETTER E WITH ACUTE if available in */
+; /* TRANS: your charset. In ISO-8859-1 (ISO Latin 1) this is 233. */
+legend=_("The Navajo or Dine are the most populous Native American\
  nation of the United States. They are closely related to the Apache.\
  Their language is famous for being one of the world's most\
  complex.")
@@ -30,7 +33,7 @@ ruler_titles = {
 
 flag="navajo"
 flag_alt = "-"
-style = "Celtic"
+city_style = "Celtic"
 
 init_techs=""
 init_buildings=""

@@ -61,8 +61,6 @@ void fc_interface_init(void)
 
   fc_funcs_defined = TRUE;
 
-  fc_strAPI_init();
-
   setup_real_activities_array();
 }
 
@@ -71,11 +69,8 @@ void fc_interface_init(void)
 **************************************************************************/
 void free_libfreeciv(void)
 {
-  diplrel_mess_close();
   free_data_dir_names();
   free_multicast_group();
-  free_freeciv_storage_dir();
   free_user_home_dir();
   free_fileinfo_data();
-  fc_strAPI_free();
 }

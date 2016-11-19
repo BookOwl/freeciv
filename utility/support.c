@@ -1,4 +1,4 @@
-/***********************************************************************
+/**********************************************************************
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 ***********************************************************************/
 
-/***********************************************************************
+/********************************************************************** 
   This module contains replacements for functions which are not
   available on all platforms.  Where the functions are available
   natively, these are (mostly) just wrappers.
@@ -20,7 +20,7 @@
   alternative would be to use the "standard" function name, and
   provide the implementation only if required.  However the method
   here has some advantages:
-
+  
    - We can provide definite prototypes in support.h, rather than
    worrying about whether a system prototype exists, and if so where,
    and whether it is correct.  (Note that whether or not configure
@@ -35,13 +35,11 @@
   The main disadvantage is remembering to use these "fc" functions on
   systems which have the functions natively.
 
-***********************************************************************/
+**********************************************************************/
 
 #ifdef HAVE_CONFIG_H
 #include <fc_config.h>
 #endif
-
-#include "fc_prehdrs.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -67,7 +65,7 @@
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
-#ifdef FREECIV_HAVE_SYS_TYPES_H
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
 #ifdef HAVE_UNISTD_H
@@ -76,13 +74,30 @@
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 #include <zlib.h>
 #endif
-#ifdef FREECIV_MSWINDOWS
+
+/* Must be before <windows.h> */
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
+
+#ifdef WIN32_NATIVE
 #include <process.h>
 #include <windows.h>
-#endif /* FREECIV_MSWINDOWS */
+#endif
+#ifdef HAVE_WINSOCK
+#ifdef HAVE_WINSOCK2
+#include <winsock2.h>
+#else  /* HAVE_WINSOCK2 */
+#include <winsock.h>
+#endif /* HAVE_WINSOCK2 */
+#endif /* HAVE_WINSOCK */
 #ifdef HAVE_STRINGS_H
 #  include <strings.h>
 #endif
@@ -91,12 +106,9 @@
 #  include <libgen.h>
 #endif
 
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 #include <zlib.h>
 #endif
-
-/* ICU */
-#include "unicode/ustring.h"
 
 /* utility */
 #include "fciconv.h"
@@ -107,113 +119,29 @@
 
 #include "support.h"
 
-static int cmp_buffer_uchars = 0;
-static UChar *cmp_buffer0 = NULL;
-static UChar *cmp_buffer1 = NULL;
-fc_mutex cmp_buffer_mutex;
-
-/***************************************************************
-  Initial allocation of string comparison buffers.
-***************************************************************/
-static void cmp_buffers_initial(void)
-{
-  if (cmp_buffer0 == NULL) {
-    cmp_buffer_uchars = 255;
-    cmp_buffer0 = fc_malloc((cmp_buffer_uchars + 1) * sizeof(UChar));
-    cmp_buffer1 = fc_malloc((cmp_buffer_uchars + 1) * sizeof(UChar));
-
-    /* Make sure there's zero after the buffer published with cmp_buffer_uchars */
-    cmp_buffer0[cmp_buffer_uchars] = 0;
-    cmp_buffer1[cmp_buffer_uchars] = 0;
-  }
-}
-
-/***************************************************************
-  Make string comparison buffers bigger
-***************************************************************/
-static void cmp_buffers_increase(void)
-{
-  cmp_buffer_uchars *= 1.5;
-  cmp_buffer0 = fc_realloc(cmp_buffer0, (cmp_buffer_uchars + 1) * sizeof(UChar));
-  cmp_buffer1 = fc_realloc(cmp_buffer1, (cmp_buffer_uchars + 1) * sizeof(UChar));
-
-  /* Make sure there's zero after the buffer published with cmp_buffer_uchars */
-  cmp_buffer0[cmp_buffer_uchars] = 0;
-  cmp_buffer1[cmp_buffer_uchars] = 0;
-}
-
-/***************************************************************
-  Initialize string handling API
-***************************************************************/
-void fc_strAPI_init(void)
-{
-  if (cmp_buffer_uchars == 0) {
-    fc_init_mutex(&cmp_buffer_mutex);
-    cmp_buffers_initial();
-  }
-}
-
-/***************************************************************
-  Free string handling API resources
-***************************************************************/
-void fc_strAPI_free(void)
-{
-  if (cmp_buffer0 != NULL) {
-    free(cmp_buffer0);
-    cmp_buffer0 = NULL;
-    free(cmp_buffer1);
-    cmp_buffer1 = NULL;
-    cmp_buffer_uchars = 0;
-  }
-  fc_destroy_mutex(&cmp_buffer_mutex);
-}
-
 /***************************************************************
   Compare strings like strcmp(), but ignoring case.
 ***************************************************************/
 int fc_strcasecmp(const char *str0, const char *str1)
 {
-  UErrorCode err_code = U_ZERO_ERROR;
-  int len0;
-  int len1;
-  bool enough_mem = FALSE;
-  int ret;
-
   if (str0 == NULL) {
     return -1;
   }
   if (str1 == NULL) {
     return 1;
   }
-
-  if (cmp_buffer_uchars == 0) {
-    fc_strAPI_init();
-  }
-
-  fc_allocate_mutex(&cmp_buffer_mutex);
-
-  while (!enough_mem) {
-    UErrorCode err_code0 = U_ZERO_ERROR;
-    UErrorCode err_code1 = U_ZERO_ERROR;
-
-    u_strFromUTF8Lenient(cmp_buffer0, cmp_buffer_uchars, &len0, str0, -1, &err_code0);
-    u_strFromUTF8Lenient(cmp_buffer1, cmp_buffer_uchars, &len1, str1, -1, &err_code1);
-
-    /* No need to handle U_STRING_NOT_TERMINATED_WARNING here as there's '0' after
-     * the buffers we were using */
-    if (err_code0 == U_BUFFER_OVERFLOW_ERROR || err_code1 == U_BUFFER_OVERFLOW_ERROR) {
-      cmp_buffers_increase();
-    } else {
-      enough_mem = TRUE;
+#ifdef HAVE_STRCASECMP
+  return strcasecmp (str0, str1);
+#else
+  for (; fc_tolower(*str0) == fc_tolower(*str1); str0++, str1++) {
+    if (*str0 == '\0') {
+      return 0;
     }
   }
 
-  ret = u_strCaseCompare(cmp_buffer0, -1, cmp_buffer1, -1,
-                         0, &err_code);
-
-  fc_release_mutex(&cmp_buffer_mutex);
-
-  return ret;
+  return ((int) (unsigned char) fc_tolower(*str0))
+    - ((int) (unsigned char) fc_tolower(*str1));
+#endif /* HAVE_STRCASECMP */
 }
 
 /***************************************************************
@@ -222,119 +150,30 @@ int fc_strcasecmp(const char *str0, const char *str1)
 ***************************************************************/
 int fc_strncasecmp(const char *str0, const char *str1, size_t n)
 {
-  UErrorCode err_code = U_ZERO_ERROR;
-  int len0;
-  int len1;
-  bool enough_mem = FALSE;
-  int ret;
-
   if (str0 == NULL) {
     return -1;
   }
   if (str1 == NULL) {
     return 1;
   }
-
-  if (cmp_buffer_uchars == 0) {
-    fc_strAPI_init();
-  }
-
-  fc_allocate_mutex(&cmp_buffer_mutex);
-
-  while (!enough_mem) {
-    UErrorCode err_code0 = U_ZERO_ERROR;
-    UErrorCode err_code1 = U_ZERO_ERROR;
-
-    u_strFromUTF8Lenient(cmp_buffer0, cmp_buffer_uchars, &len0, str0, -1, &err_code0);
-    u_strFromUTF8Lenient(cmp_buffer1, cmp_buffer_uchars, &len1, str1, -1, &err_code1);
-
-    /* No need to handle U_STRING_NOT_TERMINATED_WARNING here as there's '0' after
-     * the buffers we were using */
-    if (err_code0 == U_BUFFER_OVERFLOW_ERROR || err_code1 == U_BUFFER_OVERFLOW_ERROR) {
-      cmp_buffers_increase();
-    } else {
-      enough_mem = TRUE;
+#ifdef HAVE_STRNCASECMP
+  return strncasecmp (str0, str1, n);
+#else
+  size_t i;
+  
+  for (i = 0; i < n && fc_tolower(*str0) == fc_tolower(*str1);
+       i++, str0++, str1++) {
+    if (*str0 == '\0') {
+      return 0;
     }
   }
 
-  if (len0 > n) {
-    len0 = n;
-  }
-  if (len1 > n) {
-    len1 = n;
-  }
-
-  ret = u_strCaseCompare(cmp_buffer0, len0, cmp_buffer1, len1,
-                         0, &err_code);
-
-  fc_release_mutex(&cmp_buffer_mutex);
-
-  return ret;
-}
-
-/****************************************************************************
-  Copies a string and convert the following characters:
-  - '\n' to "\\n".
-  - '\\' to "\\\\".
-  - '\"' to "\\\"".
-  See also remove_escapes().
-****************************************************************************/
-void make_escapes(const char *str, char *buf, size_t buf_len)
-{
-  char *dest = buf;
-  /* Sometimes we insert 2 characters at once ('\n' -> "\\n"), so keep
-   * place for '\0' and an extra character. */
-  const char *const max = buf + buf_len - 2;
-
-  while (*str != '\0' && dest < max) {
-    switch (*str) {
-    case '\n':
-      *dest++ = '\\';
-      *dest++ = 'n';
-      str++;
-      break;
-    case '\\':
-    case '\"':
-      *dest++ = '\\';
-      /* Fallthrough. */
-    default:
-      *dest++ = *str++;
-      break;
-    }
-  }
-  *dest = 0;
-}
-
-/****************************************************************************
-  Copies a string. Backslash followed by a genuine newline always
-  removes the newline.
-  If full_escapes is TRUE:
-    - '\n' -> newline translation.
-    - Other '\c' sequences (any character 'c') are just passed
-      through with the '\' removed (eg, includes '\\', '\"').
-  See also make_escapes().
-****************************************************************************/
-void remove_escapes(const char *str, bool full_escapes,
-                    char *buf, size_t buf_len)
-{
-  char *dest = buf;
-  const char *const max = buf + buf_len - 1;
-
-  while (*str != '\0' && dest < max) {
-    if (*str == '\\' && *(str + 1) == '\n') {
-      /* Escape followed by newline. Skip both */
-      str += 2;
-    } else if (full_escapes && *str == '\\') {
-      str++;
-      if (*str == 'n') {
-        *dest++ = '\n';
-        str++;
-      }
-    } else {
-      *dest++ = *str++;
-    }
-  }
-  *dest = '\0';
+  if (i == n)
+    return 0;
+  else
+    return ((int) (unsigned char) fc_tolower(*str0))
+      - ((int) (unsigned char) fc_tolower(*str1));
+#endif /* HAVE_STRNCASECMP */
 }
 
 /***************************************************************
@@ -489,57 +328,54 @@ int fc_stricoll(const char *str0, const char *str1)
 ****************************************************************/
 FILE *fc_fopen(const char *filename, const char *opentype)
 {
-#ifdef FREECIV_MSWINDOWS
-  FILE *result;
-  char *filename_in_local_encoding =
-    internal_to_local_string_malloc(filename);
-
-  result = fopen(filename_in_local_encoding, opentype);
-  free(filename_in_local_encoding);
-  return result;
-#else  /* FREECIV_MSWINDOWS */
-  return fopen(filename, opentype);
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+	FILE *result;
+	char *filename_in_local_encoding =
+	     internal_to_local_string_malloc(filename);
+	result = fopen(filename_in_local_encoding, opentype);
+	free(filename_in_local_encoding);
+	return result;
+#else  /* WIN32_NATIVE */
+	return fopen(filename, opentype);
+#endif /* WIN32_NATIVE */
 }
 
 /*****************************************************************
   Wrapper function for gzopen() with filename conversion to local
   encoding on Windows.
 *****************************************************************/
-#ifdef FREECIV_HAVE_LIBZ
+#ifdef HAVE_LIBZ
 gzFile fc_gzopen(const char *filename, const char *opentype)
 {
-#ifdef FREECIV_MSWINDOWS
-  gzFile result;
-  char *filename_in_local_encoding =
-    internal_to_local_string_malloc(filename);
-
-  result = gzopen(filename_in_local_encoding, opentype);
-  free(filename_in_local_encoding);
-  return result;
-#else  /* FREECIV_MSWINDOWS */
-  return gzopen(filename, opentype);
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+	gzFile result;
+	char *filename_in_local_encoding =
+	     internal_to_local_string_malloc(filename);
+	result = gzopen(filename_in_local_encoding, opentype);
+	free(filename_in_local_encoding);
+	return result;
+#else  /* WIN32_NATIVE */
+	return gzopen(filename, opentype);
+#endif /* WIN32_NATIVE */
 }
-#endif /* FREECIV_HAVE_LIBZ */
+#endif /* HAVE_LIBZ */
 
 /******************************************************************
   Wrapper function for opendir() with filename conversion to local
   encoding on Windows.
 ******************************************************************/
-DIR *fc_opendir(const char *dir_to_open)
+DIR *fc_opendir(const char *dirname)
 {
-#ifdef FREECIV_MSWINDOWS
-  DIR *result;
-  char *dirname_in_local_encoding =
-    internal_to_local_string_malloc(dir_to_open);
-
-  result = opendir(dirname_in_local_encoding);
-  free(dirname_in_local_encoding);
-  return result;
-#else  /* FREECIV_MSWINDOWS */
-  return opendir(dir_to_open);
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+	DIR *result;
+	char *dirname_in_local_encoding =
+	     internal_to_local_string_malloc(dirname);
+	result = opendir(dirname_in_local_encoding);
+	free(dirname_in_local_encoding);
+	return result;
+#else  /* WIN32_NATIVE */
+	return opendir(dirname);
+#endif /* WIN32_NATIVE */
 }
 
 /*****************************************************************
@@ -548,17 +384,16 @@ DIR *fc_opendir(const char *dir_to_open)
 *****************************************************************/
 int fc_remove(const char *filename)
 {
-#ifdef FREECIV_MSWINDOWS
-  int result;
-  char *filename_in_local_encoding =
-    internal_to_local_string_malloc(filename);
-
-  result = remove(filename_in_local_encoding);
-  free(filename_in_local_encoding);
-  return result;
-#else  /* FREECIV_MSWINDOWS */
-  return remove(filename);
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+	int result;
+	char *filename_in_local_encoding =
+	     internal_to_local_string_malloc(filename);
+	result = remove(filename_in_local_encoding);
+	free(filename_in_local_encoding);
+	return result;
+#else  /* WIN32_NATIVE */
+	return remove(filename);
+#endif /* WIN32_NATIVE */
 }
 
 /*****************************************************************
@@ -567,17 +402,16 @@ int fc_remove(const char *filename)
 *****************************************************************/
 int fc_stat(const char *filename, struct stat *buf)
 {
-#ifdef FREECIV_MSWINDOWS
-  int result;
-  char *filename_in_local_encoding =
-    internal_to_local_string_malloc(filename);
-
-  result = stat(filename_in_local_encoding, buf);
-  free(filename_in_local_encoding);
-  return result;
-#else  /* FREECIV_MSWINDOWS */
-  return stat(filename, buf);
-#endif /* FREECIV_MSWINDOWS */
+#ifdef WIN32_NATIVE
+	int result;
+	char *filename_in_local_encoding =
+	     internal_to_local_string_malloc(filename);
+	result = stat(filename_in_local_encoding, buf);
+	free(filename_in_local_encoding);
+	return result;
+#else  /* WIN32_NATIVE */
+	return stat(filename, buf);
+#endif /* WIN32_NATIVE */
 }
 
 /***************************************************************
@@ -585,11 +419,11 @@ int fc_stat(const char *filename, struct stat *buf)
 ***************************************************************/
 fc_errno fc_get_errno(void)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   return GetLastError();
-#else  /* FREECIV_MSWINDOWS */
+#else
   return errno;
-#endif /* FREECIV_MSWINDOWS */
+#endif
 }
 
 /***************************************************************
@@ -602,7 +436,7 @@ fc_errno fc_get_errno(void)
 ***************************************************************/
 const char *fc_strerror(fc_errno err)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   static char buf[256];
 
   if (!FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -611,7 +445,7 @@ const char *fc_strerror(fc_errno err)
 		_("error %ld (failed FormatMessage)"), err);
   }
   return buf;
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
 #ifdef HAVE_STRERROR
   static char buf[256];
 
@@ -624,8 +458,9 @@ const char *fc_strerror(fc_errno err)
 	      _("error %d (compiled without strerror)"), err);
   return buf;
 #endif /* HAVE_STRERROR */
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 }
+
 
 /***************************************************************
   Suspend execution for the specified number of microseconds.
@@ -640,17 +475,14 @@ void fc_usleep(unsigned long usec)
 #else  /* HAVE_SNOOZE */
 #ifdef GENERATING_MAC
   EventRecord the_event;	/* dummy - always be a null event */
-
   usec /= 16666;		/* microseconds to 1/60th seconds */
-  if (usec < 1) {
-    usec = 1;
-  }
-  /* supposed to give other application processor time for the mac */
+  if (usec < 1) usec = 1;
+  /* suposed to give other application processor time for the mac */
   WaitNextEvent(0, &the_event, usec, 0L);
 #else  /* GENERATING_MAC */
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   Sleep(usec / 1000);
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
   fc_timeval tv;
 
   tv.tv_sec = 0;
@@ -658,7 +490,7 @@ void fc_usleep(unsigned long usec)
   /* FIXME: an interrupt can cause an EINTR return here.  In that case we
    * need to have another select call. */
   fc_select(0, NULL, NULL, NULL, &tv);
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 #endif /* GENERATING_MAC */
 #endif /* HAVE_SNOOZE */
 #endif /* HAVE_USLEEP */
@@ -673,7 +505,6 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
                        const char *replace)
 {
   size_t len_max;
-  bool success;
 
   fc_assert_ret_val(str != NULL, NULL);
   fc_assert_ret_val(len != NULL, NULL);
@@ -689,9 +520,8 @@ char *fc_strrep_resize(char *str, size_t *len, const char *search,
     str = fc_realloc(str, len_max);
   }
 
-  success = fc_strrep(str, (*len), search, replace);
   /* should never happen */
-  fc_assert_ret_val_msg(success == TRUE, NULL,
+  fc_assert_ret_val_msg(fc_strrep(str, (*len), search, replace), NULL,
                         "Can't replace '%s' by '%s' in '%s'. To small "
                         "size after reallocation: %lu.", search, replace,
                         str, (long unsigned int)*len);
@@ -1001,9 +831,9 @@ int fc_gethostname(char *buf, size_t len)
 #endif
 }
 
-#ifdef FREECIV_SOCKET_ZERO_NOT_STDIN
+#ifdef SOCKET_ZERO_ISNT_STDIN
 /**********************************************************************
-  Support for console I/O in case FREECIV_SOCKET_ZERO_NOT_STDIN.
+  Support for console I/O in case SOCKET_ZERO_ISNT_STDIN.
 ***********************************************************************/
 
 #define CONSOLE_BUF_SIZE 100
@@ -1011,7 +841,7 @@ static char console_buf[CONSOLE_BUF_SIZE + 1];
 
 /**********************************************************************/
 
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
 static HANDLE console_thread = INVALID_HANDLE_VALUE;
 
 static DWORD WINAPI thread_proc(LPVOID arg)
@@ -1026,14 +856,14 @@ static DWORD WINAPI thread_proc(LPVOID arg)
 
   return 0;
 }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 
 /**********************************************************************
-  Initialize console I/O in case FREECIV_SOCKET_ZERO_NOT_STDIN.
+  Initialize console I/O in case SOCKET_ZERO_ISNT_STDIN.
 ***********************************************************************/
 void fc_init_console(void)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   DWORD threadid;
 
   if (console_thread != INVALID_HANDLE_VALUE) {
@@ -1042,7 +872,7 @@ void fc_init_console(void)
 
   console_buf[0] = '\0';
   console_thread = (HANDLE) CreateThread(NULL, 0, thread_proc, NULL, 0, &threadid);
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
   static bool initialized = FALSE;
 
   if (!initialized) {
@@ -1051,11 +881,11 @@ void fc_init_console(void)
     fc_nonblock(fileno(stdin));
 #endif
   }
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 }
 
 /**********************************************************************
-  Read a line from console I/O in case FREECIV_SOCKET_ZERO_NOT_STDIN.
+  Read a line from console I/O in case SOCKET_ZERO_ISNT_STDIN.
 
   This returns a pointer to a statically allocated buffer.
   Subsequent calls to fc_read_console() or fc_init_console() will
@@ -1063,7 +893,7 @@ void fc_init_console(void)
 ***********************************************************************/
 char *fc_read_console(void)
 {
-#ifdef FREECIV_MSWINDOWS
+#ifdef WIN32_NATIVE
   if (WaitForSingleObject(console_thread, 0) == WAIT_OBJECT_0) {
     CloseHandle(console_thread);
     console_thread = INVALID_HANDLE_VALUE;
@@ -1072,7 +902,7 @@ char *fc_read_console(void)
   }
 
   return NULL;
-#else  /* FREECIV_MSWINDOWS */
+#else  /* WIN32_NATIVE */
   if (!feof(stdin)) {    /* input from server operator */
     static char *bufptr = console_buf;
 
@@ -1094,10 +924,10 @@ char *fc_read_console(void)
   }
 
   return NULL;
-#endif /* FREECIV_MSWINDOWS */
+#endif /* WIN32_NATIVE */
 }
 
-#endif /* FREECIV_SOCKET_ZERO_NOT_STDIN */
+#endif /* SOCKET_ZERO_ISNT_STDIN */
 
 /**********************************************************************
   Returns TRUE iff the file is a regular file or a link to a regular
@@ -1141,7 +971,7 @@ int fc_break_lines(char *str, size_t desired_len)
     }
 
     /* find space and break: */
-    for (c = str + desired_len; c > str; c--) {
+    for(c = str + desired_len; c > str; c--) {
       if (fc_isspace(*c)) {
         *c = '\n';
         slen -= c + 1 - str;
@@ -1265,6 +1095,112 @@ char fc_tolower(char c)
 }
 
 /*****************************************************************
+  Returns an uname like string.
+*****************************************************************/
+void fc_uname(char *buf, size_t len)
+{
+#ifdef HAVE_UNAME
+  {
+    struct utsname un;
+
+    uname(&un);
+    fc_snprintf(buf, len, "%s %s [%s]", un.sysname, un.release, un.machine);
+  }
+#else /* ! HAVE_UNAME */
+  /* Fill in here if you are making a binary without sys/utsname.h and know
+     the OS name, release number, and machine architechture */
+#ifdef WIN32_NATIVE
+  {
+    /* TODO: Add handling of newer Windows versions. */
+    char cpuname[16];
+    char *osname;
+    SYSTEM_INFO sysinfo;
+    OSVERSIONINFO osvi;
+
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    GetVersionEx(&osvi);
+
+    switch (osvi.dwPlatformId) {
+    case VER_PLATFORM_WIN32s:
+      osname = "Win32s";
+      break;
+
+    case VER_PLATFORM_WIN32_WINDOWS:
+      osname = "Win32";
+
+      if (osvi.dwMajorVersion == 4) {
+	switch (osvi.dwMinorVersion) {
+	case  0: osname = "Win95";    break;
+	case 10: osname = "Win98";    break;
+	case 90: osname = "WinME";    break;
+	default:			    break;
+	}
+      }
+      break;
+
+    case VER_PLATFORM_WIN32_NT:
+      osname = "WinNT";
+
+      if (osvi.dwMajorVersion == 5) {
+	switch (osvi.dwMinorVersion) {
+	case 0: osname = "Win2000";   break;
+	case 1: osname = "WinXP";	    break;
+	default:			    break;
+	}
+      }
+      break;
+
+    default:
+      osname = osvi.szCSDVersion;
+      break;
+    }
+
+    GetSystemInfo(&sysinfo); 
+    switch (sysinfo.wProcessorArchitecture) {
+      case PROCESSOR_ARCHITECTURE_INTEL:
+	{
+	  unsigned int ptype;
+	  if (sysinfo.wProcessorLevel < 3) /* Shouldn't happen. */
+	    ptype = 3;
+	  else if (sysinfo.wProcessorLevel > 9) /* P4 */
+	    ptype = 6;
+	  else
+	    ptype = sysinfo.wProcessorLevel;
+
+          fc_snprintf(cpuname, sizeof(cpuname), "i%d86", ptype);
+	}
+	break;
+
+      case PROCESSOR_ARCHITECTURE_MIPS:
+	sz_strlcpy(cpuname, "mips");
+	break;
+
+      case PROCESSOR_ARCHITECTURE_ALPHA:
+	sz_strlcpy(cpuname, "alpha");
+	break;
+
+      case PROCESSOR_ARCHITECTURE_PPC:
+	sz_strlcpy(cpuname, "ppc");
+	break;
+#if 0
+      case PROCESSOR_ARCHITECTURE_IA64:
+	sz_strlcpy(cpuname, "ia64");
+	break;
+#endif
+      default:
+	sz_strlcpy(cpuname, "unknown");
+	break;
+    }
+    fc_snprintf(buf, len, "%s %ld.%ld [%s]",
+                osname, osvi.dwMajorVersion, osvi.dwMinorVersion, cpuname);
+  }
+#else  /* WIN32_NATIVE */
+  fc_snprintf(buf, len, "unknown unknown [unknown]");
+#endif /* WIN32_NATIVE */
+#endif /* HAVE_UNAME */
+}
+
+/*****************************************************************
   basename() replacement that always takes const parameter.
   POSIX basename() modifies its parameter, GNU one does not.
   Ideally we would like to use GNU one, when available, directly
@@ -1279,16 +1215,4 @@ const char *fc_basename(const char *path)
   fc_strlcpy(buf, path, sizeof(buf));
 
   return basename(buf);
-}
-
-/*****************************************************************
-  Set quick_exit() callback if possible.
-*****************************************************************/
-int fc_at_quick_exit(void (*func)(void))
-{
-#ifdef HAVE_AT_QUICK_EXIT
-  return at_quick_exit(func);
-#else  /* HAVE_AT_QUICK_EXIT */
-  return -1;
-#endif /* HAVE_AT_QUICK_EXIT */
 }

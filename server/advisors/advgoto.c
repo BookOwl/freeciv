@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 1996 - A Kjeldberg, L Gregersen, P Unold
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ bool adv_follow_path(struct unit *punit, struct pf_path *path,
 {
   struct tile *old_tile = punit->goto_tile;
   enum unit_activity activity = punit->activity;
-  struct extra_type *tgt = punit->activity_target;
+  struct act_tgt tgt = punit->activity_target;
   bool alive;
 
   if (punit->moves_left <= 0) {
@@ -78,7 +78,7 @@ bool adv_follow_path(struct unit *punit, struct pf_path *path,
 *************************************************************************/
 bool adv_unit_execute_path(struct unit *punit, struct pf_path *path)
 {
-  const bool is_plr_ai = is_ai(unit_owner(punit));
+  const bool is_ai = unit_owner(punit)->ai_controlled;
   int i;
 
   /* We start with i = 1 for i = 0 is our present position */
@@ -99,7 +99,7 @@ bool adv_unit_execute_path(struct unit *punit, struct pf_path *path)
      * using units temporarily under AI control (such as auto-explorers)
      */
 
-    if (is_plr_ai) {
+    if (is_ai) {
       CALL_PLR_AI_FUNC(unit_move, unit_owner(punit), punit, ptile, path, i);
     } else {
       (void) adv_unit_move(punit, ptile);
@@ -149,8 +149,7 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
 
   /* go */
   unit_activity_handling(punit, ACTIVITY_IDLE);
-  /* Move */
-  (void) unit_move_handling(punit, ptile, FALSE, TRUE, NULL);
+  (void) unit_move_handling(punit, ptile, FALSE, TRUE);
 
   return TRUE;
 }
@@ -159,6 +158,8 @@ static bool adv_unit_move(struct unit *punit, struct tile *ptile)
   Similar to is_my_zoc(), but with some changes:
   - destination (x0,y0) need not be adjacent?
   - don't care about some directions?
+  
+  Note this function only makes sense for ground units.
 
   Fix to bizarre did-not-find bug.  Thanks, Katvrr -- Syela
 **************************************************************************/
@@ -173,7 +174,7 @@ static bool adv_could_be_my_zoc(struct unit *myunit, struct tile *ptile)
   }
 
   adjc_iterate(ptile, atile) {
-    if (!terrain_has_flag(tile_terrain(atile), TER_NO_ZOC)
+    if (!is_ocean_tile(atile)
 	&& is_non_allied_unit_tile(atile, unit_owner(myunit))) {
       return FALSE;
     }
@@ -194,9 +195,7 @@ int adv_could_unit_move_to_tile(struct unit *punit, struct tile *dest_tile)
 {
   enum unit_move_result reason =
       unit_move_to_tile_test(punit, ACTIVITY_IDLE, unit_tile(punit),
-                             dest_tile, unit_has_type_flag(punit, UTYF_IGZOC),
-                             NULL, FALSE);
-
+                             dest_tile, unit_has_type_flag(punit, UTYF_IGZOC));
   switch (reason) {
   case MR_OK:
     return 1;
@@ -229,7 +228,7 @@ int adv_unittype_att_rating(const struct unit_type *punittype, int veteran,
 ****************************************************************************/
 int adv_unit_att_rating(const struct unit *punit)
 {
-  return adv_unittype_att_rating(unit_type_get(punit), punit->veteran,
+  return adv_unittype_att_rating(unit_type(punit), punit->veteran,
                                  SINGLE_MOVE, punit->hp);
 }
 
@@ -240,16 +239,15 @@ int adv_unit_att_rating(const struct unit *punit)
 int adv_unit_def_rating_basic(const struct unit *punit)
 {
   return base_get_defense_power(punit) * punit->hp *
-    unit_type_get(punit)->firepower / POWER_DIVIDER;
+    unit_type(punit)->firepower / POWER_DIVIDER;
 }
 
 /****************************************************************************
   Square of the previous function - used in actual computations.
 ****************************************************************************/
-int adv_unit_def_rating_basic_squared(const struct unit *punit)
+int adv_unit_def_rating_basic_sq(const struct unit *punit)
 {
   int v = adv_unit_def_rating_basic(punit);
-
   return v * v;
 }
 
@@ -261,14 +259,14 @@ bool adv_danger_at(struct unit *punit, struct tile *ptile)
   int a = 0, d, db;
   struct player *pplayer = unit_owner(punit);
   struct city *pcity = tile_city(ptile);
-  enum override_bool dc = NO_OVERRIDE;
+  enum danger_consideration dc = DANG_UNDECIDED;
   int extras_bonus = 0;
 
   /* Give AI code possibility to decide itself */
   CALL_PLR_AI_FUNC(consider_tile_dangerous, unit_owner(punit), ptile, punit, &dc);
-  if (dc == OVERRIDE_TRUE) {
+  if (dc == DANG_YES) {
     return TRUE;
-  } else if (dc == OVERRIDE_FALSE) {
+  } else if (dc == DANG_NOT) {
     return FALSE;
   }
 
@@ -280,9 +278,9 @@ bool adv_danger_at(struct unit *punit, struct tile *ptile)
 
   /* Calculate how well we can defend at (x,y) */
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  extras_bonus += tile_extras_defense_bonus(ptile, unit_type_get(punit));
+  extras_bonus += tile_extras_defense_bonus(ptile, unit_type(punit));
   db += (db * extras_bonus) / 100;
-  d = adv_unit_def_rating_basic_squared(punit) * db;
+  d = adv_unit_def_rating_basic_sq(punit) * db;
 
   adjc_iterate(ptile, ptile1) {
     if (!map_is_known_and_seen(ptile1, unit_owner(punit), V_MAIN)) {
@@ -353,8 +351,7 @@ static double chance_killed_at(const struct tile *ptile,
 
   /* If we are on defensive terrain, we are more likely to survive */
   db = 10 + tile_terrain(ptile)->defense_bonus / 10;
-  extras_bonus += tile_extras_class_defense_bonus(ptile,
-                                                  utype_class(param->utype));
+  extras_bonus += tile_extras_class_defense_bonus(ptile, param->uclass);
   db += (extras_bonus) / 100;
   p *= 10.0 / db;
 

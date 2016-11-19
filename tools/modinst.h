@@ -21,14 +21,10 @@ struct fcmp_params
 };
 
 #if IS_DEVEL_VERSION && ! IS_FREEZE_VERSION
-#ifndef MODPACK_LIST_URL
-#define MODPACK_LIST_URL "http://download.gna.org/freeciv/modinst/" DATASUBDIR "/modpack.list"
-#endif
-#define DEFAULT_URL_START "http://download.gna.org/freeciv/modinst/" DATASUBDIR "/"
+#define MODPACK_LIST_URL  "http://www.cazfi.net/freeciv/modinst/" DATASUBDIR "/modpack.list"
+#define DEFAULT_URL_START "http://www.cazfi.net/freeciv/modinst/" DATASUBDIR "/"
 #else  /* IS_DEVEL_VERSION */
-#ifndef MODPACK_LIST_URL
 #define MODPACK_LIST_URL  "http://modpack.freeciv.org/" DATASUBDIR "/modpack.list"
-#endif
 #define DEFAULT_URL_START "http://modpack.freeciv.org/" DATASUBDIR "/"
 #endif /* IS_DEVEL_VERSION */
 
@@ -45,10 +41,6 @@ struct fcmp_params
 #define SPECENUM_VALUE3NAME N_("Scenario")
 #define SPECENUM_VALUE4 MPT_SOUNDSET
 #define SPECENUM_VALUE4NAME N_("Soundset")
-#define SPECENUM_VALUE5 MPT_MUSICSET
-#define SPECENUM_VALUE5NAME N_("Musicset")
-#define SPECENUM_VALUE6 MPT_MODPACK_GROUP
-#define SPECENUM_VALUE6NAME N_("Group")
 #include "specenum_gen.h"
 
 void fcmp_init(void);

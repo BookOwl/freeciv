@@ -320,7 +320,7 @@ static void sql_commit(conn_data *conn) {
 
 
 static void sql_begin(conn_data *conn) {
-	PQclear(PQexec(conn->pg_conn, "BEGIN"));
+	PQclear(PQexec(conn->pg_conn, "BEGIN")); 
 }
 
 
@@ -371,38 +371,14 @@ static int conn_escape (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	size_t len;
 	const char *from = luaL_checklstring (L, 2, &len);
+	char to[len*sizeof(char)*2+1];
 	int error;
-	int ret = 1;
-	luaL_Buffer b;
-	char *to;
-#if !defined(LUA_VERSION_NUM) || (LUA_VERSION_NUM == 501)
-	/* Lua 5.0 and 5.1 */
-	luaL_buffinit (L, &b);
-	do {
-		int max = LUAL_BUFFERSIZE / 2;
-		size_t bytes_copied;
-		size_t this_len = (len > max) ? max : len;
-		to = luaL_prepbuffer (&b);
-		bytes_copied = PQescapeStringConn (conn->pg_conn, to, from, this_len, &error);
-		if (error != 0) { /* failed ! */
-			return luasql_failmsg (L, "cannot escape string. PostgreSQL: ", PQerrorMessage (conn->pg_conn));
-		}
-		luaL_addsize (&b, bytes_copied);
-		from += this_len;
-		len -= this_len;
-	} while (len > 0);
-	luaL_pushresult (&b);
-#else
-	/* Lua 5.2 and 5.3 */
-	to = luaL_buffinitsize (L, &b, 2*len+1);
 	len = PQescapeStringConn (conn->pg_conn, to, from, len, &error);
 	if (error == 0) { /* success ! */
-		luaL_pushresultsize (&b, len);
-	} else {
-		ret = luasql_failmsg (L, "cannot escape string. PostgreSQL: ", PQerrorMessage (conn->pg_conn));
-	}
-#endif
-	return ret;
+		lua_pushlstring (L, to, len);
+		return 1;
+	} else
+		return luasql_failmsg (L, "cannot escape string. PostgreSQL: ", PQerrorMessage (conn->pg_conn));
 }
 
 
@@ -439,7 +415,7 @@ static int conn_commit (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	sql_commit(conn);
 	if (conn->auto_commit == 0) {
-		sql_begin(conn);
+		sql_begin(conn); 
 		lua_pushboolean (L, 1);
 	} else
 		lua_pushboolean (L, 0);
@@ -454,7 +430,7 @@ static int conn_rollback (lua_State *L) {
 	conn_data *conn = getconnection (L);
 	sql_rollback(conn);
 	if (conn->auto_commit == 0) {
-		sql_begin(conn);
+		sql_begin(conn); 
 		lua_pushboolean (L, 1);
 	} else
 		lua_pushboolean (L, 0);
@@ -508,22 +484,30 @@ static void notice_processor (void *arg, const char *message) {
 
 /*
 ** Connects to a data source.
+** This driver provides two ways to connect to a data source:
+** (1) giving the connection parameters as a set of pairs separated
+**     by whitespaces in a string (first method parameter)
+** (2) giving one string for each connection parameter, said
+**     datasource, username, password, host and port.
 */
 static int env_connect (lua_State *L) {
 	const char *sourcename = luaL_checkstring(L, 2);
-	const char *username = luaL_optstring(L, 3, NULL);
-	const char *password = luaL_optstring(L, 4, NULL);
-	const char *pghost = luaL_optstring(L, 5, NULL);
-	const char *pgport = luaL_optstring(L, 6, NULL);
 	PGconn *conn;
 	getenvironment (L);	/* validate environment */
-	conn = PQsetdbLogin(pghost, pgport, NULL, NULL, sourcename, username, password);
+	if ((lua_gettop (L) == 2) && (strchr (sourcename, '=') != NULL))
+		conn = PQconnectdb (sourcename);
+	else {
+		const char *username = luaL_optstring(L, 3, NULL);
+		const char *password = luaL_optstring(L, 4, NULL);
+		const char *pghost = luaL_optstring(L, 5, NULL);
+		const char *pgport = luaL_optstring(L, 6, NULL);
 
-	if (PQstatus(conn) == CONNECTION_BAD) {
-		int rc = luasql_failmsg(L, "error connecting to database. PostgreSQL: ", PQerrorMessage(conn));
-		PQfinish(conn);
-		return rc;
+		conn = PQsetdbLogin(pghost, pgport, NULL, NULL,
+			sourcename, username, password);
 	}
+
+	if (PQstatus(conn) == CONNECTION_BAD)
+		return luasql_failmsg(L, "error connecting to database. PostgreSQL: ", PQerrorMessage(conn));
 	PQsetNoticeProcessor(conn, notice_processor, NULL);
 	return create_connection(L, 1, conn);
 }

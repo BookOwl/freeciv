@@ -24,6 +24,9 @@
 
 #include "connectdlg_g.h"
 
+/* common */
+#include "game.h"
+
 /* client */
 #include "chatline_common.h"	/* for append_output_window */
 #include "client_main.h"
@@ -85,7 +88,7 @@ void handle_game_load(bool load_successful, const char *filename)
 /**************************************************************************
   Provide an interface for connecting to a Freeciv server.
 **************************************************************************/
-void qtg_server_connect()
+void qtg_gui_server_connect()
 {
   /* PORTME */
 }

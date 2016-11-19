@@ -31,10 +31,9 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 
 static void handle_readline_input_callback(char *line) {
 /* Generally taken from freeciv-1.11.4/server/sernet.c. */
-  if (line) {
-    if (*line) {
+  if(line) {
+    if(*line)
       add_history(line);
-    }
     /* printf(line); */
   }
 }
@@ -114,7 +113,7 @@ make readline library pass the test.])
                    have_readline_lib=1, have_readline_lib=0)
                if test "$have_readline_lib" = "1"; then
                    SRV_LIB_LIBS="-lreadline $SRV_LIB_LIBS $HAVE_TERMCAP"
-                   AC_DEFINE_UNQUOTED([FREECIV_HAVE_LIBREADLINE], [1], [Readline support])
+                   AC_DEFINE_UNQUOTED([HAVE_LIBREADLINE], [1], [Readline support])
                else
                    if test "$WITH_READLINE" = "yes"; then
                        AC_MSG_ERROR(Specified --with-readline but the 

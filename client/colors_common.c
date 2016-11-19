@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2005 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -48,10 +48,9 @@ struct color_system *color_system_read(struct section_file *file)
 
   colors->stdcolors = fc_calloc(COLOR_LAST, sizeof(*colors->stdcolors));
 
-  for (stdcolor = color_std_begin(); stdcolor != color_std_end();
-       stdcolor = color_std_next(stdcolor)) {
+  for (stdcolor= color_std_begin(); stdcolor!= color_std_end();
+       stdcolor= color_std_next(stdcolor)) {
     struct rgbcolor *prgbcolor = NULL;
-
     if (rgbcolor_load(file, &prgbcolor, "colors.%s0",
                       color_std_name(stdcolor))) {
       *(colors->stdcolors + stdcolor) = prgbcolor;
@@ -71,8 +70,8 @@ void color_system_free(struct color_system *colors)
 {
   enum color_std stdcolor;
 
-  for (stdcolor = color_std_begin(); stdcolor != color_std_end();
-       stdcolor = color_std_next(stdcolor)) {
+  for (stdcolor= color_std_begin(); stdcolor!= color_std_end();
+       stdcolor= color_std_next(stdcolor)) {
     rgbcolor_destroy(*(colors->stdcolors + stdcolor));
   }
 
@@ -107,21 +106,7 @@ struct color *get_color(const struct tileset *t, enum color_std stdcolor)
 }
 
 /**********************************************************************
-  Return whether the player has a color assigned yet.
-  Should only be FALSE in pregame.
-***********************************************************************/
-bool player_has_color(const struct tileset *t,
-                      const struct player *pplayer)
-{
-  fc_assert_ret_val(pplayer != NULL, NULL);
-
-  return pplayer->rgb != NULL;
-}
-
-/**********************************************************************
   Return the color of the player.
-  In pregame, callers should check player_has_color() before calling
-  this.
 ***********************************************************************/
 struct color *get_player_color(const struct tileset *t,
                                const struct player *pplayer)

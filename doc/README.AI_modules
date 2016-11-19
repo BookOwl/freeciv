@@ -7,7 +7,6 @@ CONTENTS
 3. Building freeciv with AI-modules support
 4. Coding new AI module
 5. Using default AI as part of new AI module
-6. Callback interface ChangeLog
 
 
 1. Default build
@@ -92,6 +91,10 @@ bool fc_ai_<modulename>_setup(struct ai_type *ai)
 For "--LoadAI <modulename>" to find the AI module, it must reside in ${libdir}/fcai/
 (/usr/lib/fcai by default) under name fc_ai_<modulename>.so
 
+Default AI code is usually built in freeciv only if some AI type using it has been built;
+either 'classic' or 'threaded'. If no such ai type has been built, you can still force
+it in for custom ai types to use by passing configure option --with-ai-lib
+
 
 5. Using default AI as part of new AI module
 --------------------------------------------
@@ -107,35 +110,3 @@ having such AI type specific data.
 If a AI type wants to add its own data associated with some code structure, it needs
 to make sure data needed by default AI is in the beginning of the allocated data blocks.
 For example, see threaded AI: tai_player_alloc(), tai_player_free(), and struct tai_plr.
-
-Default AI code is usually built in freeciv only if some AI type using it has been built;
-either 'classic' or 'threaded'. If no such ai type has been built, you can still force
-it in for custom ai types to use by passing configure option --with-ai-lib
-
-
-6. Callback interface ChangeLog
--------------------------------
-
-New in Freeciv 3.0:
--------------------
-- Added 'private' pointer for ai module to store data of its own
-- Added 'player_console', called when user enter aicmd
-
-
-New in Freeciv 2.6:
--------------------
-- Renamed enum danger_consideration as enum override_bool
-- Added restart_phase, called when AI gains control of the player whose phase is already
-  active, for example when continuing from a saved game
-- Added created_by_civil_war, called for AI type of the player who got created from
-  civil war
-- Added "created" player parameter to split_by_civil_war
-- Added game_start, called for all AI types when game starts
-- "city_got" is called when the city is fully initialized, "city_lost" when city still valid
-- Added gov_value for giving AI control of deciding value of governments
-- Added player_save_relations and player_load_relations called on savegame handling for a
-  player once per other player in game. Old player_save and player_load are called only once
-  overall
-- Added want_to_explore, called for AI type of the unit owner, when it is about to autoexplore
-- Added currently unused 'reserved' pointers that we can populate with optional callbacks
-  without need to change the mandatory capability of the modules

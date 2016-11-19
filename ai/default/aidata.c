@@ -1,4 +1,4 @@
-/***********************************************************************
+/********************************************************************** 
  Freeciv - Copyright (C) 2002 - The Freeciv Project
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -17,25 +17,17 @@
 
 /* common */
 #include "game.h"
-#include "government.h"
 #include "map.h"
-#include "research.h"
-
-/* server */
-#include "cityturn.h"
-#include "plrhand.h"
 
 /* server/advisors */
 #include "advdata.h"
 
-/* ai/default */
-#include "aicity.h"
+/* ai */
+#include "advdiplomacy.h"
 #include "aiferry.h"
 #include "aiplayer.h"
 #include "aisettler.h"
 #include "aiunit.h"
-#include "daidiplomacy.h"
-#include "daieffects.h"
 
 #include "aidata.h"
 
@@ -60,6 +52,8 @@ void dai_data_init(struct ai_type *ait, struct player *pplayer)
 
   ai->last_num_continents = -1;
   ai->last_num_oceans = -1;
+
+  ai->channels = NULL;
 
   ai->diplomacy.player_intel_slots
     = fc_calloc(player_slot_count(),
@@ -139,7 +133,7 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
                           bool is_new_phase)
 {
   struct ai_plr *ai = def_ai_player_data(pplayer, ait);
-  bool caller_closes;
+  bool close;
 
   /* Note that this refreshes advisor data if needed. ai_plr_data_get()
      is expected to refresh advisor data if needed, and ai_plr_data_get()
@@ -147,6 +141,7 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
      ai_plr_data_get()->ai_data_phase_begin()->adv_data_get() to do it.
      If you change this, you may need to adjust ai_plr_data_get() also. */
   struct adv_data *adv;
+  int i;
 
   if (ai->phase_initialized) {
     return;
@@ -154,7 +149,7 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
 
   ai->phase_initialized = TRUE;
 
-  adv = adv_data_get(pplayer, &caller_closes);
+  adv = adv_data_get(pplayer, &close);
 
   /* Store current number of known continents and oceans so we can compare
      against it later in order to see if ai data needs refreshing. */
@@ -162,7 +157,7 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
   ai->last_num_oceans = adv->num_oceans;
 
   /*** Diplomacy ***/
-  if (is_ai(pplayer) && !is_barbarian(pplayer) && is_new_phase) {
+  if (pplayer->ai_controlled && !is_barbarian(pplayer) && is_new_phase) {
     dai_diplomacy_begin_new_phase(ait, pplayer);
   }
 
@@ -197,30 +192,64 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
     } players_iterate_end;
   } players_iterate_end;
 
-  /*** Statistics ***/
+  /*** Channels ***/
 
-  ai->stats.workers = fc_calloc(adv->num_continents + 1, sizeof(int));
-  unit_list_iterate(pplayer->units, punit) {
-    struct tile *ptile = unit_tile(punit);
-
-    if (!is_ocean_tile(ptile) && unit_has_type_flag(punit, UTYF_SETTLERS)) {
-      ai->stats.workers[(int)tile_continent(unit_tile(punit))]++;
+  /* Ways to cross from one ocean to another through a city. */
+  ai->channels = fc_calloc((adv->num_oceans + 1) * (adv->num_oceans + 1), sizeof(int));
+  players_iterate(aplayer) {
+    if (pplayers_allied(pplayer, aplayer)) {
+      city_list_iterate(aplayer->cities, pcity) {
+        adjc_iterate(pcity->tile, tile1) {
+          if (is_ocean_tile(tile1)) {
+            adjc_iterate(pcity->tile, tile2) {
+              if (is_ocean_tile(tile2) 
+                  && tile_continent(tile1) != tile_continent(tile2)) {
+                ai->channels[(-tile_continent(tile1)) * adv->num_oceans
+                             + (-tile_continent(tile2))] = TRUE;
+                ai->channels[(-tile_continent(tile2)) * adv->num_oceans
+                             + (-tile_continent(tile1))] = TRUE;
+              }
+            } adjc_iterate_end;
+          }
+        } adjc_iterate_end;
+      } city_list_iterate_end;
     }
-  } unit_list_iterate_end;
+  } players_iterate_end;
+
+  /* If we can go i -> j and j -> k, we can also go i -> k. */
+  for(i = 1; i <= adv->num_oceans; i++) {
+    int j;
+
+    for(j = 1; j <= adv->num_oceans; j++) {
+      if (ai->channels[i * adv->num_oceans + j]) {
+        int k;
+
+        for(k = 1; k <= adv->num_oceans; k++) {
+          ai->channels[i * adv->num_oceans + k] |= 
+            ai->channels[j * adv->num_oceans + k];
+        }
+      }
+    }
+  }
+
+  if (game.server.debug[DEBUG_FERRIES]) {
+    for(i = 1; i <= adv->num_oceans; i++) {
+      int j;
+
+      for(j = 1; j <= adv->num_oceans; j++) {
+        if (ai->channels[i * adv->num_oceans + j]) {
+          log_test("%s: oceans %d and %d are connected",
+                   player_name(pplayer), i, j);
+       }
+      }
+    }
+  }
+
+  /*** Statistics ***/
 
   BV_CLR_ALL(ai->stats.diplomat_reservations);
   unit_list_iterate(pplayer->units, punit) {
-    if ((unit_can_do_action(punit, ACTION_SPY_POISON)
-         || unit_can_do_action(punit, ACTION_SPY_SABOTAGE_CITY)
-         || unit_can_do_action(punit, ACTION_SPY_TARGETED_SABOTAGE_CITY)
-         || unit_can_do_action(punit, ACTION_SPY_INCITE_CITY)
-         || unit_can_do_action(punit, ACTION_ESTABLISH_EMBASSY)
-         || unit_can_do_action(punit, ACTION_SPY_STEAL_TECH)
-         || unit_can_do_action(punit, ACTION_SPY_TARGETED_STEAL_TECH)
-         || unit_can_do_action(punit, ACTION_SPY_INVESTIGATE_CITY)
-         || unit_can_do_action(punit, ACTION_SPY_STEAL_GOLD)
-         || unit_can_do_action(punit, ACTION_STEAL_MAPS)
-         || unit_can_do_action(punit, ACTION_SPY_NUKE))
+    if (unit_has_type_flag(punit, UTYF_DIPLOMAT)
         && def_ai_unit_data(punit, ait)->task == AIUNIT_ATTACK) {
 
       fc_assert_msg(punit->goto_tile != NULL, "No target city for spy action");
@@ -263,7 +292,7 @@ void dai_data_phase_begin(struct ai_type *ait, struct player *pplayer,
     } unit_list_iterate_end;
   } players_iterate_alive_end;
 
-  if (caller_closes) {
+  if (close) {
     adv_data_phase_done(pplayer);
   }
 }
@@ -279,8 +308,8 @@ void dai_data_phase_finished(struct ai_type *ait, struct player *pplayer)
     return;
   }
 
-  free(ai->stats.workers);
-  ai->stats.workers = NULL;
+  free(ai->channels);
+  ai->channels = NULL;
 
   ai->phase_initialized = FALSE;
 }
@@ -292,7 +321,7 @@ void dai_data_phase_finished(struct ai_type *ait, struct player *pplayer)
   closing.
 ****************************************************************************/
 struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer,
-                                bool *caller_closes)
+                                bool *close)
 {
   struct ai_plr *ai = def_ai_player_data(pplayer, ait);
 
@@ -300,16 +329,16 @@ struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer,
 
   /* This assert really is required. See longer comment
      in adv_data_get() for equivalent code. */
-#if defined(FREECIV_DEBUG) || defined(IS_DEVEL_VERSION)
-  fc_assert(caller_closes != NULL || ai->phase_initialized);
+#if defined(DEBUG) || defined(IS_DEVEL_VERSION)
+  fc_assert(close != NULL || ai->phase_initialized);
 #endif
 
-  if (caller_closes != NULL) {
-    *caller_closes = FALSE;
+  if (close != NULL) {
+    *close = FALSE;
   }
 
-  if (ai->last_num_continents != wld.map.num_continents
-      || ai->last_num_oceans != wld.map.num_oceans) {
+  if (ai->last_num_continents != map.num_continents
+      || ai->last_num_oceans != map.num_oceans) {
     /* We have discovered more continents, recalculate! */
 
     /* See adv_data_get() */
@@ -321,20 +350,37 @@ struct ai_plr *dai_plr_data_get(struct ai_type *ait, struct player *pplayer,
       log_debug("%s ai data phase closed when dai_plr_data_get() called",
                 player_name(pplayer));
       dai_data_phase_begin(ait, pplayer, FALSE);
-      if (caller_closes != NULL) {
-        *caller_closes = TRUE;
+      if (close != NULL) {
+        *close = TRUE;
       } else {
         dai_data_phase_finished(ait, pplayer);
       }
     }
   } else {
-    if (!ai->phase_initialized && caller_closes != NULL) {
+    if (!ai->phase_initialized && close != NULL) {
       dai_data_phase_begin(ait, pplayer, FALSE);
-      *caller_closes = TRUE;
+      *close = TRUE;
     }
   }
 
   return ai;
+}
+
+/**************************************************************************
+  Is there a channel going from ocean c1 to ocean c2?
+  Returns FALSE if either is not an ocean.
+**************************************************************************/
+bool dai_channel(struct ai_type *ait, struct player *pplayer,
+                 Continent_id c1, Continent_id c2)
+{
+  struct ai_plr *ai = dai_plr_data_get(ait, pplayer, NULL);
+  struct adv_data *adv = adv_data_get(pplayer, NULL);
+
+  if (c1 >= 0 || c2 >= 0) {
+    return FALSE;
+  }
+
+  return (c1 == c2 || ai->channels[(-c1) * adv->num_oceans + (-c2)]);
 }
 
 /****************************************************************************
@@ -373,7 +419,7 @@ static void dai_diplomacy_defaults(struct ai_type *ait,
   /* pseudorandom value */
   player_intel->spam = (player_index(plr1) + player_index(plr2)) % 5;
   player_intel->countdown = -1;
-  player_intel->war_reason = DAI_WR_NONE;
+  player_intel->war_reason = WAR_REASON_NONE;
   player_intel->distance = 1;
   player_intel->ally_patience = 0;
   player_intel->asked_about_peace = 0;
@@ -420,100 +466,4 @@ static void dai_diplomacy_destroy(struct ai_type *ait,
   }
 
   *player_intel_slot = NULL;
-}
-
-/****************************************************************************
-  Set value of the government.
-****************************************************************************/
-void dai_gov_value(struct ai_type *ait, struct player *pplayer,
-                   struct government *gov, adv_want *val, bool *override)
-{
-  int dist;
-  int bonus = 0; /* in percentage */
-  int revolution_turns;
-  struct universal source = { .kind = VUT_GOVERNMENT, .value.govern = gov };
-  struct adv_data *adv;
-  int turns = 9999; /* TODO: Set to correct value */
-  int nplayers;
-  const struct research *presearch;
-
-  /* Use default handling of no-cities case */
-  if (city_list_size(pplayer->cities) == 0) {
-    *override = FALSE;
-    return;
-  }
-
-  adv = adv_data_get(pplayer, NULL);
-  nplayers = normal_player_count();
-  presearch = research_get(pplayer);
-
-  pplayer->government = gov;
-  /* Ideally we should change tax rates here, but since
-   * this is a rather big CPU operation, we'd rather not. */
-  check_player_max_rates(pplayer);
-  city_list_iterate(pplayer->cities, acity) {
-    auto_arrange_workers(acity);
-  } city_list_iterate_end;
-  city_list_iterate(pplayer->cities, pcity) {
-    bool capital;
-
-    *val += dai_city_want(pplayer, pcity, adv, NULL);
-    capital = is_capital(pcity);
-
-    effect_list_iterate(get_req_source_effects(&source), peffect) {
-      bool present = TRUE;
-      bool active = TRUE;
-
-      requirement_vector_iterate(&peffect->reqs, preq) {
-        /* Check if all the requirements for the currently evaluated effect
-         * are met, except for having the tech that we are evaluating.
-         * TODO: Consider requirements that could be met later. */
-        if (VUT_GOVERNMENT == preq->source.kind
-            && preq->source.value.govern == gov) {
-          present = preq->present;
-          continue;
-        }
-        if (!is_req_active(pplayer, NULL, pcity, NULL, NULL, NULL, NULL,
-                           NULL, NULL, NULL, preq, RPT_POSSIBLE)) {
-          active = FALSE;
-          break; /* presence doesn't matter for inactive effects. */
-        }
-
-      } requirement_vector_iterate_end;
-
-      if (active) {
-        adv_want v1;
-
-        v1 = dai_effect_value(pplayer, gov, adv, pcity, capital,
-                              turns, peffect, 1,
-                              nplayers);
-
-        if (!present) {
-          /* Tech removes the effect */
-          *val -= v1;
-        } else {
-          *val += v1;
-        }
-      }
-    } effect_list_iterate_end;
-  } city_list_iterate_end;
-
-  revolution_turns = get_player_bonus(pplayer, EFT_REVOLUTION_UNHAPPINESS);
-  if (revolution_turns > 0) {
-    bonus -= 6 / revolution_turns;
-  }
-
-  *val += (*val * bonus) / 100;
-
-  /* FIXME: handle reqs other than technologies. */
-  dist = 0;
-  requirement_vector_iterate(&gov->reqs, preq) {
-    if (VUT_ADVANCE == preq->source.kind) {
-      dist += MAX(1, research_goal_unknown_techs(presearch,
-                                                 advance_number(preq->source.value.advance)));
-    }
-  } requirement_vector_iterate_end;
-  *val = amortize(*val, dist);
-
-  *override = TRUE;
 }
